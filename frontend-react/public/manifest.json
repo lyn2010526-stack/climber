@@ -1,0 +1,18 @@
+{
+  "name": "Climber Agent Engine",
+  "short_name": "Climber",
+  "description": "Local-first AI Agent Workbench",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0A0F",
+  "theme_color": "#007AFF",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

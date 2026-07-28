@@ -1,0 +1,9 @@
+{
+  "name": "web-search",
+  "description": "网络搜索和信息提取：执行搜索查询并返回结构化结果。",
+  "category": "research",
+  "prompt_template": "搜索以下内容并总结：{query}",
+  "tools": ["web_search", "web_scrape", "extract_links"],
+  "enabled": true,
+  "version": "1.0.0"
+}

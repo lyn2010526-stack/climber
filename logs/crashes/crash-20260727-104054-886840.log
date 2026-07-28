@@ -1,0 +1,13 @@
+timestamp: 2026-07-27T10:40:54.886974+00:00
+exception: RuntimeError: boom 1
+
+context:
+  task: flaky
+
+traceback:
+Traceback (most recent call last):
+  File "/workspace/agent-engine/app/core/watchdog.py", line 98, in _guarded
+    await supervised.factory()
+  File "/workspace/agent-engine/tests/test_watchdog.py", line 45, in flaky
+    raise RuntimeError(f"boom {attempts}")
+RuntimeError: boom 1

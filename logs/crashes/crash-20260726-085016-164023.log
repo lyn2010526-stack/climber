@@ -1,0 +1,187 @@
+timestamp: 2026-07-26T08:50:16.164056+00:00
+exception: IntegrityError: (sqlite3.IntegrityError) FOREIGN KEY constraint failed
+[SQL: INSERT INTO sessions (id, agent_id, user_id, status, title, context_data, iteration_count, total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING created_at, updated_at]
+[parameters: ('4972bddc-e7bc-44af-8c96-b099c09e1f69', '83cd7de8-452d-4c47-b384-b2a90f92ac22', '', 'idle', 'New Session', '{}', 0, 0)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+context:
+  path: /api/v1/sessions
+  method: POST
+
+traceback:
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/dialects/sqlite/aiosqlite.py", line 183, in execute
+    self._adapt_connection._handle_exception(error)
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/dialects/sqlite/aiosqlite.py", line 343, in _handle_exception
+    raise error
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/dialects/sqlite/aiosqlite.py", line 165, in execute
+    self.await_(_cursor.execute(operation, parameters))
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/aiosqlite/cursor.py", line 40, in execute
+    await self._execute(self._cursor.execute, sql, parameters)
+  File "/usr/local/lib/python3.11/dist-packages/aiosqlite/cursor.py", line 32, in _execute
+    return await self._conn._execute(fn, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+             ^^^^^^^^^^
+sqlite3.IntegrityError: FOREIGN KEY constraint failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/dist-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/usr/local/lib/python3.11/dist-packages/starlette/middleware/base.py", line 193, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/agent-engine/app/middleware/metrics.py", line 78, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/usr/local/lib/python3.11/dist-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/usr/local/lib/python3.11/dist-packages/starlette/middleware/cors.py", line 88, in __call__
+    await self.app(scope, receive, send)
+  File "/usr/local/lib/python3.11/dist-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/usr/local/lib/python3.11/dist-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/usr/local/lib/python3.11/dist-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/usr/local/lib/python3.11/dist-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/usr/local/lib/python3.11/dist-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/usr/local/lib/python3.11/dist-packages/fastapi/routing.py", line 2685, in app
+    await route.handle(scope, receive, send)
+  File "/usr/local/lib/python3.11/dist-packages/fastapi/routing.py", line 1766, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "/usr/local/lib/python3.11/dist-packages/fastapi/routing.py", line 2740, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "/usr/local/lib/python3.11/dist-packages/fastapi/routing.py", line 1777, in _handle_selected
+    await route.handle(scope, receive, send)
+  File "/usr/local/lib/python3.11/dist-packages/fastapi/routing.py", line 1766, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "/usr/local/lib/python3.11/dist-packages/fastapi/routing.py", line 2740, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "/usr/local/lib/python3.11/dist-packages/fastapi/routing.py", line 1786, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "/usr/local/lib/python3.11/dist-packages/fastapi/routing.py", line 1265, in handle
+    await app(scope, receive, send)
+  File "/usr/local/lib/python3.11/dist-packages/fastapi/routing.py", line 151, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/usr/local/lib/python3.11/dist-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/usr/local/lib/python3.11/dist-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/usr/local/lib/python3.11/dist-packages/fastapi/routing.py", line 137, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/fastapi/routing.py", line 691, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/fastapi/routing.py", line 345, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/agent-engine/app/api/v1/sessions.py", line 73, in create_session_no_slash
+    return await create_session_with_slash(payload)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/agent-engine/app/api/v1/sessions.py", line 66, in create_session_with_slash
+    await session.commit()
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/ext/asyncio/session.py", line 999, in commit
+    await greenlet_spawn(self.sync_session.commit)
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/util/_concurrency_py3k.py", line 203, in greenlet_spawn
+    result = context.switch(value)
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/orm/session.py", line 2035, in commit
+    trans.commit(_to_root=True)
+  File "<string>", line 2, in commit
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/orm/session.py", line 1316, in commit
+    self._prepare_impl()
+  File "<string>", line 2, in _prepare_impl
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/orm/session.py", line 1290, in _prepare_impl
+    self.session.flush()
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/orm/session.py", line 4353, in flush
+    self._flush(objects)
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/orm/session.py", line 4488, in _flush
+    with util.safe_reraise():
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/util/langhelpers.py", line 122, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/orm/session.py", line 4449, in _flush
+    flush_context.execute()
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/orm/unitofwork.py", line 465, in execute
+    rec.execute(self)
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/orm/unitofwork.py", line 641, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/orm/persistence.py", line 94, in save_obj
+    _emit_insert_statements(
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/orm/persistence.py", line 1234, in _emit_insert_statements
+    result = connection.execute(
+             ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/engine/base.py", line 1421, in execute
+    return meth(
+           ^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/sql/elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/engine/base.py", line 1643, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/engine/base.py", line 1848, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/engine/base.py", line 1988, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/engine/base.py", line 2365, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/engine/base.py", line 1969, in _exec_single_context
+    self.dialect.do_execute(
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/dialects/sqlite/aiosqlite.py", line 183, in execute
+    self._adapt_connection._handle_exception(error)
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/dialects/sqlite/aiosqlite.py", line 343, in _handle_exception
+    raise error
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/dialects/sqlite/aiosqlite.py", line 165, in execute
+    self.await_(_cursor.execute(operation, parameters))
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/aiosqlite/cursor.py", line 40, in execute
+    await self._execute(self._cursor.execute, sql, parameters)
+  File "/usr/local/lib/python3.11/dist-packages/aiosqlite/cursor.py", line 32, in _execute
+    return await self._conn._execute(fn, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/aiosqlite/core.py", line 160, in _execute
+    return await future
+           ^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/aiosqlite/core.py", line 63, in _connection_worker_thread
+    result = function()
+             ^^^^^^^^^^
+sqlalchemy.exc.IntegrityError: (sqlite3.IntegrityError) FOREIGN KEY constraint failed
+[SQL: INSERT INTO sessions (id, agent_id, user_id, status, title, context_data, iteration_count, total_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING created_at, updated_at]
+[parameters: ('4972bddc-e7bc-44af-8c96-b099c09e1f69', '83cd7de8-452d-4c47-b384-b2a90f92ac22', '', 'idle', 'New Session', '{}', 0, 0)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)

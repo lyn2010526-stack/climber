@@ -1,0 +1,187 @@
+:root {
+  /* ═══════════════════════════════════════════════════════════════
+     Climber Design Tokens — Dark Mode (Default)
+     ═══════════════════════════════════════════════════════════════ */
+
+  /* ── Brand / Semantic Colors ── */
+  --color-primary: #1E293B;
+  --color-on-primary: #FFFFFF;
+  --color-secondary: #334155;
+  --color-accent: #22C55E;
+  --color-accent-hover: #16A34A;
+  --color-accent-muted: rgba(34, 197, 94, 0.15);
+  --color-background: #0F172A;
+  --color-foreground: #F8FAFC;
+  --color-muted: #272F42;
+  --color-muted-foreground: #94A3B8;
+  --color-border: #475569;
+  --color-border-subtle: rgba(71, 85, 105, 0.5);
+  --color-destructive: #EF4444;
+  --color-destructive-muted: rgba(239, 68, 68, 0.15);
+  --color-ring: #1E293B;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-info: #3B82F6;
+
+  /* ── Surface / Layer ── */
+  --surface-base: #0F172A;
+  --surface-raised: #1E293B;
+  --surface-overlay: #334155;
+  --surface-inset: #0B1120;
+  --surface-glass: rgba(15, 23, 42, 0.85);
+
+  /* ── Typography ── */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.75;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* ── Spacing ── */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+
+  /* ── Radius ── */
+  --radius-none: 0;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-full: 9999px;
+
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.3);
+  --shadow-glow: 0 0 20px rgba(34, 197, 94, 0.15);
+
+  /* ── Transitions ── */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── Z-index Scale ── */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+
+  /* ── Layout ── */
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 64px;
+  --header-height: 56px;
+  --max-width: 1440px;
+  --content-max-width: 896px;
+
+  /* ── Focus ── */
+  --focus-ring: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-accent);
+  --focus-ring-offset: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Light Mode Overrides
+   ═══════════════════════════════════════════════════════════════ */
+[data-theme="light"] {
+  --color-primary: #1E293B;
+  --color-on-primary: #FFFFFF;
+  --color-secondary: #F1F5F9;
+  --color-accent: #16A34A;
+  --color-accent-hover: #15803D;
+  --color-accent-muted: rgba(22, 163, 74, 0.1);
+  --color-background: #F8FAFC;
+  --color-foreground: #0F172A;
+  --color-muted: #F1F5F9;
+  --color-muted-foreground: #64748B;
+  --color-border: #E2E8F0;
+  --color-border-subtle: rgba(226, 232, 240, 0.8);
+  --color-destructive: #DC2626;
+  --color-destructive-muted: rgba(220, 38, 38, 0.1);
+  --color-ring: #1E293B;
+
+  --surface-base: #FFFFFF;
+  --surface-raised: #F8FAFC;
+  --surface-overlay: #F1F5F9;
+  --surface-inset: #FFFFFF;
+  --surface-glass: rgba(255, 255, 255, 0.9);
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.05);
+  --shadow-glow: 0 0 20px rgba(22, 163, 74, 0.1);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Base Reset & Typography
+   ═══════════════════════════════════════════════════════════════ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--color-foreground);
+  background-color: var(--color-background);
+  transition: background-color var(--transition-base), color var(--transition-base);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Utility Classes
+   ═══════════════════════════════════════════════════════════════ */
+.focus-ring:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

@@ -1,0 +1,9 @@
+{
+  "name": "calculator",
+  "description": "执行数学计算，支持基础四则运算、幂运算、开方、三角函数等。",
+  "category": "productivity",
+  "prompt_template": "你是一个数学助手。请计算：{query}",
+  "tools": ["calculator"],
+  "enabled": true,
+  "version": "1.0.0"
+}

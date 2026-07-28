@@ -1,0 +1,9 @@
+{
+  "name": "file-organizer",
+  "description": "智能文件整理：按类型、日期、大小自动分类和归档文件。",
+  "category": "productivity",
+  "prompt_template": "请帮我整理以下文件：{query}",
+  "tools": ["file_exists", "list_directory", "move_file", "copy_file"],
+  "enabled": true,
+  "version": "1.0.0"
+}

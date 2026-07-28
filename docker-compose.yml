@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://climber:climber@postgres:5432/climber
+      - REDIS_URL=redis://redis:6379/0
+      - APP_ENV=production
+      - APP_DEBUG=false
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app/frontend-react
+    command: sh -c "npm install && npx vite --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend-react:/app/frontend-react
+      - /app/frontend-react/node_modules
+    environment:
+      - VITE_API_URL=/api
+      - VITE_PROXY_TARGET=http://api:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=climber
+      - POSTGRES_PASSWORD=climber
+      - POSTGRES_DB=climber
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U climber"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  chroma_data:

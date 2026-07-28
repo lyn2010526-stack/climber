@@ -1,0 +1,9 @@
+{
+  "name": "code-review",
+  "description": "代码审查和质量检查：分析代码风格、潜在 bug、安全问题和性能优化建议。",
+  "category": "development",
+  "prompt_template": "请审查以下代码：\n\n{query}\n\n从以下方面给出反馈：\n1. 代码风格和可读性\n2. 潜在 bug\n3. 安全风险\n4. 性能优化\n5. 改进建议",
+  "tools": ["read_file", "list_directory", "execute_command"],
+  "enabled": true,
+  "version": "1.0.0"
+}

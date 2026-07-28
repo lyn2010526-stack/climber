@@ -1,0 +1,9 @@
+{
+  "name": "summarizer",
+  "description": "文本摘要和提取：将长文本压缩为简洁摘要，提取关键信息。",
+  "category": "productivity",
+  "prompt_template": "请总结以下内容，提取关键要点：\n\n{query}",
+  "tools": ["read_file", "get_datetime"],
+  "enabled": true,
+  "version": "1.0.0"
+}
