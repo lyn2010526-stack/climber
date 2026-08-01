@@ -1,1 +1,0 @@
-"""Authentication endpoints removed — application is now local-only."""
