@@ -58,6 +58,7 @@ class ChatResult:
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     finish_reason: str | None = None
     tokens_used: int = 0
+    accumulated_content: str = ""
 
 
 @dataclass

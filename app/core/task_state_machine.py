@@ -1,6 +1,6 @@
 """Task state machine with hook chain support.
 
-- Generic lifecycle manager design pattern
+- MonkeyCode `backend/biz/task/` Manager[I, S, M] 泛型生命周期管理器
 - LangGraph `StateGraph` 状态转换矩阵设计
 """
 
@@ -10,11 +10,20 @@ from enum import Enum
 from typing import Any, Callable, Coroutine
 
 from app.core import AgentEventType
+from app.core.exceptions import InvalidStateTransitionError
 
 
 class TaskState(str, Enum):
-    """Task lifecycle states."""
+    """Task lifecycle states.
+
+    Single source of truth for task state across the engine.
+    Consolidates states from both the core state machine and the scheduler.
+    """
+
     PENDING = "pending"
+    ASSIGNED = "assigned"
+    RUNNING = "running"
+    WAITING = "waiting"
     PROCESSING = "processing"
     PAUSED = "paused"
     COMPLETED = "completed"
@@ -25,18 +34,36 @@ class TaskState(str, Enum):
 
 # Allowed state transitions
 TRANSITIONS: dict[TaskState, list[TaskState]] = {
-    TaskState.PENDING: [TaskState.PROCESSING, TaskState.CANCELLED],
+    TaskState.PENDING: [TaskState.ASSIGNED, TaskState.PROCESSING, TaskState.CANCELLED],
+    TaskState.ASSIGNED: [TaskState.RUNNING, TaskState.CANCELLED],
+    TaskState.RUNNING: [TaskState.WAITING, TaskState.PROCESSING, TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED],
+    TaskState.WAITING: [TaskState.ASSIGNED, TaskState.RUNNING, TaskState.CANCELLED],
     TaskState.PROCESSING: [TaskState.PAUSED, TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED, TaskState.RETRYING],
-    TaskState.PAUSED: [TaskState.PROCESSING, TaskState.CANCELLED],
-    TaskState.COMPLETED: [],
-    TaskState.FAILED: [TaskState.PROCESSING],  # retry
-    TaskState.CANCELLED: [],
+    TaskState.PAUSED: [TaskState.PROCESSING, TaskState.CANCELLED, TaskState.PENDING],
+    TaskState.COMPLETED: [TaskState.PENDING],
+    TaskState.FAILED: [TaskState.PROCESSING, TaskState.PENDING],
+    TaskState.CANCELLED: [TaskState.PENDING],
     TaskState.RETRYING: [TaskState.PROCESSING, TaskState.FAILED, TaskState.CANCELLED],
 }
 
 
-class StateTransitionError(Exception):
-    """Raised when an invalid state transition is attempted."""
+def to_session_status(state: TaskState) -> "SessionStatus":
+    """Map TaskState to the view-level SessionStatus enum."""
+    from app.core import SessionStatus
+
+    _mapping: dict[TaskState, SessionStatus] = {
+        TaskState.PENDING: SessionStatus.PENDING,
+        TaskState.ASSIGNED: SessionStatus.RUNNING,
+        TaskState.RUNNING: SessionStatus.RUNNING,
+        TaskState.WAITING: SessionStatus.RUNNING,
+        TaskState.PROCESSING: SessionStatus.RUNNING,
+        TaskState.PAUSED: SessionStatus.PAUSED,
+        TaskState.COMPLETED: SessionStatus.COMPLETED,
+        TaskState.FAILED: SessionStatus.FAILED,
+        TaskState.CANCELLED: SessionStatus.STOPPED,
+        TaskState.RETRYING: SessionStatus.RUNNING,
+    }
+    return _mapping.get(state, SessionStatus.FAILED)
 
 
 TaskHook = Callable[["TaskStateMachine", TaskState, TaskState], Coroutine[Any, Any, None]]
@@ -45,7 +72,7 @@ TaskHook = Callable[["TaskStateMachine", TaskState, TaskState], Coroutine[Any, A
 class TaskStateMachine:
     """Generic task lifecycle manager with hook chain support.
 
-    Reference: generic state machine pattern
+    参考 MonkeyCode Manager[I, S, M] 设计：
     - 泛型状态管理
     - Hook 链（按优先级排序，支持同步/异步）
     - 状态持久化（通过 metadata 字典）
@@ -92,12 +119,12 @@ class TaskStateMachine:
         """Attempt to transition to a new state.
 
         Raises:
-            StateTransitionError: If the transition is not allowed.
+            InvalidStateTransitionError: If the transition is not allowed.
         """
         if new_state == self._state:
             return
         if new_state not in TRANSITIONS.get(self._state, []):
-            raise StateTransitionError(
+            raise InvalidStateTransitionError(
                 f"Cannot transition from {self._state} to {new_state}. "
                 f"Allowed: {TRANSITIONS.get(self._state, [])}"
             )
@@ -136,3 +163,7 @@ class TaskStateMachine:
             "transition_count": self._transition_count,
             "metadata": self._metadata,
         }
+
+
+# Backward-compatible alias
+StateTransitionError = InvalidStateTransitionError

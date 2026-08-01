@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Sequence
 from uuid import uuid4
 
@@ -9,7 +10,7 @@ from sqlalchemy import select, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.storage.database import (
-    User, Agent, Session, Message, Tool, Document, ApiKey, UsageLog,
+    User, Agent, Session, Message, Tool, Document, ApiKey, UsageLog, Turn,
 )
 from app.storage.models_plugins import PluginRecord, MCPServerRecord
 
@@ -149,6 +150,137 @@ class SessionRepository:
     async def delete(self, session_id: str) -> bool:
         result = await self._session.execute(delete(Session).where(Session.id == session_id))
         return result.rowcount > 0
+
+
+class TurnRepository:
+    """CRUD operations for turns."""
+
+    def __init__(self, session_factory=None):
+        self._session_factory = session_factory
+
+    async def _get_session(self):
+        if self._session_factory is not None:
+            return self._session_factory()
+        from app.storage import async_session
+        return async_session()
+
+    async def create(
+        self,
+        session_id: str,
+        status: str = "running",
+        checkpoint_id: str | None = None,
+        metadata_: dict[str, Any] | None = None,
+    ) -> Turn:
+        async with await self._get_session() as db:
+            turn = Turn(
+                id=str(uuid4()),
+                session_id=session_id,
+                status=status,
+                checkpoint_id=checkpoint_id,
+                started_at=datetime.utcnow() if status == "running" else None,
+                metadata_=metadata_ or {},
+            )
+            db.add(turn)
+            await db.flush()
+            return turn
+
+    async def get_by_id(self, turn_id: str) -> Turn | None:
+        async with await self._get_session() as db:
+            result = await db.execute(select(Turn).where(Turn.id == turn_id))
+            return result.scalar_one_or_none()
+
+    async def list_by_session(self, session_id: str) -> Sequence[Turn]:
+        async with await self._get_session() as db:
+            result = await db.execute(
+                select(Turn).where(Turn.session_id == session_id).order_by(Turn.created_at.asc())
+            )
+            return result.scalars().all()
+
+    async def update(self, turn_id: str, **kwargs: Any) -> Turn | None:
+        async with await self._get_session() as db:
+            await db.execute(
+                update(Turn).where(Turn.id == turn_id).values(**kwargs)
+            )
+            await db.flush()
+            await db.commit()
+            result = await db.execute(select(Turn).where(Turn.id == turn_id))
+            return result.scalar_one_or_none()
+
+    async def complete(self, turn_id: str, result: str | None = None, error: str | None = None) -> Turn | None:
+        now = datetime.utcnow()
+        values: dict[str, Any] = {"completed_at": now}
+        if result is not None:
+            values["result"] = result
+        if error is not None:
+            values["error"] = error
+            values["error_message"] = error
+        status = "failed" if error else "completed"
+        values["status"] = status
+        return await self.update(turn_id, **values)
+
+    async def start_turn(
+        self,
+        session_id: str,
+        checkpoint_id: str | None = None,
+        metadata_: dict[str, Any] | None = None,
+    ) -> Turn:
+        """Create a new turn in running state."""
+        async with await self._get_session() as db:
+            turn = Turn(
+                id=str(uuid4()),
+                session_id=session_id,
+                status="running",
+                checkpoint_id=checkpoint_id,
+                started_at=datetime.utcnow(),
+                metadata_=metadata_ or {},
+            )
+            db.add(turn)
+            await db.flush()
+            await db.commit()
+            return turn
+
+    async def complete_turn(
+        self,
+        turn_id: str,
+        result: str | None = None,
+        iteration_count: int = 0,
+        tokens_used: int = 0,
+    ) -> Turn | None:
+        """Mark a turn as completed with metrics."""
+        now = datetime.utcnow()
+        values: dict[str, Any] = {
+            "completed_at": now,
+            "status": "completed",
+            "iteration_count": iteration_count,
+            "tokens_used": tokens_used,
+        }
+        if result is not None:
+            values["result"] = result
+        return await self.update(turn_id, **values)
+
+    async def fail_turn(
+        self,
+        turn_id: str,
+        error_message: str,
+        iteration_count: int = 0,
+        tokens_used: int = 0,
+    ) -> Turn | None:
+        """Mark a turn as failed with error details."""
+        now = datetime.utcnow()
+        values: dict[str, Any] = {
+            "completed_at": now,
+            "status": "failed",
+            "error": error_message,
+            "error_message": error_message,
+            "iteration_count": iteration_count,
+            "tokens_used": tokens_used,
+        }
+        return await self.update(turn_id, **values)
+
+    async def delete(self, turn_id: str) -> bool:
+        async with await self._get_session() as db:
+            result = await db.execute(delete(Turn).where(Turn.id == turn_id))
+            return result.rowcount > 0
 
 
 class MessageRepository:

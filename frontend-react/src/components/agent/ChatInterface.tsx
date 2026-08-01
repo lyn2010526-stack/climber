@@ -4,11 +4,14 @@ import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 import { MessageContent, MessageActions, ToolCallCard } from '../chat/MessageContent';
 import { ThinkingDetails } from '../chat/ThinkingDetails';
+import { ThinkingIndicator, ThinkingDots } from './ThinkingIndicator';
+import { FloatingPermissionDialog, PermissionRequest } from './FloatingPermissionDialog';
+import { api } from '../../api';
 
 /* Reference: Lobe UI `chat/ChatItem/style.ts` - message enter animation */
 const messageEnterStyle = `
   @keyframes message-enter {
-    from { opacity: 0; transform: translateY(8px); }
+    from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
   }
   @keyframes slide-in-top {
@@ -63,8 +66,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [input, setInput] = useState('');
   const [editState, setEditState] = useState<EditState>(null);
   const [editContent, setEditContent] = useState('');
+  const [permissionRequests, setPermissionRequests] = useState<PermissionRequest[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleApprovePermission = useCallback(async (id: string) => {
+    setPermissionRequests(prev => prev.filter(r => r.id !== id));
+  }, []);
+
+  const handleDenyPermission = useCallback(async (id: string) => {
+    setPermissionRequests(prev => prev.filter(r => r.id !== id));
+  }, []);
+
+  const handleApproveAllPermissions = useCallback(async () => {
+    setPermissionRequests([]);
+  }, []);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -82,7 +98,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, []);
 
-  /* Reference: Lobe UI EditableMessage - 三态切换 */
+  /* Reference: Lobe UI EditableMessage - mode switching */
   const startEditing = useCallback((messageId: string, content: string) => {
     setEditContent(content);
     setEditState({ mode: 'edit', messageId });
@@ -127,11 +143,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     if (isEditing && (editState.mode === 'edit' || editState.mode === 'modal')) {
       return (
         <div className={cn('flex gap-3 max-w-[85%]', msg.role === 'user' ? 'flex-row-reverse ml-auto' : '')}>
-          <div className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-blue-500 text-white w-9 h-9 shrink-0">
+          <div className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-blue-500 text-white w-9 h-9 shrink-0">
             <Edit3 size={16} />
           </div>
           <div className={cn('flex flex-col gap-2 min-w-0 flex-1')}>
-            <div className="px-4 py-3 bg-white/5 border border-white/10 rounded-2xl">
+            <div className="px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-2xl focus-within:border-[#3B82F6]/40 transition-colors duration-200">
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
@@ -172,7 +188,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     if (msg.toolCalls && msg.toolCalls.length > 0) {
       return (
         <div className="flex gap-3 max-w-[85%] message-enter">
-          <div className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-blue-500 text-white w-9 h-9 shrink-0">
+          <div className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-blue-500 text-white w-9 h-9 shrink-0">
             <Bot size={16} />
           </div>
           <div className="flex flex-col gap-2 min-w-0 flex-1">
@@ -229,18 +245,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-8 py-6 chat-container">
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center max-w-md animate-in fade-in duration-500">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center mx-auto mb-4">
-                <MessageSquare size={24} className="text-blue-400" />
+            <div className="text-center max-w-md fade-enter">
+              <div className="w-18 h-18 rounded-3xl bg-gradient-to-br from-blue-500/20 to-violet-500/20 flex items-center justify-center mx-auto mb-5 p-4">
+                <MessageSquare size={28} className="text-blue-400" />
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">{emptyStateTitle}</h3>
-              <p className="text-gray-400 text-sm mb-6">{emptyStateDescription}</p>
+              <h3 className="text-xl font-semibold text-white mb-2 tracking-tight">{emptyStateTitle}</h3>
+              <p className="text-gray-400 text-sm mb-6 leading-relaxed">{emptyStateDescription}</p>
               <div className="flex flex-wrap justify-center gap-2">
                 {suggestions.map((suggestion, idx) => (
                   <button
                     key={idx}
                     onClick={() => onSend(suggestion)}
-                    className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-gray-400 hover:border-blue-500/50 hover:text-gray-200 transition-all duration-200"
+                    className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] rounded-2xl text-xs text-gray-400 hover:border-blue-500/40 hover:text-gray-200 hover:bg-white/[0.06] transition-all duration-200 active:scale-[0.97]"
                   >
                     {suggestion}
                   </button>
@@ -251,12 +267,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         )}
         <div className="space-y-5">
           {messages.map(renderMessageContent)}
+          {isLoading && (
+            <div className="flex gap-3 max-w-[85%]">
+              <div className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500/50 to-blue-500/50 text-white/70 w-9 h-9 shrink-0">
+                <Bot size={16} />
+              </div>
+              <div className="flex-1">
+                <ThinkingIndicator sparkle />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Input Area */}
-      <form onSubmit={handleSubmit} className="border-t border-white/5 p-4 md:p-5 bg-[#0F0F14]/80 backdrop-blur-xl">
-        <div className="flex gap-2 max-w-4xl mx-auto">
+      <form onSubmit={handleSubmit} className="border-t border-white/[0.04] p-4 md:p-5 bg-[#0F0F14]/90 backdrop-blur-xl">
+        <div className="flex gap-2.5 max-w-4xl mx-auto">
           <textarea
             ref={inputRef}
             value={input}
@@ -264,7 +290,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             disabled={isLoading}
-            className="chat-input-mobile flex-1 px-5 py-3 bg-white/5 border border-white/10 rounded-3xl text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-[#007AFF]/50 focus:bg-white/10 transition-all duration-200 resize-none"
+            className="chat-input-mobile flex-1 px-5 py-3 bg-white/[0.04] border border-white/[0.08] rounded-3xl text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-[#3B82F6]/40 focus:bg-white/[0.06] transition-all duration-200 resize-none"
             rows={1}
           />
           {isLoading ? (
@@ -272,7 +298,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <Square size={16} />
             </Button>
           ) : (
-            <Button type="submit" size="icon" disabled={!input.trim()} className="rounded-2xl shadow-lg shadow-blue-500/20">
+            <Button type="submit" size="icon" disabled={!input.trim()} className="rounded-2xl shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30">
               <Send size={16} />
             </Button>
           )}
@@ -281,10 +307,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
       {/* Edit Modal */}
       {editState?.mode === 'modal' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-black/80 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full h-full max-w-7xl max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-gray-700">
-              <h3 className="text-lg font-semibold text-white">编辑消息</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-black/80 backdrop-blur-md fade-enter">
+          <div className="bg-[#121218] border border-white/[0.08] rounded-3xl w-full h-full max-w-7xl max-h-[90vh] flex flex-col shadow-2xl shadow-black/50">
+            <div className="flex items-center justify-between p-5 border-b border-white/[0.06]">
+              <h3 className="text-lg font-semibold text-white tracking-tight">编辑消息</h3>
               <div className="flex items-center gap-2">
                 <Button size="sm" onClick={saveEdit} className="rounded-xl">
                   <Check size={14} /> 保存
@@ -305,6 +331,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
         </div>
       )}
+
+      {/* Floating Permission Dialog */}
+      <FloatingPermissionDialog
+        requests={permissionRequests}
+        onApprove={handleApprovePermission}
+        onDeny={handleDenyPermission}
+        onApproveAll={handleApproveAllPermissions}
+      />
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Download, Trash2, Search, Check, Server, Star, RefreshCw, AlertCircle } from 'lucide-react';
+import { api } from '../api';
 
 interface MCPServer {
   id: string;
@@ -32,13 +33,8 @@ export function MCPPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/v1/mcp/servers');
-      if (response.ok) {
-        const data = await response.json();
+      const data = await api.listMCPServers();
         setServers(data);
-       } else {
-         setError(`加载 MCP 服务器失败 (HTTP ${response.status})`);
-       }
      } catch (e: any) {
        setError(e.message || '加载 MCP 服务器失败');
      }
@@ -47,11 +43,8 @@ export function MCPPage() {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/v1/mcp/categories');
-      if (response.ok) {
-        const data = await response.json();
+      const data = await api.listMCPCategories();
         setCategories(data);
-      }
     } catch (e) {
       console.error('加载分类失败:', e);
     }
@@ -60,18 +53,10 @@ export function MCPPage() {
   const installServer = async (serverId: string) => {
     setInstalling(serverId);
     try {
-      const response = await fetch(`/api/v1/mcp/servers/${serverId}/install`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      });
-      if (response.ok) {
+      await api.installMCPServer(serverId, {});
         setServers(prev => prev.map(s =>
           s.id === serverId ? { ...s, is_installed: true } : s
         ));
-      }
     } catch (e) {
       console.error('Failed to install:', e);
     }
@@ -80,14 +65,10 @@ export function MCPPage() {
 
   const uninstallServer = async (serverId: string) => {
     try {
-      const response = await fetch(`/api/v1/mcp/servers/${serverId}`, {
-        method: 'DELETE',
-      });
-      if (response.ok) {
+      await api.deleteMCPServer(serverId);
         setServers(prev => prev.map(s =>
           s.id === serverId ? { ...s, is_installed: false } : s
         ));
-      }
     } catch (e) {
       console.error('Failed to uninstall:', e);
     }

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
@@ -53,7 +53,7 @@ class SettingsService:
         if token_throttle_mcp_enabled is not None:
             settings.token_throttle_mcp_enabled = token_throttle_mcp_enabled
 
-        settings.updated_at = datetime.utcnow()
+        settings.updated_at = datetime.now(timezone.utc)
         await self.db.commit()
         await self.db.refresh(settings)
 
@@ -63,7 +63,7 @@ class SettingsService:
         """Update MCP status for user."""
         settings = await self.get_settings(user_id)
         settings.mcp_status = status
-        settings.updated_at = datetime.utcnow()
+        settings.updated_at = datetime.now(timezone.utc)
         await self.db.commit()
 
     def get_effective_mode(self, settings: UserSettings) -> dict:

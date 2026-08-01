@@ -45,7 +45,7 @@ export interface TaskItem {
 export interface WorkspaceState {
   sessions: Session[];
   activeSessionId: string | null;
-  rightPanelTab: 'config' | 'dag' | 'trace' | 'reasoning' | 'files';
+  rightPanelTab: 'config' | 'diff' | 'toolcalls' | 'dag' | 'trace' | 'reasoning' | 'files';
   rightPanelOpen: boolean;
   focusMode: boolean;
   expertMode: boolean;
@@ -55,7 +55,7 @@ export interface WorkspaceState {
   snapshots: Array<{ id: string; sessionId: string; timestamp: number; label: string }>;
 
   setActiveSession: (id: string | null) => void;
-  setRightPanelTab: (tab: 'config' | 'dag' | 'trace' | 'reasoning' | 'files') => void;
+  setRightPanelTab: (tab: 'config' | 'diff' | 'toolcalls' | 'dag' | 'trace' | 'reasoning' | 'files') => void;
   toggleRightPanel: () => void;
   toggleFocusMode: () => void;
   toggleExpertMode: () => void;
@@ -93,7 +93,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   addMessage: (sessionId, message) =>
     set((state) => ({
       sessions: state.sessions.map((s) =>
-        s.id === sessionId ? { ...s, messages: [...s.messages, message] } : s
+        s.id === sessionId
+          ? {
+              ...s,
+              messages: s.messages.some((m) => m.id === message.id)
+                ? s.messages.map((m) => (m.id === message.id ? message : m))
+                : [...s.messages, message],
+            }
+          : s
       ),
     })),
 

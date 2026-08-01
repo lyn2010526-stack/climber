@@ -54,11 +54,17 @@ class Trimmer:
 
     def trim_messages(self, messages: list[dict[str, Any]], budget: TokenBudget) -> list[dict[str, Any]]:
         """Trim messages to fit within token budget."""
-        from app.core.context_compressor import ContextCompressor, CompressionStrategy
-        compressor = ContextCompressor(max_tokens=budget.max_input_tokens, system_tokens=budget.reserved_system_tokens)
-        if compressor.needs_compression(messages):
-            result = compressor.compress(messages, CompressionStrategy.SLIDING)
-            return result.messages
+        from app.core import CompressionStrategy, ContextConfig
+        from app.core.compressor import ContextCompressor, estimate_tokens
+        if estimate_tokens(messages) > budget.max_input_tokens:
+            config = ContextConfig(
+                max_tokens=budget.max_input_tokens,
+                compression_strategy=CompressionStrategy.SLIDING,
+                keep_recent_messages=10,
+            )
+            compressor = ContextCompressor(config)
+            import asyncio
+            return asyncio.run(compressor.compress(messages, model=None))
         return messages
 
 

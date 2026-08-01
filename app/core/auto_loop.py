@@ -8,7 +8,7 @@ import asyncio
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Coroutine
 
@@ -385,7 +385,7 @@ class AutoLoopEngine:
                 )
                 existing = result.scalars().first()
 
-                now = datetime.utcnow()
+                now = datetime.now(timezone.utc)
                 if existing:
                     existing.status = status.value
                     existing.current_step = record.current_step

@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import {
   Settings, GitBranch, Activity, FolderTree, ChevronDown, ChevronRight,
-  Zap, Brain, Sliders, Timer, Shield,
+  Zap, Brain, Sliders, Timer, Shield, FileDiff, Wrench,
 } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/workspace';
 import { ReasoningPanel } from './ReasoningPanel';
+import { DiffPanel } from '../code/DiffPanel';
+import { ToolCallVisualization, ToolCall } from '../agent/ToolCallVisualization';
+import { api } from '../../api';
 
 export function RightPanel() {
   const { rightPanelTab, setRightPanelTab, rightPanelOpen, activeSessionId, sessions } = useWorkspaceStore();
@@ -15,6 +18,8 @@ export function RightPanel() {
 
   const tabs = [
     { id: 'config' as const, icon: Settings, label: '配置' },
+    { id: 'diff' as const, icon: FileDiff, label: 'Diff' },
+    { id: 'toolcalls' as const, icon: Wrench, label: '工具' },
     { id: 'dag' as const, icon: GitBranch, label: 'DAG' },
     { id: 'trace' as const, icon: Activity, label: '链路' },
     { id: 'reasoning' as const, icon: Brain, label: '推理' },
@@ -47,6 +52,8 @@ export function RightPanel() {
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-3">
         {rightPanelTab === 'config' && <ConfigPanel session={activeSession} />}
+        {rightPanelTab === 'diff' && <DiffPanelTab sessionId={activeSessionId} />}
+        {rightPanelTab === 'toolcalls' && <ToolCallsTab sessionId={activeSessionId} />}
         {rightPanelTab === 'dag' && <DAGPanel />}
         {rightPanelTab === 'trace' && <TracePanel />}
         {rightPanelTab === 'reasoning' && <ReasoningPanel />}
@@ -158,9 +165,7 @@ function DAGPanel() {
     const fetchStatus = async () => {
       setLoading(true);
       try {
-        const res = await fetch('/api/v1/cluster/status');
-        if (res.ok) {
-          const data = await res.json();
+        const data = await api.getClusterStatus();
           if (data.plan) {
             setNodes(data.plan.map((p: any) => ({
               id: p.id || String(Math.random()),
@@ -242,11 +247,8 @@ function TracePanel() {
     const fetchTraces = async () => {
       setLoading(true);
       try {
-        const res = await fetch('/api/v1/traces/');
-        if (res.ok) {
-          const data = await res.json();
+        const data = await api.listTraces();
           setTraces(data.traces || data || []);
-        }
       } catch { /* skip */ }
       setLoading(false);
     };
@@ -319,11 +321,8 @@ function FilesPanel() {
     const fetchDocuments = async () => {
       setLoading(true);
       try {
-        const res = await fetch('/api/v1/documents/');
-        if (res.ok) {
-          const data = await res.json();
+        const data = await api.listDocuments();
           setDocuments(data || []);
-        }
       } catch { /* skip */ }
       setLoading(false);
     };
@@ -368,6 +367,124 @@ function FilesPanel() {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── Diff Panel Tab ──
+
+function DiffPanelTab({ sessionId }: { sessionId: string | null }) {
+  const [diffText, setDiffText] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    setLoading(true);
+    api.getSessionMessages(sessionId).then((messages) => {
+      const toolResults = messages.filter((m: any) => m.type === 'tool-result' || m.type === 'tool-result');
+      const diffMessages = toolResults.filter((m: any) =>
+        m.content && typeof m.content === 'string' && m.content.includes('diff --git')
+      );
+      if (diffMessages.length > 0) {
+        const latestDiff = diffMessages[diffMessages.length - 1];
+        setDiffText(latestDiff.content);
+      }
+    }).catch(() => {});
+    setLoading(false);
+  }, [sessionId]);
+
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        <p className="text-xs text-gray-500">加载变更中...</p>
+        <div className="space-y-1.5">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="h-6 bg-white/5 rounded-xl animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!diffText) {
+    return (
+      <div className="space-y-2">
+        <p className="text-xs text-gray-500">文件变更视图</p>
+        <div className="text-center py-8">
+          <FileDiff size={24} className="mx-auto text-gray-600" />
+          <p className="text-xs text-gray-500 mt-2">暂无文件变更</p>
+          <p className="text-[10px] text-gray-600 mt-1">执行文件操作后在此查看 diff</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-gray-500">文件变更 — 最新 diff</p>
+      <DiffPanel diffText={diffText} />
+    </div>
+  );
+}
+
+// ── Tool Calls Tab ──
+
+function ToolCallsTab({ sessionId }: { sessionId: string | null }) {
+  const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    setLoading(true);
+    api.getSessionMessages(sessionId).then((messages) => {
+      const toolMessages = messages.filter((m: any) => m.type === 'tool-call' || m.type === 'tool_call');
+      const calls: ToolCall[] = toolMessages.map((m: any, idx: number) => ({
+        id: m.id || `tool-${idx}`,
+        name: m.metadata?.toolName || m.content?.name || 'unknown',
+        arguments: m.metadata?.toolArgs || m.content?.arguments || {},
+        result: m.content?.result,
+        error: m.content?.error,
+        status: m.metadata?.status || 'success',
+        duration: m.metadata?.durationMs,
+        startTime: m.timestamp,
+      }));
+      setToolCalls(calls);
+    }).catch(() => {});
+    setLoading(false);
+  }, [sessionId]);
+
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        <p className="text-xs text-gray-500">加载工具调用中...</p>
+        <div className="space-y-1.5">
+          {[1, 2].map(i => (
+            <div key={i} className="p-2 bg-white/5 rounded-xl animate-pulse">
+              <div className="h-3 w-24 bg-white/10 rounded-xl" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (toolCalls.length === 0) {
+    return (
+      <div className="space-y-2">
+        <p className="text-xs text-gray-500">工具调用记录</p>
+        <div className="text-center py-8">
+          <Wrench size={24} className="mx-auto text-gray-600" />
+          <p className="text-xs text-gray-500 mt-2">暂无工具调用</p>
+          <p className="text-[10px] text-gray-600 mt-1">智能体执行工具后在此查看</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-gray-500">工具调用 — 展开查看详情</p>
+      <ToolCallVisualization calls={toolCalls} defaultExpanded={false} />
     </div>
   );
 }

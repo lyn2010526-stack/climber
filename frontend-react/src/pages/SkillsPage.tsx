@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, Package, RefreshCw, AlertCircle, Power, PowerOff } from 'lucide-react';
+import { api } from '../api';
 
 interface Skill {
   id: number;
@@ -36,13 +37,8 @@ export function SkillsPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch('/api/v1/skills');
-        if (res.ok) {
-          const data = await res.json();
-          setSkills(data.skills || []);
-        } else {
-          setError(`加载技能失败 (HTTP ${res.status})`);
-        }
+        const res = await api.listSkills();
+          setSkills(res.skills || []);
       } catch (e: any) {
         setError(e.message || '加载技能失败');
       }
@@ -67,11 +63,7 @@ export function SkillsPage() {
   const toggleSkill = async (skill: Skill) => {
     setToggling(`skill-${skill.id}`);
     try {
-      await fetch(`/api/v1/skills/${skill.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !skill.is_enabled }),
-      });
+      await api.updateSkill(String(skill.id), { enabled: !skill.is_enabled });
       setSkills(prev => prev.map(s => s.id === skill.id ? { ...s, is_enabled: !s.is_enabled } : s));
     } catch {
       // ignore

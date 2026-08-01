@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
+import structlog
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -33,6 +34,7 @@ from app.storage.models_plugins import PluginRecord
 from app.core.di import resolve as di_resolve
 
 router = APIRouter()
+logger = structlog.get_logger()
 
 DEFAULT_USER = "default-user"
 
@@ -78,21 +80,15 @@ async def list_agents() -> list[dict[str, Any]]:
 @router.post("/agents")
 @router.post("/agents/")
 async def create_agent(request: Request) -> dict[str, Any]:
-    from app.storage.database import Agent, User
+    from app.storage.database import Agent
 
     data = await _payload(request)
     if not data.get("name"):
         raise HTTPException(status_code=422, detail="name is required")
 
     async with async_session() as db:
-        user = (await db.execute(select(User).limit(1))).scalar_one_or_none()
-        if user is None:
-            user = User(id=DEFAULT_USER, email="local@localhost", password_hash="")
-            db.add(user)
-            await db.flush()
-
         agent = Agent(
-            user_id=user.id,
+            user_id=DEFAULT_USER,
             name=data["name"],
             provider=data.get("provider", "openai"),
             model_id=data.get("model_id", "gpt-4o-mini"),
@@ -113,6 +109,28 @@ async def create_agent(request: Request) -> dict[str, Any]:
             "provider": agent.provider,
             "model_id": agent.model_id,
             "base_url": agent.base_url,
+        }
+
+
+@router.get("/agents/{agent_id}")
+async def get_agent(agent_id: str) -> dict[str, Any]:
+    from app.storage.database import Agent
+
+    async with async_session() as db:
+        agent = (await db.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
+        if agent is None:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        return {
+            "id": agent.id,
+            "name": agent.name,
+            "description": getattr(agent, "description", "") or "",
+            "provider": agent.provider,
+            "model_id": agent.model_id,
+            "system_prompt": getattr(agent, "system_prompt", "") or "",
+            "base_url": agent.base_url,
+            "tool_ids": getattr(agent, "tool_ids", []) or [],
+            "skill_ids": getattr(agent, "skill_ids", []) or [],
+            "created_at": agent.created_at.isoformat() if agent.created_at else None,
         }
 
 
@@ -149,13 +167,26 @@ async def list_tools() -> list[dict[str, Any]]:
 @router.get("/models/")
 async def list_models() -> list[dict[str, Any]]:
     """Return known models per provider, plus locally discovered Ollama models."""
-    models: list[dict[str, Any]] = [
-        {"provider": "openai", "model_id": "gpt-4o", "label": "GPT-4o"},
-        {"provider": "openai", "model_id": "gpt-4o-mini", "label": "GPT-4o mini"},
-        {"provider": "anthropic", "model_id": "claude-3-5-sonnet-20241022", "label": "Claude 3.5 Sonnet"},
-        {"provider": "google", "model_id": "gemini-1.5-pro", "label": "Gemini 1.5 Pro"},
-        {"provider": "stepfun", "model_id": "step-1v-8k", "label": "Step-1V 8K"},
-    ]
+    from app.models.registry import ModelRegistry
+
+    model_registry = di_resolve("ModelRegistry")
+    models: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    # Build from registry's known aliases (deduplicated by provider:model_id)
+    for alias, (provider, model_id) in ModelRegistry.MODEL_ALIASES.items():
+        key = f"{provider}:{model_id}"
+        if key not in seen:
+            seen.add(key)
+            models.append({"provider": provider, "model_id": model_id, "label": alias})
+
+    # Add any user-registered models from the registry
+    for m in model_registry.list_models():
+        key = f"{m['provider']}:{m['model_id']}"
+        if key not in seen:
+            seen.add(key)
+            models.append({"provider": m["provider"], "model_id": m["model_id"], "label": m["model_id"]})
+
     # Discover local Ollama models when the daemon is reachable
     try:
         import httpx
@@ -170,8 +201,8 @@ async def list_models() -> list[dict[str, Any]]:
                     models.append(
                         {"provider": "ollama", "model_id": m.get("name", ""), "label": f"{m.get('name','')} (local)"}
                     )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("generic.list_models_ollama_discovery", error=str(e))
     return models
 
 
@@ -509,7 +540,7 @@ async def run_crew(crew_id: str, request: Request) -> dict[str, Any]:
 @router.get("/stats")
 @router.get("/stats/")
 async def get_stats() -> dict[str, Any]:
-    from app.storage.database import Agent, ApiKey, Message, Session, UsageLog, User
+    from app.storage.database import Agent, ApiKey, Message, Session, UsageLog
 
     async with async_session() as db:
         async def count(model) -> int:
@@ -518,7 +549,7 @@ async def get_stats() -> dict[str, Any]:
         total_tokens = (await db.execute(select(func.coalesce(func.sum(UsageLog.total_tokens), 0)))).scalar() or 0
 
         return {
-            "total_users": await count(User),
+            "total_users": 1,
             "total_agents": await count(Agent),
             "total_api_keys": await count(ApiKey),
             "total_sessions": await count(Session),
@@ -532,18 +563,7 @@ async def get_stats() -> dict[str, Any]:
 @router.get("/profile")
 @router.get("/profile/")
 async def get_profile() -> dict[str, Any]:
-    from app.storage.database import User
-
-    async with async_session() as db:
-        user = (await db.execute(select(User).limit(1))).scalar_one_or_none()
-        if user is None:
-            return {"display_name": "Guest", "email": "", "is_admin": False}
-        return {
-            "id": user.id,
-            "display_name": user.email.split("@")[0] if user.email else "Local User",
-            "email": user.email,
-            "is_admin": user.is_admin,
-        }
+    return {"id": DEFAULT_USER, "display_name": "Local User", "email": "local@localhost", "is_admin": True}
 
 
 # ─── Skills ─────────────────────────────────────────────────────────────────
@@ -756,32 +776,10 @@ async def get_trace(trace_id: str) -> dict[str, Any]:
 
 # ─── Plugins ────────────────────────────────────────────────────────────────
 
-MARKETPLACE: list[dict[str, Any]] = [
-    {
-        "plugin_key": "web-scraper",
-        "name": "网页抓取器",
-        "description": "抓取并解析网页内容为结构化数据",
-        "category": "data",
-        "version": "1.0.0",
-        "author": "climber",
-    },
-    {
-        "plugin_key": "code-runner",
-        "name": "代码执行器",
-        "description": "在本地沙箱中执行 Python 代码片段",
-        "category": "dev",
-        "version": "1.0.0",
-        "author": "climber",
-    },
-    {
-        "plugin_key": "file-watcher",
-        "name": "文件监听器",
-        "description": "监听本地目录变化并触发工作流",
-        "category": "automation",
-        "version": "1.0.0",
-        "author": "climber",
-    },
-]
+def _get_marketplace() -> list[dict[str, Any]]:
+    """Return plugin marketplace catalog from settings."""
+    from app.config import settings
+    return list(settings.plugin_marketplace)
 
 
 def _plugin_dict(p: PluginRecord) -> dict[str, Any]:
@@ -821,7 +819,7 @@ async def get_marketplace() -> list[dict[str, Any]]:
             for p in (await db.execute(select(PluginRecord))).scalars().all()
             if p.plugin_key
         }
-    return [{**item, "is_installed": item["plugin_key"] in installed} for item in MARKETPLACE]
+    return [{**item, "is_installed": item["plugin_key"] in installed} for item in _get_marketplace()]
 
 
 @router.get("/plugins/categories")
@@ -829,12 +827,12 @@ async def get_marketplace() -> list[dict[str, Any]]:
 async def get_plugin_categories() -> list[str]:
     async with async_session() as db:
         rows = (await db.execute(select(PluginRecord.category).distinct())).scalars().all()
-    return sorted({*(r for r in (rows or []) if r), *(m["category"] for m in MARKETPLACE)})
+    return sorted({*(r for r in (rows or []) if r), *(m["category"] for m in _get_marketplace())})
 
 
 @router.post("/plugins/{plugin_key}/install")
 async def install_plugin(plugin_key: str, request: Request) -> dict[str, Any]:
-    entry = next((m for m in MARKETPLACE if m["plugin_key"] == plugin_key), None)
+    entry = next((m for m in _get_marketplace() if m["plugin_key"] == plugin_key), None)
     data = await _payload(request)
     async with async_session() as db:
         existing = (
@@ -1009,7 +1007,7 @@ async def create_group(request: Request) -> dict[str, Any]:
             max_rounds=int(data.get("max_rounds") or 10),
             process_type=data.get("process_type", "sequential"),
         )
-        print("DEBUG group process_type:", group.process_type, flush=True)
+        logger.debug("group.process_type", process_type=group.process_type)
         db.add(group)
         await db.commit()
         await db.refresh(group)
@@ -1311,7 +1309,7 @@ async def pause_task(task_id: str) -> dict[str, Any]:
         if task.status not in ("running",):
             raise HTTPException(status_code=400, detail=f"Cannot pause task in status: {task.status}")
         task.status = "paused"
-        task.paused_at = __import__("datetime").datetime.utcnow()
+        task.paused_at = datetime.now(timezone.utc)
         await db.commit()
         return {"ok": True, "task_id": task_id, "status": "paused"}
 
@@ -1339,7 +1337,7 @@ async def stop_task(task_id: str) -> dict[str, Any]:
         if task.status in ("completed", "failed", "stopped"):
             raise HTTPException(status_code=400, detail=f"Cannot stop task in status: {task.status}")
         task.status = "stopped"
-        task.completed_at = __import__("datetime").datetime.utcnow()
+        task.completed_at = datetime.now(timezone.utc)
         await db.commit()
         return {"ok": True, "task_id": task_id, "status": "stopped"}
 
@@ -1658,13 +1656,13 @@ async def ws_endpoint(websocket: Any, session_id: str):
         while True:
             msg = await websocket.receive_text()
             await websocket.send_json({"type": "echo", "data": msg})
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("generic.ws_endpoint_disconnect", error=str(e))
     finally:
         try:
             await websocket.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("generic.ws_endpoint_close", error=str(e))
 
 
 @router.websocket("/ws/groups/{group_id}")
@@ -1702,11 +1700,11 @@ async def ws_group_endpoint(websocket: Any, group_id: str):
 
             result = await group_ws_hub.handle_message(group_id, payload)
             await websocket.send_json({"type": "ack", "data": result})
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("generic.ws_group_endpoint_disconnect", error=str(e))
     finally:
         await group_ws_hub.disconnect(group_id, websocket)
         try:
             await websocket.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("generic.ws_group_endpoint_close", error=str(e))

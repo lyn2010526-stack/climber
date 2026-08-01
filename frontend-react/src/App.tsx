@@ -176,15 +176,15 @@ export default function App() {
       <aside className={`
         fixed md:relative inset-y-0 left-0 z-50
         ${sidebarOpen ? 'w-60' : 'w-16'}
-        bg-[#0F0F14]/95 backdrop-blur-2xl border-r border-white/5
-        flex flex-col transition-all duration-300 ease-out
+        bg-[#0F0F14]/95 backdrop-blur-2xl border-r border-white/[0.04]
+        flex flex-col transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
         ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         {/* Logo */}
-        <div className="h-14 flex items-center px-4 border-b border-white/5">
+        <div className="h-14 flex items-center px-4 border-b border-white/[0.04]">
           {sidebarOpen && (
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-[#007AFF] to-[#AF52DE] flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <div className="w-8 h-8 rounded-2xl bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] flex items-center justify-center shadow-lg shadow-blue-500/20">
                 <Sparkles size={16} className="text-white" />
               </div>
               <span className="text-sm font-bold text-white tracking-tight">Climber</span>
@@ -192,13 +192,13 @@ export default function App() {
           )}
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="ml-auto p-2 rounded-xl hover:bg-white/5 text-gray-400 hover:text-white transition-all duration-200 hidden md:flex"
+            className="ml-auto p-2 rounded-xl hover:bg-white/[0.06] text-gray-400 hover:text-white transition-all duration-200 hidden md:flex active:scale-[0.95]"
           >
             {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeft size={16} />}
           </button>
           <button
             onClick={() => setMobileMenuOpen(false)}
-            className="ml-auto p-2 rounded-xl hover:bg-white/5 text-gray-400 hover:text-white transition-all duration-200 md:hidden"
+            className="ml-auto p-2 rounded-xl hover:bg-white/[0.06] text-gray-400 hover:text-white transition-all duration-200 md:hidden active:scale-[0.95]"
           >
             <X size={16} />
           </button>
@@ -222,18 +222,18 @@ export default function App() {
                     onClick={() => navigate(id)}
                     className={`
                       w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm
-                      transition-all duration-200 group border
+                      transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group border
                       ${currentPage === id
-                        ? 'bg-white/[0.08] text-white shadow-sm shadow-white/5 border-white/10'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5 border-transparent'
+                        ? 'bg-white/[0.06] text-white shadow-sm shadow-black/20 border-white/[0.08]'
+                        : 'text-gray-400 hover:text-white hover:bg-white/[0.03] border-transparent hover:border-white/[0.04]'
                       }
                     `}
                   >
                     <div className={`
-                      p-1.5 rounded-xl transition-colors duration-200
+                      p-1.5 rounded-xl transition-all duration-200
                       ${currentPage === id
-                        ? 'bg-white/10 text-white'
-                        : 'bg-white/5 text-gray-500 group-hover:text-gray-300'
+                        ? 'bg-gradient-to-br from-blue-500/20 to-violet-500/20 text-blue-400'
+                        : 'bg-white/[0.03] text-gray-500 group-hover:text-gray-300'
                       }
                     `}>
                       <Icon size={14} />
@@ -248,19 +248,19 @@ export default function App() {
           ))}
         </nav>
 
-        {/* Search Button */}
-        <div className="p-3 border-t border-white/5 space-y-2">
+        {/* Search & Theme */}
+        <div className="p-3 border-t border-white/[0.04] space-y-2">
           <button
             onClick={() => setSearchOpen(true)}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-200 border border-transparent"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm text-gray-400 hover:text-white hover:bg-white/[0.04] transition-all duration-200 border border-transparent hover:border-white/[0.06] active:scale-[0.98]"
           >
-            <div className="p-1.5 rounded-xl bg-white/5 text-gray-500">
+            <div className="p-1.5 rounded-xl bg-white/[0.03] text-gray-500">
               <Search size={14} />
             </div>
             {sidebarOpen && (
                 <div className="flex items-center gap-2 flex-1">
                   <span className="font-medium">搜索</span>
-                  <kbd className="ml-auto text-[10px] px-1.5 py-0.5 rounded-md bg-white/10 text-gray-500 font-mono border border-white/10">⌘K</kbd>
+                  <kbd className="ml-auto text-[10px] px-1.5 py-0.5 rounded-md bg-white/[0.06] text-gray-500 font-mono border border-white/[0.06]">⌘K</kbd>
                 </div>
             )}
           </button>
@@ -274,15 +274,15 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 overflow-hidden flex flex-col bg-[#0A0A0F] relative">
         {/* Mobile Header */}
-        <div className="md:hidden h-12 flex items-center px-4 border-b border-white/5 bg-[#0F0F14]/90 backdrop-blur-xl">
+        <div className="md:hidden h-12 flex items-center px-4 border-b border-white/[0.04] bg-[#0F0F14]/90 backdrop-blur-xl">
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="p-2 rounded-xl hover:bg-white/5 text-gray-400 hover:text-white transition-all"
+            className="p-2 rounded-xl hover:bg-white/[0.06] text-gray-400 hover:text-white transition-all duration-200 active:scale-[0.95]"
           >
             <Menu size={20} />
           </button>
           <div className="ml-3 flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-[#007AFF] to-[#AF52DE] flex items-center justify-center">
+            <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-[#3B82F6] to-[#8B5CF6] flex items-center justify-center">
               <Sparkles size={14} className="text-white" />
             </div>
             <span className="text-sm font-bold text-white">Climber</span>
@@ -290,7 +290,9 @@ export default function App() {
         </div>
 
         <Suspense fallback={<PageFallback />}>
-          {renderPage()}
+          <div className="flex-1 overflow-hidden page-transition">
+            {renderPage()}
+          </div>
         </Suspense>
       </main>
 

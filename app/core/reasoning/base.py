@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Protocol, runtime_checkable
 
@@ -247,7 +247,7 @@ class ReasoningFeedback(BaseModel):
     thumbs: str | None = Field(default=None, description="up / down / None")
     comment: str = Field(default="", max_length=1000)
     selected_candidate_id: str | None = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @runtime_checkable

@@ -56,7 +56,9 @@ def test_sliding_drops_old_msgs():
     comp = ContextCompressor(cfg)
     msgs = _build_messages(10)
     result = comp._sliding(msgs)
-    assert len(result) == 5
+    assert len(result) == 7
+    assert result[0]["role"] == "system"
+    assert result[1]["role"] == "system"
     assert result[-1]["role"] == "assistant"
 
 

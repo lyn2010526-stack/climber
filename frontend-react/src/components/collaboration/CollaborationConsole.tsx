@@ -3,6 +3,7 @@ import { TaskInput } from './TaskInput';
 import { CollabMessage, type CollabMessage as CollabMessageType } from './CollabMessage';
 import { ProgressHeader } from './ProgressHeader';
 import { Send } from 'lucide-react';
+import { api } from '../../api';
 
 function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
@@ -56,9 +57,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
 
   useEffect(() => {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const token = localStorage.getItem('auth_token') || '';
-    const userId = localStorage.getItem('user_id') || 'guest';
-    const ws = new WebSocket(`${proto}//${window.location.host}/api/v1/ws/groups/${groupId}?token=${encodeURIComponent(token)}&user_id=${encodeURIComponent(userId)}`);
+    const ws = new WebSocket(`${proto}//${window.location.host}/api/v1/ws/groups/${groupId}?user_id=local`);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -346,42 +345,27 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
     setElapsedTime(0);
 
     try {
-      const resp = await fetch(`/api/v1/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const resp = await api.createTask({
           group_id: groupId,
           description: task,
           max_rounds: rounds || 5,
           context: options?.context || [],
           guardrails: options?.guardrails || [],
           human_review_required: options?.humanReviewRequired || false,
-        }),
-      });
+        });
 
-      if (resp.ok) {
-        const data = await resp.json();
-        setSessionId(data.id);
+      if (resp.id) {
+        setSessionId(resp.id);
         setMessages([{
           id: genId(),
           memberId: 'system',
           memberName: 'System',
           role: 'system',
-          content: `任务已创建 (ID: ${data.id.slice(0, 8)}...)`,
+          content: `任务已创建 (ID: ${resp.id.slice(0, 8)}...)`,
           timestamp: new Date().toISOString(),
         }] as CollabMessageType[]);
 
-        // Run the task
-        await fetch(`/api/v1/tasks/${data.id}/run`, { method: 'POST' });
-      } else {
-        setMessages([{
-          id: genId(),
-          memberId: 'system',
-          memberName: 'System',
-          role: 'system',
-          content: `启动失败: ${resp.statusText}`,
-          timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        await api.runTask(resp.id);
       }
     } catch (e: any) {
       setMessages([{
@@ -398,7 +382,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
   const pauseTask = useCallback(async () => {
     if (!sessionId) return;
     try {
-      await fetch(`/api/v1/tasks/${sessionId}/pause`, { method: 'POST' });
+      await api.pauseTask(sessionId);
       setStatus('paused');
       setStartTime(null);
       setElapsedTime(0);
@@ -417,7 +401,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
   const resumeTask = useCallback(async () => {
     if (!sessionId) return;
     try {
-      await fetch(`/api/v1/tasks/${sessionId}/resume`, { method: 'POST' });
+      await api.resumeTask(sessionId);
       setStatus('running');
       setStartTime(Date.now());
       setElapsedTime(0);
@@ -436,7 +420,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
   const stopTask = useCallback(async () => {
     if (!sessionId) return;
     try {
-      await fetch(`/api/v1/tasks/${sessionId}/stop`, { method: 'POST' });
+      await api.stopTask(sessionId);
       setStatus('stopped');
       setActiveMember('');
       setStartTime(null);

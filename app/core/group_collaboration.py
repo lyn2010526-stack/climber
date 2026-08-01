@@ -16,6 +16,7 @@ import asyncio
 import importlib
 import json
 import structlog
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 from app.core import AgentEvent, AgentEventType, ChatResult
@@ -25,6 +26,7 @@ from app.core.group_ws_hub import group_ws_hub
 from app.core.task_dag import TaskDAG, TaskNode, HandoffMessage
 from app.storage import async_session
 from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupTask, AgentGroupMemory, AgentGroupTaskCheckpoint
+from sqlalchemy import select
 
 import os
 
@@ -97,7 +99,7 @@ class GroupCollaborationEngine:
             async with async_session() as db:
                 task = (
                     await db.execute(
-                        __import__("sqlalchemy").select(AgentGroupTask).where(AgentGroupTask.id == task_id)
+                        select(AgentGroupTask).where(AgentGroupTask.id == task_id)
                     )
                 ).scalar_one_or_none()
                 if task is None:
@@ -107,7 +109,7 @@ class GroupCollaborationEngine:
 
                 group = (
                     await db.execute(
-                        __import__("sqlalchemy").select(AgentGroup).where(AgentGroup.id == task.group_id)
+                        select(AgentGroup).where(AgentGroup.id == task.group_id)
                     )
                 ).scalar_one_or_none()
                 if group is None:
@@ -119,14 +121,14 @@ class GroupCollaborationEngine:
                 if task.worker_id:
                     worker = (
                         await db.execute(
-                            __import__("sqlalchemy").select(AgentGroupMember).where(AgentGroupMember.id == task.worker_id)
+                            select(AgentGroupMember).where(AgentGroupMember.id == task.worker_id)
                         )
                     ).scalar_one_or_none()
 
                 if worker is None:
                     worker = (
                         await db.execute(
-                            __import__("sqlalchemy").select(AgentGroupMember).where(AgentGroupMember.group_id == task.group_id)
+                            select(AgentGroupMember).where(AgentGroupMember.group_id == task.group_id)
                         )
                     ).scalars().first()
                 if worker is None:
@@ -138,14 +140,14 @@ class GroupCollaborationEngine:
 
                 reviewers = (
                     await db.execute(
-                        __import__("sqlalchemy").select(AgentGroupMember).where(
+                        select(AgentGroupMember).where(
                             AgentGroupMember.id.in_(task.reviewer_ids or [])
                         )
                     )
                 ).scalars().all()
                 db_reviewers = list(reviewers)
 
-                task.started_at = __import__("datetime").datetime.utcnow()
+                task.started_at = datetime.now(timezone.utc)
                 task.status = "running"
                 await db.commit()
 
@@ -206,7 +208,7 @@ class GroupCollaborationEngine:
         async with async_session() as db:
             group = (
                 await db.execute(
-                    __import__("sqlalchemy").select(AgentGroup).where(AgentGroup.id == group_id)
+                    select(AgentGroup).where(AgentGroup.id == group_id)
                 )
             ).scalar_one_or_none()
             if not group:
@@ -214,7 +216,7 @@ class GroupCollaborationEngine:
 
             tasks = (
                 await db.execute(
-                    __import__("sqlalchemy").select(AgentGroupTask)
+                    select(AgentGroupTask)
                     .where(AgentGroupTask.group_id == group_id)
                     .where(AgentGroupTask.status.in_(["pending"]))
                 )
@@ -286,7 +288,7 @@ class GroupCollaborationEngine:
             if not t:
                 return
             t.status = "running"
-            t.started_at = __import__("datetime").datetime.utcnow()
+            t.started_at = datetime.now(timezone.utc)
             await db.commit()
             task = t
 
@@ -295,13 +297,13 @@ class GroupCollaborationEngine:
         if task.worker_id:
             async with async_session() as db:
                 worker = (await db.execute(
-                    __import__("sqlalchemy").select(AgentGroupMember).where(AgentGroupMember.id == task.worker_id)
+                    select(AgentGroupMember).where(AgentGroupMember.id == task.worker_id)
                 )).scalar_one_or_none()
 
         if not worker:
             async with async_session() as db:
                 worker = (await db.execute(
-                    __import__("sqlalchemy").select(AgentGroupMember)
+                    select(AgentGroupMember)
                     .where(AgentGroupMember.group_id == task.group_id)
                     .where(AgentGroupMember.role.in_(["worker", "participant"]))
                 )).scalars().first()
@@ -337,7 +339,7 @@ class GroupCollaborationEngine:
             t = await db.get(AgentGroupTask, task.id)
             if t:
                 reviewers = (await db.execute(
-                    __import__("sqlalchemy").select(AgentGroupMember)
+                    select(AgentGroupMember)
                     .where(AgentGroupMember.id.in_(t.reviewer_ids or []))
                 )).scalars().all()
 
@@ -365,7 +367,7 @@ class GroupCollaborationEngine:
                 t.status = "completed"
                 t.final_output = final_output
                 t.total_tokens = (t.total_tokens or 0) + worker_tokens
-                t.completed_at = __import__("datetime").datetime.utcnow()
+                t.completed_at = datetime.now(timezone.utc)
                 await db.commit()
 
         await self._store_memory(task.group_id, task.id, worker.agent_id, final_output, "task_result")
@@ -385,7 +387,7 @@ class GroupCollaborationEngine:
 
             target = (
                 await db.execute(
-                    __import__("sqlalchemy").select(AgentGroupMember).where(AgentGroupMember.agent_id == target_agent_id)
+                    select(AgentGroupMember).where(AgentGroupMember.agent_id == target_agent_id)
                 )
             ).scalar_one_or_none()
             if not target:
@@ -626,7 +628,7 @@ class GroupCollaborationEngine:
                             t.final_output = worker_output
                             if task.output_schema:
                                 t.structured_output = parsed if 'parsed' in dir() else {}
-                            t.completed_at = __import__("datetime").datetime.utcnow()
+                            t.completed_at = datetime.now(timezone.utc)
                             await db.commit()
                             task = t
 
@@ -648,7 +650,7 @@ class GroupCollaborationEngine:
                 if t:
                     t.status = "partial"
                     t.final_output = worker_output
-                    t.completed_at = __import__("datetime").datetime.utcnow()
+                    t.completed_at = datetime.now(timezone.utc)
                     await db.commit()
             await group_ws_hub.broadcast(task.group_id, {
                 "type": "task_partial",
@@ -678,7 +680,7 @@ class GroupCollaborationEngine:
             async with async_session() as db:
                 manager_member = (
                     await db.execute(
-                        __import__("sqlalchemy").select(AgentGroupMember).where(
+                        select(AgentGroupMember).where(
                             AgentGroupMember.id == group.manager_agent_id,
                             AgentGroupMember.group_id == group.id,
                         )
@@ -690,7 +692,7 @@ class GroupCollaborationEngine:
             async with async_session() as db:
                 candidates = (
                     await db.execute(
-                        __import__("sqlalchemy").select(AgentGroupMember).where(
+                        select(AgentGroupMember).where(
                             AgentGroupMember.group_id == group.id,
                             AgentGroupMember.role.in_(["manager", "coordinator", "worker"]),
                         )
@@ -814,7 +816,7 @@ class GroupCollaborationEngine:
             if t:
                 t.status = "completed" if passed else "partial"
                 t.final_output = final_output
-                t.completed_at = __import__("datetime").datetime.utcnow()
+                t.completed_at = datetime.now(timezone.utc)
                 await db.commit()
 
         await self._store_memory(task.group_id, task.id, manager_member.agent_id, final_output, "task_result")
@@ -919,7 +921,7 @@ class GroupCollaborationEngine:
             if t:
                 t.status = "completed" if consensus_reached else "partial"
                 t.final_output = final_output
-                t.completed_at = __import__("datetime").datetime.utcnow()
+                t.completed_at = datetime.now(timezone.utc)
                 await db.commit()
 
         await self._store_memory(task.group_id, task.id, "group_chat", final_output, "task_result")
@@ -956,7 +958,7 @@ class GroupCollaborationEngine:
         async with async_session() as db:
             memories = (
                 await db.execute(
-                    __import__("sqlalchemy").select(AgentGroupMemory).where(
+                    select(AgentGroupMemory).where(
                         AgentGroupMemory.group_id == group_id,
                         AgentGroupMemory.memory_type.in_(["short_term", "long_term"]),
                     ).order_by(AgentGroupMemory.importance.desc(), AgentGroupMemory.created_at.desc()).limit(10)
@@ -1122,7 +1124,7 @@ Respond with:
         async with async_session() as db:
             result = (
                 await db.execute(
-                    __import__("sqlalchemy").select(AgentGroupTaskCheckpoint).where(
+                    select(AgentGroupTaskCheckpoint).where(
                         AgentGroupTaskCheckpoint.task_id == task_id
                     ).order_by(AgentGroupTaskCheckpoint.created_at.desc()).limit(1)
                 )
@@ -1138,7 +1140,7 @@ Respond with:
                 t.status = "partial"
                 t.final_output = checkpoint.current_artifact
                 t.current_round = checkpoint.current_round
-                t.completed_at = __import__("datetime").datetime.utcnow()
+                t.completed_at = datetime.now(timezone.utc)
                 await db.commit()
         await group_ws_hub.broadcast(task.group_id, {
             "type": "checkpoint_restored",
@@ -1469,7 +1471,19 @@ You are participating in a group discussion. Be concise, constructive, and focus
         return issues
 
 
-group_collaboration_engine = GroupCollaborationEngine(
-    model_registry=di_resolve("ModelRegistry"),
-    tool_registry=__import__("app.tools", fromlist=["ToolRegistry"]).ToolRegistry(),
-)
+_group_collaboration_engine: GroupCollaborationEngine | None = None
+
+
+def get_group_collaboration_engine() -> GroupCollaborationEngine:
+    global _group_collaboration_engine
+    if _group_collaboration_engine is None:
+        try:
+            model_registry = di_resolve("ModelRegistry")
+        except KeyError:
+            from app.models.registry import ModelRegistry
+            model_registry = ModelRegistry()
+        _group_collaboration_engine = GroupCollaborationEngine(
+            model_registry=model_registry,
+            tool_registry=__import__("app.tools", fromlist=["ToolRegistry"]).ToolRegistry(),
+        )
+    return _group_collaboration_engine

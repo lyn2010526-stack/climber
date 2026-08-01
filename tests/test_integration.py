@@ -52,16 +52,18 @@ class MockStreamingOpenAIResponse:
         self.content = content
         self.tool_calls = tool_calls
         self.status_code = 200
+        self._closed = False
 
     def raise_for_status(self):
         pass
 
-    async def aiter_lines(self):
-        """Generate SSE-formatted streaming lines."""
+    async def aiter_bytes(self):
+        """Generate SSE-formatted streaming bytes."""
         if self.content:
-            # Split content into word-level chunks
             words = self.content.split(" ")
             for i, word in enumerate(words):
+                if self._closed:
+                    return
                 chunk = {
                     "choices": [{
                         "delta": {"content": word + (" " if i < len(words) - 1 else "")},
@@ -69,10 +71,12 @@ class MockStreamingOpenAIResponse:
                     }],
                     "usage": None,
                 }
-                yield f"data: {json.dumps(chunk)}"
+                yield f"data: {json.dumps(chunk)}\n".encode()
 
         if self.tool_calls:
             for tc in self.tool_calls:
+                if self._closed:
+                    return
                 chunk = {
                     "choices": [{
                         "delta": {
@@ -90,9 +94,13 @@ class MockStreamingOpenAIResponse:
                     }],
                     "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
                 }
-                yield f"data: {json.dumps(chunk)}"
+                yield f"data: {json.dumps(chunk)}\n".encode()
 
-        yield "data: [DONE]"
+        if not self._closed:
+            yield b"data: [DONE]\n"
+
+    async def aclose(self):
+        self._closed = True
 
 
 @pytest.fixture
@@ -175,11 +183,12 @@ def test_full_chat_flow_with_tool(client: TestClient):
     ]
     response_iter = iter(responses)
 
-    @asynccontextmanager
-    async def fake_stream(*args, **kwargs):
-        yield next(response_iter)
+    _send_iter = iter(responses)
 
-    with patch.object(httpx.AsyncClient, 'stream', side_effect=fake_stream):
+    async def fake_send(*args, **kwargs):
+        return next(_send_iter)
+
+    with patch.object(httpx.AsyncClient, 'send', side_effect=fake_send):
         # Send a chat message
         resp = client.post(
             f'/api/v1/sessions/{session_id}/chat',

@@ -722,21 +722,15 @@ class TestTreeOfThoughtStrategy:
 # ═══════════════════════════════════════════════════════════════════════════
 
 class TestReasoningAPI:
+    @pytest.mark.skip(reason="Auth removed for local-only mode")
     @pytest.mark.asyncio
     async def test_list_modes_auth_required(self, client):
-        response = await client.get("/api/v1/reason/modes")
-        assert response.status_code == 401
+        pass
 
+    @pytest.mark.skip(reason="Auth removed for local-only mode")
     @pytest.mark.asyncio
     async def test_reason_endpoint_auth_required(self, client):
-        request_data = {
-            "task": "Test task",
-            "mode": "tree",
-            "max_paths": 1,
-            "max_refine_rounds": 1,
-        }
-        response = await client.post("/api/v1/reason", json=request_data)
-        assert response.status_code == 401
+        pass
 
 
 # ═══════════════════════════════════════════════════════════════════════════

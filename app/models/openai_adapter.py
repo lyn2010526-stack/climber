@@ -109,56 +109,197 @@ class OpenAIAdapter(ModelAdapter):
         tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[ChatResult]:
-        """Stream chat with token-level granularity."""
+        """Stream chat with idle-timeout watchdog.
+
+        For providers like LongCat that keep the connection open without sending
+        a standard ``data: [DONE]`` terminator, a background watchdog task
+        monitors idle time.  If no bytes arrive within ``idle_timeout`` seconds
+        the response is forcefully closed, causing ``aiter_bytes()`` to return
+        and the generator to exit cleanly.
+        """
         payload = self._build_payload(messages, tools, stream=True, **kwargs)
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
 
+        total_timeout = kwargs.get("timeout", 120)
+        idle_timeout = kwargs.get("idle_timeout", 15)
         accumulated_content = ""
         accumulated_tool_calls: list[dict] = []
         finish_reason = None
         tokens_used = 0
 
-        try:
-            client = self.get_client()
-            async with client.stream(
-                "POST",
-                f"{self._base_url}/chat/completions",
-                headers=headers,
-                content=json.dumps(payload, ensure_ascii=False).encode(),
-                timeout=kwargs.get("timeout", 120),
-            ) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if not line or line == "data: [DONE]":
-                        continue
-                    if not line.startswith("data: "):
-                        continue
-                    data = line[6:]
+        client = self.get_client()
+        response: httpx.Response | None = None
+        watchdog_task: asyncio.Task | None = None
+        idle_event = asyncio.Event()
+
+        async def _watchdog():
+            """Close the response when idle timeout fires."""
+            try:
+                while True:
                     try:
-                        chunk = json.loads(data)
+                        await asyncio.wait_for(
+                            idle_event.wait(), timeout=idle_timeout
+                        )
+                        idle_event.clear()
+                    except asyncio.TimeoutError:
+                        if response is not None:
+                            logger.info(
+                                "stream_idle_timeout",
+                                model=self._model_id,
+                                idle=idle_timeout,
+                            )
+                            await response.aclose()
+                        return
+            except asyncio.CancelledError:
+                return
+
+        try:
+            watchdog_task = asyncio.create_task(_watchdog())
+            response = await client.send(
+                httpx.Request(
+                    method="POST",
+                    url=f"{self._base_url}/chat/completions",
+                    headers=headers,
+                    content=json.dumps(payload, ensure_ascii=False).encode(),
+                ),
+                stream=True,
+                timeout=httpx.Timeout(total_timeout, connect=10),
+            )
+            response.raise_for_status()
+
+            buffer = b""
+            async for raw_bytes in response.aiter_bytes():
+                idle_event.set()
+
+                if not raw_bytes:
+                    break
+
+                buffer += raw_bytes
+                while b"\n" in buffer:
+                    line_bytes, buffer = buffer.split(b"\n", 1)
+                    line = line_bytes.decode("utf-8", errors="replace").strip("\r")
+
+                    if not line or line.startswith(":"):
+                        continue
+
+                    if line == "data: [DONE]":
+                        yield ChatResult(
+                            content="",
+                            tool_calls=list(accumulated_tool_calls),
+                            finish_reason=finish_reason or "stop",
+                            tokens_used=tokens_used,
+                            accumulated_content=accumulated_content,
+                        )
+                        return
+
+                    if not line.startswith("data:"):
+                        continue
+
+                    data_str = line[5:].strip()
+                    if not data_str:
+                        continue
+
+                    try:
+                        chunk = json.loads(data_str)
                     except json.JSONDecodeError:
                         continue
+
                     delta = chunk.get("choices", [{}])[0].get("delta", {})
-                    if delta.get("content"):
-                        accumulated_content += delta["content"]
+                    delta_content = delta.get("content") or ""
+                    if delta_content:
+                        accumulated_content += delta_content
                     if delta.get("tool_calls"):
                         accumulated_tool_calls = self._parse_tool_calls_from_delta(delta["tool_calls"])
                     if chunk.get("usage"):
                         tokens_used = chunk["usage"].get("total_tokens", tokens_used)
-                    if chunk.get("choices", [{}])[0].get("finish_reason"):
-                        finish_reason = chunk["choices"][0]["finish_reason"]
+                    fr = chunk.get("choices", [{}])[0].get("finish_reason")
+                    if fr:
+                        finish_reason = fr
+
                     yield ChatResult(
-                        content=accumulated_content,
+                        content=delta_content,
                         tool_calls=list(accumulated_tool_calls),
                         finish_reason=finish_reason,
                         tokens_used=tokens_used,
+                        accumulated_content=accumulated_content,
                     )
-        except Exception as exc:  # pragma: no cover
+
+                    if self._is_stream_terminated(chunk):
+                        return
+
+            # Process any remaining data in buffer (no trailing newline)
+            if buffer.strip():
+                line = buffer.decode("utf-8", errors="replace").strip("\r")
+                if line.startswith("data:") and line[5:].strip():
+                    try:
+                        chunk = json.loads(line[5:].strip())
+                        delta = chunk.get("choices", [{}])[0].get("delta", {})
+                        delta_content = delta.get("content") or ""
+                        if delta_content:
+                            accumulated_content += delta_content
+                            yield ChatResult(
+                                content=delta_content,
+                                tool_calls=list(accumulated_tool_calls),
+                                finish_reason=finish_reason,
+                                tokens_used=tokens_used,
+                                accumulated_content=accumulated_content,
+                            )
+                    except (json.JSONDecodeError, IndexError):
+                        pass
+
+        except httpx.ReadTimeout:
+            logger.warning("stream_read_timeout", model=self._model_id)
+            yield ChatResult(
+                content="",
+                tool_calls=list(accumulated_tool_calls),
+                finish_reason=finish_reason or "stop",
+                tokens_used=tokens_used,
+                accumulated_content=accumulated_content,
+            )
+        except TimeoutError:
+            logger.warning("stream_total_timeout", model=self._model_id, timeout=total_timeout)
+            yield ChatResult(
+                content="",
+                tool_calls=list(accumulated_tool_calls),
+                finish_reason=finish_reason or "stop",
+                tokens_used=tokens_used,
+                accumulated_content=accumulated_content,
+            )
+        except Exception as exc:
             logger.error("stream_chat_failed", error=str(exc), model=self._model_id)
             raise
+        finally:
+            if watchdog_task and not watchdog_task.done():
+                watchdog_task.cancel()
+                try:
+                    await watchdog_task
+                except asyncio.CancelledError:
+                    pass
+            if response is not None:
+                await response.aclose()
+
+    @staticmethod
+    def _is_stream_terminated(chunk: dict[str, Any]) -> bool:
+        """Check if this SSE frame signals end of stream.
+
+        Handles multiple non-standard termination signals from various providers
+        (LongCat, Kimi, DeepSeek, etc.).
+        """
+        if chunk.get("lastOne") is True:
+            return True
+        if chunk.get("stream_end") is True:
+            return True
+        if chunk.get("is_last") is True:
+            return True
+        if chunk.get("end_of_stream") is True:
+            return True
+        choices = chunk.get("choices", [])
+        if choices and choices[0].get("finish_reason"):
+            return True
+        return False
 
     async def _chat_non_streaming(
         self,

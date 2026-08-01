@@ -13,8 +13,8 @@ load_dotenv(BASE_DIR / ".env")
 
 
 class Settings(BaseSettings):
-    app_testing: bool = Field(default=True)
-    app_debug: bool = Field(default=True)
+    app_testing: bool = Field(default=False)
+    app_debug: bool = Field(default=False)
     app_log_level: str = Field(default="INFO")
     app_secret_key: str = Field(default="dev-secret-key-change-in-production")
 
@@ -64,6 +64,34 @@ class Settings(BaseSettings):
     api_key_rotation_enabled: bool = Field(default=True)
     max_key_failures: int = Field(default=3)
     key_cooldown_seconds: int = Field(default=60)
+
+    # Plugin marketplace catalog
+    plugin_marketplace: list[dict] = Field(default_factory=lambda: [
+        {
+            "plugin_key": "web-scraper",
+            "name": "网页抓取器",
+            "description": "抓取并解析网页内容为结构化数据",
+            "category": "data",
+            "version": "1.0.0",
+            "author": "climber",
+        },
+        {
+            "plugin_key": "code-runner",
+            "name": "代码执行器",
+            "description": "在本地沙箱中执行 Python 代码片段",
+            "category": "dev",
+            "version": "1.0.0",
+            "author": "climber",
+        },
+        {
+            "plugin_key": "file-watcher",
+            "name": "文件监听器",
+            "description": "监听本地目录变化并触发工作流",
+            "category": "automation",
+            "version": "1.0.0",
+            "author": "climber",
+        },
+    ])
 
     @property
     def is_sqlite(self) -> bool:

@@ -95,8 +95,8 @@ class DebugLoop:
                         for m in self._memory
                     ]
                 }, f)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("debug_loop.save_memory_failed", error=str(e))
 
     async def handle_tool_error(
         self,

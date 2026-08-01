@@ -30,7 +30,7 @@ class AgentGroup(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="")
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, default="default-user")
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, default="default-user")
 
     # Group config
     topic: Mapped[str] = mapped_column(Text, default="")

@@ -45,6 +45,10 @@ class AgentSession:
         self.mode = mode
         # Debug tracking per task
         self.debug_attempts: dict[str, int] = {}
+        # Survival layer: restart tracking
+        self.restart_count: int = 0
+        self.paused_at: str | None = None
+        self.termination_reason: str | None = None
 
     @property
     def status(self) -> SessionStatus:
@@ -90,6 +94,28 @@ class AgentSession:
         except RuntimeError:
             pass
 
+    async def pause(self) -> None:
+        """Pause the session, recording the pause timestamp."""
+        await self.state_machine.transition(TaskState.PAUSED, trigger="user_pause")
+        self.paused_at = __import__("datetime").datetime.utcnow().isoformat()
+
+    async def resume(self) -> None:
+        """Resume from PAUSED back to PROCESSING."""
+        await self.state_machine.transition(TaskState.PROCESSING, trigger="user_resume")
+        self.paused_at = None
+
+    async def terminate(self, reason: str = "user_terminate") -> None:
+        """Terminate the session with a reason."""
+        await self.state_machine.transition(TaskState.CANCELLED, trigger=reason)
+        self.termination_reason = reason
+
+    async def restart(self) -> None:
+        """Reset session to PENDING for re-execution."""
+        await self.state_machine.transition(TaskState.PENDING, trigger="user_restart")
+        self.restart_count += 1
+        self.termination_reason = None
+        self.paused_at = None
+
 
 class _SessionMemory:
     def __init__(self, session: AgentSession):
@@ -105,6 +131,7 @@ class AgentEngine:
         self.tool_registry = tool_registry or di_resolve("ToolRegistry")
         self._checkpoints = checkpoint_store or InMemoryCheckpointStore()
         self._sessions: dict[str, AgentSession] = {}
+        self._session_locks: dict[str, asyncio.Lock] = {}
         self.memory_service = PersistentMemoryService()
         # Tool prioritization with lightweight learning (reference: Suna)
         self.tool_prioritizer = ToolPrioritizer()
@@ -134,8 +161,8 @@ class AgentEngine:
         defaults = [
             PermissionRule(action="read", resource_pattern="*", level=PermissionLevel.ALLOW, description="Read any file"),
             PermissionRule(action="write", resource_pattern="./data/*", level=PermissionLevel.ALLOW, description="Write to data dir"),
-            PermissionRule(action="write", resource_pattern="*.py", level=PermissionLevel.ASK, description="Write Python files"),
-            PermissionRule(action="execute", resource_pattern="*", level=PermissionLevel.ASK, description="Execute any command"),
+            PermissionRule(action="write", resource_pattern="*", level=PermissionLevel.ALLOW, description="Write any file"),
+            PermissionRule(action="execute", resource_pattern="*", level=PermissionLevel.ALLOW, description="Execute any command"),
             PermissionRule(action="delete", resource_pattern="*", level=PermissionLevel.DENY, description="Delete forbidden"),
         ]
         self.permission_overlay.set_defaults(defaults)
@@ -230,10 +257,57 @@ class AgentEngine:
         self._sessions[session_id] = session
         return session
 
+    async def _persist_message(
+        self,
+        session_id: str,
+        role: str,
+        content: str | None = None,
+        tool_calls: list[dict] | None = None,
+        tool_name: str | None = None,
+        tokens: int = 0,
+    ) -> None:
+        """Persist a message to the database (fire-and-forget)."""
+        try:
+            from app.storage import async_session
+            from app.storage.database import Message
+
+            async with async_session() as db:
+                msg = Message(
+                    session_id=session_id,
+                    role=role,
+                    content=content,
+                    tool_calls=tool_calls or [],
+                    tool_name=tool_name,
+                    tokens=tokens,
+                )
+                db.add(msg)
+                await db.commit()
+        except Exception:
+            pass
+
     async def run(self, session: AgentSession, message: str) -> AsyncIterator[AgentEvent]:
+        # Acquire session-level lock to prevent concurrent requests
+        if session.session_id not in self._session_locks:
+            self._session_locks[session.session_id] = asyncio.Lock()
+
+        lock = self._session_locks[session.session_id]
+        if lock.locked():
+            yield AgentEvent(type=AgentEventType.ERROR, data={"error": "Session is busy processing another request"})
+            return
+
+        async with lock:
+            async for event in self._run_locked(session, message):
+                yield event
+
+        # Clean up lock after session run completes to prevent memory leak
+        self._session_locks.pop(session.session_id, None)
+
+    async def _run_locked(self, session: AgentSession, message: str) -> AsyncIterator[AgentEvent]:
+        """Internal run method — executes under session lock."""
         # Transition to PROCESSING state via state machine
         await session.state_machine.transition(TaskState.PROCESSING, trigger="run_start")
         session.messages.append({"role": MessageRole.USER, "content": message})
+        await self._persist_message(session.session_id, MessageRole.USER, content=message)
 
         # Set current agent mode for tool execution context (e.g., PLAN vs ACT)
         try:
@@ -249,7 +323,7 @@ class AgentEngine:
         except Exception:
             pass
 
-        # Retrieve relevant memories and inject into context
+        # Retrieve relevant memories and inject into context (replace if already present)
         try:
             memory_context = await self.memory_service.format_memories_for_prompt(
                 user_id=session.user_id,
@@ -257,17 +331,29 @@ class AgentEngine:
                 max_memories=5,
             )
             if memory_context:
-                session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": memory_context})
+                memory_marker = "<!-- MEMORY_CONTEXT -->"
+                for i, msg in enumerate(session.messages):
+                    if msg.get("content", "").startswith(memory_marker):
+                        session.messages[i] = {"role": MessageRole.SYSTEM, "content": memory_marker + "\n" + memory_context}
+                        break
+                else:
+                    session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": memory_marker + "\n" + memory_context})
         except Exception:
             pass
 
-        # Inject Core Memory blocks as XML into system prompt
+        # Inject Core Memory blocks as XML into system prompt (replace if already present)
         try:
             from app.core.core_memory import core_memory
             blocks = await core_memory.get_blocks(user_id=session.user_id, agent_id=session.agent_id)
             if blocks:
                 core_memory_xml = core_memory.format_for_prompt(blocks)
-                session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": core_memory_xml})
+                core_marker = "<!-- CORE_MEMORY -->"
+                for i, msg in enumerate(session.messages):
+                    if msg.get("content", "").startswith(core_marker):
+                        session.messages[i] = {"role": MessageRole.SYSTEM, "content": core_marker + "\n" + core_memory_xml}
+                        break
+                else:
+                    session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": core_marker + "\n" + core_memory_xml})
         except Exception:
             pass
 
@@ -304,7 +390,12 @@ class AgentEngine:
                     if adapter.capabilities.streaming:
                         full_content = ""
                         accumulated_tool_calls = []
+                        total_tokens = 0
                         async for chunk in adapter.stream_chat(messages=session.messages, tools=tools or None):
+                            if session._stop_requested:
+                                yield AgentEvent(type=AgentEventType.STOPPED, data={"reason": "user_requested"})
+                                await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
+                                return
                             if chunk.content:
                                 full_content += chunk.content
                                 yield AgentEvent(type=AgentEventType.TEXT, data={"content": chunk.content})
@@ -327,7 +418,11 @@ class AgentEngine:
                                     elif not isinstance(new_args, str):
                                         new_args = str(new_args)
                                     accumulated_tool_calls[idx]["function"]["arguments"] += new_args
-                        result = ChatResult(content=full_content, tool_calls=accumulated_tool_calls, finish_reason="stop", tokens_used=0)
+                            if hasattr(chunk, 'usage') and chunk.usage:
+                                total_tokens = chunk.usage
+                            elif hasattr(chunk, 'tokens_used') and chunk.tokens_used:
+                                total_tokens = chunk.tokens_used
+                        result = ChatResult(content=full_content, tool_calls=accumulated_tool_calls, finish_reason="stop", tokens_used=total_tokens)
                     else:
                         result = await adapter.chat(messages=session.messages, tools=tools or None)
                 except Exception as e:
@@ -350,10 +445,29 @@ class AgentEngine:
 
                 if result.content:
                     session.messages.append({"role": MessageRole.ASSISTANT, "content": result.content})
+                    await self._persist_message(
+                        session.session_id,
+                        MessageRole.ASSISTANT,
+                        content=result.content,
+                        tokens=getattr(result, 'tokens_used', 0),
+                    )
                     yield AgentEvent(type=AgentEventType.TEXT, data={"content": result.content})
+
+                if not result.tool_calls and not result.content:
+                    session.messages.append({
+                        "role": MessageRole.SYSTEM,
+                        "content": "Your previous response was empty. Please provide a helpful response or use an appropriate tool.",
+                    })
+                    continue
 
                 if result.tool_calls:
                     session.messages.append({"role": MessageRole.ASSISTANT, "content": "", "tool_calls": result.tool_calls})
+                    await self._persist_message(
+                        session.session_id,
+                        MessageRole.ASSISTANT,
+                        content="",
+                        tool_calls=result.tool_calls,
+                    )
                     for tc in result.tool_calls:
                         yield AgentEvent(type=AgentEventType.TOOL_CALL, data={"id": tc.get("id"), "name": tc.get("function", {}).get("name"), "arguments": tc.get("function", {}).get("arguments", {})})
                     tool_results = await executor.execute_all(result.tool_calls)
@@ -371,6 +485,12 @@ class AgentEngine:
                                 tr = fixed
 
                         session.messages.append({"role": MessageRole.TOOL, "content": tr.result, "tool_name": tr.tool_name})
+                        await self._persist_message(
+                            session.session_id,
+                            MessageRole.TOOL,
+                            content=tr.result,
+                            tool_name=tr.tool_name,
+                        )
 
                     # Enhanced checkpoint with LangGraph-style channel values
                     cp = CheckpointData(
@@ -388,6 +508,7 @@ class AgentEngine:
                     )
                     await self._checkpoints.save(None, cp, checkpoint_id=f"{session.session_id}-{iteration}")
                     yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration, "tool_calls": len(result.tool_calls)})
+
                     continue
 
                 # Enhanced final checkpoint

@@ -147,8 +147,8 @@ def validate_tool_input(schema: dict[str, Any], arguments: dict[str, Any]) -> No
 
 HAZARD_COMMANDS = [
     # Destructive file operations
-    r'\brm\s+(-[rfRF]+\s+)?/\b',
-    r'\brm\s+-rf\s+/\b',
+    r'\brm\s+(-[rfRF]+\s+)?/?(\s|$)',
+    r'\brm\s+-[rfRF]+\s+/',
     r'\bshred\b',
     r'\bwipe\b',
     # Disk operations
@@ -161,11 +161,11 @@ HAZARD_COMMANDS = [
     # Privilege escalation
     r'\bchmod\s+777\b',
     r'\bchown\s+-R\s+root\b',
-    r'\bsudo\b.*\brm\b',
+    r'\bsudo\b',
     # Network threats
     r'\bnc\b.*-e\s+/bin/',
     r'\bbash\b.*-i\b.*>&\b',
-    r'\bnohup\b.*&\s*$',
+    r'\bnohup\b',
     r'\bcurl\b.*\|\s*(sh|bash)\b',
     r'\bwget\b.*\|\s*(sh|bash)\b',
     # System control
@@ -176,6 +176,11 @@ HAZARD_COMMANDS = [
     r'\bsystemctl\s+(stop|disable)\b',
     # Mount abuse
     r'\bmount\b.*-o\s+loop',
+    # Command injection patterns
+    r'\$\(.*\)',
+    r'`[^`]*`',
+    r';\s*(rm|shred|mkfs|fdisk|dd|chmod|chown|sudo|shutdown|reboot|poweroff)\b',
+    r'\|\s*(rm|shred|mkfs|sudo|shutdown|reboot|poweroff)\b',
 ]
 
 
@@ -241,6 +246,30 @@ class SecuritySandbox:
             if re.search(pattern, command, re.IGNORECASE):
                 return False, f"Command blocked by safety policy: matches hazard pattern '{pattern}'"
         return True, "OK"
+
+
+# Allowed commands for the allowlist check
+_ALLOWED_COMMANDS = {
+    "ls", "cat", "echo", "pwd", "cd", "mkdir", "cp", "mv", "rm",
+    "touch", "head", "tail", "grep", "find", "wc", "sort", "uniq",
+    "diff", "file", "which", "env", "export", "python3", "python",
+    "pip", "pip3", "node", "npm", "npx", "git", "curl", "wget",
+    "tar", "zip", "unzip", "chmod", "chown", "ln", "tee", "awk",
+    "sed", "xargs", "jq", "yq", "make", "pytest", "go", "rustc",
+    "cargo", "java", "javac", "mvn", "gradle", "docker",
+}
+
+
+def validate_command_allowlist(command: str) -> tuple[bool, str]:
+    """Validate that a command base name is in the allowed commands list."""
+    parts = command.strip().split()
+    if not parts:
+        return False, "Empty command"
+    base = parts[0].lstrip("./")
+    base = os.path.basename(base)
+    if base not in _ALLOWED_COMMANDS:
+        return False, f"Command '{base}' is not in the allowed commands list"
+    return True, "OK"
 
     def sanitize_output(self, output: str) -> str:
         """Truncate oversized output."""
@@ -545,8 +574,8 @@ class AuditSystem:
                 )
                 db.add(log)
                 await db.commit()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("security_sandbox.audit_log_failed", error=str(e))
 
     def get_entries(
         self,

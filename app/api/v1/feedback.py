@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from app.storage import async_session
-from app.storage.auth import DEFAULT_USER_ID
+DEFAULT_USER_ID = "default-user"
 from app.storage.models_feedback import Feedback
 
 router = APIRouter()
@@ -45,7 +46,7 @@ async def submit_feedback(
     async with async_session() as db:
         existing = (
             await db.execute(
-                __import__("sqlalchemy").select(Feedback).where(
+                select(Feedback).where(
                     Feedback.message_id == message_id,
                     Feedback.user_id == DEFAULT_USER_ID,
                 )
@@ -74,7 +75,7 @@ async def submit_feedback(
 @router.get("stats")
 async def feedback_stats() -> dict:
     async with async_session() as db:
-        rows = (await db.execute(__import__("sqlalchemy").select(Feedback))).scalars().all()
+        rows = (await db.execute(select(Feedback))).scalars().all()
         total = len(rows)
         up = sum(1 for r in rows if r.rating == "up")
         down = total - up
@@ -113,7 +114,7 @@ async def submit_reasoning_feedback(trace_id: str, payload: ReasoningFeedbackReq
     async with async_session() as db:
         existing = (
             await db.execute(
-                __import__("sqlalchemy").select(Feedback).where(
+                select(Feedback).where(
                     Feedback.message_id == message_id,
                     Feedback.user_id == DEFAULT_USER_ID,
                 )
@@ -145,7 +146,7 @@ async def get_reasoning_feedback(trace_id: str) -> list[dict]:
     async with async_session() as db:
         rows = (
             await db.execute(
-                __import__("sqlalchemy").select(Feedback).where(
+                select(Feedback).where(
                     Feedback.message_id == message_id,
                     Feedback.user_id == DEFAULT_USER_ID,
                 )

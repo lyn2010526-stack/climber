@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 import base64
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ class PageSnapshot:
     title: str
     screenshot: str | None = None
     dom_summary: str = ""
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: dict[str, Any] = field(default_factory=dict)
 
 

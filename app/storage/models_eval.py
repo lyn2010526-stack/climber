@@ -27,7 +27,7 @@ class EvalDataset(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="")
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True, default="default-user")
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True, default="default-user")
 
     # Dataset content (JSON array of cases)
     case_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -44,7 +44,7 @@ class EvalRun(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     dataset_id: Mapped[str] = mapped_column(String(36), ForeignKey("eval_datasets.id"), nullable=False, index=True)
     agent_id: Mapped[str] = mapped_column(String(36), ForeignKey("agents.id"), nullable=False, index=True)
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True, default="default-user")
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True, default="default-user")
 
     # Results summary
     total_cases: Mapped[int] = mapped_column(Integer, default=0)

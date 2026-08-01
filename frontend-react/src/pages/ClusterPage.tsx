@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { GroupRoom } from '../components/group/GroupRoom';
 import { CollaborationConsole } from '../components/collaboration/CollaborationConsole';
+import { api } from '../api';
 
 interface ClusterTask {
   id: string;
@@ -102,11 +103,8 @@ export function ClusterPage() {
   const loadTaskDetails = useCallback(async (taskId: string) => {
     setLoadingTaskDetails(true);
     try {
-      const res = await fetch(`/api/v1/tasks/${taskId}`);
-      if (res.ok) {
-        const data = await res.json();
+      const data = await api.getTask(taskId);
         setTaskDetails(data);
-      }
     } catch {
       // skip
     }
@@ -124,16 +122,8 @@ export function ClusterPage() {
     if (!requirements.trim()) return;
     setCreating(true);
     try {
-      const res = await fetch('/api/v1/cluster/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ requirements }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.plan) {
+      const res = await api.createCluster(requirements);
+      if (res.plan) {
           const planTasks = data.plan.map((p: any, idx: number) => ({
             id: p.id || String(idx + 1),
             role: p.role || 'executor',
@@ -147,22 +137,15 @@ export function ClusterPage() {
           }));
           setTasks(planTasks);
         }
-        if (data.progress) {
-          setProgress(data.progress);
+        if (res.progress) {
+          setProgress(res.progress);
         }
       } else {
         // Fallback: create a group with the requirements as topic
-        const groupRes = await fetch('/api/v1/groups/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ name: requirements.slice(0, 50), topic: requirements, agent_ids: [] }),
-        });
-        if (groupRes.ok) {
-          const groupData = await groupRes.json();
+        const groupRes = await api.createGroup({ name: requirements.slice(0, 50), topic: requirements, agent_ids: [] });
+        if (groupRes.id) {
           setTasks([{
-            id: groupData.id,
+            id: groupRes.id,
             role: 'planner',
             description: `群组已创建：${requirements.slice(0, 80)}`,
             status: 'completed',
@@ -195,30 +178,21 @@ export function ClusterPage() {
 
   const loadGroups = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/groups/');
-      if (res.ok) {
-        const data = await res.json();
-        setGroups(data);
-      }
+      const res = await api.listGroups();
+        setGroups(res);
     } catch { /* skip */ }
   }, []);
 
   const createGroup = async () => {
     if (!groupName.trim()) return;
     try {
-      const res = await fetch('/api/v1/groups/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const res = await api.createGroup({
           name: groupName,
           topic: groupTopic,
           agent_ids: [],
           template: useTemplate ? 'default' : undefined,
-        }),
-      });
-      if (res.ok) {
+        });
+        if (res.id) {
         setGroupName('');
         setGroupTopic('');
         setUseTemplate(false);
@@ -235,11 +209,8 @@ export function ClusterPage() {
     // Fetch available tasks for context selection
     if (mode === 'collab') {
       try {
-        const res = await fetch(`/api/v1/groups/${groupId}/tasks?limit=20`);
-        if (res.ok) {
-          const data = await res.json();
-          setAvailableTasks((data.tasks || []).map((t: any) => ({ id: t.id, description: t.description })));
-        }
+        const res = await api.listGroupTasks(groupId, 20);
+        setAvailableTasks((res.tasks || []).map((t: any) => ({ id: t.id, description: t.description })));
       } catch {
         // skip
       }
@@ -257,15 +228,9 @@ export function ClusterPage() {
     setManagingGroupId(groupId);
     setLoadingMembers(true);
     try {
-      const res = await fetch(`/api/v1/groups/${groupId}/members`);
-      if (res.ok) {
-        const data = await res.json();
-        setMembers(data.members || []);
-      }
-      const msgRes = await fetch(`/api/v1/groups/${groupId}/messages?limit=50`);
-      if (msgRes.ok) {
-        await msgRes.json();
-      }
+      const res = await api.listGroupMembers(groupId);
+        setMembers(res.members || []);
+      const msgData = await api.listGroupMessages(groupId, 50);
     } catch {
       // skip
     }
@@ -275,11 +240,7 @@ export function ClusterPage() {
   const addMember = async () => {
     if (!managingGroupId || !memberForm.agent_id.trim()) return;
     try {
-      await fetch(`/api/v1/groups/${managingGroupId}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(memberForm),
-      });
+      await api.addGroupMember(managingGroupId, memberForm);
       setMemberForm({ agent_id: '', role: 'participant', model_provider: '', model_id: '', tools: [] });
       setShowAddMember(false);
       openManageMembers(managingGroupId);
@@ -291,7 +252,7 @@ export function ClusterPage() {
   const removeMember = async (memberId: string) => {
     if (!managingGroupId) return;
     try {
-      await fetch(`/api/v1/groups/${managingGroupId}/members/${memberId}`, { method: 'DELETE' });
+      await api.removeGroupMember(managingGroupId, memberId);
       openManageMembers(managingGroupId);
     } catch {
       // skip

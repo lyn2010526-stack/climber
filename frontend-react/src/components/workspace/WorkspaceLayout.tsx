@@ -20,7 +20,7 @@ export function WorkspaceLayout() {
             </Panel>
             {rightPanelOpen && (
               <>
-                <Separator className="w-px bg-white/10 hover:bg-[#007AFF]/30 transition-colors cursor-col-resize" />
+                <Separator className="w-px bg-white/[0.06] hover:bg-[#3B82F6]/30 transition-colors duration-200 cursor-col-resize" />
                 <Panel defaultSize={30} minSize={20} maxSize={40}>
                   <RightPanel />
                 </Panel>

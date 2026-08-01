@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, AlertTriangle, Activity } from 'lucide-react';
+import { api } from '../api';
 
 interface CostData {
   total_cost: number;
@@ -32,19 +33,13 @@ export default function CostPage() {
     setLoading(true);
     setError(null);
     try {
-      const [usageRes, budgetRes] = await Promise.all([
-        fetch('/api/v1/cost/usage'),
-        fetch('/api/v1/cost/budget'),
+      const [usageData, budgetData] = await Promise.all([
+        api.getCostUsage(),
+        api.getCostBudget(),
       ]);
 
-      if (usageRes.ok) {
-        const data = await usageRes.json();
-        setCostData(data);
-      }
-      if (budgetRes.ok) {
-        const data = await budgetRes.json();
-        setBudget(data);
-      }
+      setCostData(usageData);
+      setBudget(budgetData);
     } catch (e) {
       setError('加载成本数据失败');
     } finally {

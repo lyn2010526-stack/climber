@@ -33,7 +33,7 @@ class Feedback(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     message_id: Mapped[str] = mapped_column(String(36), ForeignKey("messages.id"), nullable=False)
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False)
     rating: Mapped[str] = mapped_column(String(10), nullable=False)
     reason: Mapped[str | None] = mapped_column(String(20), nullable=True)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)

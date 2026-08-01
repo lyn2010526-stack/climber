@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Search, X, Database, FileText, Users,
 } from 'lucide-react';
+import { api } from '../../../api';
 
 interface SearchResult {
   id: string;
@@ -32,14 +33,8 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/v1/search?q=${encodeURIComponent(q)}&limit=20`);
-      if (res.ok) {
-        const data = await res.json();
+      const data = await api.search(q, 20);
         setResults(data.results || []);
-      } else {
-        setError('搜索失败');
-        setResults([]);
-      }
     } catch {
       setError('网络错误');
       setResults([]);

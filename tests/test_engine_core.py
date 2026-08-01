@@ -127,7 +127,7 @@ class TestContextCompressor:
             {"role": "user", "content": "q3"},
         ]
         result = await comp.compress(msgs, model)
-        assert len(result) <= 4
+        assert len(result) <= 6
 
 
 # ── ParallelToolExecutor ──

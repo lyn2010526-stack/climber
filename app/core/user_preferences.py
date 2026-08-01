@@ -5,12 +5,13 @@
 from __future__ import annotations
 
 import json
-import logging
+import structlog
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -61,14 +62,14 @@ class UserPreferenceManager:
                 )
                 self._cache[user_id] = pref
                 return pref
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("user_preferences.load_failed", error=str(e))
         pref = UserPreference(user_id=user_id)
         self._cache[user_id] = pref
         return pref
 
     def _save(self, pref: UserPreference) -> None:
-        pref.updated_at = __import__("datetime").datetime.utcnow().isoformat()
+        pref.updated_at = datetime.now(timezone.utc).isoformat()
         path = self._storage_path / f"{pref.user_id}.json"
         data = {
             "user_id": pref.user_id,

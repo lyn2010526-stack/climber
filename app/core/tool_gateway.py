@@ -1,6 +1,6 @@
 """Unified Tool Gateway — central dispatch for all tool executions.
 
-- Tool dispatch and routing
+- MonkeyCode tool dispatch
 - Sidekick-AI unified tool gateway concept
 - Cline tool security policy
 - Suna tool auto-priority feedback loop
@@ -156,8 +156,8 @@ class ToolGateway:
                 result=reason,
                 blocked=blocked,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("tool_gateway.audit_log_failed", error=str(e))
 
 
 # Global gateway instance

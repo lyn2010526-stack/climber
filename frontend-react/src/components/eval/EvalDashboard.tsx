@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { api } from '../../api';
 
 interface EvalDataset {
   id: string;
@@ -38,10 +39,8 @@ export default function EvalDashboard() {
 
   const fetchDatasets = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/eval/datasets');
-      if (res.ok) {
-        setDatasets(await res.json());
-      }
+      const data = await api.listEvalDatasets();
+        setDatasets(data);
     } catch {
       // ignore
     }
@@ -51,14 +50,8 @@ export default function EvalDashboard() {
     setSeeding(true);
     setError(null);
     try {
-      const res = await fetch('/api/v1/eval/datasets/seed-builtin', {
-        method: 'POST',
-      });
-      if (res.ok) {
+      await api.seedBuiltinDatasets();
         await fetchDatasets();
-      } else {
-        setError(`Seed failed: ${res.status}`);
-      }
     } catch {
       setError('Network error');
     }
@@ -73,19 +66,8 @@ export default function EvalDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/v1/eval/datasets/${selectedDataset}/run`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ agent_id: 'default' }),
-      });
-      if (res.ok) {
-        const result = await res.json();
+      const result = await api.runEvalDataset(selectedDataset);
         setRuns([result, ...runs]);
-      } else {
-        setError(`Run failed: ${res.status}`);
-      }
     } catch {
       setError('Network error');
     }

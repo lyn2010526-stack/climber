@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Activity, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
+import { api } from '../api';
 
 interface CheckItem {
   name: string;
@@ -18,9 +19,7 @@ export function DoctorPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/v1/doctor');
-      if (res.ok) {
-        const data = await res.json();
+      const data = await api.runDoctor();
         const items: CheckItem[] = [];
         for (const section of data.sections || []) {
           for (const c of section.checks || []) {
@@ -29,9 +28,6 @@ export function DoctorPage() {
         }
         setChecks(items);
         setHealthy(data.healthy);
-      } else {
-        setError(`诊断失败 (HTTP ${res.status})`);
-      }
     } catch (e: any) {
       setError(e.message || '诊断失败');
     } finally {

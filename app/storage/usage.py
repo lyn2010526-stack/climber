@@ -6,7 +6,7 @@ import asyncio
 import time
 import uuid
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 import structlog
@@ -35,7 +35,7 @@ class UsageRecord:
         self.tokens_used = tokens_used
         self.tool_calls = tool_calls
         self.status = status
-        self.created_at = datetime.utcnow().isoformat()
+        self.created_at = datetime.now(timezone.utc).isoformat()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -59,10 +59,12 @@ class UsageTracker:
         requests_per_minute: int = 30,
         tokens_per_day: int = 1_000_000,
         tool_calls_per_hour: int = 100,
+        max_records: int = 10000,
     ):
         self.requests_per_minute = requests_per_minute
         self.tokens_per_day = tokens_per_day
         self.tool_calls_per_hour = tool_calls_per_hour
+        self._max_records = max_records
         self._records: list[UsageRecord] = []
         self._request_timestamps: dict[str, list[float]] = defaultdict(list)
         self._lock = asyncio.Lock()
@@ -89,6 +91,8 @@ class UsageTracker:
                 status=status,
             )
             self._records.append(record)
+            if len(self._records) > self._max_records:
+                self._records = self._records[-self._max_records:]
             self._request_timestamps[user_id].append(time.time())
             # Cleanup old timestamps (keep last 24h)
             cutoff = time.time() - 86400
@@ -112,7 +116,7 @@ class UsageTracker:
                 return False, f"Rate limit: {self.requests_per_minute} requests/minute exceeded"
 
             # Tokens per day
-            one_day_ago = datetime.utcnow() - timedelta(days=1)
+            one_day_ago = datetime.now(timezone.utc) - timedelta(days=1)
             daily_tokens = sum(
                 r.tokens_used
                 for r in self._records
@@ -123,7 +127,7 @@ class UsageTracker:
                 return False, f"Daily token limit ({self.tokens_per_day}) exceeded"
 
             # Tool calls per hour
-            one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+            one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
             hourly_tool_calls = sum(
                 r.tool_calls
                 for r in self._records
@@ -138,7 +142,7 @@ class UsageTracker:
     async def get_usage_summary(self, user_id: str) -> dict[str, Any]:
         """Get usage summary for a user."""
         async with self._lock:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             one_day_ago = now - timedelta(days=1)
             one_hour_ago = now - timedelta(hours=1)
 
@@ -176,7 +180,7 @@ class UsageTracker:
 
     def cleanup_old_records(self, max_age_hours: int = 24) -> int:
         """Remove records older than max_age_hours. Returns count removed."""
-        cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
         original_len = len(self._records)
         self._records = [
             r for r in self._records

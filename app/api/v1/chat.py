@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -22,6 +22,10 @@ router = APIRouter()
 _engine: AgentEngine | None = None
 
 
+def get_current_user() -> str:
+    return "local"
+
+
 def get_engine() -> AgentEngine:
     global _engine
     if _engine is None:
@@ -36,50 +40,48 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/{session_id}/chat")
-async def chat(session_id: str, request: ChatRequest):
+async def chat(session_id: str, request: ChatRequest, user_id: str = Depends(get_current_user)):
     engine = get_engine()
     session = engine._sessions.get(session_id)
     if session is None:
         provider = "openai"
-        model_id = "gpt-4o"
-        api_key = "placeholder"
+        model_id = "gpt-4o-mini"
+        api_key = ""
         base_url = None
         system_prompt = ""
         agent_id = ""
+        tool_ids = []
         try:
             async with async_session() as db:
-                result = await db.execute(__import__("sqlalchemy").select(SessionModel).where(SessionModel.id == session_id))
+                from sqlalchemy import select
+                result = await db.execute(select(SessionModel).where(SessionModel.id == session_id))
                 row = result.scalar_one_or_none()
                 if row:
                     agent_id = row.agent_id or ""
-                    agent_result = await db.execute(__import__("sqlalchemy").select(AgentModel).where(AgentModel.id == agent_id))
+                    agent_result = await db.execute(select(AgentModel).where(AgentModel.id == agent_id))
                     agent_row = agent_result.scalar_one_or_none()
                     if agent_row:
                         provider = agent_row.provider or "openai"
-                        model_id = agent_row.model_id or "gpt-4o"
+                        model_id = agent_row.model_id or "gpt-4o-mini"
                         base_url = agent_row.base_url
                         system_prompt = agent_row.system_prompt or ""
-                        if agent_row.api_key_encrypted:
-                            try:
-                                from app.storage.auth import decrypt_api_key
-                                api_key = decrypt_api_key(agent_row.api_key_encrypted)
-                            except Exception:
-                                api_key = "placeholder"
-                    key_result = await db.execute(__import__("sqlalchemy").select(ApiKeyModel).where(ApiKeyModel.provider == provider).where(ApiKeyModel.is_active == True))
-                    key_row = key_result.scalar_one_or_none()
-                    if key_row and key_row.api_key_encrypted:
-                        try:
-                            from app.storage.auth import decrypt_api_key
-                            api_key = decrypt_api_key(key_row.api_key_encrypted)
-                        except Exception:
-                            pass
+                        api_key = agent_row.api_key_encrypted or ""
+                    if not api_key:
+                        key_result = await db.execute(
+                            select(ApiKeyModel)
+                            .where(ApiKeyModel.provider == provider)
+                            .where(ApiKeyModel.is_active == True)
+                        )
+                        key_row = key_result.scalar_one_or_none()
+                        if key_row:
+                            api_key = key_row.api_key_encrypted or ""
                     tool_ids = list(getattr(agent_row, "tool_ids", None) or [])
-        except Exception:
-            tool_ids = []
-        from app.storage.auth import ensure_user_id
+        except Exception as e:
+            import structlog
+            structlog.get_logger().warning("chat_session_load_failed", session_id=session_id, error=str(e))
         session = engine.create_session(
             agent_id=agent_id,
-            user_id=ensure_user_id(None),
+            user_id="local",
             provider=provider,
             model_id=model_id,
             api_key=api_key,
@@ -91,7 +93,16 @@ async def chat(session_id: str, request: ChatRequest):
         engine._sessions[session_id] = session
 
     async def _stream() -> Any:
-        async for event in engine.run(session, request.message):
-            yield event.to_sse()
+        try:
+            async for event in engine.run(session, request.message):
+                yield event.to_sse()
+        except Exception as e:
+            import structlog
+            structlog.get_logger().error("chat_stream_error", session_id=session_id, error=str(e), exc_info=True)
+            error_event = AgentEvent(
+                type=AgentEventType.ERROR,
+                data={"error": f"Stream error: {type(e).__name__}: {str(e)}"},
+            )
+            yield error_event.to_sse()
 
     return StreamingResponse(_stream(), media_type="text/event-stream")

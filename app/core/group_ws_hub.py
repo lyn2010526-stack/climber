@@ -13,6 +13,7 @@ import structlog
 
 from app.storage import async_session
 from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupMessage
+from sqlalchemy import select
 
 logger = structlog.get_logger()
 
@@ -146,7 +147,7 @@ class GroupWebSocketHub:
         async with async_session() as db:
             member = (
                 await db.execute(
-                    __import__("sqlalchemy").select(AgentGroupMember).where(
+                    select(AgentGroupMember).where(
                         AgentGroupMember.id == member_id,
                         AgentGroupMember.group_id == group_id,
                     )
@@ -168,7 +169,7 @@ class GroupWebSocketHub:
         async with async_session() as db:
             task = (
                 await db.execute(
-                    __import__("sqlalchemy").select(AgentGroupTask).where(
+                    select(AgentGroupTask).where(
                         AgentGroupTask.id == task_id,
                         AgentGroupTask.group_id == group_id,
                     )
@@ -196,7 +197,7 @@ class GroupWebSocketHub:
         async with async_session() as db:
             task = (
                 await db.execute(
-                    __import__("sqlalchemy").select(AgentGroupTask).where(
+                    select(AgentGroupTask).where(
                         AgentGroupTask.id == task_id,
                         AgentGroupTask.group_id == group_id,
                     )

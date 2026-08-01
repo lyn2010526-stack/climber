@@ -152,8 +152,8 @@ class SandboxExecutor:
         if self._workdir and os.path.isdir(self._workdir):
             try:
                 shutil.rmtree(self._workdir, ignore_errors=True)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("sandbox.cleanup_failed", workdir=self._workdir, error=str(e))
             self._workdir = ""
 
 

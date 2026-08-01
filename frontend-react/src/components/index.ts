@@ -10,6 +10,15 @@ export { ThemeToggle } from './ui/ThemeToggle';
 // Agent Components
 export { ChatInterface } from './agent/ChatInterface';
 export { MessageBubble } from './agent/MessageBubble';
+export { FloatingPermissionDialog } from './agent/FloatingPermissionDialog';
+export { ToolCallVisualization } from './agent/ToolCallVisualization';
+export { FileModificationDisplay } from './agent/FileModificationDisplay';
+export { ThinkingIndicator, ThinkingDots } from './agent/ThinkingIndicator';
+export { PermissionModes } from './agent/PermissionModes';
+export type { PermissionMode } from './agent/PermissionModes';
+export type { PermissionRequest } from './agent/FloatingPermissionDialog';
+export type { ToolCall } from './agent/ToolCallVisualization';
+export type { FileChange } from './agent/FileModificationDisplay';
 
 // Chat Components
 export { MessageContent, MessageActions, ToolCallCard } from './chat/MessageContent';
