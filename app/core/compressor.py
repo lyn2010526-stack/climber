@@ -103,3 +103,46 @@ class ContextCompressor:
         })
         out.extend(tail)
         return out
+
+    def compress_with_budget(
+        self,
+        messages: list[dict[str, Any]],
+        max_tokens: int,
+        model: str = "gpt-4",
+    ) -> list[dict[str, Any]]:
+        """Compress messages to fit within token budget.
+
+        Strategy:
+        1. Keep all system messages
+        2. Keep last N messages that fit in budget
+        3. Summarize older messages
+        """
+        current_tokens = sum(estimate_tokens([m]) for m in messages)
+        if current_tokens <= max_tokens:
+            return messages
+
+        system_msgs = [m for m in messages if m.get("role") == "system"]
+        non_system = [m for m in messages if m.get("role") != "system"]
+
+        system_tokens = sum(estimate_tokens([m]) for m in system_msgs)
+        remaining_budget = max_tokens - system_tokens
+
+        kept = []
+        used_tokens = 0
+        for msg in reversed(non_system):
+            msg_tokens = estimate_tokens([msg])
+            if used_tokens + msg_tokens <= remaining_budget * 0.8:
+                kept.insert(0, msg)
+                used_tokens += msg_tokens
+            else:
+                break
+
+        summarized_count = len(non_system) - len(kept)
+        if summarized_count > 0:
+            summary = {
+                "role": "system",
+                "content": f"<summary of {summarized_count} earlier messages>",
+            }
+            return system_msgs + [summary] + kept
+
+        return system_msgs + kept

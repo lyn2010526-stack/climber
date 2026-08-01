@@ -131,3 +131,98 @@ class ContextManager:
         recent = messages[-(max_messages - len(system_msgs)):]
         summary_marker = {"role": "system", "content": "<previous conversation summarized>"}
         return system_msgs + [summary_marker] + recent
+
+    def apply_hot_cold_strategy(
+        self,
+        messages: list[dict],
+        hot_window: int = 20,
+        cold_summary_threshold: int = 50,
+    ) -> list[dict]:
+        """Apply hot/cold memory strategy.
+
+        - Recent `hot_window` messages: kept verbatim (hot memory)
+        - Older messages: replaced with summary (cold memory)
+        - System messages always preserved
+        """
+        if len(messages) <= hot_window:
+            return messages
+
+        system_msgs = [m for m in messages if m.get("role") == "system"]
+        non_system = [m for m in messages if m.get("role") != "system"]
+
+        if len(non_system) <= hot_window:
+            return messages
+
+        hot = non_system[-hot_window:]
+        cold = non_system[:-hot_window]
+
+        cold_summary = {
+            "role": "system",
+            "content": f"<cold_memory>\n{self._summarize_messages(cold)}\n</cold_memory>",
+        }
+
+        return system_msgs + [cold_summary] + hot
+
+    def _summarize_messages(self, messages: list[dict]) -> str:
+        """Generate a brief summary of old messages."""
+        if not messages:
+            return "No prior conversation."
+
+        user_msgs = [m for m in messages if m.get("role") == "user"]
+        tool_calls = [m for m in messages if m.get("role") == "tool"]
+
+        parts = []
+        if user_msgs:
+            parts.append(f"{len(user_msgs)} user requests")
+        if tool_calls:
+            parts.append(f"{len(tool_calls)} tool calls")
+
+        if user_msgs:
+            last_user = str(user_msgs[-1].get("content", ""))[:200]
+            parts.append(f"Last request: {last_user}")
+
+        return "; ".join(parts)
+
+    def compress_tool_outputs_in_messages(
+        self,
+        messages: list[dict],
+        max_output_chars: int = TOOL_OUTPUT_THRESHOLD,
+    ) -> list[dict]:
+        """Truncate tool outputs in message history to save tokens."""
+        compressed = []
+        for msg in messages:
+            if msg.get("role") == "tool" and len(str(msg.get("content", ""))) > max_output_chars:
+                content = str(msg["content"])
+                truncated = self.truncate_tool_output(content, max_output_chars)
+                msg = dict(msg)
+                msg["content"] = truncated
+            compressed.append(msg)
+        return compressed
+
+    def create_stage_summary(
+        self,
+        messages: list[dict],
+        stage_name: str,
+    ) -> dict:
+        """Create a stage transition summary.
+
+        When moving between phases (e.g., planning -> coding),
+        create a compact summary of what was accomplished.
+        """
+        user_msgs = [m for m in messages if m.get("role") == "user"]
+        assistant_msgs = [m for m in messages if m.get("role") == "assistant"]
+
+        summary_parts = [f"## Stage: {stage_name}"]
+
+        if user_msgs:
+            summary_parts.append(f"User requests: {len(user_msgs)}")
+        if assistant_msgs:
+            summary_parts.append(f"Responses: {len(assistant_msgs)}")
+            last_resp = str(assistant_msgs[-1].get("content", ""))[:500]
+            if last_resp:
+                summary_parts.append(f"Last response: {last_resp}")
+
+        return {
+            "role": "system",
+            "content": "\n".join(summary_parts),
+        }
