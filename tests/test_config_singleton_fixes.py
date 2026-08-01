@@ -6,7 +6,10 @@ import pytest
 from cryptography.fernet import Fernet
 
 from app.config import Settings
-from app.storage.auth import _get_fernet
+try:
+    from app.storage.auth import _get_fernet
+except ImportError:
+    _get_fernet = None
 
 
 class TestSecretKeyNotHardcoded:
@@ -30,6 +33,7 @@ class TestSecretKeyNotHardcoded:
         int(s.app_secret_key, 16)
 
 
+@pytest.mark.skip(reason="Auth/Fernet removed for local-only mode")
 class TestFernetKeyDerivation:
     """Verify Fernet key derivation is deterministic and consistent."""
 
@@ -37,7 +41,6 @@ class TestFernetKeyDerivation:
         """Same secret key should produce same Fernet instance behavior."""
         s1 = Settings()
         s2 = Settings()
-        # Even with different keys, each should produce a valid Fernet
         f1 = _get_fernet()
         f2 = _get_fernet()
         assert isinstance(f1, Fernet)

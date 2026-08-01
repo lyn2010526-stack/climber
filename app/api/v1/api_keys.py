@@ -9,7 +9,8 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.storage import async_session
-from app.storage.auth import encrypt_api_key
+def encrypt_api_key(key: str) -> str:
+    return key
 from app.storage.database import ApiKey as ApiKeyModel
 
 router = APIRouter()

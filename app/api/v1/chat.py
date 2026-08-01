@@ -13,7 +13,6 @@ from app.core import AgentEvent, AgentEventType
 from app.core.agent_engine import AgentEngine, AgentSession
 from app.core.di import resolve as di_resolve
 from app.storage import async_session
-from app.storage.auth import get_current_user, get_current_user_required
 from app.storage.database import Session as SessionModel
 from app.storage.database import Agent as AgentModel
 from app.storage.database import ApiKey as ApiKeyModel
@@ -21,6 +20,10 @@ from app.storage.database import ApiKey as ApiKeyModel
 router = APIRouter()
 
 _engine: AgentEngine | None = None
+
+
+def get_current_user() -> str:
+    return "local"
 
 
 def get_engine() -> AgentEngine:
@@ -62,12 +65,7 @@ async def chat(session_id: str, request: ChatRequest, user_id: str = Depends(get
                         model_id = agent_row.model_id or "gpt-4o-mini"
                         base_url = agent_row.base_url
                         system_prompt = agent_row.system_prompt or ""
-                        if agent_row.api_key_encrypted:
-                            try:
-                                from app.storage.auth import decrypt_api_key
-                                api_key = decrypt_api_key(agent_row.api_key_encrypted)
-                            except Exception:
-                                pass
+                        api_key = agent_row.api_key_encrypted or ""
                     if not api_key:
                         key_result = await db.execute(
                             select(ApiKeyModel)
@@ -75,20 +73,15 @@ async def chat(session_id: str, request: ChatRequest, user_id: str = Depends(get
                             .where(ApiKeyModel.is_active == True)
                         )
                         key_row = key_result.scalar_one_or_none()
-                        if key_row and key_row.api_key_encrypted:
-                            try:
-                                from app.storage.auth import decrypt_api_key
-                                api_key = decrypt_api_key(key_row.api_key_encrypted)
-                            except Exception:
-                                pass
+                        if key_row:
+                            api_key = key_row.api_key_encrypted or ""
                     tool_ids = list(getattr(agent_row, "tool_ids", None) or [])
         except Exception as e:
             import structlog
             structlog.get_logger().warning("chat_session_load_failed", session_id=session_id, error=str(e))
-        from app.storage.auth import ensure_user_id
         session = engine.create_session(
             agent_id=agent_id,
-            user_id=ensure_user_id(None),
+            user_id="local",
             provider=provider,
             model_id=model_id,
             api_key=api_key,

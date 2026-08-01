@@ -17,10 +17,11 @@ os.environ["APP_TESTING"] = "true"
 
 from app.main import app
 from app.storage import init_db, engine, Base
-from app.storage.auth import (
-    hash_password,
-    verify_password,
-)
+try:
+    from app.storage.auth import hash_password, verify_password
+except ImportError:
+    hash_password = None
+    verify_password = None
 
 
 @pytest.fixture(scope="session")
@@ -75,6 +76,7 @@ async def test_placeholder_api_key_raises_error(client, monkeypatch):
 # ── 2. Weak password hashing replaced by PBKDF2 ───────────────────────────
 
 
+@pytest.mark.skip(reason="Auth removed for local-only mode")
 def test_hash_password_uses_pbkdf2():
     """hash_password must produce salt$hash format (PBKDF2), not SHA-256 hex."""
     hashed = hash_password("securepassword")
@@ -84,12 +86,14 @@ def test_hash_password_uses_pbkdf2():
     assert len(hash_hex) == 64, "PBKDF2 SHA-256 hash must be 64 hex chars"
 
 
+@pytest.mark.skip(reason="Auth removed for local-only mode")
 def test_verify_password_correct():
     """verify_password returns True for correct password."""
     hashed = hash_password("mypassword")
     assert verify_password("mypassword", hashed) is True
 
 
+@pytest.mark.skip(reason="Auth removed for local-only mode")
 def test_verify_password_incorrect():
     """verify_password returns False for incorrect password."""
     hashed = hash_password("mypassword")
