@@ -93,7 +93,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   addMessage: (sessionId, message) =>
     set((state) => ({
       sessions: state.sessions.map((s) =>
-        s.id === sessionId ? { ...s, messages: [...s.messages, message] } : s
+        s.id === sessionId
+          ? {
+              ...s,
+              messages: s.messages.some((m) => m.id === message.id)
+                ? s.messages.map((m) => (m.id === message.id ? message : m))
+                : [...s.messages, message],
+            }
+          : s
       ),
     })),
 

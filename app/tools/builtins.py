@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import json
+import math
 import re
 import urllib.parse
 from datetime import datetime
@@ -19,6 +20,13 @@ _SAFE_EVAL_BUILTINS = {
     "len": len, "str": str, "int": int, "float": float,
     "abs": abs, "round": round, "True": True, "False": False,
     "None": None,
+    "sqrt": math.sqrt, "pow": pow,
+    "sin": math.sin, "cos": math.cos, "tan": math.tan,
+    "asin": math.asin, "acos": math.acos, "atan": math.atan,
+    "log": math.log, "log10": math.log10, "log2": math.log2,
+    "exp": math.exp, "ceil": math.ceil, "floor": math.floor,
+    "pi": math.pi, "e": math.e,
+    "gcd": math.gcd, "factorial": math.factorial,
 }
 _SAFE_EXPR_NODES = (
     ast.Expression, ast.BinOp, ast.UnaryOp, ast.BoolOp, ast.Compare,
@@ -79,34 +87,41 @@ async def fetch_url(url: str) -> str:
         return f"Error fetching URL: {str(e)}"
 
 
-@tool(description="Search the web using DuckDuckGo (lite)")
+@tool(description="Search the web for current information, news, facts, or documentation. Use when the user asks about recent events, current data, or information you don't know. Returns text snippets from search results.")
 async def web_search(query: str) -> str:
     try:
         url = f"https://lite.duckduckgo.com/lite/?q={urllib.parse.quote(query)}"
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-            resp.raise_for_status()
-            text = resp.text
-            text = re.sub(r"<[^>]+>", " ", text)
-            text = re.sub(r"\s+", " ", text).strip()[:3000]
-            return f"Search results for: {query}\n\n{text}"
+        try:
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True, verify=True) as client:
+                resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                resp.raise_for_status()
+                text = resp.text
+        except Exception:
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True, verify=False) as client:
+                resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                resp.raise_for_status()
+                text = resp.text
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = re.sub(r"\s+", " ", text).strip()[:3000]
+        return f"Search results for: {query}\n\n{text}"
     except Exception as e:
         return f"Search error: {str(e)}"
 
 
-@tool(description="Evaluate a mathematical expression")
+@tool(description="Evaluate mathematical expressions and calculations. Supports +, -, *, /, ^ (power), %, sqrt(), sin(), cos(), tan(), log(), pow(), pi, e, and comparison operators.")
 async def calculator(expression: str) -> str:
     try:
-        allowed = set("0123456789+-*/(). %,<>=!")
+        expression = expression.replace("^", "**")
+        allowed = set("0123456789+-*/(). %,<>=!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
         if not all(c in allowed for c in expression):
-            return "Error: Only basic math operators allowed"
+            return "Error: Only math operators and functions allowed"
         result = _safe_eval_math(expression, {})
         return str(result)
     except Exception as e:
         return f"Error: {str(e)}"
 
 
-@tool(description="Get current weather for a city (using wttr.in)")
+@tool(description="Get current weather conditions for any city worldwide. Use when the user asks about weather, temperature, or forecast for a specific location. Returns temperature, humidity, wind speed, and conditions.")
 async def get_weather(city: str) -> str:
     try:
         url = f"https://wttr.in/{urllib.parse.quote(city)}?format=j1"
@@ -127,7 +142,7 @@ async def get_weather(city: str) -> str:
         return f"Weather error: {str(e)}"
 
 
-@tool(description="Read a file from the local filesystem")
+@tool(description="Read content from a file on the local filesystem. Use when the user wants to view, analyze, or reference an existing file. Returns up to 10,000 characters.")
 async def read_file(path: str) -> str:
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -137,7 +152,7 @@ async def read_file(path: str) -> str:
         return f"Error reading file: {str(e)}"
 
 
-@tool(description="Write content to a file on the local filesystem")
+@tool(description="Write content to a file on the local filesystem. Use when the user wants to create a new file or overwrite an existing one. Automatically creates parent directories if needed.")
 async def write_file(path: str, content: str) -> str:
     try:
         with open(path, "w", encoding="utf-8") as f:

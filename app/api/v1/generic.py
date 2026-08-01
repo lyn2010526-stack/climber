@@ -112,6 +112,28 @@ async def create_agent(request: Request) -> dict[str, Any]:
         }
 
 
+@router.get("/agents/{agent_id}")
+async def get_agent(agent_id: str) -> dict[str, Any]:
+    from app.storage.database import Agent
+
+    async with async_session() as db:
+        agent = (await db.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
+        if agent is None:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        return {
+            "id": agent.id,
+            "name": agent.name,
+            "description": getattr(agent, "description", "") or "",
+            "provider": agent.provider,
+            "model_id": agent.model_id,
+            "system_prompt": getattr(agent, "system_prompt", "") or "",
+            "base_url": agent.base_url,
+            "tool_ids": getattr(agent, "tool_ids", []) or [],
+            "skill_ids": getattr(agent, "skill_ids", []) or [],
+            "created_at": agent.created_at.isoformat() if agent.created_at else None,
+        }
+
+
 @router.delete("/agents/{agent_id}")
 async def delete_agent(agent_id: str) -> dict:
     from app.storage.database import Agent

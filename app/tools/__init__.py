@@ -138,7 +138,11 @@ class ToolRegistry:
         }
 
     async def execute(self, name: str, arguments: dict[str, Any]) -> str:
-        """Execute a registered tool."""
+        """Execute a registered tool.
+
+        Always returns a string (LLMs expect text responses from tools).
+        Complex objects are serialized as JSON for structured parsing.
+        """
         func = self._tools.get(name)
         if not func:
             raise ValueError(f"Tool '{name}' not found")
@@ -148,7 +152,12 @@ class ToolRegistry:
                 result = await func(**arguments)
             else:
                 result = func(**arguments)
-            return str(result) if not isinstance(result, str) else result
+            if isinstance(result, str):
+                return result
+            if isinstance(result, (dict, list)):
+                import json
+                return json.dumps(result, ensure_ascii=False, default=str)
+            return str(result)
         except Exception as e:
             logger.error("Tool execution failed", tool=name, error=str(e))
             return f"Error executing {name}: {str(e)}"

@@ -58,52 +58,59 @@ export function ChatArea() {
 
     let assistantContent = '';
     let toolCalls: any[] = [];
+    let assistantMessageId = `assistant-${Date.now()}`;
 
     try {
       await api.chatStream(activeSessionId!, msg, (event) => {
-        if (event.event === 'text') {
-          const data = JSON.parse(event.data);
-          assistantContent += data.content || '';
-          addMessage(activeSessionId, {
-            id: `assistant-${Date.now()}`,
-            type: 'thinking',
-            content: { text: assistantContent },
-            timestamp: Date.now(),
-            metadata: { tokens: data.tokens },
-          });
-        } else if (event.event === 'tool_call') {
-          const data = JSON.parse(event.data);
-          toolCalls.push(data);
-          addMessage(activeSessionId, {
-            id: `tool-call-${Date.now()}`,
-            type: 'tool-call',
-            content: { name: data.name, arguments: data.arguments },
-            timestamp: Date.now(),
-            metadata: { status: 'running', toolName: data.name, toolArgs: data.arguments },
-          });
-          if (permissionMode === 'native' && data.name?.startsWith('native_')) {
-            const cmd = typeof data.arguments === 'string' ? data.arguments : JSON.stringify(data.arguments || {});
-            const item: ApprovalQueueItem = {
-              id: `approval-${Date.now()}`,
-              command: cmd,
-              riskLevel: data.name.includes('run') ? 'high' : 'medium',
+        try {
+          if (event.event === 'text') {
+            const data = JSON.parse(event.data);
+            assistantContent += data.content || '';
+            addMessage(activeSessionId, {
+              id: assistantMessageId,
+              type: 'thinking',
+              content: { text: assistantContent },
               timestamp: Date.now(),
-            };
-            setApprovalQueue(prev => [...prev, item]);
-            setCurrentApproval(item);
+              metadata: { tokens: data.tokens },
+            });
+          } else if (event.event === 'tool_call') {
+            const data = JSON.parse(event.data);
+            toolCalls.push(data);
+            addMessage(activeSessionId, {
+              id: `tool-call-${Date.now()}`,
+              type: 'tool-call',
+              content: { name: data.name, arguments: data.arguments },
+              timestamp: Date.now(),
+              metadata: { status: 'running', toolName: data.name, toolArgs: data.arguments },
+            });
+            if (permissionMode === 'native' && data.name?.startsWith('native_')) {
+              const cmd = typeof data.arguments === 'string' ? data.arguments : JSON.stringify(data.arguments || {});
+              const item: ApprovalQueueItem = {
+                id: `approval-${Date.now()}`,
+                command: cmd,
+                riskLevel: data.name.includes('run') ? 'high' : 'medium',
+                timestamp: Date.now(),
+              };
+              setApprovalQueue(prev => [...prev, item]);
+              setCurrentApproval(item);
+            }
+          } else if (event.event === 'tool_result') {
+            const data = JSON.parse(event.data);
+            addMessage(activeSessionId, {
+              id: `tool-result-${Date.now()}`,
+              type: 'tool-result',
+              content: data.result,
+              timestamp: Date.now(),
+              metadata: { status: 'success', toolName: data.tool_name },
+            });
+          } else if (event.event === 'done') {
+            setIsStreaming(false);
+            updateSession(activeSessionId, { status: 'idle' });
+          } else if (event.event === 'stopped') {
+            setIsStreaming(false);
+            updateSession(activeSessionId, { status: 'idle' });
           }
-        } else if (event.event === 'tool_result') {
-          const data = JSON.parse(event.data);
-          addMessage(activeSessionId, {
-            id: `tool-result-${Date.now()}`,
-            type: 'tool-result',
-            content: data.result,
-            timestamp: Date.now(),
-            metadata: { status: 'success', toolName: data.tool_name },
-          });
-        } else if (event.event === 'done') {
-          setIsStreaming(false);
-          updateSession(activeSessionId, { status: 'idle' });
+        } catch {
         }
       });
     } catch (e) {
