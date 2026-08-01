@@ -175,13 +175,39 @@ class ToolRegistry:
         return self._definitions.get(name)
 
 
-# Global singleton
-tool_registry = ToolRegistry()
+class ToolRegistryProvider:
+    """Provides isolated tool registry instances.
+
+    Use get_registry() for the global default, or create_isolated()
+    for test/tenant-specific registries.
+    """
+
+    _global: ToolRegistry | None = None
+
+    @classmethod
+    def get_registry(cls) -> ToolRegistry:
+        if cls._global is None:
+            cls._global = ToolRegistry()
+        return cls._global
+
+    @classmethod
+    def create_isolated(cls) -> ToolRegistry:
+        return ToolRegistry()
+
+    @classmethod
+    def reset_global(cls) -> None:
+        cls._global = None
 
 
-def register_builtins() -> None:
-    """Import and register all built-in tools."""
-    from app.tools import builtins  # noqa: F401
+def get_tool_registry() -> ToolRegistry:
+    return ToolRegistryProvider.get_registry()
+
+
+def create_isolated_registry() -> ToolRegistry:
+    return ToolRegistryProvider.create_isolated()
+
+
+tool_registry = ToolRegistryProvider.get_registry()
 
 
 def tool(
@@ -191,3 +217,8 @@ def tool(
 ) -> Callable:
     """Convenience decorator using global registry."""
     return tool_registry.tool(name, description, parameters)
+
+
+def register_builtins() -> None:
+    """Import and register all built-in tools."""
+    from app.tools import builtins  # noqa: F401

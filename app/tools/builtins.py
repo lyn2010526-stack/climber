@@ -470,40 +470,9 @@ async def apply_patch(file_path: str, patch: str) -> str:
 async def stream_command(command: str, timeout: int = 120, workdir: str = "") -> str:
     """Execute a shell command with streaming output."""
     try:
-        import os
-        import subprocess
-
-        env = os.environ.copy()
-        cwd = workdir or None
-
-        proc = subprocess.Popen(
-            command,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            cwd=cwd,
-            env=env,
-        )
-
-        output_lines = []
-        try:
-            import asyncio
-            while True:
-                line = proc.stdout.readline()
-                if not line and proc.poll() is not None:
-                    break
-                if line:
-                    output_lines.append(line.rstrip())
-        except asyncio.TimeoutError:
-            proc.kill()
-            return f"Command timed out after {timeout}s\n" + "\n".join(output_lines[-50:])
-
-        returncode = proc.wait()
-        output = "\n".join(output_lines)
-        if returncode != 0:
-            return f"Command failed (exit {returncode}):\n{output}"
-        return output
+        from app.core.di import resolve as di_resolve
+        sandbox = di_resolve("SandboxExecutor")
+        return await sandbox.execute(command, timeout=timeout)
     except Exception as e:
         return f"Error executing command: {str(e)}"
 

@@ -147,8 +147,8 @@ def validate_tool_input(schema: dict[str, Any], arguments: dict[str, Any]) -> No
 
 HAZARD_COMMANDS = [
     # Destructive file operations
-    r'\brm\s+(-[rfRF]+\s+)?/\b',
-    r'\brm\s+-rf\s+/\b',
+    r'\brm\s+(-[rfRF]+\s+)?/?(\s|$)',
+    r'\brm\s+-[rfRF]+\s+/',
     r'\bshred\b',
     r'\bwipe\b',
     # Disk operations
@@ -161,11 +161,11 @@ HAZARD_COMMANDS = [
     # Privilege escalation
     r'\bchmod\s+777\b',
     r'\bchown\s+-R\s+root\b',
-    r'\bsudo\b.*\brm\b',
+    r'\bsudo\b',
     # Network threats
     r'\bnc\b.*-e\s+/bin/',
     r'\bbash\b.*-i\b.*>&\b',
-    r'\bnohup\b.*&\s*$',
+    r'\bnohup\b',
     r'\bcurl\b.*\|\s*(sh|bash)\b',
     r'\bwget\b.*\|\s*(sh|bash)\b',
     # System control
@@ -176,6 +176,11 @@ HAZARD_COMMANDS = [
     r'\bsystemctl\s+(stop|disable)\b',
     # Mount abuse
     r'\bmount\b.*-o\s+loop',
+    # Command injection patterns
+    r'\$\(.*\)',
+    r'`[^`]*`',
+    r';\s*(rm|shred|mkfs|fdisk|dd|chmod|chown|sudo|shutdown|reboot|poweroff)\b',
+    r'\|\s*(rm|shred|mkfs|sudo|shutdown|reboot|poweroff)\b',
 ]
 
 

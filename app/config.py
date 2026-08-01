@@ -13,8 +13,8 @@ load_dotenv(BASE_DIR / ".env")
 
 
 class Settings(BaseSettings):
-    app_testing: bool = Field(default=True)
-    app_debug: bool = Field(default=True)
+    app_testing: bool = Field(default=False)
+    app_debug: bool = Field(default=False)
     app_log_level: str = Field(default="INFO")
     app_secret_key: str = Field(default="dev-secret-key-change-in-production")
 

@@ -1,20 +1,19 @@
-"""Session chat endpoint with SSE streaming using Frame Protocol."""
+"""Session chat endpoint with SSE streaming."""
 
 from __future__ import annotations
 
 import json
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from app.core.agent_engine import AgentEngine
+from app.core import AgentEvent, AgentEventType
+from app.core.agent_engine import AgentEngine, AgentSession
 from app.core.di import resolve as di_resolve
-from app.core.frame import Frame
-from sqlalchemy import select
-
 from app.storage import async_session
+from app.storage.auth import get_current_user, get_current_user_required
 from app.storage.database import Session as SessionModel
 from app.storage.database import Agent as AgentModel
 from app.storage.database import ApiKey as ApiKeyModel
@@ -38,18 +37,20 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/{session_id}/chat")
-async def chat(session_id: str, request: ChatRequest):
+async def chat(session_id: str, request: ChatRequest, user_id: str = Depends(get_current_user)):
     engine = get_engine()
     session = engine._sessions.get(session_id)
     if session is None:
         provider = "openai"
-        model_id = "gpt-4o"
+        model_id = "gpt-4o-mini"
         api_key = ""
         base_url = None
         system_prompt = ""
         agent_id = ""
+        tool_ids = []
         try:
             async with async_session() as db:
+                from sqlalchemy import select
                 result = await db.execute(select(SessionModel).where(SessionModel.id == session_id))
                 row = result.scalar_one_or_none()
                 if row:
@@ -58,7 +59,7 @@ async def chat(session_id: str, request: ChatRequest):
                     agent_row = agent_result.scalar_one_or_none()
                     if agent_row:
                         provider = agent_row.provider or "openai"
-                        model_id = agent_row.model_id or "gpt-4o"
+                        model_id = agent_row.model_id or "gpt-4o-mini"
                         base_url = agent_row.base_url
                         system_prompt = agent_row.system_prompt or ""
                         if agent_row.api_key_encrypted:
@@ -66,25 +67,28 @@ async def chat(session_id: str, request: ChatRequest):
                                 from app.storage.auth import decrypt_api_key
                                 api_key = decrypt_api_key(agent_row.api_key_encrypted)
                             except Exception:
-                                api_key = ""
-                    key_result = await db.execute(select(ApiKeyModel).where(ApiKeyModel.provider == provider).where(ApiKeyModel.is_active == True))
-                    key_row = key_result.scalar_one_or_none()
-                    if key_row and key_row.api_key_encrypted:
-                        try:
-                            from app.storage.auth import decrypt_api_key
-                            api_key = decrypt_api_key(key_row.api_key_encrypted)
-                        except Exception:
-                            pass
+                                pass
+                    if not api_key:
+                        key_result = await db.execute(
+                            select(ApiKeyModel)
+                            .where(ApiKeyModel.provider == provider)
+                            .where(ApiKeyModel.is_active == True)
+                        )
+                        key_row = key_result.scalar_one_or_none()
+                        if key_row and key_row.api_key_encrypted:
+                            try:
+                                from app.storage.auth import decrypt_api_key
+                                api_key = decrypt_api_key(key_row.api_key_encrypted)
+                            except Exception:
+                                pass
                     tool_ids = list(getattr(agent_row, "tool_ids", None) or [])
-        except Exception:
-            tool_ids = []
-        if not api_key:
+        except Exception as e:
             import structlog
-            logger = structlog.get_logger()
-            logger.warning("chat.no_api_key", session_id=session_id, provider=provider)
+            structlog.get_logger().warning("chat_session_load_failed", session_id=session_id, error=str(e))
+        from app.storage.auth import ensure_user_id
         session = engine.create_session(
             agent_id=agent_id,
-            user_id="default-user",
+            user_id=ensure_user_id(None),
             provider=provider,
             model_id=model_id,
             api_key=api_key,
@@ -96,12 +100,16 @@ async def chat(session_id: str, request: ChatRequest):
         engine._sessions[session_id] = session
 
     async def _stream() -> Any:
-        async for frame in engine.run(session, request.message):
-            yield _frame_to_sse(frame)
+        try:
+            async for event in engine.run(session, request.message):
+                yield event.to_sse()
+        except Exception as e:
+            import structlog
+            structlog.get_logger().error("chat_stream_error", session_id=session_id, error=str(e), exc_info=True)
+            error_event = AgentEvent(
+                type=AgentEventType.ERROR,
+                data={"error": f"Stream error: {type(e).__name__}: {str(e)}"},
+            )
+            yield error_event.to_sse()
 
     return StreamingResponse(_stream(), media_type="text/event-stream")
-
-
-def _frame_to_sse(frame: Frame) -> str:
-    payload = json.dumps(frame.to_dict(), ensure_ascii=False)
-    return f"event: frame\ndata: {payload}\n\n"

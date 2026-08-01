@@ -220,7 +220,7 @@ app.include_router(api_router, prefix="/api/v1")
 async def global_exception_handler(request: Request, exc: Exception):
     dump = write_crash_dump(exc, {"path": request.url.path, "method": request.method})
     logger.error("Unhandled exception", error=str(exc), error_type=type(exc).__name__, path=request.url.path, crash_dump=str(dump) if dump else None, exc_info=True)
-    return JSONResponse(status_code=500, content={"detail": "Internal server error", "type": "internal_error", "error": type(exc).__name__, "crash_dump": str(dump) if dump else None})
+    return JSONResponse(status_code=500, content={"detail": "Internal server error", "type": "internal_error"})
 
 
 @app.exception_handler(HTTPException)

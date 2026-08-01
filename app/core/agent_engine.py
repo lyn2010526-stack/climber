@@ -378,6 +378,13 @@ class AgentEngine:
                     session.messages.append({"role": MessageRole.ASSISTANT, "content": result.content})
                     yield AgentEvent(type=AgentEventType.TEXT, data={"content": result.content})
 
+                if not result.tool_calls and not result.content:
+                    session.messages.append({
+                        "role": MessageRole.SYSTEM,
+                        "content": "Your previous response was empty. Please provide a helpful response or use an appropriate tool.",
+                    })
+                    continue
+
                 if result.tool_calls:
                     session.messages.append({"role": MessageRole.ASSISTANT, "content": "", "tool_calls": result.tool_calls})
                     for tc in result.tool_calls:

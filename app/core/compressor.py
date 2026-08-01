@@ -55,7 +55,10 @@ class ContextCompressor:
         keep = self._config.keep_recent_messages
         if len(messages) <= keep:
             return messages
-        return messages[-keep:]
+        result = messages[:1]
+        result.append({"role": "system", "content": "[Earlier messages truncated]"})
+        result.extend(messages[-(keep):])
+        return result
 
     async def _summarize(self, messages: list[dict[str, Any]], model: Any) -> list[dict[str, Any]]:
         """Summarize older messages into a single system message using the LLM.

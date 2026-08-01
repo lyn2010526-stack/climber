@@ -82,5 +82,7 @@ class ParallelToolExecutor:
             return ToolExecutionResult(tool_name=name, result=result, duration_ms=duration, arguments=arguments)
         except asyncio.TimeoutError:
             return ToolExecutionResult(tool_name=name, error="timeout", success=False, arguments=arguments)
+        except asyncio.CancelledError:
+            return ToolExecutionResult(tool_name=name, error="cancelled", success=False, arguments=arguments)
         except Exception as e:
             return ToolExecutionResult(tool_name=name, error=str(e), success=False, arguments=arguments)

@@ -43,6 +43,8 @@ class OpenAIAdapter(ModelAdapter):
             "messages": messages,
             "stream": stream,
         }
+        if stream:
+            payload["stream_options"] = {"include_usage": True}
         if tools:
             payload["tools"] = tools
         payload.update(kwargs)
@@ -121,6 +123,9 @@ class OpenAIAdapter(ModelAdapter):
         finish_reason = None
         tokens_used = 0
 
+        import time
+        timeout = kwargs.get("timeout", 120)
+        start_time = time.monotonic()
         try:
             client = self.get_client()
             async with client.stream(
@@ -128,10 +133,13 @@ class OpenAIAdapter(ModelAdapter):
                 f"{self._base_url}/chat/completions",
                 headers=headers,
                 content=json.dumps(payload, ensure_ascii=False).encode(),
-                timeout=kwargs.get("timeout", 120),
+                timeout=timeout,
             ) as response:
                 response.raise_for_status()
                 async for line in response.aiter_lines():
+                    if time.monotonic() - start_time > timeout:
+                        logger.warning("stream_chat_total_timeout", timeout=timeout, model=self._model_id)
+                        break
                     if not line or line == "data: [DONE]":
                         continue
                     if not line.startswith("data: "):
@@ -145,7 +153,20 @@ class OpenAIAdapter(ModelAdapter):
                     if delta.get("content"):
                         accumulated_content += delta["content"]
                     if delta.get("tool_calls"):
-                        accumulated_tool_calls = self._parse_tool_calls_from_delta(delta["tool_calls"])
+                        for tc in delta["tool_calls"]:
+                            idx = tc.get("index", 0)
+                            while len(accumulated_tool_calls) <= idx:
+                                accumulated_tool_calls.append({
+                                    "id": "",
+                                    "type": "function",
+                                    "function": {"name": "", "arguments": ""},
+                                })
+                            if tc.get("id"):
+                                accumulated_tool_calls[idx]["id"] = tc["id"]
+                            if tc.get("function", {}).get("name"):
+                                accumulated_tool_calls[idx]["function"]["name"] = tc["function"]["name"]
+                            if tc.get("function", {}).get("arguments"):
+                                accumulated_tool_calls[idx]["function"]["arguments"] += tc["function"]["arguments"]
                     if chunk.get("usage"):
                         tokens_used = chunk["usage"].get("total_tokens", tokens_used)
                     if chunk.get("choices", [{}])[0].get("finish_reason"):
@@ -223,16 +244,15 @@ class OpenAIAdapter(ModelAdapter):
         if not chunks:
             return ChatResult(content="", tool_calls=[], finish_reason="stop", tokens_used=0)
         last = chunks[-1]
-        full_content = "".join(c.content or "" for c in chunks)
         all_tool_calls: list[dict] = []
         for c in chunks:
             if c.tool_calls:
                 all_tool_calls = c.tool_calls
-        total_tokens = sum(c.tokens_used or 0 for c in chunks)
+        total_tokens = max(c.tokens_used or 0 for c in chunks)
         return ChatResult(
-            content=full_content or "",
+            content=last.content or "",
             tool_calls=all_tool_calls,
-            finish_reason=chunks[-1].finish_reason or "stop",
+            finish_reason=last.finish_reason or "stop",
             tokens_used=total_tokens,
         )
 
