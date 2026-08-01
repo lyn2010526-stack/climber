@@ -119,9 +119,10 @@ class OpenAIAdapter(ModelAdapter):
         """
         payload = self._build_payload(messages, tools, stream=True, **kwargs)
         headers = {
-            "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
 
         total_timeout = kwargs.get("timeout", 120)
         idle_timeout = kwargs.get("idle_timeout", 15)
@@ -166,7 +167,6 @@ class OpenAIAdapter(ModelAdapter):
                     content=json.dumps(payload, ensure_ascii=False).encode(),
                 ),
                 stream=True,
-                timeout=httpx.Timeout(total_timeout, connect=10),
             )
             response.raise_for_status()
 
@@ -310,9 +310,10 @@ class OpenAIAdapter(ModelAdapter):
         """Non-streaming chat completion for providers that don't support stream."""
         payload = self._build_payload(messages, tools, stream=False, **kwargs)
         headers = {
-            "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
         try:
             client = self.get_client()
             response = await client.post(
@@ -358,6 +359,7 @@ class OpenAIAdapter(ModelAdapter):
         **kwargs: Any,
     ) -> ChatResult:
         """Non-streaming chat completion."""
+        kwargs.pop("stream", None)
         chunks: list[ChatResult] = []
         async for chunk in self.stream_chat(messages, tools, **kwargs):
             chunks.append(chunk)
