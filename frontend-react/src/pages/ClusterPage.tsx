@@ -124,7 +124,7 @@ export function ClusterPage() {
     try {
       const res = await api.createCluster(requirements);
       if (res.plan) {
-          const planTasks = data.plan.map((p: any, idx: number) => ({
+          const planTasks = res.plan.map((p: any, idx: number) => ({
             id: p.id || String(idx + 1),
             role: p.role || 'executor',
             description: p.description || p.task || '',
@@ -136,28 +136,27 @@ export function ClusterPage() {
             human_review_required: p.human_review_required || false,
           }));
           setTasks(planTasks);
+        } else {
+          // Fallback: create a group with the requirements as topic
+          const groupRes = await api.createGroup({ name: requirements.slice(0, 50), topic: requirements, agent_ids: [] });
+          if (groupRes.id) {
+            setTasks([{
+              id: groupRes.id,
+              role: 'planner',
+              description: `群组已创建：${requirements.slice(0, 80)}`,
+              status: 'completed',
+              dependencies: [],
+              process_type: 'sequential',
+              guardrails: [],
+              context: [],
+              human_review_required: false,
+            }]);
+            setProgress({ total: 1, completed: 1, failed: 0, running: 0, pending: 0, progress_pct: 100 });
+          }
         }
         if (res.progress) {
           setProgress(res.progress);
         }
-      } else {
-        // Fallback: create a group with the requirements as topic
-        const groupRes = await api.createGroup({ name: requirements.slice(0, 50), topic: requirements, agent_ids: [] });
-        if (groupRes.id) {
-          setTasks([{
-            id: groupRes.id,
-            role: 'planner',
-            description: `群组已创建：${requirements.slice(0, 80)}`,
-            status: 'completed',
-            dependencies: [],
-            process_type: 'sequential',
-            guardrails: [],
-            context: [],
-            human_review_required: false,
-          }]);
-          setProgress({ total: 1, completed: 1, failed: 0, running: 0, pending: 0, progress_pct: 100 });
-        }
-      }
     } catch {
       // Show error state
       setTasks([{

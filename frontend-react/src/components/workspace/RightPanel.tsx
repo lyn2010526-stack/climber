@@ -173,7 +173,6 @@ function DAGPanel() {
               status: p.status || 'pending',
             })));
           }
-        }
       } catch { /* skip */ }
       setLoading(false);
     };

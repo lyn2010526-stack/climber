@@ -46,9 +46,8 @@ export default function TaskMonitorPage() {
     try {
       const data = await api.listTasks();
       setTasks(data);
-        if (data.length > 0 && !selectedTaskId) {
-          setSelectedTaskId(data[0].id);
-        }
+      if (data.length > 0 && !selectedTaskId) {
+        setSelectedTaskId(data[0].id);
       }
     } catch { /* skip */ }
   }, [selectedTaskId]);
