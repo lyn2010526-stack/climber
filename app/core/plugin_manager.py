@@ -1,6 +1,6 @@
 """Plugin Manager — hot-reload support for skills and MCP servers.
 
-- Plugin lifecycle management
+- MonkeyCode plugin lifecycle
 - Sidekick-AI plugin system concept
 """
 

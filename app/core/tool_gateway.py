@@ -1,6 +1,6 @@
 """Unified Tool Gateway — central dispatch for all tool executions.
 
-- Tool dispatch and routing
+- MonkeyCode tool dispatch
 - Sidekick-AI unified tool gateway concept
 - Cline tool security policy
 - Suna tool auto-priority feedback loop

@@ -1,7 +1,7 @@
 """Task scheduler with state machine integration.
 
 - LangGraph `StateGraph` + `Pregel` 调度循环
-- Task lifecycle management pattern
+- MonkeyCode `backend/biz/task/` Manager 生命周期管理
 - OpenCode task queue 设计
 """
 

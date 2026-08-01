@@ -11,6 +11,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.storage import async_session
+
 
 @dataclass
 class CheckpointData:
@@ -92,10 +94,11 @@ class InMemoryCheckpointStore:
 
 
 class SQLiteCheckpointStore:
-    """SQLite-backed checkpoint store with LangGraph-style enhancements."""
+    """Persistent checkpoint store backed by SQLite via SQLAlchemy.
 
-    def __init__(self, db_path: str | None = None):
-        self._db_path = db_path
+    Replaces the default InMemoryCheckpointStore so checkpoints survive
+    service restarts and can be shared across workers.
+    """
 
     async def save(
         self,
@@ -105,188 +108,209 @@ class SQLiteCheckpointStore:
         checkpoint_id: str = "",
         parent_id: str | None = None,
     ) -> str:
-        from app.storage import async_session
         from app.storage.database import CheckpointRecord
-
+        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
         cid = checkpoint_id or f"cp-{int(time.time()*1000)}"
-        record = CheckpointRecord(
-            id=cid,
-            session_id=checkpoint.session_id,
-            thread_id=thread_id,
-            messages=json.dumps(checkpoint.messages),
-            iteration=checkpoint.iteration,
-            status=checkpoint.status,
-            tool_results=json.dumps(checkpoint.tool_results),
-            metadata_=json.dumps(checkpoint.metadata),
-            parent_id=parent_id,
-        )
-        async with async_session() as session:
-            session.add(record)
-            await session.commit()
+        metadata_payload = {**checkpoint.metadata, "parent_id": parent_id}
+        async with async_session() as db:
+            stmt = sqlite_insert(CheckpointRecord).values(
+                id=cid,
+                session_id=checkpoint.session_id,
+                thread_id=thread_id or "",
+                messages=json.dumps(checkpoint.messages, ensure_ascii=False),
+                iteration=checkpoint.iteration,
+                status=checkpoint.status,
+                tool_results=json.dumps(checkpoint.tool_results, ensure_ascii=False),
+                metadata_=json.dumps(metadata_payload, ensure_ascii=False),
+                parent_id=parent_id,
+            )
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["id"],
+                set_={
+                    "session_id": checkpoint.session_id,
+                    "thread_id": thread_id or "",
+                    "messages": json.dumps(checkpoint.messages, ensure_ascii=False),
+                    "iteration": checkpoint.iteration,
+                    "status": checkpoint.status,
+                    "tool_results": json.dumps(checkpoint.tool_results, ensure_ascii=False),
+                    "metadata": json.dumps(metadata_payload, ensure_ascii=False),
+                    "parent_id": parent_id,
+                },
+            )
+            await db.execute(stmt)
+            await db.commit()
         return cid
 
     async def get(self, _thread_id: str | None, checkpoint_id: str) -> CheckpointData | None:
-        from app.storage import async_session
         from app.storage.database import CheckpointRecord
-        from sqlalchemy import select
-
-        async with async_session() as session:
-            result = await session.execute(
-                select(CheckpointRecord).where(CheckpointRecord.id == checkpoint_id)
-            )
-            record = result.scalar_one_or_none()
-            if not record:
+        async with async_session() as db:
+            record = (
+                await db.execute(
+                    __import__("sqlalchemy").select(CheckpointRecord).where(CheckpointRecord.id == checkpoint_id)
+                )
+            ).scalar_one_or_none()
+            if record is None:
                 return None
-            return CheckpointData(
-                session_id=record.session_id,
-                messages=json.loads(record.messages),
-                iteration=record.iteration,
-                status=record.status,
-                tool_results=json.loads(record.tool_results),
-                metadata=json.loads(record.metadata_),
-            )
+            return self._to_checkpoint(record)
+
+    async def load(self, session_id: str, turn_id: str) -> CheckpointData | None:
+        """Retrieve a checkpoint by session_id + turn_id (thread_id)."""
+        from app.storage.database import CheckpointRecord
+        async with async_session() as db:
+            record = (
+                await db.execute(
+                    __import__("sqlalchemy")
+                    .select(CheckpointRecord)
+                    .where(CheckpointRecord.session_id == session_id)
+                    .where(CheckpointRecord.thread_id == turn_id)
+                    .order_by(CheckpointRecord.created_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if record is None:
+                return None
+            return self._to_checkpoint(record)
 
     async def get_latest(self, _thread_id: str | None, session_id: str, thread_id: str = "") -> tuple[CheckpointData, str] | None:
-        from app.storage import async_session
         from app.storage.database import CheckpointRecord
-        from sqlalchemy import select
-
-        async with async_session() as session:
-            result = await session.execute(
-                select(CheckpointRecord)
-                .where(CheckpointRecord.session_id == session_id)
-                .order_by(CheckpointRecord.iteration.desc())
-                .limit(1)
-            )
-            record = result.scalar_one_or_none()
-            if not record:
+        async with async_session() as db:
+            record = (
+                await db.execute(
+                    __import__("sqlalchemy")
+                    .select(CheckpointRecord)
+                    .where(CheckpointRecord.session_id == session_id)
+                    .order_by(CheckpointRecord.iteration.desc(), CheckpointRecord.created_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if record is None:
                 return None
-            checkpoint = CheckpointData(
-                session_id=record.session_id,
-                messages=json.loads(record.messages),
-                iteration=record.iteration,
-                status=record.status,
-                tool_results=json.loads(record.tool_results),
-                metadata=json.loads(record.metadata_),
-            )
-            return checkpoint, record.id
+            cp = self._to_checkpoint(record)
+            return cp, record.id
 
     async def list_for_session(self, _thread_id: str | None, session_id: str) -> list[str]:
-        from app.storage import async_session
         from app.storage.database import CheckpointRecord
-        from sqlalchemy import select
+        async with async_session() as db:
+            rows = (
+                await db.execute(
+                    __import__("sqlalchemy")
+                    .select(CheckpointRecord.id)
+                    .where(CheckpointRecord.session_id == session_id)
+                    .order_by(CheckpointRecord.created_at.asc())
+                )
+            ).scalars().all()
+            return list(rows)
 
-        async with async_session() as session:
-            result = await session.execute(
-                select(CheckpointRecord.id).where(CheckpointRecord.session_id == session_id)
-            )
-            return [row[0] for row in result.all()]
+    async def list(self, session_id: str) -> list[CheckpointData]:
+        """Return all checkpoints for a session as CheckpointData objects."""
+        from app.storage.database import CheckpointRecord
+        async with async_session() as db:
+            rows = (
+                await db.execute(
+                    __import__("sqlalchemy")
+                    .select(CheckpointRecord)
+                    .where(CheckpointRecord.session_id == session_id)
+                    .order_by(CheckpointRecord.created_at.asc())
+                )
+            ).scalars().all()
+            return [self._to_checkpoint(r) for r in rows]
 
     async def delete_for_session(self, _thread_id: str | None, session_id: str) -> int:
-        from app.storage import async_session
         from app.storage.database import CheckpointRecord
-        from sqlalchemy import delete
+        async with async_session() as db:
+            rows = (
+                await db.execute(
+                    __import__("sqlalchemy")
+                    .select(CheckpointRecord.id)
+                    .where(CheckpointRecord.session_id == session_id)
+                )
+            ).scalars().all()
+            ids = list(rows)
+            if ids:
+                await db.execute(
+                    __import__("sqlalchemy").delete(CheckpointRecord).where(CheckpointRecord.session_id == session_id)
+                )
+                await db.commit()
+            return len(ids)
 
-        async with async_session() as session:
-            result = await session.execute(
-                delete(CheckpointRecord).where(CheckpointRecord.session_id == session_id)
+    async def delete(self, checkpoint_id: str) -> bool:
+        """Remove a single checkpoint by id."""
+        from app.storage.database import CheckpointRecord
+        async with async_session() as db:
+            result = await db.execute(
+                __import__("sqlalchemy").delete(CheckpointRecord).where(CheckpointRecord.id == checkpoint_id)
             )
-            await session.commit()
-            return result.rowcount
+            await db.commit()
+            return result.rowcount > 0
 
     async def put_writes(self, checkpoint_id: str, writes: list[PendingWrite]) -> None:
-        """Persist pending writes for a checkpoint."""
-        pass
+        metadata: dict[str, Any] = {}
+        async with async_session() as db:
+            record = (
+                await db.execute(
+                    __import__("sqlalchemy").select(CheckpointRecord).where(CheckpointRecord.id == checkpoint_id)
+                )
+            ).scalar_one_or_none()
+            if record is None:
+                return
+            try:
+                metadata = json.loads(record.metadata_ or "{}")
+            except Exception:
+                metadata = {}
+            metadata.setdefault("pending_writes", [])
+            for w in writes:
+                metadata["pending_writes"].append(
+                    {
+                        "channel": w.channel,
+                        "value": w.value,
+                        "write_id": w.write_id,
+                        "status": w.status,
+                    }
+                )
+            record.metadata_ = json.dumps(metadata, ensure_ascii=False)
+            await db.commit()
 
     async def get_writes(self, checkpoint_id: str) -> list[PendingWrite]:
-        """Get pending writes for a checkpoint."""
-        return []
-
-    async def get_state_history(
-        self,
-        session_id: str,
-        limit: int = 20,
-    ) -> list[tuple[CheckpointData, str]]:
-        """获取历史 checkpoint 列表 — 参考 LangGraph get_state_history
-
-        LangGraph 返回 StateSnapshot(values, next, config, metadata, created_at, parent_config, tasks)
-        """
-        from app.storage import async_session
         from app.storage.database import CheckpointRecord
-        from sqlalchemy import select
-
-        async with async_session() as session:
-            result = await session.execute(
-                select(CheckpointRecord)
-                .where(CheckpointRecord.session_id == session_id)
-                .order_by(CheckpointRecord.iteration.desc())
-                .limit(limit)
-            )
-            rows = result.scalars().all()
-            history = []
-            for row in rows:
-                checkpoint = CheckpointData(
-                    session_id=row.session_id,
-                    messages=json.loads(row.messages),
-                    iteration=row.iteration,
-                    status=row.status,
-                    tool_results=json.loads(row.tool_results),
-                    metadata=json.loads(row.metadata_),
-                    channel_values={"thread_id": row.thread_id, "parent_id": row.parent_id or ""},
+        async with async_session() as db:
+            record = (
+                await db.execute(
+                    __import__("sqlalchemy").select(CheckpointRecord).where(CheckpointRecord.id == checkpoint_id)
                 )
-                history.append((checkpoint, row.id))
-            return list(reversed(history))
+            ).scalar_one_or_none()
+            if record is None:
+                return []
+            try:
+                metadata = json.loads(record.metadata_ or "{}")
+            except Exception:
+                return []
+            raw = metadata.get("pending_writes", [])
+            return [PendingWrite(**item) for item in raw]
 
-    async def get_parent_chain(
-        self,
-        session_id: str,
-        checkpoint_id: str,
-    ) -> list[tuple[CheckpointData, str]]:
-        """获取 checkpoint 的父链 — 从起点到指定 checkpoint 的完整路径"""
-        chain: list[tuple[CheckpointData, str]] = []
-        current_id: str | None = checkpoint_id
-
-        while current_id:
-            cp = await self.get(None, current_id)
-            if not cp:
-                break
-            chain.append((cp, current_id))
-            current_id = cp.channel_values.get("parent_id") or None
-            if current_id == "":
-                current_id = None
-
-        return list(reversed(chain))
-
-    async def fork(
-        self,
-        session_id: str,
-        from_checkpoint_id: str,
-        new_messages: list[dict[str, Any]] | None = None,
-    ) -> str:
-        """从历史 checkpoint 分叉 — 参考 LangGraph update_state
-
-        LangGraph:
-            fork_config = graph.update_state(before_joke.config, values={"topic": "chickens"})
-            fork_result = graph.invoke(None, fork_config)
-        """
-        source = await self.get(None, from_checkpoint_id)
-        if not source:
-            raise ValueError(f"Checkpoint not found: {from_checkpoint_id}")
-
-        # 创建新的 checkpoint，修改消息
-        new_checkpoint = CheckpointData(
-            session_id=source.session_id,
-            messages=new_messages if new_messages is not None else list(source.messages),
-            iteration=source.iteration,
-            status="forked",
-            tool_results=list(source.tool_results),
-            metadata={**source.metadata, "forked_from": from_checkpoint_id},
-            channel_values={**source.channel_values, "parent_id": from_checkpoint_id},
-        )
-
-        return await self.save(
-            _thread_id=None,
-            checkpoint=new_checkpoint,
-            thread_id=source.channel_values.get("thread_id", ""),
-            parent_id=from_checkpoint_id,
+    def _to_checkpoint(self, record: "CheckpointRecord") -> CheckpointData:
+        try:
+            messages = json.loads(record.messages or "[]")
+        except Exception:
+            messages = []
+        try:
+            tool_results = json.loads(record.tool_results or "[]")
+        except Exception:
+            tool_results = []
+        try:
+            metadata = json.loads(record.metadata_ or "{}")
+        except Exception:
+            metadata = {}
+        pending_writes_raw = metadata.pop("pending_writes", [])
+        try:
+            pending_writes = [PendingWrite(**item) for item in pending_writes_raw]
+        except Exception:
+            pending_writes = []
+        return CheckpointData(
+            session_id=record.session_id,
+            messages=messages,
+            iteration=record.iteration,
+            status=record.status,
+            tool_results=tool_results,
+            metadata=metadata,
+            pending_writes=pending_writes,
         )
