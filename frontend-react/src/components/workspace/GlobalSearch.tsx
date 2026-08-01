@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Search, X, Database, FileText, Users,
 } from 'lucide-react';
-import { api } from '../../../api';
+import { api } from '../../api';
 
 interface SearchResult {
   id: string;
