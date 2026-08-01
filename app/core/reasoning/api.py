@@ -15,7 +15,6 @@ from app.core.reasoning import (
     ReasoningRequest,
     ReasoningResult,
 )
-from app.storage.auth import get_current_user_required
 from app.storage import get_db
 from app.storage.repository_reasoning import (
     ReasoningTraceRepository,
@@ -23,19 +22,17 @@ from app.storage.repository_reasoning import (
 )
 from app.middleware.rate_limit import RateLimit
 
+DEFAULT_USER = "default-user"
+
 router = APIRouter(tags=["reasoning"], redirect_slashes=False)
 
 
 @router.post("/")
 async def reason_with_slash(
     request: ReasoningRequest,
-    user_id: str = Depends(get_current_user_required),
     db: AsyncSession = Depends(get_db),
+    _rate_limit: None = RateLimit,
 ) -> ReasoningResult:
-    """Execute multi-strategy reasoning.
-
-    Modes: auto, tree (Phase 1), deep (Phase 2), debate (Phase 3)
-    """
     from app.api.v1 import get_engine
 
     engine = get_engine()
@@ -49,7 +46,7 @@ async def reason_with_slash(
             trace_repo = ReasoningTraceRepository(db)
             await trace_repo.create({
                 "trace_id": result.trace.trace_id,
-                "user_id": user_id,
+                "user_id": DEFAULT_USER,
                 "task": result.trace.task,
                 "mode": result.mode_used.value,
                 "candidates_count": len(result.candidates),
@@ -73,20 +70,17 @@ async def reason_with_slash(
 @router.post("")
 async def reason_no_slash(
     request: ReasoningRequest,
-    user_id: str = Depends(get_current_user_required),
     db: AsyncSession = Depends(get_db),
+    _rate_limit: None = RateLimit,
 ) -> ReasoningResult:
-    """Execute multi-strategy reasoning (no trailing slash)."""
-    return await reason_with_slash(request, user_id, db)
+    return await reason_with_slash(request, db)
 
 
 @router.post("/stream")
 async def reason_stream(
     request: ReasoningRequest,
-    user_id: str = Depends(get_current_user_required),
     db: AsyncSession = Depends(get_db),
 ) -> EventSourceResponse:
-    """Execute reasoning with SSE streaming of progress events."""
     from app.api.v1 import get_engine
 
     engine = get_engine()
@@ -103,7 +97,7 @@ async def reason_stream(
                 trace_repo = ReasoningTraceRepository(db)
                 await trace_repo.create({
                     "trace_id": result.trace.trace_id,
-                    "user_id": user_id,
+                    "user_id": DEFAULT_USER,
                     "task": result.trace.task,
                     "mode": result.mode_used.value,
                     "candidates_count": len(result.candidates),
@@ -149,10 +143,8 @@ async def reason_stream(
 @router.get("/{trace_id}")
 async def get_reasoning_trace(
     trace_id: str,
-    user_id: str = Depends(get_current_user_required),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any] | None:
-    """Get full reasoning trace by ID."""
     repo = ReasoningTraceRepository(db)
     trace = await repo.get_by_trace_id(trace_id)
     if not trace:
@@ -175,10 +167,7 @@ async def get_reasoning_trace(
 
 
 @router.get("/modes")
-async def list_reasoning_modes(
-    user_id: str = Depends(get_current_user_required),
-) -> list[dict[str, str]]:
-    """List available reasoning modes."""
+async def list_reasoning_modes() -> list[dict[str, str]]:
     modes = [
         {"id": "auto", "name": "Auto", "description": "Automatically select best strategy", "available": True},
         {"id": "tree", "name": "Tree of Thought", "description": "Parallel multi-path + self-refine", "available": True},
@@ -192,11 +181,9 @@ async def list_reasoning_modes(
 async def submit_feedback(
     trace_id: str,
     feedback: dict[str, Any],
-    user_id: str = Depends(get_current_user_required),
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = RateLimit,
 ) -> dict[str, str]:
-    """Submit user feedback for a reasoning trace."""
     trace_repo = ReasoningTraceRepository(db)
     trace = await trace_repo.get_by_trace_id(trace_id)
     if not trace:
@@ -205,7 +192,7 @@ async def submit_feedback(
     feedback_repo = ReasoningFeedbackRepository(db)
     await feedback_repo.create({
         "trace_id": trace_id,
-        "user_id": user_id,
+        "user_id": DEFAULT_USER,
         "rating": feedback.get("rating", 3),
         "thumbs": feedback.get("thumbs"),
         "comment": feedback.get("comment", ""),
@@ -218,11 +205,9 @@ async def submit_feedback(
 @router.get("/{trace_id}/feedback")
 async def get_feedback(
     trace_id: str,
-    user_id: str = Depends(get_current_user_required),
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = RateLimit,
 ) -> list[dict[str, Any]]:
-    """Get all feedback for a reasoning trace."""
     feedback_repo = ReasoningFeedbackRepository(db)
     entries = await feedback_repo.list_by_trace_id(trace_id)
     return [
@@ -240,13 +225,11 @@ async def get_feedback(
 
 @router.get("/history")
 async def list_reasoning_history(
-    user_id: str = Depends(get_current_user_required),
     db: AsyncSession = Depends(get_db),
     limit: int = 50,
 ) -> list[dict[str, Any]]:
-    """List recent reasoning traces for the current user."""
     trace_repo = ReasoningTraceRepository(db)
-    items = await trace_repo.list_by_user(user_id, limit=limit)
+    items = await trace_repo.list_by_user(DEFAULT_USER, limit=limit)
     return [
         {
             "trace_id": t.trace_id,

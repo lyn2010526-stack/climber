@@ -9,38 +9,9 @@ from sqlalchemy import select, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.storage.database import (
-    User, Agent, Session, Message, Tool, Document, ApiKey, UsageLog,
+    Agent, Session, Message, Tool, Document, ApiKey, UsageLog,
 )
 from app.storage.models_plugins import PluginRecord, MCPServerRecord
-
-
-class UserRepository:
-    """CRUD operations for users."""
-
-    def __init__(self, session: AsyncSession):
-        self._session = session
-
-    async def create(self, email: str, password_hash: str) -> User:
-        user = User(id=str(uuid4()), email=email, password_hash=password_hash)
-        self._session.add(user)
-        await self._session.flush()
-        return user
-
-    async def get_by_email(self, email: str) -> User | None:
-        result = await self._session.execute(select(User).where(User.email == email))
-        return result.scalar_one_or_none()
-
-    async def get_by_id(self, user_id: str) -> User | None:
-        result = await self._session.execute(select(User).where(User.id == user_id))
-        return result.scalar_one_or_none()
-
-    async def list_all(self) -> Sequence[User]:
-        result = await self._session.execute(select(User))
-        return result.scalars().all()
-
-    async def delete(self, user_id: str) -> bool:
-        result = await self._session.execute(delete(User).where(User.id == user_id))
-        return result.rowcount > 0
 
 
 class AgentRepository:

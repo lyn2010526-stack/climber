@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any
 from functools import wraps
@@ -99,7 +100,7 @@ def cached(ttl: int = 300, key_prefix: str = "cache"):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             cache = Cache(await get_redis())
-            cache_key = f"{key_prefix}:{func.__name__}:{hash(str(args))}:{hash(str(sorted(kwargs.items())))}"
+            cache_key = f"{key_prefix}:{func.__name__}:{hashlib.md5(str(args).encode()).hexdigest()[:8]}:{hashlib.md5(str(sorted(kwargs.items())).encode()).hexdigest()[:8]}"
             result = await cache.get(cache_key)
             if result is not None:
                 return result

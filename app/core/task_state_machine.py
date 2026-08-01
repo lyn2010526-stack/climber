@@ -6,10 +6,15 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Coroutine
 
-from app.core import AgentEventType
+import structlog
+
+from app.core import AgentEventType, SessionStatus
+
+logger = structlog.get_logger()
 
 
 class TaskState(str, Enum):
@@ -111,7 +116,7 @@ class TaskStateMachine:
         self._metadata.update({
             "state": new_state.value,
             "from_state": old_state.value,
-            "updated_at": __import__("datetime").datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
             "transition_trigger": trigger,
         })
 
@@ -119,9 +124,8 @@ class TaskStateMachine:
         for _, hook in self._hooks:
             try:
                 await hook(self, old_state, new_state)
-            except Exception:
-                # Log but don't block transition
-                pass
+            except Exception as e:
+                logger.warning("task_state_machine.hook_execution_failed", error=str(e))
 
     def can_transition_to(self, new_state: TaskState) -> bool:
         """Check if transition to new_state is allowed."""
@@ -136,3 +140,16 @@ class TaskStateMachine:
             "transition_count": self._transition_count,
             "metadata": self._metadata,
         }
+
+
+def to_session_status(state: TaskState) -> SessionStatus:
+    mapping = {
+        TaskState.PENDING: SessionStatus.PENDING,
+        TaskState.PROCESSING: SessionStatus.RUNNING,
+        TaskState.RETRYING: SessionStatus.RUNNING,
+        TaskState.PAUSED: SessionStatus.PAUSED,
+        TaskState.COMPLETED: SessionStatus.COMPLETED,
+        TaskState.FAILED: SessionStatus.FAILED,
+        TaskState.CANCELLED: SessionStatus.STOPPED,
+    }
+    return mapping.get(state, SessionStatus.PENDING)

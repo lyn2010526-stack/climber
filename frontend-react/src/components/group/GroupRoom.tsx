@@ -3,6 +3,7 @@ import {
   Send, Users, Hash, MessageCircle,
   Bot, Crown, Eye, Loader2, PanelLeft, X,
 } from 'lucide-react';
+import { api } from '../../api';
 
 interface GroupMember {
   id: string;
@@ -58,14 +59,12 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
 
   useEffect(() => {
     // Fetch initial messages
-    fetch(`/api/v1/groups/${groupId}/messages`)
-      .then((r) => r.json())
+    api.listGroupMessages(groupId)
       .then((data) => setMessages(data.messages || []))
       .catch(() => {});
 
     // Fetch group details for members
-    fetch(`/api/v1/groups/${groupId}`)
-      .then((r) => r.json())
+    api.getGroup(groupId)
       .then((data) => setMembers(data.members || []))
       .catch(() => {});
 
@@ -105,8 +104,7 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
   // Periodic member refresh for real-time status
   useEffect(() => {
     const interval = setInterval(() => {
-      fetch(`/api/v1/groups/${groupId}`)
-        .then((r) => r.json())
+      api.getGroup(groupId)
         .then((data) => {
           if (data.members && data.members.length > 0) {
             setMembers(data.members);

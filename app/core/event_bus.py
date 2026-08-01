@@ -8,7 +8,7 @@ import asyncio
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Coroutine
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ class Event:
     event_type: str
     data: dict[str, Any]
     source: str = ""
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     event_id: str = ""
 
 

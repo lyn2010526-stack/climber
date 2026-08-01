@@ -37,7 +37,7 @@ class TraceSpanRecord(Base):
     kind: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="ok")
-    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
 
     # Performance metrics
     duration_ms: Mapped[float] = mapped_column(Float, default=0.0)

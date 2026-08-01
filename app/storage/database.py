@@ -25,39 +25,29 @@ from app.storage import Base
 # These are populated by models_memory when it's imported
 
 
-class User(Base):
-    __tablename__ = "users"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-
-    # Relationships
-    agents: Mapped[list["Agent"]] = relationship(back_populates="user", cascade="all, delete-orphan")
-    sessions: Mapped[list["Session"]] = relationship(back_populates="user", cascade="all, delete-orphan")
-    episodic_memories: Mapped[list["EpisodicMemory"]] = relationship("EpisodicMemory", back_populates="user", cascade="all, delete-orphan", order_by="EpisodicMemory.created_at.desc()")
-    profile: Mapped["UserProfile"] = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
-
-
 class Agent(Base):
     __tablename__ = "agents"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="")
-    system_prompt: Mapped[str] = mapped_column(Text, default="")
 
     # Model config
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     model_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)  # Encrypted API key
+    api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     base_url: Mapped[str] = mapped_column(String(500), nullable=True)
     temperature: Mapped[float] = mapped_column(Float, default=0.7)
     max_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
+
+    # Role-based agent identity (参考 CrewAI)
+    agent_role: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    goal: Mapped[str | None] = mapped_column(Text, nullable=True)
+    backstory: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # System prompt (覆盖内置模板)
+    system_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Tools & memory config
     tool_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
@@ -70,7 +60,6 @@ class Agent(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # Relationships
-    user: Mapped[User] = relationship(back_populates="agents")
     sessions: Mapped[list["Session"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
 
 
@@ -79,7 +68,7 @@ class Session(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     agent_id: Mapped[str] = mapped_column(String(36), ForeignKey("agents.id"), nullable=False)
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     title: Mapped[str] = mapped_column(String(255), nullable=True)
 
@@ -93,7 +82,6 @@ class Session(Base):
 
     # Relationships
     agent: Mapped[Agent] = relationship(back_populates="sessions")
-    user: Mapped[User] = relationship(back_populates="sessions")
     messages: Mapped[list["Message"]] = relationship(back_populates="session", cascade="all, delete-orphan", order_by="Message.created_at")
 
 
@@ -139,7 +127,7 @@ class Document(Base):
     __tablename__ = "documents"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_type: Mapped[str] = mapped_column(String(100))
@@ -157,7 +145,7 @@ class ApiKey(Base):
     __tablename__ = "api_keys"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False)
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     name: Mapped[str] = mapped_column(String(100))  # human label
     api_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
@@ -171,7 +159,7 @@ class UsageLog(Base):
     __tablename__ = "usage_logs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False)
     session_id: Mapped[str] = mapped_column(String(36), ForeignKey("sessions.id"), nullable=True)
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     model_id: Mapped[str] = mapped_column(String(100), nullable=False)

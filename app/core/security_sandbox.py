@@ -242,6 +242,30 @@ class SecuritySandbox:
                 return False, f"Command blocked by safety policy: matches hazard pattern '{pattern}'"
         return True, "OK"
 
+
+# Allowed commands for the allowlist check
+_ALLOWED_COMMANDS = {
+    "ls", "cat", "echo", "pwd", "cd", "mkdir", "cp", "mv", "rm",
+    "touch", "head", "tail", "grep", "find", "wc", "sort", "uniq",
+    "diff", "file", "which", "env", "export", "python3", "python",
+    "pip", "pip3", "node", "npm", "npx", "git", "curl", "wget",
+    "tar", "zip", "unzip", "chmod", "chown", "ln", "tee", "awk",
+    "sed", "xargs", "jq", "yq", "make", "pytest", "go", "rustc",
+    "cargo", "java", "javac", "mvn", "gradle", "docker",
+}
+
+
+def validate_command_allowlist(command: str) -> tuple[bool, str]:
+    """Validate that a command base name is in the allowed commands list."""
+    parts = command.strip().split()
+    if not parts:
+        return False, "Empty command"
+    base = parts[0].lstrip("./")
+    base = os.path.basename(base)
+    if base not in _ALLOWED_COMMANDS:
+        return False, f"Command '{base}' is not in the allowed commands list"
+    return True, "OK"
+
     def sanitize_output(self, output: str) -> str:
         """Truncate oversized output."""
         max_bytes = self.config.max_output_size_kb * 1024
@@ -545,8 +569,8 @@ class AuditSystem:
                 )
                 db.add(log)
                 await db.commit()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("security_sandbox.audit_log_failed", error=str(e))
 
     def get_entries(
         self,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -35,23 +35,23 @@ class ApprovalRequest(BaseModel):
         if data.get("id") is None:
             data["id"] = str(uuid.uuid4())
         if data.get("created_at") is None:
-            data["created_at"] = datetime.utcnow()
+            data["created_at"] = datetime.now(timezone.utc)
         super().__init__(**data)
 
     def approve(self, resolved_by: str = "human") -> None:
         self.status = ApprovalStatus.APPROVED
-        self.resolved_at = datetime.utcnow()
+        self.resolved_at = datetime.now(timezone.utc)
         self.resolved_by = resolved_by
 
     def reject(self, reason: str = "", resolved_by: str = "human") -> None:
         self.status = ApprovalStatus.REJECTED
-        self.resolved_at = datetime.utcnow()
+        self.resolved_at = datetime.now(timezone.utc)
         self.resolved_by = resolved_by
         self.reason = reason
 
     def expire(self) -> None:
         self.status = ApprovalStatus.EXPIRED
-        self.resolved_at = datetime.utcnow()
+        self.resolved_at = datetime.now(timezone.utc)
 
 
 class ApprovalManager:

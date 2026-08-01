@@ -21,6 +21,7 @@ from app.core.memory_guardian import get_memory_guardian
 from app.core.watchdog import get_watchdog
 from app.core.interfaces import IModelAdapter, IToolRegistry, ISkillRegistry, IExecutor
 from app.middleware.metrics import MetricsMiddleware, metrics_endpoint, APP_INFO
+from app.middleware.security import SecurityHeadersMiddleware, RequestValidationMiddleware
 from app.storage import db_health, init_db
 from app.storage.cache import get_redis, close_redis
 from app.tools import register_builtins
@@ -33,6 +34,8 @@ for name in ('playwright', 'chromadb', 'psutil'):
         print(f"ERROR: Missing required dependency {name}, run scripts/init-env.sh")
         _missing.append(name)
 del importlib, _missing
+
+_APP_VERSION = "0.2.0"
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 
@@ -102,7 +105,7 @@ def _local_ip() -> str:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log_dir = configure_logging(settings.app_log_level)
-    logger.info("Agent Engine starting", debug=settings.app_debug, version="0.2.0", log_dir=str(log_dir))
+    logger.info("Agent Engine starting", debug=settings.app_debug, version=_APP_VERSION, log_dir=str(log_dir))
 
     with ScopeContext("app_lifespan") as scope:
         _register_core_services()
@@ -155,7 +158,10 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Telegram bot startup skipped", error=str(e))
 
-        APP_INFO.info({"version": "0.2.0", "debug": str(settings.app_debug)})
+        from app.services.notifications import notification_service
+        app.state.notification_service = notification_service
+
+        APP_INFO.info({"version": _APP_VERSION, "debug": str(settings.app_debug)})
 
         if settings.enable_lan_access:
             logger.info("LAN access enabled", url=f"http://{_local_ip()}:{settings.port}")
@@ -172,8 +178,8 @@ async def lifespan(app: FastAPI):
         try:
             from app.services.telegram_bot import stop_telegram_bot
             await stop_telegram_bot()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("main.telegram_bot_stop_failed", error=str(exc))
         await close_redis()
         from app.models.openai_adapter import OpenAIAdapter
         from app.models.anthropic_adapter import AnthropicAdapter
@@ -191,7 +197,7 @@ async def _run_scheduler(scheduler):
 app = FastAPI(
     title="Agent Engine",
     description="Production-grade AI Agent Platform",
-    version="0.2.0",
+    version=_APP_VERSION,
     lifespan=lifespan,
     redirect_slashes=False,
 )
@@ -200,10 +206,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
 )
 app.add_middleware(MetricsMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestValidationMiddleware)
 
 app.include_router(api_router, prefix="/api/v1")
 
@@ -222,7 +230,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.get("/health")
 async def health() -> dict:
-    checks: dict = {"status": "ok", "version": "0.2.0"}
+    checks: dict = {"status": "ok", "version": _APP_VERSION}
     try:
         checks["database"] = await db_health()
     except Exception as e:

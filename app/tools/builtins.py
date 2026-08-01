@@ -13,6 +13,7 @@ import httpx
 
 from app.tools import tool
 from app.core.di import resolve as di_resolve
+from sqlalchemy import select
 
 _SAFE_EVAL_BUILTINS = {
     "len": len, "str": str, "int": int, "float": float,
@@ -568,7 +569,7 @@ async def auto_decompose_task(group_id: str, objective: str, max_steps: int = 5)
         async with async_session() as db:
             group = (
                 await db.execute(
-                    __import__("sqlalchemy").select(AgentGroup).where(AgentGroup.id == group_id)
+                    select(AgentGroup).where(AgentGroup.id == group_id)
                 )
             ).scalar_one_or_none()
             if not group:
@@ -576,7 +577,7 @@ async def auto_decompose_task(group_id: str, objective: str, max_steps: int = 5)
 
             members = (
                 await db.execute(
-                    __import__("sqlalchemy").select(AgentGroupMember).where(AgentGroupMember.group_id == group_id)
+                    select(AgentGroupMember).where(AgentGroupMember.group_id == group_id)
                 )
             ).scalars().all()
 

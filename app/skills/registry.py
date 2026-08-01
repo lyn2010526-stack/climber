@@ -8,13 +8,11 @@ moved to dedicated modules.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable
 
 import structlog
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.interfaces import ISkillRegistry
 
@@ -36,11 +34,11 @@ class SkillInfo(BaseModel):
     category: SkillCategory
     icon: str = ""
     system_prompt: str = ""
-    tools: list[str] = field(default_factory=list)
+    tools: list[str] = Field(default_factory=list)
     enabled: bool = True
     is_mcp: bool = False
-    mcp_config: dict[str, Any] = field(default_factory=dict)
-    tags: list[str] = field(default_factory=list)
+    mcp_config: dict[str, Any] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
 
 
 class SkillRegistry:

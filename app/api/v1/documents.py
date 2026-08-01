@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+import structlog
+from datetime import datetime, timezone
 from fastapi import APIRouter, Form, HTTPException
+
+logger = structlog.get_logger()
 from pydantic import BaseModel
 
 from app.storage import async_session
@@ -42,7 +46,8 @@ def get_chroma_collection():
                 name="documents",
                 metadata={"hnsw:space": "cosine"},
             )
-        except Exception:
+        except Exception as exc:
+            logger.warning("documents.get_chroma_collection_failed", error=str(exc))
             return None
     return _chroma_collection
 
@@ -70,7 +75,7 @@ async def index_text(text: str = Form(""), name: str = Form("untitled"), request
             collection="default",
             chunk_count=len(chunks),
             status="ready",
-            indexed_at=__import__("datetime").datetime.utcnow(),
+            indexed_at=datetime.now(timezone.utc),
         )
         session.add(doc)
         await session.commit()
@@ -83,8 +88,8 @@ async def index_text(text: str = Form(""), name: str = Form("untitled"), request
             ids = [f"doc-{doc.id}-{i}" for i in range(len(chunks))]
             metadatas = [{"doc_id": doc.id, "filename": name, "chunk_index": i} for i in range(len(chunks))]
             collection.add(documents=chunks, ids=ids, metadatas=metadatas)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("documents.index_text_chroma_add", error=str(e))
     
     return IndexTextResponse(id=doc.id, name=name, status="indexed", chunks=len(chunks))
 
@@ -133,8 +138,8 @@ async def search_documents(query: str, n_results: int = 5):
                         "metadata": meta,
                         "score": 1.0 - distance,
                     })
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("documents.search_documents_chroma_query", error=str(e))
     
     # Fallback to LIKE if Chroma is empty or unavailable
     if not results:
@@ -175,7 +180,7 @@ async def delete_document(doc_id: str):
     if collection is not None:
         try:
             collection.delete(where={"doc_id": doc_id})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("documents.delete_document_chroma_delete", error=str(e))
     
     return {"id": doc_id, "deleted": True}

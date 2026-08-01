@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Square, CheckCircle2, XCircle, Loader2, Clock, Terminal, Globe, FileText } from 'lucide-react';
+import { api } from '../api';
 
 interface TaskStep {
   id: string;
@@ -43,10 +44,8 @@ export default function TaskMonitorPage() {
   // Fetch existing tasks
   const fetchTasks = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/tasks/');
-      if (res.ok) {
-        const data = await res.json();
-        setTasks(data);
+      const data = await api.listTasks();
+      setTasks(data);
         if (data.length > 0 && !selectedTaskId) {
           setSelectedTaskId(data[0].id);
         }
@@ -100,33 +99,22 @@ export default function TaskMonitorPage() {
     if (!newTask.trim()) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/v1/tasks/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          description: newTask,
-          provider: 'openai',
-          model_id: 'gpt-4o',
-          api_key: '',
-        }),
+      const data = await api.createTask({
+        description: newTask,
+        provider: 'openai',
+        model_id: 'gpt-4o',
+        api_key: '',
       });
-      if (res.ok) {
-        const data = await res.json();
-        setNewTask('');
-        fetchTasks();
-        setSelectedTaskId(data.task_id);
-      }
+      setNewTask('');
+      fetchTasks();
+      setSelectedTaskId(data.task_id);
     } catch { /* skip */ }
     setLoading(false);
   };
 
   const cancelTask = async (taskId: string) => {
     try {
-      await fetch(`/api/v1/tasks/${taskId}/cancel`, {
-        method: 'POST',
-      });
+      await api.cancelTask(taskId);
       fetchTasks();
     } catch { /* skip */ }
   };

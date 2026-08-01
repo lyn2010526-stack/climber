@@ -1,34 +1,43 @@
 :root {
   /* ═══════════════════════════════════════════════════════════════
      Climber Design Tokens — Dark Mode (Default)
+     Premium UI: Lobe Chat × Linear × Apple Vision Pro
      ═══════════════════════════════════════════════════════════════ */
 
   /* ── Brand / Semantic Colors ── */
   --color-primary: #1E293B;
   --color-on-primary: #FFFFFF;
   --color-secondary: #334155;
-  --color-accent: #22C55E;
-  --color-accent-hover: #16A34A;
-  --color-accent-muted: rgba(34, 197, 94, 0.15);
-  --color-background: #0F172A;
+  --color-accent: #3B82F6;
+  --color-accent-hover: #60A5FA;
+  --color-accent-muted: rgba(59, 130, 246, 0.12);
+  --color-accent-glow: rgba(59, 130, 246, 0.25);
+  --color-background: #0A0A0F;
   --color-foreground: #F8FAFC;
-  --color-muted: #272F42;
-  --color-muted-foreground: #94A3B8;
-  --color-border: #475569;
-  --color-border-subtle: rgba(71, 85, 105, 0.5);
+  --color-muted: #141418;
+  --color-muted-foreground: #8892A8;
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-subtle: rgba(255, 255, 255, 0.04);
+  --color-border-elevated: rgba(255, 255, 255, 0.1);
   --color-destructive: #EF4444;
-  --color-destructive-muted: rgba(239, 68, 68, 0.15);
-  --color-ring: #1E293B;
-  --color-success: #22C55E;
+  --color-destructive-muted: rgba(239, 68, 68, 0.12);
+  --color-ring: #3B82F6;
+  --color-success: #10B981;
   --color-warning: #F59E0B;
   --color-info: #3B82F6;
 
+  /* ── Gradient Accents ── */
+  --gradient-accent: linear-gradient(135deg, #3B82F6, #8B5CF6);
+  --gradient-accent-subtle: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.05));
+  --gradient-surface: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+
   /* ── Surface / Layer ── */
-  --surface-base: #0F172A;
-  --surface-raised: #1E293B;
-  --surface-overlay: #334155;
-  --surface-inset: #0B1120;
-  --surface-glass: rgba(15, 23, 42, 0.85);
+  --surface-base: #0A0A0F;
+  --surface-raised: #121218;
+  --surface-overlay: #1A1A22;
+  --surface-inset: #060608;
+  --surface-glass: rgba(10, 10, 15, 0.85);
+  --surface-glass-elevated: rgba(20, 20, 28, 0.9);
 
   /* ── Typography ── */
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -68,24 +77,32 @@
 
   /* ── Radius ── */
   --radius-none: 0;
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
-  --radius-2xl: 1rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.5rem;
   --radius-full: 9999px;
 
   /* ── Shadows ── */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.3);
-  --shadow-glow: 0 0 20px rgba(34, 197, 94, 0.15);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 12px 28px -6px rgb(0 0 0 / 0.5), 0 4px 12px -4px rgb(0 0 0 / 0.3);
+  --shadow-xl: 0 24px 48px -12px rgb(0 0 0 / 0.6), 0 8px 16px -8px rgb(0 0 0 / 0.4);
+  --shadow-glow: 0 0 24px rgba(59, 130, 246, 0.15);
+  --shadow-glow-strong: 0 0 32px rgba(59, 130, 246, 0.25);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
 
-  /* ── Transitions ── */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* ── Animation Timing ── */
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-instant: 100ms var(--ease-out);
+  --transition-fast: 150ms var(--ease-spring);
+  --transition-base: 200ms var(--ease-spring);
+  --transition-slow: 300ms var(--ease-spring);
+  --transition-slower: 500ms var(--ease-spring);
 
   /* ── Z-index Scale ── */
   --z-base: 0;
@@ -99,13 +116,20 @@
   /* ── Layout ── */
   --sidebar-width: 260px;
   --sidebar-collapsed-width: 64px;
-  --header-height: 56px;
+  --header-height: 52px;
   --max-width: 1440px;
   --content-max-width: 896px;
 
   /* ── Focus ── */
   --focus-ring: 0 0 0 2px var(--color-background), 0 0 0 4px var(--color-accent);
   --focus-ring-offset: 2px;
+
+  /* ── Glassmorphism ── */
+  --glass-blur: 24px;
+  --glass-saturate: 180%;
+  --glass-bg: rgba(15, 15, 20, 0.8);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-highlight: rgba(255, 255, 255, 0.04);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -115,30 +139,43 @@
   --color-primary: #1E293B;
   --color-on-primary: #FFFFFF;
   --color-secondary: #F1F5F9;
-  --color-accent: #16A34A;
-  --color-accent-hover: #15803D;
-  --color-accent-muted: rgba(22, 163, 74, 0.1);
+  --color-accent: #2563EB;
+  --color-accent-hover: #3B82F6;
+  --color-accent-muted: rgba(37, 99, 235, 0.1);
+  --color-accent-glow: rgba(37, 99, 235, 0.2);
   --color-background: #F8FAFC;
   --color-foreground: #0F172A;
   --color-muted: #F1F5F9;
   --color-muted-foreground: #64748B;
-  --color-border: #E2E8F0;
-  --color-border-subtle: rgba(226, 232, 240, 0.8);
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-border-subtle: rgba(0, 0, 0, 0.04);
+  --color-border-elevated: rgba(0, 0, 0, 0.12);
   --color-destructive: #DC2626;
   --color-destructive-muted: rgba(220, 38, 38, 0.1);
-  --color-ring: #1E293B;
+  --color-ring: #2563EB;
+
+  --gradient-accent: linear-gradient(135deg, #2563EB, #7C3AED);
+  --gradient-accent-subtle: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(124, 58, 237, 0.04));
+  --gradient-surface: linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.01));
 
   --surface-base: #FFFFFF;
   --surface-raised: #F8FAFC;
   --surface-overlay: #F1F5F9;
   --surface-inset: #FFFFFF;
-  --surface-glass: rgba(255, 255, 255, 0.9);
+  --surface-glass: rgba(255, 255, 255, 0.85);
+  --surface-glass-elevated: rgba(255, 255, 255, 0.92);
 
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.05);
-  --shadow-glow: 0 0 20px rgba(22, 163, 74, 0.1);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 12px 28px -6px rgb(0 0 0 / 0.1), 0 4px 12px -4px rgb(0 0 0 / 0.05);
+  --shadow-xl: 0 24px 48px -12px rgb(0 0 0 / 0.12), 0 8px 16px -8px rgb(0 0 0 / 0.06);
+  --shadow-glow: 0 0 24px rgba(37, 99, 235, 0.1);
+  --shadow-glow-strong: 0 0 32px rgba(37, 99, 235, 0.15);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-highlight: rgba(255, 255, 255, 0.5);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -155,6 +192,7 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -164,6 +202,7 @@ body {
   color: var(--color-foreground);
   background-color: var(--color-background);
   transition: background-color var(--transition-base), color var(--transition-base);
+  overflow: hidden;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -184,4 +223,33 @@ body {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+}
+
+.glass-elevated {
+  background: var(--surface-glass-elevated);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-elevated);
+}
+
+/* Interactive element defaults */
+.interactive {
+  transition: all var(--transition-base);
+}
+
+.interactive:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.interactive:active {
+  transform: scale(0.98);
 }

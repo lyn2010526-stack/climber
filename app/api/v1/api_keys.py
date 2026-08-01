@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from app.storage import async_session
 from app.storage.auth import encrypt_api_key
@@ -35,7 +36,7 @@ class ApiKeyOut(BaseModel):
 async def list_api_keys() -> list[ApiKeyOut]:
     async with async_session() as session:
         result = await session.execute(
-            __import__("sqlalchemy").select(ApiKeyModel).where(ApiKeyModel.user_id == "default-user").order_by(ApiKeyModel.created_at.desc())
+            select(ApiKeyModel).where(ApiKeyModel.user_id == "default-user").order_by(ApiKeyModel.created_at.desc())
         )
         rows = result.scalars().all()
         return [
@@ -80,7 +81,7 @@ async def add_api_key(payload: ApiKeyCreate) -> ApiKeyOut:
 async def delete_api_key(key_id: str) -> dict:
     async with async_session() as session:
         result = await session.execute(
-            __import__("sqlalchemy").select(ApiKeyModel).where(ApiKeyModel.id == key_id)
+            select(ApiKeyModel).where(ApiKeyModel.id == key_id)
         )
         row = result.scalar_one_or_none()
         if not row:

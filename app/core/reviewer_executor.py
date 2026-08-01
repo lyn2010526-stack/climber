@@ -141,8 +141,8 @@ class ReviewerExecutor:
             if not sanitized:
                 from app.core.review_models import ReviewOutputModel
                 review_result = ReviewOutputModel(passed=True, issues=[], summary="Output filtered by guardrails")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("reviewer_executor.guardrails_failed", error=str(e))
 
         yield make_reviewer_issues(
             session_id=self._session_id,

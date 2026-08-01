@@ -1,47 +1,57 @@
 @import "tailwindcss";
 
 @theme {
-  /* 冷调深蓝 — 主背景层级 */
-  --color-bg-canvas: #0B101A;
-  --color-bg-primary: #0F1520;
-  --color-bg-secondary: #131A2A;
-  --color-bg-tertiary: #1A2236;
-  --color-bg-hover: #1E2740;
-  --color-bg-elevated: #1C2540;
+  /* Deep dark base — premium dark mode */
+  --color-bg-canvas: #0A0A0F;
+  --color-bg-primary: #0F0F14;
+  --color-bg-secondary: #14141A;
+  --color-bg-tertiary: #1A1A22;
+  --color-bg-hover: #1E1E28;
+  --color-bg-elevated: #1C1C26;
 
-  /* 边框与分割线 */
-  --color-border: #1E2A42;
-  --color-border-subtle: #182238;
-  --color-border-accent: #2A3D6B;
+  /* Borders — ultra-subtle */
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-subtle: rgba(255, 255, 255, 0.03);
+  --color-border-accent: rgba(59, 130, 246, 0.3);
 
-  /* 文字层级 */
+  /* Text hierarchy */
   --color-text-primary: #E4E9F5;
   --color-text-secondary: #8892A8;
   --color-text-muted: #505870;
   --color-text-disabled: #3A4058;
 
-  /* 强调色 — 冷蓝 */
+  /* Accent — blue to violet gradient system */
   --color-accent: #3B82F6;
   --color-accent-hover: #60A5FA;
-  --color-accent-subtle: #3B82F620;
-  --color-accent-glow: #3B82F640;
+  --color-accent-subtle: rgba(59, 130, 246, 0.08);
+  --color-accent-glow: rgba(59, 130, 246, 0.2);
 
-  /* 功能色 */
+  /* Violet accent for variety */
+  --color-violet: #8B5CF6;
+  --color-violet-hover: #A78BFA;
+  --color-violet-subtle: rgba(139, 92, 246, 0.08);
+
+  /* Functional colors */
   --color-success: #10B981;
-  --color-success-subtle: #10B98120;
+  --color-success-subtle: rgba(16, 185, 129, 0.08);
   --color-warning: #F59E0B;
-  --color-warning-subtle: #F59E0B20;
+  --color-warning-subtle: rgba(245, 158, 11, 0.08);
   --color-error: #EF4444;
-  --color-error-subtle: #EF444420;
+  --color-error-subtle: rgba(239, 68, 68, 0.08);
 
-  /* 代码块 */
-  --color-code-bg: #0D1525;
-  --color-code-border: #1A2540;
+  /* Code blocks */
+  --color-code-bg: #0D1117;
+  --color-code-border: rgba(255, 255, 255, 0.06);
 
-  /* 工具调用卡片 */
-  --color-tool-card-bg: #111B2E;
-  --color-tool-card-border: #1E2D4A;
-  --color-tool-header-bg: #0E1828;
+  /* Tool call cards */
+  --color-tool-card-bg: rgba(15, 15, 22, 0.8);
+  --color-tool-card-border: rgba(255, 255, 255, 0.06);
+  --color-tool-header-bg: rgba(12, 12, 18, 0.9);
+
+  /* Glass surfaces */
+  --color-glass-bg: rgba(15, 15, 20, 0.8);
+  --color-glass-border: rgba(255, 255, 255, 0.06);
+  --color-glass-highlight: rgba(255, 255, 255, 0.04);
 }
 
 /* ─── Mobile Responsive ────────────────── */
@@ -57,8 +67,8 @@
   .mobile-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
     z-index: var(--z-overlay);
   }
 
@@ -86,16 +96,15 @@
   }
 }
 
-
-
+/* ─── Scrollbar Styling ───────────────── */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-border) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
 }
 
 *::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 *::-webkit-scrollbar-track {
@@ -103,22 +112,45 @@
 }
 
 *::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  transition: background 200ms ease;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.15);
 }
 
+/* ─── Selection Styling ───────────────── */
+::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: #FFFFFF;
+}
+
+::-moz-selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: #FFFFFF;
+}
+
+/* ─── Base Body ───────────────────────── */
 body {
   background-color: var(--color-bg-canvas);
   color: var(--color-text-primary);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
 }
 
-/* 代码块样式 */
+/* ─── Focus Ring ──────────────────────── */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg-canvas), 0 0 0 4px var(--color-accent);
+  border-radius: 8px;
+}
+
+/* ─── Code Block ──────────────────────── */
 .code-block {
   background: var(--color-code-bg);
   border: 1px solid var(--color-code-border);
@@ -130,13 +162,19 @@ body {
   overflow-x: auto;
 }
 
-/* 工具调用卡片 */
+/* ─── Tool Call Card ──────────────────── */
 .tool-call-card {
   background: var(--color-tool-card-bg);
   border: 1px solid var(--color-tool-card-border);
   border-radius: 16px;
   overflow: hidden;
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  transition: border-color 200ms ease;
+}
+
+.tool-call-card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .tool-call-header {
@@ -148,33 +186,56 @@ body {
   gap: 8px;
 }
 
-/* 消息入场动画 */
+/* ─── Message Enter Animation ─────────── */
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.message-enter {
-  animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-/* 脉冲光晕 */
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.message-enter {
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fade-enter {
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.scale-enter {
+  animation: scaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ─── Pulse Glow ──────────────────────── */
 @keyframes pulseGlow {
   0%, 100% { box-shadow: 0 0 0 0 var(--color-accent-glow); }
-  50% { box-shadow: 0 0 14px 5px var(--color-accent-glow); }
+  50% { box-shadow: 0 0 16px 6px var(--color-accent-glow); }
 }
 
 .pulse-glow {
   animation: pulseGlow 2.5s ease-in-out infinite;
 }
 
-/* 面板分隔线 */
+/* ─── Panel Divider ───────────────────── */
 .panel-divider {
   width: 1px;
   background: linear-gradient(to bottom, transparent, var(--color-border), transparent);
+  transition: background 200ms ease;
 }
 
-/* 渐变边框卡片 */
+.panel-divider:hover {
+  background: linear-gradient(to bottom, transparent, var(--color-accent), transparent);
+}
+
+/* ─── Gradient Border Card ────────────── */
 .card-glow {
   position: relative;
 }
@@ -185,12 +246,12 @@ body {
   inset: -1px;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(135deg, var(--color-accent), transparent 50%);
+  background: linear-gradient(135deg, var(--color-accent), var(--color-violet), transparent 60%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.3s ease;
   pointer-events: none;
 }
 
@@ -198,7 +259,7 @@ body {
   opacity: 1;
 }
 
-/* 状态指示点 */
+/* ─── Status Dot ──────────────────────── */
 .status-dot {
   width: 6px;
   height: 6px;
@@ -209,17 +270,17 @@ body {
 .status-dot.active,
 .status-dot.success {
   background: var(--color-success);
-  box-shadow: 0 0 6px var(--color-success);
+  box-shadow: 0 0 8px var(--color-success);
 }
 
 .status-dot.pending {
   background: var(--color-warning);
-  box-shadow: 0 0 4px var(--color-warning);
+  box-shadow: 0 0 6px var(--color-warning);
 }
 
 .status-dot.running {
   background: var(--color-accent);
-  box-shadow: 0 0 6px var(--color-accent);
+  box-shadow: 0 0 8px var(--color-accent);
   animation: pulseGlow 1.5s ease-in-out infinite;
 }
 
@@ -230,10 +291,10 @@ body {
 .status-dot.error,
 .status-dot.cancelled {
   background: var(--color-error);
-  box-shadow: 0 0 6px var(--color-error);
+  box-shadow: 0 0 8px var(--color-error);
 }
 
-/* 无障碍形状指示 */
+/* ─── Accessibility Shape Indicators ───── */
 .status-shape {
   width: 8px;
   height: 8px;
@@ -288,12 +349,12 @@ body {
   to { transform: rotate(360deg); }
 }
 
-/* 高对比度模式 */
+/* ─── High Contrast Mode ──────────────── */
 .high-contrast {
   --color-text-primary: #FFFFFF;
   --color-text-secondary: #D1D5DB;
   --color-text-muted: #9CA3AF;
-  --color-border: #4B5563;
+  --color-border: rgba(255, 255, 255, 0.15);
   --color-accent: #60A5FA;
   --color-success: #34D399;
   --color-error: #F87171;
@@ -305,7 +366,7 @@ body {
   border-width: 2px;
 }
 
-/* 骨架屏动画 */
+/* ─── Skeleton Shimmer ────────────────── */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -315,20 +376,21 @@ body {
   background: linear-gradient(90deg, var(--color-bg-tertiary) 25%, var(--color-bg-hover) 50%, var(--color-bg-tertiary) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 8px;
 }
 
-/* 通用过渡 */
+/* ─── Smooth Transitions ──────────────── */
 .transition-smooth {
-  transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .transition-panel {
-  transition: all 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Apple 风格交互反馈 */
+/* ─── Apple-style Interaction Feedback ── */
 .apple-button {
-  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .apple-button:active {
@@ -336,19 +398,63 @@ body {
   opacity: 0.9;
 }
 
-/* 玻璃态面板 */
+/* ─── Glass Panel ─────────────────────── */
 .glass-panel {
-  background: rgba(15, 15, 20, 0.85);
+  background: var(--color-glass-bg);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--color-glass-border);
 }
 
-/* 微妙阴影 */
+/* ─── Subtle Shadow ───────────────────── */
 .shadow-apple {
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25), 0 1px 4px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 1px 4px rgba(0, 0, 0, 0.15);
 }
 
-/* 选中态光晕 */
+/* ─── Selection Glow ──────────────────── */
 .glow-selection {
-  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.25), 0 4px 16px rgba(0, 122, 255, 0.15);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2), 0 4px 16px rgba(59, 130, 246, 0.12);
+}
+
+/* ─── Page Transition ─────────────────── */
+@keyframes pageSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.page-transition {
+  animation: pageSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ─── Hover Lift ──────────────────────── */
+.hover-lift {
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms ease;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* ─── Nav Item Active Indicator ───────── */
+.nav-active-indicator {
+  position: relative;
+}
+
+.nav-active-indicator::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: var(--gradient-accent);
+  border-radius: 0 4px 4px 0;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.nav-active-indicator.active::before {
+  opacity: 1;
 }

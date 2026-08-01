@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Clock, CheckCircle2, AlertCircle, Copy, Download, ChevronRight } from 'lucide-react';
+import { api } from '../api';
 
 interface TaskRecord {
   id: string;
@@ -46,11 +47,8 @@ export function TaskHistoryPage() {
 
   const loadTasks = async () => {
     try {
-      const resp = await fetch('/api/v1/tasks');
-      if (resp.ok) {
-        const data = await resp.json();
-        setTasks(data);
-      }
+      const data = await api.listTasks();
+      setTasks(data);
     } catch (e) {
       console.error('Failed to load tasks:', e);
     } finally {

@@ -14,7 +14,7 @@ from httpx import AsyncClient, ASGITransport
 
 from app.main import app
 from app.storage import init_db, engine, async_session, Base
-from app.storage.database import User, Agent, Session, Message, ApiKey, Tool, Document, CheckpointRecord
+from app.storage.database import Agent, Session, Message, ApiKey, Tool, Document, CheckpointRecord
 from app.storage import models_memory
 
 

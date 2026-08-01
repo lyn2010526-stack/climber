@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { api } from '../../api';
 
 interface TraceSpan {
   id: string;
@@ -42,13 +43,8 @@ export default function TraceViewer({ traceId }: TraceViewerProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/v1/traces/?limit=50');
-      if (res.ok) {
-        const data = await res.json();
+      const data = await api.listTraces();
         setTraces(data);
-      } else {
-        setError(`获取追踪数据失败: ${res.status}`);
-      }
     } catch (e) {
       setError('Network error');
     }
@@ -59,14 +55,9 @@ export default function TraceViewer({ traceId }: TraceViewerProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/v1/traces/${tid}`);
-      if (res.ok) {
-        const data = await res.json();
+      const data = await api.getTrace(tid);
         setSpans(data.spans || []);
         setStats(data.stats || null);
-      } else {
-        setError(`获取追踪详情失败: ${res.status}`);
-      }
     } catch (e) {
       setError('Network error');
     }

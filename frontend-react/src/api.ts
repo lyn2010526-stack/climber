@@ -215,11 +215,6 @@ class ApiClient {
     return this.request<any>('/stats');
   }
 
-  // User profile
-  async getProfile() {
-    return this.request<any>('/auth/me');
-  }
-
   // Skills toggle
   async enableSkill(skillId: string) {
     return this.request<any>(`/skills/${skillId}/enable`, { method: 'POST' });
@@ -456,17 +451,162 @@ class ApiClient {
     });
   }
 
-  // Users
-  async listUsers() {
-    return this.request<any[]>('/users');
+  // Tasks
+  async listTasks(params?: { status?: string; limit?: number }) {
+    const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
+    return this.request<any[]>(`/tasks${qs}`);
   }
 
-  async switchUser(data: { user_id: string }) {
-    return this.request<any>('/users/switch', {
+  async getTask(taskId: string) {
+    return this.request<any>(`/tasks/${taskId}`);
+  }
+
+  async createTask(data: any) {
+    return this.request<any>('/tasks', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
-}
+
+  async runTask(id: string, inputs?: Record<string, any>) {
+    return this.request<any>(`/tasks/${id}/run`, {
+      method: 'POST',
+      body: JSON.stringify(inputs || {}),
+    });
+  }
+
+  async cancelTask(id: string) {
+    return this.request<any>(`/tasks/${id}/cancel`, { method: 'POST' });
+  }
+
+  async pauseTask(id: string) {
+    return this.request<any>(`/tasks/${id}/pause`, { method: 'POST' });
+  }
+
+  async resumeTask(id: string) {
+    return this.request<any>(`/tasks/${id}/resume`, { method: 'POST' });
+  }
+
+  async stopTask(id: string) {
+    return this.request<any>(`/tasks/${id}/stop`, { method: 'POST' });
+  }
+
+  // Cost
+  async getCostUsage() {
+    return this.request<any>('/cost/usage');
+  }
+
+  async getCostBudget() {
+    return this.request<any>('/cost/budget');
+  }
+
+  // Scheduler
+  async listSchedulerTasks() {
+    return this.request<any[]>('/scheduler/tasks');
+  }
+
+  async createSchedulerTask(data: any) {
+    return this.request<any>('/scheduler/tasks', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateSchedulerTask(id: string, data: any) {
+    return this.request<any>(`/scheduler/tasks/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteSchedulerTask(id: string) {
+    return this.request(`/scheduler/tasks/${id}`, { method: 'DELETE' });
+  }
+
+  // Skills (additional)
+  async updateSkill(id: string, data: any) {
+    return this.request<any>(`/skills/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async runAutonomousSkill(data: any) {
+    return this.request<any>('/skills/autonomous/run', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // MCP
+  async listMCPServers() {
+    return this.request<any[]>('/mcp/servers');
+  }
+
+  async listMCPCategories() {
+    return this.request<any[]>('/mcp/categories');
+  }
+
+  async installMCPServer(id: string, config?: Record<string, any>) {
+    return this.request<any>(`/mcp/servers/${id}/install`, {
+      method: 'POST',
+      body: JSON.stringify(config || {}),
+    });
+  }
+
+  async deleteMCPServer(id: string) {
+    return this.request(`/mcp/servers/${id}`, { method: 'DELETE' });
+  }
+
+  // Groups (additional)
+  async listGroupTasks(groupId: string, limit = 20) {
+    return this.request<any[]>(`/groups/${groupId}/tasks?limit=${limit}`);
+  }
+
+  async listGroupMembers(groupId: string) {
+    return this.request<any[]>(`/groups/${groupId}/members`);
+  }
+
+  // Traces (additional)
+  async getTrace(traceId: string) {
+    return this.request<any>(`/traces/${traceId}`);
+  }
+
+  // Eval
+  async listEvalDatasets() {
+    return this.request<any[]>('/eval/datasets');
+  }
+
+  async seedBuiltinDatasets() {
+    return this.request<any>('/eval/datasets/seed-builtin', { method: 'POST' });
+  }
+
+  async runEvalDataset(id: string) {
+    return this.request<any>(`/eval/datasets/${id}/run`, { method: 'POST' });
+  }
+
+  // Search
+  async search(query: string, limit = 20) {
+    return this.request<any[]>(`/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+  }
+
+  // Permissions
+  async resolvePermission(toolCallId: string, decision: 'approve' | 'deny') {
+    return this.request<any>(`/permissions/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ tool_call_id: toolCallId, decision }),
+    });
+  }
+
+  async getPermissionConfig() {
+    return this.request<any>('/permissions/config');
+  }
+
+  async updatePermissionConfig(config: Record<string, any>) {
+    return this.request<any>('/permissions/config', {
+      method: 'PUT',
+      body: JSON.stringify(config),
+    });
+  }
 
 export const api = new ApiClient();

@@ -39,7 +39,7 @@ class EpisodicMemory(Base):
     __tablename__ = "episodic_memories"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     agent_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("agents.id"), nullable=True, index=True)
 
     # Memory content
@@ -67,8 +67,6 @@ class EpisodicMemory(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    user: Mapped["User"] = relationship(back_populates="episodic_memories")
-
 
 class KnowledgeGraph(Base):
     """Entity-Relation-Entity triples extracted from conversations.
@@ -80,7 +78,7 @@ class KnowledgeGraph(Base):
     __tablename__ = "knowledge_graph"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
 
     # Triple components
     subject: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
@@ -109,7 +107,7 @@ class UserProfile(Base):
     __tablename__ = "user_profiles"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True)
 
     # Structured preferences
     preferred_language: Mapped[str] = mapped_column(String(10), default="en")
@@ -134,8 +132,6 @@ class UserProfile(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    user: Mapped["User"] = relationship(back_populates="profile")
-
 
 class MemoryRetrievalLog(Base):
     """Log of memory retrievals for analytics and debugging.
@@ -150,7 +146,7 @@ class MemoryRetrievalLog(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     memory_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     session_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     # Retrieval context
@@ -169,7 +165,7 @@ class CoreMemoryBlock(Base):
     __tablename__ = "core_memory_blocks"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     agent_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("agents.id"), nullable=True, index=True)
 
     label: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., "persona", "user_profile"
@@ -190,7 +186,7 @@ class ArchivalPassage(Base):
     __tablename__ = "archival_passages"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
 
     text: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
@@ -214,7 +210,7 @@ class AuditLog(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     session_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
-    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True, index=True)
+    user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
 
     action: Mapped[str] = mapped_column(String(50), nullable=False)  # file:read, command:execute, api:call, permission:*
     severity: Mapped[str] = mapped_column(String(20), default="info")  # info / warning / critical

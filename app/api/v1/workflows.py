@@ -6,7 +6,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, HTTPException, Request, Response
+from sqlalchemy import select
 
 from app.workflow.io import WorkflowIO
 from app.workflow.templates import WorkflowTemplates
@@ -14,6 +16,7 @@ from app.storage import async_session
 from app.storage.models_platform import Workflow as WorkflowModel
 from app.api.v1.generic import _payload
 
+logger = structlog.get_logger()
 router = APIRouter()
 
 
@@ -74,7 +77,8 @@ async def list_workflow_templates() -> list[dict[str, Any]]:
                         for i, e in enumerate(workflow.edges)
                     ],
                 })
-            except Exception:
+            except Exception as exc:
+                logger.warning("workflows.list_templates_failed", template_id=tpl["id"], error=str(exc))
                 builtin.append({
                     "template_id": tpl["id"],
                     "name": tpl["name"],
@@ -162,7 +166,7 @@ async def export_workflow(workflow_id: str, request: Request) -> Response:
 
     async with async_session() as db:
         wf = (await db.execute(
-            __import__("sqlalchemy").select(WorkflowModel).where(WorkflowModel.id == workflow_id)
+            select(WorkflowModel).where(WorkflowModel.id == workflow_id)
         )).scalar_one_or_none()
         if wf is None:
             raise HTTPException(status_code=404, detail="Workflow not found")
@@ -186,7 +190,7 @@ async def export_workflow_get(workflow_id: str, format: str = "json") -> Respons
 
     async with async_session() as db:
         wf = (await db.execute(
-            __import__("sqlalchemy").select(WorkflowModel).where(WorkflowModel.id == workflow_id)
+            select(WorkflowModel).where(WorkflowModel.id == workflow_id)
         )).scalar_one_or_none()
         if wf is None:
             raise HTTPException(status_code=404, detail="Workflow not found")

@@ -3,6 +3,7 @@ import {
   Clock, Plus, Trash2, ToggleLeft, ToggleRight,
   Shield, Search, RefreshCw,
 } from 'lucide-react';
+import { api } from '../api';
 
 interface ScheduledTask {
   id: string;
@@ -41,13 +42,8 @@ export function SchedulerPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/v1/scheduler/tasks');
-      if (res.ok) {
-        const data = await res.json();
-        setTasks(data);
-      } else {
-        setError('加载定时任务失败');
-      }
+      const data = await api.listSchedulerTasks();
+      setTasks(data);
     } catch (e) {
       setError('加载定时任务失败');
     } finally {
@@ -61,18 +57,14 @@ export function SchedulerPage() {
 
   const toggleTask = async (id: string) => {
     try {
-      await fetch(`/api/v1/scheduler/tasks/${id}`, {
-        method: 'PATCH',
-      });
+      await api.updateSchedulerTask(id, {});
       fetchTasks();
     } catch { /* skip */ }
   };
 
   const deleteTask = async (id: string) => {
     try {
-      await fetch(`/api/v1/scheduler/tasks/${id}`, {
-        method: 'DELETE',
-      });
+      await api.deleteSchedulerTask(id);
       fetchTasks();
     } catch { /* skip */ }
   };
@@ -80,23 +72,15 @@ export function SchedulerPage() {
   const addTask = async () => {
     if (!newTask.name) return;
     try {
-      const res = await fetch('/api/v1/scheduler/tasks', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: newTask.name,
-          description: newTask.description,
-          cron: newTask.cron,
-          task_type: newTask.type,
-        }),
+      await api.createSchedulerTask({
+        name: newTask.name,
+        description: newTask.description,
+        cron: newTask.cron,
+        task_type: newTask.type,
       });
-      if (res.ok) {
-        setShowAdd(false);
-        setNewTask({ name: '', description: '', cron: '*/5 * * * *', type: 'custom' });
-        fetchTasks();
-      }
+      setShowAdd(false);
+      setNewTask({ name: '', description: '', cron: '*/5 * * * *', type: 'custom' });
+      fetchTasks();
     } catch { /* skip */ }
   };
 

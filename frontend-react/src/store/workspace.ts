@@ -45,7 +45,7 @@ export interface TaskItem {
 export interface WorkspaceState {
   sessions: Session[];
   activeSessionId: string | null;
-  rightPanelTab: 'config' | 'dag' | 'trace' | 'reasoning' | 'files';
+  rightPanelTab: 'config' | 'diff' | 'toolcalls' | 'dag' | 'trace' | 'reasoning' | 'files';
   rightPanelOpen: boolean;
   focusMode: boolean;
   expertMode: boolean;
@@ -55,7 +55,7 @@ export interface WorkspaceState {
   snapshots: Array<{ id: string; sessionId: string; timestamp: number; label: string }>;
 
   setActiveSession: (id: string | null) => void;
-  setRightPanelTab: (tab: 'config' | 'dag' | 'trace' | 'reasoning' | 'files') => void;
+  setRightPanelTab: (tab: 'config' | 'diff' | 'toolcalls' | 'dag' | 'trace' | 'reasoning' | 'files') => void;
   toggleRightPanel: () => void;
   toggleFocusMode: () => void;
   toggleExpertMode: () => void;

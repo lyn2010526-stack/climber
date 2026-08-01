@@ -105,7 +105,8 @@ async def get_db() -> Any:
         try:
             yield session
             await session.commit()
-        except Exception:
+        except Exception as exc:
+            logger.warning("storage.get_db_session_failed", error=str(exc))
             await session.rollback()
             raise
 
@@ -128,37 +129,6 @@ async def db_health() -> dict[str, Any]:
     return info
 
 
-async def ensure_default_user() -> str:
-    """Guarantee the guest user row exists.
-
-    Guest mode hands out the id ``default-user`` without ever creating the
-    row, so every foreign key pointing at it fails once FK enforcement is on.
-    """
-    from sqlalchemy import select
-
-    from app.storage.database import User
-
-    default_id = "default-user"
-    async with async_session() as db:
-        existing = (await db.execute(select(User).where(User.id == default_id))).scalars().first()
-        if existing is not None:
-            return default_id
-        db.add(
-            User(
-                id=default_id,
-                email="guest@localhost",
-                password_hash="",
-            )
-        )
-        try:
-            await db.commit()
-            logger.info("default_user_created", user_id=default_id)
-        except Exception as exc:
-            await db.rollback()
-            logger.debug("default_user_exists_or_failed", error=str(exc))
-    return default_id
-
-
 async def init_db() -> None:
     """Create all tables. Ensure all models are imported for registration."""
     # Import all models so SQLAlchemy registers them with Base
@@ -177,5 +147,3 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-
-    await ensure_default_user()

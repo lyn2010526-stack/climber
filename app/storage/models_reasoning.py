@@ -19,7 +19,7 @@ class ReasoningTraceDB(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     trace_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     task: Mapped[str] = mapped_column(Text, nullable=False)
     mode: Mapped[str] = mapped_column(String(50), nullable=False)
     candidates_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -41,7 +41,7 @@ class ReasoningFeedbackDB(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     trace_id: Mapped[str] = mapped_column(String(36), ForeignKey("reasoning_traces.trace_id"), nullable=False, index=True)
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     rating: Mapped[int] = mapped_column(Integer, nullable=False)
     thumbs: Mapped[str | None] = mapped_column(String(10), nullable=True)
     comment: Mapped[str] = mapped_column(Text, default="")

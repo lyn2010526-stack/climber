@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Bell, Send, CheckCircle, AlertCircle } from 'lucide-react';
+import { api } from '../api';
 
 export function NotificationsPage() {
   const [title, setTitle] = useState('Climber 通知测试');
@@ -11,12 +12,7 @@ export function NotificationsPage() {
     setSending(true);
     setResult(null);
     try {
-      const res = await fetch('/api/v1/notifications/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, message }),
-      });
-      const data = await res.json();
+      const data = await api.sendNotification(title, message);
       setResult(data);
     } catch (e: any) {
       setResult({ ok: false, error: e.message });
@@ -29,8 +25,7 @@ export function NotificationsPage() {
     setSending(true);
     setResult(null);
     try {
-      const res = await fetch('/api/v1/notifications/test');
-      const data = await res.json();
+      const data = await api.testNotification();
       setResult(data);
     } catch (e: any) {
       setResult({ ok: false, error: e.message });

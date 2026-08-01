@@ -1,102 +1,28 @@
-"""Minimal agent engine with ReAct loop."""
-
 from __future__ import annotations
 
 import asyncio
-import json
-import re
-import time
-from typing import Any, AsyncIterator
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
-from app.core import (
-    AgentEvent, AgentEventType, ChatResult, CheckpointData,
-    CompressionStrategy, ContextConfig, MessageRole, SessionStatus, SubAgentTask,
-)
+import structlog
+
+from app.core import AgentEvent, AgentEventType, ContextConfig, MessageRole
 from app.core.checkpoint import InMemoryCheckpointStore
-from app.core.compressor import ContextCompressor, estimate_tokens
 from app.core.di import resolve as di_resolve
-from app.core.parallel import ParallelToolExecutor
+from app.core.engine.react_loop import ReActLoopExecutor
+from app.core.engine.safety import setup_default_permissions, validate_tool_call
+from app.core.engine.session import AgentSession
+from app.core.engine.tool_builder import build_tools as _build_tools_impl
+from app.core.frame import Frame, FrameFolder, FrameKind, FrameType
 from app.core.persistent_memory import PersistentMemoryService
-from app.core.task_state_machine import TaskState, TaskStateMachine
+from app.core.permission_rules import PermissionConfig, RuleDecision, get_default_config
+from app.core.task_state_machine import TaskState
 from app.core.tool_prioritizer import ToolPrioritizer
-from app.models import ModelCapability
-from app.models.openai_adapter import OpenAIAdapter
 
+if TYPE_CHECKING:
+    from app.models.registry import ModelRegistry
+    from app.tools import ToolRegistry
 
-class AgentSession:
-    def __init__(self, session_id: str, agent_id: str, user_id: str, provider: str, model_id: str, api_key: str, base_url: str | None = None, system_prompt: str = "", tools: list[str] | None = None, context_config: ContextConfig | None = None, mode: str = "act"):
-        self.session_id = session_id
-        self.agent_id = agent_id
-        self.user_id = user_id
-        self.provider = provider
-        self.model_id = model_id
-        self.api_key = api_key
-        self.base_url = base_url
-        self.system_prompt = system_prompt
-        self.tools = tools or []
-        self.context_config = context_config or ContextConfig()
-        self.max_iterations = 10
-        self.messages: list[dict[str, Any]] = []
-        self._stop_requested = False
-        self.session_memory = _SessionMemory(self)
-        # State machine: use TaskState for unified lifecycle management
-        self.state_machine = TaskStateMachine(task_id=session_id, initial_state=TaskState.PENDING)
-        # Agent mode: plan (read-only) or act (real execution)
-        self.mode = mode
-        # Debug tracking per task
-        self.debug_attempts: dict[str, int] = {}
-
-    @property
-    def status(self) -> SessionStatus:
-        """Map TaskState to legacy SessionStatus for backward compatibility."""
-        mapping = {
-            TaskState.PENDING: SessionStatus.PENDING,
-            TaskState.PROCESSING: SessionStatus.RUNNING,
-            TaskState.PAUSED: SessionStatus.PAUSED,
-            TaskState.COMPLETED: SessionStatus.COMPLETED,
-            TaskState.FAILED: SessionStatus.FAILED,
-            TaskState.CANCELLED: SessionStatus.STOPPED,
-        }
-        return mapping.get(self.state_machine.state, SessionStatus.PENDING)
-
-    @status.setter
-    def status(self, value: SessionStatus) -> None:
-        """Set state from legacy SessionStatus."""
-        reverse_map = {
-            SessionStatus.PENDING: TaskState.PENDING,
-            SessionStatus.RUNNING: TaskState.PROCESSING,
-            SessionStatus.PAUSED: TaskState.PAUSED,
-            SessionStatus.COMPLETED: TaskState.COMPLETED,
-            SessionStatus.FAILED: TaskState.FAILED,
-            SessionStatus.STOPPED: TaskState.CANCELLED,
-        }
-        target = reverse_map.get(value, TaskState.PENDING)
-        # Only transition if different
-        if self.state_machine.state != target:
-            import asyncio
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(self.state_machine.transition(target, trigger="api"))
-            except RuntimeError:
-                # No event loop running (e.g., in tests)
-                pass
-
-    def stop(self) -> None:
-        self._stop_requested = True
-        import asyncio
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(self.state_machine.transition(TaskState.CANCELLED, trigger="user_stop"))
-        except RuntimeError:
-            pass
-
-
-class _SessionMemory:
-    def __init__(self, session: AgentSession):
-        self._session = session
-
-    def add(self, role: str, content: str) -> None:
-        self._session.messages.append({"role": role, "content": content})
+logger = structlog.get_logger()
 
 
 class AgentEngine:
@@ -106,109 +32,52 @@ class AgentEngine:
         self._checkpoints = checkpoint_store or InMemoryCheckpointStore()
         self._sessions: dict[str, AgentSession] = {}
         self.memory_service = PersistentMemoryService()
-        # Tool prioritization with lightweight learning (reference: Suna)
         self.tool_prioritizer = ToolPrioritizer()
-        # Auto-debug loop (reference: Devika failure debugging closed loop)
+        self._seq_counter: int = 0
+        self._permission_config = get_default_config()
+        self._permission_events: dict[str, asyncio.Event] = {}
+        self._permission_resolutions: dict[str, str] = {}
+        self._denied_tool_calls: set[str] = set()
+        self._frame_folder = FrameFolder()
         try:
             from app.core.debug_loop import DebugLoopEngine
             self.debug_loop = DebugLoopEngine(model_registry=self.model_registry)
         except Exception:
             self.debug_loop = None
-        # Security sandbox: rejects hazard commands and out-of-scope file access before execution
         try:
             from app.core.security_sandbox import SecuritySandbox, SandboxConfig, PermissionOverlay, AgentMode
             import os
             workdir = os.environ.get("CLIMBER_SANDBOX_WORKDIR") or os.getcwd()
             self.sandbox = SecuritySandbox(SandboxConfig(workdir=workdir))
             self.permission_overlay = PermissionOverlay()
-            self._setup_default_permissions()
+            setup_default_permissions(self.permission_overlay)
             self.agent_mode = AgentMode.ACT
         except Exception:
             self.sandbox = None
             self.permission_overlay = None
             self.agent_mode = None
 
-    def _setup_default_permissions(self) -> None:
-        """Setup default three-layer permission rules."""
-        from app.core.security_sandbox import PermissionRule, PermissionLevel
-        defaults = [
-            PermissionRule(action="read", resource_pattern="*", level=PermissionLevel.ALLOW, description="Read any file"),
-            PermissionRule(action="write", resource_pattern="./data/*", level=PermissionLevel.ALLOW, description="Write to data dir"),
-            PermissionRule(action="write", resource_pattern="*.py", level=PermissionLevel.ASK, description="Write Python files"),
-            PermissionRule(action="execute", resource_pattern="*", level=PermissionLevel.ASK, description="Execute any command"),
-            PermissionRule(action="delete", resource_pattern="*", level=PermissionLevel.DENY, description="Delete forbidden"),
-        ]
-        self.permission_overlay.set_defaults(defaults)
-
-    # Tool names that accept a shell command under a "command" parameter
-    _COMMAND_TOOLS = {"run_command", "shell", "execute_command", "bash"}
-    # Tool names that perform file IO under path/file parameters
-    _FILE_TOOLS = {
-        "read_file": ("path", "read"),
-        "write_file": ("path", "write"),
-        "edit_file": ("path", "write"),
-        "append_file": ("path", "write"),
-        "file_exists": ("path", "read"),
-        "file_info": ("path", "read"),
-        "file_diff": ("path", "read"),
-        "list_directory": ("dir", "read"),
-    }
+        self._loop_executor = ReActLoopExecutor(
+            model_registry=self.model_registry,
+            tool_registry=self.tool_registry,
+            checkpoint_store=self._checkpoints,
+            tool_prioritizer=self.tool_prioritizer,
+            build_tools_fn=self._build_tools,
+            validate_tool_call_fn=self._validate_tool_call if self.sandbox else None,
+        )
 
     def _validate_tool_call(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
-        """Pre-execution safety check. Returns (allowed, reason)."""
-        # PLAN mode: deny write/execute operations, but allow edit_file (preview-only)
-        if hasattr(self, 'agent_mode') and self.agent_mode is not None:
-            from app.core.security_sandbox import AgentMode
-            if self.agent_mode == AgentMode.PLAN and tool_name in self._COMMAND_TOOLS:
-                return False, "PLAN mode: command execution is read-only"
-            if self.agent_mode == AgentMode.PLAN and tool_name in self._FILE_TOOLS:
-                param, mode = self._FILE_TOOLS[tool_name]
-                if mode != "read" and tool_name != "edit_file":
-                    return False, "PLAN mode: file modification is read-only"
+        return validate_tool_call(
+            self.sandbox, self.permission_overlay, self.agent_mode,
+            self.tool_registry, tool_name, arguments,
+        )
 
-        # Permission overlay check
-        if self.permission_overlay is not None:
-            action = "execute" if tool_name in self._COMMAND_TOOLS else "read"
-            if tool_name in self._FILE_TOOLS:
-                _, mode = self._FILE_TOOLS[tool_name]
-                action = mode
-            resource = arguments.get("path") or arguments.get("command") or "*"
-            level = self.permission_overlay.evaluate(action, str(resource), agent_id=None, user_id=None)
-            from app.core.security_sandbox import PermissionLevel
-            if level == PermissionLevel.DENY:
-                return False, f"Permission denied by overlay: {action} on {resource}"
-            if level == PermissionLevel.ASK:
-                return False, f"Permission required: {action} on {resource}"
+    def _build_tools(self, tool_names: list[str], task_description: str = "") -> list[dict[str, Any]]:
+        return _build_tools_impl(self.tool_registry, self.tool_prioritizer, tool_names, task_description)
 
-        # JSON Schema validation
-        try:
-            from app.core.security_sandbox import validate_tool_input
-            tool_def = self.tool_registry.get_tool(tool_name)
-            if tool_def and tool_def.parameters:
-                validate_tool_input(tool_def.parameters, arguments)
-        except Exception as e:
-            return False, str(e)
-
-        # Existing sandbox checks
-        if self.sandbox is None:
-            return True, "OK"
-        try:
-            if tool_name in self._COMMAND_TOOLS:
-                cmd = arguments.get("command") or ""
-                if isinstance(cmd, str) and cmd:
-                    ok, reason = self.sandbox.validate_command(cmd)
-                    if not ok:
-                        return False, reason
-            if tool_name in self._FILE_TOOLS:
-                param, mode = self._FILE_TOOLS[tool_name]
-                path = arguments.get(param) or arguments.get("path") or ""
-                if isinstance(path, str) and path:
-                    ok, reason = self.sandbox.validate_file_access(path, mode)
-                    if not ok:
-                        return False, reason
-        except Exception as e:
-            return False, f"sandbox validation error: {e}"
-        return True, "OK"
+    def _next_seq(self) -> int:
+        self._seq_counter += 1
+        return self._seq_counter
 
     def create_session(self, agent_id: str, user_id: str, provider: str, model_id: str, api_key: str, base_url: str | None = None, system_prompt: str = "", tools: list[str] | None = None, context_config: ContextConfig | None = None, session_id: str | None = None) -> AgentSession:
         from uuid import uuid4
@@ -225,31 +94,148 @@ class AgentEngine:
             tools=tools,
             context_config=context_config,
         )
+        # 注入 MemFS 记忆到系统提示词 (参考 Letta system/ 目录)
+        memfs_context = self._load_memfs_context_sync(user_id, agent_id)
+        if memfs_context:
+            session.messages.append({"role": MessageRole.SYSTEM, "content": memfs_context})
+        # 注入角色化 Agent 的 system prompt (参考 CrewAI role+goal+backstory)
+        if not system_prompt:
+            role_prompt = self._load_role_prompt_sync(agent_id)
+            if role_prompt:
+                system_prompt = role_prompt
+        # 注入内置提示词模板 (参考 prompt_engine/template_repository.py)
+        if not system_prompt:
+            builtin = self._get_builtin_prompt(agent_id)
+            if builtin:
+                system_prompt = builtin
         if system_prompt:
             session.messages.append({"role": MessageRole.SYSTEM, "content": system_prompt})
         self._sessions[session_id] = session
         return session
 
+    def _load_memfs_context_sync(self, user_id: str, agent_id: str) -> str:
+        """同步加载 MemFS persona 和 human 偏好记忆"""
+        try:
+            import asyncio
+            from app.core.memfs import MemFS
+            memfs = MemFS(base_path=f"data/memfs/{user_id}/{agent_id}")
+            # 尝试获取现有 loop，否则创建新 loop
+            try:
+                loop = asyncio.get_running_loop()
+                # 已在 loop 中，创建 task（但这里不能 await，返回空）
+                return ""
+            except RuntimeError:
+                # 无运行中的 loop，可以安全使用 run
+                async def _read():
+                    persona = await memfs.read("system/persona.md")
+                    human = await memfs.read("system/human.md")
+                    parts = []
+                    if persona:
+                        parts.append(f"# Your Identity\n{persona}")
+                    if human:
+                        parts.append(f"# About Your Human\n{human}")
+                    return "\n\n".join(parts) if parts else ""
+                return asyncio.run(_read())
+        except Exception:
+            return ""
+
+    def _load_role_prompt_sync(self, agent_id: str) -> str:
+        """同步加载角色化 Agent 定义的 system prompt"""
+        try:
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                return ""  # 在 loop 中无法 sync 等待
+            except RuntimeError:
+                from app.core.role_agent import AgentProfile
+                from app.storage import async_session
+                from app.storage.database import Agent as AgentModel
+                from sqlalchemy import select
+                async def _query():
+                    async with async_session() as db:
+                        result = await db.execute(select(AgentModel).where(AgentModel.id == agent_id))
+                        row = result.scalar_one_or_none()
+                        if row and row.agent_role:
+                            profile = AgentProfile(
+                                id=agent_id,
+                                role=row.agent_role or "",
+                                goal=row.goal or "",
+                                backstory=row.backstory or "",
+                                tools=list(row.tool_ids or []),
+                            )
+                            return profile.system_prompt()
+                    return ""
+                return asyncio.run(_query())
+        except Exception:
+            return ""
+
+    async def _load_memfs_context(self, user_id: str, agent_id: str) -> str:
+        """从 MemFS 加载 agent persona 和 human 偏好记忆"""
+        try:
+            from app.core.memfs import MemFS
+            memfs = MemFS(base_path=f"data/memfs/{user_id}/{agent_id}")
+            persona = memfs.read("system/persona.md")
+            human = memfs.read("system/human.md")
+            parts = []
+            if persona:
+                parts.append(f"# Your Identity\n{persona}")
+            if human:
+                parts.append(f"# About Your Human\n{human}")
+            return "\n\n".join(parts) if parts else ""
+        except Exception:
+            return ""
+
+    async def _load_role_prompt(self, user_id: str, agent_id: str) -> str:
+        """加载角色化 Agent 定义的 system prompt"""
+        try:
+            from app.core.role_agent import AgentProfile
+            from app.storage import async_session
+            from app.storage.database import Agent as AgentModel
+            from sqlalchemy import select
+            async with async_session() as db:
+                result = await db.execute(select(AgentModel).where(AgentModel.id == agent_id))
+                row = result.scalar_one_or_none()
+                if row and row.agent_role:
+                    profile = AgentProfile(
+                        id=agent_id,
+                        role=row.agent_role or "",
+                        goal=row.goal or "",
+                        backstory=row.backstory or "",
+                        tools=list(row.tool_ids or []),
+                    )
+                    return profile.system_prompt()
+        except Exception:
+            pass
+        return ""
+
+    def _get_builtin_prompt(self, agent_id: str) -> str:
+        """获取内置提示词模板"""
+        try:
+            from app.core.prompt_engine.template_repository import PromptTemplateRepository
+            repo = PromptTemplateRepository()
+            templates = repo.list_builtins()
+            if templates:
+                return templates[0].content
+        except Exception:
+            pass
+        return ""
+
     async def run(self, session: AgentSession, message: str) -> AsyncIterator[AgentEvent]:
-        # Transition to PROCESSING state via state machine
         await session.state_machine.transition(TaskState.PROCESSING, trigger="run_start")
         session.messages.append({"role": MessageRole.USER, "content": message})
 
-        # Set current agent mode for tool execution context (e.g., PLAN vs ACT)
         try:
             from app.core.file_patch import set_current_agent_mode
             set_current_agent_mode(session.mode)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("agent_engine.set_agent_mode_failed", error=str(e))
 
-        # Fire-and-forget notification for agent start
         try:
             from app.services.notifications import notification_service
-            asyncio.create_task(notification_service.agent_message(session.agent_id or "Agent", "开始执行任务..."))
-        except Exception:
-            pass
+            asyncio.create_task(notification_service.agent_message(session.agent_id or "Agent", "Agent started task"))
+        except Exception as e:
+            logger.warning("agent_engine.notification_start_failed", error=str(e))
 
-        # Retrieve relevant memories and inject into context
         try:
             memory_context = await self.memory_service.format_memories_for_prompt(
                 user_id=session.user_id,
@@ -258,269 +244,285 @@ class AgentEngine:
             )
             if memory_context:
                 session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": memory_context})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("agent_engine.memory_injection_failed", error=str(e))
 
-        # Inject Core Memory blocks as XML into system prompt
         try:
             from app.core.core_memory import core_memory
             blocks = await core_memory.get_blocks(user_id=session.user_id, agent_id=session.agent_id)
             if blocks:
                 core_memory_xml = core_memory.format_for_prompt(blocks)
                 session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": core_memory_xml})
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("agent_engine.core_memory_injection_failed", error=str(e))
 
-        iteration = 0
-        executor = ParallelToolExecutor(
-            self.tool_registry,
-            validator=self._validate_tool_call if self.sandbox else None,
-        )
-        compressor = ContextCompressor(session.context_config)
-        result: ChatResult | None = None
+        result_content = ""
+        iterations = 0
+
+        yield self._frame_to_event(Frame(
+            type=FrameType.SESSION_START,
+            kind=FrameKind.INFO,
+            data={"sessionId": session.session_id, "message": message},
+            seq=self._next_seq(),
+        ))
 
         try:
-            adapter = self.model_registry.get_or_create(
-                provider=session.provider,
-                model_id=session.model_id,
-                api_key=session.api_key,
-                base_url=session.base_url,
-            )
+            async for event in self._loop_executor.execute(session, message, on_error=_notify_error):
+                async for frame in self._event_to_frames(event, session):
+                    if frame is not None:
+                        yield self._frame_to_event(frame)
 
-            tools = self._build_tools(session.tools, task_description=message)
-
-            while iteration < session.max_iterations and not session._stop_requested:
-                iteration += 1
-
-                ctx_tokens = estimate_tokens(session.messages)
-                ctx_limit = getattr(adapter.capabilities, "max_tokens", None) or session.context_config.max_tokens
-                if compressor.needs_compression(session.messages) or (ctx_limit and ctx_tokens > ctx_limit * 0.8):
-                    session.messages = await compressor.compress(session.messages, adapter)
-                    yield AgentEvent(type=AgentEventType.CONTEXT_COMPRESSION, data={"iteration": iteration, "tokens": ctx_tokens, "limit": ctx_limit})
-
-                yield AgentEvent(type=AgentEventType.THINKING, data={"iteration": iteration})
-
-                try:
-                    if adapter.capabilities.streaming:
-                        full_content = ""
-                        accumulated_tool_calls = []
-                        async for chunk in adapter.stream_chat(messages=session.messages, tools=tools or None):
-                            if chunk.content:
-                                full_content += chunk.content
-                                yield AgentEvent(type=AgentEventType.TEXT, data={"content": chunk.content})
-                            for tc in chunk.tool_calls:
-                                idx = tc.get("index", 0) if "index" in tc else 0
-                                while len(accumulated_tool_calls) <= idx:
-                                    accumulated_tool_calls.append({
-                                        "id": "",
-                                        "type": "function",
-                                        "function": {"name": "", "arguments": ""},
-                                    })
-                                if tc.get("id"):
-                                    accumulated_tool_calls[idx]["id"] = tc["id"]
-                                if tc.get("function", {}).get("name"):
-                                    accumulated_tool_calls[idx]["function"]["name"] = tc["function"]["name"]
-                                if tc.get("function", {}).get("arguments"):
-                                    new_args = tc["function"]["arguments"]
-                                    if isinstance(new_args, dict):
-                                        new_args = json.dumps(new_args, ensure_ascii=False)
-                                    elif not isinstance(new_args, str):
-                                        new_args = str(new_args)
-                                    accumulated_tool_calls[idx]["function"]["arguments"] += new_args
-                        result = ChatResult(content=full_content, tool_calls=accumulated_tool_calls, finish_reason="stop", tokens_used=0)
-                    else:
-                        result = await adapter.chat(messages=session.messages, tools=tools or None)
-                except Exception as e:
-                    if session._stop_requested:
-                        yield AgentEvent(type=AgentEventType.ERROR, data={"error": str(e)})
-                        await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
-                        return
-                    yield AgentEvent(type=AgentEventType.ERROR, data={"error": str(e)})
-                    await session.state_machine.transition(TaskState.FAILED, trigger="llm_error")
-                    return
-
-                # Parse XML-style tool calls for non-standard providers (e.g., StepFun)
-                if not result.tool_calls and result.content:
-                    xml_tool_calls = OpenAIAdapter._parse_xml_tool_calls(result.content)
-                    if xml_tool_calls:
-                        result.tool_calls = xml_tool_calls
-                        cleaned = re.sub(r'<function([^>]+)>.*?</\1>', '', result.content, flags=re.DOTALL | re.IGNORECASE).strip()
-                        if not cleaned:
-                            result.content = ""
-
-                if result.content:
-                    session.messages.append({"role": MessageRole.ASSISTANT, "content": result.content})
-                    yield AgentEvent(type=AgentEventType.TEXT, data={"content": result.content})
-
-                if result.tool_calls:
-                    session.messages.append({"role": MessageRole.ASSISTANT, "content": "", "tool_calls": result.tool_calls})
-                    for tc in result.tool_calls:
-                        yield AgentEvent(type=AgentEventType.TOOL_CALL, data={"id": tc.get("id"), "name": tc.get("function", {}).get("name"), "arguments": tc.get("function", {}).get("arguments", {})})
-                    tool_results = await executor.execute_all(result.tool_calls)
-                    for tr in tool_results:
-                        self.tool_prioritizer.record_outcome(
-                            tr.tool_name,
-                            tr.success,
-                            tr.duration_ms,
-                        )
-                        yield AgentEvent(type=AgentEventType.TOOL_RESULT, data={"tool_name": tr.tool_name, "result": tr.result, "error": tr.error})
-
-                        if self.debug_loop and self._should_debug(session, tr):
-                            fixed = await self._attempt_debug(session, tr)
-                            if fixed is not None:
-                                tr = fixed
-
-                        session.messages.append({"role": MessageRole.TOOL, "content": tr.result, "tool_name": tr.tool_name})
-
-                    # Enhanced checkpoint with LangGraph-style channel values
-                    cp = CheckpointData(
-                        session_id=session.session_id,
-                        messages=session.messages,
-                        iteration=iteration,
-                        status=session.state_machine.state.value,
-                        channel_values={
-                            "last_tool_calls": result.tool_calls,
-                            "last_tool_results": [tr.result for tr in tool_results],
-                            "context_tokens": ctx_tokens,
-                        },
-                        channel_versions={"messages": iteration, "tools": len(result.tool_calls)},
-                        versions_seen={"node": {"messages": iteration, "tools": len(result.tool_calls)}},
-                    )
-                    await self._checkpoints.save(None, cp, checkpoint_id=f"{session.session_id}-{iteration}")
-                    yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration, "tool_calls": len(result.tool_calls)})
-                    continue
-
-                # Enhanced final checkpoint
-                cp = CheckpointData(
-                    session_id=session.session_id,
-                    messages=session.messages,
-                    iteration=iteration,
-                    status=session.state_machine.state.value,
-                    channel_values={
-                        "final_content": result.content,
-                        "total_iterations": iteration,
-                        "context_tokens": ctx_tokens,
-                    },
-                    channel_versions={"messages": iteration},
-                    versions_seen={"node": {"messages": iteration}},
-                )
-                await self._checkpoints.save(None, cp, checkpoint_id=f"{session.session_id}-{iteration}")
-                yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration})
-                break
-
-            if iteration >= session.max_iterations and result and result.tool_calls:
-                await session.state_machine.transition(TaskState.FAILED, trigger="max_iterations")
-                yield AgentEvent(type=AgentEventType.DONE, data={"status": "max_iterations_reached", "iterations": iteration})
-                return
-
-            if session._stop_requested:
-                await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
-            else:
-                await session.state_machine.transition(TaskState.COMPLETED, trigger="run_complete")
-                try:
-                    from app.services.notifications import notification_service
-                    asyncio.create_task(notification_service.task_complete(f"Agent {session.agent_id}", result.content[:100] if result and result.content else None))
-                except Exception:
-                    pass
-
+                if event.type == AgentEventType.DONE:
+                    result_content = event.data.get("content", "")
+                    iterations = event.data.get("iterations", 0)
         except Exception as e:
-            if session._stop_requested:
-                await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
-            else:
-                await session.state_machine.transition(TaskState.FAILED, trigger="unhandled_error")
-            yield AgentEvent(type=AgentEventType.ERROR, data={"error": str(e)})
-            try:
-                from app.services.notifications import notification_service
-                asyncio.create_task(notification_service.task_failed(f"Agent {session.agent_id}", str(e)))
-            except Exception:
-                pass
+            logger.error("agent_engine.loop_executor_failed", error=str(e))
+            yield self._frame_to_event(Frame(
+                type=FrameType.ERROR,
+                kind=FrameKind.ERROR,
+                data={"error": str(e)},
+                seq=self._next_seq(),
+            ))
+            await session.state_machine.transition(TaskState.FAILED, trigger="loop_executor_error")
             return
 
-        # Store important interaction in episodic memory
         try:
-            if result and result.content and len(result.content) > 10:
+            if result_content and len(result_content) > 10:
                 await self.memory_service.create_episodic_memory(
                     user_id=session.user_id,
-                    content=f"User: {message}\nAssistant: {result.content[:500]}",
+                    content=f"User: {message}\nAssistant: {result_content[:500]}",
                     agent_id=session.agent_id,
                     source_session_id=session.session_id,
                     importance=0.7,
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("agent_engine.episodic_memory_failed", error=str(e))
 
-        # Trigger memory reflection (fire-and-forget)
         try:
             from app.core.memory_reflection import memory_reflection
             asyncio.create_task(memory_reflection.maybe_reflect(session.user_id))
-        except Exception:
-            pass
-
-        yield AgentEvent(type=AgentEventType.DONE, data={"status": session.status.value, "iterations": iteration, "content": result.content if result else "", "tokens_used": getattr(result, 'tokens_used', 0) if result else 0})
-
-    def _should_debug(self, session: AgentSession, tr: Any) -> bool:
-        """Check if this tool result should trigger the debug loop."""
-        if not tr.error:
-            return False
-        key = tr.tool_name
-        attempts = session.debug_attempts.get(key, 0)
-        return attempts < 3
-
-    async def _attempt_debug(self, session: AgentSession, tr: Any) -> Any | None:
-        """Run the debug loop for a failed tool result."""
-        tool_name = tr.tool_name
-        key = tool_name
-        session.debug_attempts[key] = session.debug_attempts.get(key, 0) + 1
-        original_args = tr.arguments or {}
-
-        async def retry_callback(retry_tool: str, retry_args: dict[str, Any]) -> str:
-            result = await self.tool_registry.execute(retry_tool, retry_args)
-            return str(result)
+        except Exception as e:
+            logger.warning("agent_engine.memory_reflection_failed", error=str(e))
 
         try:
-            result = await self.debug_loop.recover(
-                tool_name=tool_name,
-                arguments=original_args,
-                error_output=tr.error or tr.result,
-                retry_callback=retry_callback,
-            )
-            if result.success and result.output:
-                logger.info("agent_engine.debug_recovered", tool=tool_name, attempt=result.attempt)
-                tr.error = ""
-                tr.result = result.output
-                tr.success = True
-                return tr
+            from app.services.notifications import notification_service
+            asyncio.create_task(notification_service.task_complete(f"Agent {session.agent_id}", result_content[:100] if result_content else None))
         except Exception as e:
-            logger.warning("agent_engine.debug_failed", tool=tool_name, error=str(e))
-        return None
+            logger.warning("agent_engine.notification_complete_failed", error=str(e))
 
-    def _build_tools(self, tool_names: list[str], task_description: str = "") -> list[dict[str, Any]]:
-        if task_description and len(tool_names) > 1:
-            available: list[dict[str, Any]] = []
-            for name in tool_names:
-                defn = self.tool_registry.get_tool(name)
-                if defn:
-                    available.append({
-                        "type": "function",
-                        "function": {
-                            "name": defn.name,
-                            "description": defn.description,
-                            "parameters": defn.parameters,
-                        },
-                    })
-            ranked = self.tool_prioritizer.rank_tools(task_description, available)
-            name_to_defn = {name: self.tool_registry.get_tool(name) for name in tool_names}
-            tool_names = [name for name in ranked if name in name_to_defn]
-        result = []
-        for name in tool_names:
-            defn = self.tool_registry.get_tool(name)
-            if defn:
-                result.append({
-                    "type": "function",
-                    "function": {
-                        "name": defn.name,
-                        "description": defn.description,
-                        "parameters": defn.parameters,
-                    },
-                })
-        return result
+        # 触发后台记忆整合 (参考 Letta Dreaming)
+        asyncio.create_task(self._trigger_dreaming(session.session_id, session.user_id, session.agent_id))
+
+        yield self._frame_to_event(Frame(
+            type=FrameType.SESSION_END,
+            kind=FrameKind.SUCCESS,
+            data={"content": result_content, "iterations": iterations, "status": "completed"},
+            seq=self._next_seq(),
+        ))
+
+    async def _trigger_dreaming(self, session_id: str, user_id: str, agent_id: str) -> None:
+        """触发后台记忆整合"""
+        try:
+            from app.core.dreaming_engine import DreamingEngine, ConsolidationConfig
+            from app.core.memfs import MemFS
+            memfs = MemFS(base_path=f"data/memfs/{user_id}/{agent_id}")
+            config = ConsolidationConfig(message_threshold=3)
+            engine = DreamingEngine(memfs=memfs, config=config)
+            await engine.consolidate(session_id)
+        except Exception as e:
+            logger.debug("agent_engine.dreaming_skipped", error=str(e))
+
+    @staticmethod
+    def _frame_to_event(frame: Frame) -> AgentEvent:
+        """将 Frame 映射为 AgentEvent — 保持向后兼容
+
+        Frame 类型映射到 AgentEventType，
+        并将 Frame.data 展平到 AgentEvent.data 中，
+        使旧代码 event.data["content"] 仍可用。
+        """
+        type_map = {
+            FrameType.MESSAGE_TOKEN: AgentEventType.TEXT,
+            FrameType.THINKING_TOKEN: AgentEventType.THINKING,
+            FrameType.TOOL_CALL: AgentEventType.TOOL_CALL,
+            FrameType.TOOL_RESULT: AgentEventType.TOOL_RESULT,
+            FrameType.PERMISSION_REQ: AgentEventType.TOOL_CALL,
+            FrameType.PERMISSION_RESOLVED: AgentEventType.TOOL_RESULT,
+            FrameType.ERROR: AgentEventType.ERROR,
+            FrameType.SESSION_START: AgentEventType.TEXT,
+            FrameType.SESSION_END: AgentEventType.DONE,
+            FrameType.PLAN_UPDATE: AgentEventType.PROGRESS,
+        }
+        event_type = type_map.get(frame.type, AgentEventType.TEXT)
+        # 展平 Frame.data 并附加 Frame 元数据
+        flat_data = dict(frame.data)
+        flat_data["_frame"] = frame.to_dict()
+        return AgentEvent(
+            type=event_type,
+            data=flat_data,
+        )
+
+    async def _event_to_frames(self, event: AgentEvent, session: AgentSession) -> AsyncIterator[Frame | None]:
+        if event.type == AgentEventType.TEXT:
+            frame = Frame.message_token(content=event.data.get("content", ""), seq=self._next_seq())
+            folded = self._frame_folder.add(frame)
+            if folded is not None:
+                yield folded
+        elif event.type == AgentEventType.THINKING:
+            frame = Frame.thinking_token(content="", seq=self._next_seq())
+            yield frame
+        elif event.type == AgentEventType.TOOL_CALL:
+            tool_name = event.data.get("name", "")
+            tool_id = event.data.get("id", "")
+            arguments = event.data.get("arguments", {})
+
+            decision = self._permission_config.evaluate(tool_name, arguments)
+
+            if decision == RuleDecision.DENY:
+                self._denied_tool_calls.add(tool_name)
+                yield Frame.permission_req(
+                    tool_call_id=tool_id,
+                    action=self._map_tool_to_action(tool_name),
+                    description=f"Permission denied for tool: {tool_name}",
+                    severity="high",
+                    seq=self._next_seq(),
+                )
+                yield Frame.permission_resolved(
+                    tool_call_id=tool_id,
+                    decision="deny",
+                    seq=self._next_seq(),
+                )
+                yield Frame.tool_call(
+                    name=tool_name,
+                    arguments=arguments if isinstance(arguments, dict) else {},
+                    seq=self._next_seq(),
+                )
+                yield Frame.tool_result(
+                    name=tool_name,
+                    error="Permission denied by rule",
+                    seq=self._next_seq(),
+                )
+                return
+
+            if decision == RuleDecision.ASK:
+                req_event = asyncio.Event()
+                self._permission_events[tool_id] = req_event
+
+                yield Frame.permission_req(
+                    tool_call_id=tool_id,
+                    action=self._map_tool_to_action(tool_name),
+                    description=f"Allow tool call: {tool_name}?",
+                    details=self._format_tool_details(tool_name, arguments),
+                    severity=self._permission_config.assess_risk(tool_name, arguments),
+                    seq=self._next_seq(),
+                )
+
+                await req_event.wait()
+
+                decision_result = self._permission_resolutions.pop(tool_id, "deny")
+                self._permission_events.pop(tool_id, None)
+
+                yield Frame.permission_resolved(
+                    tool_call_id=tool_id,
+                    decision=decision_result,
+                    seq=self._next_seq(),
+                )
+
+                if decision_result == "deny":
+                    self._denied_tool_calls.add(tool_name)
+                    yield Frame.tool_call(
+                        name=tool_name,
+                        arguments=arguments if isinstance(arguments, dict) else {},
+                        seq=self._next_seq(),
+                    )
+                    yield Frame.tool_result(
+                        name=tool_name,
+                        error="Permission denied by user",
+                        seq=self._next_seq(),
+                    )
+                    return
+
+            yield Frame.tool_call(
+                name=tool_name,
+                arguments=arguments if isinstance(arguments, dict) else {},
+                seq=self._next_seq(),
+            )
+
+        elif event.type == AgentEventType.TOOL_RESULT:
+            tool_name = event.data.get("tool_name", "")
+            if tool_name in self._denied_tool_calls:
+                self._denied_tool_calls.discard(tool_name)
+                return
+            yield Frame.tool_result(
+                name=tool_name,
+                result=event.data.get("result"),
+                error=event.data.get("error"),
+                seq=self._next_seq(),
+            )
+        elif event.type == AgentEventType.DONE:
+            yield Frame(
+                type=FrameType.MESSAGE_END,
+                kind=FrameKind.SUCCESS,
+                data={"content": event.data.get("content", ""), "iterations": event.data.get("iterations", 0)},
+                seq=self._next_seq(),
+            )
+        elif event.type == AgentEventType.ERROR:
+            yield Frame(
+                type=FrameType.ERROR,
+                kind=FrameKind.ERROR,
+                data={"error": event.data.get("error", "")},
+                seq=self._next_seq(),
+            )
+        elif event.type == AgentEventType.CONTEXT_COMPRESSION:
+            yield Frame(
+                type=FrameType.STATUS,
+                kind=FrameKind.WARN,
+                data={"status": "compressing", "iteration": event.data.get("iteration", 0)},
+                seq=self._next_seq(),
+            )
+        else:
+            yield Frame(
+                type=FrameType.STATUS,
+                kind=FrameKind.INFO,
+                data={"event": event.type.value, **event.data},
+                seq=self._next_seq(),
+            )
+
+    def _map_tool_to_action(self, tool_name: str) -> str:
+        if tool_name in ("bash", "run_command", "native_run", "command"):
+            return "command"
+        if tool_name in ("read_file", "file_read"):
+            return "file_read"
+        if tool_name in ("write_file", "file_write", "edit"):
+            return "file_write"
+        if tool_name in ("file_delete", "delete", "rm"):
+            return "file_delete"
+        if tool_name in ("web_search", "http_request", "fetch", "native_web_search"):
+            return "network"
+        return "mcp_tool"
+
+    def _format_tool_details(self, tool_name: str, arguments: Any) -> str | None:
+        if isinstance(arguments, dict):
+            import json
+            return json.dumps(arguments, ensure_ascii=False, indent=2)
+        return str(arguments) if arguments else None
+
+    def resolve_permission(self, tool_call_id: str, decision: str) -> bool:
+        if tool_call_id in self._permission_events:
+            self._permission_resolutions[tool_call_id] = decision
+            self._permission_events[tool_call_id].set()
+            return True
+        return False
+
+    def get_permission_config(self) -> PermissionConfig:
+        return self._permission_config
+
+    def update_permission_config(self, config: PermissionConfig) -> None:
+        self._permission_config = config
+
+
+def _notify_error(error: str) -> None:
+    try:
+        from app.services.notifications import notification_service
+        asyncio.create_task(notification_service.task_failed("Agent", error))
+    except Exception as e:
+        logger.warning("agent_engine.notification_failed_failed", error=str(e))
