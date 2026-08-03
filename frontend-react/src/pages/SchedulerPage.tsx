@@ -28,7 +28,7 @@ const TYPE_COLORS: Record<string, string> = {
   inspect: 'bg-blue-600/10 text-blue-400',
   audit: 'bg-amber-500/10 text-amber-400',
   backup: 'bg-green-500/10 text-green-400',
-  custom: 'bg-gray-500/10 text-gray-500',
+  custom: 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)]',
 };
 
 export function SchedulerPage() {
@@ -94,8 +94,8 @@ export function SchedulerPage() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-           <span className="text-sm text-gray-500">加载任务中...</span>
+          <div className="w-8 h-8 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+           <span className="text-sm text-[var(--color-text-muted)]">加载任务中...</span>
         </div>
       </div>
     );
@@ -105,9 +105,9 @@ export function SchedulerPage() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <p className="text-sm text-gray-400">{error}</p>
-          <button onClick={fetchTasks} className="mt-3 px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
-             重试
+          <p className="text-sm text-[var(--color-text-secondary)]">{error}</p>
+          <button onClick={fetchTasks} className="mt-3 px-4 py-1.5 bg-[var(--color-accent)] text-white rounded-xl text-sm hover:bg-[var(--color-accent-hover)] transition-colors">
+              重试
           </button>
         </div>
       </div>
@@ -119,32 +119,32 @@ export function SchedulerPage() {
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-semibold text-gray-200">定时任务</h1>
-            <p className="text-xs text-gray-500 mt-0.5">周期性检查和自动化任务</p>
+            <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">定时任务</h1>
+            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">周期性检查和自动化任务</p>
           </div>
           <button
             onClick={() => setShowAdd(!showAdd)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600/10 text-blue-400 rounded-lg hover:bg-blue-600/20 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--color-accent)]/10 text-[var(--color-accent)] border border-[var(--color-accent)]/20 rounded-xl hover:bg-[var(--color-accent)]/20 transition-all duration-200"
           >
              <Plus size={12} /> 添加任务
           </button>
         </div>
 
         {showAdd && (
-          <div className="p-4 bg-gray-800/50 border border-gray-700 rounded-xl space-y-3">
+          <div className="p-4 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl space-y-3">
             <input
               type="text"
                placeholder="任务名称"
               value={newTask.name}
               onChange={(e) => setNewTask({ ...newTask, name: e.target.value })}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-200 placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50"
+              className="w-full px-3 py-2 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
             />
             <input
               type="text"
                placeholder="描述"
               value={newTask.description}
               onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-200 placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50"
+              className="w-full px-3 py-2 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
             />
             <div className="flex gap-3">
               <input
@@ -152,12 +152,12 @@ export function SchedulerPage() {
                  placeholder="Cron 表达式"
                 value={newTask.cron}
                 onChange={(e) => setNewTask({ ...newTask, cron: e.target.value })}
-                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-200 font-mono placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50"
+                className="flex-1 px-3 py-2 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl text-xs text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
               />
               <select
                 value={newTask.type}
                 onChange={(e) => setNewTask({ ...newTask, type: e.target.value })}
-                className="px-3 py-2 bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-200 focus:outline-none focus:border-blue-500/50"
+                className="px-3 py-2 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
               >
                  <option value="custom">自定义</option>
                  <option value="inspect">检查</option>
@@ -166,15 +166,15 @@ export function SchedulerPage() {
               </select>
             </div>
             <div className="flex justify-end gap-2">
-               <button onClick={() => setShowAdd(false)} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-200">取消</button>
-               <button onClick={addTask} className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700">创建</button>
+               <button onClick={() => setShowAdd(false)} className="px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors">取消</button>
+               <button onClick={addTask} className="px-3 py-1.5 text-xs bg-[var(--color-accent)] text-white rounded-xl hover:bg-[var(--color-accent-hover)] transition-all duration-200">创建</button>
             </div>
           </div>
         )}
 
         <div className="space-y-2">
           {tasks.length === 0 && (
-            <div className="p-8 text-center text-gray-500 text-sm">
+            <div className="p-8 text-center text-[var(--color-text-muted)] text-sm">
                暂无定时任务。点击"添加任务"创建一个。
             </div>
           )}
@@ -183,23 +183,23 @@ export function SchedulerPage() {
             return (
               <div
                 key={task.id}
-                className={`p-4 bg-gray-800/50 border rounded-xl transition-all ${
-                  task.enabled ? 'border-gray-700' : 'border-gray-700/50 opacity-60'
+                className={`p-4 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl transition-all duration-200 ${
+                  task.enabled ? '' : 'opacity-60'
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${TYPE_COLORS[task.type] || TYPE_COLORS['custom']}`}>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border border-[var(--color-border-subtle)] ${TYPE_COLORS[task.type] || TYPE_COLORS['custom']}`}>
                     <Icon size={14} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-200">{task.name}</span>
-                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${TYPE_COLORS[task.type] || TYPE_COLORS['custom']}`}>
+                      <span className="text-sm font-medium text-[var(--color-text-primary)]">{task.name}</span>
+                       <span className={`px-1.5 py-0.5 rounded-lg text-[10px] font-medium border border-[var(--color-border-subtle)] ${TYPE_COLORS[task.type] || TYPE_COLORS['custom']}`}>
                         {task.type}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5">{task.description}</p>
-                    <div className="flex items-center gap-4 mt-2 text-[10px] text-gray-500">
+                    <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{task.description}</p>
+                    <div className="flex items-center gap-4 mt-2 text-[10px] text-[var(--color-text-muted)]">
                       <span className="font-mono">{task.cron}</span>
                       <span>上次：{formatTime(task.last_run)}</span>
                       <span>执行次数：{task.run_count}</span>
@@ -208,14 +208,14 @@ export function SchedulerPage() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => toggleTask(task.id)}
-                      className="p-1 text-gray-500 hover:text-blue-400 transition-colors"
+                      className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors"
                       title={task.enabled ? 'Disable' : 'Enable'}
                     >
-                       {task.enabled ? <ToggleRight size={18} className="text-blue-400" /> : <ToggleLeft size={18} />}
+                       {task.enabled ? <ToggleRight size={18} className="text-[var(--color-accent)]" /> : <ToggleLeft size={18} />}
                     </button>
                     <button
                       onClick={() => deleteTask(task.id)}
-                      className="p-1 text-gray-500 hover:text-red-400 transition-colors"
+                      className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-error)] transition-colors"
                     >
                       <Trash2 size={14} />
                     </button>

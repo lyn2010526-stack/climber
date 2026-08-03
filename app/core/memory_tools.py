@@ -13,8 +13,10 @@ Tools:
 
 from __future__ import annotations
 
+import asyncio
 import functools
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import structlog
 
@@ -31,9 +33,6 @@ def _ensure_async(func: Callable) -> Callable:
         return func(*args, **kwargs)
 
     return wrapper
-
-
-import asyncio
 
 
 class MemoryToolRegistry:
@@ -286,7 +285,17 @@ class MemoryToolRegistry:
         if self._memory_service is None:
             return "Error: Core memory service not available"
 
-        block = await self._memory_service.replace_in_block(
+        existing = await self._memory_service.get_block(
+            user_id=user_id,
+            label=block_name,
+            agent_id=agent_id,
+        )
+        if existing is None:
+            return f"Block '{block_name}' not found."
+        if old_text not in (existing.value or ""):
+            return f"Warning: old text not found in block '{block_name}'. No changes made."
+
+        await self._memory_service.replace_in_block(
             user_id=user_id,
             label=block_name,
             old_text=old_text,
@@ -294,18 +303,12 @@ class MemoryToolRegistry:
             agent_id=agent_id,
         )
 
-        if block is None:
-            return f"Block '{block_name}' not found."
-
-        if old_text not in (block.value or ""):
-            logger.info(
-                "tool_core_memory_replace",
-                block=block_name,
-                user_id=user_id,
-            )
-            return f"Replaced text in block '{block_name}'"
-
-        return f"Warning: old text not found in block '{block_name}'. No changes made."
+        logger.info(
+            "tool_core_memory_replace",
+            block=block_name,
+            user_id=user_id,
+        )
+        return f"Replaced text in block '{block_name}'"
 
     async def _tool_read_memory(self, path: str) -> str:
         """Read a memory file from MemFS."""

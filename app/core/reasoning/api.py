@@ -36,7 +36,7 @@ async def reason_with_slash(
     from app.api.v1 import get_engine
 
     engine = get_engine()
-    if not engine.reasoning or not engine.reasoning.is_available():
+    if not hasattr(engine, 'reasoning') or not engine.reasoning or not engine.reasoning.is_available():
         raise HTTPException(status_code=503, detail="Reasoning engine not initialized")
 
     try:
@@ -84,7 +84,7 @@ async def reason_stream(
     from app.api.v1 import get_engine
 
     engine = get_engine()
-    if not engine.reasoning or not engine.reasoning.is_available():
+    if not hasattr(engine, 'reasoning') or not engine.reasoning or not engine.reasoning.is_available():
         raise HTTPException(status_code=503, detail="Reasoning engine not initialized")
 
     async def event_generator():

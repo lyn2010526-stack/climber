@@ -16,7 +16,7 @@ export function AttachmentPreview({ files, onRemove }: AttachmentPreviewProps) {
   if (files.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap gap-2 px-4 py-2 border-t border-gray-700 bg-gray-800/30">
+    <div className="flex flex-wrap gap-2 px-4 py-2 border-t border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)]/30">
       {files.map((item) => (
         <AttachmentThumbnail key={item.id} item={item} onRemove={onRemove} />
       ))}
@@ -44,7 +44,7 @@ function AttachmentThumbnail({
 
   return (
     <div className="relative group">
-      <div className="w-16 h-16 rounded-lg border border-gray-700 bg-gray-700 overflow-hidden flex items-center justify-center">
+      <div className="w-16 h-16 rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-surface-elevated)] overflow-hidden flex items-center justify-center">
         {isImage && objectUrl ? (
           <img
             src={objectUrl}
@@ -52,7 +52,7 @@ function AttachmentThumbnail({
             className="w-full h-full object-cover"
           />
         ) : (
-          <FileText size={24} className="text-gray-500" />
+          <FileText size={24} className="text-[var(--color-text-muted)]" />
         )}
       </div>
       <button
@@ -62,7 +62,7 @@ function AttachmentThumbnail({
       >
         <X size={12} className="text-white" />
       </button>
-      <p className="mt-1 max-w-[64px] text-[10px] text-gray-500 truncate text-center">
+      <p className="mt-1 max-w-[64px] text-[10px] text-[var(--color-text-muted)] truncate text-center">
         {item.file.name}
       </p>
     </div>

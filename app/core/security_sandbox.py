@@ -29,11 +29,6 @@ class ExecutionMode(Enum):
     FULL_AUTO = "full_auto"      # Full local access with permission grants
 
 
-class ExecutionMode(Enum):
-    SANDBOX = "sandbox"          # Isolated window, restricted access
-    FULL_AUTO = "full_auto"      # Full local access with permission grants
-
-
 class AgentMode(Enum):
     PLAN = "plan"                # Read-only preview mode
     ACT = "act"                  # Real execution mode
@@ -241,35 +236,21 @@ class SecuritySandbox:
         return True, "OK"
 
     def validate_command(self, command: str) -> tuple[bool, str]:
-        """Validate a shell command against hazard list."""
+        """Validate a shell command against hazard list and allowlist."""
+        # Check hazard patterns first
         for pattern in HAZARD_COMMANDS:
             if re.search(pattern, command, re.IGNORECASE):
                 return False, f"Command blocked by safety policy: matches hazard pattern '{pattern}'"
+        
+        # Check allowlist
+        parts = command.strip().split()
+        if parts:
+            base = parts[0].lstrip("./")
+            base = os.path.basename(base)
+            if base not in _ALLOWED_COMMANDS:
+                return False, f"Command '{base}' is not in the allowed commands list"
+        
         return True, "OK"
-
-
-# Allowed commands for the allowlist check
-_ALLOWED_COMMANDS = {
-    "ls", "cat", "echo", "pwd", "cd", "mkdir", "cp", "mv", "rm",
-    "touch", "head", "tail", "grep", "find", "wc", "sort", "uniq",
-    "diff", "file", "which", "env", "export", "python3", "python",
-    "pip", "pip3", "node", "npm", "npx", "git", "curl", "wget",
-    "tar", "zip", "unzip", "chmod", "chown", "ln", "tee", "awk",
-    "sed", "xargs", "jq", "yq", "make", "pytest", "go", "rustc",
-    "cargo", "java", "javac", "mvn", "gradle", "docker",
-}
-
-
-def validate_command_allowlist(command: str) -> tuple[bool, str]:
-    """Validate that a command base name is in the allowed commands list."""
-    parts = command.strip().split()
-    if not parts:
-        return False, "Empty command"
-    base = parts[0].lstrip("./")
-    base = os.path.basename(base)
-    if base not in _ALLOWED_COMMANDS:
-        return False, f"Command '{base}' is not in the allowed commands list"
-    return True, "OK"
 
     def sanitize_output(self, output: str) -> str:
         """Truncate oversized output."""
@@ -278,6 +259,60 @@ def validate_command_allowlist(command: str) -> tuple[bool, str]:
             truncated = output.encode('utf-8')[:max_bytes].decode('utf-8', errors='ignore')
             return truncated + f"\n... [Output truncated: exceeded {self.config.max_output_size_kb}KB limit]"
         return output
+
+
+# Allowed commands for the allowlist check
+_ALLOWED_COMMANDS = {
+    "ls", "cat", "echo", "pwd", "cd", "mkdir", "cp", "mv", "rm",
+    "touch", "head", "tail", "grep", "find", "wc", "sort", "uniq",
+    "diff", "file", "which", "env", "export",
+    "pip", "pip3", "npm", "npx", "git", "curl", "wget",
+    "tar", "zip", "unzip", "chmod", "chown", "ln", "tee", "awk",
+    "sed", "xargs", "jq", "yq", "make", "pytest", "go", "rustc",
+    "cargo", "java", "javac", "mvn", "gradle", "docker",
+}
+
+
+def validate_command_allowlist(command: str) -> tuple[bool, str]:
+    """Validate that a command base name is in the allowed commands list.
+    
+    Also checks for dangerous argument patterns (e.g., rm -rf) and
+    invalid shell syntax (unclosed quotes).
+    """
+    parts = command.strip().split()
+    if not parts:
+        return False, "Empty command"
+    
+    # Check for invalid shell syntax (unclosed quotes)
+    single_quotes = command.count("'")
+    double_quotes = command.count('"')
+    if single_quotes % 2 != 0 or double_quotes % 2 != 0:
+        return False, "Invalid shell syntax: unclosed quote"
+    
+    base = parts[0].lstrip("./")
+    base = os.path.basename(base)
+    if base not in _ALLOWED_COMMANDS:
+        return False, f"Command '{base}' is not in the allowed commands list"
+    
+    # Check for dangerous argument patterns
+    dangerous_patterns = {
+        "rm": [
+            r"-[rR][fF]", r"-[fF][rR]",  # -rf, -Fr, -rF, -fR etc.
+            r"-r\s+-?[fF]", r"-[fF]\s+-?r",  # -r -f, -f -r
+            r"--recursive.*--force", r"--force.*--recursive",  # --recursive --force
+            r"--[a-zA-Z]*r[a-zA-Z]*f", r"--[a-zA-Z]*f[a-zA-Z]*r",  # mixed long flags
+        ],
+    }
+    if base in dangerous_patterns:
+        full_args = " ".join(parts[1:])
+        for pattern in dangerous_patterns[base]:
+            if re.search(pattern, full_args):
+                return False, f"Dangerous arguments for '{base}': {full_args}"
+
+    return True, "OK"
+
+
+
 
 
 # ─── Code Execution Sandbox ──────────────────────────────────────────────────

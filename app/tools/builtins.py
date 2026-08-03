@@ -487,7 +487,7 @@ async def stream_command(command: str, timeout: int = 120, workdir: str = "") ->
     try:
         from app.core.di import resolve as di_resolve
         sandbox = di_resolve("SandboxExecutor")
-        return await sandbox.execute(command, timeout=timeout)
+        return await sandbox.execute(command)
     except Exception as e:
         return f"Error executing command: {str(e)}"
 

@@ -2,19 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from app.core.api_key_crypto import encrypt_api_key
 from app.storage import async_session
-def encrypt_api_key(key: str) -> str:
-    return key
 from app.storage.database import ApiKey as ApiKeyModel
 
 router = APIRouter()
-
 
 class ApiKeyCreate(BaseModel):
     provider: str
@@ -82,7 +78,10 @@ async def add_api_key(payload: ApiKeyCreate) -> ApiKeyOut:
 async def delete_api_key(key_id: str) -> dict:
     async with async_session() as session:
         result = await session.execute(
-            select(ApiKeyModel).where(ApiKeyModel.id == key_id)
+            select(ApiKeyModel).where(
+                ApiKeyModel.id == key_id,
+                ApiKeyModel.user_id == "default-user",
+            )
         )
         row = result.scalar_one_or_none()
         if not row:

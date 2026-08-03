@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shlex
 import subprocess
 from typing import Any
 
@@ -24,12 +25,45 @@ from app.tools import tool
 logger = structlog.get_logger()
 
 
-@tool(description="Run any shell command without restrictions. Returns stdout+stderr. Timeout configurable.")
+@tool(description="Run a shell command with system access. Subject to sandbox restrictions.")
 async def native_run(command: str, timeout: int = 120, cwd: str | None = None) -> str:
     """Run a shell command with native system access."""
+    safe, reason = _validate_command_safety(command)
+    if not safe:
+        return f"Command rejected: {reason}"
+
     try:
-        proc = await asyncio.create_subprocess_shell(
-            command,
+        args = shlex.split(command)
+        if not args:
+            return "Error: empty command"
+
+        base = os.path.basename(args[0])
+        allowed_binaries = {
+            "ls", "cat", "echo", "pwd", "mkdir", "cp", "mv", "rm",
+            "touch", "head", "tail", "grep", "find", "wc", "sort", "uniq",
+            "diff", "file", "which", "env", "git", "curl", "wget",
+            "tar", "zip", "unzip", "chmod", "chown", "ln", "tee", "awk",
+            "sed", "xargs", "jq", "make", "pytest",
+        }
+        if base not in allowed_binaries:
+            return f"Command rejected: '{base}' is not in the allowed binaries list"
+
+        # Block dangerous argument patterns for sensitive commands
+        if base == "rm":
+            full_args = " ".join(args[1:])
+            for pattern in [r"-[rR][fF]", r"-[fF][rR]", r"-r\s+-?[fF]", r"-[fF]\s+-?r",
+                            r"--recursive.*--force", r"--force.*--recursive"]:
+                if re.search(pattern, full_args):
+                    return f"Command rejected: dangerous rm flags detected ({full_args})"
+            # Block rm targeting root or system paths (allow /workspace, /tmp)
+            target_paths = [p for p in full_args.split() if not p.startswith('-')]
+            for tp in target_paths:
+                abs_tp = os.path.abspath(tp)
+                if abs_tp == '/' or abs_tp.startswith('/etc') or abs_tp.startswith('/root') or abs_tp.startswith('/home'):
+                    return f"Command rejected: rm targeting system path ({full_args})"
+
+        proc = await asyncio.create_subprocess_exec(
+            *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
@@ -50,6 +84,9 @@ async def native_run(command: str, timeout: int = 120, cwd: str | None = None) -
 @tool(description="Read any file from the system. Returns file content as text.")
 async def native_read_file(path: str) -> str:
     """Read any file from the filesystem."""
+    valid, reason = _validate_file_path(path, writable=False)
+    if not valid:
+        return f"Error: {reason}"
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
@@ -60,7 +97,10 @@ async def native_read_file(path: str) -> str:
 
 @tool(description="Write content to any file path. Creates directories if needed.")
 async def native_write_file(path: str, content: str) -> str:
-    """Write content to any file."""
+    """Write content to file."""
+    valid, reason = _validate_file_path(path, writable=True)
+    if not valid:
+        return f"Error: {reason}"
     try:
         dir_name = os.path.dirname(path)
         if dir_name:
@@ -149,8 +189,9 @@ async def process_video(command: str) -> str:
     try:
         if not command.startswith("ffmpeg"):
             command = f"ffmpeg {command}"
-        proc = await asyncio.create_subprocess_shell(
-            command,
+        args = shlex.split(command)
+        proc = await asyncio.create_subprocess_exec(
+            *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -169,8 +210,9 @@ async def process_image(command: str) -> str:
     try:
         if not command.startswith("convert"):
             command = f"convert {command}"
-        proc = await asyncio.create_subprocess_shell(
-            command,
+        args = shlex.split(command)
+        proc = await asyncio.create_subprocess_exec(
+            *args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -222,3 +264,87 @@ async def download_file(url: str, output_path: str) -> str:
         return f"Downloaded {len(resp.content):,} bytes to {output_path}"
     except Exception as e:
         return f"Error downloading: {str(e)}"
+
+
+# ─── Security validation helpers ──────────────────────────────────────────
+
+import re
+
+# Dangerous shell patterns that indicate command injection
+_DANGEROUS_SHELL_PATTERNS = [
+    r';',           # semicolon chaining
+    r'\|',          # pipe
+    r'\$\(',        # $() command substitution
+    r'`',           # backtick command substitution
+    r'&&',          # logical AND chaining
+    r'\|\|',        # logical OR chaining
+]
+
+
+def _validate_command_safety(command: str) -> tuple[bool, str]:
+    """Check if a shell command contains dangerous patterns.
+    
+    Returns (is_safe, reason) where reason explains the result.
+    """
+    for pattern in _DANGEROUS_SHELL_PATTERNS:
+        if re.search(pattern, command):
+            return False, f"dangerous shell pattern detected: {pattern}"
+    return True, "OK"
+
+
+def _get_workspace_root() -> str:
+    """Get the workspace root directory."""
+    return os.environ.get("CLIMBER_SANDBOX_WORKDIR", "/workspace")
+
+
+def _validate_path_within_workspace(path: str) -> tuple[bool, str]:
+    """Validate that a path is within the workspace directory.
+
+    Returns (is_valid, message) where message explains the result.
+    """
+    workspace_root = _get_workspace_root()
+
+    # Check for traversal attempts
+    if ".." in path:
+        return False, "Path traversal detected"
+
+    # Resolve to absolute path
+    abs_path = os.path.abspath(path)
+    abs_workspace = os.path.abspath(workspace_root)
+
+    # Check if path is within workspace
+    if not abs_path.startswith(abs_workspace):
+        return False, "Path is outside workspace"
+
+    return True, "OK"
+
+
+_BLOCKED_PREFIXES = ("/etc/", "/etc", "/root/", "/root", "/home/", "/home",
+                     "/proc", "/sys", "/dev")
+_ALLOWED_FILE_ROOTS = ("/workspace", "/tmp")
+
+
+def _validate_file_path(path: str, writable: bool = False) -> tuple[bool, str]:
+    """Validate file path is within allowed directories and not in blocked system paths.
+
+    Returns (is_valid, message).
+    """
+    abs_path = os.path.abspath(path)
+
+    for blocked in _BLOCKED_PREFIXES:
+        if abs_path == blocked or abs_path.startswith(blocked + "/") or abs_path.startswith(blocked + os.sep):
+            return False, f"Access denied: path '{abs_path}' is in a blocked system directory"
+
+    allowed = False
+    for root in _ALLOWED_FILE_ROOTS:
+        if abs_path == root or abs_path.startswith(root + "/") or abs_path.startswith(root + os.sep):
+            allowed = True
+            break
+
+    if not allowed:
+        return False, f"Access denied: path '{abs_path}' is outside allowed directories ({', '.join(_ALLOWED_FILE_ROOTS)})"
+
+    if writable and os.path.exists(abs_path) and not os.path.isfile(abs_path):
+        return False, f"Path '{abs_path}' is not a regular file"
+
+    return True, "OK"

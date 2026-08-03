@@ -36,10 +36,10 @@ export function StreamingIndicator({ text, type = 'thinking' }: StreamingIndicat
   const displayText = text || config.defaultText;
 
   return (
-    <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg">
+    <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-lg">
       <WaveformBars />
       <Icon size={12} className="text-blue-400" />
-      <span className="text-xs text-gray-100 font-medium">{displayText}</span>
+      <span className="text-xs text-[var(--color-text-primary)] font-medium">{displayText}</span>
       <style>{`
         @keyframes streamingBar {
           0%, 100% { transform: scaleY(0.4); opacity: 0.5; }

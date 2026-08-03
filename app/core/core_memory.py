@@ -100,10 +100,7 @@ class CoreMemoryService:
             return block
         new_value = (block.value + "\n" + text).strip()[:block.limit]
         block.value = new_value
-        async with async_session() as db:
-            await db.merge(block)
-            await db.commit()
-            await db.refresh(block)
+        await self._update_block(block)
         return block
 
     async def replace_in_block(
@@ -122,10 +119,7 @@ class CoreMemoryService:
         if old_text not in block.value:
             return block
         block.value = block.value.replace(old_text, new_text, 1)[: block.limit]
-        async with async_session() as db:
-            await db.merge(block)
-            await db.commit()
-            await db.refresh(block)
+        await self._update_block(block)
         return block
 
     async def delete_block(self, user_id: str, label: str, agent_id: str | None = None) -> bool:
@@ -141,6 +135,19 @@ class CoreMemoryService:
             result = await db.execute(query)
             await db.commit()
             return result.rowcount > 0
+
+    @staticmethod
+    async def _update_block(block: CoreMemoryBlock) -> None:
+        """Update an existing block using UPDATE instead of merge."""
+        from app.storage import async_session
+        from app.storage.models_memory import CoreMemoryBlock
+        async with async_session() as db:
+            await db.execute(
+                CoreMemoryBlock.__table__.update()
+                .where(CoreMemoryBlock.id == block.id)
+                .values(value=block.value)
+            )
+            await db.commit()
 
     def format_for_prompt(self, blocks: list[CoreMemoryBlock]) -> str:
         """Format blocks as XML tags for system prompt injection."""

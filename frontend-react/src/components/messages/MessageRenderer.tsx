@@ -30,7 +30,7 @@ export function MessageRenderer({ message }: { message: Message }) {
     case 'system':
       return <SystemNotification content={message.content} metadata={message.metadata} timestamp={message.timestamp} />;
     default:
-       return expertMode ? <div className="text-gray-500 text-sm">未知消息类型</div> : null;
+       return expertMode ? <div className="text-[var(--color-text-muted)] text-sm">未知消息类型</div> : null;
   }
 }
 
@@ -54,28 +54,28 @@ function ThinkingBlock({ content, metadata }: { content: any; metadata?: Message
   const isDeepReflection = content?.type === 'deep_reflection';
 
   return (
-    <div className={`max-w-[85%] rounded-xl border ${isDeepReflection ? 'border-blue-500/20 bg-blue-600/5' : 'border-gray-700/50 bg-gray-800'}`}>
+     <div className={`max-w-[85%] rounded-xl border ${isDeepReflection ? 'border-blue-500/20 bg-blue-600/5' : 'border-[var(--color-border-subtle)]/50 bg-[var(--color-bg-surface)]'}`}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-gray-700/50/50 rounded-xl transition-colors"
+         className="w-full flex items-center gap-2 px-4 py-2.5 text-left hover:bg-[var(--color-bg-surface-elevated)]/50/50 rounded-xl transition-colors"
       >
         <div className={`w-1 h-4 rounded-full ${isDeepReflection ? 'bg-blue-600' : 'bg-text-muted'}`} />
         {isDeepReflection ? (
           <Brain size={14} className="text-blue-400" />
         ) : (
-          <Bot size={14} className="text-gray-500" />
+          <Bot size={14} className="text-[var(--color-text-muted)]" />
         )}
-        <span className={`text-xs font-medium ${isDeepReflection ? 'text-blue-400' : 'text-gray-500'}`}>
+        <span className={`text-xs font-medium ${isDeepReflection ? 'text-blue-400' : 'text-[var(--color-text-muted)]'}`}>
           {isDeepReflection ? 'Deep Reflection' : 'Thinking'}
         </span>
         {metadata?.tokens && (
-          <span className="text-xs text-gray-500 ml-auto">{metadata.tokens} tokens</span>
+          <span className="text-xs text-[var(--color-text-muted)] ml-auto">{metadata.tokens} tokens</span>
         )}
-        {expanded ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-500" />}
+        {expanded ? <ChevronDown size={14} className="text-[var(--color-text-muted)]" /> : <ChevronRight size={14} className="text-[var(--color-text-muted)]" />}
       </button>
       {expanded && (
         <div className="px-4 pb-3 pl-10">
-          <p className="text-xs text-gray-400 leading-relaxed whitespace-pre-wrap">
+          <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap">
             {typeof content === 'string' ? content : content?.text || JSON.stringify(content, null, 2)}
           </p>
         </div>
@@ -97,37 +97,43 @@ function ToolCallCard({ content, metadata, expertMode }: { content: any; metadat
     running: { color: 'text-blue-400', dot: 'bg-blue-600 animate-pulse', label: 'Running' },
     success: { color: 'text-green-400', dot: 'bg-green-500', label: 'Success' },
     error: { color: 'text-red-400', dot: 'bg-red-500', label: 'Failed' },
-    cancelled: { color: 'text-gray-500', dot: 'bg-text-muted', label: 'Cancelled' },
+    cancelled: { color: 'text-[var(--color-text-muted)]', dot: 'bg-text-muted', label: 'Cancelled' },
   };
 
   const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.running;
 
-  return (
-    <div className="max-w-[85%] tool-call-card">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="tool-call-header w-full text-left cursor-pointer hover:bg-gray-700/50/50 transition-colors"
-      >
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <span className={`status-dot ${status}`} style={{ width: 6, height: 6 }} />
-          <Terminal size={13} className={config.color} />
-          <span className="text-xs font-medium text-gray-100 truncate">{toolName}</span>
-          {Object.keys(args).length > 0 && (
-            <span className="text-xs text-gray-500 truncate">
-              ({Object.keys(args).join(', ')})
-            </span>
-          )}
+   return (
+     <div className="max-w-[85%] tool-call-card">
+       <button
+         onClick={() => setExpanded(!expanded)}
+         className="tool-call-header w-full text-left cursor-pointer hover:bg-[var(--color-bg-surface-elevated)]/50/50 transition-colors"
+       >
+         <div className="flex items-center gap-2 flex-1 min-w-0">
+           <span className={`status-dot ${status}`} style={{ width: 6, height: 6 }} />
+           <Terminal size={13} className={config.color} />
+           <span className="text-xs font-medium text-[var(--color-text-primary)] truncate">{toolName}</span>
+           {Object.keys(args).length > 0 && (
+             <span className="text-xs text-[var(--color-text-muted)] truncate">
+               ({Object.keys(args).join(', ')})
+             </span>
+           )}
+         </div>
+         <div className="flex items-center gap-2">
+           <span className={`text-xs ${config.color}`}>{config.label}</span>
+           {metadata?.durationMs && (
+             <span className="text-xs text-[var(--color-text-muted)]">{(metadata.durationMs / 1000).toFixed(1)}s</span>
+           )}
         </div>
         <div className="flex items-center gap-2">
           <span className={`text-xs ${config.color}`}>{config.label}</span>
           {metadata?.durationMs && (
-            <span className="text-xs text-gray-500">{(metadata.durationMs / 1000).toFixed(1)}s</span>
+            <span className="text-xs text-[var(--color-text-muted)]">{(metadata.durationMs / 1000).toFixed(1)}s</span>
           )}
           {metadata?.retryCount && metadata.retryCount > 0 && (
             <span className="text-xs text-amber-400">retry:{metadata.retryCount}</span>
           )}
           {status === 'running' && <Loader2 size={12} className="text-blue-400 animate-spin" />}
-          {expanded ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-500" />}
+          {expanded ? <ChevronDown size={14} className="text-[var(--color-text-muted)]" /> : <ChevronRight size={14} className="text-[var(--color-text-muted)]" />}
         </div>
       </button>
 
@@ -143,8 +149,8 @@ function ToolCallCard({ content, metadata, expertMode }: { content: any; metadat
       {expanded && (
         <div className="p-3 space-y-2">
           {Object.entries(args).map(([key, val]) => (
-            <div key={key}>
-              <span className="text-xs text-gray-500 font-medium">{key}:</span>
+              <div key={key}>
+                <span className="text-xs text-[var(--color-text-muted)] font-medium">{key}:</span>
               <pre className="code-block text-xs mt-0.5">{typeof val === 'string' ? val : JSON.stringify(val, null, 2)}</pre>
             </div>
           ))}
@@ -152,7 +158,7 @@ function ToolCallCard({ content, metadata, expertMode }: { content: any; metadat
       )}
 
       {expertMode && metadata?.tokens !== undefined && (
-        <div className="px-4 py-1.5 border-t border-gray-700/50 flex items-center gap-3 text-[10px] text-gray-500">
+            <div className="px-4 py-1.5 border-t border-[var(--color-border-subtle)]/50 flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
           <span className="flex items-center gap-1"><Code2 size={10} /> {metadata.tokens} tokens</span>
         </div>
       )}
@@ -170,25 +176,25 @@ function ToolResultCard({ content, metadata, expertMode }: { content: any; metad
   const status = metadata?.status || 'success';
   void expertMode;
 
-  return (
-    <div className="max-w-[85%] tool-call-card">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="tool-call-header w-full text-left cursor-pointer hover:bg-gray-700/50/50 transition-colors"
-      >
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <CheckCircle2 size={13} className={status === 'error' ? 'text-red-400' : 'text-green-400'} />
-          <span className="text-xs font-medium text-green-400 truncate">{toolName}</span>
-          <span className="text-xs text-gray-500 truncate">
-            {resultStr.slice(0, 80)}{resultStr.length > 80 ? '...' : ''}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          {metadata?.tokens && <span className="text-xs text-gray-500">{metadata.tokens} tok</span>}
-           {isLong && <span className="text-xs text-blue-400">长输出</span>}
-          {expanded ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-500" />}
-        </div>
-      </button>
+   return (
+     <div className="max-w-[85%] tool-call-card">
+       <button
+         onClick={() => setExpanded(!expanded)}
+         className="tool-call-header w-full text-left cursor-pointer hover:bg-[var(--color-bg-surface-elevated)]/50/50 transition-colors"
+       >
+         <div className="flex items-center gap-2 flex-1 min-w-0">
+           <CheckCircle2 size={13} className={status === 'error' ? 'text-red-400' : 'text-green-400'} />
+           <span className="text-xs font-medium text-green-400 truncate">{toolName}</span>
+           <span className="text-xs text-[var(--color-text-muted)] truncate">
+             {resultStr.slice(0, 80)}{resultStr.length > 80 ? '...' : ''}
+           </span>
+         </div>
+         <div className="flex items-center gap-2">
+           {metadata?.tokens && <span className="text-xs text-[var(--color-text-muted)]">{metadata.tokens} tok</span>}
+            {isLong && <span className="text-xs text-blue-400">长输出</span>}
+           {expanded ? <ChevronDown size={14} className="text-[var(--color-text-muted)]" /> : <ChevronRight size={14} className="text-[var(--color-text-muted)]" />}
+         </div>
+       </button>
       {expanded && (
         <div className="p-3">
           <pre className="code-block text-xs max-h-80 overflow-y-auto">{resultStr}</pre>
@@ -219,12 +225,12 @@ function ReflectionCard({ content, metadata }: { content: any; metadata?: Messag
       >
         <Brain size={14} className="text-blue-400" />
         <span className="text-xs font-medium text-blue-400">Self-Reflection</span>
-        {metadata?.tokens && <span className="text-xs text-gray-500 ml-auto">{metadata.tokens} tokens</span>}
-        {expanded ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-500" />}
+         {metadata?.tokens && <span className="text-xs text-[var(--color-text-muted)] ml-auto">{metadata.tokens} tokens</span>}
+         {expanded ? <ChevronDown size={14} className="text-[var(--color-text-muted)]" /> : <ChevronRight size={14} className="text-[var(--color-text-muted)]" />}
       </button>
       {expanded && (
         <div className="px-4 pb-3">
-          <p className="text-xs text-gray-400 leading-relaxed whitespace-pre-wrap">
+          <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap">
             {typeof content === 'string' ? content : content?.text || JSON.stringify(content, null, 2)}
           </p>
         </div>
@@ -244,10 +250,10 @@ function SystemNotification({ content, metadata, timestamp }: { content: any; me
   return (
     <div className={`mx-auto max-w-md px-4 py-2.5 rounded-xl border ${bgColor} flex items-center gap-2`}>
       <Info size={14} className={iconColor} />
-      <span className="text-xs text-gray-400 flex-1">
+       <span className="text-xs text-[var(--color-text-secondary)] flex-1">
         {typeof content === 'string' ? content : JSON.stringify(content)}
       </span>
-      <span className="text-[10px] text-gray-500 flex items-center gap-1">
+       <span className="text-[10px] text-[var(--color-text-muted)] flex items-center gap-1">
         <Clock size={10} />
         {formatTime(timestamp)}
       </span>

@@ -6,7 +6,8 @@ import { useWorkspaceStore } from '../../store/workspace';
 import { useSessions } from '../../stores/useSessions';
 import { api } from '../../api';
 import { UserSwitcher } from './UserSwitcher';
-import { PermissionModes, PermissionMode } from '../agent/PermissionModes';
+import { PermissionModes } from '../agent/PermissionModes';
+import type { PermissionMode } from '../agent/PermissionModes';
 
 export function SessionSidebar() {
   const { activeSessionId, setActiveSession } = useWorkspaceStore();
@@ -67,7 +68,7 @@ export function SessionSidebar() {
         <select
           value={selectedAgent}
           onChange={(e) => setSelectedAgent(e.target.value)}
-          className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-2xl text-xs text-gray-200 focus:outline-none focus:border-[#3B82F6]/50 focus:bg-white/[0.06] transition-all duration-200 hover:border-white/[0.1]"
+          className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-2xl text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/40 focus:bg-white/[0.06] transition-all duration-200 hover:border-white/[0.1]"
         >
           {agents.length === 0 && <option value="">暂无可用智能体</option>}
           {agents.map(a => (
@@ -77,7 +78,7 @@ export function SessionSidebar() {
         <select
           value={selectedModel}
           onChange={(e) => setSelectedModel(e.target.value)}
-          className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-2xl text-xs text-gray-200 focus:outline-none focus:border-[#3B82F6]/50 focus:bg-white/[0.06] transition-all duration-200 hover:border-white/[0.1]"
+          className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-2xl text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/40 focus:bg-white/[0.06] transition-all duration-200 hover:border-white/[0.1]"
         >
           {models.length === 0 && <option value="">暂无可用模型</option>}
           {models.map(m => (
@@ -93,7 +94,7 @@ export function SessionSidebar() {
         {loading && (
           <div className="text-center py-8">
             <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-            <span className="text-[10px] text-gray-500">加载中...</span>
+            <span className="text-[10px] text-[var(--color-text-muted)]">加载中...</span>
           </div>
         )}
         {sessions.map((s, idx) => (
@@ -102,15 +103,15 @@ export function SessionSidebar() {
             className={`group flex items-center gap-2.5 px-3 py-2.5 rounded-2xl cursor-pointer transition-all duration-200 border ${
               activeSessionId === s.id
                 ? 'bg-white/[0.06] text-white shadow-md shadow-black/20 border-white/[0.08]'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.03] border-transparent hover:border-white/[0.04]'
+                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-white/[0.03] border-transparent hover:border-white/[0.04]'
             }`}
             style={{ animationDelay: `${Math.min(idx, 8) * 40}ms` }}
             onClick={() => setActiveSession(s.id)}
           >
-            <MessageSquare size={13} className={`shrink-0 transition-all duration-200 ${activeSessionId === s.id ? 'text-blue-400' : 'text-gray-500 group-hover:text-gray-300'}`} />
+            <MessageSquare size={13} className={`shrink-0 transition-all duration-200 ${activeSessionId === s.id ? 'text-blue-400' : 'text-[var(--color-text-muted)] group-hover:text-[var(--color-text-secondary)]'}`} />
             <div className="flex-1 min-w-0">
               <span className="text-xs truncate block font-medium">{s.title || 'Untitled'}</span>
-              <span className="text-[10px] text-gray-500 font-medium">{s.status || 'idle'}</span>
+              <span className="text-[10px] text-[var(--color-text-muted)] font-medium">{s.status || 'idle'}</span>
             </div>
             <button
               onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
@@ -122,7 +123,7 @@ export function SessionSidebar() {
         ))}
         {!loading && sessions.length === 0 && (
           <div className="text-center py-8">
-            <span className="text-[10px] text-gray-500">暂无会话</span>
+            <span className="text-[10px] text-[var(--color-text-muted)]">暂无会话</span>
           </div>
         )}
       </div>
@@ -132,16 +133,16 @@ export function SessionSidebar() {
         <div className="border-t border-white/[0.04] p-3 space-y-2 max-h-48 overflow-y-auto">
           <div className="flex items-center gap-2 px-1">
             <History size={12} className="text-blue-400" />
-            <span className="text-[11px] font-medium text-gray-400">检查点历史</span>
+            <span className="text-[11px] font-medium text-[var(--color-text-secondary)]">检查点历史</span>
           </div>
-          {sessions.find(s => s.id === activeSessionId)?.messages?.slice(-10).reverse().map((msg, i) => (
-            <div key={i} className="px-2 py-1.5 rounded-lg bg-white/[0.02] border border-white/[0.04] text-[10px] text-gray-400">
-              <span className="text-gray-500">{new Date(msg.timestamp).toLocaleTimeString()}</span>
+          {(sessions.find(s => s.id === activeSessionId) as any)?.messages?.slice(-10).reverse().map((msg: any, i: number) => (
+            <div key={i} className="px-2 py-1.5 rounded-lg bg-white/[0.02] border border-white/[0.04] text-[10px] text-[var(--color-text-secondary)]">
+              <span className="text-[var(--color-text-muted)]">{new Date(msg.timestamp).toLocaleTimeString()}</span>
               <span className="ml-2">{msg.type}</span>
             </div>
           ))}
-          {(!sessions.find(s => s.id === activeSessionId)?.messages?.length) && (
-            <p className="text-[10px] text-gray-500 text-center py-2">暂无检查点</p>
+          {(!(sessions.find(s => s.id === activeSessionId) as any)?.messages?.length) && (
+            <p className="text-[10px] text-[var(--color-text-muted)] text-center py-2">暂无检查点</p>
           )}
         </div>
       )}
@@ -154,14 +155,14 @@ export function SessionSidebar() {
             className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors ${
               showCheckpoints
                 ? 'bg-blue-500/10 text-blue-400'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.04]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-white/[0.04]'
             }`}
           >
             <History size={10} />
             检查点历史
           </button>
         </div>
-        <div className="flex items-center gap-2 px-2 py-1.5 text-[10px] text-gray-500 font-medium">
+        <div className="flex items-center gap-2 px-2 py-1.5 text-[10px] text-[var(--color-text-muted)] font-medium">
           <Sparkles size={10} className="text-blue-400" />
           <span>{sessions.length} 个活跃会话</span>
         </div>

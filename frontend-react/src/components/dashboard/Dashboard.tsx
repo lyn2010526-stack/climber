@@ -52,15 +52,15 @@ export const StatCard: React.FC<StatCardProps> = ({
   const trendColors = {
     up: 'text-emerald-400 bg-emerald-500/10',
     down: 'text-rose-400 bg-rose-500/10',
-    neutral: 'text-gray-400 bg-white/5',
+    neutral: 'text-[var(--color-text-secondary)] bg-white/5',
   };
 
   return (
     <Card variant={variant} padding="md" className={cn(statCardVariants({ variant }), className)}>
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">{title}</span>
+        <span className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wider">{title}</span>
         {icon && (
-          <div className="p-2 rounded-xl bg-white/5 text-gray-400">
+          <div className="p-2 rounded-xl bg-white/5 text-[var(--color-text-secondary)]">
             {icon}
           </div>
         )}
@@ -74,7 +74,7 @@ export const StatCard: React.FC<StatCardProps> = ({
           </span>
         )}
       </div>
-      {description && <p className="text-xs text-gray-500 mt-1">{description}</p>}
+      {description && <p className="text-xs text-[var(--color-text-muted)] mt-1">{description}</p>}
     </Card>
   );
 };

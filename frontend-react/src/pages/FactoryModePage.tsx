@@ -27,12 +27,12 @@ export function FactoryModePage() {
   const abortRef = useRef(false);
 
   const skills = [
-    { id: 'code_executor', name: 'Code Executor', icon: '⚙️' },
-    { id: 'web_search', name: 'Web Search', icon: '🔍' },
-    { id: 'file_manager', name: 'File Manager', icon: '📁' },
-    { id: 'data_analyzer', name: 'Data Analyzer', icon: '📊' },
-    { id: 'task_planner', name: 'Task Planner', icon: '📋' },
-    { id: 'code_reviewer', name: 'Code Reviewer', icon: '🛡️' },
+    { id: 'code_executor', name: 'Code Executor', icon: '\u2699\ufe0f' },
+    { id: 'web_search', name: 'Web Search', icon: '\ud83d\udd0d' },
+    { id: 'file_manager', name: 'File Manager', icon: '\ud83d\udcc1' },
+    { id: 'data_analyzer', name: 'Data Analyzer', icon: '\ud83d\udcca' },
+    { id: 'task_planner', name: 'Task Planner', icon: '\ud83d\udccb' },
+    { id: 'code_reviewer', name: 'Code Reviewer', icon: '\ud83d\udee1\ufe0f' },
   ];
 
   const prompts = [
@@ -142,11 +142,11 @@ export function FactoryModePage() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'completed': return <CheckCircle size={16} className="text-green-400" />;
-      case 'failed': return <AlertCircle size={16} className="text-red-400" />;
-      case 'running': return <Loader2 size={16} className="text-blue-400 animate-spin" />;
+      case 'completed': return <CheckCircle size={16} className="text-[var(--color-success)]" />;
+      case 'failed': return <AlertCircle size={16} className="text-[var(--color-error)]" />;
+      case 'running': return <Loader2 size={16} className="text-[var(--color-accent)] animate-spin" />;
       case 'retrying': return <Loader2 size={16} className="text-amber-400 animate-spin" />;
-      default: return <div className="w-4 h-4 rounded-full border border-gray-700" />;
+      default: return <div className="w-4 h-4 rounded-full border border-[var(--color-border-subtle)]" />;
     }
   };
 
@@ -154,31 +154,29 @@ export function FactoryModePage() {
     <div className="h-full overflow-y-auto p-8">
       <div className="max-w-5xl mx-auto">
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-blue-500/10 flex items-center justify-center">
-              <Brain size={20} className="text-blue-400" />
+          <h2 className="text-2xl font-bold text-[var(--color-text-primary)] flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-[var(--color-accent)]/10 flex items-center justify-center border border-[var(--color-accent)]/20">
+              <Brain size={20} className="text-[var(--color-accent)]" />
             </div>
             自主执行模式
           </h2>
-          <p className="text-gray-400 text-sm mt-2">
+          <p className="text-[var(--color-text-secondary)] text-sm mt-2">
             自主执行：规划、分解、执行、自愈、综合结果
           </p>
         </div>
 
-        {/* Goal input */}
-        <div className="bg-white/[0.04] border border-white/[0.08] rounded-3xl p-6 mb-6 backdrop-blur-sm">
-          <label className="block text-sm font-medium text-gray-400 mb-2">目标</label>
+        <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-3xl p-6 mb-6">
+          <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">目标</label>
           <textarea
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
               placeholder="描述你想要智能体完成的目标..."
             rows={3}
-            className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-sm text-gray-100 placeholder:text-gray-600 focus:outline-none focus:border-[#007AFF]/50 resize-none transition-all duration-200"
+            className="w-full bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl px-5 py-3 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 resize-none transition-all duration-200"
           />
 
-          {/* Skills selection */}
           <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-400 mb-2">技能</label>
+            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">技能</label>
             <div className="flex flex-wrap gap-2">
               {skills.map(s => (
                 <button
@@ -186,8 +184,8 @@ export function FactoryModePage() {
                   onClick={() => toggleSkill(s.id)}
                   className={`px-4 py-2 rounded-2xl text-sm font-medium border transition-all duration-200 ${
                     selectedSkills.includes(s.id)
-                      ? 'bg-[#007AFF]/20 border-[#007AFF]/30 text-white shadow-lg shadow-blue-500/10'
-                      : 'bg-white/5 border-white/10 text-gray-400 hover:border-[#007AFF]/30'
+                      ? 'bg-[var(--color-accent)]/15 border-[var(--color-accent)]/30 text-[var(--color-text-primary)]'
+                      : 'bg-white/[0.03] border-[var(--color-border-subtle)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/30'
                   }`}
                 >
                   {s.icon} {s.name}
@@ -196,32 +194,30 @@ export function FactoryModePage() {
             </div>
           </div>
 
-          {/* Prompt template */}
           <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-400 mb-2">专家角色</label>
+            <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">专家角色</label>
             <select
               value={selectedPrompt}
               onChange={(e) => setSelectedPrompt(e.target.value)}
-              className="px-4 py-2.5 bg-white/5 border border-white/10 rounded-2xl text-sm text-gray-200 focus:outline-none focus:border-[#007AFF]/50 transition-all duration-200"
+              className="px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
             >
               {prompts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
 
-          {/* Start/Stop */}
           <div className="mt-6 flex gap-3">
             {!isRunning ? (
               <button
                 onClick={startExecution}
                 disabled={!goal.trim()}
-                className="flex items-center gap-2 px-6 py-2.5 bg-[#007AFF] hover:bg-[#007AFF]/90 text-white rounded-2xl text-sm font-semibold disabled:opacity-40 transition-all duration-200 active:scale-[0.97] shadow-lg shadow-blue-500/20"
+                className="flex items-center gap-2 px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold disabled:opacity-40 transition-all duration-200 active:scale-[0.97]"
               >
                  <Play size={16} /> 开始执行
               </button>
             ) : (
               <button
                 onClick={stopExecution}
-                className="flex items-center gap-2 px-6 py-2.5 bg-red-500/90 hover:bg-red-500 text-white rounded-2xl text-sm font-semibold transition-all duration-200 active:scale-[0.97] shadow-lg shadow-red-500/20"
+                className="flex items-center gap-2 px-6 py-2.5 bg-[var(--color-error)] hover:bg-red-600 text-white rounded-2xl text-sm font-semibold transition-all duration-200 active:scale-[0.97]"
               >
                  <Square size={16} /> 停止
               </button>
@@ -229,45 +225,43 @@ export function FactoryModePage() {
           </div>
         </div>
 
-        {/* Plan */}
         {plan.length > 0 && (
-          <div className="bg-white/[0.04] border border-white/[0.08] rounded-3xl p-6 mb-6 backdrop-blur-sm">
-             <h3 className="font-semibold text-gray-200 mb-4 flex items-center gap-2">
-               <Wrench size={16} className="text-blue-400" /> 执行计划
+          <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-3xl p-6 mb-6">
+             <h3 className="font-semibold text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
+               <Wrench size={16} className="text-[var(--color-accent)]" /> 执行计划
              </h3>
             <div className="space-y-2.5">
               {plan.map(step => (
                 <div key={step.step} className="flex items-center gap-3 text-sm">
-                  <span className="w-6 h-6 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center text-xs font-bold">
+                  <span className="w-6 h-6 rounded-full bg-[var(--color-accent)]/10 text-[var(--color-accent)] flex items-center justify-center text-xs font-bold">
                     {step.step}
                   </span>
-                  <span className={step.status === 'done' ? 'text-gray-500 line-through' : 'text-gray-200'}>
+                  <span className={step.status === 'done' ? 'text-[var(--color-text-muted)] line-through' : 'text-[var(--color-text-primary)]'}>
                     {step.action}
                   </span>
                   {step.tool && (
-                    <span className="px-2.5 py-0.5 bg-white/5 text-gray-500 rounded-xl text-xs font-medium border border-white/10">{step.tool}</span>
+                    <span className="px-2.5 py-0.5 bg-white/[0.03] text-[var(--color-text-muted)] rounded-xl text-xs font-medium border border-[var(--color-border-subtle)]">{step.tool}</span>
                   )}
-                  {step.status === 'running' && <Loader2 size={14} className="text-blue-400 animate-spin" />}
-                  {step.status === 'done' && <CheckCircle size={14} className="text-green-400" />}
-                  {step.status === 'error' && <AlertCircle size={14} className="text-red-400" />}
+                  {step.status === 'running' && <Loader2 size={14} className="text-[var(--color-accent)] animate-spin" />}
+                  {step.status === 'done' && <CheckCircle size={14} className="text-[var(--color-success)]" />}
+                  {step.status === 'error' && <AlertCircle size={14} className="text-[var(--color-error)]" />}
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Tasks */}
         {tasks.length > 0 && (
-          <div className="bg-white/[0.04] border border-white/[0.08] rounded-3xl p-6 mb-6 backdrop-blur-sm">
-             <h3 className="font-semibold text-gray-200 mb-4">子任务执行</h3>
+          <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-3xl p-6 mb-6">
+             <h3 className="font-semibold text-[var(--color-text-primary)] mb-4">子任务执行</h3>
             <div className="space-y-3">
               {tasks.map(task => (
-                <div key={task.id} className="flex items-start gap-3 p-4 bg-white/5 rounded-2xl border border-white/10">
+                <div key={task.id} className="flex items-start gap-3 p-4 bg-white/[0.03] rounded-2xl border border-[var(--color-border-subtle)]">
                   {getStatusIcon(task.status)}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-200">{task.description}</p>
+                    <p className="text-sm text-[var(--color-text-primary)]">{task.description}</p>
                     {task.result && (
-                      <p className="text-xs text-gray-500 mt-1 line-clamp-2">{task.result}</p>
+                      <p className="text-xs text-[var(--color-text-muted)] mt-1 line-clamp-2">{task.result}</p>
                     )}
                     {task.retries !== undefined && task.retries > 0 && (
                       <p className="text-xs text-amber-400 mt-1">重试 #{task.retries}</p>
@@ -279,13 +273,12 @@ export function FactoryModePage() {
           </div>
         )}
 
-        {/* Final Report */}
         {finalReport && (
-          <div className="bg-white/[0.04] border border-[#007AFF]/30 rounded-3xl p-6 backdrop-blur-sm">
-             <h3 className="font-semibold text-gray-200 mb-4 flex items-center gap-2">
-               <CheckCircle size={16} className="text-green-400" /> 最终报告
+          <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-accent)]/30 rounded-3xl p-6">
+             <h3 className="font-semibold text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
+               <CheckCircle size={16} className="text-[var(--color-success)]" /> 最终报告
              </h3>
-            <div className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+            <div className="text-sm text-[var(--color-text-secondary)] whitespace-pre-wrap leading-relaxed">
               {finalReport}
             </div>
           </div>

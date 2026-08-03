@@ -97,12 +97,9 @@ class TestAppendBlockSingleSession:
         import inspect
         from app.core.core_memory import CoreMemoryService
         source = inspect.getsource(CoreMemoryService.append_block)
-        # Count occurrences of async_session() - should be exactly 1
-        assert source.count("async_session()") == 1
-
-    def test_append_block_no_merge_call(self):
-        """append_block should not use db.merge (which requires a second session)."""
-        import inspect
-        from app.core.core_memory import CoreMemoryService
-        source = inspect.getsource(CoreMemoryService.append_block)
+        # Count occurrences of async_session() - should be 0 (moved to _update_block)
+        assert source.count("async_session()") == 0
+        # Should NOT contain db.merge
         assert "db.merge" not in source
+        # Should use _update_block helper
+        assert "_update_block" in source

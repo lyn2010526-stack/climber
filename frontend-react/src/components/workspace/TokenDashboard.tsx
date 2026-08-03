@@ -29,8 +29,8 @@ export function TokenDashboard({
     <div className="space-y-3">
       {!hasData && (
         <div className="text-center py-4">
-          <p className="text-xs text-gray-500">暂无 Token 使用数据</p>
-          <p className="text-[10px] text-gray-600 mt-1">Start a session to see usage metrics</p>
+          <p className="text-xs text-[var(--color-text-muted)]">暂无 Token 使用数据</p>
+          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">Start a session to see usage metrics</p>
         </div>
       )}
 
@@ -102,14 +102,14 @@ function TokenGauge({
     <div className="space-y-1">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <Icon size={11} className="text-gray-500" />
-          <span className="text-[10px] text-gray-400">{label}</span>
+          <Icon size={11} className="text-[var(--color-text-muted)]" />
+          <span className="text-[10px] text-[var(--color-text-secondary)]">{label}</span>
         </div>
-        <span className="text-[10px] text-gray-500">
+        <span className="text-[10px] text-[var(--color-text-muted)]">
           {hasValue ? `${(used / 1000).toFixed(1)}k / ${(limit / 1000).toFixed(0)}k` : '—'}
         </span>
       </div>
-      <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+      <div className="w-full h-1.5 bg-[var(--color-bg-surface-elevated)] rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all ${barColor}`}
           style={{ width: `${Math.min(percentage, 100)}%` }}

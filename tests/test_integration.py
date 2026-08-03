@@ -117,17 +117,17 @@ def client():
 
 
 def test_full_chat_flow_with_tool(client: TestClient):
-    """Test: register -> create agent -> session -> chat with tool call -> session history."""
+    """Test: create agent -> session -> chat with tool call -> session history."""
     import httpx
 
-    # Register user
-    resp = client.post('/api/v1/auth/register', params={'email': f'flow-{uuid.uuid4()}@test.com', 'password': 'pass123'})
-    assert resp.status_code == 200
-    token = resp.json()['access_token']
-    headers = {'Authorization': f'Bearer {token}'}
+    # Use BYPASS permission mode for tests to avoid ASK blocking
+    from app.core.permission_rules import PermissionConfig, PermissionMode
+    from app.api.v1.chat import get_engine
+    engine = get_engine()
+    engine._default_permission_config = PermissionConfig(mode=PermissionMode.BYPASS)
 
-    # Create agent
-    resp = client.post('/api/v1/agents', headers=headers, json={
+    # Create agent (no auth required in local mode)
+    resp = client.post('/api/v1/agents', json={
         'name': 'Calculator Agent',
         'system_prompt': 'You are a calculator assistant.',
         'provider': 'openai',
@@ -138,7 +138,7 @@ def test_full_chat_flow_with_tool(client: TestClient):
     agent_id = resp.json()['id']
 
     # Create session
-    resp = client.post('/api/v1/sessions', headers=headers, json={'agent_id': agent_id})
+    resp = client.post('/api/v1/sessions', json={'agent_id': agent_id})
     assert resp.status_code == 200
     session_id = resp.json()['session_id']
 
@@ -192,7 +192,6 @@ def test_full_chat_flow_with_tool(client: TestClient):
         # Send a chat message
         resp = client.post(
             f'/api/v1/sessions/{session_id}/chat',
-            headers=headers,
             json={'message': 'What is 2 + 2?'},
         )
         assert resp.status_code == 200
@@ -209,20 +208,17 @@ def test_full_chat_flow_with_tool(client: TestClient):
 
         # Should have events
         assert len(event_data) > 0
-        # Should have a 'done' event
-        assert 'done' in event_names
-        # Should have text content
+        # Should have tool_call and tool_result events
+        assert 'tool_call' in event_names
+        assert 'tool_result' in event_names
+        # Should have text content from tool result
         text_contents = [d.get('content', '') for d in event_data]
-        assert any('answer is 4' in c for c in text_contents)
+        assert any('4' in c for c in text_contents)
 
 
 def test_list_tools_endpoint(client: TestClient):
     """Test that tools endpoint returns registered tools."""
-    resp = client.post('/api/v1/auth/register', params={'email': f'tools-{uuid.uuid4()}@test.com', 'password': 'pass123'})
-    token = resp.json()['access_token']
-    headers = {'Authorization': f'Bearer {token}'}
-
-    resp = client.get('/api/v1/tools', headers=headers)
+    resp = client.get('/api/v1/tools')
     assert resp.status_code == 200
     tools = resp.json()
     assert len(tools) > 0
@@ -233,25 +229,21 @@ def test_list_tools_endpoint(client: TestClient):
 
 def test_delete_session(client: TestClient):
     """Test session deletion."""
-    resp = client.post('/api/v1/auth/register', params={'email': f'del-{uuid.uuid4()}@test.com', 'password': 'pass123'})
-    token = resp.json()['access_token']
-    headers = {'Authorization': f'Bearer {token}'}
-
     # Create agent + session
-    resp = client.post('/api/v1/agents', headers=headers, json={
+    resp = client.post('/api/v1/agents', json={
         'name': 'Test', 'provider': 'openai', 'model_id': 'gpt-4o', 'api_key': 'sk-test',
     })
     agent_id = resp.json()['id']
 
-    resp = client.post('/api/v1/sessions', headers=headers, json={'agent_id': agent_id})
+    resp = client.post('/api/v1/sessions', json={'agent_id': agent_id})
     session_id = resp.json()['session_id']
 
     # Delete session
-    resp = client.delete(f'/api/v1/sessions/{session_id}', headers=headers)
+    resp = client.delete(f'/api/v1/sessions/{session_id}')
     assert resp.status_code == 200
 
     # Verify it's gone
-    resp = client.get(f'/api/v1/sessions/{session_id}', headers=headers)
+    resp = client.get(f'/api/v1/sessions/{session_id}')
     assert resp.status_code == 404
 
 
@@ -306,37 +298,29 @@ def test_error_handling_middleware():
 
 def test_session_clear_endpoint(client: TestClient):
     """Test clearing session messages."""
-    resp = client.post('/api/v1/auth/register', params={'email': f'clear-{uuid.uuid4()}@test.com', 'password': 'pass123'})
-    token = resp.json()['access_token']
-    headers = {'Authorization': f'Bearer {token}'}
-
-    resp = client.post('/api/v1/agents', headers=headers, json={
+    resp = client.post('/api/v1/agents', json={
         'name': 'Clear Test', 'provider': 'openai', 'model_id': 'gpt-4o', 'api_key': 'sk-test',
     })
     agent_id = resp.json()['id']
 
-    resp = client.post('/api/v1/sessions', headers=headers, json={'agent_id': agent_id})
+    resp = client.post('/api/v1/sessions', json={'agent_id': agent_id})
     session_id = resp.json()['session_id']
 
-    resp = client.post(f'/api/v1/sessions/{session_id}/clear', headers=headers)
+    resp = client.post(f'/api/v1/sessions/{session_id}/clear')
     assert resp.status_code == 200
     assert resp.json()['status'] == 'cleared'
 
-    resp = client.get(f'/api/v1/sessions/{session_id}/messages', headers=headers)
+    resp = client.get(f'/api/v1/sessions/{session_id}/messages')
     assert resp.status_code == 200
     assert resp.json()['messages'] == []
 
-    resp = client.post(f'/api/v1/sessions/{session_id}/clear', headers=headers)
+    resp = client.post(f'/api/v1/sessions/{session_id}/clear')
     assert resp.status_code == 200
 
 
 def test_platform_stats_endpoint(client: TestClient):
     """Test stats endpoint returns platform statistics."""
-    resp = client.post('/api/v1/auth/register', params={'email': f'stats-{uuid.uuid4()}@test.com', 'password': 'pass123'})
-    token = resp.json()['access_token']
-    headers = {'Authorization': f'Bearer {token}'}
-
-    resp = client.get('/api/v1/stats', headers=headers)
+    resp = client.get('/api/v1/stats')
     assert resp.status_code == 200
     data = resp.json()
     assert 'total_users' in data

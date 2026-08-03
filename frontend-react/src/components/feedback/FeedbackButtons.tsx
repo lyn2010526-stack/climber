@@ -58,7 +58,7 @@ export function FeedbackButtons({ messageId, initialRating = null }: FeedbackBut
         className={`p-1.5 rounded-md transition-colors ${
           rating === 'up'
             ? 'bg-green-500/20 text-green-400'
-            : 'text-gray-500 hover:text-gray-400 hover:bg-gray-700/50'
+            : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-elevated)]/50'
         }`}
          title="有用"
       >
@@ -69,7 +69,7 @@ export function FeedbackButtons({ messageId, initialRating = null }: FeedbackBut
         className={`p-1.5 rounded-md transition-colors ${
           rating === 'down'
             ? 'bg-red-500/20 text-red-400'
-            : 'text-gray-500 hover:text-gray-400 hover:bg-gray-700/50'
+            : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-elevated)]/50'
         }`}
          title="没用"
       >
@@ -81,12 +81,12 @@ export function FeedbackButtons({ messageId, initialRating = null }: FeedbackBut
       )}
 
       {showReasons && (
-        <div className="absolute bottom-full left-0 mb-2 z-50 bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-2 min-w-[160px]">
-          <div className="flex items-center justify-between px-2 pb-1.5 mb-1.5 border-b border-gray-700/50">
-             <span className="text-xs text-gray-400 font-medium">为什么没用？</span>
+         <div className="absolute bottom-full left-0 mb-2 z-50 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-lg shadow-xl p-2 min-w-[160px]">
+          <div className="flex items-center justify-between px-2 pb-1.5 mb-1.5 border-b border-[var(--color-border-subtle)]/50">
+             <span className="text-xs text-[var(--color-text-secondary)] font-medium">为什么没用？</span>
             <button
               onClick={() => setShowReasons(false)}
-              className="p-0.5 text-gray-500 hover:text-gray-400 rounded transition-colors"
+               className="p-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] rounded transition-colors"
             >
               <X size={12} />
             </button>
@@ -95,7 +95,7 @@ export function FeedbackButtons({ messageId, initialRating = null }: FeedbackBut
             <button
               key={r.value}
               onClick={() => handleReasonSelect(r.value)}
-              className="w-full text-left px-2 py-1.5 text-xs text-gray-400 hover:text-gray-100 hover:bg-gray-700/50 rounded transition-colors"
+               className="w-full text-left px-2 py-1.5 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-elevated)]/50 rounded transition-colors"
             >
               {r.label}
             </button>

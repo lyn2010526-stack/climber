@@ -34,7 +34,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
     setError(null);
     try {
       const data = await api.search(q, 20);
-        setResults(data.results || []);
+        setResults(Array.isArray(data) ? data : (data as any).results || []);
     } catch {
       setError('网络错误');
       setResults([]);
@@ -82,27 +82,27 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
       case 'document': return 'text-[#007AFF]';
       case 'memory': return 'text-[#AF52DE]';
       case 'group': return 'text-[#34C759]';
-      default: return 'text-gray-500';
+      default: return 'text-[var(--color-text-muted)]';
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]" onClick={onClose} role="dialog" aria-modal="true" aria-label="全局搜索">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
         className="relative w-full max-w-2xl bg-[#131A2A]/95 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
-          <Search size={20} className="text-gray-500 shrink-0" />
+          <Search size={20} className="text-[var(--color-text-muted)] shrink-0" />
           <input
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="搜索文档、记忆、群组..."
-            className="flex-1 bg-transparent text-sm text-gray-100 placeholder:text-gray-600 focus:outline-none"
+            className="flex-1 bg-transparent text-sm text-[var(--color-text-secondary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
             autoFocus
           />
           <div className="flex gap-1">
@@ -113,21 +113,21 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                 className={`px-2.5 py-1 rounded-xl text-[10px] font-semibold transition-all duration-200 ${
                   filter === f
                     ? 'bg-[#007AFF]/20 text-white border border-[#007AFF]/30'
-                    : 'text-gray-500 hover:text-gray-300 border border-transparent'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] border border-transparent'
                 }`}
               >
                  {f ? (f === 'document' ? '文档' : f === 'memory' ? '记忆' : f === 'group' ? '群组' : f) : '全部'}
               </button>
             ))}
           </div>
-          <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-gray-300 rounded-xl hover:bg-white/5 transition-all duration-200">
+          <button onClick={onClose} aria-label="关闭全局搜索" className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] rounded-xl hover:bg-white/5 transition-all duration-200">
             <X size={16} />
           </button>
         </div>
 
         <div className="max-h-96 overflow-y-auto">
           {loading && (
-            <div className="px-4 py-8 text-center text-gray-500 text-sm">
+            <div className="px-4 py-8 text-center text-[var(--color-text-muted)] text-sm">
               <div className="w-5 h-5 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                正在搜索...
             </div>
@@ -136,8 +136,8 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
             <div className="px-4 py-8 text-center text-red-400 text-sm">{error}</div>
           )}
           {!loading && !error && filtered.length === 0 && query && (
-            <div className="px-4 py-8 text-center text-gray-500 text-sm">
-               未找到 "{query}" 的结果
+            <div className="px-4 py-8 text-center text-[var(--color-text-muted)] text-sm">
+                未找到 "{query}" 的结果
             </div>
           )}
           {!loading && !error && filtered.map(result => {
@@ -152,10 +152,10 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-100 truncate font-medium">{result.title}</span>
-                    <span className="text-[10px] text-gray-500 capitalize font-medium">{result.type}</span>
+                    <span className="text-sm text-[var(--color-text-secondary)] truncate font-medium">{result.title}</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] capitalize font-medium">{result.type}</span>
                   </div>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">{result.preview}</p>
+                  <p className="text-xs text-[var(--color-text-muted)] truncate mt-0.5">{result.preview}</p>
                 </div>
               </button>
             );

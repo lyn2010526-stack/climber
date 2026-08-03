@@ -42,7 +42,7 @@ const STATUS_COLORS: Record<string, { bg: string; border: string; text: string }
 };
 
 function TaskNode({ data }: { data: TaskNodeData }) {
-  const colors = STATUS_COLORS[data.status] || STATUS_COLORS.pending;
+  const colors = STATUS_COLORS[data.status] ?? STATUS_COLORS['pending']!;
 
   return (
     <div
@@ -63,7 +63,7 @@ function TaskNode({ data }: { data: TaskNodeData }) {
         </span>
       </div>
       {data.status === 'completed' && data.result && (
-        <div className="mt-1 text-[10px] text-gray-400 truncate" title={data.result as string}>
+        <div className="mt-1 text-[10px] text-[var(--color-text-muted)] truncate" title={data.result as string}>
           {data.result}
         </div>
       )}
@@ -73,7 +73,7 @@ function TaskNode({ data }: { data: TaskNodeData }) {
         </div>
       )}
       {data.dependencies.length > 0 && (
-        <div className="mt-1 text-[10px] text-gray-500 flex items-center gap-1">
+        <div className="mt-1 text-[10px] text-[var(--color-text-muted)] flex items-center gap-1">
           <GitBranch size={10} />
           {data.dependencies.length} 依赖
         </div>
@@ -92,7 +92,7 @@ function StatusIcon({ status }: { status: string }) {
     case 'cancelled':
       return <XCircle size={14} className="text-red-400 shrink-0" />;
     default:
-      return <Clock size={14} className="text-gray-500 shrink-0" />;
+      return <Clock size={14} className="text-[var(--color-text-muted)] shrink-0" />;
   }
 }
 
@@ -138,9 +138,9 @@ export function TaskDAGVisualizer() {
           label: task.title,
           status: task.status,
           dependencies: task.dependencies,
-          result: task.result,
-          error: task.error,
-        },
+          ...(task.result ? { result: task.result } : {}),
+          ...(task.error ? { error: task.error } : {}),
+        } as any,
         sourcePosition: Position.Bottom,
         targetPosition: Position.Top,
       };
@@ -174,7 +174,7 @@ export function TaskDAGVisualizer() {
 
   if (tasks.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-gray-500">
+      <div className="flex flex-col items-center justify-center h-full text-[var(--color-text-muted)]">
         <GitBranch size={32} className="mb-2 opacity-30" />
         <p className="text-xs">暂无任务依赖图</p>
         <p className="text-[10px] mt-1">创建带有依赖的任务后将在此显示 DAG 图</p>
@@ -194,9 +194,9 @@ export function TaskDAGVisualizer() {
         maxZoom={2}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#374151" />
-        <Controls className="!bg-gray-900 !border-gray-700 !rounded-lg" />
+        <Controls className="!bg-[var(--color-bg-surface-1)] !border-[var(--color-border-subtle)] !rounded-lg" />
         <MiniMap
-          className="!bg-gray-900 !border-gray-700"
+          className="!bg-[var(--color-bg-surface-1)] !border-[var(--color-border-subtle)]"
           nodeColor={(n) => {
             const d = n.data as TaskNodeData;
             return STATUS_COLORS[d?.status]?.border || '#6b7280';

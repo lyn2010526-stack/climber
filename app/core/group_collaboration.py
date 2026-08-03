@@ -21,11 +21,13 @@ from typing import Any, Callable
 
 from app.core import AgentEvent, AgentEventType, ChatResult
 from app.core.agent_engine import AgentEngine, AgentSession
+from app.core.api_key_crypto import decrypt_api_key
 from app.core.di import resolve as di_resolve
 from app.core.group_ws_hub import group_ws_hub
 from app.core.task_dag import TaskDAG, TaskNode, HandoffMessage
 from app.storage import async_session
 from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupTask, AgentGroupMemory, AgentGroupTaskCheckpoint
+from fastapi import HTTPException
 from sqlalchemy import select
 
 import os
@@ -35,7 +37,7 @@ logger = structlog.get_logger(__name__)
 def _resolve_api_key(provider: str, stored_key: str | None) -> str:
     """Resolve API key from member config or environment variable fallback."""
     if stored_key:
-        return stored_key
+        return decrypt_api_key(stored_key)
     env_map = {
         "openai": "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
@@ -84,9 +86,13 @@ def register_callback(name: str, fn: Callable[..., Any]) -> None:
 class GroupCollaborationEngine:
     """Orchestrates multi-agent collaboration with multiple process types."""
 
-    def __init__(self, model_registry: ModelRegistry, tool_registry: Any) -> None:
+    def __init__(self, model_registry: ModelRegistry, tool_registry: Any, max_concurrent_tasks: int = 10) -> None:
         self.model_registry = model_registry
         self.tool_registry = tool_registry
+        self._max_concurrent = max_concurrent_tasks
+        self._task_semaphore = asyncio.Semaphore(max_concurrent_tasks)
+        self._review_states: dict[str, dict[str, str]] = {}
+        self._running_tasks: dict[str, asyncio.Task] = {}
 
     async def run_task(self, task_id: str) -> None:
         """Execute a group task using the group's configured process type."""
@@ -95,109 +101,126 @@ class GroupCollaborationEngine:
         db_reviewers = []
         db_group = None
 
+        # Register the running task for cancellation support
+        current_task = asyncio.current_task()
+        self._running_tasks[task_id] = current_task
         try:
-            async with async_session() as db:
-                task = (
-                    await db.execute(
-                        select(AgentGroupTask).where(AgentGroupTask.id == task_id)
-                    )
-                ).scalar_one_or_none()
-                if task is None:
-                    logger.error("task_not_found", task_id=task_id)
-                    return
-                db_task = task
-
-                group = (
-                    await db.execute(
-                        select(AgentGroup).where(AgentGroup.id == task.group_id)
-                    )
-                ).scalar_one_or_none()
-                if group is None:
-                    logger.error("group_not_found", group_id=task.group_id)
-                    return
-                db_group = group
-
-                worker = None
-                if task.worker_id:
-                    worker = (
-                        await db.execute(
-                            select(AgentGroupMember).where(AgentGroupMember.id == task.worker_id)
-                        )
-                    ).scalar_one_or_none()
-
-                if worker is None:
-                    worker = (
-                        await db.execute(
-                            select(AgentGroupMember).where(AgentGroupMember.group_id == task.group_id)
-                        )
-                    ).scalars().first()
-                if worker is None:
-                    logger.error("worker_not_found", task_id=task_id, worker_id=task.worker_id)
-                    task.status = "failed"
-                    await db.commit()
-                    return
-                db_worker = worker
-
-                reviewers = (
-                    await db.execute(
-                        select(AgentGroupMember).where(
-                            AgentGroupMember.id.in_(task.reviewer_ids or [])
-                        )
-                    )
-                ).scalars().all()
-                db_reviewers = list(reviewers)
-
-                task.started_at = datetime.now(timezone.utc)
-                task.status = "running"
-                await db.commit()
-
-        except Exception as e:
-            logger.error("db_error_loading_task", task_id=task_id, error=str(e))
-            return
-
-        if db_task is None or db_worker is None or db_group is None:
-            return
-
-        task = db_task
-        worker = db_worker
-        reviewers = db_reviewers
-        group = db_group
-
-        # Check for resume from checkpoint
-        checkpoint = await self._load_latest_checkpoint(task_id)
-        if checkpoint and checkpoint.status in ("running", "paused"):
-            logger.info("resuming_from_checkpoint", task_id=task_id, checkpoint_id=checkpoint.id)
-            await self._resume_from_checkpoint(task, checkpoint)
-            return
-
-        # Dispatch based on process type
-        process_type = group.process_type or "sequential"
-        try:
-            if process_type == "sequential":
-                await self._run_sequential_process(task, worker, reviewers, group)
-            elif process_type == "hierarchical":
-                await self._run_hierarchical_process(task, group)
-            elif process_type == "group_chat":
-                await self._run_group_chat_process(task, group)
-            else:
-                logger.error("unknown_process_type", process_type=process_type, task_id=task_id)
-                task.status = "failed"
-                async with async_session() as db:
-                    await db.commit()
-        except Exception as e:
-            logger.exception("group_task_failed", task_id=task_id)
             try:
                 async with async_session() as db:
-                    t = await db.get(AgentGroupTask, task_id)
-                    if t:
-                        t.status = "failed"
+                    task = (
+                        await db.execute(
+                            select(AgentGroupTask).where(AgentGroupTask.id == task_id)
+                        )
+                    ).scalar_one_or_none()
+                    if task is None:
+                        logger.error("task_not_found", task_id=task_id)
+                        return
+                    db_task = task
+
+                    group = (
+                        await db.execute(
+                            select(AgentGroup).where(AgentGroup.id == task.group_id)
+                        )
+                    ).scalar_one_or_none()
+                    if group is None:
+                        logger.error("group_not_found", group_id=task.group_id)
+                        return
+                    db_group = group
+
+                    worker = None
+                    if task.worker_id:
+                        worker = (
+                            await db.execute(
+                                select(AgentGroupMember).where(AgentGroupMember.id == task.worker_id)
+                            )
+                        ).scalar_one_or_none()
+
+                    if worker is None:
+                        worker = (
+                            await db.execute(
+                                select(AgentGroupMember).where(AgentGroupMember.group_id == task.group_id)
+                            )
+                        ).scalars().first()
+                    if worker is None:
+                        logger.error("worker_not_found", task_id=task_id, worker_id=task.worker_id)
+                        task.status = "failed"
                         await db.commit()
-            except Exception:
-                pass
-            await group_ws_hub.broadcast(task.group_id, {
-                "type": "task_failed",
-                "data": {"task_id": task_id, "error": str(e)},
-            })
+                        return
+                    db_worker = worker
+
+                    reviewers = (
+                        await db.execute(
+                            select(AgentGroupMember).where(
+                                AgentGroupMember.id.in_(task.reviewer_ids or [])
+                            )
+                        )
+                    ).scalars().all()
+                    db_reviewers = list(reviewers)
+
+                    task.started_at = datetime.now(timezone.utc)
+                    task.status = "running"
+                    await db.commit()
+
+            except Exception as e:
+                logger.error("db_error_loading_task", task_id=task_id, error=str(e))
+                return
+
+            if db_task is None or db_worker is None or db_group is None:
+                return
+
+            task = db_task
+            worker = db_worker
+            reviewers = db_reviewers
+            group = db_group
+
+            # Check for resume from checkpoint
+            checkpoint = await self._load_latest_checkpoint(task_id)
+            if checkpoint and checkpoint.status in ("running", "paused"):
+                logger.info("resuming_from_checkpoint", task_id=task_id, checkpoint_id=checkpoint.id)
+                await self._resume_from_checkpoint(task, checkpoint)
+                return
+
+            # Dispatch based on process type
+            process_type = group.process_type or "sequential"
+            try:
+                if process_type == "sequential":
+                    await self._run_sequential_process(task, worker, reviewers, group)
+                elif process_type == "hierarchical":
+                    await self._run_hierarchical_process(task, group)
+                elif process_type == "group_chat":
+                    await self._run_group_chat_process(task, group)
+                else:
+                    logger.error("unknown_process_type", process_type=process_type, task_id=task_id)
+                    task.status = "failed"
+                    async with async_session() as db:
+                        await db.commit()
+            except asyncio.CancelledError:
+                logger.info("task_cancelled", task_id=task_id)
+                try:
+                    async with async_session() as db:
+                        t = await db.get(AgentGroupTask, task_id)
+                        if t:
+                            t.status = "stopped"
+                            await db.commit()
+                except Exception:
+                    pass
+                raise
+            except Exception as e:
+                logger.exception("group_task_failed", task_id=task_id)
+                try:
+                    async with async_session() as db:
+                        t = await db.get(AgentGroupTask, task_id)
+                        if t:
+                            t.status = "failed"
+                            await db.commit()
+                except Exception:
+                    pass
+                await group_ws_hub.broadcast(task.group_id, {
+                    "type": "task_failed",
+                    "data": {"task_id": task_id, "error": str(e)},
+                })
+        finally:
+            self._running_tasks.pop(task_id, None)
 
     async def run_group_tasks(self, group_id: str) -> dict[str, Any]:
         """Execute all pending tasks in a group using DAG-based dependency resolution.
@@ -764,7 +787,7 @@ class GroupCollaborationEngine:
                 agent_id=worker.agent_id,
                 provider=worker.model_provider or "openai",
                 model_id=worker.model_id or "gpt-4o",
-                api_key=worker.api_key_encrypted or "",
+                api_key=decrypt_api_key(worker.api_key_encrypted or ""),
                 system_prompt=self._build_worker_prompt(subtask_desc),
                 user_message=subtask_desc,
                 tools=worker.tools or [],
@@ -1133,14 +1156,12 @@ Respond with:
 
     async def _resume_from_checkpoint(self, task: AgentGroupTask, checkpoint: AgentGroupTaskCheckpoint) -> None:
         """Resume task execution from a checkpoint."""
-        # For now, mark as partial since full state restoration requires more complex logic
         async with async_session() as db:
             t = await db.get(AgentGroupTask, task.id)
             if t:
-                t.status = "partial"
+                t.status = "running"
                 t.final_output = checkpoint.current_artifact
                 t.current_round = checkpoint.current_round
-                t.completed_at = datetime.now(timezone.utc)
                 await db.commit()
         await group_ws_hub.broadcast(task.group_id, {
             "type": "checkpoint_restored",
@@ -1150,6 +1171,36 @@ Respond with:
             "type": "task_partial",
             "data": {"task_id": task.id, "final_output": checkpoint.current_artifact, "rounds": checkpoint.current_round},
         })
+
+    # ─── Task Cancellation ────────────────────────────────────────────────
+
+    def cancel_task(self, task_id: str) -> bool:
+        """Cancel a running task by its ID."""
+        task = self._running_tasks.get(task_id)
+        if task is None:
+            return False
+        task.cancel()
+        return True
+
+    # ─── Review State Machine ────────────────────────────────────────────
+
+    def get_review_state(self, task_id: str, reviewer_id: str) -> str:
+        """Get the review state for a reviewer on a task. Defaults to 'pending'."""
+        return self._review_states.get(task_id, {}).get(reviewer_id, "pending")
+
+    def set_review_state(self, task_id: str, reviewer_id: str, state: str) -> None:
+        """Set the review state for a reviewer on a task."""
+        if task_id not in self._review_states:
+            self._review_states[task_id] = {}
+        self._review_states[task_id][reviewer_id] = state
+
+    def get_task_review_summary(self, task_id: str) -> dict[str, int]:
+        """Get a summary of review states for a task."""
+        states = self._review_states.get(task_id, {})
+        summary: dict[str, int] = {"pending": 0, "approved": 0, "rejected": 0}
+        for s in states.values():
+            summary[s] = summary.get(s, 0) + 1
+        return summary
 
     async def _invoke_step_callback(self, task: AgentGroupTask, role: str, agent_id: str, output: str) -> None:
         """Invoke step callback if configured."""
@@ -1487,3 +1538,28 @@ def get_group_collaboration_engine() -> GroupCollaborationEngine:
             tool_registry=__import__("app.tools", fromlist=["ToolRegistry"]).ToolRegistry(),
         )
     return _group_collaboration_engine
+
+
+# Module-level singleton for direct import
+group_collaboration_engine = None
+
+
+def _get_engine_synchronously() -> GroupCollaborationEngine:
+    """Get or create the engine synchronously for import-time access."""
+    global group_collaboration_engine
+    if group_collaboration_engine is None:
+        try:
+            model_registry = di_resolve("ModelRegistry")
+        except KeyError:
+            from app.models.registry import ModelRegistry
+            model_registry = ModelRegistry()
+        group_collaboration_engine = GroupCollaborationEngine(
+            model_registry=model_registry,
+            tool_registry=__import__("app.tools", fromlist=["ToolRegistry"]).ToolRegistry(),
+        )
+    return group_collaboration_engine
+
+
+# Initialize at module import time
+group_collaboration_engine = _get_engine_synchronously()
+

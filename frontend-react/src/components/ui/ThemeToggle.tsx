@@ -11,7 +11,7 @@ export const ThemeToggle: React.FC<{ className?: string }> = ({ className }) => 
       onClick={toggleTheme}
       className={cn(
         'p-2 rounded-xl transition-all duration-200 border border-transparent',
-        'text-gray-400 hover:text-white hover:bg-white/5',
+        'text-[var(--color-text-secondary)] hover:text-white hover:bg-white/5',
         className
       )}
       title={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}

@@ -58,7 +58,7 @@ export function MemoryFileEditor({
             onClick={() => setView('edit')}
             className={cn(
               'p-1.5 rounded-lg transition-all',
-              view === 'edit' ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-gray-300'
+              view === 'edit' ? 'bg-white/[0.08] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
             )}
           >
             <Edit3 size={13} />
@@ -67,7 +67,7 @@ export function MemoryFileEditor({
             onClick={() => setView('split')}
             className={cn(
               'p-1.5 rounded-lg transition-all',
-              view === 'split' ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-gray-300'
+              view === 'split' ? 'bg-white/[0.08] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
             )}
           >
             <Code size={13} />
@@ -76,7 +76,7 @@ export function MemoryFileEditor({
             onClick={() => setView('preview')}
             className={cn(
               'p-1.5 rounded-lg transition-all',
-              view === 'preview' ? 'bg-white/[0.08] text-white' : 'text-gray-500 hover:text-gray-300'
+              view === 'preview' ? 'bg-white/[0.08] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
             )}
           >
             <Eye size={13} />
@@ -90,7 +90,7 @@ export function MemoryFileEditor({
             保存
           </button>
           {onClose && (
-            <button onClick={onClose} className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/[0.06] transition-all">
+            <button onClick={onClose} className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.06] transition-all">
               <X size={13} />
             </button>
           )}
@@ -122,7 +122,7 @@ export function MemoryFileEditor({
             <textarea
               value={content}
               onChange={e => setContent(e.target.value)}
-              className="flex-1 w-full p-4 bg-transparent text-sm text-gray-200 font-mono leading-relaxed resize-none focus:outline-none"
+               className="flex-1 w-full p-4 bg-transparent text-sm text-[var(--color-text-primary)] font-mono leading-relaxed resize-none focus:outline-none"
               placeholder="在此输入 Markdown..."
             />
           </div>
@@ -130,7 +130,7 @@ export function MemoryFileEditor({
         {view !== 'edit' && (
           <div className="flex-1 overflow-y-auto p-4">
             <div className="prose prose-invert prose-sm max-w-none">
-              <pre className="text-sm text-gray-300 font-mono whitespace-pre-wrap leading-relaxed">
+              <pre                className="text-sm text-[var(--color-text-secondary)] font-mono whitespace-pre-wrap leading-relaxed">
                 {content || '*空文件*'}
               </pre>
             </div>
@@ -139,13 +139,13 @@ export function MemoryFileEditor({
       </div>
 
       {/* Status bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06]">
-        <div className="flex items-center gap-3 text-[10px] text-gray-600">
+         <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06]">
+           <div className="flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
           <span className="flex items-center gap-1"><Type size={10} />{charCount} 字符</span>
           <span className="flex items-center gap-1"><FileText size={10} />{wordCount} 词</span>
           <span className="flex items-center gap-1"><List size={10} />{lineCount} 行</span>
         </div>
-        <div className="flex items-center gap-1 text-[10px] text-gray-600">
+         <div className="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)]">
           <Clock size={10} />
           <span>Markdown</span>
         </div>
@@ -161,13 +161,13 @@ export function MemoryFileEditor({
               value={commitMessage}
               onChange={e => setCommitMessage(e.target.value)}
               placeholder="提交信息..."
-              className="w-full h-9 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-blue-500/40 transition-all mb-4"
+               className="w-full h-9 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all mb-4"
               autoFocus
             />
             <div className="flex items-center justify-end gap-2">
               <button
                 onClick={() => setShowCommitDialog(false)}
-                className="px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-white/[0.06] transition-all"
+                className="px-3 py-1.5 rounded-lg text-xs text-[var(--color-text-secondary)] hover:text-white hover:bg-white/[0.06] transition-all"
               >
                 取消
               </button>
@@ -187,10 +187,10 @@ export function MemoryFileEditor({
 
 function ToolbarButton({ icon: Icon, onClick }: { icon: React.ComponentType<any>; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      className="p-1.5 rounded-lg text-gray-500 hover:text-gray-200 hover:bg-white/[0.06] transition-all"
-    >
+      <button
+        onClick={onClick}
+        className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-white/[0.06] transition-all"
+      >
       <Icon size={14} />
     </button>
   );

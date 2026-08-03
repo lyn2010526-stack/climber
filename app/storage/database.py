@@ -67,7 +67,7 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    agent_id: Mapped[str] = mapped_column(String(36), ForeignKey("agents.id"), nullable=False)
+    agent_id: Mapped[str] = mapped_column(String(36), ForeignKey("agents.id"), nullable=True)
     user_id: Mapped[str] = mapped_column(String(36), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     title: Mapped[str] = mapped_column(String(255), nullable=True)
@@ -76,6 +76,7 @@ class Session(Base):
     context_data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     iteration_count: Mapped[int] = mapped_column(Integer, default=0)
     total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    working_memory: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

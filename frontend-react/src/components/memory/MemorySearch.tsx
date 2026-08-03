@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Search, Filter, Sparkles, FileText, X,
   ChevronDown,
@@ -47,7 +47,7 @@ export function MemorySearch() {
   const [activeScope, setActiveScope] = useState('全部');
   const [showScopeFilter, setShowScopeFilter] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const performSearch = useCallback((q: string) => {
     if (!q.trim()) {
@@ -82,7 +82,7 @@ export function MemorySearch() {
     let result = text;
     terms.forEach(term => {
       const regex = new RegExp(`(${term})`, 'gi');
-      result = result.replace(regex, '<mark class="bg-blue-500/20 text-blue-300 rounded px-0.5">$1</mark>');
+      result = result.replace(regex, '<mark class="bg-[var(--color-accent)]/20 text-[var(--color-accent)] rounded px-0.5">$1</mark>');
     });
     return result;
   };
@@ -97,26 +97,26 @@ export function MemorySearch() {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-white">语义搜索</h1>
-            <p className="text-xs text-gray-500 mt-0.5">搜索所有记忆文件和上下文</p>
+            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">搜索所有记忆文件和上下文</p>
           </div>
         </div>
 
         {/* Search input */}
         <div className="relative">
-          <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+          <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={e => handleInputChange(e.target.value)}
             placeholder="搜索记忆内容..."
-            className="w-full h-11 pl-11 pr-4 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-violet-500/40 focus:bg-white/[0.06] focus:ring-1 focus:ring-violet-500/20 transition-all"
+            className="w-full h-11 pl-11 pr-4 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-secondary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 focus:bg-white/[0.06] focus:ring-1 focus:ring-[var(--color-accent)]/20 transition-all"
             autoFocus
           />
           {query && (
             <button
               onClick={() => { setQuery(''); setResults([]); }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-gray-500 hover:text-white hover:bg-white/[0.06] transition-all"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.06] transition-all"
             >
               <X size={13} />
             </button>
@@ -128,7 +128,7 @@ export function MemorySearch() {
           <div className="relative">
             <button
               onClick={() => setShowScopeFilter(!showScopeFilter)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[11px] text-gray-400 hover:text-white hover:bg-white/[0.06] transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[11px] text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.06] transition-all"
             >
               <Filter size={11} />
               {activeScope === '全部' ? '范围' : activeScope}
@@ -142,7 +142,7 @@ export function MemorySearch() {
                     onClick={() => { setActiveScope(scope); setShowScopeFilter(false); }}
                     className={cn(
                       'w-full px-3 py-1.5 text-left text-[11px] transition-colors',
-                      activeScope === scope ? 'text-violet-400 bg-violet-500/10' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+                       activeScope === scope ? 'text-[var(--color-accent)] bg-[var(--color-accent)]/10' : 'text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.04]'
                     )}
                   >
                     {scope}
@@ -152,7 +152,7 @@ export function MemorySearch() {
             )}
           </div>
           {results.length > 0 && (
-            <span className="text-[11px] text-gray-500">找到 {results.length} 个结果</span>
+            <span className="text-[11px] text-[var(--color-text-muted)]">找到 {results.length} 个结果</span>
           )}
         </div>
       </div>
@@ -161,14 +161,14 @@ export function MemorySearch() {
       <div className="flex-1 overflow-y-auto px-5 pb-5">
         {searching ? (
           <div className="flex flex-col items-center justify-center py-12">
-            <div className="w-8 h-8 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin mb-3" />
-            <p className="text-xs text-gray-500">搜索中...</p>
+            <div className="w-8 h-8 border-2 border-[var(--color-accent)]/30 border-t-[var(--color-accent)] rounded-full animate-spin mb-3" />
+            <p className="text-xs text-[var(--color-text-muted)]">搜索中...</p>
           </div>
         ) : query && results.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
-            <Search size={32} className="text-gray-700 mb-3" />
-            <p className="text-sm text-gray-500">没有找到相关结果</p>
-            <p className="text-xs text-gray-600 mt-1">尝试其他关键词或调整范围</p>
+            <Search size={32} className="text-[var(--color-text-muted)] mb-3" />
+            <p className="text-sm text-[var(--color-text-muted)]">没有找到相关结果</p>
+            <p className="text-xs text-[var(--color-text-muted)] mt-1">尝试其他关键词或调整范围</p>
           </div>
         ) : results.length > 0 ? (
           <div className="space-y-2">
@@ -178,9 +178,9 @@ export function MemorySearch() {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-12">
-            <Sparkles size={32} className="text-gray-700 mb-3" />
-            <p className="text-sm text-gray-500">开始搜索记忆</p>
-            <p className="text-xs text-gray-600 mt-1">输入关键词查找相关文件和上下文</p>
+            <Sparkles size={32} className="text-[var(--color-text-muted)] mb-3" />
+            <p className="text-sm text-[var(--color-text-muted)]">开始搜索记忆</p>
+            <p className="text-xs text-[var(--color-text-muted)] mt-1">输入关键词查找相关文件和上下文</p>
           </div>
         )}
       </div>
@@ -195,27 +195,27 @@ function SearchResultItem({ result, onHighlight }: { result: SearchResult; onHig
     <div className="p-4 rounded-xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/[0.1] transition-all cursor-pointer group">
       <div className="flex items-start justify-between gap-3 mb-2">
         <div className="flex items-center gap-2 min-w-0">
-          <FileText size={13} className="text-blue-400 flex-shrink-0" />
+          <FileText size={13} className="text-[var(--color-accent)] flex-shrink-0" />
           <span className="text-sm font-medium text-white truncate">{result.fileName}</span>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <div className={cn(
             'w-8 h-4 rounded-full flex items-center justify-center text-[9px] font-bold',
-            scorePercent >= 80 ? 'bg-green-500/10 text-green-400' :
-            scorePercent >= 50 ? 'bg-amber-500/10 text-amber-400' :
-            'bg-gray-500/10 text-gray-500'
+             scorePercent >= 80 ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]' :
+             scorePercent >= 50 ? 'bg-amber-500/10 text-amber-400' :
+             'bg-[var(--color-text-muted)]/10 text-[var(--color-text-muted)]'
           )}>
             {scorePercent}
           </div>
         </div>
       </div>
       <p
-        className="text-xs text-gray-400 leading-relaxed line-clamp-2"
+         className="text-xs text-[var(--color-text-muted)] leading-relaxed line-clamp-2"
         dangerouslySetInnerHTML={{ __html: onHighlight(result.snippet, result.matchedTerms) }}
       />
       <div className="flex items-center gap-2 mt-2">
         <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-violet-500/10 text-violet-400">{result.scope}</span>
-        <span className="text-[10px] text-gray-600 truncate">{result.path}</span>
+        <span className="text-[10px] text-[var(--color-text-muted)] truncate">{result.path}</span>
       </div>
     </div>
   );

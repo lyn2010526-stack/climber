@@ -56,7 +56,7 @@ const ROLE_STYLES = {
 const SEVERITY_COLORS = {
   critical: 'text-red-400 bg-red-500/10',
   major: 'text-amber-400 bg-amber-500/10',
-  minor: 'text-gray-500 bg-gray-700',
+  minor: 'text-[var(--color-text-muted)] bg-[var(--color-bg-surface-elevated)]',
 };
 
 export function CollabMessage({ message }: CollabMessageProps) {
@@ -66,7 +66,7 @@ export function CollabMessage({ message }: CollabMessageProps) {
   return (
     <div className={`flex items-start gap-3 ${style.bg} rounded-r-lg border-l-2 ${style.border} p-3`}>
       {/* Avatar */}
-      <div className="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center shrink-0">
+      <div className="w-8 h-8 rounded-lg bg-[var(--color-bg-surface-elevated)] flex items-center justify-center shrink-0">
         {message.memberAvatar ? (
           <img src={message.memberAvatar} alt="" className="w-8 h-8 rounded-lg object-cover" />
         ) : (
@@ -77,18 +77,18 @@ export function CollabMessage({ message }: CollabMessageProps) {
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs font-medium text-gray-100">{message.memberName}</span>
+          <span className="text-xs font-medium text-[var(--color-text-primary)]">{message.memberName}</span>
           <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${style.badge}`}>
             {style.label}
           </span>
-          <span className="text-[10px] text-gray-500 ml-auto">
+          <span className="text-[10px] text-[var(--color-text-muted)] ml-auto">
             {message.timestamp ? new Date(message.timestamp).toLocaleTimeString() : ''}
           </span>
         </div>
 
         {/* Text content */}
         {message.content && (
-          <div className="text-xs text-gray-400 whitespace-pre-wrap break-words mt-1">
+          <div className="text-xs text-[var(--color-text-secondary)] whitespace-pre-wrap break-words mt-1">
             {message.content}
           </div>
         )}
@@ -103,16 +103,16 @@ export function CollabMessage({ message }: CollabMessageProps) {
                   {tc.toolName}
                 </summary>
                 <div className="mt-1 pl-4 space-y-1">
-                  <div className="text-gray-500">
+                  <div className="text-[var(--color-text-muted)]">
                     <span className="font-medium">Args:</span>{' '}
-                    <code className="bg-gray-700 px-1 rounded">
+                    <code className="bg-[var(--color-bg-surface-elevated)] px-1 rounded">
                       {JSON.stringify(tc.arguments).slice(0, 100)}
                     </code>
                   </div>
                   {tc.result && (
-                    <div className="text-gray-500 max-h-20 overflow-y-auto">
+                    <div className="text-[var(--color-text-muted)] max-h-20 overflow-y-auto">
                       <span className="font-medium">Result:</span>{' '}
-                      <code className="bg-gray-700 px-1 rounded block mt-0.5">
+                      <code className="bg-[var(--color-bg-surface-elevated)] px-1 rounded block mt-0.5">
                         {tc.result.slice(0, 200)}
                       </code>
                     </div>
@@ -134,7 +134,7 @@ export function CollabMessage({ message }: CollabMessageProps) {
                     [{issue.severity.toUpperCase()}] {issue.description}
                   </div>
                   {issue.fixSuggestion && (
-                    <div className="text-[9px] text-gray-500 mt-0.5">
+                    <div className="text-[9px] text-[var(--color-text-muted)] mt-0.5">
                       Fix: {issue.fixSuggestion.slice(0, 100)}
                     </div>
                   )}

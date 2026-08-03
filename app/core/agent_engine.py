@@ -5,12 +5,17 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-import time
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 from app.core import (
-    AgentEvent, AgentEventType, ChatResult, CheckpointData,
-    CompressionStrategy, ContextConfig, MessageRole, SessionStatus, SubAgentTask,
+    AgentEvent,
+    AgentEventType,
+    ChatResult,
+    CheckpointData,
+    ContextConfig,
+    MessageRole,
+    SessionStatus,
 )
 from app.core.checkpoint import InMemoryCheckpointStore
 from app.core.compressor import ContextCompressor, estimate_tokens
@@ -19,7 +24,6 @@ from app.core.parallel import ParallelToolExecutor
 from app.core.persistent_memory import PersistentMemoryService
 from app.core.task_state_machine import TaskState, TaskStateMachine
 from app.core.tool_prioritizer import ToolPrioritizer
-from app.models import ModelCapability
 from app.models.openai_adapter import OpenAIAdapter
 
 
@@ -39,6 +43,7 @@ class AgentSession:
         self.messages: list[dict[str, Any]] = []
         self._stop_requested = False
         self.session_memory = _SessionMemory(self)
+        self.current_turn_id: str | None = None
         # State machine: use TaskState for unified lifecycle management
         self.state_machine = TaskStateMachine(task_id=session_id, initial_state=TaskState.PENDING)
         # Agent mode: plan (read-only) or act (real execution)
@@ -49,6 +54,16 @@ class AgentSession:
         self.restart_count: int = 0
         self.paused_at: str | None = None
         self.termination_reason: str | None = None
+        # Permission system
+        try:
+            from app.core.permission_rules import get_default_config
+            self.permission_config = get_default_config()
+        except Exception:
+            self.permission_config = None
+        self._pending_permission: dict[str, Any] | None = None
+        self._permission_event: asyncio.Event | None = None
+        # Fire-and-forget task tracking
+        self._pending_tasks: set[asyncio.Task] = set()
 
     @property
     def status(self) -> SessionStatus:
@@ -62,28 +77,6 @@ class AgentSession:
             TaskState.CANCELLED: SessionStatus.STOPPED,
         }
         return mapping.get(self.state_machine.state, SessionStatus.PENDING)
-
-    @status.setter
-    def status(self, value: SessionStatus) -> None:
-        """Set state from legacy SessionStatus."""
-        reverse_map = {
-            SessionStatus.PENDING: TaskState.PENDING,
-            SessionStatus.RUNNING: TaskState.PROCESSING,
-            SessionStatus.PAUSED: TaskState.PAUSED,
-            SessionStatus.COMPLETED: TaskState.COMPLETED,
-            SessionStatus.FAILED: TaskState.FAILED,
-            SessionStatus.STOPPED: TaskState.CANCELLED,
-        }
-        target = reverse_map.get(value, TaskState.PENDING)
-        # Only transition if different
-        if self.state_machine.state != target:
-            import asyncio
-            try:
-                loop = asyncio.get_running_loop()
-                loop.create_task(self.state_machine.transition(target, trigger="api"))
-            except RuntimeError:
-                # No event loop running (e.g., in tests)
-                pass
 
     def stop(self) -> None:
         self._stop_requested = True
@@ -116,6 +109,19 @@ class AgentSession:
         self.termination_reason = None
         self.paused_at = None
 
+    def _fire_and_forget(self, coro: Any) -> asyncio.Task:
+        """Create a background task and track it for cleanup."""
+        task = asyncio.create_task(coro)
+        self._pending_tasks.add(task)
+        task.add_done_callback(self._pending_tasks.discard)
+        return task
+
+    async def _await_pending_tasks(self) -> None:
+        """Await all pending fire-and-forget tasks and clear the set."""
+        if self._pending_tasks:
+            await asyncio.gather(*self._pending_tasks, return_exceptions=True)
+            self._pending_tasks.clear()
+
 
 class _SessionMemory:
     def __init__(self, session: AgentSession):
@@ -143,8 +149,14 @@ class AgentEngine:
             self.debug_loop = None
         # Security sandbox: rejects hazard commands and out-of-scope file access before execution
         try:
-            from app.core.security_sandbox import SecuritySandbox, SandboxConfig, PermissionOverlay, AgentMode
             import os
+
+            from app.core.security_sandbox import (
+                AgentMode,
+                PermissionOverlay,
+                SandboxConfig,
+                SecuritySandbox,
+            )
             workdir = os.environ.get("CLIMBER_SANDBOX_WORKDIR") or os.getcwd()
             self.sandbox = SecuritySandbox(SandboxConfig(workdir=workdir))
             self.permission_overlay = PermissionOverlay()
@@ -154,10 +166,16 @@ class AgentEngine:
             self.sandbox = None
             self.permission_overlay = None
             self.agent_mode = None
+        # Default permission config for new sessions
+        try:
+            from app.core.permission_rules import get_default_config
+            self._default_permission_config = get_default_config()
+        except Exception:
+            self._default_permission_config = None
 
     def _setup_default_permissions(self) -> None:
         """Setup default three-layer permission rules."""
-        from app.core.security_sandbox import PermissionRule, PermissionLevel
+        from app.core.security_sandbox import PermissionLevel, PermissionRule
         defaults = [
             PermissionRule(action="read", resource_pattern="*", level=PermissionLevel.ALLOW, description="Read any file"),
             PermissionRule(action="write", resource_pattern="./data/*", level=PermissionLevel.ALLOW, description="Write to data dir"),
@@ -181,7 +199,7 @@ class AgentEngine:
         "list_directory": ("dir", "read"),
     }
 
-    def _validate_tool_call(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
+    def _validate_tool_call(self, session: AgentSession, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
         """Pre-execution safety check. Returns (allowed, reason)."""
         # PLAN mode: deny write/execute operations, but allow edit_file (preview-only)
         if hasattr(self, 'agent_mode') and self.agent_mode is not None:
@@ -193,7 +211,16 @@ class AgentEngine:
                 if mode != "read" and tool_name != "edit_file":
                     return False, "PLAN mode: file modification is read-only"
 
-        # Permission overlay check
+        # New permission rules system check
+        if session.permission_config is not None:
+            from app.core.permission_rules import RuleDecision
+            decision = session.permission_config.evaluate(tool_name, arguments)
+            if decision == RuleDecision.DENY:
+                return False, f"Permission denied by rules: {tool_name}"
+            if decision == RuleDecision.ASK:
+                return False, f"Permission required: {tool_name}"
+
+        # Permission overlay check (legacy)
         if self.permission_overlay is not None:
             action = "execute" if tool_name in self._COMMAND_TOOLS else "read"
             if tool_name in self._FILE_TOOLS:
@@ -252,6 +279,9 @@ class AgentEngine:
             tools=tools,
             context_config=context_config,
         )
+        # Apply engine's default permission config
+        if hasattr(self, '_default_permission_config') and self._default_permission_config is not None:
+            session.permission_config = self._default_permission_config
         if system_prompt:
             session.messages.append({"role": MessageRole.SYSTEM, "content": system_prompt})
         self._sessions[session_id] = session
@@ -295,15 +325,19 @@ class AgentEngine:
             yield AgentEvent(type=AgentEventType.ERROR, data={"error": "Session is busy processing another request"})
             return
 
-        async with lock:
-            async for event in self._run_locked(session, message):
-                yield event
-
-        # Clean up lock after session run completes to prevent memory leak
-        self._session_locks.pop(session.session_id, None)
+        try:
+            async with lock:
+                async for event in self._run_locked(session, message):
+                    yield event
+        finally:
+            self._session_locks.pop(session.session_id, None)
 
     async def _run_locked(self, session: AgentSession, message: str) -> AsyncIterator[AgentEvent]:
         """Internal run method — executes under session lock."""
+        # Allow restart: COMPLETED/FAILED/CANCELLED sessions must reset to PENDING first
+        current = session.state_machine.state
+        if current in (TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED):
+            await session.state_machine.transition(TaskState.PENDING, trigger="user_restart")
         # Transition to PROCESSING state via state machine
         await session.state_machine.transition(TaskState.PROCESSING, trigger="run_start")
         session.messages.append({"role": MessageRole.USER, "content": message})
@@ -360,7 +394,8 @@ class AgentEngine:
         iteration = 0
         executor = ParallelToolExecutor(
             self.tool_registry,
-            validator=self._validate_tool_call if self.sandbox else None,
+            validator=(lambda name, args: self._validate_tool_call(session, name, args)) if self.sandbox else None,
+            session=session,
         )
         compressor = ContextCompressor(session.context_config)
         result: ChatResult | None = None
@@ -383,8 +418,6 @@ class AgentEngine:
                 if compressor.needs_compression(session.messages) or (ctx_limit and ctx_tokens > ctx_limit * 0.8):
                     session.messages = await compressor.compress(session.messages, adapter)
                     yield AgentEvent(type=AgentEventType.CONTEXT_COMPRESSION, data={"iteration": iteration, "tokens": ctx_tokens, "limit": ctx_limit})
-
-                yield AgentEvent(type=AgentEventType.THINKING, data={"iteration": iteration})
 
                 try:
                     if adapter.capabilities.streaming:
@@ -451,7 +484,9 @@ class AgentEngine:
                         content=result.content,
                         tokens=getattr(result, 'tokens_used', 0),
                     )
-                    yield AgentEvent(type=AgentEventType.TEXT, data={"content": result.content})
+                    # Emit TEXT event for non-streaming path (streaming path emits per-chunk)
+                    if not (adapter.capabilities and adapter.capabilities.streaming):
+                        yield AgentEvent(type=AgentEventType.TEXT, data={"content": result.content})
 
                 if not result.tool_calls and not result.content:
                     session.messages.append({
@@ -479,12 +514,22 @@ class AgentEngine:
                         )
                         yield AgentEvent(type=AgentEventType.TOOL_RESULT, data={"tool_name": tr.tool_name, "result": tr.result, "error": tr.error})
 
-                        if self.debug_loop and self._should_debug(session, tr):
-                            fixed = await self._attempt_debug(session, tr)
-                            if fixed is not None:
-                                tr = fixed
+                        if self.debug_loop and tr.error:
+                            key = tr.tool_name
+                            attempts = session.debug_attempts.get(key, 0)
+                            if attempts < 3:
+                                session.debug_attempts[key] = attempts + 1
+                                fixed = await self.debug_loop.recover(
+                                    tool_name=tr.tool_name,
+                                    arguments=tr.arguments or {},
+                                    error_output=tr.error or tr.result,
+                                    retry_callback=lambda retry_tool, retry_args: self.tool_registry.execute(retry_tool, retry_args),
+                                )
+                                if fixed and fixed.success and fixed.output:
+                                    tr.error = ""
+                                    tr.result = fixed.output
 
-                        session.messages.append({"role": MessageRole.TOOL, "content": tr.result, "tool_name": tr.tool_name})
+                        session.messages.append({"role": MessageRole.TOOL, "content": tr.result, "tool_call_id": tr.tool_call_id or tr.tool_name})
                         await self._persist_message(
                             session.session_id,
                             MessageRole.TOOL,
@@ -579,41 +624,7 @@ class AgentEngine:
 
         yield AgentEvent(type=AgentEventType.DONE, data={"status": session.status.value, "iterations": iteration, "content": result.content if result else "", "tokens_used": getattr(result, 'tokens_used', 0) if result else 0})
 
-    def _should_debug(self, session: AgentSession, tr: Any) -> bool:
-        """Check if this tool result should trigger the debug loop."""
-        if not tr.error:
-            return False
-        key = tr.tool_name
-        attempts = session.debug_attempts.get(key, 0)
-        return attempts < 3
 
-    async def _attempt_debug(self, session: AgentSession, tr: Any) -> Any | None:
-        """Run the debug loop for a failed tool result."""
-        tool_name = tr.tool_name
-        key = tool_name
-        session.debug_attempts[key] = session.debug_attempts.get(key, 0) + 1
-        original_args = tr.arguments or {}
-
-        async def retry_callback(retry_tool: str, retry_args: dict[str, Any]) -> str:
-            result = await self.tool_registry.execute(retry_tool, retry_args)
-            return str(result)
-
-        try:
-            result = await self.debug_loop.recover(
-                tool_name=tool_name,
-                arguments=original_args,
-                error_output=tr.error or tr.result,
-                retry_callback=retry_callback,
-            )
-            if result.success and result.output:
-                logger.info("agent_engine.debug_recovered", tool=tool_name, attempt=result.attempt)
-                tr.error = ""
-                tr.result = result.output
-                tr.success = True
-                return tr
-        except Exception as e:
-            logger.warning("agent_engine.debug_failed", tool=tool_name, error=str(e))
-        return None
 
     def _build_tools(self, tool_names: list[str], task_description: str = "") -> list[dict[str, Any]]:
         if task_description and len(tool_names) > 1:
@@ -645,3 +656,36 @@ class AgentEngine:
                     },
                 })
         return result
+
+    # === Permission Management ===
+
+    def resolve_permission(self, tool_call_id: str, decision: str) -> bool:
+        """Resolve a pending permission request.
+        
+        Args:
+            tool_call_id: The ID of the tool call awaiting permission.
+            decision: One of 'allow', 'allow_session', 'allow_always', 'deny'.
+            
+        Returns:
+            True if the permission was resolved, False if no pending request found.
+        """
+        for session in self._sessions.values():
+            if session._pending_permission and session._pending_permission.get("tool_call_id") == tool_call_id:
+                session._pending_permission["decision"] = decision
+                if session._permission_event is not None:
+                    session._permission_event.set()
+                return True
+        return False
+
+    def get_permission_config(self) -> Any:
+        """Get the default permission configuration."""
+        try:
+            from app.core.permission_rules import get_default_config
+            return get_default_config()
+        except Exception:
+            from app.core.permission_rules import PermissionConfig
+            return PermissionConfig()
+
+    def update_permission_config(self, config: Any) -> None:
+        """Update the default permission configuration for new sessions."""
+        self._default_permission_config = config

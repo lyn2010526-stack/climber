@@ -87,17 +87,17 @@ export default function TraceViewer({ traceId }: TraceViewerProps) {
     const renderSpan = (span: TraceSpan, depth: number): React.ReactNode => {
       const children = childMap[span.id] || [];
       const statusColor = span.status === 'error' ? 'text-red-400' : 'text-green-400';
-      const kindColor = span.kind === 'llm_call' ? 'text-blue-400' : span.kind === 'tool_call' ? 'text-yellow-400' : 'text-gray-400';
+      const kindColor = span.kind === 'llm_call' ? 'text-blue-400' : span.kind === 'tool_call' ? 'text-yellow-400' : 'text-[var(--color-text-secondary)]';
 
       return (
-        <div key={span.id} style={{ marginLeft: `${depth * 16}px` }} className="border-l border-gray-700 pl-2 py-1">
+        <div key={span.id} style={{ marginLeft: `${depth * 16}px` }} className="border-l border-[var(--color-border-subtle)] pl-2 py-1">
           <div className="flex items-center gap-2 text-sm">
             <span className={kindColor}>[{span.kind}]</span>
-            <span className="text-gray-200 font-medium">{span.name}</span>
+            <span className="text-[var(--color-text-primary)] font-medium">{span.name}</span>
             <span className={statusColor}>{span.status}</span>
-            <span className="text-gray-500">{span.duration_ms.toFixed(0)}ms</span>
+            <span className="text-[var(--color-text-muted)]">{span.duration_ms.toFixed(0)}ms</span>
             {span.tokens_used > 0 && <span className="text-purple-400">{span.tokens_used}t</span>}
-            {span.model && <span className="text-gray-500">{span.model}</span>}
+            {span.model && <span className="text-[var(--color-text-muted)]">{span.model}</span>}
           </div>
           {span.error && <div className="text-red-400 text-xs mt-1">{span.error}</div>}
           {children.map((child) => renderSpan(child, depth + 1))}
@@ -109,25 +109,25 @@ export default function TraceViewer({ traceId }: TraceViewerProps) {
   };
 
   return (
-    <div className="flex h-full gap-4 p-4 bg-gray-900 text-gray-200">
+    <div className="flex h-full gap-4 p-4 bg-[var(--color-bg-surface-primary)] text-[var(--color-text-primary)]">
       {/* Trace list sidebar */}
-      <div className="w-72 border border-gray-700 rounded-lg overflow-y-auto">
-        <div className="p-3 border-b border-gray-700 flex items-center justify-between">
+      <div className="w-72 border border-[var(--color-border-subtle)] rounded-lg overflow-y-auto">
+        <div className="p-3 border-b border-[var(--color-border-subtle)] flex items-center justify-between">
            <h3 className="font-semibold text-sm">追踪记录</h3>
-          <button onClick={fetchTraces} className="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded">
+          <button onClick={fetchTraces} className="text-xs px-2 py-1 bg-[var(--color-bg-surface-elevated)] hover:bg-[var(--color-bg-surface-hover)] rounded">
             Refresh
           </button>
         </div>
-        {loading && <div className="p-3 text-sm text-gray-400">Loading...</div>}
-         {!loading && traces.length === 0 && <div className="p-3 text-sm text-gray-500">暂无追踪数据</div>}
+        {loading && <div className="p-3 text-sm text-[var(--color-text-secondary)]">Loading...</div>}
+         {!loading && traces.length === 0 && <div className="p-3 text-sm text-[var(--color-text-muted)]">暂无追踪数据</div>}
         {traces.map((t) => (
           <div
             key={t.id}
             onClick={() => setSelectedTrace(t.id)}
-            className={`p-3 border-b border-gray-800 cursor-pointer hover:bg-gray-800 ${selectedTrace === t.id ? 'bg-gray-800' : ''}`}
+            className={`p-3 border-b border-[var(--color-border-subtle)] cursor-pointer hover:bg-[var(--color-bg-surface-elevated)] ${selectedTrace === t.id ? 'bg-[var(--color-bg-surface-elevated)]' : ''}`}
           >
             <div className="text-sm font-medium truncate">{t.name || t.id}</div>
-            <div className="text-xs text-gray-500">{t.kind} · {t.started_at?.slice(0, 19)}</div>
+            <div className="text-xs text-[var(--color-text-muted)]">{t.kind} · {t.started_at?.slice(0, 19)}</div>
           </div>
         ))}
       </div>
@@ -138,37 +138,37 @@ export default function TraceViewer({ traceId }: TraceViewerProps) {
 
         {stats && (
           <div className="grid grid-cols-6 gap-3">
-            <div className="bg-gray-800 rounded-lg p-3 text-center">
+            <div className="bg-[var(--color-bg-surface-elevated)] rounded-lg p-3 text-center">
               <div className="text-lg font-bold text-blue-400">{stats.total_spans}</div>
-               <div className="text-xs text-gray-500">跨度</div>
+               <div className="text-xs text-[var(--color-text-muted)]">跨度</div>
             </div>
-            <div className="bg-gray-800 rounded-lg p-3 text-center">
+            <div className="bg-[var(--color-bg-surface-elevated)] rounded-lg p-3 text-center">
               <div className="text-lg font-bold text-green-400">{stats.total_duration_ms.toFixed(0)}ms</div>
-               <div className="text-xs text-gray-500">耗时</div>
+               <div className="text-xs text-[var(--color-text-muted)]">耗时</div>
             </div>
-            <div className="bg-gray-800 rounded-lg p-3 text-center">
+            <div className="bg-[var(--color-bg-surface-elevated)] rounded-lg p-3 text-center">
               <div className="text-lg font-bold text-purple-400">{stats.total_tokens}</div>
-               <div className="text-xs text-gray-500">Token 数</div>
+               <div className="text-xs text-[var(--color-text-muted)]">Token 数</div>
             </div>
-            <div className="bg-gray-800 rounded-lg p-3 text-center">
+            <div className="bg-[var(--color-bg-surface-elevated)] rounded-lg p-3 text-center">
               <div className="text-lg font-bold text-yellow-400">{stats.llm_calls}</div>
-               <div className="text-xs text-gray-500">LLM 调用</div>
+               <div className="text-xs text-[var(--color-text-muted)]">LLM 调用</div>
             </div>
-            <div className="bg-gray-800 rounded-lg p-3 text-center">
+            <div className="bg-[var(--color-bg-surface-elevated)] rounded-lg p-3 text-center">
               <div className="text-lg font-bold text-orange-400">{stats.tool_calls}</div>
-               <div className="text-xs text-gray-500">工具调用</div>
+               <div className="text-xs text-[var(--color-text-muted)]">工具调用</div>
             </div>
-            <div className="bg-gray-800 rounded-lg p-3 text-center">
+            <div className="bg-[var(--color-bg-surface-elevated)] rounded-lg p-3 text-center">
               <div className="text-lg font-bold text-red-400">{stats.error_count}</div>
-               <div className="text-xs text-gray-500">错误</div>
+               <div className="text-xs text-[var(--color-text-muted)]">错误</div>
             </div>
           </div>
         )}
 
-        <div className="flex-1 border border-gray-700 rounded-lg overflow-y-auto p-3">
-          {loading && <div className="text-gray-400 text-sm">Loading spans...</div>}
-           {!loading && spans.length === 0 && selectedTrace && <div className="text-gray-500 text-sm">追踪中暂无跨度</div>}
-           {!selectedTrace && <div className="text-gray-500 text-sm">选择追踪以查看跨度</div>}
+        <div className="flex-1 border border-[var(--color-border-subtle)] rounded-lg overflow-y-auto p-3">
+          {loading && <div className="text-[var(--color-text-secondary)] text-sm">Loading spans...</div>}
+           {!loading && spans.length === 0 && selectedTrace && <div className="text-[var(--color-text-muted)] text-sm">追踪中暂无跨度</div>}
+           {!selectedTrace && <div className="text-[var(--color-text-muted)] text-sm">选择追踪以查看跨度</div>}
           {spans.length > 0 && renderSpanTree(spans)}
         </div>
       </div>

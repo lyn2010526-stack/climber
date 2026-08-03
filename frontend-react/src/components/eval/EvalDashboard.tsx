@@ -79,14 +79,14 @@ export default function EvalDashboard() {
   }, [fetchDatasets]);
 
   return (
-    <div className="p-6 bg-gray-900 text-gray-200 min-h-full">
+    <div className="p-6 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] min-h-full">
       <div className="flex items-center justify-between mb-6">
          <h2 className="text-xl font-bold">评估仪表板</h2>
         <div className="flex gap-2">
           <button
             onClick={seedBuiltin}
             disabled={seeding}
-            className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm disabled:opacity-50"
+            className="px-3 py-1.5 bg-[var(--color-bg-surface)] hover:bg-[var(--color-bg-surface-hover)] rounded text-sm disabled:opacity-50"
           >
             {seeding ? '导入中...' : '导入内置数据集'}
           </button>
@@ -97,9 +97,9 @@ export default function EvalDashboard() {
 
       {/* Datasets */}
       <div className="mb-6">
-         <h3 className="text-sm font-semibold text-gray-400 mb-2">数据集</h3>
+           <h3 className="text-sm font-semibold text-[var(--color-text-muted)] mb-2">数据集</h3>
          {datasets.length === 0 ? (
-           <div className="text-gray-500 text-sm">暂无数据集，请先导入内置数据集</div>
+            <div className="text-[var(--color-text-muted)] text-sm">暂无数据集，请先导入内置数据集</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {datasets.map((ds) => (
@@ -109,12 +109,12 @@ export default function EvalDashboard() {
                 className={`p-3 rounded-lg border cursor-pointer transition ${
                   selectedDataset === ds.id
                     ? 'border-blue-500 bg-blue-900/20'
-                    : 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                    : 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] hover:border-[var(--color-border-default)]'
                 }`}
               >
                 <div className="font-medium text-sm">{ds.name}</div>
-                <div className="text-xs text-gray-500 mt-1">{ds.description}</div>
-                 <div className="text-xs text-gray-400 mt-2">{ds.case_count} 条用例</div>
+                <div className="text-xs text-[var(--color-text-muted)] mt-1">{ds.description}</div>
+                 <div className="text-xs text-[var(--color-text-muted)] mt-2">{ds.case_count} 条用例</div>
               </div>
             ))}
           </div>
@@ -134,31 +134,31 @@ export default function EvalDashboard() {
 
       {/* Results */}
       {runs.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-gray-400 mb-2">评估结果</h3>
+         <div>
+           <h3 className="text-sm font-semibold text-[var(--color-text-muted)] mb-2">评估结果</h3>
           <div className="space-y-3">
             {runs.map((run) => (
-              <div key={run.id} className="p-4 bg-gray-800 rounded-lg border border-gray-700">
+               <div key={run.id} className="p-4 bg-[var(--color-bg-surface)] rounded-lg border border-[var(--color-border-subtle)]">
                 <div className="flex items-center justify-between mb-2">
                    <span className="text-sm font-medium">运行 {run.id.slice(0, 8)}</span>
-                  <span className="text-xs text-gray-500">{run.created_at?.slice(0, 19)}</span>
+                   <span className="text-xs text-[var(--color-text-muted)]">{run.created_at?.slice(0, 19)}</span>
                 </div>
                 <div className="grid grid-cols-4 gap-3 mb-3">
                   <div className="text-center">
                     <div className="text-lg font-bold text-green-400">{run.passed_cases}</div>
-                     <div className="text-xs text-gray-500">通过</div>
+                      <div className="text-xs text-[var(--color-text-muted)]">通过</div>
                   </div>
                   <div className="text-center">
                     <div className="text-lg font-bold text-red-400">{run.failed_cases}</div>
-                     <div className="text-xs text-gray-500">失败</div>
+                      <div className="text-xs text-[var(--color-text-muted)]">失败</div>
                   </div>
                   <div className="text-center">
                     <div className="text-lg font-bold text-blue-400">{(run.pass_rate * 100).toFixed(0)}%</div>
-                     <div className="text-xs text-gray-500">通过率</div>
+                      <div className="text-xs text-[var(--color-text-muted)]">通过率</div>
                   </div>
                   <div className="text-center">
                     <div className="text-lg font-bold text-purple-400">{run.average_score.toFixed(2)}</div>
-                     <div className="text-xs text-gray-500">平均分</div>
+                      <div className="text-xs text-[var(--color-text-muted)]">平均分</div>
                   </div>
                 </div>
                 {run.results && (
@@ -168,8 +168,8 @@ export default function EvalDashboard() {
                         <span className={r.passed ? 'text-green-400' : 'text-red-400'}>
                            {r.passed ? '通过' : '失败'}
                         </span>
-                        <span className="text-gray-400">{r.case_id}</span>
-                        <span className="text-gray-500">{r.score.toFixed(2)}</span>
+                         <span className="text-[var(--color-text-muted)]">{r.case_id}</span>
+                         <span className="text-[var(--color-text-muted)]">{r.score.toFixed(2)}</span>
                       </div>
                     ))}
                   </div>

@@ -24,13 +24,13 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
           {icon || <MessageSquare size={24} className="text-blue-400" />}
         </div>
         <h3 className="text-lg font-semibold text-white mb-2">{title}</h3>
-        <p className="text-gray-400 text-sm mb-6 leading-relaxed">{description}</p>
+        <p className="text-[var(--color-text-secondary)] text-sm mb-6 leading-relaxed">{description}</p>
         <div className="flex flex-wrap justify-center gap-2">
           {actions || (
             <>
-              <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-gray-400">帮我分析代码</span>
-              <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-gray-400">写一个 Python 脚本</span>
-              <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-gray-400">解释这个错误</span>
+              <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-[var(--color-text-secondary)]">帮我分析代码</span>
+              <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-[var(--color-text-secondary)]">写一个 Python 脚本</span>
+              <span className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs text-[var(--color-text-secondary)]">解释这个错误</span>
             </>
           )}
         </div>

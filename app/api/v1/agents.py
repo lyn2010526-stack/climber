@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import func as sa_func
+from sqlalchemy import select
 
-from app.api.v1.helpers import DEFAULT_USER, payload as _payload
-from app.storage import async_session
+from app.api.v1.helpers import DEFAULT_USER
+from app.api.v1.helpers import payload as _payload
+from app.core.api_key_crypto import encrypt_api_key
 from app.core.di import resolve as di_resolve
+from app.storage import async_session
 
 router = APIRouter()
 
@@ -67,8 +69,11 @@ async def create_agent(request: Request) -> dict[str, Any]:
             provider=data.get("provider", "openai"),
             model_id=data.get("model_id", "gpt-4o-mini"),
             base_url=data.get("base_url"),
+            api_key_encrypted=encrypt_api_key(
+                data.get("api_key") or data.get("api_key_encrypted") or ""
+            ) or None,
         )
-        for field in ("description", "system_prompt", "api_key_encrypted", "tool_ids", "skill_ids"):
+        for field in ("description", "system_prompt", "tool_ids", "skill_ids"):
             if hasattr(agent, field) and data.get(field) is not None:
                 setattr(agent, field, data[field])
         if not getattr(agent, "tool_ids", None):

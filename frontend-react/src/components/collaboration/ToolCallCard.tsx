@@ -30,15 +30,15 @@ export function ToolCallCard({ toolName, args, result, success }: ToolCallCardPr
       {expanded && (
         <div className="px-2 pb-2 space-y-1.5 border-t border-blue-500/10">
           <div>
-            <span className="text-[9px] text-gray-500 font-medium">参数:</span>
-            <pre className="text-[9px] text-gray-400 bg-gray-700 rounded p-1 mt-0.5 overflow-x-auto">
+            <span className="text-[9px] text-[var(--color-text-muted)] font-medium">参数:</span>
+            <pre className="text-[9px] text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-elevated)] rounded p-1 mt-0.5 overflow-x-auto">
               {JSON.stringify(args, null, 2).slice(0, 300)}
             </pre>
           </div>
           {result && (
             <div>
-              <span className="text-[9px] text-gray-500 font-medium">结果:</span>
-              <pre className="text-[9px] text-gray-400 bg-gray-700 rounded p-1 mt-0.5 overflow-x-auto max-h-20">
+              <span className="text-[9px] text-[var(--color-text-muted)] font-medium">结果:</span>
+              <pre className="text-[9px] text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-elevated)] rounded p-1 mt-0.5 overflow-x-auto max-h-20">
                 {result.slice(0, 500)}
               </pre>
             </div>

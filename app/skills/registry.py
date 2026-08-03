@@ -7,6 +7,7 @@ moved to dedicated modules.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from enum import Enum
 from typing import Any, Callable
@@ -97,6 +98,29 @@ class SkillRegistry:
         if asyncio.iscoroutinefunction(handler):
             return await handler(**params)
         return handler(**params)
+
+    async def execute(self, skill_id: str, **kwargs: Any) -> Any:
+        """Execute a skill by ID with given keyword arguments."""
+        return await self.invoke(skill_id, kwargs)
+
+    def get_by_category(self) -> dict[str, list[SkillInfo]]:
+        """Get skills grouped by category value."""
+        result: dict[str, list[SkillInfo]] = {}
+        for skill in self._skills.values():
+            cat_val = skill.category.value if hasattr(skill.category, "value") else str(skill.category)
+            if cat_val not in result:
+                result[cat_val] = []
+            result[cat_val].append(skill)
+        return result
+
+    def list_skills(self, category: str | None = None) -> list[SkillInfo]:
+        """List skills, optionally filtered by category."""
+        if category is None:
+            return list(self._skills.values())
+        return [
+            s for s in self._skills.values()
+            if (s.category.value if hasattr(s.category, "value") else str(s.category)) == category
+        ]
 
 
 # Legacy compatibility: keep the old interface working

@@ -8,9 +8,15 @@ from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.api.v1.helpers import DEFAULT_USER, payload as _payload
+from app.api.v1.helpers import DEFAULT_USER
+from app.api.v1.helpers import payload as _payload
+from app.core.api_key_crypto import encrypt_api_key
 from app.storage import async_session
-from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupMessage, AgentGroupTask
+from app.storage.models_groups import (
+    AgentGroup,
+    AgentGroupMember,
+    AgentGroupMessage,
+)
 
 router = APIRouter()
 
@@ -110,7 +116,9 @@ async def add_group_member(group_id: str, request: Request) -> dict[str, Any]:
         member = AgentGroupMember(
             group_id=group_id, agent_id=data.get("agent_id", ""), role=data.get("role", "participant"),
             model_provider=data.get("model_provider"), model_id=data.get("model_id"),
-            api_key_encrypted=data.get("api_key_encrypted"), tools=data.get("tools", []),
+            api_key_encrypted=encrypt_api_key(
+                data.get("api_key") or data.get("api_key_encrypted") or ""
+            ) or None, tools=data.get("tools", []),
             is_worker=bool(data.get("is_worker", False)),
         )
         db.add(member)

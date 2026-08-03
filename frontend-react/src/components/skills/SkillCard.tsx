@@ -1,4 +1,4 @@
-import React from 'react';
+import {} from 'react';
 import { cn } from '../../lib/utils';
 
 interface SkillCardProps {
@@ -37,8 +37,8 @@ const categoryBg: Record<string, string> = {
 };
 
 export function SkillCard({ skill, onToggle, onSelect, selected }: SkillCardProps) {
-  const gradient = categoryGradients[skill.category] || categoryGradients.utility;
-  const badgeClass = categoryBg[skill.category] || categoryBg.utility;
+  const gradient = categoryGradients[skill.category] || categoryGradients['utility'];
+  const badgeClass = categoryBg[skill.category] || categoryBg['utility'];
 
   return (
     <div
@@ -76,7 +76,7 @@ export function SkillCard({ skill, onToggle, onSelect, selected }: SkillCardProp
 
         {/* Name & Category */}
         <h3 className="text-sm font-semibold text-white mb-1 truncate">{skill.name}</h3>
-        <p className="text-xs text-gray-500 leading-relaxed line-clamp-2 mb-3">{skill.description}</p>
+        <p className="text-xs text-[var(--color-text-muted)] leading-relaxed line-clamp-2 mb-3">{skill.description}</p>
 
         {/* Tags */}
         <div className="flex flex-wrap gap-1.5 mb-4">
@@ -84,7 +84,7 @@ export function SkillCard({ skill, onToggle, onSelect, selected }: SkillCardProp
             {skill.category}
           </span>
           {skill.tags?.slice(0, 2).map(tag => (
-            <span key={tag} className="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-white/[0.04] text-gray-500 border border-white/[0.06]">
+             <span key={tag} className="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-white/[0.04] text-[var(--color-text-muted)] border border-white/[0.06]">
               {tag}
             </span>
           ))}
@@ -92,7 +92,7 @@ export function SkillCard({ skill, onToggle, onSelect, selected }: SkillCardProp
 
         {/* Stats & Action */}
         <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
-          <div className="flex items-center gap-3 text-[10px] text-gray-500">
+          <div className="flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
             {skill.installCount != null && (
               <span className="flex items-center gap-1">
                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -118,7 +118,7 @@ export function SkillCard({ skill, onToggle, onSelect, selected }: SkillCardProp
             className={cn(
               'px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-200',
               skill.enabled
-                ? 'bg-white/[0.06] text-gray-400 hover:bg-red-500/10 hover:text-red-400'
+                ? 'bg-white/[0.06] text-[var(--color-text-muted)] hover:bg-red-500/10 hover:text-red-400'
                 : 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
             )}
           >

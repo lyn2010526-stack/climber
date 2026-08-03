@@ -30,9 +30,10 @@ class MemoryReflectionService:
     - After session completion
     """
 
-    def __init__(self, reflection_interval: int = 3600, memory_threshold: int = 50):
+    def __init__(self, reflection_interval: int = 3600, memory_threshold: int = 50, vector_memory: Any = None):
         self.reflection_interval = reflection_interval  # seconds
         self.memory_threshold = memory_threshold
+        self.vector_memory = vector_memory
         self._last_reflection: float = 0.0
 
     async def maybe_reflect(self, user_id: str, force: bool = False) -> dict[str, Any]:

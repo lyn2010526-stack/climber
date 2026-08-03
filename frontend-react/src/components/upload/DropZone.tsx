@@ -59,8 +59,8 @@ export function DropZone({ onFilesDrop, children }: DropZoneProps) {
                 />
               </svg>
             </div>
-             <p className="text-gray-100 font-medium text-sm">拖拽文件到此处</p>
-             <p className="text-gray-500 text-xs mt-1">支持图片、PDF、DOCX 或文本文件</p>
+             <p className="text-[var(--color-text-primary)] font-medium text-sm">拖拽文件到此处</p>
+             <p className="text-[var(--color-text-muted)] text-xs mt-1">支持图片、PDF、DOCX 或文本文件</p>
           </div>
         </div>
       )}

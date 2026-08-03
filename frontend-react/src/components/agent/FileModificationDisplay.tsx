@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   FileText, Plus, Minus, ArrowRight,
   ChevronDown, ChevronRight, Check,
@@ -47,7 +47,7 @@ function DiffLine({ line }: { line: string }) {
         'w-3 text-right shrink-0 select-none',
         isAddition && 'text-green-500/60',
         isDeletion && 'text-red-500/60',
-        isContext && 'text-gray-600'
+        isContext && 'text-[var(--color-text-muted)]'
       )}>
         {isAddition ? '+' : isDeletion ? '-' : ' '}
       </span>
@@ -55,7 +55,7 @@ function DiffLine({ line }: { line: string }) {
         'whitespace-pre-wrap break-all',
         isAddition && 'text-green-300/90',
         isDeletion && 'text-red-300/90',
-        isContext && 'text-gray-400'
+        isContext && 'text-[var(--color-text-muted)]'
       )}>
         {line.slice(1) || line}
       </span>
@@ -94,7 +94,7 @@ function FileChangeRow({ change, onRevert, onPreview }: {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-200 truncate">{fileName}</span>
+            <span className="text-xs font-medium text-[var(--color-text-secondary)] truncate">{fileName}</span>
             <span className={cn(
               'px-1.5 py-0.5 rounded-md text-[9px] font-medium',
               config.bg, config.color
@@ -103,7 +103,7 @@ function FileChangeRow({ change, onRevert, onPreview }: {
             </span>
           </div>
           {dirPath && (
-            <p className="text-[10px] text-gray-500 truncate mt-0.5">{dirPath}/</p>
+            <p className="text-[10px] text-[var(--color-text-muted)] truncate mt-0.5">{dirPath}/</p>
           )}
         </div>
 
@@ -115,11 +115,11 @@ function FileChangeRow({ change, onRevert, onPreview }: {
           {change.deletions !== undefined && change.deletions > 0 && (
             <span className="text-[10px] text-red-400 font-mono">-{change.deletions}</span>
           )}
-          {isExpanded ? (
-            <ChevronDown size={13} className="text-gray-500" />
-          ) : (
-            <ChevronRight size={13} className="text-gray-500" />
-          )}
+            {isExpanded ? (
+             <ChevronDown size={13} className="text-[var(--color-text-muted)]" />
+           ) : (
+             <ChevronRight size={13} className="text-[var(--color-text-muted)]" />
+           )}
         </div>
       </button>
 
@@ -130,8 +130,8 @@ function FileChangeRow({ change, onRevert, onPreview }: {
           <div className="flex items-center gap-1 px-3 py-2 bg-white/[0.01]">
             <button
               className={cn(
-                'px-2 py-1 rounded-md text-[10px] font-medium transition-colors',
-                !showPreview ? 'bg-white/[0.08] text-white' : 'text-gray-400 hover:text-gray-200'
+                 'px-2 py-1 rounded-md text-[10px] font-medium transition-colors',
+                 !showPreview ? 'bg-white/[0.08] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
               )}
               onClick={() => setShowPreview(false)}
             >
@@ -140,7 +140,7 @@ function FileChangeRow({ change, onRevert, onPreview }: {
             <button
               className={cn(
                 'px-2 py-1 rounded-md text-[10px] font-medium transition-colors',
-                showPreview ? 'bg-white/[0.08] text-white' : 'text-gray-400 hover:text-gray-200'
+                 showPreview ? 'bg-white/[0.08] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
               )}
               onClick={() => setShowPreview(true)}
             >
@@ -157,12 +157,12 @@ function FileChangeRow({ change, onRevert, onPreview }: {
                 ))}
               </div>
             ) : showPreview && change.preview ? (
-              <pre className="text-[11px] text-gray-300 font-mono p-3 whitespace-pre-wrap">
+              <pre className="text-[11px] text-[var(--color-text-secondary)] font-mono p-3 whitespace-pre-wrap">
                 {change.preview}
               </pre>
             ) : (
               <div className="flex items-center justify-center py-8">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-[var(--color-text-muted)]">
                   {change.type === 'deleted' ? '文件已被删除' : '无差异信息'}
                 </p>
               </div>
@@ -193,7 +193,7 @@ function FileChangeRow({ change, onRevert, onPreview }: {
                 </Button>
               )}
               <div className="flex-1" />
-              <span className="text-[10px] text-gray-500 flex items-center gap-1">
+              <span className="text-[10px] text-[var(--color-text-muted)] flex items-center gap-1">
                 <Check size={9} className="text-green-400" />
                 已保存
               </span>
@@ -224,8 +224,8 @@ export function FileModificationDisplay({
       {/* Summary header */}
       <div className="flex items-center justify-between px-1 mb-2">
         <div className="flex items-center gap-2">
-          <FileText size={13} className="text-gray-400" />
-          <span className="text-[11px] font-medium text-gray-400">
+          <FileText size={13} className="text-[var(--color-text-muted)]" />
+          <span className="text-[11px] font-medium text-[var(--color-text-muted)]">
             {changes.length} 个文件变更
           </span>
           {createdCount > 0 && (
@@ -251,8 +251,8 @@ export function FileModificationDisplay({
         <FileChangeRow
           key={`${change.path}-${index}`}
           change={change}
-          onRevert={onRevert}
-          onPreview={onPreview}
+          {...(onRevert ? { onRevert } : {})}
+          {...(onPreview ? { onPreview } : {})}
         />
       ))}
 

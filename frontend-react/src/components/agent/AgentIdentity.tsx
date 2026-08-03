@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Bot, Edit3, Save, X, Target,
   Brain, Globe,
@@ -52,7 +52,7 @@ export function AgentIdentity() {
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Agent>>({});
 
-  const activeAgent = agents.find(a => a.id === activeAgentId) || agents[0];
+  const activeAgent = agents.find(a => a.id === activeAgentId) ?? agents[0]!;
 
   const startEdit = () => {
     setEditData({ ...activeAgent });
@@ -94,7 +94,7 @@ export function AgentIdentity() {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-white">智能体身份</h1>
-            <p className="text-xs text-gray-500 mt-0.5">管理智能体人格、目标和偏好</p>
+             <p className="text-xs text-[var(--color-text-muted)] mt-0.5">管理智能体人格、目标和偏好</p>
           </div>
         </div>
 
@@ -119,7 +119,7 @@ export function AgentIdentity() {
               </div>
               <span className={cn(
                 'text-xs font-medium',
-                activeAgentId === agent.id ? 'text-white' : 'text-gray-400'
+                 activeAgentId === agent.id ? 'text-white' : 'text-[var(--color-text-muted)]'
               )}>
                 {agent.name}
               </span>
@@ -146,22 +146,22 @@ export function AgentIdentity() {
                 </div>
                 <div className="pb-1">
                   <h3 className="text-lg font-bold text-white">{activeAgent.name}</h3>
-                  <p className="text-[11px] text-gray-500 mt-0.5">ID: {activeAgent.id}</p>
+                   <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">ID: {activeAgent.id}</p>
                 </div>
               </div>
               {!editing ? (
                 <button
                   onClick={startEdit}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/[0.06] border border-white/[0.08] text-gray-300 text-xs font-medium hover:bg-white/[0.1] transition-all"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/[0.06] border border-white/[0.08] text-[var(--color-text-secondary)] text-xs font-medium hover:bg-white/[0.1] transition-all"
                 >
                   <Edit3 size={13} />
-                  编辑
+                   编辑
                 </button>
               ) : (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setEditing(false)}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/[0.06] border border-white/[0.08] text-gray-300 text-xs font-medium hover:bg-white/[0.1] transition-all"
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/[0.06] border border-white/[0.08] text-[var(--color-text-secondary)] text-xs font-medium hover:bg-white/[0.1] transition-all"
                   >
                     <X size={13} />
                     取消
@@ -179,23 +179,23 @@ export function AgentIdentity() {
 
             {/* Persona */}
             <div className="mb-5">
-              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2 block">人格设定</label>
+              <label className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-2 block">人格设定</label>
               {editing ? (
                 <textarea
                   value={editData.persona || ''}
                   onChange={e => setEditData(d => ({ ...d, persona: e.target.value }))}
                   rows={3}
-                  className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-gray-200 focus:outline-none focus:border-blue-500/40 transition-all resize-none"
+                   className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all resize-none"
                 />
               ) : (
-                <p className="text-sm text-gray-300 leading-relaxed">{activeAgent.persona}</p>
+                <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">{activeAgent.persona}</p>
               )}
             </div>
 
             {/* Goals */}
             <div className="mb-5">
               <div className="flex items-center justify-between mb-2">
-                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">目标</label>
+                <label className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">目标</label>
                 {editing && (
                   <button onClick={addGoal} className="text-[11px] text-blue-400 hover:text-blue-300 transition-colors">
                     + 添加
@@ -212,17 +212,17 @@ export function AgentIdentity() {
                           type="text"
                           value={goal}
                           onChange={e => updateGoal(i, e.target.value)}
-                          className="flex-1 h-8 px-3 rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs text-gray-200 focus:outline-none focus:border-blue-500/40 transition-all"
+                          className="flex-1 h-8 px-3 rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
                         />
                         <button
                           onClick={() => removeGoal(i)}
-                          className="p-1 rounded-lg text-gray-500 hover:text-red-400 transition-colors"
+                          className="p-1 rounded-lg text-[var(--color-text-muted)] hover:text-red-400 transition-colors"
                         >
                           <X size={12} />
                         </button>
                       </>
                     ) : (
-                      <span className="text-xs text-gray-300">{goal}</span>
+                      <span className="text-xs text-[var(--color-text-secondary)]">{goal}</span>
                     )}
                   </div>
                 ))}
@@ -231,7 +231,7 @@ export function AgentIdentity() {
 
             {/* Memory scope */}
             <div>
-              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2 block">记忆范围</label>
+              <label className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-2 block">记忆范围</label>
               {editing ? (
                 <div className="space-y-2">
                   {memoryScopes.map(scope => (
@@ -245,10 +245,10 @@ export function AgentIdentity() {
                           : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.1]'
                       )}
                     >
-                      <Brain size={14} className={editData.memoryScope === scope.id ? 'text-blue-400' : 'text-gray-500'} />
+                      <Brain size={14} className={editData.memoryScope === scope.id ? 'text-blue-400' : 'text-[var(--color-text-muted)]'} />
                       <div className="flex-1">
                         <div className="text-xs font-medium text-white">{scope.label}</div>
-                        <div className="text-[10px] text-gray-500">{scope.description}</div>
+                        <div className="text-[10px] text-[var(--color-text-muted)]">{scope.description}</div>
                       </div>
                       {editData.memoryScope === scope.id && <Check size={14} className="text-blue-400" />}
                     </button>
@@ -256,8 +256,8 @@ export function AgentIdentity() {
                 </div>
               ) : (
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                  <Globe size={14} className="text-gray-500" />
-                  <span className="text-xs text-gray-300">
+                  <Globe size={14} className="text-[var(--color-text-muted)]" />
+                  <span className="text-xs text-[var(--color-text-secondary)]">
                     {memoryScopes.find(s => s.id === activeAgent.memoryScope)?.label || activeAgent.memoryScope}
                   </span>
                 </div>

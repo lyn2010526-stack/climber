@@ -232,12 +232,56 @@ asyncio.run(_test())
 
     def _register_tool(self, request: ToolCreationRequest) -> None:
         """Dynamically register the function as a callable tool."""
+        import ast as _ast
 
-        # Create async wrapper
-        namespace: dict[str, Any] = {}
-        exec(request.code, namespace)
+        # AST-level validation: reject unsafe nodes
+        tree = _ast.parse(request.code, mode="exec")
+        unsafe_nodes: list[tuple[str, str]] = []
+
+        for node in _ast.walk(tree):
+            # Block dangerous imports
+            if isinstance(node, _ast.Import):
+                for alias in node.names:
+                    root = alias.name.split(".")[0]
+                    if root in {"os", "subprocess", "shutil", "socket", "ctypes",
+                                "multiprocessing", "threading", "importlib", "pickle",
+                                " marshal", "signal", "pty", "fcntl"}:
+                        unsafe_nodes.append(("import", root))
+            elif isinstance(node, _ast.ImportFrom):
+                if node.module:
+                    root = node.module.split(".")[0]
+                    if root in {"os", "subprocess", "shutil", "socket", "ctypes",
+                                "multiprocessing", "threading", "importlib", "pickle",
+                                "signal", "pty", "fcntl"}:
+                        unsafe_nodes.append(("from import", root))
+            # Block dangerous call targets
+            elif isinstance(node, _ast.Call):
+                if isinstance(node.func, _ast.Name):
+                    if node.func.id in {"eval", "exec", "compile", "__import__",
+                                        "open", "getattr", "setattr", "delattr",
+                                        "globals", "locals"}:
+                        unsafe_nodes.append(("call", node.func.id))
+
+        if unsafe_nodes:
+            flagged = ", ".join(f"{kind}({name})" for kind, name in unsafe_nodes)
+            raise ValueError(f"Unsafe operations detected: {flagged}")
+
+        # Restricted builtins: only core data operations
+        _SAFE_BUILTINS = {
+            "len": len, "str": str, "int": int, "float": float,
+            "list": list, "dict": dict, "tuple": tuple, "set": set,
+            "range": range, "enumerate": enumerate, "zip": zip,
+            "sorted": sorted, "min": min, "max": max, "sum": sum,
+            "abs": abs, "round": round, "isinstance": isinstance,
+            "issubclass": issubclass, "any": any, "all": all,
+            "True": True, "False": False, "None": None,
+        }
+
+        namespace: dict[str, Any] = {"__builtins__": _SAFE_BUILTINS}
+        compiled = compile(tree, "<dynamic_tool>", "exec")
+        exec(compiled, namespace)  # noqa: S102 — namespace is strictly restricted above
+
         func = namespace.get(request.name)
-
         if func is None:
             raise ValueError(f"Function '{request.name}' not found in code")
 

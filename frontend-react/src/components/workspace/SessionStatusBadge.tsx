@@ -9,7 +9,7 @@ interface SessionStatusBadgeProps {
 const statusConfig: Record<SessionStatusBadgeProps['status'], { label: string; dotClass: string; pulseClass: string }> = {
   idle: {
     label: '空闲',
-    dotClass: 'bg-gray-500',
+    dotClass: 'bg-[var(--color-text-muted)]',
     pulseClass: '',
   },
   running: {
@@ -56,16 +56,16 @@ export function SessionStatusBadge({ status, tokens, modelName }: SessionStatusB
       className="relative group"
       title={tooltipParts.join(' · ')}
     >
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-800 border border-gray-700 text-gray-100 cursor-default">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[var(--color-bg-surface)] border border-[var(--color-border-subtle)] text-[var(--color-text-primary)] cursor-default">
         <span className={`w-1.5 h-1.5 rounded-full ${config.dotClass} ${config.pulseClass}`} />
-        <Cpu size={10} className="text-gray-400" />
+        <Cpu size={10} className="text-[var(--color-text-secondary)]" />
         {config.label}
       </span>
 
       {(tokens !== undefined || modelName) && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-[10px] text-gray-100 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
-          {modelName && <div className="text-gray-400">{modelName}</div>}
-          {tokens !== undefined && <div className="text-gray-400">{formatTokens(tokens)} tokens 已用</div>}
+         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-[var(--color-bg-surface)] border border-[var(--color-border-subtle)] rounded text-[10px] text-[var(--color-text-primary)] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+          {modelName && <div className="text-[var(--color-text-secondary)]">{modelName}</div>}
+          {tokens !== undefined && <div className="text-[var(--color-text-secondary)]">{formatTokens(tokens)} tokens 已用</div>}
         </div>
       )}
     </div>

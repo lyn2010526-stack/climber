@@ -41,6 +41,20 @@ class MockResponse:
             except asyncio.CancelledError:
                 return
 
+    async def aiter_bytes(self) -> AsyncIterator[bytes]:
+        for frame in self._frames:
+            if self._closed:
+                return
+            yield (frame + "\n").encode()
+        if self._hang_after:
+            try:
+                for _ in range(300):
+                    if self._closed:
+                        return
+                    await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                return
+
     def raise_for_status(self):
         pass
 
@@ -63,6 +77,9 @@ class MockClient:
     @asynccontextmanager
     async def stream(self, method, url, headers=None, content=None, timeout=None):
         yield self._response
+
+    async def send(self, request, stream=False):
+        return self._response
 
     async def aclose(self):
         pass

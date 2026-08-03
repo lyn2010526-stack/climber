@@ -92,9 +92,9 @@ export function MemoryKnowledgeBase() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-900">
+    <div className="h-full flex flex-col bg-[var(--color-bg-deep)]">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-default)]">
         <div className="flex items-center gap-2">
           <Database size={16} className="text-blue-400" />
            <h3 className="text-sm font-semibold">持久记忆</h3>
@@ -108,21 +108,21 @@ export function MemoryKnowledgeBase() {
       </div>
 
       {/* Search & Filter */}
-      <div className="px-4 py-2 border-b border-gray-700 flex gap-2">
+      <div className="px-4 py-2 border-b border-[var(--color-border-default)] flex gap-2">
         <div className="flex-1 relative">
-          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
              placeholder="搜索记忆..."
-            className="w-full pl-7 pr-3 py-1.5 bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50"
+            className="w-full pl-7 pr-3 py-1.5 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-default)] rounded-lg text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-blue-500/50"
           />
         </div>
         <select
           value={filterType}
           onChange={(e) => setFilterType(e.target.value)}
-          className="px-2 py-1.5 bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-100"
+          className="px-2 py-1.5 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-default)] rounded-lg text-xs text-[var(--color-text-primary)]"
         >
            <option value="">全部类型</option>
            <option value="fact">事实</option>
@@ -135,18 +135,18 @@ export function MemoryKnowledgeBase() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {editingEntry && (
-          <div className="p-3 bg-gray-800 border border-blue-500/30 rounded-xl mb-3">
+          <div className="p-3 bg-[var(--color-bg-surface-1)] border border-blue-500/30 rounded-xl mb-3">
             <textarea
               value={editingEntry.content || ''}
               onChange={(e) => setEditingEntry({ ...editingEntry, content: e.target.value })}
-              className="w-full h-20 px-3 py-2 bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-100 resize-none focus:outline-none focus:border-blue-500/50"
+              className="w-full h-20 px-3 py-2 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-default)] rounded-lg text-xs text-[var(--color-text-primary)] resize-none focus:outline-none focus:border-blue-500/50"
                placeholder="记忆内容..."
             />
             <div className="grid grid-cols-2 gap-2 mt-2">
               <select
                 value={editingEntry.type || 'fact'}
                 onChange={(e) => setEditingEntry({ ...editingEntry, type: e.target.value as any })}
-                className="px-2 py-1.5 bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-100"
+                className="px-2 py-1.5 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-default)] rounded-lg text-xs text-[var(--color-text-primary)]"
               >
                  <option value="fact">事实</option>
                  <option value="decision">决策</option>
@@ -159,7 +159,7 @@ export function MemoryKnowledgeBase() {
                 max={10}
                 value={editingEntry.weight || 5}
                 onChange={(e) => setEditingEntry({ ...editingEntry, weight: parseInt(e.target.value) })}
-                className="px-2 py-1.5 bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-100"
+                className="px-2 py-1.5 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-default)] rounded-lg text-xs text-[var(--color-text-primary)]"
                  placeholder="权重 1-10"
               />
             </div>
@@ -172,7 +172,7 @@ export function MemoryKnowledgeBase() {
               </button>
               <button
                 onClick={() => setEditingEntry(null)}
-                className="px-3 py-1 text-xs text-gray-400 bg-gray-700 rounded-lg"
+                className="px-3 py-1 text-xs text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-elevated)] rounded-lg"
               >
                  取消
               </button>
@@ -181,14 +181,14 @@ export function MemoryKnowledgeBase() {
         )}
 
         {filtered.map(entry => (
-          <div key={entry.id} className="p-3 bg-gray-800 border border-gray-700 rounded-xl hover:border-blue-500/20 transition-colors">
+          <div key={entry.id} className="p-3 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-default)] rounded-xl hover:border-blue-500/20 transition-colors">
             <div className="flex items-start gap-2">
               <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${typeColors[entry.type]}`}>
                 {entry.type}
               </span>
-              <p className="text-xs text-gray-100 flex-1">{entry.content}</p>
+              <p className="text-xs text-[var(--color-text-primary)] flex-1">{entry.content}</p>
             </div>
-            <div className="flex items-center gap-3 mt-2 text-[10px] text-gray-500">
+            <div className="flex items-center gap-3 mt-2 text-[10px] text-[var(--color-text-muted)]">
               <span className="flex items-center gap-0.5">
                 <Star size={9} /> {entry.weight}/10
               </span>
@@ -217,7 +217,7 @@ export function MemoryKnowledgeBase() {
             {entry.tags.length > 0 && (
               <div className="flex gap-1 mt-1.5">
                 {entry.tags.map(tag => (
-                  <span key={tag} className="px-1.5 py-0.5 bg-gray-700 rounded text-[10px] text-gray-500">
+                  <span key={tag} className="px-1.5 py-0.5 bg-[var(--color-bg-surface-elevated)] rounded text-[10px] text-[var(--color-text-muted)]">
                     {tag}
                   </span>
                 ))}
@@ -227,7 +227,7 @@ export function MemoryKnowledgeBase() {
         ))}
 
         {filtered.length === 0 && (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-[var(--color-text-muted)]">
             <Archive size={24} className="mx-auto mb-2 opacity-30" />
             <p className="text-xs">No memory entries found</p>
           </div>

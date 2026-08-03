@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Search, Plus, Server, Activity,
   CheckCircle2, WifiOff,
@@ -143,7 +143,7 @@ export function MCPManager() {
             </div>
             <div>
               <h1 className="text-lg font-semibold text-white">MCP 服务器</h1>
-              <p className="text-xs text-gray-500 mt-0.5">管理模型上下文协议服务器连接</p>
+              <p className="text-xs text-[var(--color-text-muted)] mt-0.5">管理模型上下文协议服务器连接</p>
             </div>
           </div>
           <button
@@ -159,22 +159,22 @@ export function MCPManager() {
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
             <div className="flex items-center gap-2 mb-1">
-              <Server size={12} className="text-gray-500" />
-              <span className="text-[10px] text-gray-500">服务器总数</span>
+              <Server size={12} className="text-[var(--color-text-muted)]" />
+              <span className="text-[10px] text-[var(--color-text-muted)]">服务器总数</span>
             </div>
             <div className="text-lg font-semibold text-white">{stats.total}</div>
           </div>
           <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
             <div className="flex items-center gap-2 mb-1">
               <CheckCircle2 size={12} className="text-green-400" />
-              <span className="text-[10px] text-gray-500">已连接</span>
+              <span className="text-[10px] text-[var(--color-text-muted)]">已连接</span>
             </div>
             <div className="text-lg font-semibold text-green-400">{stats.connected}</div>
           </div>
           <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
             <div className="flex items-center gap-2 mb-1">
               <Activity size={12} className="text-blue-400" />
-              <span className="text-[10px] text-gray-500">可用工具</span>
+              <span className="text-[10px] text-[var(--color-text-muted)]">可用工具</span>
             </div>
             <div className="text-lg font-semibold text-blue-400">{stats.tools}</div>
           </div>
@@ -182,13 +182,13 @@ export function MCPManager() {
 
         {/* Search */}
         <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="搜索服务器..."
-            className="w-full h-9 pl-9 pr-4 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-emerald-500/40 focus:bg-white/[0.06] transition-all"
+            className="w-full h-9 pl-9 pr-4 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-secondary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-success)]/40 focus:bg-white/[0.06] transition-all"
           />
         </div>
       </div>
@@ -197,9 +197,9 @@ export function MCPManager() {
       <div className="flex-1 overflow-y-auto px-6 pb-6">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16">
-            <WifiOff size={32} className="text-gray-600 mb-3" />
-            <p className="text-sm text-gray-500">没有找到服务器</p>
-            <p className="text-xs text-gray-600 mt-1">尝试其他搜索词或添加新服务器</p>
+              <WifiOff size={32} className="text-[var(--color-text-muted)] mb-3" />
+            <p className="text-sm text-[var(--color-text-muted)]">没有找到服务器</p>
+            <p className="text-xs text-[var(--color-text-muted)] mt-1">尝试其他搜索词或添加新服务器</p>
           </div>
         ) : (
           <div className="space-y-3">

@@ -47,7 +47,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   return (
     <div
       ref={ref}
-      className="fixed z-50 min-w-[180px] bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 overflow-hidden"
+      className="fixed z-50 min-w-[180px] bg-[var(--color-bg-surface-primary)] border border-[var(--color-border-subtle)] rounded-lg shadow-xl py-1 overflow-hidden"
       style={{ left: x, top: adjustedY }}
     >
       {items.map((item) => (
@@ -57,16 +57,16 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
           disabled={item.disabled}
           className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-xs transition-colors ${
             item.disabled
-              ? 'text-gray-600 cursor-not-allowed'
+              ? 'text-[var(--color-text-muted)] cursor-not-allowed'
               : item.danger
                 ? 'text-red-400 hover:bg-red-500/10'
-                : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-100'
+                : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-hover)]/50 hover:text-[var(--color-text-primary)]'
           }`}
         >
           {item.icon && <item.icon size={12} />}
           <span className="flex-1 text-left">{item.label}</span>
           {item.shortcut && (
-            <kbd className="text-[10px] text-gray-500">{item.shortcut}</kbd>
+            <kbd className="text-[10px] text-[var(--color-text-muted)]">{item.shortcut}</kbd>
           )}
         </button>
       ))}

@@ -312,6 +312,8 @@ class TestModelRouter:
 class TestAgentEngineIntegration:
     @pytest.fixture
     def engine(self):
+        from app.core.permission_rules import PermissionConfig, PermissionMode
+
         model_registry = ModelRegistry()
         tool_registry = ToolRegistry()
 
@@ -323,7 +325,9 @@ class TestAgentEngineIntegration:
         async def get_time() -> str:
             return "2024-01-01 12:00:00"
 
-        return AgentEngine(model_registry, tool_registry)
+        eng = AgentEngine(model_registry, tool_registry)
+        eng._default_permission_config = PermissionConfig(mode=PermissionMode.BYPASS)
+        return eng
 
     @pytest.mark.asyncio
     async def test_simple_conversation(self, engine):

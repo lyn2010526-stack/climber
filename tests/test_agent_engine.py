@@ -87,6 +87,8 @@ class StreamingFakeModelAdapter(FakeModelAdapter):
 @pytest_asyncio.fixture
 async def engine():
     """Create an agent engine with fake registries."""
+    from app.core.permission_rules import PermissionConfig, PermissionMode
+
     model_registry = ModelRegistry()
     tool_registry = ToolRegistry()
 
@@ -102,6 +104,8 @@ async def engine():
         model_registry=model_registry,
         tool_registry=tool_registry,
     )
+    # Use BYPASS permission mode for tests to avoid ASK blocking
+    engine._default_permission_config = PermissionConfig(mode=PermissionMode.BYPASS)
     return engine
 
 

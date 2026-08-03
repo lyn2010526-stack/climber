@@ -47,7 +47,7 @@ export function ToggleSwitch({
             <h3 className="text-sm font-semibold text-white">{label}</h3>
             {statusBadge[status]}
           </div>
-          <p className="mt-1 text-xs text-gray-400 leading-relaxed">
+          <p className="mt-1 text-xs text-[var(--color-text-secondary)] leading-relaxed">
             {description}
           </p>
         </div>

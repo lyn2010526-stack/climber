@@ -62,7 +62,7 @@ function NodeHeader({ style, nodeData, icon: Icon }: any) {
       <div className={`p-1.5 rounded-lg ${style.bg} ${style.color}`}>
         <Icon size={14} />
       </div>
-      <span className="text-xs font-medium text-gray-100 truncate">
+      <span className="text-xs font-medium text-[var(--color-text-primary)] truncate">
         {nodeData['label'] || 'Node'}
       </span>
     </div>
@@ -77,7 +77,7 @@ function NodeMeta({ nodeData, type }: any) {
   else if (type === 'output') meta = nodeData['description'] || 'Workflow output';
 
   if (!meta) return null;
-  return <p className="text-[10px] text-gray-500 mt-1 truncate">{meta}</p>;
+  return <p className="text-[10px] text-[var(--color-text-muted)] mt-1 truncate">{meta}</p>;
 }
 
 /* Reference: Flowise `CanvasNode.jsx` - selected state, version warning */

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   cn,
 } from '../../lib/utils';
@@ -23,7 +23,7 @@ interface MCPServer {
 const statusConfig = {
   connected: { color: 'bg-green-500', text: 'text-green-400', label: '已连接', icon: CheckCircle2 },
   connecting: { color: 'bg-yellow-500', text: 'text-yellow-400', label: '连接中', icon: Activity },
-  disconnected: { color: 'bg-gray-500', text: 'text-gray-400', label: '未连接', icon: WifiOff },
+  disconnected: { color: 'bg-[var(--color-text-muted)]', text: 'text-[var(--color-text-muted)]', label: '未连接', icon: WifiOff },
   error: { color: 'bg-red-500', text: 'text-red-400', label: '错误', icon: AlertCircle },
 };
 
@@ -68,15 +68,15 @@ export function ServerCard({ server, onStart, onStop, onRestart }: ServerCardPro
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h4 className="text-sm font-semibold text-white truncate">{server.name}</h4>
-              <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-white/[0.04] text-gray-500 font-medium">
+              <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-white/[0.04] text-[var(--color-text-muted)] font-medium">
                 {transportLabels[server.transport]}
               </span>
             </div>
             <div className="flex items-center gap-3 mt-1">
               <span className={cn('text-[11px] font-medium', config.text)}>{config.label}</span>
-              <span className="text-[11px] text-gray-600">{server.toolCount} 个工具</span>
+              <span className="text-[11px] text-[var(--color-text-muted)]">{server.toolCount} 个工具</span>
               {server.lastPing != null && (
-                <span className="text-[11px] text-gray-600 flex items-center gap-1">
+                <span className="text-[11px] text-[var(--color-text-muted)] flex items-center gap-1">
                   <Clock size={10} />
                   {server.lastPing}ms
                 </span>
@@ -90,14 +90,14 @@ export function ServerCard({ server, onStart, onStop, onRestart }: ServerCardPro
               <>
                 <button
                   onClick={() => onRestart(server.id)}
-                  className="p-1.5 rounded-lg bg-white/[0.04] text-gray-400 hover:text-white hover:bg-white/[0.08] transition-all"
+                  className="p-1.5 rounded-lg bg-white/[0.04] text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.08] transition-all"
                   title="重启"
                 >
                   <RotateCcw size={13} />
                 </button>
                 <button
                   onClick={() => onStop(server.id)}
-                  className="p-1.5 rounded-lg bg-white/[0.04] text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  className="p-1.5 rounded-lg bg-white/[0.04] text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-all"
                   title="停止"
                 >
                   <Square size={13} />
@@ -114,7 +114,7 @@ export function ServerCard({ server, onStart, onStop, onRestart }: ServerCardPro
             )}
             <button
               onClick={() => setExpanded(!expanded)}
-              className="p-1.5 rounded-lg bg-white/[0.04] text-gray-400 hover:text-white hover:bg-white/[0.08] transition-all"
+              className="p-1.5 rounded-lg bg-white/[0.04] text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.08] transition-all"
             >
               <ChevronDown size={13} className={cn('transition-transform', expanded && 'rotate-180')} />
             </button>
@@ -123,7 +123,7 @@ export function ServerCard({ server, onStart, onStop, onRestart }: ServerCardPro
 
         {/* Connection detail */}
         <div className="mt-2 ml-6">
-          <code className="text-[11px] text-gray-500 font-mono">
+          <code className="text-[11px] text-[var(--color-text-muted)] font-mono">
             {server.transport === 'stdio' ? server.command : server.url}
           </code>
         </div>
@@ -132,12 +132,12 @@ export function ServerCard({ server, onStart, onStop, onRestart }: ServerCardPro
       {/* Expanded tool list */}
       {expanded && server.tools && server.tools.length > 0 && (
         <div className="px-4 pb-4 pt-1 border-t border-white/[0.04]">
-          <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">可用工具</div>
+          <div className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">可用工具</div>
           <div className="space-y-1.5">
             {server.tools.map(tool => (
               <div key={tool.name} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
                 <Zap size={11} className="text-blue-400 flex-shrink-0" />
-                <span className="text-[11px] text-gray-300 font-mono flex-1 truncate">{tool.name}</span>
+                <span className="text-[11px] text-[var(--color-text-secondary)] font-mono flex-1 truncate">{tool.name}</span>
               </div>
             ))}
           </div>

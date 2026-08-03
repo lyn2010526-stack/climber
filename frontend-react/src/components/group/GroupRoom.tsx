@@ -35,7 +35,7 @@ const ROLE_ICONS: Record<string, any> = {
 const ROLE_COLORS: Record<string, string> = {
   moderator: 'text-amber-400',
   participant: 'text-blue-400',
-  observer: 'text-gray-500',
+  observer: 'text-[var(--color-text-muted)]',
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -54,9 +54,6 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const getWsProtocol = () => window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const BASE_WS = `${getWsProtocol()}//${window.location.host}/api/v1/ws/groups/${groupId}`;
-
   useEffect(() => {
     // Fetch initial messages
     api.listGroupMessages(groupId)
@@ -69,7 +66,8 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
       .catch(() => {});
 
     // Connect WebSocket
-    const ws = new WebSocket(`${BASE_WS}`);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${protocol}//${window.location.host}/api/v1/ws/groups/${groupId}`);
     wsRef.current = ws;
 
     ws.onopen = () => setConnected(true);
@@ -137,18 +135,18 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
       {/* Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="h-10 flex items-center px-4 border-b border-gray-700 bg-gray-800/50">
+        <div className="h-10 flex items-center px-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-elevated)]/50">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="mr-2 p-1 rounded hover:bg-gray-700 text-gray-400 lg:hidden"
+            className="mr-2 p-1 rounded hover:bg-[var(--color-bg-surface-elevated)] text-[var(--color-text-secondary)] lg:hidden"
           >
             <PanelLeft size={14} />
           </button>
           <Hash size={14} className="text-blue-400 mr-2" />
-           <span className="text-xs font-medium text-gray-100">群组讨论</span>
+           <span className="text-xs font-medium text-[var(--color-text-primary)]">群组讨论</span>
           <div className="ml-auto flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-[10px] text-gray-500">
+            <span className="text-[10px] text-[var(--color-text-muted)]">
               {connected ? '已连接' : '已断开'}
             </span>
           </div>
@@ -158,23 +156,23 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 && (
             <div className="text-center py-8">
-              <MessageCircle size={32} className="mx-auto text-gray-500/30" />
-               <p className="text-xs text-gray-500 mt-2">暂无消息，开始讨论吧！</p>
+              <MessageCircle size={32} className="mx-auto text-[var(--color-text-muted)]/30" />
+               <p className="text-xs text-[var(--color-text-muted)] mt-2">暂无消息，开始讨论吧！</p>
             </div>
           )}
           {messages.map((msg) => (
             <div key={msg.id} className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-[var(--color-bg-surface-elevated)] flex items-center justify-center shrink-0">
                 <Bot size={14} className="text-blue-400" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-gray-100">{msg.sender_name}</span>
-                  <span className="text-[10px] text-gray-500">
+                  <span className="text-xs font-medium text-[var(--color-text-primary)]">{msg.sender_name}</span>
+                  <span className="text-[10px] text-[var(--color-text-muted)]">
                     {msg.created_at ? new Date(msg.created_at).toLocaleTimeString() : ''}
                   </span>
                 </div>
-                <p className="text-xs text-gray-400 mt-1 whitespace-pre-wrap break-words">
+                <p className="text-xs text-[var(--color-text-secondary)] mt-1 whitespace-pre-wrap break-words">
                   {msg.content}
                 </p>
               </div>
@@ -184,7 +182,7 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
         </div>
 
         {/* Input */}
-        <div className="p-3 border-t border-gray-700 bg-gray-800/30">
+        <div className="p-3 border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-elevated)]/30">
           <div className="flex items-center gap-2">
             <input
               type="text"
@@ -192,7 +190,7 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
                placeholder="输入消息..."
-              className="flex-1 px-3 py-2 bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50"
+              className="flex-1 px-3 py-2 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded-lg text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-blue-500/50"
             />
             <button
               onClick={sendMessage}
@@ -210,15 +208,15 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
-      <div className={`fixed inset-y-0 right-0 w-56 border-l border-gray-700 bg-gray-800/30 flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 z-50 ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        <div className="h-10 flex items-center px-3 border-b border-gray-700">
-          <Users size={12} className="text-gray-500 mr-2" />
-          <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+      <div className={`fixed inset-y-0 right-0 w-56 border-l border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-elevated)]/30 flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 z-50 ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+        <div className="h-10 flex items-center px-3 border-b border-[var(--color-border-subtle)]">
+          <Users size={12} className="text-[var(--color-text-muted)] mr-2" />
+          <span className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
              成员 ({members.length})
           </span>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="ml-auto p-1 rounded hover:bg-gray-700 text-gray-400 lg:hidden"
+            className="ml-auto p-1 rounded hover:bg-[var(--color-bg-surface-elevated)] text-[var(--color-text-secondary)] lg:hidden"
           >
             <X size={12} />
           </button>
@@ -231,18 +229,18 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
               <div
                 key={member.id}
                 className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${
-                  isOnline ? 'bg-gray-700/30 hover:bg-gray-700/50' : 'opacity-60'
+                  isOnline ? 'bg-[var(--color-bg-surface-elevated)]/30 hover:bg-[var(--color-bg-surface-elevated)]/50' : 'opacity-60'
                 }`}
               >
                 <div className="relative">
-                  <Icon size={12} className={ROLE_COLORS[member.role] || 'text-gray-500'} />
+                  <Icon size={12} className={ROLE_COLORS[member.role] || 'text-[var(--color-text-muted)]'} />
                   {isOnline && (
-                    <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-gray-800 animate-pulse" />
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-[var(--color-border-subtle)] animate-pulse" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] text-gray-100 truncate">{member.agent_id.slice(0, 8)}</p>
-                   <p className="text-[9px] text-gray-500">{ROLE_LABELS[member.role] || member.role}</p>
+                  <p className="text-[11px] text-[var(--color-text-primary)] truncate">{member.agent_id.slice(0, 8)}</p>
+                   <p className="text-[9px] text-[var(--color-text-muted)]">{ROLE_LABELS[member.role] || member.role}</p>
                 </div>
                 {isOnline && (
                   <span className="text-[8px] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded-full">
@@ -253,10 +251,10 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
             );
           })}
         </div>
-        <div className="p-2 border-t border-gray-700">
+        <div className="p-2 border-t border-[var(--color-border-subtle)]">
           <button
             onClick={onLeave}
-            className="w-full py-1.5 text-[10px] text-gray-500 hover:text-red-400 transition-colors"
+            className="w-full py-1.5 text-[10px] text-[var(--color-text-muted)] hover:text-red-400 transition-colors"
           >
              退出群组
           </button>

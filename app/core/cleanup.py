@@ -101,8 +101,16 @@ async def cleanup_memory_archive() -> None:
     """Archive old episodic memories to long-term storage."""
     try:
         from app.core.persistent_memory import persistent_memory
+        from app.storage import async_session
+        from app.storage.models_memory import EpisodicMemory
+        from sqlalchemy import select, func
 
-        user_ids = ["default-user"]
+        # Get all distinct user_ids that have episodic memories
+        async with async_session() as db:
+            result = await db.execute(
+                select(EpisodicMemory.user_id).distinct()
+            )
+            user_ids = [row[0] for row in result.fetchall()]
 
         total_archived = 0
         for uid in user_ids:

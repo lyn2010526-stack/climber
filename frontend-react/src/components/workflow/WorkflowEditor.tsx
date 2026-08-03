@@ -154,18 +154,18 @@ export function WorkflowEditor({
       {/* Canvas */}
       <div className="flex-1 flex flex-col">
         {/* Toolbar */}
-        <div className="h-10 flex items-center px-4 border-b border-gray-700 bg-gray-800/50 gap-3">
+         <div className="h-10 flex items-center px-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)]/50 gap-3">
           <input
             type="text"
             value={workflowName}
             onChange={(e) => setWorkflowName(e.target.value)}
-            className="text-xs font-medium text-gray-100 bg-transparent border-none focus:outline-none"
+            className="text-xs font-medium text-[var(--color-text-primary)] bg-transparent border-none focus:outline-none"
           />
           <div className="ml-auto flex items-center gap-1">
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-1 px-2 py-1 text-[10px] text-gray-400 hover:text-gray-100 bg-gray-700 rounded transition-colors disabled:opacity-50"
+               className="flex items-center gap-1 px-2 py-1 text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] bg-[var(--color-bg-surface-elevated)] rounded transition-colors disabled:opacity-50"
             >
               <Save size={11} />
               {saving ? '保存中...' : 'Save'}
@@ -201,12 +201,12 @@ export function WorkflowEditor({
             onDragOver={onDragOver}
             nodeTypes={nodeTypes}
             fitView
-            className="bg-gray-900"
+             className="bg-[var(--color-bg-deep)]"
           >
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="rgba(255,255,255,0.05)" />
-            <Controls className="!bg-gray-800 !border-gray-700 !shadow-lg [&>button]:!bg-gray-800 [&>button]:!border-gray-700 [&>button]:!text-gray-400 [&>button:hover]:!bg-gray-700/50" />
+             <Controls className="!bg-[var(--color-bg-surface)] !border-[var(--color-border-subtle)] !shadow-lg [&>button]:!bg-[var(--color-bg-surface)] [&>button]:!border-[var(--color-border-subtle)] [&>button]:!text-[var(--color-text-muted)] [&>button:hover]:!bg-[var(--color-bg-surface-elevated)]/50" />
             <MiniMap
-              className="!bg-gray-800 !border-gray-700"
+               className="!bg-[var(--color-bg-surface)] !border-[var(--color-border-subtle)]"
               nodeColor={(n) => {
                 const colors: Record<string, string> = {
                   input: '#6366f1',
@@ -222,11 +222,11 @@ export function WorkflowEditor({
         </div>
       </div>
 
-      {/* Right Panel */}
-      <div className="w-64 border-l border-gray-700 bg-gray-800/30 flex flex-col">
+       {/* Right Panel */}
+       <div className="w-64 border-l border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)]/30 flex flex-col">
         {/* Node Palette */}
-        <div className="p-3 border-b border-gray-700">
-          <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+         <div className="p-3 border-b border-[var(--color-border-subtle)]">
+           <h3 className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">
             Node Palette
           </h3>
           <div className="space-y-1">
@@ -238,12 +238,12 @@ export function WorkflowEditor({
                   e.dataTransfer.setData('application/reactflow', type);
                   e.dataTransfer.effectAllowed = 'move';
                 }}
-                className="flex items-center gap-2 px-2 py-2 rounded-lg bg-gray-700 border border-gray-700 cursor-grab hover:border-blue-500/30 transition-colors"
+                className="flex items-center gap-2 px-2 py-2 rounded-lg bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] cursor-grab hover:border-[var(--color-accent)]/30 transition-colors"
               >
                 <Icon size={13} className="text-blue-400" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-medium text-gray-100">{label}</p>
-                  <p className="text-[9px] text-gray-500 truncate">{description}</p>
+                   <p className="text-[11px] font-medium text-[var(--color-text-primary)]">{label}</p>
+                   <p className="text-[9px] text-[var(--color-text-muted)] truncate">{description}</p>
                 </div>
               </div>
             ))}
@@ -260,7 +260,7 @@ export function WorkflowEditor({
             />
           ) : (
             <div className="p-4 text-center">
-               <p className="text-[10px] text-gray-500">选择节点以编辑属性</p>
+                <p className="text-[10px] text-[var(--color-text-muted)]">选择节点以编辑属性</p>
             </div>
           )}
         </div>

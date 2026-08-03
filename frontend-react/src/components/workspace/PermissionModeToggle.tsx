@@ -32,14 +32,14 @@ export function PermissionModeToggle({ value, onChange }: PermissionModeTogglePr
 
   return (
     <div className="relative inline-flex items-center">
-      <div className="flex items-center bg-gray-800 border border-gray-700 rounded-lg p-0.5">
+      <div className="flex items-center bg-[var(--color-bg-surface-primary)] border border-[var(--color-border-subtle)] rounded-lg p-0.5">
         <button
           type="button"
           onClick={() => handleToggle('sandbox')}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
             value === 'sandbox'
               ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
-              : 'text-gray-400 hover:text-gray-100 hover:bg-gray-700/50'
+              : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-hover)]/50'
           }`}
           title="沙箱模式 — 安全受限环境"
         >
@@ -53,7 +53,7 @@ export function PermissionModeToggle({ value, onChange }: PermissionModeTogglePr
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
             value === 'native'
               ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-sm shadow-amber-500/10'
-              : 'text-gray-400 hover:text-gray-100 hover:bg-gray-700/50'
+              : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-hover)]/50'
           }`}
           title="原生模式 — 完整系统访问，需要审批"
         >

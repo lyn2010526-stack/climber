@@ -13,7 +13,7 @@ from typing import Any, Callable
 import structlog
 from mcp import ClientSession
 from mcp.client.stdio import stdio_client
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 from app.config import settings
 from app.tools.mcp_models import (
@@ -111,7 +111,7 @@ class MCPClient:
         if not self.url:
             raise ValueError("streamable_http transport requires 'url' parameter")
 
-        self._connect_cm = streamablehttp_client(
+        self._connect_cm = streamable_http_client(
             url=self.url,
             headers=self.headers,
         )

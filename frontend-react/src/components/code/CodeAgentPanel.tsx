@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Play, Square, RotateCcw, Code2, Terminal,
   CheckCircle2, XCircle, Clock,
@@ -76,7 +76,7 @@ export function CodeAgentPanel() {
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06]">
               <div className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-[11px] text-gray-400 font-mono">main.py</span>
+              <span className="text-[11px] text-[var(--color-text-muted)] font-mono">main.py</span>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
@@ -97,7 +97,7 @@ export function CodeAgentPanel() {
                 运行
               </button>
             )}
-            <button className="p-1.5 rounded-lg bg-white/[0.04] text-gray-400 hover:text-white hover:bg-white/[0.08] transition-all">
+            <button className="p-1.5 rounded-lg bg-white/[0.04] text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.08] transition-all">
               <RotateCcw size={13} />
             </button>
           </div>
@@ -109,7 +109,7 @@ export function CodeAgentPanel() {
             <textarea
               value={code}
               onChange={e => setCode(e.target.value)}
-              className="w-full h-full p-4 bg-transparent text-sm text-gray-200 font-mono leading-relaxed resize-none focus:outline-none"
+              className="w-full h-full p-4 bg-transparent text-sm text-[var(--color-text-primary)] font-mono leading-relaxed resize-none focus:outline-none"
               spellCheck={false}
             />
           </div>
@@ -117,10 +117,10 @@ export function CodeAgentPanel() {
           {/* Output panel */}
           <div className="h-40 border-t border-white/[0.06] flex flex-col">
             <div className="flex items-center justify-between px-4 py-2">
-              <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">执行输出</span>
+              <span className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">执行输出</span>
               <button
                 onClick={() => setOutput('')}
-                className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors"
+                className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
               >
                 清空
               </button>
@@ -136,7 +136,7 @@ export function CodeAgentPanel() {
                 <pre className="text-xs text-green-400 font-mono">{output}</pre>
               )}
               {!running && !output && (
-                <p className="text-xs text-gray-600">点击运行按钮执行代码</p>
+                <p className="text-xs text-[var(--color-text-muted)]">点击运行按钮执行代码</p>
               )}
             </div>
           </div>
@@ -146,10 +146,10 @@ export function CodeAgentPanel() {
       {/* Right: Execution trace */}
       <div className="w-80 border-l border-white/[0.06] flex flex-col bg-[#0D0D12]/50">
         <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
-          <span className="text-xs font-semibold text-gray-400">执行追踪</span>
+          <span className="text-xs font-semibold text-[var(--color-text-muted)]">执行追踪</span>
           <button
             onClick={() => setShowPlan(!showPlan)}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] text-gray-500 hover:text-gray-300 hover:bg-white/[0.04] transition-all"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-white/[0.04] transition-all"
           >
             <Eye size={11} />
             {showPlan ? '隐藏计划' : '显示计划'}
@@ -194,10 +194,10 @@ export function CodeAgentPanel() {
                         {typeConfig.label}
                       </span>
                       {step.duration && (
-                        <span className="text-[10px] text-gray-600">{step.duration}ms</span>
+                        <span className="text-[10px] text-[var(--color-text-muted)]">{step.duration}ms</span>
                       )}
                     </div>
-                    <pre className="text-[11px] text-gray-400 font-mono leading-relaxed whitespace-pre-wrap">
+                    <pre className="text-[11px] text-[var(--color-text-muted)] font-mono leading-relaxed whitespace-pre-wrap">
                       {step.content}
                     </pre>
                   </div>

@@ -192,8 +192,8 @@ class MemoryToolSet:
                     logger.warning("memory_toolset.forget_vector_delete", error=str(e))
 
             if deleted_count > 0:
-                return f"Memory {memory_id} forgotten (reason: {reason})"
-            return f"Memory {memory_id} not found or not owned by user"
+                return f"Forgotten memory {memory_id} (reason: {reason})"
+            return f"Memory {memory_id} not found"
         except Exception as e:
             logger.error("memory_toolset.forget_failed", error=str(e))
             return f"Error forgetting: {e}"

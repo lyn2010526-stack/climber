@@ -119,6 +119,11 @@ class UserProfile(Base):
     facts: Mapped[list[dict]] = mapped_column(JSON, default=list)
     # Each fact: {"category": "work", "content": "Software engineer at Google", "confidence": 0.9}
 
+    # Identity memory — inviolable rules, values, principles
+    inviolable: Mapped[list[str]] = mapped_column(JSON, default=list)
+    values: Mapped[list[str]] = mapped_column(JSON, default=list)
+    principles: Mapped[list[str]] = mapped_column(JSON, default=list)
+
     # Behavioral patterns
     common_topics: Mapped[list[dict]] = mapped_column(JSON, default=list)
     # Each: {"topic": "Python", "frequency": 15, "last_mentioned": "2024-01-15"}

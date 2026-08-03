@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Zap, CheckCircle2, XCircle, Clock, ChevronRight,
   Terminal, Code2, FileText, Loader2, Brain,
@@ -30,20 +30,20 @@ const mockStream: StreamItem[] = [
 ];
 
 const typeConfig = {
-  thinking: { icon: Brain, color: 'text-blue-400', bg: 'bg-blue-500/10', label: '思考中' },
-  token: { icon: ChevronRight, color: 'text-gray-300', bg: '', label: '' },
+  thinking: { icon: Brain, color: 'text-[var(--color-accent)]', bg: 'bg-[var(--color-accent)]/10', label: '思考中' },
+  token: { icon: ChevronRight, color: 'text-[var(--color-text-muted)]', bg: '', label: '' },
   'tool-call': { icon: Terminal, color: 'text-amber-400', bg: 'bg-amber-500/10', label: '工具调用' },
   'tool-result': { icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-500/10', label: '执行结果' },
   code: { icon: Code2, color: 'text-violet-400', bg: 'bg-violet-500/10', label: '代码生成' },
   'plan-update': { icon: FileText, color: 'text-cyan-400', bg: 'bg-cyan-500/10', label: '计划更新' },
-  progress: { icon: Loader2, color: 'text-blue-400', bg: 'bg-blue-500/10', label: '进度' },
+  progress: { icon: Loader2, color: 'text-[var(--color-accent)]', bg: 'bg-[var(--color-accent)]/10', label: '进度' },
 };
 
 export function StreamOutput() {
   const [items, setItems] = useState<StreamItem[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const streamRef = useRef<ReturnType<typeof setTimeout>>();
+  const streamRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const startStream = () => {
     setItems([]);
@@ -83,11 +83,11 @@ export function StreamOutput() {
         <div className="flex items-center gap-2">
           <div className={cn(
             'w-2 h-2 rounded-full',
-            isStreaming ? 'bg-green-500 animate-pulse' : 'bg-gray-600'
+            isStreaming ? 'bg-[var(--color-success)] animate-pulse' : 'bg-[var(--color-text-muted)]'
           )} />
-          <span className="text-xs font-semibold text-gray-400">流式输出</span>
+          <span className="text-xs font-semibold text-[var(--color-text-muted)]">流式输出</span>
           {isStreaming && (
-            <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-green-500/10 text-green-400 font-medium animate-pulse">
+            <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-[var(--color-success)]/10 text-[var(--color-success)] font-medium animate-pulse">
               实时
             </span>
           )}
@@ -96,7 +96,7 @@ export function StreamOutput() {
           {!isStreaming && (
             <button
               onClick={startStream}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 text-[11px] font-medium hover:bg-blue-500/15 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-accent)]/10 text-[var(--color-accent)] text-[11px] font-medium hover:bg-[var(--color-accent)]/15 transition-all"
             >
               <Zap size={12} />
               演示
@@ -104,7 +104,7 @@ export function StreamOutput() {
           )}
           <button
             onClick={() => { setItems([]); setIsStreaming(false); }}
-            className="p-1.5 rounded-lg bg-white/[0.04] text-gray-400 hover:text-white hover:bg-white/[0.08] transition-all"
+            className="p-1.5 rounded-lg bg-white/[0.04] text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.08] transition-all"
           >
             <XCircle size={13} />
           </button>
@@ -115,9 +115,9 @@ export function StreamOutput() {
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
         {items.length === 0 && !isStreaming ? (
           <div className="flex flex-col items-center justify-center h-full">
-            <Zap size={32} className="text-gray-700 mb-3" />
-            <p className="text-sm text-gray-500">点击演示查看流式输出</p>
-            <p className="text-xs text-gray-600 mt-1">实时展示智能体的思考和工具调用</p>
+            <Zap size={32} className="text-[var(--color-text-muted)] mb-3" />
+            <p className="text-sm text-[var(--color-text-muted)]">点击演示查看流式输出</p>
+            <p className="text-xs text-[var(--color-text-muted)] mt-1">实时展示智能体的思考和工具调用</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -135,22 +135,22 @@ export function StreamOutput() {
                   style={{ animationDelay: `${index * 30}ms` }}
                 >
                   {item.type === 'token' ? (
-                    <p className="text-sm text-gray-200 leading-relaxed pl-2">
+                    <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed pl-2">
                       {item.content}
                     </p>
                   ) : item.type === 'progress' ? (
-                    <div className="p-3 rounded-xl bg-blue-500/[0.04] border border-blue-500/10">
+                    <div className="p-3 rounded-xl bg-[var(--color-accent)]/[0.04] border border-[var(--color-accent)]/10">
                       <div className="flex items-center gap-2 mb-2">
-                        <Loader2 size={13} className="text-blue-400 animate-spin" />
-                        <span className="text-xs text-blue-400 font-medium">{item.content}</span>
+                        <Loader2 size={13} className="text-[var(--color-accent)] animate-spin" />
+                        <span className="text-xs text-[var(--color-accent)] font-medium">{item.content}</span>
                       </div>
                       <div className="w-full h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-blue-500 to-violet-500 rounded-full transition-all duration-500"
+                          className="h-full bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-accent)] rounded-full transition-all duration-500"
                           style={{ width: `${item.progress || 0}%` }}
                         />
                       </div>
-                      <span className="text-[10px] text-gray-500 mt-1 block text-right">{item.progress}%</span>
+                      <span className="text-[10px] text-[var(--color-text-muted)] mt-1 block text-right">{item.progress}%</span>
                     </div>
                   ) : (
                     <div className={cn('p-3 rounded-xl border', config.bg || 'bg-white/[0.02]', 'border-white/[0.04]')}>
@@ -158,16 +158,16 @@ export function StreamOutput() {
                         <Icon size={13} className={config.color} />
                         <span className={cn('text-[10px] font-medium', config.color)}>{config.label}</span>
                         {item.toolName && (
-                          <code className="text-[10px] text-gray-500 font-mono">{item.toolName}</code>
+                          <code className="text-[10px] text-[var(--color-text-muted)] font-mono">{item.toolName}</code>
                         )}
                         {item.duration && (
-                          <span className="text-[10px] text-gray-600 ml-auto">{item.duration}ms</span>
+                          <span className="text-[10px] text-[var(--color-text-muted)] ml-auto">{item.duration}ms</span>
                         )}
                         {item.status && (
                           <StatusBadge status={item.status} />
                         )}
                       </div>
-                      <pre className="text-xs text-gray-300 font-mono leading-relaxed whitespace-pre-wrap">
+                      <pre className="text-xs text-[var(--color-text-secondary)] font-mono leading-relaxed whitespace-pre-wrap">
                         {item.content}
                       </pre>
                     </div>
@@ -182,7 +182,7 @@ export function StreamOutput() {
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '150ms' }} />
                   <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
-                <span className="text-[11px] text-gray-500">正在生成...</span>
+                <span className="text-[11px] text-[var(--color-text-muted)]">正在生成...</span>
               </div>
             )}
           </div>
@@ -194,11 +194,11 @@ export function StreamOutput() {
 
 function StatusBadge({ status }: { status: string }) {
   const config = {
-    pending: { icon: Clock, color: 'text-gray-400', label: '等待' },
+    pending: { icon: Clock, color: 'text-[var(--color-text-muted)]', label: '等待' },
     running: { icon: Loader2, color: 'text-amber-400', label: '运行中' },
     success: { icon: CheckCircle2, color: 'text-green-400', label: '成功' },
     error: { icon: XCircle, color: 'text-red-400', label: '失败' },
-  }[status] || { icon: Clock, color: 'text-gray-400', label: status };
+  }[status] || { icon: Clock, color: 'text-[var(--color-text-muted)]', label: status };
 
   if (!config) return null;
   const Icon = config.icon;

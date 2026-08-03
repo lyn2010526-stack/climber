@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   ArrowRight, Check, X, Copy, ChevronDown, ChevronRight,
   FileEdit,
@@ -40,13 +40,13 @@ function computeLineDiff(oldText: string, newText: string): { type: 'same' | 'ad
 
   while (oi < oldLines.length || ni < newLines.length) {
     if (oi >= oldLines.length) {
-      result.push({ type: 'add', content: newLines[ni] });
+      result.push({ type: 'add', content: newLines[ni]! });
       ni++;
     } else if (ni >= newLines.length) {
-      result.push({ type: 'del', content: oldLines[oi] });
+      result.push({ type: 'del', content: oldLines[oi]! });
       oi++;
     } else if (oldLines[oi] === newLines[ni]) {
-      result.push({ type: 'same', content: oldLines[oi] });
+      result.push({ type: 'same', content: oldLines[oi]! });
       oi++;
       ni++;
     } else {
@@ -56,7 +56,7 @@ function computeLineDiff(oldText: string, newText: string): { type: 'same' | 'ad
         if (ni + lookAhead < newLines.length && oldLines[oi] === newLines[ni + lookAhead]) {
           // 添加新增行
           for (let i = 0; i < lookAhead; i++) {
-            result.push({ type: 'add', content: newLines[ni + i] });
+            result.push({ type: 'add', content: newLines[ni + i]! });
           }
           ni += lookAhead;
           foundMatch = true;
@@ -65,7 +65,7 @@ function computeLineDiff(oldText: string, newText: string): { type: 'same' | 'ad
         if (oi + lookAhead < oldLines.length && oldLines[oi + lookAhead] === newLines[ni]) {
           // 删除旧行
           for (let i = 0; i < lookAhead; i++) {
-            result.push({ type: 'del', content: oldLines[oi + i] });
+            result.push({ type: 'del', content: oldLines[oi + i]! });
           }
           oi += lookAhead;
           foundMatch = true;
@@ -73,8 +73,8 @@ function computeLineDiff(oldText: string, newText: string): { type: 'same' | 'ad
         }
       }
       if (!foundMatch) {
-        result.push({ type: 'del', content: oldLines[oi] });
-        result.push({ type: 'add', content: newLines[ni] });
+        result.push({ type: 'del', content: oldLines[oi]! });
+        result.push({ type: 'add', content: newLines[ni]! });
         oi++;
         ni++;
       }
@@ -138,17 +138,17 @@ function SearchReplaceCard({
         onClick={() => setIsExpanded(!isExpanded)}
       >
         {isExpanded ? (
-          <ChevronDown size={13} className="text-gray-500 shrink-0" />
+          <ChevronDown size={13} className="text-[var(--color-text-muted)] shrink-0" />
         ) : (
-          <ChevronRight size={13} className="text-gray-500 shrink-0" />
+          <ChevronRight size={13} className="text-[var(--color-text-muted)] shrink-0" />
         )}
 
         <FileEdit size={13} className="text-blue-400 shrink-0" />
 
         <div className="flex-1 min-w-0">
-          <span className="text-xs font-medium text-gray-200">{fileName}</span>
+          <span className="text-xs font-medium text-[var(--color-text-primary)]">{fileName}</span>
           {dirPath && (
-            <span className="text-[10px] text-gray-500 ml-1.5">{dirPath}/</span>
+            <span className="text-[10px] text-[var(--color-text-muted)] ml-1.5">{dirPath}/</span>
           )}
         </div>
 
@@ -174,8 +174,8 @@ function SearchReplaceCard({
             <div className="flex items-center gap-1">
               <button
                 className={cn(
-                  'px-2 py-1 rounded-md text-[10px] font-medium transition-colors',
-                  !showRawFormat ? 'bg-white/[0.08] text-white' : 'text-gray-400 hover:text-gray-200'
+                   'px-2 py-1 rounded-md text-[10px] font-medium transition-colors',
+                  !showRawFormat ? 'bg-white/[0.08] text-white' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
                 )}
                 onClick={() => setShowRawFormat(false)}
               >
@@ -183,8 +183,8 @@ function SearchReplaceCard({
               </button>
               <button
                 className={cn(
-                  'px-2 py-1 rounded-md text-[10px] font-medium transition-colors',
-                  showRawFormat ? 'bg-white/[0.08] text-white' : 'text-gray-400 hover:text-gray-200'
+                   'px-2 py-1 rounded-md text-[10px] font-medium transition-colors',
+                  showRawFormat ? 'bg-white/[0.08] text-white' : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
                 )}
                 onClick={() => setShowRawFormat(true)}
               >
@@ -193,7 +193,7 @@ function SearchReplaceCard({
             </div>
             <button
               onClick={handleCopy}
-              className="p-1 rounded hover:bg-white/[0.06] text-gray-400 transition-colors"
+              className="p-1 rounded hover:bg-white/[0.06] text-[var(--color-text-secondary)] transition-colors"
             >
               {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
             </button>
@@ -204,12 +204,12 @@ function SearchReplaceCard({
             {showRawFormat ? (
               /* Aider 原始格式 */
               <div className="p-3 font-mono text-[11px] space-y-1">
-                <div className="text-gray-400 mb-2">{block.filePath}</div>
+                <div className="text-[var(--color-text-secondary)] mb-2">{block.filePath}</div>
                 <div className="text-red-400/60">{'<<<<<<< SEARCH'}</div>
                 <pre className="text-red-300/80 whitespace-pre-wrap bg-red-500/[0.03] rounded-lg p-2">
                   {block.searchContent}
                 </pre>
-                <div className="text-gray-500">{'======='}</div>
+                <div className="text-[var(--color-text-muted)]">{'======='}</div>
                 <pre className="text-green-300/80 whitespace-pre-wrap bg-green-500/[0.03] rounded-lg p-2">
                   {block.replaceContent}
                 </pre>
@@ -231,7 +231,7 @@ function SearchReplaceCard({
                       'w-4 text-center shrink-0 mr-2 select-none',
                       line.type === 'add' && 'text-green-500/60',
                       line.type === 'del' && 'text-red-500/60',
-                      line.type === 'same' && 'text-gray-600',
+                      line.type === 'same' && 'text-[var(--color-text-muted)]',
                     )}>
                       {line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' '}
                     </span>
@@ -239,7 +239,7 @@ function SearchReplaceCard({
                       'whitespace-pre-wrap break-all',
                       line.type === 'add' && 'text-green-300/90',
                       line.type === 'del' && 'text-red-300/90',
-                      line.type === 'same' && 'text-gray-400/70',
+                      line.type === 'same' && 'text-[var(--color-text-secondary)]/70',
                     )}>
                       {line.content || ' '}
                     </span>
@@ -297,7 +297,7 @@ export function SearchReplaceDisplay({
       <div className="flex items-center justify-between px-1 mb-2">
         <div className="flex items-center gap-2">
           <ArrowRight size={13} className="text-blue-400" />
-          <span className="text-[11px] font-medium text-gray-400">
+          <span className="text-[11px] font-medium text-[var(--color-text-secondary)]">
             {blocks.length} 个编辑
           </span>
           {pendingCount > 0 && (
@@ -320,8 +320,8 @@ export function SearchReplaceDisplay({
         <SearchReplaceCard
           key={block.id}
           block={block}
-          onApply={onApply}
-          onReject={onReject}
+          {...(onApply ? { onApply } : {})}
+          {...(onReject ? { onReject } : {})}
         />
       ))}
     </div>

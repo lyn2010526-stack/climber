@@ -106,9 +106,9 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
           <div>
             <h3 className="text-sm font-semibold text-white">添加 MCP 服务器</h3>
-            <p className="text-[11px] text-gray-500 mt-0.5">配置新的模型上下文协议服务器</p>
+             <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">配置新的模型上下文协议服务器</p>
           </div>
-          <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-white/[0.06] text-gray-500 hover:text-gray-300 transition-colors">
+          <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-white/[0.06] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors">
             <X size={16} />
           </button>
         </div>
@@ -123,13 +123,13 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                     'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold transition-all',
                     i < step ? 'bg-green-500/20 text-green-400' :
                     i === step ? 'bg-blue-500/20 text-blue-400 ring-2 ring-blue-500/30' :
-                    'bg-white/[0.04] text-gray-600'
+                     'bg-white/[0.04] text-[var(--color-text-muted)]'
                   )}>
                     {i < step ? <Check size={12} /> : i + 1}
                   </div>
                   <span className={cn(
                     'text-[11px] font-medium hidden sm:inline',
-                    i === step ? 'text-white' : 'text-gray-500'
+                     i === step ? 'text-white' : 'text-[var(--color-text-muted)]'
                   )}>
                     {s.label}
                   </span>
@@ -146,7 +146,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
         <div className="px-6 py-5 min-h-[240px]">
           {step === 0 && (
             <div className="space-y-3">
-              <p className="text-xs text-gray-400 mb-4">选择服务器使用的传输协议</p>
+              <p className="text-xs text-[var(--color-text-muted)] mb-4">选择服务器使用的传输协议</p>
               {transportOptions.map(opt => (
                 <button
                   key={opt.type}
@@ -160,13 +160,13 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                 >
                   <div className={cn(
                     'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0',
-                    data.transport === opt.type ? 'bg-blue-500/20 text-blue-400' : 'bg-white/[0.04] text-gray-500'
+                     data.transport === opt.type ? 'bg-blue-500/20 text-blue-400' : 'bg-white/[0.04] text-[var(--color-text-muted)]'
                   )}>
                     <opt.icon size={18} />
                   </div>
                   <div>
                     <div className="text-sm font-medium text-white">{opt.label}</div>
-                    <div className="text-[11px] text-gray-500 mt-0.5">{opt.description}</div>
+                     <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5">{opt.description}</div>
                   </div>
                 </button>
               ))}
@@ -176,58 +176,58 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <label className="text-[11px] font-medium text-gray-400 mb-1.5 block">服务器名称</label>
+                <label className="text-[11px] font-medium text-[var(--color-text-muted)] mb-1.5 block">服务器名称</label>
                 <input
                   type="text"
                   value={data.name}
                   onChange={e => setData(d => ({ ...d, name: e.target.value }))}
                   placeholder="my-mcp-server"
-                  className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-blue-500/40 transition-all"
+                  className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
                 />
               </div>
               {data.transport === 'stdio' ? (
                 <>
                   <div>
-                    <label className="text-[11px] font-medium text-gray-400 mb-1.5 block">启动命令</label>
+                    <label className="text-[11px] font-medium text-[var(--color-text-muted)] mb-1.5 block">启动命令</label>
                     <input
                       type="text"
                       value={data.command}
                       onChange={e => setData(d => ({ ...d, command: e.target.value }))}
                       placeholder="npx -y @modelcontextprotocol/server-filesystem"
-                      className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-gray-200 font-mono placeholder:text-gray-600 focus:outline-none focus:border-blue-500/40 transition-all"
+                      className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-medium text-gray-400 mb-1.5 block">参数（可选）</label>
+                    <label className="text-[11px] font-medium text-[var(--color-text-muted)] mb-1.5 block">参数（可选）</label>
                     <input
                       type="text"
                       value={data.args}
                       onChange={e => setData(d => ({ ...d, args: e.target.value }))}
                       placeholder="/path/to/directory"
-                      className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-gray-200 font-mono placeholder:text-gray-600 focus:outline-none focus:border-blue-500/40 transition-all"
+                      className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
                     />
                   </div>
                 </>
               ) : (
                 <div>
-                  <label className="text-[11px] font-medium text-gray-400 mb-1.5 block">服务器 URL</label>
+                  <label className="text-[11px] font-medium text-[var(--color-text-muted)] mb-1.5 block">服务器 URL</label>
                   <input
                     type="text"
                     value={data.url}
                     onChange={e => setData(d => ({ ...d, url: e.target.value }))}
                     placeholder={data.transport === 'sse' ? 'https://example.com/sse' : 'https://example.com/api'}
-                    className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-gray-200 font-mono placeholder:text-gray-600 focus:outline-none focus:border-blue-500/40 transition-all"
+                    className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
                   />
                 </div>
               )}
               <div>
-                <label className="text-[11px] font-medium text-gray-400 mb-1.5 block">环境变量（可选）</label>
+                <label className="text-[11px] font-medium text-[var(--color-text-muted)] mb-1.5 block">环境变量（可选）</label>
                 <textarea
                   value={data.env}
                   onChange={e => setData(d => ({ ...d, env: e.target.value }))}
                   placeholder={"KEY=value\nANOTHER_KEY=value2"}
                   rows={3}
-                  className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-gray-200 font-mono placeholder:text-gray-600 focus:outline-none focus:border-blue-500/40 transition-all resize-none"
+                  className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all resize-none"
                 />
               </div>
             </div>
@@ -239,7 +239,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                 <Shield size={18} className="text-amber-400 flex-shrink-0" />
                 <div className="flex-1">
                   <div className="text-sm font-medium text-white">OAuth 认证</div>
-                  <div className="text-[11px] text-gray-500 mt-0.5">如果服务器需要 OAuth 认证，请启用此选项</div>
+                  <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5">如果服务器需要 OAuth 认证，请启用此选项</div>
                 </div>
                 <button
                   onClick={() => setData(d => ({ ...d, oauth: !d.oauth }))}
@@ -256,13 +256,13 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
               </div>
               {data.oauth && (
                 <div>
-                  <label className="text-[11px] font-medium text-gray-400 mb-1.5 block">Token URL</label>
+                  <label className="text-[11px] font-medium text-[var(--color-text-muted)] mb-1.5 block">Token URL</label>
                   <input
                     type="text"
                     value={data.tokenUrl}
                     onChange={e => setData(d => ({ ...d, tokenUrl: e.target.value }))}
                     placeholder="https://auth.example.com/oauth/token"
-                    className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-gray-200 font-mono placeholder:text-gray-600 focus:outline-none focus:border-blue-500/40 transition-all"
+                    className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
                   />
                 </div>
               )}
@@ -272,23 +272,23 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
           {step === 3 && (
             <div className="space-y-4">
               <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] space-y-3">
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">名称</span>
-                  <span className="text-gray-300 font-medium">{data.name}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">传输方式</span>
-                  <span className="text-gray-300 font-medium capitalize">{data.transport}</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-500">连接</span>
-                  <span className="text-gray-300 font-mono text-[11px] truncate max-w-[200px]">
+                 <div className="flex justify-between text-xs">
+                   <span className="text-[var(--color-text-muted)]">名称</span>
+                   <span className="text-[var(--color-text-secondary)] font-medium">{data.name}</span>
+                 </div>
+                 <div className="flex justify-between text-xs">
+                   <span className="text-[var(--color-text-muted)]">传输方式</span>
+                   <span className="text-[var(--color-text-secondary)] font-medium capitalize">{data.transport}</span>
+                 </div>
+                 <div className="flex justify-between text-xs">
+                   <span className="text-[var(--color-text-muted)]">连接</span>
+                   <span className="text-[var(--color-text-secondary)] font-mono text-[11px] truncate max-w-[200px]">
                     {data.transport === 'stdio' ? data.command : data.url}
                   </span>
                 </div>
                 {data.oauth && (
                   <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">OAuth</span>
+                    <span className="text-[var(--color-text-muted)]">OAuth</span>
                     <span className="text-amber-400 font-medium">已启用</span>
                   </div>
                 )}
@@ -319,7 +319,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                   <Check size={18} className="text-green-400" />
                   <div>
                     <div className="text-sm font-medium text-green-400">连接成功</div>
-                    <div className="text-[11px] text-gray-500 mt-0.5">服务器响应正常，可以添加</div>
+                    <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5">服务器响应正常，可以添加</div>
                   </div>
                 </div>
               )}
@@ -329,7 +329,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                   <X size={18} className="text-red-400" />
                   <div>
                     <div className="text-sm font-medium text-red-400">连接失败</div>
-                    <div className="text-[11px] text-gray-500 mt-0.5">请检查配置后重试</div>
+                    <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5">请检查配置后重试</div>
                   </div>
                 </div>
               )}
@@ -344,9 +344,9 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
             disabled={step === 0}
             className={cn(
               'flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium transition-all',
-              step === 0
-                ? 'text-gray-600 cursor-not-allowed'
-                : 'text-gray-400 hover:text-white hover:bg-white/[0.06]'
+                step === 0
+                  ? 'text-[var(--color-text-muted)] cursor-not-allowed'
+                  : 'text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.06]'
             )}
           >
             <ArrowLeft size={13} />
@@ -361,7 +361,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                   'flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium transition-all',
                   canNext()
                     ? 'bg-gradient-to-r from-blue-500 to-violet-500 text-white shadow-lg shadow-blue-500/20 hover:brightness-110'
-                    : 'bg-white/[0.04] text-gray-600 cursor-not-allowed'
+                    : 'bg-white/[0.04] text-[var(--color-text-muted)] cursor-not-allowed'
                 )}
               >
                 下一步
@@ -375,7 +375,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                   'flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium transition-all',
                   canNext()
                     ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg shadow-green-500/20 hover:brightness-110'
-                    : 'bg-white/[0.04] text-gray-600 cursor-not-allowed'
+                    : 'bg-white/[0.04] text-[var(--color-text-muted)] cursor-not-allowed'
                 )}
               >
                 <Check size={13} />

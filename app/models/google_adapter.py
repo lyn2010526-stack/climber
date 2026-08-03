@@ -15,10 +15,11 @@ from app.models import ModelAdapter, ModelCapability
 class GoogleGeminiAdapter(ModelAdapter):
     """Google Gemini adapter using the native Google AI API format."""
 
-    def __init__(self, model_id: str, api_key: str, base_url: str | None = None):
+    def __init__(self, model_id: str, api_key: str, base_url: str | None = None, capabilities: "ModelCapability | None" = None):
         self._model_id = model_id
         self._api_key = api_key
         self._base_url = base_url or "https://generativelanguage.googleapis.com/v1beta"
+        self._capabilities = capabilities
 
     @property
     def provider(self) -> str:
@@ -38,6 +39,8 @@ class GoogleGeminiAdapter(ModelAdapter):
 
     @property
     def capabilities(self) -> ModelCapability:
+        if self._capabilities is not None:
+            return self._capabilities
         return ModelCapability(
             chat=True,
             streaming=True,

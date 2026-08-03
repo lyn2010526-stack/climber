@@ -184,7 +184,7 @@ class UsageTracker:
         original_len = len(self._records)
         self._records = [
             r for r in self._records
-            if datetime.fromisoformat(r.created_at) > cutoff
+            if datetime.fromisoformat(r.created_at).replace(tzinfo=timezone.utc) > cutoff
         ]
         removed = original_len - len(self._records)
         if removed > 0:

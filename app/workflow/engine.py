@@ -64,6 +64,13 @@ def _validate_ast(node: ast.AST) -> None:
 
 
 def safe_eval(expression: str, local_vars: dict[str, Any]) -> Any:
+    """Safely evaluate a Python expression using AST validation.
+
+    Note: This is designed for a sandboxed workflow environment where
+    only pre-validated AST nodes are permitted. The eval() call is
+    restricted to a controlled builtin set and should not be used
+    with untrusted input in production.
+    """
     try:
         tree = ast.parse(expression, mode="eval")
         _validate_ast(tree)
@@ -74,6 +81,7 @@ def safe_eval(expression: str, local_vars: dict[str, Any]) -> Any:
 
 def _validate_code_ast(node: ast.AST) -> None:
     allowed_nodes = _SAFE_NODES + (
+        ast.Module,
         ast.Assign, ast.AugAssign, ast.AnnAssign,
         ast.For, ast.While, ast.If, ast.Return,
         ast.Break, ast.Continue,
@@ -81,6 +89,7 @@ def _validate_code_ast(node: ast.AST) -> None:
         ast.arg, ast.arguments, ast.Return,
         ast.Pass, ast.Assert, ast.Raise,
         ast.Import, ast.ImportFrom,
+        ast.Expr, ast.Store, ast.NameConstant,
     )
     for child in ast.walk(node):
         if not isinstance(child, allowed_nodes):
@@ -329,16 +338,20 @@ class WorkflowEngine:
             else:
                 resolved_tool_inputs[k] = v
 
-        result = await self.agent_engine.tool_executor._execute_one({
+        from app.core.parallel import ParallelToolExecutor
+        registry = ToolRegistry()
+        executor = ParallelToolExecutor(registry)
+        tool_result = await executor.execute_all([{
             "id": f"wf-{node.id}",
             "function": {
                 "name": tool_name,
                 "arguments": resolved_tool_inputs,
             },
-        })
+        }])
+        tool_result = tool_result[0]
 
         return {
-            "result": result.result,
+            "result": tool_result.result,
             "tool_name": tool_name,
             "node_id": node.id,
             "node_name": node.name,

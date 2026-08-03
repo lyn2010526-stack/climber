@@ -7,9 +7,15 @@ export interface ApiError {
 }
 
 class ApiClient {
+  private getAuthHeaders(): Record<string, string> {
+    const token = localStorage.getItem('auth_token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      ...this.getAuthHeaders(),
       ...options.headers as Record<string, string>,
     };
 
@@ -28,7 +34,8 @@ class ApiClient {
 
   // Agents
   async listAgents() {
-    return this.request<any[]>('/agents');
+    const response = await this.request<any[] | { items: any[] }>('/agents');
+    return Array.isArray(response) ? response : response.items;
   }
 
   async createAgent(data: any) {
@@ -44,7 +51,8 @@ class ApiClient {
 
   // Sessions
   async listSessions() {
-    return this.request<any[]>('/sessions');
+    const response = await this.request<any[] | { items: any[] }>('/sessions');
+    return Array.isArray(response) ? response : response.items;
   }
 
   async createSession(data: any) {
@@ -63,14 +71,13 @@ class ApiClient {
   }
 
   // Chat (SSE)
-  chatStream(sessionId: string, message: string, onEvent: (event: any) => void): () => void {
+  chatStream(sessionId: string, message: string, onEvent: (event: { event: string; data: any }) => void): () => void {
     const url = `${BASE_URL}/sessions/${sessionId}/chat`;
-
     const abortController = new AbortController();
 
     fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() },
       body: JSON.stringify({ message }),
       signal: abortController.signal,
     }).then(async (response) => {
@@ -84,31 +91,36 @@ class ApiClient {
 
       const decoder = new TextDecoder();
       let buffer = '';
-      let currentEvent = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
 
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith('event:')) {
-            currentEvent = trimmed.slice(6).trim();
-          } else if (trimmed.startsWith('data:')) {
-            const dataStr = trimmed.slice(5).trim();
-            try {
-              const data = JSON.parse(dataStr);
-              onEvent({ event: currentEvent || 'text', data });
-            } catch {
-              onEvent({ event: currentEvent || 'text', data: dataStr });
+        for (const eventBlock of events) {
+          const lines = eventBlock.split('\n');
+          let eventName = '';
+          let dataStr = '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('event:')) {
+              eventName = trimmed.slice(6).trim();
+            } else if (trimmed.startsWith('data:')) {
+              dataStr += trimmed.slice(5).trim();
             }
-            currentEvent = '';
-          } else if (trimmed === '') {
-            currentEvent = '';
+          }
+
+          if (!dataStr) continue;
+
+          try {
+            const data = JSON.parse(dataStr);
+            onEvent({ event: eventName || 'text', data });
+          } catch {
+            onEvent({ event: eventName || 'text', data: dataStr });
           }
         }
       }
@@ -157,17 +169,6 @@ class ApiClient {
     });
   }
 
-  async listWorkflowTemplates() {
-    return this.request<any[]>('/workflows/templates/');
-  }
-
-  async createFromTemplate(templateId: string, params: Record<string, any>) {
-    return this.request<any>(`/workflows/templates/${templateId}`, {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-  }
-
   // Crews
   async listCrews() {
     return this.request<any[]>('/crews/');
@@ -184,13 +185,6 @@ class ApiClient {
     return this.request<any>(`/crews/${id}/run`, {
       method: 'POST',
       body: JSON.stringify(inputs || {}),
-    });
-  }
-
-  async updateCrew(id: string, data: any) {
-    return this.request<any>(`/crews/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
     });
   }
 
@@ -275,13 +269,6 @@ class ApiClient {
 
   async listGroupMessages(groupId: string, limit = 50) {
     return this.request<any>(`/groups/${groupId}/messages?limit=${limit}`);
-  }
-
-  async sendGroupMessage(groupId: string, data: Record<string, any>) {
-    return this.request<any>(`/groups/${groupId}/messages`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
   }
 
   // Documents
@@ -387,20 +374,10 @@ class ApiClient {
   ): Promise<any> {
     const body = { task, mode, max_paths: maxPaths, max_refine_rounds: maxRefineRounds, coverage_enabled: coverageEnabled };
 
-    const response = await fetch(`${BASE_URL}/reason`, {
+    return this.request<any>('/reason', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(body),
     });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Reasoning failed' }));
-      throw new Error(error.detail || `HTTP ${response.status}`);
-    }
-
-    return response.json();
   }
 
   async getReasoningTrace(traceId: string) {
@@ -556,15 +533,6 @@ class ApiClient {
 
   async deleteMCPServer(id: string) {
     return this.request(`/mcp/servers/${id}`, { method: 'DELETE' });
-  }
-
-  // Groups (additional)
-  async listGroupTasks(groupId: string, limit = 20) {
-    return this.request<any[]>(`/groups/${groupId}/tasks?limit=${limit}`);
-  }
-
-  async listGroupMembers(groupId: string) {
-    return this.request<any[]>(`/groups/${groupId}/members`);
   }
 
   // Traces (additional)

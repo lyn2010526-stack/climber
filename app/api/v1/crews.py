@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-import time
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 
-from app.api.v1.helpers import DEFAULT_USER, payload as _payload
+from app.api.v1.helpers import DEFAULT_USER
+from app.api.v1.helpers import payload as _payload
+from app.core.api_key_crypto import decrypt_api_key
+from app.core.di import resolve as di_resolve
 from app.storage import async_session
 from app.storage.models_platform import Crew, CrewRun
-from app.core.di import resolve as di_resolve
 
 router = APIRouter()
 
@@ -108,7 +109,7 @@ async def run_crew(crew_id: str, request: Request) -> dict[str, Any]:
                 user_id=DEFAULT_USER,
                 provider=agent_row.provider,
                 model_id=agent_row.model_id,
-                api_key=getattr(agent_row, "api_key_encrypted", "") or "",
+                api_key=decrypt_api_key(getattr(agent_row, "api_key_encrypted", "") or ""),
                 base_url=agent_row.base_url,
                 system_prompt=task.get("system_prompt", f"You are part of crew '{crew_name}'."),
             )

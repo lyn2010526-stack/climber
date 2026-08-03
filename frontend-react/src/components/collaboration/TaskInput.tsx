@@ -64,7 +64,7 @@ export function TaskInput({ onStart, onPause, onStop, status, disabled, availabl
   }, []);
 
   return (
-    <div className="border-t border-gray-700 bg-gray-800/30 p-3">
+    <div className="border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)]/30 p-3">
       {status === 'idle' ? (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -74,7 +74,7 @@ export function TaskInput({ onStart, onPause, onStop, status, disabled, availabl
               onChange={(e) => setTask(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleStart()}
               placeholder="输入任务描述，AI 将自动协作完成..."
-              className="flex-1 px-3 py-2 bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50"
+               className="flex-1 px-3 py-2 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded-lg text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50"
               disabled={disabled}
             />
             <button
@@ -88,19 +88,19 @@ export function TaskInput({ onStart, onPause, onStop, status, disabled, availabl
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="text-[10px] text-gray-500">最大轮次:</label>
+             <label className="text-[10px] text-[var(--color-text-muted)]">最大轮次:</label>
             <input
               type="number"
               value={maxRounds}
               onChange={(e) => setMaxRounds(Math.max(1, Math.min(20, parseInt(e.target.value) || 5)))}
               min={1}
               max={20}
-              className="w-16 px-2 py-1 bg-gray-700 border border-gray-700 rounded text-[10px] text-gray-100 focus:outline-none focus:border-blue-500/50"
+               className="w-16 px-2 py-1 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded text-[10px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/50"
             />
             <button
               type="button"
               onClick={() => setShowAdvanced(prev => !prev)}
-              className="ml-auto flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+               className="ml-auto flex items-center gap-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
             >
               {showAdvanced ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
               高级设置
@@ -108,20 +108,20 @@ export function TaskInput({ onStart, onPause, onStop, status, disabled, availabl
           </div>
 
           {showAdvanced && (
-            <div className="space-y-3 pt-2 border-t border-gray-700/50">
+            <div className="space-y-3 pt-2 border-t border-[var(--color-border-subtle)]/50">
               {/* Process Type */}
               <div className="space-y-1">
-                <label className="text-[10px] text-gray-500">执行流程</label>
+                <label className="text-[10px] text-[var(--color-text-muted)]">执行流程</label>
                 <select
                   value={processType}
                   onChange={(e) => setProcessType(e.target.value as ProcessType)}
-                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-[10px] text-gray-200 focus:outline-none focus:border-blue-500/50"
+                   className="w-full px-2 py-1.5 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded text-[10px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/50"
                 >
                   <option value="sequential">顺序执行（Sequential）</option>
                   <option value="hierarchical">分层管理（Hierarchical）</option>
                   <option value="group_chat">群组讨论（Group Chat）</option>
                 </select>
-                <p className="text-[9px] text-gray-500">
+                <p className="text-[9px] text-[var(--color-text-muted)]">
                   {processType === 'sequential' && '任务按顺序执行，每个任务获取前一个任务的输出'}
                   {processType === 'hierarchical' && 'Manager 规划子任务并分配给 Worker，最终验证输出'}
                   {processType === 'group_chat' && '多 Agent 轮询讨论，基于共识结束'}
@@ -131,20 +131,20 @@ export function TaskInput({ onStart, onPause, onStop, status, disabled, availabl
               {/* Context Tasks */}
               {availableTasks.length > 0 && (
                 <div className="space-y-1">
-                  <label className="text-[10px] text-gray-500 flex items-center gap-1">
+                  <label className="text-[10px] text-[var(--color-text-muted)] flex items-center gap-1">
                     <Users size={10} />
                     依赖任务（Context）
                   </label>
                   <div className="max-h-24 overflow-y-auto space-y-1">
                     {availableTasks.map(t => (
-                      <label key={t.id} className="flex items-center gap-2 p-1.5 bg-gray-700/30 rounded cursor-pointer hover:bg-gray-700/50">
+                      <label key={t.id} className="flex items-center gap-2 p-1.5 bg-[var(--color-bg-surface-elevated)]/30 rounded cursor-pointer hover:bg-[var(--color-bg-surface-elevated)]/50">
                         <input
                           type="checkbox"
                           checked={selectedContext.includes(t.id)}
                           onChange={() => toggleContextTask(t.id)}
-                          className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                          className="rounded border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-elevated)] text-blue-600 focus:ring-blue-500"
                         />
-                        <span className="text-[10px] text-gray-300 truncate">{t.description.slice(0, 50)}</span>
+                        <span className="text-[10px] text-[var(--color-text-secondary)] truncate">{t.description.slice(0, 50)}</span>
                       </label>
                     ))}
                   </div>
@@ -153,25 +153,25 @@ export function TaskInput({ onStart, onPause, onStop, status, disabled, availabl
 
               {/* Guardrails */}
               <div className="space-y-1">
-                <label className="text-[10px] text-gray-500 flex items-center gap-1">
+                <label className="text-[10px] text-[var(--color-text-muted)] flex items-center gap-1">
                   <Shield size={10} />
                   输出校验（Guardrails）
                 </label>
                 <div className="flex gap-1">
-                  <input
-                    type="text"
-                    value={guardrailName}
-                    onChange={(e) => setGuardrailName(e.target.value)}
-                    placeholder="校验名称"
-                    className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-[10px] text-gray-200 focus:outline-none focus:border-blue-500/50"
-                  />
-                  <input
-                    type="text"
-                    value={guardrailDesc}
-                    onChange={(e) => setGuardrailDesc(e.target.value)}
-                    placeholder="校验描述"
-                    className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-[10px] text-gray-200 focus:outline-none focus:border-blue-500/50"
-                  />
+                   <input
+                     type="text"
+                     value={guardrailName}
+                     onChange={(e) => setGuardrailName(e.target.value)}
+                     placeholder="校验名称"
+                     className="flex-1 px-2 py-1 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded text-[10px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/50"
+                   />
+                   <input
+                     type="text"
+                     value={guardrailDesc}
+                     onChange={(e) => setGuardrailDesc(e.target.value)}
+                     placeholder="校验描述"
+                     className="flex-1 px-2 py-1 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded text-[10px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/50"
+                   />
                   <button
                     type="button"
                     onClick={addGuardrail}
@@ -184,10 +184,10 @@ export function TaskInput({ onStart, onPause, onStop, status, disabled, availabl
                 {guardrails.length > 0 && (
                   <div className="space-y-1 mt-1">
                     {guardrails.map((g, i) => (
-                      <div key={i} className="flex items-center justify-between p-1.5 bg-gray-700/30 rounded">
+                      <div key={i} className="flex items-center justify-between p-1.5 bg-[var(--color-bg-surface-elevated)]/30 rounded">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[10px] text-gray-200">{g.name}</p>
-                          {g.description && <p className="text-[9px] text-gray-500 truncate">{g.description}</p>}
+                          <p className="text-[10px] text-[var(--color-text-primary)]">{g.name}</p>
+                          {g.description && <p className="text-[9px] text-[var(--color-text-muted)] truncate">{g.description}</p>}
                         </div>
                         <button
                           type="button"
@@ -203,12 +203,12 @@ export function TaskInput({ onStart, onPause, onStop, status, disabled, availabl
               </div>
 
               {/* Human-in-the-loop */}
-              <label className="flex items-center gap-2 text-[10px] text-gray-400 cursor-pointer">
+              <label className="flex items-center gap-2 text-[10px] text-[var(--color-text-secondary)] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={humanReviewRequired}
                   onChange={(e) => setHumanReviewRequired(e.target.checked)}
-                  className="rounded border-gray-600 bg-gray-700 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-elevated)] text-blue-600 focus:ring-blue-500"
                 />
                 需要人工审批（Human-in-the-loop）
               </label>
@@ -216,7 +216,7 @@ export function TaskInput({ onStart, onPause, onStop, status, disabled, availabl
           )}
 
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-500 ml-auto">
+            <span className="text-[10px] text-[var(--color-text-muted)] ml-auto">
               点击开始后，AI 将自动循环执行直到完成
             </span>
           </div>

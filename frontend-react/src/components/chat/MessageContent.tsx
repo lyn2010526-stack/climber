@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { User, Bot, Terminal, Loader2, ChevronRight, ChevronDown, Copy, ThumbsUp, ThumbsDown, Edit3 } from 'lucide-react';
+import { User, Bot, Terminal, ChevronDown, Copy, ThumbsUp, ThumbsDown, Edit3 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { cva } from 'class-variance-authority';
 import { MarkdownRenderer } from './MarkdownRenderer';
@@ -11,7 +11,7 @@ const bubbleVariants = cva(
     variants: {
       role: {
         user: 'bg-[#007AFF] text-white rounded-3xl rounded-br-xl',
-        assistant: 'bg-white/[0.04] border border-white/[0.08] text-gray-200 rounded-3xl rounded-tl-xl backdrop-blur-sm',
+        assistant: 'bg-white/[0.04] border border-white/[0.08] text-[var(--color-text-primary)] rounded-3xl rounded-tl-xl backdrop-blur-sm',
         system: 'bg-amber-500/10 border border-amber-500/20 text-amber-200 rounded-2xl',
         tool: 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-200 rounded-2xl',
       },
@@ -60,7 +60,7 @@ export const MessageContent: React.FC<MessageContentProps> = ({ content, role, t
           )}
         </div>
         <div className={cn('flex items-center gap-2 px-1 transition-opacity duration-200', isUser ? 'flex-row-reverse' : '')}>
-          {timeStr && <span className="text-[10px] text-gray-500">{timeStr}</span>}
+          {timeStr && <span className="text-[10px] text-[var(--color-text-muted)]">{timeStr}</span>}
           {actions && <div className="flex items-center gap-1">{actions}</div>}
         </div>
       </div>
@@ -79,21 +79,21 @@ export const MessageActions: React.FC<MessageActionsProps> = ({ onCopy, onFeedba
   return (
     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
       {onEdit && (
-        <button onClick={onEdit} className="p-1 rounded-lg hover:bg-white/10 text-gray-500 hover:text-gray-300 transition-colors" title="编辑">
+        <button onClick={onEdit} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors" title="编辑">
           <Edit3 size={12} />
         </button>
       )}
       {onCopy && (
-        <button onClick={onCopy} className="p-1 rounded-lg hover:bg-white/10 text-gray-500 hover:text-gray-300 transition-colors" title="复制">
+        <button onClick={onCopy} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors" title="复制">
           <Copy size={12} />
         </button>
       )}
       {onFeedback && (
         <>
-          <button onClick={() => onFeedback('up')} className="p-1 rounded-lg hover:bg-white/10 text-gray-500 hover:text-emerald-400 transition-colors" title="有用">
+          <button onClick={() => onFeedback('up')} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-emerald-400 transition-colors" title="有用">
             <ThumbsUp size={12} />
           </button>
-          <button onClick={() => onFeedback('down')} className="p-1 rounded-lg hover:bg-white/10 text-gray-500 hover:text-rose-400 transition-colors" title="无用">
+          <button onClick={() => onFeedback('down')} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-rose-400 transition-colors" title="无用">
             <ThumbsDown size={12} />
           </button>
         </>
@@ -102,7 +102,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({ onCopy, onFeedba
   );
 };
 
-/* Reference: Dify `chat/answer/tool-detail.tsx` + `thinking-details.tsx` */
+/* Reference: Dify `chat/answer/tool-detail.tsx` + Vercel AI SDK + Linear */
 interface ToolCallCardProps {
   name: string;
   arguments: Record<string, unknown>;
@@ -111,50 +111,83 @@ interface ToolCallCardProps {
   isRunning: boolean | undefined;
 }
 
+const statusConfig = {
+  running: { color: '#5E6AD2', bg: 'rgba(94,106,210,0.12)', label: '执行中', pulse: true },
+  success: { color: '#10B981', bg: 'rgba(16,185,129,0.12)', label: '成功', pulse: false },
+  error: { color: '#EF4444', bg: 'rgba(239,68,68,0.12)', label: 'error', pulse: false },
+};
+
 export const ToolCallCard: React.FC<ToolCallCardProps> = ({ name, arguments: args, result, error, isRunning }) => {
   const [expanded, setExpanded] = useState(false);
+  const status = error ? 'error' : isRunning ? 'running' : result ? 'success' : 'running';
+  const config = statusConfig[status];
 
   return (
     <div className="max-w-[85%] message-enter">
       <div
-        className={cn(
-          'rounded-2xl border overflow-hidden transition-all duration-200',
-          expanded
-            ? 'border-white/10 bg-white/[0.04] shadow-lg'
-            : 'border-l-[0.25px] border-white/5 bg-white/[0.02] hover:bg-white/[0.04]'
-        )}
+        className="rounded-2xl border overflow-hidden transition-all duration-200"
+        style={{
+          borderColor: expanded ? 'var(--color-border-default)' : 'var(--color-border-subtle)',
+          backgroundColor: expanded ? 'var(--color-bg-surface-2)' : 'var(--color-bg-surface-1)',
+          boxShadow: expanded ? '0 4px 20px rgba(0,0,0,0.2)' : 'none',
+        }}
       >
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-white/5 transition-colors cursor-pointer group"
+          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors cursor-pointer group"
+          style={{ borderBottom: expanded ? '1px solid var(--color-border-subtle)' : 'none' }}
         >
-          <div className="p-1.5 rounded-xl bg-blue-500/10 text-blue-400">
+          <div className="p-1.5 rounded-xl flex items-center justify-center" style={{
+            backgroundColor: config.bg,
+            color: config.color,
+          }}>
             <Terminal size={12} />
           </div>
-          <span className="text-xs font-semibold text-blue-400 truncate flex-1">{name}</span>
-          {isRunning && <Loader2 size={12} className="text-blue-400 animate-spin" />}
-          {error && <span className="text-[10px] text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-full">error</span>}
-          {expanded
-            ? <ChevronDown size={14} className="text-gray-500 transition-transform duration-200" />
-            : <ChevronRight size={14} className="text-gray-500 transition-transform duration-200" />
-          }
+          <span className="text-xs font-semibold flex-1" style={{ color: 'var(--color-text-primary)' }}>{name}</span>
+          {isRunning && (
+            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium" style={{
+              backgroundColor: config.bg,
+              color: config.color,
+            }}>
+              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: config.color }} />
+              执行中
+            </span>
+          )}
+          {!isRunning && !error && result && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{
+              backgroundColor: 'rgba(16,185,129,0.12)',
+              color: '#10B981',
+            }}>成功</span>
+          )}
+          {error && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{
+              backgroundColor: 'rgba(239,68,68,0.12)',
+              color: '#EF4444',
+            }}>{config.label}</span>
+          )}
+          <div className="p-1 rounded-lg transition-all duration-200" style={{
+            color: 'var(--color-text-muted)',
+            transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+          }}>
+            <ChevronDown size={14} />
+          </div>
         </button>
         {expanded && (
-          <div className="px-4 pb-4 space-y-3 border-t border-white/5 animate-in slide-in-from-top-2 duration-200">
+          <div className="px-4 pb-4 space-y-3 animate-in slide-in-from-top-2 duration-200">
             <div>
-              <div className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mb-2">Input</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-text-muted)' }}>Input</div>
               <pre className="code-block text-xs whitespace-pre-wrap">{JSON.stringify(args, null, 2)}</pre>
             </div>
             {result && (
               <div>
-                <div className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mb-2">Output</div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-text-muted)' }}>Output</div>
                 <pre className="code-block text-xs whitespace-pre-wrap">{result}</pre>
               </div>
             )}
             {error && (
               <div>
-                <div className="text-[10px] text-rose-400 font-semibold uppercase tracking-wider mb-2">Error</div>
-                <pre className="code-block text-xs text-rose-300">{error}</pre>
+                <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: '#EF4444' }}>Error</div>
+                <pre className="code-block text-xs" style={{ color: '#EF4444' }}>{error}</pre>
               </div>
             )}
           </div>

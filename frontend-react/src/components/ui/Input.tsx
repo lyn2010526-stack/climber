@@ -28,7 +28,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement>, Varian
   inputSize?: 'sm' | 'md' | 'lg' | null;
 }
 
-const Input = forwardRef<HTMLInputElement, InputProps>(({ className, variant, inputSize, size, type, ...props }, ref) => {
+const Input = forwardRef<HTMLInputElement, InputProps>(({ className, variant, inputSize, type, ...props }, ref) => {
   return (
     <input
       type={type}

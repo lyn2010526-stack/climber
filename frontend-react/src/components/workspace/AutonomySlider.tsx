@@ -53,14 +53,14 @@ export function AutonomySlider({ value, onChange }: AutonomySliderProps) {
     <div className="w-full">
       <div className="flex items-center gap-2 mb-3">
         <Icon size={15} className={activeColors[value - 1]} />
-        <span className="text-xs font-medium text-gray-100">
+        <span className="text-xs font-medium text-[var(--color-text-primary)]">
           自主级别: <span className={activeColors[value - 1]}>{currentLevel.label}</span>
         </span>
-        <span className="text-[10px] text-gray-500 ml-auto">{currentLevel.description}</span>
+        <span className="text-[10px] text-[var(--color-text-muted)] ml-auto">{currentLevel.description}</span>
       </div>
 
       <div className="relative">
-        <div className="relative h-2 bg-gray-700 rounded-full overflow-hidden">
+        <div className="relative h-2 bg-[var(--color-bg-surface-elevated)] rounded-full overflow-hidden">
           <div
             className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r ${trackFillColors[value - 1]} to-transparent transition-all duration-300`}
             style={{ width: `${percentage}%` }}
@@ -100,8 +100,8 @@ export function AutonomySlider({ value, onChange }: AutonomySliderProps) {
                 isCurrent
                   ? activeColors[value - 1]
                   : isActive
-                    ? 'text-gray-400'
-                    : 'text-gray-500'
+                    ? 'text-[var(--color-text-secondary)]'
+                    : 'text-[var(--color-text-muted)]'
               }`}>
                 {item.label}
               </span>
@@ -109,8 +109,8 @@ export function AutonomySlider({ value, onChange }: AutonomySliderProps) {
                 isCurrent
                   ? activeBgColors[value - 1]
                   : isActive
-                    ? 'bg-gray-700/50'
-                    : 'bg-gray-700'
+                    ? 'bg-[var(--color-bg-surface-elevated)]/50'
+                    : 'bg-[var(--color-bg-surface-elevated)]'
               }`} />
             </button>
           );

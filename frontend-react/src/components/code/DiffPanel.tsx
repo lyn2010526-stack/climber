@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Plus, Minus, FileText, ChevronDown, ChevronRight,
   Copy, Check,
@@ -52,7 +52,7 @@ export function parseDiff(diffText: string): DiffFile[] {
         files.push(currentFile);
       }
       const match = line.match(/b\/(.+)$/);
-      const path = match ? match[1] : 'unknown';
+      const path = match?.[1] ?? 'unknown';
       currentFile = { path, hunks: [], additions: 0, deletions: 0, status: 'modified' };
       currentHunk = null;
       additions = 0;
@@ -62,7 +62,7 @@ export function parseDiff(diffText: string): DiffFile[] {
         currentFile.hunks.push(currentHunk);
       }
       const match = line.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-      if (match) {
+      if (match?.[1] && match?.[2]) {
         oldN = parseInt(match[1], 10);
         newN = parseInt(match[2], 10);
         currentHunk = { header: line, oldStart: oldN, newStart: newN, rows: [] };
@@ -114,7 +114,7 @@ function HighlightedLine({ line }: { line: string }) {
           return <span key={i} className="text-green-300">{part}</span>;
         }
         if (/^[{}()\[\];,.:=<>!+\-*/]$/.test(part)) {
-          return <span key={i} className="text-gray-500">{part}</span>;
+          return <span key={i} className="text-[var(--color-text-muted)]">{part}</span>;
         }
         return <span key={i}>{part}</span>;
       })}
@@ -152,14 +152,14 @@ function DiffLine({ row, showLineNumbers }: DiffLineProps) {
   const prefixColor = {
     add: 'text-green-500/70',
     del: 'text-red-500/70',
-    ctx: 'text-gray-600',
-    h: 'text-gray-500',
+    ctx: 'text-[var(--color-text-muted)]',
+    h: 'text-[var(--color-text-muted)]',
   }[row.kind];
 
   const textColor = {
     add: 'text-green-200/90',
     del: 'text-red-200/90',
-    ctx: 'text-gray-300/80',
+    ctx: 'text-[var(--color-text-secondary)]',
     h: 'text-blue-300/70',
   }[row.kind];
 
@@ -181,10 +181,10 @@ function DiffLine({ row, showLineNumbers }: DiffLineProps) {
           'w-[72px] px-2 py-0.5 font-mono text-[11px]',
           gutterBg
         )}>
-          <span className="w-6 text-right text-gray-600">
+          <span className="w-6 text-right text-[var(--color-text-muted)]">
             {row.oldN ?? ''}
           </span>
-          <span className="w-6 text-right text-gray-600">
+          <span className="w-6 text-right text-[var(--color-text-muted)]">
             {row.newN ?? ''}
           </span>
           <span className={cn('w-3 text-center', prefixColor)}>
@@ -220,12 +220,6 @@ function DiffFileView({ file, defaultExpanded = true, showLineNumbers = true }: 
     deleted: <Minus size={12} className="text-red-400" />,
   }[file.status];
 
-  const statusColor = {
-    added: 'text-green-400',
-    modified: 'text-amber-400',
-    deleted: 'text-red-400',
-  }[file.status];
-
   const handleCopy = () => {
     const diffText = file.hunks
       .flatMap(h => [h.header, ...h.rows.map(r => `${r.kind === 'add' ? '+' : r.kind === 'del' ? '-' : ' '}${r.content}`)])
@@ -249,22 +243,22 @@ function DiffFileView({ file, defaultExpanded = true, showLineNumbers = true }: 
       >
         <div className="shrink-0">
           {expanded ? (
-            <ChevronDown size={14} className="text-gray-500" />
+            <ChevronDown size={14} className="text-[var(--color-text-muted)]" />
           ) : (
-            <ChevronRight size={14} className="text-gray-500" />
+            <ChevronRight size={14} className="text-[var(--color-text-muted)]" />
           )}
         </div>
         {statusIcon}
         <div className="flex-1 min-w-0">
-          <span className="text-xs font-medium text-gray-200">{fileName}</span>
+          <span className="text-xs font-medium text-[var(--color-text-secondary)]">{fileName}</span>
           {dirPath && (
-            <span className="text-[10px] text-gray-500 ml-2">{dirPath}/</span>
+            <span className="text-[10px] text-[var(--color-text-muted)] ml-2">{dirPath}/</span>
           )}
         </div>
 
         {/* Stats */}
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[10px] text-gray-500 font-mono">{totalLines} 行</span>
+          <span className="text-[10px] text-[var(--color-text-muted)] font-mono">{totalLines} 行</span>
           {file.additions > 0 && (
             <span className="text-[10px] text-green-400 font-mono">+{file.additions}</span>
           )}
@@ -273,7 +267,7 @@ function DiffFileView({ file, defaultExpanded = true, showLineNumbers = true }: 
           )}
           <button
             onClick={(e) => { e.stopPropagation(); handleCopy(); }}
-            className="p-1 rounded hover:bg-white/[0.06] text-gray-400 transition-colors"
+            className="p-1 rounded hover:bg-white/[0.06] text-[var(--color-text-muted)] transition-colors"
           >
             {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
           </button>
@@ -340,9 +334,9 @@ export function DiffPanel({
       {/* Summary */}
       <div className="flex items-center justify-between px-1 mb-2">
         <div className="flex items-center gap-2">
-          <FileText size={13} className="text-gray-400" />
-          <span className="text-[11px] font-medium text-gray-400">{title}</span>
-          <span className="text-[10px] text-gray-500">
+          <FileText size={13} className="text-[var(--color-text-muted)]" />
+          <span className="text-[11px] font-medium text-[var(--color-text-muted)]">{title}</span>
+          <span className="text-[10px] text-[var(--color-text-muted)]">
             {files.length} 个文件
           </span>
         </div>
@@ -364,5 +358,4 @@ export function DiffPanel({
   );
 }
 
-export { parseDiff };
 export type { DiffFile, DiffRow, DiffHunk };

@@ -43,7 +43,7 @@ export function InlineApprovalCard({
     <div className={`max-w-[85%] rounded-xl border ${riskColors[riskLevel]} overflow-hidden`}>
       <div className="flex items-center gap-2 px-4 py-2.5">
         <AlertTriangle size={14} className={riskIconColors[riskLevel]} />
-         <span className="text-xs font-medium text-gray-100">需要批准</span>
+         <span className="text-xs font-medium text-[var(--color-text-primary)]">需要批准</span>
         <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium capitalize ${
           riskLevel === 'critical' ? 'bg-red-500/20 text-red-400' :
           riskLevel === 'high' ? 'bg-red-500/10 text-red-400' :
@@ -56,10 +56,10 @@ export function InlineApprovalCard({
 
       <div className="px-4 pb-2 space-y-1">
         <div className="flex items-center gap-2 text-xs">
-          <Shield size={11} className="text-gray-500" />
-          <span className="text-gray-400">{toolName}</span>
+          <Shield size={11} className="text-[var(--color-text-muted)]" />
+          <span className="text-[var(--color-text-secondary)]">{toolName}</span>
         </div>
-        <p className="text-[10px] text-gray-500">{reason}</p>
+        <p className="text-[10px] text-[var(--color-text-muted)]">{reason}</p>
         {command && !editing && (
           <pre className="code-block text-[10px] mt-1 max-h-20 overflow-y-auto">{command}</pre>
         )}
@@ -67,12 +67,12 @@ export function InlineApprovalCard({
           <textarea
             value={modifiedCommand}
             onChange={(e) => setModifiedCommand(e.target.value)}
-            className="w-full h-16 px-2 py-1 bg-gray-700 border border-gray-700 rounded text-[10px] text-gray-100 font-mono resize-none focus:outline-none focus:border-blue-500/50"
+            className="w-full h-16 px-2 py-1 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded text-[10px] text-[var(--color-text-primary)] font-mono resize-none focus:outline-none focus:border-[var(--color-accent)]/50"
           />
         )}
       </div>
 
-      <div className="flex items-center gap-2 px-4 py-2.5 border-t border-gray-700/50">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-t border-[var(--color-border-subtle)]/50">
         <button
           onClick={() => onApprove()}
           className="flex items-center gap-1 px-3 py-1 text-[10px] bg-green-500/10 text-green-400 rounded-lg hover:bg-green-500/20"

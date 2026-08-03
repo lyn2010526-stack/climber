@@ -56,28 +56,6 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
   }, [status, startTime]);
 
   useEffect(() => {
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${proto}//${window.location.host}/api/v1/ws/groups/${groupId}?user_id=local`);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setMessages(prev => [...prev, {
-        id: genId(), memberId: 'system', memberName: 'System', role: 'system',
-        content: '已连接到群组协作空间', timestamp: new Date().toISOString(),
-      }] as CollabMessageType[]);
-    };
-    ws.onclose = () => { /* disconnected */ };
-    ws.onmessage = (event) => {
-      try {
-        const msg: any = JSON.parse(event.data);
-        handleWSMessage(msg);
-      } catch { /* skip */ }
-    };
-
-    return () => ws.close();
-  }, [groupId]);
-
-  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
@@ -339,6 +317,27 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
     }
   }, []);
 
+  useEffect(() => {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${proto}//${window.location.host}/api/v1/ws/groups/${groupId}`);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setMessages(prev => [...prev, {
+        id: genId(), memberId: 'system', memberName: 'System', role: 'system',
+        content: '已连接到群组协作空间', timestamp: new Date().toISOString(),
+      }] as CollabMessageType[]);
+    };
+    ws.onclose = () => { /* disconnected */ };
+    ws.onmessage = (event) => {
+      try {
+        handleWSMessage(JSON.parse(event.data));
+      } catch { /* skip */ }
+    };
+
+    return () => ws.close();
+  }, [groupId, handleWSMessage]);
+
   const startTask = useCallback(async (task?: string, rounds?: number, options?: TaskOptions) => {
     if (!task) return;
     setStartTime(Date.now());
@@ -476,8 +475,8 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
       <div className="flex-1 overflow-y-auto p-4 md:p-4 space-y-2">
         {messages.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-xs text-gray-500">配置 AI 成员后，输入任务开始自动协作</p>
-            <p className="text-[10px] text-gray-500 mt-1">Worker 产出 → Reviewer 检查 → 纠正 → 通过</p>
+            <p className="text-xs text-[var(--color-text-muted)]">配置 AI 成员后，输入任务开始自动协作</p>
+            <p className="text-[10px] text-[var(--color-text-muted)] mt-1">Worker 产出 → Reviewer 检查 → 纠正 → 通过</p>
           </div>
         )}
         {messages.map((msg) => (
@@ -487,9 +486,9 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
       </div>
 
       {/* Message Input + Task Input */}
-      <div className="border-t border-gray-700 bg-gray-800/30">
+      <div className="border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-elevated)]/30">
         {/* Message Input */}
-        <div className="p-3 md:p-3 border-b border-gray-700/50">
+        <div className="p-3 md:p-3 border-b border-[var(--color-border-subtle)]/50">
           <div className="flex items-center gap-2">
             <input
               type="text"
@@ -497,7 +496,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder="输入消息..."
-              className="flex-1 px-3 py-2 bg-gray-700 border border-gray-700 rounded-lg text-xs text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50"
+              className="flex-1 px-3 py-2 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded-lg text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-blue-500/50"
             />
             <button
               onClick={sendMessage}

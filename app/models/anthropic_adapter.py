@@ -24,10 +24,12 @@ class AnthropicAdapter(ModelAdapter):
         model_id: str,
         api_key: str,
         base_url: str = "https://api.anthropic.com",
+        capabilities: "ModelCapability | None" = None,
     ):
         self._model_id = model_id
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
+        self._capabilities = capabilities
 
     @classmethod
     def get_client(cls) -> httpx.AsyncClient:
@@ -62,6 +64,8 @@ class AnthropicAdapter(ModelAdapter):
 
     @property
     def capabilities(self) -> ModelCapability:
+        if self._capabilities is not None:
+            return self._capabilities
         return ModelCapability(
             chat=True,
             streaming=True,

@@ -78,10 +78,6 @@ class AutoLoopEngine:
         self._recovery_check_interval = recovery_check_interval
 
     async def start(self) -> None:
-        """Start the background loop.
-
-        Called from app.main.py lifespan during startup.
-        """
         if self._running:
             return
         self._running = True
@@ -89,6 +85,11 @@ class AutoLoopEngine:
             self._monitor_loop(), name="auto-loop-monitor"
         )
         logger.info("auto_loop_engine_started")
+        # Keep the start task alive so watchdog considers it running
+        try:
+            await self._monitor
+        except asyncio.CancelledError:
+            pass
 
     async def stop(self) -> None:
         """Clean shutdown preserving state."""

@@ -53,14 +53,14 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: PropertiesPanelPro
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-gray-700">
-        <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+      <div className="flex items-center justify-between p-3 border-b border-[var(--color-border-subtle)]">
+        <h3 className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
           Node Properties
         </h3>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="p-1 rounded hover:bg-red-500/10 text-gray-500 hover:text-red-400 transition-colors"
+            className="p-1 rounded hover:bg-red-500/10 text-[var(--color-text-muted)] hover:text-red-400 transition-colors"
           >
             <Trash2 size={12} />
           </button>
@@ -68,10 +68,10 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: PropertiesPanelPro
       </div>
 
       {/* Node Info */}
-      <div className="p-3 border-b border-gray-700">
+      <div className="p-3 border-b border-[var(--color-border-subtle)]">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs font-medium text-gray-100 capitalize">{node.type}</span>
-          <span className="text-[9px] text-gray-500 font-mono">{node.id}</span>
+          <span className="text-xs font-medium text-[var(--color-text-primary)] capitalize">{node.type}</span>
+          <span className="text-[9px] text-[var(--color-text-muted)] font-mono">{node.id}</span>
         </div>
       </div>
 
@@ -83,14 +83,14 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: PropertiesPanelPro
 
           return (
             <div key={field.label}>
-              <label className="block text-[10px] font-medium text-gray-500 mb-1">
+              <label className="block text-[10px] font-medium text-[var(--color-text-muted)] mb-1">
                 {field.label}
               </label>
               {field.type === 'select' ? (
                 <select
                   value={value}
                   onChange={(e) => handleChange(key, e.target.value)}
-                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-700 rounded text-[11px] text-gray-100 focus:outline-none focus:border-blue-500/50"
+                   className="w-full px-2 py-1.5 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded text-[11px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50"
                 >
                   <option value="">Select...</option>
                   {field.options?.map((opt) => (
@@ -102,7 +102,7 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: PropertiesPanelPro
                   value={value}
                   onChange={(e) => handleChange(key, e.target.value)}
                   rows={3}
-                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-700 rounded text-[11px] text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50 resize-none"
+                   className="w-full px-2 py-1.5 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded text-[11px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 resize-none"
                   placeholder={`Enter ${fieldKey(field.label)}...`}
                 />
               ) : (
@@ -110,7 +110,7 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: PropertiesPanelPro
                   type="text"
                   value={value}
                   onChange={(e) => handleChange(key, e.target.value)}
-                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-700 rounded text-[11px] text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50"
+                   className="w-full px-2 py-1.5 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded text-[11px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50"
                   placeholder={`Enter ${fieldKey(field.label)}...`}
                 />
               )}
@@ -121,19 +121,19 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: PropertiesPanelPro
 
       {/* Delete Confirmation */}
       {showDeleteConfirm && (
-        <div className="absolute inset-0 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="p-4 bg-gray-800 border border-gray-700 rounded-xl shadow-xl max-w-[240px]">
+         <div className="absolute inset-0 bg-[var(--color-bg-deep)]/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="p-4 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-xl shadow-xl max-w-[240px]">
             <div className="flex items-center gap-2 mb-3">
               <AlertCircle size={16} className="text-red-400" />
-              <span className="text-xs font-medium text-gray-100">Delete Node?</span>
+              <span className="text-xs font-medium text-[var(--color-text-primary)]">Delete Node?</span>
             </div>
-            <p className="text-[10px] text-gray-500 mb-4">
+            <p className="text-[10px] text-[var(--color-text-muted)] mb-4">
               This will remove the node and all its connections.
             </p>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 px-3 py-1.5 text-[11px] text-gray-400 bg-gray-700 rounded-lg hover:bg-gray-700/50 transition-colors"
+                className="flex-1 px-3 py-1.5 text-[11px] text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-elevated)] rounded-lg hover:bg-[var(--color-bg-surface-elevated)]/50 transition-colors"
               >
                 Cancel
               </button>

@@ -56,7 +56,7 @@ export function MemberConfig({ members, onAdd, onRemove, onUpdate }: MemberConfi
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-         <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+         <span className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
            AI 成员 ({members.length})
          </span>
         <button
@@ -72,26 +72,26 @@ export function MemberConfig({ members, onAdd, onRemove, onUpdate }: MemberConfi
         {members.map((member) => {
           const RoleIcon = ROLE_ICONS[member.role];
           return (
-            <div key={member.id} className="p-2 bg-gray-700 rounded-lg border border-gray-700 space-y-2">
+            <div key={member.id} className="p-2 bg-[var(--color-bg-surface-elevated)] rounded-lg border border-[var(--color-border-default)] space-y-2">
               <div className="flex items-center gap-2">
                 <RoleIcon size={12} className={member.role === 'worker' ? 'text-green-400' : 'text-amber-400'} />
                 <input
                   type="text"
                   value={member.name}
                   onChange={(e) => onUpdate(member.id, { name: e.target.value })}
-                  className="flex-1 bg-transparent text-[11px] text-gray-100 focus:outline-none"
+                  className="flex-1 bg-transparent text-[11px] text-[var(--color-text-primary)] focus:outline-none"
                 />
                 <select
                   value={member.role}
                   onChange={(e) => onUpdate(member.id, { role: e.target.value as 'worker' | 'reviewer' })}
-                  className="bg-gray-800 text-[10px] text-gray-100 border border-gray-700 rounded px-1 py-0.5 focus:outline-none"
+                  className="bg-[var(--color-bg-surface-1)] text-[10px] text-[var(--color-text-primary)] border border-[var(--color-border-default)] rounded px-1 py-0.5 focus:outline-none"
                 >
                    <option value="worker">执行者</option>
                    <option value="reviewer">审核者</option>
                 </select>
                 <button
                   onClick={() => onRemove(member.id)}
-                  className="text-gray-500 hover:text-red-400"
+                  className="text-[var(--color-text-muted)] hover:text-red-400"
                 >
                   <X size={10} />
                 </button>
@@ -101,7 +101,7 @@ export function MemberConfig({ members, onAdd, onRemove, onUpdate }: MemberConfi
                 <select
                   value={member.provider}
                   onChange={(e) => onUpdate(member.id, { provider: e.target.value, modelId: PROVIDER_MODELS[e.target.value]?.[0] || '' })}
-                  className="bg-gray-800 text-[10px] text-gray-100 border border-gray-700 rounded px-1.5 py-1 focus:outline-none"
+                  className="bg-[var(--color-bg-surface-1)] text-[10px] text-[var(--color-text-primary)] border border-[var(--color-border-default)] rounded px-1.5 py-1 focus:outline-none"
                 >
                   {PROVIDERS.map((p) => (
                     <option key={p} value={p}>{p}</option>
@@ -110,7 +110,7 @@ export function MemberConfig({ members, onAdd, onRemove, onUpdate }: MemberConfi
                 <select
                   value={member.modelId}
                   onChange={(e) => onUpdate(member.id, { modelId: e.target.value })}
-                  className="bg-gray-800 text-[10px] text-gray-100 border border-gray-700 rounded px-1.5 py-1 focus:outline-none"
+                  className="bg-[var(--color-bg-surface-1)] text-[10px] text-[var(--color-text-primary)] border border-[var(--color-border-default)] rounded px-1.5 py-1 focus:outline-none"
                 >
                   {(PROVIDER_MODELS[member.provider] || []).map((m) => (
                     <option key={m} value={m}>{m}</option>
@@ -123,14 +123,14 @@ export function MemberConfig({ members, onAdd, onRemove, onUpdate }: MemberConfi
                 value={member.apiKey}
                 onChange={(e) => onUpdate(member.id, { apiKey: e.target.value })}
                  placeholder="API 密钥"
-                className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-[10px] text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50"
+                className="w-full px-2 py-1 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-default)] rounded text-[10px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50"
               />
 
               {member.role === 'reviewer' && (
                 <select
                   value={member.reviewType}
                   onChange={(e) => onUpdate(member.id, { reviewType: e.target.value as 'code' | 'architecture' | 'security' })}
-                  className="w-full bg-gray-800 text-[10px] text-gray-100 border border-gray-700 rounded px-1.5 py-1 focus:outline-none"
+                  className="w-full bg-[var(--color-bg-surface-1)] text-[10px] text-[var(--color-text-primary)] border border-[var(--color-border-default)] rounded px-1.5 py-1 focus:outline-none"
                 >
                   {REVIEW_TYPES.map((rt) => (
                     <option key={rt.value} value={rt.value}>{rt.label}</option>

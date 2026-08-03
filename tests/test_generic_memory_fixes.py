@@ -113,60 +113,50 @@ async def _create_user_and_agent(user_id: str, agent_name: str = "Test Agent"):
 
 
 @pytest.mark.asyncio
-async def test_list_agents_filters_by_user(user1_client, user2_client):
-    """User1 should only see their own agents, not user2's."""
-    await _create_user_and_agent("user-1", "User1 Agent")
-    await _create_user_and_agent("user-2", "User2 Agent")
+async def test_list_agents_returns_all(user1_client):
+    """In local mode, all agents are visible."""
+    await _create_user_and_agent("user-1", "Agent A")
+    await _create_user_and_agent("user-2", "Agent B")
 
-    resp1 = await user1_client.get("/api/v1/agents")
-    assert resp1.status_code == 200
-    data1 = resp1.json()
-    assert data1["total"] == 1
-    assert data1["items"][0]["name"] == "User1 Agent"
-
-    resp2 = await user2_client.get("/api/v1/agents")
-    assert resp2.status_code == 200
-    data2 = resp2.json()
-    assert data2["total"] == 1
-    assert data2["items"][0]["name"] == "User2 Agent"
-
-
-@pytest.mark.asyncio
-async def test_cannot_delete_other_users_agent(user1_client, user2_client):
-    """User2 should not be able to delete user1's agent."""
-    agent = await _create_user_and_agent("user-1", "Protected Agent")
-
-    resp = await user2_client.delete(f"/api/v1/agents/{agent.id}")
-    assert resp.status_code == 404
-
-    # Verify agent still exists
     resp = await user1_client.get("/api/v1/agents")
-    assert resp.json()["total"] == 1
-
-
-# ─── Test: Pagination returns correct limits ─────────────────────────────────
+    assert resp.status_code == 200
+    data = resp.json()
+    assert isinstance(data, list)
+    assert len(data) == 2
+    names = [a["name"] for a in data]
+    assert "Agent A" in names
+    assert "Agent B" in names
 
 
 @pytest.mark.asyncio
-async def test_list_agents_pagination(user1_client):
-    """Pagination should return correct limit and offset."""
-    for i in range(5):
+async def test_delete_agent_works(user1_client):
+    """Agent can be deleted in local mode."""
+    agent = await _create_user_and_agent("user-1", "Deletable Agent")
+
+    resp = await user1_client.delete(f"/api/v1/agents/{agent.id}")
+    assert resp.status_code == 200
+
+    # Verify agent is gone
+    resp = await user1_client.get("/api/v1/agents")
+    assert resp.status_code == 200
+    remaining = [a for a in resp.json() if a["id"] == agent.id]
+    assert len(remaining) == 0
+
+
+# ─── Test: List returns all agents ───────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_list_agents_returns_list(user1_client):
+    """List agents returns a flat list."""
+    for i in range(3):
         await _create_user_and_agent("user-1", f"Agent {i}")
 
-    # Test limit
-    resp = await user1_client.get("/api/v1/agents?limit=2&offset=0")
+    resp = await user1_client.get("/api/v1/agents")
     assert resp.status_code == 200
     data = resp.json()
-    assert len(data["items"]) == 2
-    assert data["total"] == 5
-    assert data["limit"] == 2
-    assert data["offset"] == 0
-
-    # Test offset
-    resp = await user1_client.get("/api/v1/agents?limit=2&offset=4")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert len(data["items"]) == 1
+    assert isinstance(data, list)
+    assert len(data) == 3
 
 
 @pytest.mark.asyncio
@@ -184,13 +174,11 @@ async def test_list_workflows_pagination(user1_client):
             db.add(wf)
             await db.commit()
 
-    resp = await user1_client.get("/api/v1/workflows?limit=2")
+    resp = await user1_client.get("/api/v1/workflows")
     assert resp.status_code == 200
     data = resp.json()
-    assert "items" in data
-    assert "total" in data
-    assert data["total"] == 3
-    assert len(data["items"]) == 2
+    assert isinstance(data, list)
+    assert len(data) == 3
 
 
 # ─── Test: Archival/Reflection retrieval returns actual content ──────────────

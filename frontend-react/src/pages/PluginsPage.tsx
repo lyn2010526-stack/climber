@@ -99,7 +99,6 @@ export function PluginsPage() {
     } catch (e) { console.error(e); }
   };
 
-  // Filtering
   const filtered = plugins.filter(p => {
     const matchSearch = !searchQuery ||
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -112,7 +111,6 @@ export function PluginsPage() {
     return matchSearch && matchType && matchCat;
   });
 
-  // Group by category
   const categories = [...new Set(plugins.map(p => p.category).filter(Boolean))];
   const grouped: Record<string, Plugin[]> = {};
   for (const p of filtered) {
@@ -127,45 +125,43 @@ export function PluginsPage() {
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <Loader2 size={32} className="text-blue-400 animate-spin" />
+        <Loader2 size={32} className="text-[var(--color-accent)] animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="max-w-7xl mx-auto p-8">
-        {/* Header */}
+    <div className="h-full overflow-y-auto p-8">
+      <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h2 className="text-2xl font-bold flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-600/10 flex items-center justify-center">
-                <Package size={20} className="text-blue-400" />
+            <h2 className="text-2xl font-bold text-[var(--color-text-primary)] flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[var(--color-accent)]/10 flex items-center justify-center border border-[var(--color-accent)]/20">
+                <Package size={20} className="text-[var(--color-accent)]" />
               </div>
-               插件市场
+                插件市场
              </h2>
-             <p className="text-gray-400 text-sm mt-1">
+             <p className="text-[var(--color-text-secondary)] text-sm mt-1">
                共 {totalCount} 个插件，{enabledCount} 个已启用 — 技能、MCP 服务器、提示词模板
              </p>
           </div>
           <button
             onClick={() => setImportModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-600-hover text-white rounded-xl text-sm font-medium transition-all shadow-lg shadow-blue-500/20"
+            className="flex items-center gap-2 px-4 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold transition-all duration-200 active:scale-[0.97]"
           >
              <Plus size={16} /> 导入插件
           </button>
         </div>
 
-        {/* Search & Filters */}
         <div className="flex gap-3 mb-6">
           <div className="flex-1 relative">
-            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
             <input
               type="text"
               placeholder="按名称、描述或标签搜索插件..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-sm text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50 transition-colors"
+              className="w-full pl-11 pr-4 py-3 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
             />
           </div>
           <div className="flex gap-2">
@@ -173,10 +169,10 @@ export function PluginsPage() {
               <button
                 key={type || 'all'}
                 onClick={() => setSelectedType(type)}
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                className={`px-4 py-2 rounded-2xl text-sm font-medium border transition-all duration-200 ${
                   selectedType === type
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                    : 'bg-gray-800 border border-gray-700 text-gray-400 hover:border-blue-500/30'
+                    ? 'bg-[var(--color-accent)]/15 border-[var(--color-accent)]/30 text-[var(--color-text-primary)]'
+                    : 'bg-white/[0.03] border-[var(--color-border-subtle)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/30'
                 }`}
               >
                  {type ? TYPE_CONFIG[type].label : '全部'}
@@ -185,27 +181,26 @@ export function PluginsPage() {
           </div>
         </div>
 
-        {/* Category Pills */}
         <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
           <button
             onClick={() => setSelectedCategory(CATEGORY_ALL)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap border transition-all duration-200 ${
               selectedCategory === CATEGORY_ALL
-                ? 'bg-blue-600/10 text-blue-400 border border-blue-500/30'
-                : 'bg-gray-700 text-gray-500 hover:text-gray-400'
+                ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] border-[var(--color-accent)]/30'
+                : 'bg-white/[0.03] text-[var(--color-text-muted)] border-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]'
             }`}
           >
-             全部 ({totalCount})
+              全部 ({totalCount})
           </button>
           <button
             onClick={() => setSelectedCategory(CATEGORY_INSTALLED)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap border transition-all duration-200 ${
               selectedCategory === CATEGORY_INSTALLED
-                ? 'bg-blue-600/10 text-blue-400 border border-blue-500/30'
-                : 'bg-gray-700 text-gray-500 hover:text-gray-400'
+                ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] border-[var(--color-accent)]/30'
+                : 'bg-white/[0.03] text-[var(--color-text-muted)] border-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]'
             }`}
           >
-             已启用 ({enabledCount})
+              已启用 ({enabledCount})
           </button>
           {categories.map(cat => {
             const count = plugins.filter(p => p.category === cat).length;
@@ -213,10 +208,10 @@ export function PluginsPage() {
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap capitalize transition-all ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap capitalize border transition-all duration-200 ${
                   selectedCategory === cat
-                    ? 'bg-blue-600/10 text-blue-400 border border-blue-500/30'
-                    : 'bg-gray-700 text-gray-500 hover:text-gray-400'
+                    ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] border-[var(--color-accent)]/30'
+                    : 'bg-white/[0.03] text-[var(--color-text-muted)] border-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]'
                 }`}
               >
                 {cat} ({count})
@@ -225,13 +220,12 @@ export function PluginsPage() {
           })}
         </div>
 
-        {/* Plugin Grid */}
         {Object.entries(grouped).map(([cat, catPlugins]) => (
           <div key={cat} className="mb-10">
-            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-4 flex items-center gap-2">
               <Filter size={12} />
               {cat}
-              <span className="text-gray-500 font-normal">({catPlugins.length})</span>
+              <span className="text-[var(--color-text-muted)] font-normal">({catPlugins.length})</span>
             </h3>
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
               {catPlugins.map(plugin => (
@@ -252,74 +246,73 @@ export function PluginsPage() {
 
         {filtered.length === 0 && (
           <div className="text-center py-20">
-            <Package size={48} className="mx-auto mb-4 text-gray-500 opacity-30" />
-             <p className="text-gray-400 text-lg">未找到插件</p>
-             <p className="text-gray-500 text-sm mt-1">尝试调整搜索或筛选条件</p>
+            <Package size={48} className="mx-auto mb-4 text-[var(--color-text-muted)] opacity-30" />
+             <p className="text-[var(--color-text-muted)] text-lg">未找到插件</p>
+             <p className="text-[var(--color-text-muted)] text-sm mt-1">尝试调整搜索或筛选条件</p>
           </div>
         )}
       </div>
 
-      {/* Import Modal */}
       {importModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setImportModalOpen(false)}>
-          <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-6 w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                 <Download size={18} className="text-blue-400" /> 导入插件
-              </h3>
-              <button onClick={() => setImportModalOpen(false)} className="p-1 rounded-lg hover:bg-gray-700/50 text-gray-500">
-                <X size={18} />
-              </button>
+              <h3 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
+                 <Download size={18} className="text-[var(--color-accent)]" /> 导入插件
+               </h3>
+               <button onClick={() => setImportModalOpen(false)} className="p-1 rounded-xl hover:bg-white/[0.06] text-[var(--color-text-muted)]">
+                 <X size={18} />
+               </button>
             </div>
 
             <div className="space-y-4">
               <div>
-                 <label className="block text-sm font-medium text-gray-400 mb-1.5">源地址</label>
+                 <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1.5">源地址</label>
                  <input
                    type="url"
                    value={importUrl}
                    onChange={(e) => setImportUrl(e.target.value)}
                    placeholder="https://github.com/user/mcp-server 或原始 JSON URL"
-                  className="w-full px-4 py-2.5 bg-gray-700 border border-gray-700 rounded-xl text-sm text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50"
-                />
-              </div>
-              <div>
-                 <label className="block text-sm font-medium text-gray-400 mb-1.5">名称（可选）</label>
+                  className="w-full px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
+                 />
+               </div>
+               <div>
+                 <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1.5">名称（可选）</label>
                  <input
                    type="text"
                    value={importName}
                    onChange={(e) => setImportName(e.target.value)}
                    placeholder="我的自定义插件"
-                  className="w-full px-4 py-2.5 bg-gray-700 border border-gray-700 rounded-xl text-sm text-gray-100 placeholder:text-gray-500 focus:outline-none focus:border-blue-500/50"
-                />
-              </div>
-              <div>
-                 <label className="block text-sm font-medium text-gray-400 mb-1.5">类型</label>
+                  className="w-full px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
+                 />
+               </div>
+               <div>
+                 <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1.5">类型</label>
                 <select
                   value={importType}
                   onChange={(e) => setImportType(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-gray-700 border border-gray-700 rounded-xl text-sm text-gray-100"
+                  className="w-full px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)]"
                 >
                    <option value="mcp">MCP 服务器</option>
                    <option value="skill">技能</option>
                    <option value="prompt">提示词模板</option>
-                </select>
-              </div>
-            </div>
+                 </select>
+               </div>
+             </div>
 
             <div className="flex justify-end gap-3 mt-6">
               <button
                 onClick={() => setImportModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-sm text-gray-400 hover:bg-gray-700/50"
+                className="px-4 py-2 rounded-xl text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
               >
-                 取消
+                  取消
               </button>
               <button
                 onClick={handleImport}
                 disabled={!importUrl.trim()}
-                className="px-5 py-2 bg-blue-600 hover:bg-blue-600-hover text-white rounded-xl text-sm font-medium disabled:opacity-50 transition-all"
+                className="px-5 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold disabled:opacity-50 transition-all duration-200 active:scale-[0.97]"
               >
-                 导入
+                  导入
               </button>
             </div>
           </div>
@@ -328,8 +321,6 @@ export function PluginsPage() {
     </div>
   );
 }
-
-// ── Plugin Card Component ──
 
 function PluginCard({
   plugin,
@@ -355,23 +346,21 @@ function PluginCard({
 
   return (
     <div
-      className={`group relative bg-gray-800 border rounded-xl p-5 transition-all duration-200 hover:shadow-lg ${
+      className={`group relative bg-[var(--color-bg-surface-1)] border rounded-2xl p-5 transition-all duration-200 ${
         isEnabled
-          ? 'border-blue-500/30 shadow-blue-500/5 hover:border-blue-500/50'
-          : 'border-gray-700 hover:border-blue-500/30'
+          ? 'border-[var(--color-accent)]/30 shadow-lg shadow-[var(--color-accent)]/5 hover:border-[var(--color-accent)]/50'
+          : 'border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/30'
       }`}
     >
-      {/* Status indicator */}
       {isEnabled && (
         <div className="absolute top-4 right-4 flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-           <span className="text-xs text-green-400 font-medium">已启用</span>
+          <div className="w-2 h-2 rounded-full bg-[var(--color-success)] animate-pulse" />
+           <span className="text-xs text-[var(--color-success)] font-medium">已启用</span>
         </div>
       )}
 
-      {/* Header */}
       <div className="flex items-start gap-3 mb-3">
-        <div className={`w-10 h-10 rounded-lg ${typeConf.bg} flex items-center justify-center shrink-0`}>
+        <div className={`w-10 h-10 rounded-xl ${typeConf.bg} flex items-center justify-center shrink-0 border ${typeConf.border}`}>
           {plugin.icon ? (
             <span className="text-lg">{plugin.icon}</span>
           ) : (
@@ -379,9 +368,9 @@ function PluginCard({
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <h4 className="font-medium text-sm truncate pr-16">{plugin.name}</h4>
+          <h4 className="font-medium text-sm truncate pr-16 text-[var(--color-text-primary)]">{plugin.name}</h4>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className={`px-2 py-0.5 rounded text-xs font-medium ${typeConf.bg} ${typeConf.color}`}>
+            <span className={`px-2 py-0.5 rounded-lg text-xs font-medium border ${typeConf.bg} ${typeConf.color} ${typeConf.border}`}>
               {typeConf.label}
             </span>
             {plugin.popularity && plugin.popularity > 0 && (
@@ -393,59 +382,54 @@ function PluginCard({
         </div>
       </div>
 
-      {/* Description */}
-      <p className="text-xs text-gray-400 leading-relaxed mb-3 line-clamp-2">
+      <p className="text-xs text-[var(--color-text-muted)] leading-relaxed mb-3 line-clamp-2">
         {plugin.description}
       </p>
 
-      {/* Tags */}
       {plugin.tags && plugin.tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-3">
           {plugin.tags.slice(0, 3).map(tag => (
-            <span key={tag} className="px-2 py-0.5 bg-gray-700 rounded text-xs text-gray-500">
+            <span key={tag} className="px-2 py-0.5 bg-white/[0.03] rounded-lg text-xs text-[var(--color-text-muted)] border border-[var(--color-border-subtle)]">
               {tag}
             </span>
           ))}
           {plugin.tags.length > 3 && (
-            <span className="px-2 py-0.5 text-xs text-gray-500">+{plugin.tags.length - 3}</span>
+            <span className="px-2 py-0.5 text-xs text-[var(--color-text-muted)]">+{plugin.tags.length - 3}</span>
           )}
         </div>
       )}
 
-      {/* Tools count for MCP */}
       {plugin.type === 'mcp' && plugin.tools && plugin.tools.length > 0 && (
-        <div className="flex items-center gap-1.5 mb-3 text-xs text-gray-500">
+        <div className="flex items-center gap-1.5 mb-3 text-xs text-[var(--color-text-muted)]">
           <Zap size={10} />
            <span>{plugin.tools.length} 个可用工具</span>
         </div>
       )}
 
-      {/* Expandable details */}
       {isExpanded && (
-        <div className="mt-3 pt-3 border-t border-gray-700 space-y-2">
+        <div className="mt-3 pt-3 border-t border-[var(--color-border-subtle)] space-y-2">
           <div className="flex items-center justify-between text-xs">
-             <span className="text-gray-500">来源</span>
-            <span className="text-gray-400 capitalize">{plugin.source}</span>
+             <span className="text-[var(--color-text-muted)]">来源</span>
+            <span className="text-[var(--color-text-secondary)] capitalize">{plugin.source}</span>
           </div>
           <div className="flex items-center justify-between text-xs">
-             <span className="text-gray-500">版本</span>
-            <span className="text-gray-400">{plugin.version || '1.0.0'}</span>
+             <span className="text-[var(--color-text-muted)]">版本</span>
+            <span className="text-[var(--color-text-secondary)]">{plugin.version || '1.0.0'}</span>
           </div>
           {plugin.error && (
-            <div className="mt-2 p-2 bg-red-500/10 rounded-lg text-xs text-red-400">
+            <div className="mt-2 p-2 bg-[var(--color-error)]/10 rounded-xl text-xs text-[var(--color-error)] border border-[var(--color-error)]/20">
               {plugin.error}
             </div>
           )}
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-700">
+      <div className="flex items-center justify-between mt-4 pt-3 border-t border-[var(--color-border-subtle)]">
         <button
           onClick={onExpand}
-          className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+          className="flex items-center gap-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
         >
-          Details <ChevronRight size={12} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+          Details <ChevronRight size={12} className={`transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
         </button>
 
         <div className="flex items-center gap-2">
@@ -455,10 +439,10 @@ function PluginCard({
             <>
               <button
                 onClick={onToggle}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-200 border ${
                   isEnabled
-                    ? 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
-                    : 'bg-gray-700 text-gray-500 hover:text-gray-400'
+                    ? 'bg-[var(--color-success)]/10 text-[var(--color-success)] hover:bg-[var(--color-success)]/20 border-[var(--color-success)]/20'
+                    : 'bg-white/[0.03] text-[var(--color-text-muted)] hover:bg-white/[0.06] border-[var(--color-border-subtle)]'
                 }`}
               >
                 {isEnabled ? <Power size={12} /> : <PowerOff size={12} />}
@@ -467,7 +451,7 @@ function PluginCard({
               {plugin.source !== 'builtin' && (
                 <button
                   onClick={onUninstall}
-                  className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  className="p-1.5 rounded-xl text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/10 transition-all duration-200"
                 >
                   <Trash2 size={14} />
                 </button>
@@ -476,7 +460,7 @@ function PluginCard({
           ) : (
             <button
               onClick={onInstall}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-600-hover text-white rounded-lg text-xs font-medium transition-all shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-xl text-xs font-semibold transition-all duration-200 active:scale-[0.97]"
             >
               <Download size={12} /> Install
             </button>
@@ -488,5 +472,5 @@ function PluginCard({
 }
 
 function LoaderSize16() {
-  return <Loader2 size={16} className="text-blue-400 animate-spin" />;
+  return <Loader2 size={16} className="text-[var(--color-accent)] animate-spin" />;
 }

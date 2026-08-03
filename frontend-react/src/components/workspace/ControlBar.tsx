@@ -51,15 +51,15 @@ export function ControlBar() {
         <button
           onClick={handlePause}
           disabled={!activeSession || (!isRunning && !isPaused)}
-          className="p-2 rounded-2xl hover:bg-white/10 text-gray-400 hover:text-white transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
-          title={isPaused ? '继续' : '暂停'}
+           className="p-2 rounded-2xl hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
+           title={isPaused ? '继续' : '暂停'}
         >
           {isPaused ? <Play size={14} /> : <Pause size={14} />}
         </button>
         <button
           onClick={handleStop}
           disabled={!activeSession}
-          className="p-2 rounded-2xl hover:bg-red-500/10 text-gray-400 hover:text-red-400 transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
+           className="p-2 rounded-2xl hover:bg-red-500/10 text-[var(--color-text-secondary)] hover:text-red-400 transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
           title="停止"
         >
           <Square size={14} />
@@ -67,13 +67,13 @@ export function ControlBar() {
         <button
           onClick={handleSnapshot}
           disabled={!activeSession}
-          className="p-2 rounded-2xl hover:bg-white/10 text-gray-400 hover:text-white transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
-          title="保存快照"
+           className="p-2 rounded-2xl hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
+           title="保存快照"
         >
           <Camera size={14} />
         </button>
         <button
-          className="p-2 rounded-2xl hover:bg-white/10 text-gray-400 hover:text-white transition-all duration-200 hover:scale-105 active:scale-95"
+           className="p-2 rounded-2xl hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-all duration-200 hover:scale-105 active:scale-95"
           title="回滚到快照"
         >
           <RotateCcw size={14} />
@@ -95,9 +95,9 @@ export function ControlBar() {
             key={id}
             onClick={() => rightPanelTab === id && rightPanelOpen ? toggleRightPanel() : setRightPanelTab(id)}
             className={`p-2 rounded-2xl transition-all duration-200 ${
-              rightPanelTab === id && rightPanelOpen
-                ? 'bg-white/10 text-white shadow-sm shadow-white/5 border border-white/10'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'
+               rightPanelTab === id && rightPanelOpen
+                 ? 'bg-white/10 text-white shadow-sm shadow-white/5 border border-white/10'
+                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-white/5 border border-transparent'
             }`}
             title={label}
           >
@@ -112,7 +112,7 @@ export function ControlBar() {
       {/* Token gauge */}
       {activeSession?.tokenUsage && (
         <div className="flex items-center gap-2 mr-3">
-          <span className="text-[10px] text-gray-500 font-medium">Token</span>
+          <span className="text-[10px] text-[var(--color-text-muted)] font-medium">Token</span>
           <div className="w-20 h-1 bg-white/10 rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-300 ${
@@ -123,7 +123,7 @@ export function ControlBar() {
               style={{ width: `${(activeSession.tokenUsage.used / activeSession.tokenUsage.limit) * 100}%` }}
             />
           </div>
-          <span className="text-[10px] text-gray-500 font-mono">
+          <span className="text-[10px] text-[var(--color-text-muted)] font-mono">
             {Math.round((activeSession.tokenUsage.used / activeSession.tokenUsage.limit) * 100)}%
           </span>
         </div>
@@ -157,7 +157,7 @@ export function ControlBar() {
       <button
         onClick={toggleExpertMode}
         className={`p-2 rounded-2xl transition-all duration-200 ${
-          expertMode ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20 shadow-sm shadow-purple-500/10' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'
+          expertMode ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20 shadow-sm shadow-purple-500/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-white/5 border border-transparent'
         }`}
         title={expertMode ? '关闭专家模式' : '开启专家模式'}
       >
@@ -168,7 +168,7 @@ export function ControlBar() {
       <button
         onClick={toggleFocusMode}
         className={`p-2 rounded-2xl transition-all duration-200 ${
-          focusMode ? 'bg-white/10 text-white shadow-sm shadow-white/5 border border-white/10' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'
+          focusMode ? 'bg-white/10 text-white shadow-sm shadow-white/5 border border-white/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-white/5 border border-transparent'
         }`}
           title="专注模式"
       >

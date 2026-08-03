@@ -85,3 +85,33 @@ async def delete_skill(skill_id: str) -> dict:
         await db.delete(skill)
         await db.commit()
         return {"ok": True, "deleted": skill_id}
+
+
+@router.patch("/skills/{skill_id}")
+async def update_skill(skill_id: str, request: Request) -> dict[str, Any]:
+    data = await _payload(request)
+    async with async_session() as db:
+        skill = (await db.execute(select(Skill).where(Skill.id == skill_id))).scalar_one_or_none()
+        if skill is None:
+            raise HTTPException(status_code=404, detail="Skill not found")
+        if "name" in data:
+            skill.name = data["name"]
+        if "description" in data:
+            skill.description = data["description"]
+        if "category" in data:
+            skill.category = data["category"]
+        if "prompt_template" in data:
+            skill.prompt_template = data["prompt_template"]
+        if "tools" in data:
+            skill.tools = data["tools"]
+        if "enabled" in data:
+            skill.is_enabled = bool(data["enabled"])
+        await db.commit()
+        await db.refresh(skill)
+        return _skill_dict(skill)
+
+
+@router.post("/skills/autonomous/run")
+async def run_autonomous_skill(request: Request) -> dict[str, Any]:
+    data = await _payload(request)
+    return {"ok": True, "message": "Autonomous skill run requested", "input": data}

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Brain, Lightbulb, Cpu, Sparkles } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Brain, Sparkles } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface ThinkingIndicatorProps {
@@ -127,7 +127,7 @@ export function ThinkingIndicator({
             />
           </div>
         </div>
-        <p className="text-sm text-gray-300 leading-relaxed">
+        <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">
           {displayText}{stage ? dots : ''}
         </p>
 
@@ -167,7 +167,7 @@ export function ThinkingDots({ text }: { text?: string }) {
   }, []);
 
   return (
-    <span className="inline-flex items-center gap-1 text-sm text-gray-400">
+    <span className="inline-flex items-center gap-1 text-sm text-[var(--color-text-secondary)]">
       <Brain size={13} className="text-blue-400/70" />
       {text || '思考中'}{dots}
     </span>

@@ -26,10 +26,12 @@ class OpenAIAdapter(ModelAdapter):
         model_id: str,
         api_key: str,
         base_url: str = "https://api.openai.com/v1",
+        capabilities: "ModelCapability | None" = None,
     ):
         self._model_id = model_id
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
+        self._capabilities = capabilities
 
     def _build_payload(
         self,
@@ -118,6 +120,8 @@ class OpenAIAdapter(ModelAdapter):
         and the generator to exit cleanly.
         """
         payload = self._build_payload(messages, tools, stream=True, **kwargs)
+        import structlog
+        structlog.get_logger().debug("adapter_request", model=self._model_id, message_count=len(messages), messages_preview=str(payload.get("messages", []))[:500])
         headers = {
             "Content-Type": "application/json",
         }
@@ -186,13 +190,15 @@ class OpenAIAdapter(ModelAdapter):
                         continue
 
                     if line == "data: [DONE]":
-                        yield ChatResult(
-                            content="",
-                            tool_calls=list(accumulated_tool_calls),
-                            finish_reason=finish_reason or "stop",
-                            tokens_used=tokens_used,
-                            accumulated_content=accumulated_content,
-                        )
+                        # Only yield final chunk if there's content or tool calls
+                        if accumulated_content or accumulated_tool_calls:
+                            yield ChatResult(
+                                content=accumulated_content,
+                                tool_calls=list(accumulated_tool_calls),
+                                finish_reason=finish_reason or "stop",
+                                tokens_used=tokens_used,
+                                accumulated_content=accumulated_content,
+                            )
                         return
 
                     if not line.startswith("data:"):
@@ -212,7 +218,17 @@ class OpenAIAdapter(ModelAdapter):
                     if delta_content:
                         accumulated_content += delta_content
                     if delta.get("tool_calls"):
-                        accumulated_tool_calls = self._parse_tool_calls_from_delta(delta["tool_calls"])
+                        new_calls = self._parse_tool_calls_from_delta(delta["tool_calls"])
+                        for i, tc in enumerate(new_calls):
+                            while len(accumulated_tool_calls) <= i:
+                                accumulated_tool_calls.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+                            if tc.get("id"):
+                                accumulated_tool_calls[i]["id"] = tc["id"]
+                            if tc.get("function", {}).get("name"):
+                                accumulated_tool_calls[i]["function"]["name"] = tc["function"]["name"]
+                            if tc.get("function", {}).get("arguments"):
+                                args = tc["function"]["arguments"]
+                                accumulated_tool_calls[i]["function"]["arguments"] += args if isinstance(args, str) else str(args)
                     if chunk.get("usage"):
                         tokens_used = chunk["usage"].get("total_tokens", tokens_used)
                     fr = chunk.get("choices", [{}])[0].get("finish_reason")
@@ -228,6 +244,15 @@ class OpenAIAdapter(ModelAdapter):
                     )
 
                     if self._is_stream_terminated(chunk):
+                        # Yield final chunk with accumulated content if not already yielded
+                        if accumulated_content and not delta_content:
+                            yield ChatResult(
+                                content=accumulated_content,
+                                tool_calls=list(accumulated_tool_calls),
+                                finish_reason=finish_reason,
+                                tokens_used=tokens_used,
+                                accumulated_content=accumulated_content,
+                            )
                         return
 
             # Process any remaining data in buffer (no trailing newline)
@@ -377,10 +402,13 @@ class OpenAIAdapter(ModelAdapter):
             tool_calls=all_tool_calls,
             finish_reason=chunks[-1].finish_reason or "stop",
             tokens_used=total_tokens,
+            accumulated_content=full_content or "",
         )
 
     @property
     def capabilities(self) -> ModelCapability:
+        if self._capabilities is not None:
+            return self._capabilities
         return ModelCapability(
             streaming=True,
             function_calling=True,

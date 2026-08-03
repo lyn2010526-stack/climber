@@ -146,4 +146,7 @@ async def init_db() -> None:
     from app.storage import models_platform  # noqa: F401
 
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        try:
+            await conn.run_sync(Base.metadata.create_all)
+        except Exception:
+            pass

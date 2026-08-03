@@ -60,8 +60,8 @@ export function PermissionModes({
   return (
     <div className={cn('space-y-2', className)}>
       <div className="flex items-center gap-2 px-1 mb-3">
-        <Shield size={14} className="text-gray-400" />
-        <span className="text-[11px] font-medium text-gray-400">权限模式</span>
+        <Shield size={14} className="text-[var(--color-text-secondary)]" />
+        <span className="text-[11px] font-medium text-[var(--color-text-secondary)]">权限模式</span>
       </div>
 
       <div className="space-y-1.5">
@@ -91,7 +91,7 @@ export function PermissionModes({
                   size={14}
                   className={cn(
                     'transition-colors',
-                    isActive ? mode.color : 'text-gray-400'
+                    isActive ? mode.color : 'text-[var(--color-text-secondary)]'
                   )}
                 />
               </div>
@@ -100,7 +100,7 @@ export function PermissionModes({
                 <div className="flex items-center gap-2">
                   <span className={cn(
                     'text-xs font-medium transition-colors',
-                    isActive ? 'text-white' : 'text-gray-300'
+                    isActive ? 'text-white' : 'text-[var(--color-text-secondary)]'
                   )}>
                     {mode.label}
                   </span>
@@ -111,7 +111,7 @@ export function PermissionModes({
                     <AlertTriangle size={10} className="text-amber-400/60" />
                   )}
                 </div>
-                <p className="text-[10px] text-gray-500 mt-0.5">
+                <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">
                   {mode.description}
                 </p>
 
@@ -119,8 +119,8 @@ export function PermissionModes({
                 {isHovered && !isActive && (
                   <div className="mt-2 space-y-1 animate-[fadeIn_0.15s_ease_forwards]">
                     {mode.features.map((feature, i) => (
-                      <div key={i} className="flex items-center gap-1.5 text-[10px] text-gray-400">
-                        <div className="w-1 h-1 rounded-full bg-gray-600" />
+                      <div key={i} className="flex items-center gap-1.5 text-[10px] text-[var(--color-text-secondary)]">
+                        <div className="w-1 h-1 rounded-full bg-[var(--color-bg-surface-elevated)]" />
                         {feature}
                       </div>
                     ))}

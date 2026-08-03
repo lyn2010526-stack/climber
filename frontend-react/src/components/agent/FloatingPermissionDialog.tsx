@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Shield, AlertTriangle, Check, X, FileText, Terminal, Globe } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/Button';
@@ -96,7 +96,7 @@ export function FloatingPermissionDialog({
               )}
               <button
                 onClick={() => { setVisible(false); }}
-                className="p-1 rounded-lg hover:bg-white/[0.06] text-gray-400 transition-colors"
+                className="p-1 rounded-lg hover:bg-white/[0.06] text-[var(--color-text-secondary)] transition-colors"
               >
                 <X size={14} />
               </button>
@@ -107,7 +107,6 @@ export function FloatingPermissionDialog({
           <div className="max-h-[300px] overflow-y-auto">
             {requests.map((req, index) => {
               const config = actionConfig[req.action];
-              const severity = severityConfig[req.severity];
               const isExpanded = expanded === req.id;
               const isLatest = index === requests.length - 1;
 
@@ -128,12 +127,12 @@ export function FloatingPermissionDialog({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-gray-200">{config.label}</span>
+                        <span className="text-xs font-medium text-[var(--color-text-primary)]">{config.label}</span>
                         {req.severity === 'high' && (
                           <AlertTriangle size={12} className="text-red-400" />
                         )}
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5 truncate">{req.description}</p>
+                      <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 truncate">{req.description}</p>
                     </div>
                     {isLatest && (
                       <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-blue-500/10 text-blue-400 font-medium animate-pulse">
@@ -146,7 +145,7 @@ export function FloatingPermissionDialog({
                   {isExpanded && (
                     <div className="px-4 pb-3 animate-[fadeIn_0.2s_ease_forwards]">
                       {req.details && (
-                        <pre className="text-[11px] text-gray-400 font-mono bg-black/30 rounded-lg p-3 mb-3 overflow-x-auto whitespace-pre-wrap">
+                        <pre className="text-[11px] text-[var(--color-text-secondary)] font-mono bg-black/30 rounded-lg p-3 mb-3 overflow-x-auto whitespace-pre-wrap">
                           {req.details}
                         </pre>
                       )}

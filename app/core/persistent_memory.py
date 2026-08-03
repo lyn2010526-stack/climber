@@ -468,6 +468,27 @@ class PersistentMemoryService:
         profile = await self.get_or_create_profile(user_id)
         lines: list[str] = []
 
+        # Inviolable rules (highest priority)
+        if profile.inviolable:
+            lines.append("[INVIOLABLE RULES — MUST FOLLOW]")
+            for rule in profile.inviolable:
+                lines.append(f"- {rule}")
+            lines.append("")
+
+        # User values
+        if profile.values:
+            lines.append("## User Values")
+            for v in profile.values:
+                lines.append(f"- {v}")
+            lines.append("")
+
+        # User principles
+        if profile.principles:
+            lines.append("## User Principles")
+            for p in profile.principles:
+                lines.append(f"- {p}")
+            lines.append("")
+
         facts = profile.facts[-10:]  # Last 10 facts
         if facts:
             lines.append("## User Information:")

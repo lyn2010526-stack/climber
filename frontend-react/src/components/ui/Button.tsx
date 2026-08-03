@@ -9,9 +9,9 @@ const buttonVariants = cva(
       variant: {
         primary: 'bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] text-white shadow-md shadow-blue-500/20 hover:shadow-lg hover:shadow-blue-500/30 hover:brightness-110',
         secondary: 'bg-white/[0.06] text-foreground hover:bg-white/[0.1] border border-white/[0.06]',
-        outline: 'border border-white/[0.1] bg-transparent hover:bg-white/[0.04] hover:border-white/[0.15] text-gray-200',
-        ghost: 'hover:bg-white/[0.06] text-gray-300 hover:text-white',
-        subtle: 'bg-white/[0.03] text-gray-300 hover:bg-white/[0.06] hover:text-white',
+        outline: 'border border-white/[0.1] bg-transparent hover:bg-white/[0.04] hover:border-white/[0.15] text-[var(--color-text-primary)]',
+        ghost: 'hover:bg-secondary hover:bg-white/[0.06] text-[var(--color-text-secondary)] hover:text-white',
+        subtle: 'bg-white/[0.03] text-[var(--color-text-secondary)] hover:bg-white/[0.06] hover:text-white',
         destructive: 'bg-red-500/90 text-white hover:bg-red-500 shadow-sm shadow-red-500/20',
         link: 'text-blue-400 underline-offset-4 hover:underline hover:text-blue-300',
       },

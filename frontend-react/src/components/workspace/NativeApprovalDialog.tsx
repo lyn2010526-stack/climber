@@ -80,10 +80,10 @@ export function NativeApprovalDialog({
         onClick={onDeny}
       />
 
-      <div className={`relative w-full max-w-[500px] mx-4 bg-gray-900 border ${config.border} rounded-xl shadow-xl ${config.glow} overflow-hidden animate-scaleIn`}>
+      <div className={`relative w-full max-w-[500px] mx-4 bg-[var(--color-bg-base)] border ${config.border} rounded-xl shadow-xl ${config.glow} overflow-hidden animate-scaleIn`}>
         <div className={`flex items-center gap-2.5 px-5 py-3.5 ${config.bg}`}>
           <AlertTriangle size={16} className={config.color} />
-          <h3 className="text-sm font-medium text-gray-100">Approve Command Execution</h3>
+          <h3 className="text-sm font-medium text-[var(--color-text-primary)]">Approve Command Execution</h3>
           <span className={`ml-auto px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider ${config.badge}`}>
             {riskLevel}
           </span>
@@ -91,9 +91,9 @@ export function NativeApprovalDialog({
 
         <div className="px-5 py-4 space-y-3">
           <div className="flex items-start gap-2">
-            <Terminal size={13} className="text-gray-500 mt-0.5 shrink-0" />
+            <Terminal size={13} className="text-[var(--color-text-muted)] mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
-               <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">命令</p>
+               <p className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider mb-1">命令</p>
               <pre className="code-block text-xs leading-relaxed break-all whitespace-pre-wrap max-h-32 overflow-y-auto">
                 {command}
               </pre>
@@ -101,15 +101,15 @@ export function NativeApprovalDialog({
           </div>
 
           {cwd && (
-            <div className="flex items-center gap-2 text-xs text-gray-400">
-              <FolderOpen size={13} className="text-gray-500 shrink-0" />
-               <span className="text-gray-500">工作目录：</span>
-              <span className="font-mono text-gray-400 truncate">{cwd}</span>
+            <div className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)]">
+              <FolderOpen size={13} className="text-[var(--color-text-muted)] shrink-0" />
+               <span className="text-[var(--color-text-muted)]">工作目录：</span>
+              <span className="font-mono text-[var(--color-text-secondary)] truncate">{cwd}</span>
             </div>
           )}
         </div>
 
-        <div className="px-5 py-3.5 border-t border-gray-700 bg-gray-800">
+        <div className="px-5 py-3.5 border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)]">
           <div className="flex items-center gap-2">
             <button
               type="button"

@@ -1,4 +1,4 @@
-import { CheckCircle2, AlertCircle, Clock, Cpu, Timer, Pause, Play, Square } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Clock, Cpu, Timer, Pause, Square } from 'lucide-react';
 
 interface ProgressHeaderProps {
   status: string;
@@ -24,17 +24,18 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  idle: 'text-gray-500',
+  idle: 'text-[var(--color-text-muted)]',
   running: 'text-blue-400',
   reviewing: 'text-amber-400',
   paused: 'text-amber-400',
   completed: 'text-green-400',
   partial: 'text-amber-400',
   failed: 'text-red-400',
-  stopped: 'text-gray-500',
+  stopped: 'text-[var(--color-text-muted)]',
 };
 
 export function ProgressHeader({ status, currentRound, maxRounds, activeMember, totalTokens, elapsedTime = 0, onPause, onResume, onStop }: ProgressHeaderProps) {
+  void onResume;
   const progressPct = Math.min(Math.round((currentRound / Math.max(maxRounds, 1)) * 100), 100);
 
   const formatTime = (seconds: number): string => {
@@ -44,7 +45,7 @@ export function ProgressHeader({ status, currentRound, maxRounds, activeMember, 
   };
 
   return (
-    <div className="h-10 flex items-center px-4 border-b border-gray-700 bg-gray-800/50 gap-4">
+    <div className="h-10 flex items-center px-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)]/50 gap-4">
       {/* Status */}
       <div className="flex items-center gap-1.5">
         {status === 'completed' ? (
@@ -52,16 +53,16 @@ export function ProgressHeader({ status, currentRound, maxRounds, activeMember, 
         ) : status === 'failed' ? (
           <AlertCircle size={12} className="text-red-400" />
         ) : (
-          <Clock size={12} className={STATUS_COLORS[status] || 'text-gray-500'} />
+          <Clock size={12} className={STATUS_COLORS[status] || 'text-[var(--color-text-muted)]'} />
         )}
-        <span className={`text-[10px] font-medium ${STATUS_COLORS[status] || 'text-gray-500'}`}>
+        <span className={`text-[10px] font-medium ${STATUS_COLORS[status] || 'text-[var(--color-text-muted)]'}`}>
           {STATUS_LABELS[status] || status}
         </span>
       </div>
 
       {/* Progress bar */}
       <div className="flex-1 max-w-48">
-        <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-[var(--color-bg-surface-elevated)] rounded-full overflow-hidden">
           <div
             className="h-full bg-blue-600 rounded-full transition-all duration-300"
             style={{ width: `${progressPct}%` }}
@@ -70,7 +71,7 @@ export function ProgressHeader({ status, currentRound, maxRounds, activeMember, 
       </div>
 
       {/* Round info */}
-      <span className="text-[10px] text-gray-500">
+      <span className="text-[10px] text-[var(--color-text-muted)]">
         轮次 {currentRound}/{maxRounds}
       </span>
 
@@ -83,7 +84,7 @@ export function ProgressHeader({ status, currentRound, maxRounds, activeMember, 
 
       {/* Token usage */}
       {totalTokens !== undefined && totalTokens > 0 && (
-        <div className="flex items-center gap-1 text-[10px] text-gray-500">
+        <div className="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)]">
           <Cpu size={10} />
           {totalTokens.toLocaleString()} tokens
         </div>
@@ -91,7 +92,7 @@ export function ProgressHeader({ status, currentRound, maxRounds, activeMember, 
 
       {/* Elapsed time */}
       {(status === 'running' || status === 'reviewing' || status === 'completed') && (
-        <div className="flex items-center gap-1 text-[10px] text-gray-500">
+        <div className="flex items-center gap-1 text-[10px] text-[var(--color-text-muted)]">
           <Timer size={10} />
           {formatTime(elapsedTime)}
         </div>
@@ -103,7 +104,7 @@ export function ProgressHeader({ status, currentRound, maxRounds, activeMember, 
           {onPause && (
             <button
               onClick={onPause}
-              className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+              className="p-1 rounded hover:bg-[var(--color-bg-surface-elevated)] text-[var(--color-text-secondary)] hover:text-white transition-colors"
               title="暂停"
             >
               <Pause size={12} />
@@ -112,30 +113,8 @@ export function ProgressHeader({ status, currentRound, maxRounds, activeMember, 
           {onStop && (
             <button
               onClick={onStop}
-              className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-red-400 transition-colors"
-              title="停止"
-            >
-              <Square size={12} />
-            </button>
-          )}
-        </div>
-      )}
-      {status === 'paused' && (
-        <div className="flex items-center gap-1 ml-auto">
-          {onResume && (
-            <button
-              onClick={onResume}
-              className="p-1 rounded hover:bg-gray-700 text-green-400 hover:text-green-300 transition-colors"
-              title="恢复"
-            >
-              <Play size={12} />
-            </button>
-          )}
-          {onStop && (
-            <button
-              onClick={onStop}
-              className="p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-red-400 transition-colors"
-              title="停止"
+              className="p-1 rounded hover:bg-[var(--color-bg-surface-elevated)] text-[var(--color-text-secondary)] hover:text-red-400 transition-colors"
+               title="停止"
             >
               <Square size={12} />
             </button>

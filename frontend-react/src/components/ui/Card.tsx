@@ -11,7 +11,7 @@ const cardVariants = cva(
         elevated: 'border-white/[0.06] bg-white/[0.03] shadow-lg shadow-black/20 hover:shadow-xl hover:shadow-black/30 hover:border-white/[0.1]',
         glass: 'border-white/[0.06] bg-white/[0.03] backdrop-blur-xl shadow-lg shadow-black/20',
         outline: 'border-white/[0.08] bg-transparent hover:border-white/[0.12]',
-        bordered: 'border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04]',
+        bordered: 'border-white/10 bg-white/[0.02] hover:bg-white/[0.04]',
         gradient: 'border-white/[0.06] bg-gradient-to-br from-white/[0.04] to-white/[0.01] hover:from-white/[0.06] hover:to-white/[0.02]',
       },
       padding: {
@@ -53,7 +53,7 @@ CardTitle.displayName = 'CardTitle';
 
 const CardDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
   ({ className, ...props }, ref) => (
-    <p ref={ref} className={cn('text-sm text-gray-400 leading-relaxed', className)} {...props} />
+    <p ref={ref} className={cn('text-sm text-[var(--color-text-muted)] leading-relaxed', className)} {...props} />
   )
 );
 CardDescription.displayName = 'CardDescription';

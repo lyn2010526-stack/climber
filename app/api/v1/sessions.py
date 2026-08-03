@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from app.core.auth import get_current_user
 from app.storage import async_session
-from app.storage.database import Session as SessionModel
 from app.storage.database import Message as MessageModel
+from app.storage.database import Session as SessionModel
 
 router = APIRouter()
 
@@ -45,9 +46,13 @@ class MessageOut(BaseModel):
 
 
 @router.get("/", response_model=list[SessionOut])
-async def list_sessions_with_slash() -> list[SessionOut]:
+async def list_sessions_with_slash(user_id: str = Depends(get_current_user)) -> list[SessionOut]:
     async with async_session() as session:
-        result = await session.execute(select(SessionModel).order_by(SessionModel.created_at.desc()))
+        result = await session.execute(
+            select(SessionModel)
+            .where(SessionModel.user_id == user_id)
+            .order_by(SessionModel.created_at.desc())
+        )
         rows = result.scalars().all()
         return [
             SessionOut(
@@ -62,14 +67,22 @@ async def list_sessions_with_slash() -> list[SessionOut]:
 
 
 @router.get("", response_model=list[SessionOut])
-async def list_sessions_no_slash() -> list[SessionOut]:
-    return await list_sessions_with_slash()
+async def list_sessions_no_slash(user_id: str = Depends(get_current_user)) -> list[SessionOut]:
+    return await list_sessions_with_slash(user_id)
 
 
 @router.post("/", response_model=dict)
-async def create_session_with_slash(payload: SessionCreate) -> dict:
+async def create_session_with_slash(
+    payload: SessionCreate,
+    user_id: str = Depends(get_current_user),
+) -> dict:
     async with async_session() as session:
-        row = SessionModel(title=payload.title or "New Session", status="idle", agent_id=payload.agent_id or "", user_id=getattr(payload, 'user_id', None) or "default-user")
+        row = SessionModel(
+            title=payload.title or "New Session",
+            status="idle",
+            agent_id=payload.agent_id or None,
+            user_id=user_id,
+        )
         session.add(row)
         await session.commit()
         await session.refresh(row)
@@ -78,14 +91,25 @@ async def create_session_with_slash(payload: SessionCreate) -> dict:
 
 
 @router.post("", response_model=dict)
-async def create_session_no_slash(payload: SessionCreate) -> dict:
-    return await create_session_with_slash(payload)
+async def create_session_no_slash(
+    payload: SessionCreate,
+    user_id: str = Depends(get_current_user),
+) -> dict:
+    return await create_session_with_slash(payload, user_id)
 
 
 @router.post("/create", response_model=dict)
-async def create_session_legacy(payload: SessionCreate) -> dict:
+async def create_session_legacy(
+    payload: SessionCreate,
+    user_id: str = Depends(get_current_user),
+) -> dict:
     async with async_session() as session:
-        row = SessionModel(title=payload.title or "New Session", status="idle", agent_id=payload.agent_id or "", user_id=getattr(payload, 'user_id', None) or "default-user")
+        row = SessionModel(
+            title=payload.title or "New Session",
+            status="idle",
+            agent_id=payload.agent_id or "",
+            user_id=user_id,
+        )
         session.add(row)
         await session.commit()
         await session.refresh(row)
@@ -97,8 +121,16 @@ class MessagesResponse(BaseModel):
 
 
 @router.get("/{session_id}/messages", response_model=MessagesResponse)
-async def get_session_messages(session_id: str) -> dict:
+async def get_session_messages(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
     async with async_session() as session:
+        owner = await session.scalar(
+            select(SessionModel).where(
+                SessionModel.id == session_id,
+                SessionModel.user_id == user_id,
+            )
+        )
+        if owner is None:
+            raise HTTPException(status_code=404, detail="Session not found")
         result = await session.execute(
             select(MessageModel).where(MessageModel.session_id == session_id).order_by(MessageModel.created_at.asc())
         )
@@ -117,8 +149,12 @@ async def get_session_messages(session_id: str) -> dict:
 
 
 @router.post("/{session_id}/clear")
-async def clear_session(session_id: str) -> dict:
+async def clear_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
     async with async_session() as session:
+        result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
+        row = result.scalar_one_or_none()
+        if not row or (row.user_id and row.user_id != user_id):
+            raise HTTPException(status_code=404, detail="Session not found")
         from sqlalchemy import delete
         await session.execute(delete(MessageModel).where(MessageModel.session_id == session_id))
         await session.commit()
@@ -126,11 +162,11 @@ async def clear_session(session_id: str) -> dict:
 
 
 @router.get("/{session_id}")
-async def get_session(session_id: str) -> dict:
+async def get_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
     async with async_session() as session:
         result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
         row = result.scalar_one_or_none()
-        if not row:
+        if not row or (row.user_id and row.user_id != user_id):
             raise HTTPException(status_code=404, detail="Session not found")
         return {
             "id": row.id,
@@ -143,11 +179,11 @@ async def get_session(session_id: str) -> dict:
 
 
 @router.delete("/{session_id}")
-async def delete_session(session_id: str) -> dict:
+async def delete_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
     async with async_session() as session:
         result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
         row = result.scalar_one_or_none()
-        if not row:
+        if not row or (row.user_id and row.user_id != user_id):
             raise HTTPException(status_code=404, detail="Session not found")
         await session.delete(row)
         await session.commit()

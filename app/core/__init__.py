@@ -44,6 +44,7 @@ class AgentEventType(str, Enum):
     SUB_AGENT_START = "sub_agent_start"
     SUB_AGENT_END = "sub_agent_end"
     PROGRESS = "progress"
+    PIPELINE_COMPLETE = "pipeline_complete"
 
 
 class FallbackStrategy(str, Enum):

@@ -32,10 +32,12 @@ export { SessionSidebar } from './workspace/SessionSidebar';
 export { ControlBar } from './workspace/ControlBar';
 export { RightPanel } from './workspace/RightPanel';
 export { AutonomySlider } from './workspace/AutonomySlider';
-export { CommandPalette } from './workspace/CommandPalette';
+export { default as CommandPalette } from './workspace/CommandPalette';
 export { ReasoningPanel } from './workspace/ReasoningPanel';
 export { SessionStatusBadge } from './workspace/SessionStatusBadge';
 export { TaskItem } from './workspace/TaskItem';
+export { PageTransition } from './workspace/PageTransition';
+export { SkeletonPulse, ToolSkeleton, MessageSkeleton, CardSkeleton, PageSkeleton } from './workspace/SkeletonLoading';
 
 // Terminal Components
 export { TerminalPanel } from './terminal/TerminalPanel';

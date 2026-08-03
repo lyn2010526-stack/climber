@@ -6,7 +6,8 @@ import {
 import { useWorkspaceStore } from '../../store/workspace';
 import { ReasoningPanel } from './ReasoningPanel';
 import { DiffPanel } from '../code/DiffPanel';
-import { ToolCallVisualization, ToolCall } from '../agent/ToolCallVisualization';
+import { ToolCallVisualization } from '../agent/ToolCallVisualization';
+import type { ToolCall } from '../agent/ToolCallVisualization';
 import { api } from '../../api';
 
 export function RightPanel() {
@@ -37,7 +38,7 @@ export function RightPanel() {
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-all relative ${
               rightPanelTab === id
                 ? 'text-white'
-                : 'text-gray-500 hover:text-gray-300'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
             }`}
           >
             <Icon size={13} />
@@ -76,16 +77,16 @@ function ConfigPanel({ session }: { session: any }) {
       <Section title="模型配置" icon={Sliders}>
         <div className="space-y-2.5">
           <div className="flex justify-between text-xs">
-            <span className="text-gray-500">提供商</span>
-            <span className="text-gray-300 font-medium">{provider}</span>
+            <span className="text-[var(--color-text-muted)]">提供商</span>
+            <span className="text-[var(--color-text-secondary)] font-medium">{provider}</span>
           </div>
           <div className="flex justify-between text-xs">
-            <span className="text-gray-500">模型</span>
-            <span className="text-gray-300 font-medium">{modelId}</span>
+            <span className="text-[var(--color-text-muted)]">模型</span>
+            <span className="text-[var(--color-text-secondary)] font-medium">{modelId}</span>
           </div>
           <div className="flex justify-between text-xs">
-            <span className="text-gray-500">温度</span>
-            <span className="text-gray-300 font-medium">{temperature}</span>
+            <span className="text-[var(--color-text-muted)]">温度</span>
+            <span className="text-[var(--color-text-secondary)] font-medium">{temperature}</span>
           </div>
         </div>
       </Section>
@@ -99,7 +100,7 @@ function ConfigPanel({ session }: { session: any }) {
                 {skill}
               </span>
             ))
-            : <span className="text-xs text-gray-500">暂无启用技能</span>
+            : <span className="text-xs text-[var(--color-text-muted)]">暂无启用技能</span>
           }
         </div>
       </Section>
@@ -109,11 +110,11 @@ function ConfigPanel({ session }: { session: any }) {
         <div className="flex flex-wrap gap-1.5">
           {(session?.activeTools && session.activeTools.length > 0)
             ? session.activeTools.map((tool: string) => (
-              <span key={tool} className="px-2.5 py-1 bg-white/5 text-gray-400 rounded-xl text-xs font-medium border border-white/10">
+              <span key={tool} className="px-2.5 py-1 bg-white/5 text-[var(--color-text-secondary)] rounded-xl text-xs font-medium border border-white/10">
                 {tool}
               </span>
             ))
-            : <span className="text-xs text-gray-500">暂无启用工具</span>
+            : <span className="text-xs text-[var(--color-text-muted)]">暂无启用工具</span>
           }
         </div>
       </Section>
@@ -122,8 +123,8 @@ function ConfigPanel({ session }: { session: any }) {
       <Section title="Token 用量" icon={Timer}>
         <div className="space-y-2.5">
           <div className="flex justify-between text-xs">
-            <span className="text-gray-500">已用</span>
-            <span className="text-gray-300 font-medium">{session?.tokenUsage?.used || 0} / {session?.tokenUsage?.limit || 128000}</span>
+            <span className="text-[var(--color-text-muted)]">已用</span>
+            <span className="text-[var(--color-text-secondary)] font-medium">{session?.tokenUsage?.used || 0} / {session?.tokenUsage?.limit || 128000}</span>
           </div>
           <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
             <div
@@ -138,15 +139,15 @@ function ConfigPanel({ session }: { session: any }) {
       <Section title="安全设置" icon={Shield}>
         <div className="space-y-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-400">沙箱模式</span>
+            <span className="text-xs text-[var(--color-text-secondary)]">沙箱模式</span>
             <span className="text-xs text-green-400 font-medium">运行中</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-400">会话状态</span>
-            <span className="text-xs text-gray-500">{session?.status || '空闲'}</span>
+            <span className="text-xs text-[var(--color-text-secondary)]">会话状态</span>
+            <span className="text-xs text-[var(--color-text-muted)]">{session?.status || '空闲'}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-400">文件隔离</span>
+            <span className="text-xs text-[var(--color-text-secondary)]">文件隔离</span>
             <span className="text-xs text-green-400 font-medium">仅项目内</span>
           </div>
         </div>
@@ -182,7 +183,7 @@ function DAGPanel() {
   if (loading) {
     return (
       <div className="space-y-3">
-        <p className="text-xs text-gray-500">正在加载工作流状态...</p>
+        <p className="text-xs text-[var(--color-text-muted)]">正在加载工作流状态...</p>
         <div className="space-y-2">
           {[1, 2, 3].map(i => (
             <div key={i} className="flex items-center gap-2 animate-pulse">
@@ -198,11 +199,11 @@ function DAGPanel() {
   if (nodes.length === 0) {
     return (
       <div className="space-y-3">
-        <p className="text-xs text-gray-500">任务依赖图</p>
+        <p className="text-xs text-[var(--color-text-muted)]">任务依赖图</p>
         <div className="text-center py-8">
-          <GitBranch size={24} className="mx-auto text-gray-600" />
-           <p className="text-xs text-gray-500 mt-2">暂无活跃工作流</p>
-          <p className="text-[10px] text-gray-600 mt-1">Create a cluster to see the DAG</p>
+          <GitBranch size={24} className="mx-auto text-[var(--color-text-muted)]" />
+           <p className="text-xs text-[var(--color-text-muted)] mt-2">暂无活跃工作流</p>
+          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">Create a cluster to see the DAG</p>
         </div>
       </div>
     );
@@ -210,7 +211,7 @@ function DAGPanel() {
 
   return (
     <div className="space-y-3">
-       <p className="text-xs text-gray-500">任务依赖图 — 根据需求自动规划</p>
+       <p className="text-xs text-[var(--color-text-muted)]">任务依赖图 — 根据需求自动规划</p>
       <div className="space-y-1">
         {nodes.map((node, i) => (
           <div key={node.id} className="flex items-center gap-2">
@@ -218,14 +219,14 @@ function DAGPanel() {
               <div className={`w-3 h-3 rounded-full border-2 ${
                 node.status === 'completed' ? 'bg-green-500 border-green-500' :
                 node.status === 'running' ? 'bg-[#007AFF] border-[#007AFF] animate-pulse' :
-                'border-gray-500'
+                'border-[var(--color-border-subtle)]'
               }`} />
               {i < nodes.length - 1 && <div className="w-0.5 h-4 bg-white/10" />}
             </div>
             <span className={`text-xs ${
               node.status === 'completed' ? 'text-green-400' :
               node.status === 'running' ? 'text-blue-400 font-medium' :
-              'text-gray-500'
+              'text-[var(--color-text-muted)]'
             }`}>
               {node.label}
             </span>
@@ -257,7 +258,7 @@ function TracePanel() {
   if (loading) {
     return (
       <div className="space-y-2">
-         <p className="text-xs text-gray-500">加载追踪中...</p>
+         <p className="text-xs text-[var(--color-text-muted)]">加载追踪中...</p>
         <div className="space-y-1.5">
           {[1, 2].map(i => (
             <div key={i} className="p-2 bg-white/5 rounded-xl animate-pulse">
@@ -272,11 +273,11 @@ function TracePanel() {
   if (traces.length === 0) {
     return (
       <div className="space-y-2">
-         <p className="text-xs text-gray-500">完整执行追踪</p>
+         <p className="text-xs text-[var(--color-text-muted)]">完整执行追踪</p>
         <div className="text-center py-8">
-          <Activity size={24} className="mx-auto text-gray-600" />
-           <p className="text-xs text-gray-500 mt-2">暂无追踪数据</p>
-           <p className="text-[10px] text-gray-600 mt-1">运行一次会话即可查看执行追踪</p>
+          <Activity size={24} className="mx-auto text-[var(--color-text-muted)]" />
+           <p className="text-xs text-[var(--color-text-muted)] mt-2">暂无追踪数据</p>
+           <p className="text-[10px] text-[var(--color-text-muted)] mt-1">运行一次会话即可查看执行追踪</p>
         </div>
       </div>
     );
@@ -284,7 +285,7 @@ function TracePanel() {
 
   return (
     <div className="space-y-2">
-       <p className="text-xs text-gray-500">完整执行追踪 — 包含每次 LLM 调用和工具调用</p>
+       <p className="text-xs text-[var(--color-text-muted)]">完整执行追踪 — 包含每次 LLM 调用和工具调用</p>
       <div className="space-y-1.5">
         {traces.map(t => (
           <div key={t.id} className="p-2 bg-white/5 rounded-xl">
@@ -295,11 +296,11 @@ function TracePanel() {
                 }`}>
                   {t.type}
                 </span>
-                <span className="text-xs text-gray-400">{t.label || t.name || 'Unknown'}</span>
+                <span className="text-xs text-[var(--color-text-secondary)]">{t.label || t.name || 'Unknown'}</span>
               </div>
-              <span className="text-[10px] text-gray-500">{t.time || ''}</span>
+              <span className="text-[10px] text-[var(--color-text-muted)]">{t.time || ''}</span>
             </div>
-            <div className="flex gap-3 mt-1 text-[10px] text-gray-500">
+            <div className="flex gap-3 mt-1 text-[10px] text-[var(--color-text-muted)]">
               <span>{t.duration || 0}ms</span>
                {(t.tokens || 0) > 0 && <span>{t.tokens} 令牌</span>}
             </div>
@@ -331,7 +332,7 @@ function FilesPanel() {
   if (loading) {
     return (
       <div className="space-y-2">
-         <p className="text-xs text-gray-500">加载文档中...</p>
+         <p className="text-xs text-[var(--color-text-muted)]">加载文档中...</p>
         <div className="space-y-1">
           {[1, 2, 3].map(i => (
             <div key={i} className="h-6 bg-white/5 rounded-xl animate-pulse" />
@@ -344,11 +345,11 @@ function FilesPanel() {
   if (documents.length === 0) {
     return (
       <div className="space-y-2">
-         <p className="text-xs text-gray-500">项目文件浏览器</p>
+         <p className="text-xs text-[var(--color-text-muted)]">项目文件浏览器</p>
         <div className="text-center py-8">
-          <FolderTree size={24} className="mx-auto text-gray-600" />
-           <p className="text-xs text-gray-500 mt-2">暂无上传文档</p>
-          <p className="text-[10px] text-gray-600 mt-1">Upload documents to use with RAG</p>
+          <FolderTree size={24} className="mx-auto text-[var(--color-text-muted)]" />
+           <p className="text-xs text-[var(--color-text-muted)] mt-2">暂无上传文档</p>
+          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">Upload documents to use with RAG</p>
         </div>
       </div>
     );
@@ -356,13 +357,13 @@ function FilesPanel() {
 
   return (
     <div className="space-y-2">
-       <p className="text-xs text-gray-500">已上传文档 ({documents.length})</p>
+       <p className="text-xs text-[var(--color-text-muted)]">已上传文档 ({documents.length})</p>
       <div className="bg-white/5 rounded-2xl p-1.5 space-y-0.5 border border-white/10">
         {documents.map(doc => (
-          <div key={doc.id} className="flex items-center gap-2 py-1.5 px-2 rounded-xl hover:bg-white/5 text-xs text-gray-400 transition-colors">
-            <FolderTree size={12} className="text-gray-500" />
+          <div key={doc.id} className="flex items-center gap-2 py-1.5 px-2 rounded-xl hover:bg-white/5 text-xs text-[var(--color-text-secondary)] transition-colors">
+            <FolderTree size={12} className="text-[var(--color-text-muted)]" />
             <span className="truncate flex-1">{doc.filename || doc.name}</span>
-            {doc.chunks && <span className="text-[10px] text-gray-600">{doc.chunks} chunks</span>}
+            {doc.chunks && <span className="text-[10px] text-[var(--color-text-muted)]">{doc.chunks} chunks</span>}
           </div>
         ))}
       </div>
@@ -380,7 +381,7 @@ function DiffPanelTab({ sessionId }: { sessionId: string | null }) {
     if (!sessionId) return;
     setLoading(true);
     api.getSessionMessages(sessionId).then((messages) => {
-      const toolResults = messages.filter((m: any) => m.type === 'tool-result' || m.type === 'tool-result');
+      const toolResults = messages.filter((m: any) => m.type === 'tool-result');
       const diffMessages = toolResults.filter((m: any) =>
         m.content && typeof m.content === 'string' && m.content.includes('diff --git')
       );
@@ -388,14 +389,14 @@ function DiffPanelTab({ sessionId }: { sessionId: string | null }) {
         const latestDiff = diffMessages[diffMessages.length - 1];
         setDiffText(latestDiff.content);
       }
-    }).catch(() => {});
-    setLoading(false);
+    }).catch(() => {})
+    .finally(() => setLoading(false));
   }, [sessionId]);
 
   if (loading) {
     return (
       <div className="space-y-2">
-        <p className="text-xs text-gray-500">加载变更中...</p>
+        <p className="text-xs text-[var(--color-text-muted)]">加载变更中...</p>
         <div className="space-y-1.5">
           {[1, 2, 3].map(i => (
             <div key={i} className="h-6 bg-white/5 rounded-xl animate-pulse" />
@@ -408,11 +409,11 @@ function DiffPanelTab({ sessionId }: { sessionId: string | null }) {
   if (!diffText) {
     return (
       <div className="space-y-2">
-        <p className="text-xs text-gray-500">文件变更视图</p>
+        <p className="text-xs text-[var(--color-text-muted)]">文件变更视图</p>
         <div className="text-center py-8">
-          <FileDiff size={24} className="mx-auto text-gray-600" />
-          <p className="text-xs text-gray-500 mt-2">暂无文件变更</p>
-          <p className="text-[10px] text-gray-600 mt-1">执行文件操作后在此查看 diff</p>
+          <FileDiff size={24} className="mx-auto text-[var(--color-text-muted)]" />
+          <p className="text-xs text-[var(--color-text-muted)] mt-2">暂无文件变更</p>
+          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">执行文件操作后在此查看 diff</p>
         </div>
       </div>
     );
@@ -420,7 +421,7 @@ function DiffPanelTab({ sessionId }: { sessionId: string | null }) {
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-gray-500">文件变更 — 最新 diff</p>
+      <p className="text-xs text-[var(--color-text-muted)]">文件变更 — 最新 diff</p>
       <DiffPanel diffText={diffText} />
     </div>
   );
@@ -455,7 +456,7 @@ function ToolCallsTab({ sessionId }: { sessionId: string | null }) {
   if (loading) {
     return (
       <div className="space-y-2">
-        <p className="text-xs text-gray-500">加载工具调用中...</p>
+        <p className="text-xs text-[var(--color-text-muted)]">加载工具调用中...</p>
         <div className="space-y-1.5">
           {[1, 2].map(i => (
             <div key={i} className="p-2 bg-white/5 rounded-xl animate-pulse">
@@ -470,11 +471,11 @@ function ToolCallsTab({ sessionId }: { sessionId: string | null }) {
   if (toolCalls.length === 0) {
     return (
       <div className="space-y-2">
-        <p className="text-xs text-gray-500">工具调用记录</p>
+        <p className="text-xs text-[var(--color-text-muted)]">工具调用记录</p>
         <div className="text-center py-8">
-          <Wrench size={24} className="mx-auto text-gray-600" />
-          <p className="text-xs text-gray-500 mt-2">暂无工具调用</p>
-          <p className="text-[10px] text-gray-600 mt-1">智能体执行工具后在此查看</p>
+          <Wrench size={24} className="mx-auto text-[var(--color-text-muted)]" />
+          <p className="text-xs text-[var(--color-text-muted)] mt-2">暂无工具调用</p>
+          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">智能体执行工具后在此查看</p>
         </div>
       </div>
     );
@@ -482,7 +483,7 @@ function ToolCallsTab({ sessionId }: { sessionId: string | null }) {
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-gray-500">工具调用 — 展开查看详情</p>
+      <p className="text-xs text-[var(--color-text-muted)]">工具调用 — 展开查看详情</p>
       <ToolCallVisualization calls={toolCalls} defaultExpanded={false} />
     </div>
   );
@@ -497,7 +498,7 @@ function Section({ title, icon: Icon, children }: { title: string; icon: any; ch
     <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl overflow-hidden backdrop-blur-sm">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-gray-400 hover:text-gray-100 transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
       >
         <div className="p-1 rounded-lg bg-blue-500/10 text-blue-400">
           <Icon size={11} />

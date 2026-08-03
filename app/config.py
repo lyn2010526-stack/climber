@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import secrets
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -16,7 +17,7 @@ class Settings(BaseSettings):
     app_testing: bool = Field(default=False)
     app_debug: bool = Field(default=False)
     app_log_level: str = Field(default="INFO")
-    app_secret_key: str = Field(default="dev-secret-key-change-in-production")
+    app_secret_key: str = Field(default_factory=lambda: secrets.token_hex(32))
 
     # Local-first: SQLite by default. Point database_url at PostgreSQL only if
     # you actually need multi-user concurrency.

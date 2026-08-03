@@ -18,7 +18,7 @@ interface GroupMessagesProps {
 const SENDER_COLORS: Record<string, string> = {
   moderator: 'bg-amber-500/10 border-warning/20',
   participant: 'bg-blue-600/10 border-blue-500/20',
-  system: 'bg-gray-700 border-gray-700',
+  system: 'bg-[var(--color-bg-surface-elevated)] border-[var(--color-border-subtle)]',
 };
 
 export function GroupMessages({ messages, currentSpeaker, isEmpty }: GroupMessagesProps) {
@@ -31,10 +31,10 @@ export function GroupMessages({ messages, currentSpeaker, isEmpty }: GroupMessag
   if (isEmpty || messages.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <MessageCircle size={40} className="mx-auto text-gray-500/20" />
-           <p className="text-xs text-gray-500 mt-3">此讨论暂无消息</p>
-           <p className="text-[10px] text-gray-500/60 mt-1">开始对话即可查看消息</p>
+         <div className="text-center">
+           <MessageCircle size={40} className="mx-auto text-[var(--color-text-muted)]/20" />
+            <p className="text-xs text-[var(--color-text-muted)] mt-3">此讨论暂无消息</p>
+            <p className="text-[10px] text-[var(--color-text-muted)]/60 mt-1">开始对话即可查看消息</p>
         </div>
       </div>
     );
@@ -51,7 +51,7 @@ export function GroupMessages({ messages, currentSpeaker, isEmpty }: GroupMessag
         if (isSystem) {
           return (
             <div key={msg.id} className="flex justify-center">
-              <span className="px-3 py-1 bg-gray-700 rounded-full text-[10px] text-gray-500">
+              <span className="px-3 py-1 bg-[var(--color-bg-surface-elevated)] rounded-full text-[10px] text-[var(--color-text-muted)]">
                 {msg.content}
               </span>
             </div>
@@ -70,10 +70,10 @@ export function GroupMessages({ messages, currentSpeaker, isEmpty }: GroupMessag
             <div className="flex-1 min-w-0">
               {showSpeaker && (
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-medium text-gray-100">
+                  <span className="text-xs font-medium text-[var(--color-text-primary)]">
                     {msg.sender_name}
                   </span>
-                  <span className="text-[10px] text-gray-500">
+                  <span className="text-[10px] text-[var(--color-text-muted)]">
                     {msg.created_at ? new Date(msg.created_at).toLocaleTimeString() : ''}
                   </span>
                   {isCurrentSpeaker && (
@@ -83,7 +83,7 @@ export function GroupMessages({ messages, currentSpeaker, isEmpty }: GroupMessag
                   )}
                 </div>
               )}
-              <p className="text-xs text-gray-400 leading-relaxed whitespace-pre-wrap break-words">
+              <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap break-words">
                 {msg.content}
               </p>
             </div>

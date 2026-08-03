@@ -21,6 +21,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from app.storage import async_session
+from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupMessage, AgentGroupTask
 from app.storage.models_platform import (
     Cluster,
     Crew,
@@ -31,6 +32,7 @@ from app.storage.models_platform import (
     WorkflowRun,
 )
 from app.storage.models_plugins import PluginRecord
+from app.core.api_key_crypto import decrypt_api_key, encrypt_api_key
 from app.core.di import resolve as di_resolve
 
 router = APIRouter()
@@ -93,8 +95,11 @@ async def create_agent(request: Request) -> dict[str, Any]:
             provider=data.get("provider", "openai"),
             model_id=data.get("model_id", "gpt-4o-mini"),
             base_url=data.get("base_url"),
+            api_key_encrypted=encrypt_api_key(
+                data.get("api_key") or data.get("api_key_encrypted") or ""
+            ) or None,
         )
-        for field in ("description", "system_prompt", "api_key_encrypted", "tool_ids", "skill_ids"):
+        for field in ("description", "system_prompt", "tool_ids", "skill_ids"):
             if hasattr(agent, field) and data.get(field) is not None:
                 setattr(agent, field, data[field])
         if not getattr(agent, "tool_ids", None):
@@ -326,7 +331,7 @@ async def run_workflow(workflow_id: str, request: Request) -> dict[str, Any]:
             for attr, value in (
                 ("default_provider", agent.provider),
                 ("default_model_id", agent.model_id),
-                ("default_api_key", getattr(agent, "api_key_encrypted", "") or ""),
+                ("default_api_key", decrypt_api_key(getattr(agent, "api_key_encrypted", "") or "")),
                 ("default_base_url", agent.base_url),
             ):
                 if hasattr(engine, attr):
@@ -493,7 +498,7 @@ async def run_crew(crew_id: str, request: Request) -> dict[str, Any]:
                 user_id=DEFAULT_USER,
                 provider=agent_row.provider,
                 model_id=agent_row.model_id,
-                api_key=getattr(agent_row, "api_key_encrypted", "") or "",
+                api_key=decrypt_api_key(getattr(agent_row, "api_key_encrypted", "") or ""),
                 base_url=agent_row.base_url,
                 system_prompt=task.get("system_prompt", f"You are part of crew '{crew_name}'."),
             )

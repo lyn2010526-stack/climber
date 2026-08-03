@@ -19,7 +19,7 @@ import resource
 import shutil
 import tempfile
 from dataclasses import dataclass, field
-from typing import Any
+from typing import ClassVar
 
 import structlog
 
@@ -66,11 +66,31 @@ class SandboxExecutor:
         self.config = config or SandboxConfig()
         self._workdir = ""
 
-    def _is_command_safe(self, command: str) -> tuple[bool, str]:
+    # Sensitive paths that should never be accessed
+    SENSITIVE_PATHS: ClassVar[tuple[str, ...]] = (
+        "/etc/shadow", "/etc/passwd", "/etc/sudoers",
+        "/etc/ssh/", "/root/.ssh/", "/etc/ssl/private/",
+    )
+
+    def _is_command_safe(self, command: str, workdir: str) -> tuple[bool, str]:
         """Check if command passes safety rules."""
         for pattern in self.config.blocked_patterns:
             if re.search(pattern, command, re.IGNORECASE):
                 return False, f"Blocked by security rule: pattern '{pattern}'"
+        # Check for sensitive file access by path traversal
+        real_workdir = os.path.realpath(workdir)
+        if re.search(r"(?:^|[\s;|&])\.\.(?:/|\\)", command):
+            return False, "Blocked: parent-directory traversal is not allowed"
+        for token in re.findall(r"(?:^|\s|;|\|)(?:/[\w./-]+|~[\w/.-]*)", command):
+            candidate = os.path.expanduser(os.path.expandvars(token.strip()))
+            candidate = os.path.realpath(candidate)
+            if candidate.startswith(real_workdir + os.sep) or candidate == real_workdir:
+                continue
+            for sensitive in self.SENSITIVE_PATHS:
+                if candidate == sensitive or candidate.startswith(sensitive + os.sep):
+                    return False, f"Blocked: access to sensitive path '{sensitive}'"
+            if candidate.startswith("/"):
+                return False, f"Blocked: path '{candidate}' escapes workdir"
         return True, ""
 
     def _restrict_resources(self) -> None:
@@ -91,13 +111,14 @@ class SandboxExecutor:
         self._workdir = tempfile.mkdtemp(prefix="agent_sandbox_")
         return self._workdir
 
-    async def execute(self, command: str) -> str:
+    async def execute(self, command: str, timeout: int | None = None) -> str:
         """Execute a command in the sandbox."""
-        is_safe, reason = self._is_command_safe(command)
+        workdir = self._prepare_workdir()
+        is_safe, reason = self._is_command_safe(command, workdir)
         if not is_safe:
             return f"BLOCKED: {reason}"
 
-        workdir = self._prepare_workdir()
+        effective_timeout = timeout if timeout is not None else self.config.timeout_seconds
 
         try:
             env = os.environ.copy()
@@ -107,8 +128,12 @@ class SandboxExecutor:
                 env.pop("http_proxy", None)
                 env.pop("https_proxy", None)
 
-            proc = await asyncio.create_subprocess_shell(
-                command,
+            args = command.split()
+            if not args:
+                return "BLOCKED: empty command"
+
+            proc = await asyncio.create_subprocess_exec(
+                *args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=workdir,
@@ -119,18 +144,18 @@ class SandboxExecutor:
             try:
                 stdout, stderr = await asyncio.wait_for(
                     proc.communicate(),
-                    timeout=self.config.timeout_seconds,
+                    timeout=effective_timeout,
                 )
             except asyncio.TimeoutError:
                 proc.kill()
                 await proc.wait()
-                return f"TIMEOUT: Command exceeded {self.config.timeout_seconds}s limit"
+                return f"TIMEOUT: Command exceeded {effective_timeout}s limit"
 
             return self._build_output(stdout, stderr, proc.returncode)
 
         except Exception as e:
             logger.error("Sandbox execution error", error=str(e))
-            return f"Error: {str(e)}"
+            return f"Error: {e!s}"
 
     def _build_output(self, stdout: bytes, stderr: bytes, returncode: int) -> str:
         parts: list[str] = []
