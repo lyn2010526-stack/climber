@@ -3,10 +3,16 @@
 [![Tests](https://img.shields.io/badge/tests-458%2B%20passing-brightgreen)]()
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.88%2B-009688)]()
+[![React](https://img.shields.io/badge/React-18%2B-61DAFB)]()
 
 > 本地优先、开源的 AI Agent 平台。无需注册登录，数据完全本地存储。
 
-## 特性
+## 项目介绍
+
+Climber 是一个生产级 AI Agent 工作台，支持自主软件开发、多 Agent 协作和工具扩展。系统采用分层架构设计，提供从模型调度、上下文管理到权限控制的全栈能力。所有数据默认存储在本地 SQLite，可选 PostgreSQL 用于多用户并发场景。
+
+### 核心能力
 
 | 能力 | 说明 |
 |------|------|
@@ -37,7 +43,7 @@ cd climber/agent-engine
 
 # 创建虚拟环境
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate
 
 # 安装依赖
 pip install -r requirements.txt
@@ -57,24 +63,108 @@ npm install
 npm run dev
 ```
 
-### 访问
+### Docker 启动
 
-- 前端界面：http://localhost:5173
-- 后端 API：http://localhost:8000
-- API 文档：http://localhost:8000/docs
+```bash
+docker-compose up -d
+```
 
-## 配置
+### 访问地址
 
-### 环境变量
+| 服务 | URL |
+|------|-----|
+| 前端界面 | http://localhost:5173 |
+| 后端 API | http://localhost:8000 |
+| API 文档 (Swagger) | http://localhost:8000/docs |
+| 健康检查 | http://localhost:8000/health |
+| 指标 | http://localhost:8000/metrics |
 
-创建 `.env` 文件：
+## 系统架构
+
+```mermaid
+flowchart TB
+    subgraph Client["客户端层"]
+        Frontend["React 前端\nVite + TypeScript"]
+        Telegram["Telegram Bot"]
+    end
+
+    subgraph API["API 层 (FastAPI)"]
+        REST["REST API\n/api/v1"]
+        WS["WebSocket\n/ws"]
+        SSE["SSE 流式"]
+        Middleware["中间件\nCORS / 安全头\n速率限制 / 请求验证"]
+    end
+
+    subgraph AgentEngine["Agent 引擎核心"]
+        Engine["AgentEngine\n主调度器"]
+        SessionMgr["SessionManager\n会话/检查点/分叉"]
+        ContextMgr["ContextManager\n五层上下文管道"]
+        ReactLoop["ReActLoop\n执行循环"]
+    end
+
+    subgraph CoreServices["核心服务层"]
+        ModelSched["ModelScheduler\n智能模型选择"]
+        ToolRT["ToolRuntime\n统一工具运行时"]
+        PermCtrl["PermissionController\n7 级权限控制"]
+        Memory["Memory\n分层记忆系统"]
+        Safety["SafetyPipeline\n安全防护"]
+    end
+
+    subgraph Infra["基础设施层"]
+        DB["SQLite / PostgreSQL"]
+        Chroma["ChromaDB\n向量记忆"]
+        Redis["Redis\n缓存"]
+        MCP["MCP Client\n外部工具"]
+        LLM["LLM Provider\n多模型适配"]
+    end
+
+    Frontend --> Middleware
+    Telegram --> Engine
+    Middleware --> REST
+    Middleware --> WS
+    REST --> SSE
+    REST --> Engine
+    WS --> Engine
+    Engine --> SessionMgr
+    Engine --> ContextMgr
+    Engine --> ReactLoop
+    ReactLoop --> ModelSched
+    ReactLoop --> ToolRT
+    ReactLoop --> PermCtrl
+    Engine --> Memory
+    Engine --> Safety
+    ModelSched --> LLM
+    ToolRT --> MCP
+    SessionMgr --> DB
+    Memory --> Chroma
+    Memory --> Redis
+    ContextMgr --> Memory
+```
+
+## 核心模块
+
+| 模块 | 路径 | 职责 |
+|------|------|------|
+| Agent Engine | `app/core/agent_engine.py` | 主引擎，协调所有组件 |
+| 会话管理 | `app/core/engine/session.py` | 会话生命周期管理 |
+| 上下文管理 | `app/core/context_manager.py` | 五层上下文管道 |
+| 工具运行时 | `app/core/tool_runtime.py` | 统一工具执行 |
+| MCP 桥接 | `app/engine/mcp_bridge.py` | MCP 工具协议接入 |
+| 权限控制 | `app/core/permission_controller.py` | 权限规则引擎 |
+| 模型调度 | `app/core/model_scheduler.py` | 智能模型选择 |
+| 安全工具 | `app/core/security_utils.py` | 路径/Shell/Prompt 安全 |
+| 多 Agent | `app/engine/multi_agent.py` | 多 Agent 编排 |
+
+## 配置说明
+
+创建 `.env` 文件（参考 `.env.example`）：
 
 ```env
-# API Keys
+# API Keys（至少配置一个）
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 
-# 数据库
+# 数据库（默认 SQLite）
 DATABASE_URL=sqlite+aiosqlite:///./data/climber.db
 
 # 日志
@@ -94,126 +184,20 @@ DEFAULT_MODEL=anthropic/claude-sonnet-4-20250514
 FALLBACK_CHAIN=anthropic/claude-sonnet-4-20250514,openai/gpt-4o,ollama/llama3.3
 ```
 
-### AGENT_SPEC.md
+## 文档
 
-创建 `AGENT_SPEC.md` 定义项目约束：
-
-```markdown
-# Agent 配置
-
-## 项目信息
-- 名称：My Project
-- 语言：Python
-- 框架：FastAPI
-
-## 约束
-- 所有代码必须有类型标注
-- 提交前运行 pytest
-- 遵循 PEP 8 规范
-
-## 验收标准
-- 单元测试覆盖率 > 80%
-- 所有 API 有错误处理
-- 无安全漏洞
-
-## 输出格式
-- Git commit 信息遵循 Conventional Commits
-- PR 描述包含变更摘要和测试结果
-```
-
-## 架构
-
-```
-Climber Architecture
-====================
-
-┌─────────────────────────────────────────────────┐
-│                  Frontend (React)                 │
-│         Chat UI / Monitor / Config                │
-└─────────────────────────────────────────────────┘
-                        │ HTTP / SSE
-┌─────────────────────────────────────────────────┐
-│                  API Layer (FastAPI)              │
-│         /api/v1/chat /sessions /agents           │
-└─────────────────────────────────────────────────┘
-                        │
-┌─────────────────────────────────────────────────┐
-│               Agent Engine Core                   │
-│  ┌─────────┐ ┌──────────┐ ┌──────────────────┐ │
-│  │ Context │ │ Tool     │ │ Permission       │ │
-│  │ Manager │ │ Runtime  │ │ Controller       │ │
-│  └─────────┘ └──────────┘ └──────────────────┘ │
-│  ┌─────────┐ ┌──────────┐ ┌──────────────────┐ │
-│  │ Model   │ │ Session  │ │ Iteration        │ │
-│  │Scheduler│ │ Manager  │ │ Guard            │ │
-│  └─────────┘ └──────────┘ └──────────────────┘ │
-└─────────────────────────────────────────────────┘
-                        │
-┌─────────────────────────────────────────────────┐
-│              Infrastructure                      │
-│  SQLite / ChromaDB / MCP Servers / LLM APIs     │
-└─────────────────────────────────────────────────┘
-```
-
-## 核心模块
-
-### Agent Engine
-- `app/core/agent_engine.py` — 主引擎，协调所有组件
-- `app/core/engine/session.py` — 会话管理
-- `app/core/engine/react_loop.py` — ReAct 执行循环
-
-### 上下文与记忆
-- `app/core/context_manager.py` — 五层上下文管道
-- `app/core/compressor.py` — 上下文压缩
-- `app/core/memfs/` — Git 备份的记忆文件系统
-
-### 工具系统
-- `app/core/tool_runtime.py` — 统一工具运行时
-- `app/engine/mcp_bridge.py` — MCP 工具桥接
-- `app/tools/` — 内置工具
-
-### 安全与权限
-- `app/core/permission_controller.py` — 权限控制器
-- `app/core/security_utils.py` — 安全工具
-
-### 多 Agent
-- `app/engine/multi_agent.py` — 多 Agent 编排
-- `app/multi_agent/safety.py` — 死锁检测与冲突仲裁
-
-### 模型与调度
-- `app/core/model_scheduler.py` — 智能模型选择
-- `app/core/error_handler.py` — 错误处理与熔断
-
-## API 参考
-
-### 聊天
-```
-POST /api/v1/chat/
-Body: { "agent_id": "...", "message": "...", "stream": true }
-Response: SSE stream of Frame events
-```
-
-### 会话
-```
-GET    /api/v1/sessions/            # 列表
-GET    /api/v1/sessions/{id}        # 详情
-POST   /api/v1/sessions/{id}/fork   # 分叉
-DELETE /api/v1/sessions/{id}        # 删除
-```
-
-### Agent
-```
-GET    /api/v1/agents/               # 列表
-POST   /api/v1/agents/               # 创建
-PUT    /api/v1/agents/{id}           # 更新
-DELETE /api/v1/agents/{id}           # 删除
-```
+| 文档 | 描述 |
+|------|------|
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 系统架构、模块关系、数据流 |
+| [API.md](docs/API.md) | 所有 API 端点详细说明 |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | 部署指南（Docker、本地、云） |
+| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | 开发指南、代码规范、测试方法 |
+| [SECURITY.md](docs/SECURITY.md) | 安全策略、已知风险、防护措施 |
 
 ## 测试
 
 ```bash
 # 后端测试
-cd agent-engine
 python3 -m pytest tests/ -v
 
 # 前端测试
@@ -225,41 +209,9 @@ cd frontend-react
 npm run test:e2e
 ```
 
-## 部署
-
-### Docker
-
-```bash
-docker-compose up -d
-```
-
-### 手动部署
-
-```bash
-# 后端
-cd agent-engine
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-
-# 前端
-cd frontend-react
-npm install
-npm run build
-# 部署 dist/ 到 Nginx
-```
-
 ## 贡献指南
 
-1. Fork 仓库
-2. 创建功能分支 (`git checkout -b feature/amazing`)
-3. 提交变更 (`git commit -m 'feat: add amazing feature'`)
-4. 推送分支 (`git push origin feature/amazing`)
-5. 创建 Pull Request
-
-### 代码规范
-- Python: PEP 8, type hints, docstrings
-- TypeScript: ESLint + Prettier
-- 提交信息: Conventional Commits
+详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## License
 

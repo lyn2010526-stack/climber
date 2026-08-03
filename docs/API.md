@@ -1,10 +1,12 @@
 # Climber API 文档
 
-> Base URL: `/api/v1`
+> Base URL: `/api/v1`  
+> OpenAPI Schema: `/docs` (Swagger UI)  
+> OpenAPI JSON: `/openapi.json`
 
 ## 认证
 
-所有需要认证的端点使用 Bearer Token。
+所有需要认证的端点使用 Bearer Token（JWT）。
 
 ```
 Authorization: Bearer <token>
@@ -14,264 +16,966 @@ Authorization: Bearer <token>
 
 ## 通用响应格式
 
-成功响应通常返回 JSON 对象。失败时返回：
+成功响应通常返回 JSON 对象。失败时返回标准错误格式：
 
 ```json
 {
-  "detail": "错误描述"
+  "detail": "错误描述",
+  "type": "http_error"
 }
 ```
 
-## 端点列表
+## SSE 流式响应
 
-### Agents
+聊天端点使用 Server-Sent Events 返回实时流：
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/agents` | 列出所有 Agent |
-| GET | `/agents/` | 列出所有 Agent（尾部斜杠） |
-| POST | `/agents` | 创建 Agent |
-| POST | `/agents/` | 创建 Agent（尾部斜杠） |
-| DELETE | `/agents/{agent_id}` | 删除 Agent |
+```
+Content-Type: text/event-stream
 
-### Workflows
+data: {"type": "text", "data": {"content": "..."}}
+data: {"type": "tool_call", "data": {"name": "...", "arguments": {...}}}
+data: {"type": "error", "data": {"error": "..."}}
+```
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/workflows` | 列出所有工作流（非模板） |
-| GET | `/workflows/` | 列出所有工作流（尾部斜杠） |
-| POST | `/workflows` | 创建工作流 |
-| POST | `/workflows/` | 创建工作流（尾部斜杠） |
-| GET | `/workflows/{workflow_id}` | 获取工作流详情 |
-| PUT | `/workflows/{workflow_id}` | 更新工作流 |
-| DELETE | `/workflows/{workflow_id}` | 删除工作流 |
-| POST | `/workflows/{workflow_id}/run` | 运行工作流 |
-| GET | `/workflows/{workflow_id}/runs` | 获取工作流运行历史 |
-| GET | `/workflows/templates` | 列出可用模板 |
-| GET | `/workflows/templates/` | 列出可用模板（尾部斜杠） |
-| POST | `/workflows/templates/{template_id}` | 从模板创建工作流 |
-| POST | `/workflows/templates/{template_id}/create` | 从模板创建工作流（别名） |
-| POST | `/workflows/import` | 导入工作流（JSON/YAML） |
-| POST | `/workflows/{workflow_id}/export` | 导出工作流（POST） |
-| GET | `/workflows/{workflow_id}/export` | 导出工作流（GET） |
+---
 
-### Crews
+## 聊天 (Chat)
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/crews` | 列出所有 Crew |
-| GET | `/crews/` | 列出所有 Crew（尾部斜杠） |
-| POST | `/crews` | 创建 Crew |
-| POST | `/crews/` | 创建 Crew（尾部斜杠） |
-| DELETE | `/crews/{crew_id}` | 删除 Crew |
-| POST | `/crews/{crew_id}/run` | 运行 Crew |
+### 发送聊天消息
 
-### Skills
+```
+POST /api/v1/sessions/{session_id}/chat
+```
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/skills` | 列出所有 Skills |
-| GET | `/skills/` | 列出所有 Skills（尾部斜杠） |
-| POST | `/skills` | 创建 Skill |
-| POST | `/skills/` | 创建 Skill（尾部斜杠） |
-| DELETE | `/skills/{skill_id}` | 删除 Skill |
-| POST | `/skills/{skill_id}/enable` | 启用 Skill |
-| POST | `/skills/{skill_id}/disable` | 禁用 Skill |
+**请求体**:
+```json
+{
+  "message": "你好，请帮我分析这段代码"
+}
+```
 
-### Plugins
+**响应**: SSE 流式事件流
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/plugins` | 列出已安装插件 |
-| GET | `/plugins/` | 列出已安装插件（尾部斜杠） |
-| GET | `/plugins/marketplace` | 列出插件市场 |
-| GET | `/plugins/marketplace/` | 列出插件市场（尾部斜杠） |
-| GET | `/plugins/categories` | 列出插件分类 |
-| GET | `/plugins/categories/` | 列出插件分类（尾部斜杠） |
-| POST | `/plugins/import` | 导入插件 |
-| POST | `/plugins/{plugin_key}/install` | 安装插件 |
-| POST | `/plugins/{plugin_id}/enable` | 启用插件 |
-| POST | `/plugins/{plugin_id}/disable` | 禁用插件 |
-| GET | `/plugins/{plugin_id}/status` | 获取插件状态 |
-| POST | `/plugins/{plugin_id}/uninstall` | 卸载插件 |
-| DELETE | `/plugins/{plugin_id}` | 删除插件 |
+**事件类型**:
+| 类型 | 说明 |
+|------|------|
+| `text` | 文本输出片段 |
+| `tool_call` | 工具调用开始 |
+| `tool_result` | 工具调用结果 |
+| `thinking` | 推理过程 |
+| `error` | 错误信息 |
+| `done` | 流结束 |
 
-### MCP Servers
+---
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/mcp` | 列出 MCP 服务器 |
-| GET | `/mcp/` | 列出 MCP 服务器（尾部斜杠） |
-| POST | `/mcp` | 创建 MCP 服务器配置 |
-| POST | `/mcp/` | 创建 MCP 服务器配置（尾部斜杠） |
-| DELETE | `/mcp/{server_id}` | 删除 MCP 服务器 |
-| POST | `/mcp/{server_id}/start` | 启动 MCP 服务器 |
-| POST | `/mcp/{server_id}/stop` | 停止 MCP 服务器 |
+## 会话 (Sessions)
 
-### Cluster
+### 列出会话
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/cluster` | 列出集群节点 |
-| GET | `/cluster/` | 列出集群节点（尾部斜杠） |
-| POST | `/cluster` | 创建集群节点 |
-| POST | `/cluster/` | 创建集群节点（尾部斜杠） |
-| POST | `/cluster/create` | 创建集群节点（别名） |
-| GET | `/cluster/status` | 获取集群状态 |
-| GET | `/cluster/stats` | 获取集群统计 |
-| GET | `/cluster/stats/` | 获取集群统计（尾部斜杠） |
-| DELETE | `/cluster/{node_id}` | 删除集群节点 |
+```
+GET /api/v1/sessions/
+```
 
-### Tools
+**查询参数**:
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `limit` | int | 返回数量限制（默认 50） |
+| `offset` | int | 分页偏移 |
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/tools` | 列出所有可用工具 |
-| GET | `/tools/` | 列出所有可用工具（尾部斜杠） |
+**响应**:
+```json
+[
+  {
+    "id": "uuid",
+    "title": "会话标题",
+    "status": "idle|running|completed|failed",
+    "created_at": "2025-01-01T00:00:00Z",
+    "updated_at": "2025-01-01T00:00:00Z"
+  }
+]
+```
 
-### Traces
+### 创建会话
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/traces` | 列出所有追踪 |
-| GET | `/traces/` | 列出所有追踪（尾部斜杠） |
-| GET | `/traces/{trace_id}` | 获取追踪详情 |
-| POST | `/reason/{trace_id}/feedback` | 提交推理反馈 |
-| GET | `/reason/{trace_id}/feedback` | 获取推理反馈 |
+```
+POST /api/v1/sessions/
+```
 
-### Sessions / Chat
+**请求体**:
+```json
+{
+  "title": "新会话",
+  "agent_id": "agent-uuid",
+  "model_settings": {}
+}
+```
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/sessions/{session_id}` | 获取会话详情 |
-| DELETE | `/sessions/{session_id}` | 删除会话 |
-| POST | `/sessions/{session_id}/chat` | 发送聊天消息 |
-| POST | `/sessions/{session_id}/clear` | 清除会话历史 |
-| GET | `/sessions/{session_id}/messages` | 获取会话消息 |
+### 获取会话详情
 
-### Tasks
+```
+GET /api/v1/sessions/{session_id}
+```
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/tasks` | 列出所有任务 |
-| GET | `/tasks/` | 列出所有任务（尾部斜杠） |
-| POST | `/tasks` | 创建任务 |
-| POST | `/tasks/` | 创建任务（尾部斜杠） |
-| GET | `/tasks/{task_id}` | 获取任务详情 |
-| POST | `/tasks/{task_id}/run` | 运行任务 |
-| POST | `/tasks/{task_id}/pause` | 暂停任务 |
-| POST | `/tasks/{task_id}/resume` | 恢复任务 |
-| POST | `/tasks/{task_id}/stop` | 停止任务 |
+### 删除会话
 
-### Eval
+```
+DELETE /api/v1/sessions/{session_id}
+```
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/eval/datasets` | 列出评估数据集 |
-| GET | `/eval/datasets/` | 列出评估数据集（尾部斜杠） |
-| POST | `/eval/datasets` | 创建评估数据集 |
-| POST | `/eval/datasets/` | 创建评估数据集（尾部斜杠） |
-| POST | `/eval/run` | 运行评估 |
-| POST | `/eval/run/` | 运行评估（尾部斜杠） |
+### 获取会话消息
 
-### Groups
+```
+GET /api/v1/sessions/{session_id}/messages
+```
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/groups` | 列出所有群组 |
-| GET | `/groups/` | 列出所有群组（尾部斜杠） |
-| POST | `/groups` | 创建群组 |
-| POST | `/groups/` | 创建群组（尾部斜杠） |
-| GET | `/groups/{group_id}` | 获取群组详情 |
-| DELETE | `/groups/{group_id}` | 删除群组 |
-| POST | `/groups/{group_id}/members` | 添加群组成员 |
-| DELETE | `/groups/{group_id}/members/{member_id}` | 移除群组成员 |
-| PATCH | `/groups/{group_id}/members/{member_id}` | 更新群组成员 |
-| GET | `/groups/{group_id}/messages` | 获取群组消息 |
+### 清空会话消息
 
-### Documents
+```
+POST /api/v1/sessions/{session_id}/clear
+```
 
-| Method | Path | 描述 |
-|--------|------|------|
-| POST | `/documents/upload` | 上传文档 |
-| DELETE | `/documents/{doc_id}` | 删除文档 |
+### 保存检查点
 
-### Feedback
+```
+POST /api/v1/sessions/{session_id}/checkpoint
+```
 
-| Method | Path | 描述 |
-|--------|------|------|
-| POST | `/feedback` | 提交反馈 |
-| POST | `/feedback/` | 提交反馈（尾部斜杠） |
-| GET | `/traces/{trace_id}/feedback` | 获取追踪反馈 |
-| POST | `/traces/{trace_id}/feedback` | 提交追踪反馈 |
+**请求体**:
+```json
+{
+  "messages": [...],
+  "iteration": 5,
+  "status": "active",
+  "metadata": {}
+}
+```
 
-### Users
+### 获取最新检查点
 
-| Method | Path | 描述 |
-|--------|------|------|
-| POST | `/users/register` | 注册用户 |
-| POST | `/login` | 用户登录 |
-| GET | `/profile` | 获取当前用户资料 |
-| GET | `/profile/` | 获取当前用户资料（尾部斜杠） |
+```
+GET /api/v1/sessions/{session_id}/checkpoint
+```
 
-### API Keys
+### 获取检查点历史
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/api-keys` | 列出 API Keys |
-| POST | `/api-keys` | 创建 API Key |
-| DELETE | `/api-keys/{key_id}` | 删除 API Key |
+```
+GET /api/v1/sessions/{session_id}/history
+```
 
-### Notifications
+### 分叉会话
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/notifications` | 列出通知 |
-| GET | `/notifications/` | 列出通知（尾部斜杠） |
+```
+POST /api/v1/sessions/{session_id}/fork
+```
 
-### Stats & Cost
+**请求体**:
+```json
+{
+  "new_session_id": "optional-uuid"
+}
+```
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/stats` | 获取统计信息 |
-| GET | `/stats/` | 获取统计信息（尾部斜杠） |
-| GET | `/cost/budget` | 获取预算配置 |
-| GET | `/cost/budget/` | 获取预算配置（尾部斜杠） |
-| GET | `/cost/quota` | 获取配额信息 |
-| GET | `/cost/quota/` | 获取配额信息（尾部斜杠） |
-| GET | `/cost/records` | 获取成本记录 |
-| GET | `/cost/records/` | 获取成本记录（尾部斜杠） |
+### 恢复会话
 
-### 系统
+```
+POST /api/v1/sessions/{session_id}/resume
+```
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/health` | 健康检查 |
-| GET | `/health/logs` | 健康检查日志 |
-| GET | `/metrics` | Prometheus 指标 |
-| GET | `/` | 根路径 |
-| POST | `/stream` | 流式响应 |
-| POST | `/send` | 发送消息 |
-| POST | `/switch` | 切换模式 |
-| GET | `/history` | 获取历史 |
-| POST | `/create` | 创建资源 |
-| POST | `/search` | 搜索 |
-| POST | `/index-text` | 索引文本 |
-| GET | `/scheduler` | 获取调度器状态 |
-| POST | `/scheduler` | 创建调度任务 |
-| GET | `/models` | 列出可用模型 |
-| GET | `/modes` | 列出可用模式 |
-| GET | `/test` | 测试端点 |
+---
 
-## 前端路由
+## 代理 (Agents)
 
-| Method | Path | 描述 |
-|--------|------|------|
-| GET | `/` | 前端根路径 |
+### 列出代理
 
-## 认证相关路由
+```
+GET /api/v1/agents/
+```
 
-| Method | Path | 描述 |
-|--------|------|------|
-| POST | `/auth/login` | 登录 |
-| POST | `/auth/register` | 注册 |
+**查询参数**:
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `limit` | int | 返回数量（默认 50） |
+| `offset` | int | 分页偏移 |
+
+### 创建代理
+
+```
+POST /api/v1/agents/
+```
+
+**请求体**:
+```json
+{
+  "name": "代码助手",
+  "provider": "anthropic",
+  "model_id": "claude-3-5-sonnet-20241022",
+  "api_key": "sk-ant-...",
+  "base_url": null,
+  "system_prompt": "你是一个专业的编程助手...",
+  "description": "擅长代码分析和生成",
+  "tool_ids": ["read_file", "write_file"],
+  "skill_ids": []
+}
+```
+
+### 删除代理
+
+```
+DELETE /api/v1/agents/{agent_id}
+```
+
+---
+
+## 模型 (Models)
+
+### 列出可用模型
+
+```
+GET /api/v1/models/
+```
+
+**响应**:
+```json
+[
+  {"provider": "openai", "model_id": "gpt-4o", "label": "GPT-4o"},
+  {"provider": "anthropic", "model_id": "claude-3-5-sonnet-20241022", "label": "Claude 3.5 Sonnet"},
+  {"provider": "ollama", "model_id": "llama3.3", "label": "llama3.3 (local)"}
+]
+```
+
+---
+
+## 工具 (Tools)
+
+### 列出所有工具
+
+```
+GET /api/v1/tools/
+```
+
+**响应**:
+```json
+[
+  {
+    "name": "read_file",
+    "description": "读取文件内容",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {"type": "string"}
+      }
+    }
+  }
+]
+```
+
+---
+
+## 工作流 (Workflows)
+
+### 列出工作流
+
+```
+GET /api/v1/workflows/
+```
+
+### 创建工作流
+
+```
+POST /api/v1/workflows/
+```
+
+**请求体**:
+```json
+{
+  "name": "代码审查流程",
+  "description": "自动化代码审查",
+  "nodes": [...],
+  "edges": [...]
+}
+```
+
+### 获取工作流详情
+
+```
+GET /api/v1/workflows/{workflow_id}
+```
+
+### 更新工作流
+
+```
+PUT /api/v1/workflows/{workflow_id}
+```
+
+### 删除工作流
+
+```
+DELETE /api/v1/workflows/{workflow_id}
+```
+
+### 列出工作流模板
+
+```
+GET /api/v1/workflows/templates
+```
+
+### 从模板创建工作流
+
+```
+POST /api/v1/workflows/templates/{template_id}
+```
+
+### 导入工作流
+
+```
+POST /api/v1/workflows/import
+```
+
+### 导出工作流
+
+```
+GET /api/v1/workflows/{workflow_id}/export?format=json
+POST /api/v1/workflows/{workflow_id}/export
+```
+
+---
+
+## 技能 (Skills)
+
+### 列出技能
+
+```
+GET /api/v1/skills/
+```
+
+### 创建技能
+
+```
+POST /api/v1/skills/
+```
+
+**请求体**:
+```json
+{
+  "name": "代码重构",
+  "description": "自动重构代码",
+  "category": "development",
+  "prompt_template": "请重构以下代码...",
+  "tools": ["read_file", "write_file"]
+}
+```
+
+### 更新技能
+
+```
+PATCH /api/v1/skills/{skill_id}
+```
+
+### 启用技能
+
+```
+POST /api/v1/skills/{skill_id}/enable
+```
+
+### 禁用技能
+
+```
+POST /api/v1/skills/{skill_id}/disable
+```
+
+### 删除技能
+
+```
+DELETE /api/v1/skills/{skill_id}
+```
+
+---
+
+## 权限 (Permissions)
+
+### 获取权限配置
+
+```
+GET /api/v1/permissions/config
+```
+
+**响应**:
+```json
+{
+  "mode": "standard",
+  "rules": [
+    {"decision": "allow", "tool": "read_file", "pattern": null},
+    {"decision": "deny", "tool": "shell_exec", "pattern": "rm -rf"}
+  ],
+  "allowed_tools": ["read_file", "list_files"],
+  "denied_tools": ["shell_exec"]
+}
+```
+
+### 更新权限配置
+
+```
+PUT /api/v1/permissions/config
+```
+
+**请求体**:
+```json
+{
+  "mode": "standard",
+  "rules": [...],
+  "allowed_tools": [...],
+  "denied_tools": [...]
+}
+```
+
+### 解析权限请求
+
+```
+POST /api/v1/permissions/resolve
+```
+
+**请求体**:
+```json
+{
+  "tool_call_id": "uuid",
+  "decision": "allow"
+}
+```
+
+**决策选项**: `allow`, `allow_session`, `allow_always`, `deny`
+
+---
+
+## MCP 服务器
+
+### 列出 MCP 服务器
+
+```
+GET /api/v1/mcp/
+```
+
+### 创建 MCP 服务器
+
+```
+POST /api/v1/mcp/
+```
+
+**请求体**:
+```json
+{
+  "name": "Filesystem MCP",
+  "command": "npx",
+  "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+  "env": {}
+}
+```
+
+### 启动 MCP 服务器
+
+```
+POST /api/v1/mcp/{server_id}/start
+```
+
+### 停止 MCP 服务器
+
+```
+POST /api/v1/mcp/{server_id}/stop
+```
+
+### 删除 MCP 服务器
+
+```
+DELETE /api/v1/mcp/{server_id}
+```
+
+### 列出市场服务器
+
+```
+GET /api/v1/mcp/servers
+```
+
+### 安装市场服务器
+
+```
+POST /api/v1/mcp/servers/{server_id}/install
+```
+
+### 列出 MCP 分类
+
+```
+GET /api/v1/mcp/categories
+```
+
+---
+
+## 多 Agent 协作 (Groups)
+
+### 列出协作组
+
+```
+GET /api/v1/groups/
+```
+
+### 创建协作组
+
+```
+POST /api/v1/groups/
+```
+
+**请求体**:
+```json
+{
+  "name": "开发团队",
+  "description": "协作开发小组",
+  "topic": "实现用户认证模块",
+  "max_rounds": 10,
+  "process_type": "sequential"
+}
+```
+
+### 获取协作组详情
+
+```
+GET /api/v1/groups/{group_id}
+```
+
+### 删除协作组
+
+```
+DELETE /api/v1/groups/{group_id}
+```
+
+### 添加成员
+
+```
+POST /api/v1/groups/{group_id}/members
+```
+
+**请求体**:
+```json
+{
+  "agent_id": "agent-uuid",
+  "role": "developer",
+  "model_provider": "openai",
+  "model_id": "gpt-4o",
+  "is_worker": true
+}
+```
+
+### 获取成员列表
+
+```
+GET /api/v1/groups/{group_id}/members
+```
+
+### 更新成员
+
+```
+PATCH /api/v1/groups/{group_id}/members/{member_id}
+```
+
+### 移除成员
+
+```
+DELETE /api/v1/groups/{group_id}/members/{member_id}
+```
+
+### 获取消息历史
+
+```
+GET /api/v1/groups/{group_id}/messages?limit=50
+```
+
+---
+
+## Crew (层级协作)
+
+### 列出 Crew
+
+```
+GET /api/v1/crews/
+```
+
+### 创建 Crew
+
+```
+POST /api/v1/crews/
+```
+
+**请求体**:
+```json
+{
+  "name": "代码审查 Crew",
+  "description": "自动化代码审查流程",
+  "process": "sequential",
+  "agents": ["agent-uuid-1", "agent-uuid-2"],
+  "tasks": [
+    {"description": "审查代码质量", "system_prompt": "你是代码审查专家"},
+    {"description": "生成报告", "system_prompt": "你是报告生成专家"}
+  ]
+}
+```
+
+### 运行 Crew
+
+```
+POST /api/v1/crews/{crew_id}/run
+```
+
+### 删除 Crew
+
+```
+DELETE /api/v1/crews/{crew_id}
+```
+
+---
+
+## 任务 (Tasks)
+
+### 列出任务
+
+```
+GET /api/v1/tasks/?group_id=optional
+```
+
+### 创建任务
+
+```
+POST /api/v1/tasks/
+```
+
+**请求体**:
+```json
+{
+  "group_id": "group-uuid",
+  "description": "实现登录功能",
+  "worker_id": "agent-uuid",
+  "reviewer_ids": ["reviewer-uuid"],
+  "max_rounds": 5,
+  "context": [],
+  "guardrails": [],
+  "human_review_required": false,
+  "output_schema": {}
+}
+```
+
+### 运行任务
+
+```
+POST /api/v1/tasks/{task_id}/run
+```
+
+### 获取任务详情
+
+```
+GET /api/v1/tasks/{task_id}
+```
+
+### 暂停任务
+
+```
+POST /api/v1/tasks/{task_id}/pause
+```
+
+### 恢复任务
+
+```
+POST /api/v1/tasks/{task_id}/resume
+```
+
+### 停止任务
+
+```
+POST /api/v1/tasks/{task_id}/stop
+```
+
+---
+
+## 文档 (Documents)
+
+### 列出文档
+
+```
+GET /api/v1/documents/
+```
+
+### 创建文档
+
+```
+POST /api/v1/documents/
+```
+
+### 索引文本
+
+```
+POST /api/v1/documents/index-text
+```
+
+**请求体** (multipart/form-data):
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `text` | string | 要索引的文本内容 |
+| `name` | string | 文档名称 |
+
+### 搜索文档
+
+```
+POST /api/v1/documents/search?query=关键词&n_results=5
+```
+
+### 删除文档
+
+```
+DELETE /api/v1/documents/{doc_id}
+```
+
+---
+
+## API Keys
+
+### 列出 API Keys
+
+```
+GET /api/v1/api-keys/
+```
+
+### 添加 API Key
+
+```
+POST /api/v1/api-keys/
+```
+
+**请求体**:
+```json
+{
+  "provider": "anthropic",
+  "name": "我的 Claude Key",
+  "api_key": "sk-ant-...",
+  "base_url": null
+}
+```
+
+### 删除 API Key
+
+```
+DELETE /api/v1/api-keys/{key_id}
+```
+
+---
+
+## 调度器 (Scheduler)
+
+### 列出定时任务
+
+```
+GET /api/v1/scheduler/
+```
+
+### 创建定时任务
+
+```
+POST /api/v1/scheduler/
+```
+
+**请求体**:
+```json
+{
+  "name": "每日报告",
+  "nodes": [...],
+  "edges": [...],
+  "schedule": "0 9 * * *"
+}
+```
+
+### 更新定时任务
+
+```
+PATCH /api/v1/scheduler/tasks/{task_id}
+```
+
+### 删除定时任务
+
+```
+DELETE /api/v1/scheduler/tasks/{task_id}
+```
+
+---
+
+## 设置 (Settings)
+
+### 获取设置
+
+```
+GET /api/v1/settings/
+```
+
+### 更新设置
+
+```
+PATCH /api/v1/settings/
+```
+
+**请求体**:
+```json
+{
+  "autonomous_agent_mode": true,
+  "token_throttle_mcp_enabled": false
+}
+```
+
+---
+
+## WebSocket
+
+### 会话 WebSocket
+
+```
+WS /api/v1/ws/{session_id}
+```
+
+**消息协议**:
+```json
+// 客户端发送
+{"type": "message", "content": "你好"}
+
+// 服务端响应
+{"type": "echo", "data": "你好"}
+```
+
+### 协作组 WebSocket
+
+```
+WS /api/v1/ws/groups/{group_id}
+```
+
+**消息协议**:
+```json
+// 客户端发送
+{"type": "message", "content": "开始讨论"}
+
+// 服务端响应
+{"type": "ack", "data": {...}}
+```
+
+---
+
+## 健康检查与监控
+
+### 健康检查
+
+```
+GET /health
+```
+
+**响应**:
+```json
+{
+  "status": "ok",
+  "version": "0.2.0",
+  "database": {"connected": true, "backend": "sqlite"},
+  "redis": "ok",
+  "chroma": "ok",
+  "watchdog": {"healthy": true},
+  "memory": {...},
+  "browser_pool": {...}
+}
+```
+
+### 日志查看
+
+```
+GET /health/logs?lines=200&errors_only=false
+```
+
+### 指标
+
+```
+GET /metrics
+```
+
+---
+
+## 其他端点
+
+### 提示词模板
+
+```
+GET  /api/v1/prompt-templates/
+POST /api/v1/prompt-templates/
+```
+
+### 费用追踪
+
+```
+GET /api/v1/cost/
+```
+
+### 统计
+
+```
+GET /api/v1/stats/
+```
+
+### 搜索
+
+```
+GET /api/v1/search/?query=关键词
+```
+
+### 反馈
+
+```
+POST /api/v1/feedback/
+```
+
+### 通知
+
+```
+GET    /api/v1/notifications/
+POST   /api/v1/notifications/read
+```
+
+### 诊断
+
+```
+GET /api/v1/doctor/
+```
+
+### 插件
+
+```
+GET    /api/v1/plugins/
+POST   /api/v1/plugins/{plugin_id}/install
+DELETE /api/v1/plugins/{plugin_id}
+```
+
+### 推理
+
+```
+POST /api/v1/reason/
+```
+
+### 追踪
+
+```
+GET /api/v1/traces/
+```
+
+### 评估
+
+```
+POST /api/v1/eval/
+GET  /api/v1/eval/results
+```
+
+### 用户
+
+```
+GET /api/v1/users/
+```
+
+### 集群
+
+```
+GET /api/v1/cluster/status
+```
