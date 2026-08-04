@@ -16,5 +16,9 @@ uvicorn>=0.22
 sentence-transformers>=2.2.0
 cryptography>=41.0
 pyjwt>=2.8
-# 可选功能
+asyncpg>=0.29
 redis>=4.5
+sse-starlette>=1.8
+mcp>=1.0
+prometheus-client>=0.20
+pyyaml>=6.0
