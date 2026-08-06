@@ -13,10 +13,10 @@ Stored as JSON in the sessions table via a dedicated column.
 from __future__ import annotations
 
 import json
-from sqlalchemy import select
 import logging
-from dataclasses import dataclass, field, asdict
-from typing import Any
+from dataclasses import asdict, dataclass, field
+
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 

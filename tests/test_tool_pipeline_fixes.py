@@ -1,13 +1,13 @@
 """Tests for tool_pipeline.py and agent_engine.py bug fixes."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.core import MessageRole
 from app.core.agent_engine import AgentEngine, AgentSession
-from app.core.task_state_machine import TaskState, TaskStateMachine
+from app.core.task_state_machine import TaskState
 from app.core.tool_pipeline import ToolExecutionPipeline, ToolExecutionResult
 
 

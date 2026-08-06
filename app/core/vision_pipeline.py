@@ -17,11 +17,10 @@ from __future__ import annotations
 import asyncio
 import base64
 import dataclasses
-import logging
 import os
 import tempfile
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 
@@ -274,8 +273,8 @@ class VisionPipeline:
     async def _describe_with_llm(self, image_path: str, base64_image: str) -> str | None:
         """Use multimodal LLM to describe the screen."""
         try:
-            from app.core.di import resolve as di_resolve
             from app.config import settings
+            from app.core.di import resolve as di_resolve
 
             registry = di_resolve("ModelRegistry")
             provider = getattr(settings, "DEFAULT_LLM_PROVIDER", "openai")
@@ -362,8 +361,8 @@ class VisionPipeline:
     async def _plan_with_llm(self, goal: str, screen_desc: str) -> str | None:
         """Use LLM to generate action plan from goal and screen description."""
         try:
-            from app.core.di import resolve as di_resolve
             from app.config import settings
+            from app.core.di import resolve as di_resolve
 
             registry = di_resolve("ModelRegistry")
             provider = getattr(settings, "DEFAULT_LLM_PROVIDER", "openai")
@@ -573,9 +572,8 @@ Format:
                 return False, "Action requires approval in PLAN mode"
 
             # Check permission system for active grant
-            if permission_system and session_id:
-                if permission_system.check_permission(session_id, action):
-                    return True, "OK"
+            if permission_system and session_id and permission_system.check_permission(session_id, action):
+                return True, "OK"
 
             # If not in FULL_AUTO and no grant, require approval
             # Note: FULL_AUTO is represented by mode == "act" in current session model

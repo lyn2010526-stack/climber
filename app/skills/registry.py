@@ -8,9 +8,9 @@ moved to dedicated modules.
 from __future__ import annotations
 
 import asyncio
-import uuid
-from enum import Enum
-from typing import Any, Callable
+from collections.abc import Callable
+from enum import StrEnum
+from typing import Any
 
 import structlog
 from pydantic import BaseModel, Field
@@ -20,7 +20,7 @@ from app.core.interfaces import ISkillRegistry
 logger = structlog.get_logger()
 
 
-class SkillCategory(str, Enum):
+class SkillCategory(StrEnum):
     CORE = "core"
     ENGINEERING = "engineering"
     QUALITY = "quality"

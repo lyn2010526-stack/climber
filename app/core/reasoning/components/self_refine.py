@@ -368,6 +368,4 @@ class SelfRefineLoop:
             return False
         if critique.passed and critique.average_score >= threshold:
             return True
-        if critique.average_score >= 4.5 and critique.major_count == 0:
-            return True
-        return False
+        return bool(critique.average_score >= 4.5 and critique.major_count == 0)

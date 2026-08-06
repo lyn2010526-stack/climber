@@ -1,15 +1,17 @@
 """Tests for Phase 3 modules."""
 
 import os
-import pytest
+
 from app.core.metacognition.memory_pruner import LongTermMemoryPruner
 from app.tools.mcp_plugins.inter_agent_comm import (
-    InterAgentCommunication, MessageType, MessagePriority,
+    InterAgentCommunication,
+    MessageType,
 )
 from app.tools.mcp_plugins.time_scheduler import (
-    TimeEventScheduler, TaskStatus, TaskFrequency,
+    TaskFrequency,
+    TaskStatus,
+    TimeEventScheduler,
 )
-
 
 # === Memory Pruner ===
 

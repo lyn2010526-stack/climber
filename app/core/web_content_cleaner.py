@@ -43,9 +43,8 @@ def _is_noise(line: str) -> bool:
         r"^(menu|导航|navigation)",
     ]
     lower = line.lower()
-    if len(lower) < 20:
+    if any(re.search(pattern, lower) for pattern in noise_patterns):
         return True
-    for pattern in noise_patterns:
-        if re.search(pattern, lower):
-            return True
-    return False
+    # Extremely short single-character lines are noise, but short meaningful
+    # text (titles, short answers) must be preserved.
+    return len(line.strip()) <= 1

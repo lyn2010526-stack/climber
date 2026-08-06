@@ -29,45 +29,49 @@ interface EvalRun {
   created_at: string;
 }
 
-export default function EvalDashboard() {
+interface EvalAgent {
+  id: string;
+  name: string;
+}
+
+export function EvalDashboard() {
   const [datasets, setDatasets] = useState<EvalDataset[]>([]);
+  const [agents, setAgents] = useState<EvalAgent[]>([]);
   const [runs, setRuns] = useState<EvalRun[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedDataset, setSelectedDataset] = useState<string>('');
-  const [seeding, setSeeding] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<string>('');
 
   const fetchDatasets = useCallback(async () => {
     try {
       const data = await api.listEvalDatasets();
-        setDatasets(data);
+      setDatasets(data);
     } catch {
       // ignore
     }
   }, []);
 
-  const seedBuiltin = async () => {
-    setSeeding(true);
-    setError(null);
+  const fetchAgents = useCallback(async () => {
     try {
-      await api.seedBuiltinDatasets();
-        await fetchDatasets();
+      const data = await api.listAgents();
+      setAgents(data);
+      if (data.length > 0) setSelectedAgent(current => current || data[0].id);
     } catch {
-      setError('Network error');
+      // ignore
     }
-    setSeeding(false);
-  };
+  }, []);
 
   const runEval = async () => {
-    if (!selectedDataset) {
-      setError('请先选择数据集');
+    if (!selectedDataset || !selectedAgent) {
+      setError('请选择数据集和智能体');
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      const result = await api.runEvalDataset(selectedDataset);
-        setRuns([result, ...runs]);
+      const result = await api.runEvaluation(selectedDataset, selectedAgent);
+      setRuns(current => [result, ...current]);
     } catch {
       setError('Network error');
     }
@@ -76,21 +80,13 @@ export default function EvalDashboard() {
 
   useEffect(() => {
     fetchDatasets();
-  }, [fetchDatasets]);
+    fetchAgents();
+  }, [fetchAgents, fetchDatasets]);
 
   return (
     <div className="p-6 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] min-h-full">
       <div className="flex items-center justify-between mb-6">
          <h2 className="text-xl font-bold">评估仪表板</h2>
-        <div className="flex gap-2">
-          <button
-            onClick={seedBuiltin}
-            disabled={seeding}
-            className="px-3 py-1.5 bg-[var(--color-bg-surface)] hover:bg-[var(--color-bg-surface-hover)] rounded text-sm disabled:opacity-50"
-          >
-            {seeding ? '导入中...' : '导入内置数据集'}
-          </button>
-        </div>
       </div>
 
       {error && <div className="text-red-400 text-sm mb-4">{error}</div>}
@@ -99,7 +95,7 @@ export default function EvalDashboard() {
       <div className="mb-6">
            <h3 className="text-sm font-semibold text-[var(--color-text-muted)] mb-2">数据集</h3>
          {datasets.length === 0 ? (
-            <div className="text-[var(--color-text-muted)] text-sm">暂无数据集，请先导入内置数据集</div>
+            <div className="text-[var(--color-text-muted)] text-sm">暂无数据集</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {datasets.map((ds) => (
@@ -121,8 +117,20 @@ export default function EvalDashboard() {
         )}
       </div>
 
+      <div className="mb-6">
+        <h3 className="text-sm font-semibold text-[var(--color-text-muted)] mb-2">智能体</h3>
+        <select
+          value={selectedAgent}
+          onChange={(event) => setSelectedAgent(event.target.value)}
+          className="w-full max-w-sm px-3 py-2 rounded border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] text-sm"
+        >
+          <option value="">请选择智能体</option>
+          {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+        </select>
+      </div>
+
       {/* Run button */}
-      {selectedDataset && (
+      {selectedDataset && selectedAgent && (
         <button
           onClick={runEval}
           disabled={loading}
@@ -182,3 +190,5 @@ export default function EvalDashboard() {
     </div>
   );
 }
+
+export default EvalDashboard;

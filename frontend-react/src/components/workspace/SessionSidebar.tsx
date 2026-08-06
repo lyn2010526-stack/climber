@@ -47,9 +47,9 @@ export function SessionSidebar() {
   }, [selectedAgent, creating, sessions.length, createSession, refresh]);
 
   return (
-    <div className="w-60 bg-[#0F0F14]/95 backdrop-blur-2xl border-r border-white/[0.04] flex flex-col">
+    <aside className="session-sidebar" aria-label="会话">
       {/* Permission Mode Selector */}
-      <div className="p-3 border-b border-white/[0.04]">
+      <div className="border-b border-[var(--color-border-subtle)] p-3">
         <PermissionModes
           currentMode={permissionMode}
           onModeChange={setPermissionMode}
@@ -57,18 +57,19 @@ export function SessionSidebar() {
       </div>
 
       {/* Header — New Chat Button */}
-      <div className="p-3 border-b border-white/[0.04] space-y-2">
+      <div className="space-y-2 border-b border-[var(--color-border-subtle)] p-3">
         <button
           onClick={handleCreate}
           disabled={creating}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#3B82F6] to-[#8B5CF6] hover:from-[#60A5FA] hover:to-[#A78BFA] disabled:opacity-50 text-white rounded-2xl text-xs font-semibold transition-all duration-200 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 active:scale-[0.97] hover:translate-y-[-1px]"
+          className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-accent)] px-3 text-xs font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus size={14} strokeWidth={2.5} /> {creating ? '创建中...' : '新建会话'}
         </button>
         <select
           value={selectedAgent}
           onChange={(e) => setSelectedAgent(e.target.value)}
-          className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-2xl text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/40 focus:bg-white/[0.06] transition-all duration-200 hover:border-white/[0.1]"
+          aria-label="选择智能体"
+          className="h-11 w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] px-3 text-xs text-[var(--color-text-primary)] transition-colors hover:border-[var(--color-border-default)] focus:border-[var(--color-accent)] focus:outline-none"
         >
           {agents.length === 0 && <option value="">暂无可用智能体</option>}
           {agents.map(a => (
@@ -78,7 +79,8 @@ export function SessionSidebar() {
         <select
           value={selectedModel}
           onChange={(e) => setSelectedModel(e.target.value)}
-          className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-2xl text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/40 focus:bg-white/[0.06] transition-all duration-200 hover:border-white/[0.1]"
+          aria-label="选择模型"
+          className="h-11 w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] px-3 text-xs text-[var(--color-text-primary)] transition-colors hover:border-[var(--color-border-default)] focus:border-[var(--color-accent)] focus:outline-none"
         >
           {models.length === 0 && <option value="">暂无可用模型</option>}
           {models.map(m => (
@@ -90,36 +92,43 @@ export function SessionSidebar() {
       </div>
 
       {/* Session list */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+      <div className="flex-1 space-y-0.5 overflow-y-auto p-2" aria-live="polite" aria-busy={loading}>
         {loading && (
           <div className="text-center py-8">
-            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+            <div className="mx-auto mb-2 h-5 w-5 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
             <span className="text-[10px] text-[var(--color-text-muted)]">加载中...</span>
           </div>
         )}
         {sessions.map((s, idx) => (
           <div
             key={s.id}
-            className={`group flex items-center gap-2.5 px-3 py-2.5 rounded-2xl cursor-pointer transition-all duration-200 border ${
+            className={`group flex min-h-11 w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-colors ${
               activeSessionId === s.id
-                ? 'bg-white/[0.06] text-white shadow-md shadow-black/20 border-white/[0.08]'
-                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-white/[0.03] border-transparent hover:border-white/[0.04]'
+                ? 'border-[var(--color-border-accent)] bg-[var(--color-accent-subtle)] text-[var(--color-text-primary)]'
+                : 'border-transparent text-[var(--color-text-secondary)] hover:border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)]'
             }`}
             style={{ animationDelay: `${Math.min(idx, 8) * 40}ms` }}
-            onClick={() => setActiveSession(s.id)}
           >
-            <MessageSquare size={13} className={`shrink-0 transition-all duration-200 ${activeSessionId === s.id ? 'text-blue-400' : 'text-[var(--color-text-muted)] group-hover:text-[var(--color-text-secondary)]'}`} />
-            <div className="flex-1 min-w-0">
-              <span className="text-xs truncate block font-medium">{s.title || 'Untitled'}</span>
-              <span className="text-[10px] text-[var(--color-text-muted)] font-medium">{s.status || 'idle'}</span>
-            </div>
+             <button
+               type="button"
+               aria-current={activeSessionId === s.id ? 'true' : undefined}
+               onClick={() => setActiveSession(s.id)}
+               className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+             >
+               <MessageSquare size={13} className={`shrink-0 ${activeSessionId === s.id ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]'}`} />
+               <span className="min-w-0 flex-1">
+                 <span className="block truncate text-xs font-medium">{s.title || 'Untitled'}</span>
+                 <span className="block text-[10px] font-medium text-[var(--color-text-muted)]">{s.status || 'idle'}</span>
+               </span>
+             </button>
             <button
               onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
-              className="opacity-0 group-hover:opacity-100 p-1.5 hover:text-red-400 transition-all duration-200 hover:bg-red-500/10 rounded-xl hover:scale-110"
+               aria-label={`删除会话 ${s.title || 'Untitled'}`}
+                className="flex h-11 w-11 items-center justify-center rounded-md text-[var(--color-text-muted)] opacity-0 transition-colors hover:bg-[var(--color-error-subtle)] hover:text-[var(--color-error)] group-hover:opacity-100 group-focus-within:opacity-100"
             >
               <Trash2 size={10} />
             </button>
-          </div>
+           </div>
         ))}
         {!loading && sessions.length === 0 && (
           <div className="text-center py-8">
@@ -130,13 +139,13 @@ export function SessionSidebar() {
 
       {/* Checkpoint History Panel */}
       {showCheckpoints && (
-        <div className="border-t border-white/[0.04] p-3 space-y-2 max-h-48 overflow-y-auto">
+        <div className="max-h-48 space-y-2 overflow-y-auto border-t border-[var(--color-border-subtle)] p-3">
           <div className="flex items-center gap-2 px-1">
-            <History size={12} className="text-blue-400" />
+            <History size={12} className="text-[var(--color-accent)]" />
             <span className="text-[11px] font-medium text-[var(--color-text-secondary)]">检查点历史</span>
           </div>
           {(sessions.find(s => s.id === activeSessionId) as any)?.messages?.slice(-10).reverse().map((msg: any, i: number) => (
-            <div key={i} className="px-2 py-1.5 rounded-lg bg-white/[0.02] border border-white/[0.04] text-[10px] text-[var(--color-text-secondary)]">
+            <div key={i} className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] px-2 py-1.5 text-[10px] text-[var(--color-text-secondary)]">
               <span className="text-[var(--color-text-muted)]">{new Date(msg.timestamp).toLocaleTimeString()}</span>
               <span className="ml-2">{msg.type}</span>
             </div>
@@ -148,14 +157,14 @@ export function SessionSidebar() {
       )}
 
       {/* Footer */}
-      <div className="border-t border-white/[0.04] p-3">
+      <div className="border-t border-[var(--color-border-subtle)] p-3">
         <div className="flex items-center gap-2 mb-2">
           <button
             onClick={() => setShowCheckpoints(!showCheckpoints)}
             className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors ${
               showCheckpoints
-                ? 'bg-blue-500/10 text-blue-400'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-white/[0.04]'
+                ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]'
+                : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-secondary)]'
             }`}
           >
             <History size={10} />
@@ -163,11 +172,11 @@ export function SessionSidebar() {
           </button>
         </div>
         <div className="flex items-center gap-2 px-2 py-1.5 text-[10px] text-[var(--color-text-muted)] font-medium">
-          <Sparkles size={10} className="text-blue-400" />
+          <Sparkles size={10} className="text-[var(--color-accent)]" />
           <span>{sessions.length} 个活跃会话</span>
         </div>
         <UserSwitcher />
       </div>
-    </div>
+    </aside>
   );
 }

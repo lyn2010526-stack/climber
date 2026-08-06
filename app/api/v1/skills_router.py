@@ -7,7 +7,9 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
-from app.api.v1.helpers import DEFAULT_USER, payload as _payload
+from app.api.v1.common import current_user_id
+from app.api.v1.helpers import DEFAULT_USER
+from app.api.v1.helpers import payload as _payload
 from app.storage import async_session
 from app.storage.models_platform import Skill
 
@@ -90,8 +92,11 @@ async def delete_skill(skill_id: str) -> dict:
 @router.patch("/skills/{skill_id}")
 async def update_skill(skill_id: str, request: Request) -> dict[str, Any]:
     data = await _payload(request)
+    user_id = current_user_id(request)
     async with async_session() as db:
-        skill = (await db.execute(select(Skill).where(Skill.id == skill_id))).scalar_one_or_none()
+        skill = (
+            await db.execute(select(Skill).where(Skill.id == skill_id, Skill.user_id == user_id))
+        ).scalar_one_or_none()
         if skill is None:
             raise HTTPException(status_code=404, detail="Skill not found")
         if "name" in data:

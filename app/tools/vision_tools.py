@@ -15,8 +15,6 @@ Tools:
 
 from __future__ import annotations
 
-from typing import Optional
-
 import structlog
 
 from app.core.vision_pipeline import vision_pipeline
@@ -39,7 +37,7 @@ logger = structlog.get_logger()
 )
 async def capture_screen(
     source: str = "native",
-    region: Optional[list[int]] = None,
+    region: list[int] | None = None,
     session_id: str = "default",
 ) -> str:
     """Capture a screenshot and return base64 image."""
@@ -71,7 +69,7 @@ async def capture_screen(
 )
 async def ocr_screen(
     source: str = "native",
-    region: Optional[list[int]] = None,
+    region: list[int] | None = None,
     session_id: str = "default",
 ) -> str:
     """Extract text from screen using OCR."""

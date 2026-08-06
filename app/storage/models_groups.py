@@ -46,11 +46,11 @@ class AgentGroup(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # Relationships
-    members: Mapped[list["AgentGroupMember"]] = relationship(back_populates="group", cascade="all, delete-orphan", foreign_keys="[AgentGroupMember.group_id]", primaryjoin="AgentGroup.id == AgentGroupMember.group_id")
-    messages: Mapped[list["AgentGroupMessage"]] = relationship(back_populates="group", cascade="all, delete-orphan", order_by="AgentGroupMessage.created_at")
-    tasks: Mapped[list["AgentGroupTask"]] = relationship(back_populates="group", cascade="all, delete-orphan", order_by="AgentGroupTask.created_at.desc()")
-    memories: Mapped[list["AgentGroupMemory"]] = relationship(back_populates="group", cascade="all, delete-orphan", order_by="AgentGroupMemory.created_at.desc()")
-    checkpoints: Mapped[list["AgentGroupTaskCheckpoint"]] = relationship(back_populates="group", cascade="all, delete-orphan", order_by="AgentGroupTaskCheckpoint.created_at.desc()")
+    members: Mapped[list[AgentGroupMember]] = relationship(back_populates="group", cascade="all, delete-orphan", foreign_keys="[AgentGroupMember.group_id]", primaryjoin="AgentGroup.id == AgentGroupMember.group_id")
+    messages: Mapped[list[AgentGroupMessage]] = relationship(back_populates="group", cascade="all, delete-orphan", order_by="AgentGroupMessage.created_at")
+    tasks: Mapped[list[AgentGroupTask]] = relationship(back_populates="group", cascade="all, delete-orphan", order_by="AgentGroupTask.created_at.desc()")
+    memories: Mapped[list[AgentGroupMemory]] = relationship(back_populates="group", cascade="all, delete-orphan", order_by="AgentGroupMemory.created_at.desc()")
+    checkpoints: Mapped[list[AgentGroupTaskCheckpoint]] = relationship(back_populates="group", cascade="all, delete-orphan", order_by="AgentGroupTaskCheckpoint.created_at.desc()")
 
 
 class AgentGroupMember(Base):
@@ -105,6 +105,13 @@ class AgentGroupMessage(Base):
     # Relationships
     group: Mapped[AgentGroup] = relationship(back_populates="messages")
 
+    def __init__(self, **kwargs: Any) -> None:
+        if "sender_id" in kwargs:
+            kwargs["agent_id"] = kwargs.pop("sender_id")
+        if "metadata" in kwargs:
+            kwargs["metadata_"] = kwargs.pop("metadata")
+        super().__init__(**kwargs)
+
 
 class AgentGroupTask(Base):
     """Auto collaboration task record."""
@@ -155,9 +162,9 @@ class AgentGroupTask(Base):
 
     # Relationships
     group: Mapped[AgentGroup] = relationship(back_populates="tasks")
-    checkpoints: Mapped[list["AgentGroupTaskCheckpoint"]] = relationship(back_populates="task", cascade="all, delete-orphan")
-    child_tasks: Mapped[list["AgentGroupTask"]] = relationship("AgentGroupTask", foreign_keys="AgentGroupTask.parent_task_id", back_populates="parent_task")
-    parent_task: Mapped["AgentGroupTask | None"] = relationship("AgentGroupTask", remote_side="AgentGroupTask.id", back_populates="child_tasks")
+    checkpoints: Mapped[list[AgentGroupTaskCheckpoint]] = relationship(back_populates="task", cascade="all, delete-orphan")
+    child_tasks: Mapped[list[AgentGroupTask]] = relationship("AgentGroupTask", foreign_keys="AgentGroupTask.parent_task_id", back_populates="parent_task")
+    parent_task: Mapped[AgentGroupTask | None] = relationship("AgentGroupTask", remote_side="AgentGroupTask.id", back_populates="child_tasks")
 
 
 class AgentGroupTaskCheckpoint(Base):

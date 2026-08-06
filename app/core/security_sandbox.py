@@ -9,6 +9,7 @@ Implements:
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 import time
@@ -75,22 +76,26 @@ class PermissionOverlay:
         return effective.level
 
     def _merge_rules(self, action: str, resource: str, agent_id: str | None, user_id: str | None) -> PermissionRule | None:
-        merged: dict[str, PermissionRule] = {}
-        for rule in self._defaults:
-            if rule.action == action and self._match(rule.resource_pattern, resource):
-                merged[rule.resource_pattern] = rule
-        if agent_id and agent_id in self._agent_overrides:
-            for rule in self._agent_overrides[agent_id]:
-                if rule.action == action and self._match(rule.resource_pattern, resource):
-                    merged[rule.resource_pattern] = rule
-        if user_id and user_id in self._user_overrides:
-            for rule in self._user_overrides[user_id]:
-                if rule.action == action and self._match(rule.resource_pattern, resource):
-                    merged[rule.resource_pattern] = rule
-        if not merged:
-            return None
-        best = max(merged.items(), key=lambda x: self._priority(x[1].level))
-        return best[1]
+        layers = [
+            self._user_overrides.get(user_id, []) if user_id else [],
+            self._agent_overrides.get(agent_id, []) if agent_id else [],
+            self._defaults,
+        ]
+        for rules in layers:
+            matches = [
+                rule
+                for rule in rules
+                if rule.action == action and self._match(rule.resource_pattern, resource)
+            ]
+            if matches:
+                return max(
+                    matches,
+                    key=lambda rule: (
+                        self._specificity(rule.resource_pattern),
+                        self._priority(rule.level),
+                    ),
+                )
+        return None
 
     @staticmethod
     def _match(pattern: str, path: str) -> bool:
@@ -99,7 +104,12 @@ class PermissionOverlay:
 
     @staticmethod
     def _priority(level: PermissionLevel) -> int:
-        return {PermissionLevel.DENY: 0, PermissionLevel.ASK: 1, PermissionLevel.ALLOW: 2}.get(level, 0)
+        return {PermissionLevel.DENY: 2, PermissionLevel.ASK: 1, PermissionLevel.ALLOW: 0}.get(level, 0)
+
+    @staticmethod
+    def _specificity(pattern: str) -> tuple[int, int]:
+        wildcard_count = sum(pattern.count(char) for char in "*?[")
+        return len(pattern) - wildcard_count, -wildcard_count
 
 
 # ─── JSON Schema Validation ──────────────────────────────────────────────────
@@ -241,7 +251,7 @@ class SecuritySandbox:
         for pattern in HAZARD_COMMANDS:
             if re.search(pattern, command, re.IGNORECASE):
                 return False, f"Command blocked by safety policy: matches hazard pattern '{pattern}'"
-        
+
         # Check allowlist
         parts = command.strip().split()
         if parts:
@@ -249,7 +259,7 @@ class SecuritySandbox:
             base = os.path.basename(base)
             if base not in _ALLOWED_COMMANDS:
                 return False, f"Command '{base}' is not in the allowed commands list"
-        
+
         return True, "OK"
 
     def sanitize_output(self, output: str) -> str:
@@ -275,25 +285,25 @@ _ALLOWED_COMMANDS = {
 
 def validate_command_allowlist(command: str) -> tuple[bool, str]:
     """Validate that a command base name is in the allowed commands list.
-    
+
     Also checks for dangerous argument patterns (e.g., rm -rf) and
     invalid shell syntax (unclosed quotes).
     """
     parts = command.strip().split()
     if not parts:
         return False, "Empty command"
-    
+
     # Check for invalid shell syntax (unclosed quotes)
     single_quotes = command.count("'")
     double_quotes = command.count('"')
     if single_quotes % 2 != 0 or double_quotes % 2 != 0:
         return False, "Invalid shell syntax: unclosed quote"
-    
+
     base = parts[0].lstrip("./")
     base = os.path.basename(base)
     if base not in _ALLOWED_COMMANDS:
         return False, f"Command '{base}' is not in the allowed commands list"
-    
+
     # Check for dangerous argument patterns
     dangerous_patterns = {
         "rm": [
@@ -596,8 +606,8 @@ class AuditSystem:
     async def _persist(self, session_id: str, action: str, severity: str, details: dict[str, Any], result: str = "", user_id: str | None = None) -> None:
         """Persist audit entry to database."""
         try:
-            from app.storage.models_memory import AuditLog
             from app.storage import async_session
+            from app.storage.models_memory import AuditLog
             async with async_session() as db:
                 log = AuditLog(
                     session_id=session_id,

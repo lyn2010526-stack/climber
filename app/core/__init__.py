@@ -3,26 +3,29 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Any, AsyncIterator
+from enum import Enum, StrEnum
+from typing import Any
+
+from app.core.security_sandbox import AgentMode
 
 
-class MessageRole(str, Enum):
+class MessageRole(StrEnum):
     USER = "user"
     ASSISTANT = "assistant"
     SYSTEM = "system"
     TOOL = "tool"
 
 
-class CompressionStrategy(str, Enum):
+class CompressionStrategy(StrEnum):
     TRUNCATE = "truncate"
     SLIDING = "sliding"
     SUMMARIZE = "summarize"
 
 
-class SessionStatus(str, Enum):
+class SessionStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     PAUSED = "paused"
@@ -31,7 +34,7 @@ class SessionStatus(str, Enum):
     STOPPED = "stopped"
 
 
-class AgentEventType(str, Enum):
+class AgentEventType(StrEnum):
     TEXT = "text"
     THINKING = "thinking"
     TOOL_CALL = "tool_call"
@@ -47,7 +50,7 @@ class AgentEventType(str, Enum):
     PIPELINE_COMPLETE = "pipeline_complete"
 
 
-class FallbackStrategy(str, Enum):
+class FallbackStrategy(StrEnum):
     NEXT_MODEL = "next_model"
     CHEAPER_MODEL = "cheaper_model"
     RETRY = "retry"
@@ -101,6 +104,6 @@ class ContextConfig:
     compression_strategy: CompressionStrategy = CompressionStrategy.TRUNCATE
     keep_recent_messages: int = 4
     summarize_threshold: float = 0.8
-
+    compression_ratio: float = 0.5
 
 from app.core.checkpoint import CheckpointData

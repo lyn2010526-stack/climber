@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
+from weakref import WeakSet
 
 from sqlalchemy import (
     JSON,
@@ -16,10 +18,15 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    inspect,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.storage import Base
+
+_checkpoint_schema_ready: WeakSet[Any] = WeakSet()
+_checkpoint_schema_lock = asyncio.Lock()
 
 # Forward references for optional memory models
 # These are populated by models_memory when it's imported
@@ -60,7 +67,7 @@ class Agent(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # Relationships
-    sessions: Mapped[list["Session"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
+    sessions: Mapped[list[Session]] = relationship(back_populates="agent", cascade="all, delete-orphan")
 
 
 class Session(Base):
@@ -83,8 +90,8 @@ class Session(Base):
 
     # Relationships
     agent: Mapped[Agent] = relationship(back_populates="sessions")
-    messages: Mapped[list["Message"]] = relationship(back_populates="session", cascade="all, delete-orphan", order_by="Message.created_at")
-    turns: Mapped[list["Turn"]] = relationship(back_populates="session", cascade="all, delete-orphan")
+    messages: Mapped[list[Message]] = relationship(back_populates="session", cascade="all, delete-orphan", order_by="Message.created_at")
+    turns: Mapped[list[Turn]] = relationship(back_populates="session", cascade="all, delete-orphan")
 
 
 class Turn(Base):
@@ -104,7 +111,7 @@ class Turn(Base):
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    session: Mapped["Session"] = relationship(back_populates="turns")
+    session: Mapped[Session] = relationship(back_populates="turns")
 
 
 class Message(Base):
@@ -129,7 +136,7 @@ class Message(Base):
     # Relationships
     session: Mapped[Session] = relationship(back_populates="messages")
     parent: Mapped[Message | None] = relationship(back_populates="children", remote_side="Message.id")
-    children: Mapped[list["Message"]] = relationship(back_populates="parent")
+    children: Mapped[list[Message]] = relationship(back_populates="parent")
 
 
 class Tool(Base):
@@ -203,14 +210,51 @@ class CheckpointRecord(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     tool_results: Mapped[str] = mapped_column(Text, default="[]")
     metadata_: Mapped[str] = mapped_column("metadata", Text, default="{}")
+    channel_values: Mapped[str] = mapped_column(Text, default="{}")
+    channel_versions: Mapped[str] = mapped_column(Text, default="{}")
+    versions_seen: Mapped[str] = mapped_column(Text, default="{}")
+    pending_writes: Mapped[str] = mapped_column(Text, default="[]")
     parent_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+async def ensure_checkpoint_schema(database_engine: Any | None = None) -> None:
+    """Add checkpoint payload columns to existing SQLite databases."""
+    if database_engine is None:
+        from app.storage import engine as database_engine
+
+    if database_engine.dialect.name != "sqlite":
+        return
+    if database_engine in _checkpoint_schema_ready:
+        return
+
+    columns = {
+        "channel_values": "TEXT NOT NULL DEFAULT '{}'",
+        "channel_versions": "TEXT NOT NULL DEFAULT '{}'",
+        "versions_seen": "TEXT NOT NULL DEFAULT '{}'",
+        "pending_writes": "TEXT NOT NULL DEFAULT '[]'",
+    }
+    async with _checkpoint_schema_lock:
+        if database_engine in _checkpoint_schema_ready:
+            return
+        async with database_engine.begin() as connection:
+            def checkpoint_columns(sync_connection: Any) -> set[str]:
+                inspector = inspect(sync_connection)
+                if not inspector.has_table("checkpoints"):
+                    return set(columns)
+                return {
+                    column["name"]
+                    for column in inspector.get_columns("checkpoints")
+                }
+
+            existing = await connection.run_sync(checkpoint_columns)
+            for name, definition in columns.items():
+                if name not in existing:
+                    await connection.execute(
+                        text(f'ALTER TABLE checkpoints ADD COLUMN "{name}" {definition}')
+                    )
+        _checkpoint_schema_ready.add(database_engine)
+
+
 # Import memory models to register them with SQLAlchemy
 # This must be done after the base models are defined to avoid circular imports
-from app.storage import models_memory  # noqa: E402  # isort: skip
-from app.storage import models_platform  # noqa: E402  # isort: skip
-
-
-

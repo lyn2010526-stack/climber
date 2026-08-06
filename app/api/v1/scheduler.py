@@ -7,7 +7,9 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
-from app.api.v1.helpers import DEFAULT_USER, payload as _payload
+from app.api.v1.common import current_user_id
+from app.api.v1.helpers import DEFAULT_USER
+from app.api.v1.helpers import payload as _payload
 from app.storage import async_session
 from app.storage.models_platform import Workflow
 
@@ -23,7 +25,7 @@ _SCHEDULER_MARKET = [
 @router.get("/scheduler/")
 async def list_scheduled() -> list[dict[str, Any]]:
     async with async_session() as db:
-        rows = (await db.execute(select(Workflow).where(Workflow.schedule != None))).scalars().all()
+        rows = (await db.execute(select(Workflow).where(Workflow.schedule is not None))).scalars().all()
         return [{"id": w.id, "name": w.name, "schedule": w.schedule, "last_status": w.last_status, "run_count": w.run_count} for w in rows]
 
 
@@ -49,9 +51,14 @@ async def create_scheduled(request: Request) -> dict[str, Any]:
 
 @router.get("/scheduler/tasks")
 @router.get("/scheduler/tasks/")
-async def list_scheduler_tasks() -> list[dict[str, Any]]:
+async def list_scheduler_tasks(request: Request) -> list[dict[str, Any]]:
     async with async_session() as db:
-        rows = (await db.execute(select(Workflow).where(Workflow.schedule != None).order_by(Workflow.created_at.desc()))).scalars().all()
+        user_id = current_user_id(request)
+        rows = (
+            await db.execute(
+                select(Workflow).where(Workflow.schedule is not None, Workflow.user_id == user_id).order_by(Workflow.created_at.desc())
+            )
+        ).scalars().all()
         return [{"id": w.id, "name": w.name, "cron": w.schedule, "description": getattr(w, "description", ""), "enabled": True, "last_run": None, "next_run": None, "run_count": w.run_count or 0} for w in rows]
 
 
@@ -61,7 +68,7 @@ async def create_scheduler_task(request: Request) -> dict[str, Any]:
     data = await _payload(request)
     async with async_session() as db:
         wf = Workflow(
-            user_id=DEFAULT_USER,
+            user_id=current_user_id(request),
             name=data.get("name", "Scheduled Task"),
             description=data.get("description", ""),
             nodes=data.get("nodes", []),
@@ -78,7 +85,10 @@ async def create_scheduler_task(request: Request) -> dict[str, Any]:
 async def update_scheduler_task(task_id: str, request: Request) -> dict[str, Any]:
     data = await _payload(request)
     async with async_session() as db:
-        wf = (await db.execute(select(Workflow).where(Workflow.id == task_id))).scalar_one_or_none()
+        user_id = current_user_id(request)
+        wf = (
+            await db.execute(select(Workflow).where(Workflow.id == task_id, Workflow.user_id == user_id))
+        ).scalar_one_or_none()
         if wf is None:
             raise HTTPException(status_code=404, detail="Scheduler task not found")
         if "name" in data:
@@ -88,16 +98,19 @@ async def update_scheduler_task(task_id: str, request: Request) -> dict[str, Any
         if "cron" in data or "schedule" in data:
             wf.schedule = data.get("cron", data.get("schedule"))
         if "enabled" in data:
-            wf.status = "active" if data["enabled"] else "inactive"
+            wf.last_status = "active" if data["enabled"] else "inactive"
         await db.commit()
         await db.refresh(wf)
-        return {"id": wf.id, "name": wf.name, "cron": wf.schedule, "description": wf.description, "enabled": wf.status != "inactive", "last_run": None, "next_run": None, "run_count": wf.run_count or 0}
+        return {"id": wf.id, "name": wf.name, "cron": wf.schedule, "description": wf.description, "enabled": wf.last_status != "inactive", "last_run": None, "next_run": None, "run_count": wf.run_count or 0}
 
 
 @router.delete("/scheduler/tasks/{task_id}")
-async def delete_scheduler_task(task_id: str) -> dict[str, Any]:
+async def delete_scheduler_task(task_id: str, request: Request) -> dict[str, Any]:
     async with async_session() as db:
-        wf = (await db.execute(select(Workflow).where(Workflow.id == task_id))).scalar_one_or_none()
+        user_id = current_user_id(request)
+        wf = (
+            await db.execute(select(Workflow).where(Workflow.id == task_id, Workflow.user_id == user_id))
+        ).scalar_one_or_none()
         if wf is None:
             raise HTTPException(status_code=404, detail="Scheduler task not found")
         await db.delete(wf)

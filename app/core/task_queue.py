@@ -1,118 +1,197 @@
-"""Dynamic task queue with priority and concurrency control.
+"""Asynchronous task queue with priority-based scheduling and automatic retries.
 
+Tasks are held in an in-memory sorted list ordered by priority (highest first)
+and insertion time (earliest first). All mutations are guarded by an asyncio
+lock so the scheduler is safe for concurrent coroutines.
 """
 
 from __future__ import annotations
 
-import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+import asyncio
+import threading
+import uuid
+from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+import structlog
+from pydantic import BaseModel, Field
 
 
-@dataclass
-class Task:
-    id: str
-    description: str
-    priority: float = 0.0
-    status: str = "pending"  # pending / in_progress / completed / failed
-    result: str | None = None
-    dependencies: list[str] = field(default_factory=list)
-    retry_count: int = 0
-    max_retries: int = 3
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+class TaskStatus(str, Enum):
+    """Lifecycle state of a queued task."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class TaskPriority(int, Enum):
+    """Scheduling priority, higher values run first."""
+
+    LOW = 1
+    NORMAL = 2
+    HIGH = 3
+    CRITICAL = 4
+
+
+class QueuedTask(BaseModel):
+    """A single task tracked by the scheduler."""
+
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+    priority: TaskPriority = TaskPriority.NORMAL
+    status: TaskStatus = TaskStatus.QUEUED
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    started_at: datetime | None = None
     completed_at: datetime | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    attempts: int = 0
+    max_attempts: int = 3
 
 
-class TaskQueue:
-    """Priority queue for tasks with dynamic re-prioritization and concurrency limit.
+class TaskScheduler:
+    """Priority queue scheduling QUEUED tasks in FIFO order within a priority.
 
-    Features:
-    - Priority-based ordering
-    - Dependency resolution
-    - Max concurrent task limit (AGiXT)
-    - Dynamic re-prioritization (BabyAGI)
+    The ordering list holds only QUEUED task ids sorted by descending priority
+    then ascending created_at, so ``poll_next`` always returns the highest
+    priority task that has been waiting the longest.
     """
 
-    def __init__(self, max_concurrent: int = 4):
-        self._tasks: dict[str, Task] = {}
+    def __init__(self) -> None:
+        self._tasks: dict[str, QueuedTask] = {}
         self._order: list[str] = []
-        self._max_concurrent = max_concurrent
-        self._running_count = 0
+        self._lock: asyncio.Lock = asyncio.Lock()
+        self._logger: structlog.BoundLogger = structlog.get_logger(__name__)
 
-    def add(self, task: Task) -> None:
-        self._tasks[task.id] = task
-        self._order.append(task.id)
-        self._sort()
+    def _resort(self) -> None:
+        self._order.sort(key=lambda tid: (-self._tasks[tid].priority.value, self._tasks[tid].created_at))
 
-    def _sort(self) -> None:
-        self._order.sort(key=lambda tid: self._tasks[tid].priority, reverse=True)
+    async def submit(
+        self,
+        name: str,
+        payload: dict[str, Any] | None = None,
+        priority: TaskPriority = TaskPriority.NORMAL,
+        max_attempts: int = 3,
+    ) -> QueuedTask:
+        """Enqueue a new task and return it."""
+        task = QueuedTask(
+            name=name,
+            payload=payload or {},
+            priority=priority,
+            max_attempts=max_attempts,
+        )
+        async with self._lock:
+            self._tasks[task.id] = task
+            self._order.append(task.id)
+            self._resort()
+        self._logger.info("task_submitted", task_id=task.id, name=name, priority=task.priority.value)
+        return task
 
-    def get_next(self) -> Task | None:
-        if self._running_count >= self._max_concurrent:
-            return None
-        for tid in self._order:
-            task = self._tasks[tid]
-            if task.status == "pending" and self._dependencies_met(task):
-                self._running_count += 1
-                task.status = "in_progress"
+    async def poll_next(self) -> QueuedTask | None:
+        """Dequeue the next QUEUED task, mark it RUNNING, and return it."""
+        async with self._lock:
+            for tid in self._order:
+                task = self._tasks.get(tid)
+                if task is None or task.status != TaskStatus.QUEUED:
+                    continue
+                self._order.remove(tid)
+                task.status = TaskStatus.RUNNING
+                task.started_at = datetime.now(UTC)
+                self._logger.info("task_started", task_id=task.id, name=task.name)
                 return task
-        return None
+            return None
 
-    def _dependencies_met(self, task: Task) -> bool:
-        return all(self._tasks.get(dep, None) and self._tasks[dep].status == "completed" for dep in task.dependencies)
-
-    def mark_completed(self, task_id: str, result: str) -> None:
-        task = self._tasks.get(task_id)
-        if task:
-            task.status = "completed"
+    async def complete(self, task_id: str, result: dict[str, Any]) -> bool:
+        """Mark a RUNNING task as SUCCEEDED with the given result."""
+        async with self._lock:
+            task = self._tasks.get(task_id)
+            if task is None or task.status != TaskStatus.RUNNING:
+                return False
+            task.status = TaskStatus.SUCCEEDED
             task.result = result
-            task.completed_at = datetime.now(timezone.utc)
-            self._running_count = max(0, self._running_count - 1)
-            self._sort()
+            task.completed_at = datetime.now(UTC)
+        self._logger.info("task_completed", task_id=task_id, name=task.name)
+        return True
 
-    def mark_failed(self, task_id: str) -> None:
-        task = self._tasks.get(task_id)
-        if task:
-            task.retry_count += 1
-            if task.retry_count >= task.max_retries:
-                task.status = "failed"
+    async def fail(self, task_id: str, error: str) -> bool:
+        """Mark a RUNNING task failed, re-queuing it for retry when attempts remain."""
+        async with self._lock:
+            task = self._tasks.get(task_id)
+            if task is None or task.status != TaskStatus.RUNNING:
+                return False
+            task.attempts += 1
+            task.error = error
+            if task.attempts < task.max_attempts:
+                task.status = TaskStatus.QUEUED
+                self._order.append(task.id)
+                self._resort()
+                self._logger.warning(
+                    "task_retrying", task_id=task_id, name=task.name, attempts=task.attempts, max_attempts=task.max_attempts
+                )
             else:
-                task.status = "pending"
-                task.priority += 1.0
-            self._running_count = max(0, self._running_count - 1)
-            self._sort()
+                task.status = TaskStatus.FAILED
+                task.completed_at = datetime.now(UTC)
+                self._logger.error(
+                    "task_failed", task_id=task_id, name=task.name, attempts=task.attempts, error=error
+                )
+        return True
 
-    def reprioritize(self, scoring_fn: Any) -> None:
-        for task in self._tasks.values():
-            if task.status == "pending":
-                task.priority = scoring_fn(task)
-        self._sort()
+    async def cancel(self, task_id: str) -> bool:
+        """Cancel a QUEUED or RUNNING task."""
+        async with self._lock:
+            task = self._tasks.get(task_id)
+            if task is None or task.status in (TaskStatus.SUCCEEDED, TaskStatus.FAILED, TaskStatus.CANCELLED):
+                return False
+            if task.id in self._order:
+                self._order.remove(task.id)
+            task.status = TaskStatus.CANCELLED
+            task.completed_at = datetime.now(UTC)
+        self._logger.info("task_cancelled", task_id=task_id, name=task.name)
+        return True
 
-    def list_pending(self) -> list[Task]:
-        return [t for t in self._tasks.values() if t.status == "pending"]
+    async def status(self, task_id: str) -> QueuedTask | None:
+        """Return the task with the given id, or None if it does not exist."""
+        async with self._lock:
+            return self._tasks.get(task_id)
 
-    def list_completed(self) -> list[Task]:
-        return [t for t in self._tasks.values() if t.status == "completed"]
+    async def list(self, status: TaskStatus | None = None, limit: int = 50) -> list[QueuedTask]:
+        """List tasks, optionally filtered by status, newest first."""
+        async with self._lock:
+            tasks = list(self._tasks.values())
+        if status is not None:
+            tasks = [t for t in tasks if t.status == status]
+        tasks.sort(key=lambda t: t.created_at, reverse=True)
+        return tasks[:limit]
 
-    def list_running(self) -> list[Task]:
-        return [t for t in self._tasks.values() if t.status == "in_progress"]
-
-    def get(self, task_id: str) -> Task | None:
-        return self._tasks.get(task_id)
-
-    def all(self) -> list[Task]:
-        return list(self._tasks.values())
-
-    def set_max_concurrent(self, max_concurrent: int) -> None:
-        self._max_concurrent = max(1, max_concurrent)
-
-    @property
-    def running_count(self) -> int:
-        return self._running_count
+    async def stats(self) -> dict[str, Any]:
+        """Return per-status counts and the average queue wait time in seconds."""
+        async with self._lock:
+            tasks = list(self._tasks.values())
+        counts = {status: sum(1 for t in tasks if t.status == status) for status in TaskStatus}
+        now = datetime.now(UTC)
+        waits = [((t.started_at or now) - t.created_at).total_seconds() for t in tasks]
+        average_wait = sum(waits) / len(waits) if waits else 0.0
+        return {
+            "by_status": {s.value: c for s, c in counts.items()},
+            "total": len(tasks),
+            "average_wait_seconds": round(average_wait, 2),
+        }
 
 
-task_queue = TaskQueue()
+_scheduler: TaskScheduler | None = None
+_scheduler_lock = threading.Lock()
+
+
+async def get_scheduler() -> TaskScheduler:
+    """Return the process-wide TaskScheduler singleton."""
+    global _scheduler
+    if _scheduler is None:
+        with _scheduler_lock:
+            if _scheduler is None:
+                _scheduler = TaskScheduler()
+    return _scheduler

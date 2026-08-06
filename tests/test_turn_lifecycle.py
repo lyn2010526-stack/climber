@@ -1,8 +1,10 @@
 """Tests for Turn lifecycle integration with AgentEngine."""
 
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 import pytest_asyncio
-from unittest.mock import MagicMock, AsyncMock
+
 from app.core.agent_engine import AgentEngine, AgentSession
 from app.models.registry import ModelRegistry
 from app.tools import ToolRegistry

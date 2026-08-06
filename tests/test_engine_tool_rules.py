@@ -1,14 +1,11 @@
 """Tests for tool rules solver."""
 
-import pytest
 
 from app.core.engine.tool_rules import (
     HeartbeatController,
-    RulesCheckResult,
-    ToolCallRecord,
     ToolRule,
-    ToolRuleType,
     ToolRulesSolver,
+    ToolRuleType,
 )
 
 

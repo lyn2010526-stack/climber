@@ -8,6 +8,7 @@ injected into the model's system prompt.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Any
 
@@ -66,11 +67,9 @@ class MCPBridge:
         return f"{header}{tool_list}{footer}"
 
     async def disconnect_all(self):
-        for name, server in self._servers.items():
-            try:
+        for _name, server in self._servers.items():
+            with contextlib.suppress(Exception):
                 await server["client"].disconnect()
-            except Exception:
-                pass
         self._servers.clear()
         self._tool_docs.clear()
 

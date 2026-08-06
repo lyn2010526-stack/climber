@@ -8,11 +8,10 @@ Supports:
 
 from __future__ import annotations
 
-import asyncio
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
-from uuid import uuid4
+from typing import Any
 
 
 @dataclass

@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-import pytest
-
 from app.core.task_snapshot import (
     ContextSummary,
     PlanStep,
     StepStatus,
-    ToolCallStatus,
     TaskConstraints,
     TaskSnapshot,
     ToolCallRecord,
+    ToolCallStatus,
 )
 
 

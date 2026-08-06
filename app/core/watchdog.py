@@ -9,9 +9,11 @@ detects death, and restarts with exponential backoff.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import structlog
 
@@ -153,20 +155,16 @@ class Watchdog:
         self._running = False
         if self._monitor is not None and not self._monitor.done():
             self._monitor.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._monitor
-            except (asyncio.CancelledError, Exception):
-                pass
         self._monitor = None
 
         for supervised in self._tasks.values():
             supervised.stopped = True
             if supervised.task is not None and not supervised.task.done():
                 supervised.task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError, Exception):
                     await supervised.task
-                except (asyncio.CancelledError, Exception):
-                    pass
         logger.info("watchdog_stopped")
 
     def health(self) -> dict[str, Any]:

@@ -10,7 +10,6 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import os
 from typing import Any
 
@@ -50,8 +49,8 @@ async def start_telegram_bot() -> bool:
         from telegram.ext import (
             ApplicationBuilder,
             CommandHandler,
-            MessageHandler,
             ContextTypes,
+            MessageHandler,
             filters,
         )
     except ImportError as e:

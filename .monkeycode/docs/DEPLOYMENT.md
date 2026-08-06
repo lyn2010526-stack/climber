@@ -17,7 +17,6 @@
 APP_ENV=development
 APP_SECRET_KEY=your-secret-key-here
 APP_DEBUG=true
-
 # 数据库
 DATABASE_URL=sqlite+aiosqlite:///./data/climber.db
 
@@ -38,6 +37,8 @@ TELEGRAM_BOT_TOKEN=your-telegram-bot-token
 # 可选：ChromaDB
 CHROMA_DB_PATH=./data/chroma
 ```
+
+> `APP_SECRET_KEY` 必须稳定：用于 API Key 密文与 JWT 持久解密。认证启用或生产/预发环境缺失该密钥时应用会快速失败；更换密钥会导致已保存密文无法解密。
 
 ## 后端部署
 
@@ -118,29 +119,30 @@ server {
 
 ## 使用 Docker 部署
 
+> 当前 `Dockerfile` 为多阶段构建：先构建 `frontend-react` 生成 dist，再复制到 Python 运行镜像；后端单容器同时托管 API 与静态前端。
+
 ### Dockerfile
 
 ```dockerfile
+# stage 1: 前端构建
+FROM node:20-alpine AS frontend-build
+WORKDIR /app/frontend-react
+COPY frontend-react/package*.json ./
+RUN npm ci
+COPY frontend-react/ ./
+RUN npm run build
+
+# stage 2: Python 运行镜像
 FROM python:3.11-slim
-
 WORKDIR /app
-
-# 安装系统依赖
 RUN apt-get update && apt-get install -y --break-system-packages \
     chromium \
     && rm -rf /var/lib/apt/lists/*
-
-# 安装 Python 依赖
 COPY requirements.txt .
 RUN pip install --break-system-packages -r requirements.txt
-
-# 复制应用代码
 COPY . .
-
-# 暴露端口
+COPY --from=frontend-build /app/frontend-react/dist ./frontend-react/dist
 EXPOSE 8000
-
-# 启动命令
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 

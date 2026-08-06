@@ -10,7 +10,7 @@
 Authorization: Bearer <token>
 ```
 
-未认证请求在部分端点会降级为 `default-user` 访客模式。
+`ENABLE_AUTH=false`（local 模式）时，请求身份由 Principal dependency 统一生成为 `default-user`；认证启用时未认证请求返回 401，未认证 WebSocket 返回 4401。
 
 ## 通用响应格式
 
@@ -54,6 +54,20 @@ Authorization: Bearer <token>
 | POST | `/workflows/import` | 导入工作流（JSON/YAML） |
 | POST | `/workflows/{workflow_id}/export` | 导出工作流（POST） |
 | GET | `/workflows/{workflow_id}/export` | 导出工作流（GET） |
+
+### Prompt Templates
+
+| Method | Path | 描述 |
+|--------|------|------|
+| GET | `/prompt-templates` | 列出提示词模板 |
+| POST | `/prompt-templates` | 创建提示词模板 |
+| POST | `/prompt-templates/{template_id}` | 更新提示词模板 |
+| DELETE | `/prompt-templates/{template_id}` | 删除提示词模板 |
+| POST | `/prompt-templates/import` | 导入提示词模板 |
+| POST | `/prompt-templates/import-bulk` | 批量导入提示词模板 |
+| POST | `/prompt-templates/export-all` | 导出全部提示词模板 |
+
+> 提示词模板只暴露单一 `/api/v1/prompt-templates` 前缀；固定子路由（import/export）排在 `/{template_id}` 参数路由之前。
 
 ### Crews
 

@@ -11,10 +11,10 @@ from datetime import datetime
 from typing import Any
 
 import httpx
-
-from app.tools import tool
-from app.core.di import resolve as di_resolve
 from sqlalchemy import select
+
+from app.core.di import resolve as di_resolve
+from app.tools import tool
 
 _SAFE_EVAL_BUILTINS = {
     "len": len, "str": str, "int": int, "float": float,
@@ -43,31 +43,27 @@ def _safe_eval_math(expression: str, local_vars: dict[str, Any]) -> Any:
     for node in ast.walk(tree):
         if not isinstance(node, _SAFE_EXPR_NODES):
             raise ValueError(f"Unsafe math expression node: {type(node).__name__}")
-        if isinstance(node, ast.Name) and node.id not in _SAFE_EVAL_BUILTINS:
+        if isinstance(node, ast.Name) and node.id not in _SAFE_EVAL_BUILTINS and node.id not in local_vars:
             raise ValueError(f"Unsupported name in math expression: {node.id}")
     return eval(compile(tree, "<calculator>", "eval"), {"__builtins__": _SAFE_EVAL_BUILTINS}, local_vars)
 
 # Register browser tools so they are available in the tool registry
-from app.tools import browser_tools  # noqa: E402, F401
-
 # Register vision tools for screen capture, OCR, and interaction
-from app.tools import vision_tools  # noqa: E402, F401
-
 # Register vector memory tools for semantic memory search
-from app.tools import memory_vector_tools  # noqa: E402, F401
-
 # Register core memory tools for LLM self-directed core memory management
-from app.tools import core_memory_tools  # noqa: E402, F401
-
 # Register memory tools for LLM self-directed memory management
-from app.tools import memory_tools  # noqa: E402, F401
+from app.tools import (  # noqa: E402
+    browser_tools,  # noqa: E402, F401
+    core_memory_tools,  # noqa: E402, F401
+    memory_tools,  # noqa: E402, F401
+    memory_vector_tools,  # noqa: E402, F401
+    vision_tools,  # noqa: E402, F401
+)
 
 # Register core memory tools for LLM self-directed core memory management
-from app.tools import core_memory_tools  # noqa: E402, F401
 
 
 # Register browser tools so they are available in the tool registry
-from app.tools import browser_tools  # noqa: E402, F401
 
 
 @tool(description="Get the current date and time")
@@ -145,7 +141,7 @@ async def get_weather(city: str) -> str:
 @tool(description="Read content from a file on the local filesystem. Use when the user wants to view, analyze, or reference an existing file. Returns up to 10,000 characters.")
 async def read_file(path: str) -> str:
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             content = f.read()
         return content[:10000]
     except Exception as e:
@@ -301,7 +297,7 @@ async def edit_file(path: str, old_string: str, new_string: str) -> str:
         if mode == "plan":
             return f"PLAN mode preview (no changes applied):\n{diff}"
 
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             content = f.read()
         new_content = content.replace(old_string, new_string, 1)
         with open(path, "w", encoding="utf-8") as f:
@@ -318,7 +314,7 @@ async def file_diff(path: str, new_content: str) -> str:
     """Show unified diff for a file."""
     try:
         import difflib
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             old = f.read().splitlines()
         new = new_content.splitlines()
         diff = difflib.unified_diff(old, new, lineterm="")
@@ -367,15 +363,10 @@ async def file_info(path: str) -> str:
         return f"Error getting file info: {str(e)}"
 
 
-_group_collaboration_engine = None
-
-
 def _get_group_engine():
-    global _group_collaboration_engine
-    if _group_collaboration_engine is None:
-        from app.core.group_collaboration import group_collaboration_engine
-        _group_collaboration_engine = group_collaboration_engine
-    return _group_collaboration_engine
+    from app.core.group_collaboration import get_group_collaboration_engine
+
+    return get_group_collaboration_engine()
 
 
 @tool(
@@ -435,8 +426,8 @@ async def apply_patch(file_path: str, patch: str) -> str:
     """Apply a unified diff patch to a file."""
     try:
         import os
-        import tempfile
         import subprocess
+        import tempfile
 
         if not os.path.exists(file_path):
             return f"Error: File '{file_path}' does not exist"
@@ -544,11 +535,11 @@ async def container_exec(container: str, command: str, workdir: str = "") -> str
 async def auto_decompose_task(group_id: str, objective: str, max_steps: int = 5) -> str:
     """Decompose a complex task into sub-tasks and create them in the DAG."""
     try:
-        from app.core.group_collaboration import group_collaboration_engine
         model_registry = di_resolve("ModelRegistry")
+        import json
+
         from app.storage import async_session
         from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupTask
-        import json
 
         async with async_session() as db:
             group = (
@@ -741,7 +732,5 @@ async def suggest_fix(error_analysis: str, file_content: str = "") -> str:
         return json.dumps(result, ensure_ascii=False, indent=2)
     except Exception as e:
         return f"Error suggesting fix: {str(e)}"
-
-
 
 

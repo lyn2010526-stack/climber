@@ -13,20 +13,20 @@ import json
 import sqlite3
 import time
 import uuid
-from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
-from pydantic import BaseModel, Field
-
 import structlog
+from pydantic import BaseModel, Field
 
 logger = structlog.get_logger(__name__)
 
 
 def _generate_checkpoint_id() -> str:
     """Generate a lexicographically sortable checkpoint ID."""
-    return f"cp-{uuid.uuid4().hex[:24]}-{int(time.time() * 1000):014d}"
+    # Preserve the existing cp-<24 hex>-<14 digits> shape while putting time
+    # first so IDs created later sort after earlier IDs.
+    return f"cp-{time.time_ns():024x}-{int(uuid.uuid4().int % 10**14):014d}"
 
 
 class Checkpoint(BaseModel):
@@ -48,7 +48,7 @@ class Checkpoint(BaseModel):
     parent_id: str | None = None
     step: int = 0
     metadata: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -138,9 +138,16 @@ class InMemoryCheckpointSaver:
     ) -> list[Checkpoint]:
         thread_cps = self._thread_index.get(config.thread_id, [])
         checkpoints = [self._checkpoints[cid] for cid in thread_cps if cid in self._checkpoints]
-        checkpoints.sort(key=lambda c: c.step, reverse=True)
+        checkpoints.sort(key=lambda c: (c.step, c.created_at, c.id), reverse=True)
         if before:
-            checkpoints = [c for c in checkpoints if c.id < before]
+            cursor = self._checkpoints.get(before)
+            if cursor:
+                cursor_key = (cursor.step, cursor.created_at, cursor.id)
+                checkpoints = [
+                    checkpoint
+                    for checkpoint in checkpoints
+                    if (checkpoint.step, checkpoint.created_at, checkpoint.id) < cursor_key
+                ]
         return checkpoints[:limit]
 
     async def delete_thread(self, thread_id: str) -> int:
@@ -229,7 +236,10 @@ class SqliteCheckpointSaver:
                 ).fetchone()
             else:
                 row = conn.execute(
-                    "SELECT * FROM checkpoints WHERE thread_id = ? ORDER BY step DESC LIMIT 1",
+                    """
+                    SELECT * FROM checkpoints WHERE thread_id = ?
+                    ORDER BY step DESC, created_at DESC, id DESC LIMIT 1
+                    """,
                     (config.thread_id,),
                 ).fetchone()
             if row:
@@ -256,18 +266,25 @@ class SqliteCheckpointSaver:
             if before:
                 rows = conn.execute(
                     """
-                    SELECT * FROM checkpoints
-                    WHERE thread_id = ? AND id < ?
-                    ORDER BY step DESC LIMIT ?
+                    SELECT checkpoint.* FROM checkpoints AS checkpoint
+                    JOIN checkpoints AS cursor ON cursor.id = ?
+                    WHERE checkpoint.thread_id = ? AND (
+                        checkpoint.step < cursor.step OR
+                        (checkpoint.step = cursor.step AND checkpoint.created_at < cursor.created_at) OR
+                        (checkpoint.step = cursor.step AND checkpoint.created_at = cursor.created_at
+                         AND checkpoint.id < cursor.id)
+                    )
+                    ORDER BY checkpoint.step DESC, checkpoint.created_at DESC, checkpoint.id DESC
+                    LIMIT ?
                     """,
-                    (config.thread_id, before, limit),
+                    (before, config.thread_id, limit),
                 ).fetchall()
             else:
                 rows = conn.execute(
                     """
                     SELECT * FROM checkpoints
                     WHERE thread_id = ?
-                    ORDER BY step DESC LIMIT ?
+                    ORDER BY step DESC, created_at DESC, id DESC LIMIT ?
                     """,
                     (config.thread_id, limit),
                 ).fetchall()

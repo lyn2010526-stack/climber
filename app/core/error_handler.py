@@ -13,13 +13,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
 
-class ErrorSeverity(str, Enum):
+class ErrorSeverity(StrEnum):
     RETRY = "retry"           # Can retry with backoff
     FAILOVER = "failover"     # Switch to backup provider
     STOP = "stop"             # Stop immediately (auth failure, quota exceeded)
@@ -34,7 +34,7 @@ class APIError:
     retry_after: float = 0.0
 
     @classmethod
-    def from_status(cls, status: int, message: str = "") -> "APIError":
+    def from_status(cls, status: int, message: str = "") -> APIError:
         if status == 401:
             return cls(status, message or "Authentication failed", ErrorSeverity.STOP)
         elif status == 402:

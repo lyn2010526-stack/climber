@@ -6,8 +6,9 @@ to manage their own memories.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from app.core.hierarchical_memory import HierarchicalMemoryOrchestrator
 
@@ -112,10 +113,10 @@ class MemoryToolSet:
         content = arguments.get("content", "")
         if not content:
             return "Error: content is required"
-        
+
         importance = float(arguments.get("importance", 0.5))
         memory_type = arguments.get("memory_type", "episodic")
-        
+
         try:
             if memory_type == "episodic":
                 await self.orchestrator._persistent_memory_service.create_episodic_memory(
@@ -143,9 +144,9 @@ class MemoryToolSet:
         query = arguments.get("query", "")
         if not query:
             return "Error: query is required"
-        
-        limit = int(arguments.get("limit", 5))
-        
+
+        int(arguments.get("limit", 5))
+
         try:
             result = await self.orchestrator.retrieve_for_query(
                 user_id=user_id,
@@ -169,9 +170,10 @@ class MemoryToolSet:
         reason = arguments.get("reason", "no reason provided")
 
         try:
+            from sqlalchemy import delete as sa_delete
+
             from app.storage import async_session
             from app.storage.models_memory import EpisodicMemory
-            from sqlalchemy import delete as sa_delete
 
             async with async_session() as db:
                 result = await db.execute(

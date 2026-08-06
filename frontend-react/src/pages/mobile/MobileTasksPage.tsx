@@ -1,9 +1,15 @@
-import TaskMonitorPage from '../TaskMonitorPage';
+import { useCallback, lazy, Suspense } from 'react';
+
+const TaskMonitorPage = lazy(() => import('../TaskMonitorPage'));
 
 export function MobileTasksPage() {
+  const handleRefresh = useCallback(async () => {
+    // Implement pull-to-refresh functionality here
+  }, []);
+
   return (
-    <div className="mobile-page-container">
-      <div className="px-4 py-4">
+    <div className="mobile-page-container mobile-touch-feedback">
+      <div className="px-4 py-4 safe-area-top">
         <div className="mb-4">
           <h2 className="text-lg font-bold" style={{ color: 'var(--color-text-primary)' }}>
             任务监控
@@ -13,8 +19,10 @@ export function MobileTasksPage() {
           </p>
         </div>
       </div>
-      <div className="px-4">
-        <TaskMonitorPage />
+      <div className="px-4 mobile-content-shift-fix">
+        <Suspense fallback={null}>
+          <TaskMonitorPage />
+        </Suspense>
       </div>
     </div>
   );

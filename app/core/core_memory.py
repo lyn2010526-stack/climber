@@ -8,11 +8,9 @@
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
-from typing import Any
 
 import structlog
-from sqlalchemy import select, delete
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import delete, select
 
 from app.storage import async_session
 from app.storage.models_memory import CoreMemoryBlock

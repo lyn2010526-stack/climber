@@ -1,37 +1,56 @@
-import { useCallback } from 'react';
-import { ChatInterface } from '../components/agent/ChatInterface';
+import { useCallback, useState } from 'react';
+import { MobileChatInterface } from '../components/mobile/MobileChatInterface';
 import { useChat, type Message } from '../useChat';
 import { useWorkspaceStore } from '../store/workspace';
+import { cacheManager } from '../components/mobile/LazyImage';
 
 export function MobileChatPage() {
   const { activeSessionId } = useWorkspaceStore();
   const { messages, isStreaming, error, sendMessage, stopStreaming } = useChat(activeSessionId);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleSend = useCallback(async (message: string) => {
     if (!activeSessionId) {
       alert('请先创建或选择一个会话');
       return;
     }
+    
     await sendMessage(message);
+    
+    // Cache the last message for offline support
+    await cacheManager.set(`last_message_${activeSessionId}`, {
+      text: message,
+      timestamp: Date.now(),
+      sessionId: activeSessionId
+    });
   }, [activeSessionId, sendMessage]);
 
   const handleStop = useCallback(() => {
     stopStreaming();
   }, [stopStreaming]);
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      // Simulate refresh delay with smooth animation
+      await new Promise(resolve => setTimeout(resolve, 800));
+      // Refresh messages could be implemented here
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full">
-      <ChatInterface
+    <div className="flex flex-col h-full mobile-touch-feedback">
+      <MobileChatInterface
         messages={messages as Message[]}
         onSend={handleSend}
         onStop={handleStop}
         isLoading={isStreaming}
-        emptyStateTitle="开始新的对话"
-        emptyStateDescription="输入任何问题或任务，Climber 将为你自主执行。"
-        suggestions={['帮我分析代码', '写一个 Python 脚本', '解释这个错误']}
+        isRefreshing={isRefreshing}
       />
       {error && (
-        <div className="absolute bottom-20 left-4 right-4 bg-red-500/10 border border-red-500/30 rounded-2xl px-5 py-3 text-sm text-red-400 backdrop-blur-xl">
+        <div className="absolute bottom-20 left-4 right-4 bg-red-500/10 border border-red-500/30 rounded-2xl px-5 py-3 text-sm text-red-400 backdrop-blur-xl animate-fadeIn">
           {error}
         </div>
       )}

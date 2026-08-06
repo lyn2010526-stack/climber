@@ -1,7 +1,7 @@
 """Tests for AutoLoopEngine."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -47,7 +47,7 @@ async def test_task_completes(engine):
 async def test_cancel_task(engine):
     await engine.start()
     task_id = engine.start_task("test", max_steps=100)
-    record = engine._tasks[task_id]
+    engine._tasks[task_id]
     await engine.stop()  # This cancels running tasks
     status = await engine.get_status(task_id)
     assert status["status"] == AutoLoopTaskStatus.CANCELLED.value
@@ -79,7 +79,6 @@ async def test_get_status_missing(engine):
 
 @pytest.mark.asyncio
 async def test_recover_interrupted_sessions():
-    from app.storage import async_session as make_session
 
     test_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     test_session = async_sessionmaker(test_engine, class_=__import__("sqlalchemy.ext.asyncio", fromlist=["AsyncSession"]).AsyncSession, expire_on_commit=False)
@@ -87,7 +86,6 @@ async def test_recover_interrupted_sessions():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    from sqlalchemy import insert
     async with test_session() as db:
         db.add(AutoLoopTask(id="recover-1", objective="recover me", status="running", max_steps=5, current_step=2))
         db.add(AutoLoopTask(id="recover-2", objective="done", status="completed", max_steps=5, current_step=5))

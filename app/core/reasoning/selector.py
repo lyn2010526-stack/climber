@@ -48,9 +48,8 @@ class StrategySelector:
                 return ReasoningMode.DEBATE
             return ReasoningMode.TREE_OF_THOUGHT
 
-        if self._matches(task_lower, self.CREATIVE_KEYWORDS):
-            if ReasoningMode.TREE_OF_THOUGHT in available:
-                return ReasoningMode.TREE_OF_THOUGHT
+        if self._matches(task_lower, self.CREATIVE_KEYWORDS) and ReasoningMode.TREE_OF_THOUGHT in available:
+            return ReasoningMode.TREE_OF_THOUGHT
 
         return ReasoningMode.TREE_OF_THOUGHT
 

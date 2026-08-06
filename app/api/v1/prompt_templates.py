@@ -7,12 +7,11 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from app.core.prompt_engine.models import PromptTemplate
 from app.core.prompt_engine.template_repository import PromptTemplateRepository
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/prompt-templates", tags=["prompt-templates"])
+router = APIRouter()
 
 _repository: PromptTemplateRepository | None = None
 
@@ -55,16 +54,6 @@ async def list_templates(
     return [t.to_dict() for t in templates]
 
 
-@router.get("/{template_id}")
-async def get_template(template_id: str) -> dict[str, Any]:
-    """Get a specific template by ID."""
-    repo = get_repository()
-    template = repo.get(template_id)
-    if template is None:
-        raise HTTPException(status_code=404, detail="Template not found")
-    return template.to_dict()
-
-
 @router.post("")
 async def create_template(body: dict[str, Any]) -> dict[str, Any]:
     """Create a new prompt template."""
@@ -88,16 +77,63 @@ async def create_template(body: dict[str, Any]) -> dict[str, Any]:
     return template.to_dict()
 
 
+@router.post("/import")
+async def import_template(body: dict[str, Any]) -> dict[str, Any]:
+    """Import a template from JSON."""
+    repo = get_repository()
+    json_str = body.get("json", "")
+    if not json_str:
+        raise HTTPException(status_code=400, detail="JSON data is required")
+
+    template = repo.import_template(json_str)
+    if template is None:
+        raise HTTPException(status_code=400, detail="Failed to import template")
+
+    return {"status": "imported", "template": template.to_dict()}
+
+
+@router.post("/import-bulk")
+async def import_bulk(body: dict[str, Any]) -> dict[str, Any]:
+    """Import multiple templates from JSON array."""
+    repo = get_repository()
+    json_str = body.get("json", "")
+    if not json_str:
+        raise HTTPException(status_code=400, detail="JSON data is required")
+
+    imported = repo.import_bulk(json_str)
+    return {
+        "status": "imported",
+        "count": len(imported),
+        "templates": [t.to_dict() for t in imported],
+    }
+
+
+@router.get("/export-all")
+async def export_all() -> dict[str, str]:
+    """Export all custom templates as JSON."""
+    repo = get_repository()
+    return {"json": repo.export_all()}
+
+
+@router.get("/{template_id}")
+async def get_template(template_id: str) -> dict[str, Any]:
+    """Get a specific template by ID."""
+    repo = get_repository()
+    template = repo.get(template_id)
+    if template is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return template.to_dict()
+
+
 @router.put("/{template_id}")
 async def update_template(template_id: str, body: dict[str, Any]) -> dict[str, Any]:
     """Update an existing template."""
     repo = get_repository()
-
-    updates = {}
-    for key in ["name", "content", "description", "variables", "tags", "model_id"]:
-        if key in body:
-            updates[key] = body[key]
-
+    updates = {
+        key: body[key]
+        for key in ["name", "content", "description", "variables", "tags", "model_id"]
+        if key in body
+    }
     template = repo.update(template_id, **updates)
     if template is None:
         raise HTTPException(status_code=404, detail="Template not found or is built-in")
@@ -135,41 +171,8 @@ async def render_template(
     template = repo.get(template_id)
     if template is None:
         raise HTTPException(status_code=404, detail="Template not found")
-
     variables = body.get("variables") if body else None
-    rendered = template.render(variables)
-    return {"rendered": rendered, "template_id": template_id}
-
-
-@router.post("/import")
-async def import_template(body: dict[str, Any]) -> dict[str, Any]:
-    """Import a template from JSON."""
-    repo = get_repository()
-    json_str = body.get("json", "")
-    if not json_str:
-        raise HTTPException(status_code=400, detail="JSON data is required")
-
-    template = repo.import_template(json_str)
-    if template is None:
-        raise HTTPException(status_code=400, detail="Failed to import template")
-
-    return {"status": "imported", "template": template.to_dict()}
-
-
-@router.post("/import-bulk")
-async def import_bulk(body: dict[str, Any]) -> dict[str, Any]:
-    """Import multiple templates from JSON array."""
-    repo = get_repository()
-    json_str = body.get("json", "")
-    if not json_str:
-        raise HTTPException(status_code=400, detail="JSON data is required")
-
-    imported = repo.import_bulk(json_str)
-    return {
-        "status": "imported",
-        "count": len(imported),
-        "templates": [t.to_dict() for t in imported],
-    }
+    return {"rendered": template.render(variables), "template_id": template_id}
 
 
 @router.get("/{template_id}/export")
@@ -180,10 +183,3 @@ async def export_template(template_id: str) -> dict[str, str]:
     if exported is None:
         raise HTTPException(status_code=404, detail="Template not found")
     return {"json": exported}
-
-
-@router.get("/export-all")
-async def export_all() -> dict[str, str]:
-    """Export all custom templates as JSON."""
-    repo = get_repository()
-    return {"json": repo.export_all()}

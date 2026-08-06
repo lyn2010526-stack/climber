@@ -2,6 +2,7 @@
 """Generate PWA icons from Climber brand colors."""
 
 import os
+
 from PIL import Image, ImageDraw
 
 OUTPUT_DIR = "/workspace/agent-engine/frontend-react/public"
@@ -48,7 +49,7 @@ def draw_icon(size: int) -> Image.Image:
     radius = (size // 2 - padding) * 2 // 3
     cx = size // 2
     cy = size // 2
-    r = size // 2 - padding
+    size // 2 - padding
 
     draw.rounded_rectangle(
         [padding, padding, size - padding, size - padding],

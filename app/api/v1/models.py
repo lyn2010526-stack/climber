@@ -24,6 +24,7 @@ async def list_models() -> list[dict[str, Any]]:
     ]
     try:
         import httpx
+
         from app.config import settings
         base = getattr(settings, "ollama_base_url", "http://localhost:11434")
         async with httpx.AsyncClient(timeout=1.5) as client:

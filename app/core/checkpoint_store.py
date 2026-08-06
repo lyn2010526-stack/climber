@@ -1,16 +1,31 @@
-"""Checkpoint store with ancestor traversal.
-
-"""
+"""Checkpoint store with ancestor traversal."""
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
-from app.core.pregel_loop import Checkpoint, PendingWrite
-
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PendingWrite:
+    channel: str
+    value: Any
+    write_id: str
+    status: str = "pending"
+
+
+@dataclass
+class Checkpoint:
+    thread_id: str
+    step: int
+    channel_values: dict[str, Any]
+    channel_versions: dict[str, int]
+    versions_seen: dict[str, dict[str, int]]
+    pending_writes: list[PendingWrite]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class CheckpointStore:

@@ -22,18 +22,31 @@ from typing import Any
 
 import structlog
 
+from app.core.principal import Principal, get_context_principal
+from app.core.security_sandbox import PermissionLevel, PermissionOverlay, validate_tool_input
 from app.tools import ToolRegistry, tool_registry
-from app.core.security_sandbox import PermissionOverlay, PermissionLevel, validate_tool_input
 
 logger = structlog.get_logger()
 
 
 class ToolContext:
     """Context passed to tool executions."""
-    def __init__(self, user_id: str = "default-user", session_id: str = "", agent_id: str = ""):
+    def __init__(
+        self,
+        user_id: str,
+        session_id: str = "",
+        agent_id: str = "",
+        principal: Principal | None = None,
+    ):
         self.user_id = user_id
         self.session_id = session_id
         self.agent_id = agent_id
+        self.principal = principal
+
+    @classmethod
+    def from_principal(cls, principal: Principal) -> ToolContext:
+        """Create a tool context from an explicitly propagated principal."""
+        return cls(user_id=principal.subject_id, principal=principal)
 
 
 class ToolResult:
@@ -69,7 +82,7 @@ class ToolGateway:
 
     async def execute(self, tool_name: str, arguments: dict[str, Any], ctx: ToolContext | None = None) -> ToolResult:
         """Execute a tool with full security pipeline."""
-        ctx = ctx or ToolContext()
+        ctx = ctx or ToolContext.from_principal(get_context_principal())
         start = time.perf_counter()
 
         # 1. Tool enabled check
@@ -116,7 +129,7 @@ class ToolGateway:
                 if self.tool_prioritizer:
                     self.tool_prioritizer.record_outcome(tool_name, True, duration)
                 return ToolResult(output=str(result), duration_ms=duration)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_error = f"Timeout after {timeout}s"
                 if attempt < max_retries:
                     await asyncio.sleep(0.5 * (attempt + 1))
@@ -162,4 +175,3 @@ class ToolGateway:
 
 # Global gateway instance
 tool_gateway = ToolGateway(registry=tool_registry)
-

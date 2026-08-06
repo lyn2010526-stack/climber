@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import os
-import sys
 import tempfile
-from unittest.mock import patch
 
 import pytest
 
@@ -17,17 +15,15 @@ os.environ["CLIMBER_SANDBOX_WORKDIR"] = tempfile.mkdtemp(prefix="climber_test_")
 # ─── Import modules under test ──────────────────────────────────────────────
 
 from app.core.security_sandbox import (
-    SecuritySandbox,
     SandboxConfig,
+    SecuritySandbox,
     validate_command_allowlist,
 )
+from app.tools.builtins import _safe_eval_math, calculator
 from app.tools.native_tools import (
     _validate_command_safety,
     _validate_path_within_workspace,
-    _get_workspace_root,
 )
-from app.tools.builtins import calculator, _safe_eval_math
-
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -228,11 +224,9 @@ class TestContainerNameValidation:
 
     def test_container_exec_validates_name(self, workspace_root):
         """container_exec should validate container name before execution."""
-        import asyncio
         # This will fail because docker is not available, but the validation
         # should happen before the docker call
         # We can test the validation logic directly
-        from app.tools.builtins import container_exec
         # Test that the pattern matching works
         import re
         container_pattern = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_-]+$')

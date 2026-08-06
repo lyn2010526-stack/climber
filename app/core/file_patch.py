@@ -10,24 +10,23 @@ import contextvars
 import difflib
 import re
 from pathlib import Path
-from typing import Optional
 
 import structlog
 
 logger = structlog.get_logger()
 
 # Context-local current agent mode (PLAN / ACT / etc.)
-_current_agent_mode: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+_current_agent_mode: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "current_agent_mode", default=None
 )
 
 
-def set_current_agent_mode(mode: Optional[str]) -> None:
+def set_current_agent_mode(mode: str | None) -> None:
     """Set the current agent mode for tool execution context."""
     _current_agent_mode.set(mode)
 
 
-def get_current_agent_mode() -> Optional[str]:
+def get_current_agent_mode() -> str | None:
     """Get the current agent mode."""
     return _current_agent_mode.get()
 
@@ -78,7 +77,7 @@ class FilePatchService:
             if not Path(file_path).exists():
                 return False, f"File not found: {file_path}"
 
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 old_content = f.read()
 
             new_content = FilePatchService._apply_unified_diff(old_content, patch)
@@ -101,7 +100,7 @@ class FilePatchService:
         Returns (diff_string, message).
         """
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
             if old_string not in content:
@@ -128,7 +127,7 @@ class FilePatchService:
             if not Path(file_path).exists():
                 return False, f"File not found: {file_path}"
 
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
             if old_string not in content:
@@ -157,7 +156,7 @@ class FilePatchService:
             return False, f"Error validating edit: {str(e)}"
 
     @staticmethod
-    def _apply_unified_diff(old_content: str, patch: str) -> Optional[str]:
+    def _apply_unified_diff(old_content: str, patch: str) -> str | None:
         """Apply a unified diff patch to content using pure Python.
 
         Parses standard unified diff format and applies hunks.
@@ -212,9 +211,7 @@ class FilePatchService:
             new_hunk_lines = []
 
             for line in hunk["lines"]:
-                if line.startswith(" "):
-                    new_hunk_lines.append(line[1:] + line_ending)
-                elif line.startswith("+"):
+                if line.startswith(" ") or line.startswith("+"):
                     new_hunk_lines.append(line[1:] + line_ending)
 
             end = min(old_start + old_count, len(result_lines))

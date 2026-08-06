@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from app.core.prompt_engine.models import (
     ModelAdaptation,

@@ -1,6 +1,5 @@
 """Tests for memory blocks system."""
 
-import pytest
 
 from app.core.engine.memory_blocks import (
     BlockType,

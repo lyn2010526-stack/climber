@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import json
-import uuid
-from typing import Any
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.models.registry import ModelRegistry
-from app.tools import tool_registry, register_builtins
+from app.tools import register_builtins
 
 
 class MockOpenAIResponse:
@@ -120,9 +117,10 @@ def test_full_chat_flow_with_tool(client: TestClient):
     """Test: create agent -> session -> chat with tool call -> session history."""
     import httpx
 
+    from app.api.v1.chat import get_engine
+
     # Use BYPASS permission mode for tests to avoid ASK blocking
     from app.core.permission_rules import PermissionConfig, PermissionMode
-    from app.api.v1.chat import get_engine
     engine = get_engine()
     engine._default_permission_config = PermissionConfig(mode=PermissionMode.BYPASS)
 
@@ -144,7 +142,6 @@ def test_full_chat_flow_with_tool(client: TestClient):
 
     # Mock the httpx call - first returns tool call, second returns final answer
     call_count = 0
-    use_stream = {"value": True}
 
     def side_effect(*args, **kwargs):
         nonlocal call_count
@@ -164,8 +161,6 @@ def test_full_chat_flow_with_tool(client: TestClient):
             )
         return MockStreamingOpenAIResponse(content="The answer is 4.")
 
-    import httpx
-    from contextlib import asynccontextmanager
 
     responses = [
         MockStreamingOpenAIResponse(
@@ -181,7 +176,7 @@ def test_full_chat_flow_with_tool(client: TestClient):
         ),
         MockStreamingOpenAIResponse(content="The answer is 4."),
     ]
-    response_iter = iter(responses)
+    iter(responses)
 
     _send_iter = iter(responses)
 
@@ -269,8 +264,9 @@ def test_health_endpoint(client: TestClient):
 
 def test_error_handling_middleware():
     """Test that 500 errors return proper JSON without exposing internals."""
-    from app.main import app
     from fastapi import HTTPException
+
+    from app.main import app
 
     @app.get('/_test/internal-error')
     async def trigger_error():

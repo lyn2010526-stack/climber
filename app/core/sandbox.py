@@ -16,6 +16,7 @@ import asyncio
 import os
 import re
 import resource
+import shlex
 import shutil
 import tempfile
 from dataclasses import dataclass, field
@@ -128,7 +129,7 @@ class SandboxExecutor:
                 env.pop("http_proxy", None)
                 env.pop("https_proxy", None)
 
-            args = command.split()
+            args = shlex.split(command)
             if not args:
                 return "BLOCKED: empty command"
 
@@ -146,7 +147,7 @@ class SandboxExecutor:
                     proc.communicate(),
                     timeout=effective_timeout,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 await proc.wait()
                 return f"TIMEOUT: Command exceeded {effective_timeout}s limit"

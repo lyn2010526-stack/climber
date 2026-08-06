@@ -16,7 +16,6 @@ import asyncio
 import os
 import shlex
 import subprocess
-from typing import Any
 
 import structlog
 
@@ -75,7 +74,7 @@ async def native_run(command: str, timeout: int = 120, cwd: str | None = None) -
         if proc.returncode != 0:
             output += f"\n[exit code: {proc.returncode}]"
         return output if output else "Command completed (no output)"
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return f"TIMEOUT: Command exceeded {timeout}s limit"
     except Exception as e:
         return f"Error: {str(e)}"
@@ -88,7 +87,7 @@ async def native_read_file(path: str) -> str:
     if not valid:
         return f"Error: {reason}"
     try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             content = f.read()
         return content[:50000]
     except Exception as e:
@@ -198,7 +197,7 @@ async def process_video(command: str) -> str:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
         output = stderr.decode("utf-8", errors="replace")[:5000]
         return output if output else "Video processing completed"
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return "TIMEOUT: Video processing exceeded 5 minutes"
     except Exception as e:
         return f"Error: {str(e)}"
@@ -222,7 +221,7 @@ async def process_image(command: str) -> str:
         if err:
             output += f"\n{err}"
         return output if output else "Image processing completed"
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return "TIMEOUT: Image processing exceeded 60s"
     except Exception as e:
         return f"Error: {str(e)}"
@@ -232,8 +231,9 @@ async def process_image(command: str) -> str:
 async def native_web_search(query: str, num_results: int = 10) -> str:
     """Search the web with enhanced result count (native mode only)."""
     try:
-        import httpx
         import re
+
+        import httpx
         url = "https://html.duckduckgo.com/html/"
         resp = await httpx.AsyncClient(timeout=15).post(url, data={"q": query})
         results = re.findall(
@@ -283,7 +283,7 @@ _DANGEROUS_SHELL_PATTERNS = [
 
 def _validate_command_safety(command: str) -> tuple[bool, str]:
     """Check if a shell command contains dangerous patterns.
-    
+
     Returns (is_safe, reason) where reason explains the result.
     """
     for pattern in _DANGEROUS_SHELL_PATTERNS:

@@ -4,7 +4,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections.abc import Callable
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -53,7 +55,3 @@ class SequentialChain:
         for chain in self.chains:
             result = await chain.run(result, session)
         return {k: result.get(k) for k in self.output_variables if k in result}
-
-
-# Import asyncio at top
-import asyncio

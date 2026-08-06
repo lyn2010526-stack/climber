@@ -5,16 +5,16 @@ Revision ID: 52310c24d4c8
 Revises: dd8212a8f22a
 Create Date: 2026-07-28 06:50:37.331201
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 revision: str = '52310c24d4c8'
-down_revision: Union[str, None] = 'dd8212a8f22a'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = 'dd8212a8f22a'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

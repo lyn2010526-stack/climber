@@ -7,11 +7,11 @@ goal drift, tool misuse.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class DefectType(str, Enum):
+class DefectType(StrEnum):
     REDUNDANT_CALL = "redundant_call"
     HALLUCINATION_RISK = "hallucination_risk"
     CONTEXT_OVERFLOW = "context_overflow"

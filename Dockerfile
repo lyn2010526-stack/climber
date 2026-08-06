@@ -1,3 +1,11 @@
+FROM node:22-slim AS frontend-builder
+
+WORKDIR /frontend
+COPY frontend-react/package.json frontend-react/package-lock.json ./
+RUN npm ci
+COPY frontend-react/ ./
+RUN npm run build
+
 FROM python:3.11-slim AS builder
 
 WORKDIR /app
@@ -23,6 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /root/.local /root/.local
 COPY . .
+COPY --from=frontend-builder /frontend/dist /app/frontend-react/dist
 
 ENV PATH=/root/.local/bin:$PATH
 

@@ -1,16 +1,16 @@
 """Tests for the consolidated skill system, memory manager, and MCP marketplace."""
 
-import os
 import tempfile
-import pytest
 from unittest.mock import MagicMock, patch
 
-from app.skills import SkillCategory, SkillRegistry, skill_registry
-from app.skills.memory_manager import (
-    MemoryEntry, MemoryType, PersistentMemoryManager,
-)
-from app.skills.mcp_marketplace import MCPMarketplace, BUILTIN_MCP_SERVERS, mcp_marketplace
+import pytest
 
+from app.skills import SkillCategory, skill_registry
+from app.skills.mcp_marketplace import BUILTIN_MCP_SERVERS, mcp_marketplace
+from app.skills.memory_manager import (
+    MemoryType,
+    PersistentMemoryManager,
+)
 
 # ── Consolidated Skill Registry Tests ──
 

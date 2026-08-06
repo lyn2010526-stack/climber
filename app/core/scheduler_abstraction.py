@@ -11,16 +11,17 @@ import logging
 import time
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Awaitable, Callable
+from enum import Enum, StrEnum
+from typing import Any
 
 from app.core.task_state_machine import TaskState
 
 logger = logging.getLogger(__name__)
 
 
-class AgentRole(str, Enum):
+class AgentRole(StrEnum):
     """Roles that agents can assume in a multi-agent system."""
 
     ORCHESTRATOR = "orchestrator"
@@ -268,7 +269,7 @@ class MultiAgentScheduler:
                     task.state = TaskState.FAILED
                     agent.total_tasks_failed += 1
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 task.error = f"Task timed out after {task.timeout_seconds}s"
                 task.state = TaskState.FAILED
                 agent.total_tasks_failed += 1

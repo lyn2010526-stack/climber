@@ -7,7 +7,8 @@ from typing import Any
 from fastapi import APIRouter, Request
 from sqlalchemy import select
 
-from app.api.v1.helpers import DEFAULT_USER, payload as _payload
+from app.api.v1.helpers import DEFAULT_USER
+from app.api.v1.helpers import payload as _payload
 from app.storage import async_session
 from app.storage.models_eval import EvalDataset, EvalRun
 

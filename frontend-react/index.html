@@ -4,23 +4,58 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/icon-180x180.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0" />
     <meta name="theme-color" content="#863BFF" />
     <meta name="description" content="Local-first AI Agent Workbench" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Climber" />
-    <link rel="manifest" href="/manifest.json" />
+    <!-- iOS viewport meta for notch support -->
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="msapplication-tap-highlight" content="no" />
+    
+    <!-- Android status bar color -->
+    <meta name="background-color" content="#000000" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    
+    <meta name="manifest" href="/manifest.json" />
     <title>Climber - AI Agent Platform</title>
+    
+    <!-- iOS Safari PWA settings -->
+    <link rel="apple-touch-startup-image" href="/splash-750x1294.png" media="screen and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" />
+    <link rel="apple-touch-startup-image" href="/splash-1125x2436.png" media="screen and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 2)" />
+    <link rel="apple-touch-startup-image" href="/splash-1284x2778.png" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)" />
+    <link rel="apple-touch-startup-image" href="/splash-768x1024.png" media="screen and (device-width: 1024px) and (device-height: 768px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
+      // Service Worker registration for PWA offline support
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').catch(() => {});
         });
+      }
+      
+      // iOS viewport height fix
+      const setIOSViewport = () => {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+      };
+      
+      setIOSViewport();
+      window.addEventListener('resize', setIOSViewport);
+      
+      // Safe area detection
+      function getSafeAreaInsets() {
+        if (window.screen?..orientation?.type) {
+          return {
+            top: window.screen.orientation.type.includes('portrait') ? 44 : 20,
+            bottom: window.screen.orientation.type.includes('portrait') ? 34 : 20
+          };
+        }
+        return { top: 44, bottom: 34 };
       }
     </script>
   </body>

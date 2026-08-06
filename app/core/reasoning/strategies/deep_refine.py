@@ -14,13 +14,11 @@ Architecture:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 from typing import Any
 
 import structlog
-from pydantic import ValidationError
 
 from app.core.reasoning.base import (
     Candidate,
@@ -28,7 +26,6 @@ from app.core.reasoning.base import (
     ReasoningRequest,
     RoundTrace,
 )
-from app.core.reasoning.components.coverage import CoverageChecker
 from app.core.reasoning.components.reflection_memory import ReflectionMemory
 from app.core.reasoning.components.scorer import CandidateScorer
 from app.core.reasoning.components.self_refine import SelfRefineLoop, _parse_critique_response
@@ -375,9 +372,7 @@ class DeepRefineStrategy:
         """Check if refinement should stop."""
         if critique.passed and critique.average_score >= 4.0:
             return True
-        if critique.average_score >= 4.5 and critique.critical_count == 0:
-            return True
-        return False
+        return bool(critique.average_score >= 4.5 and critique.critical_count == 0)
 
     def _get_model(self, request: ReasoningRequest, model_registry: Any) -> Any:
         """Get model adapter from registry."""

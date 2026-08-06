@@ -9,6 +9,7 @@ possible: without it every session leaks a Chromium process.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -177,10 +178,8 @@ class BrowserPool:
     async def _stop_sweeper(self) -> None:
         if self._sweeper is not None and not self._sweeper.done():
             self._sweeper.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._sweeper
-            except (asyncio.CancelledError, Exception):
-                pass
         self._sweeper = None
 
     # ── introspection ──────────────────────────────────────────────────────

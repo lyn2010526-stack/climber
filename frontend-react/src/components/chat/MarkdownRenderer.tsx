@@ -74,7 +74,7 @@ function CodeBlock({ children, className: codeClassName }: { children?: React.Re
   const [copied, setCopied] = React.useState(false);
   const [showLineNumbers, setShowLineNumbers] = React.useState(false);
   const match = /language-(\w+)/.exec(codeClassName || '');
-  const language = match ? match[1] : '';
+  const language = match ? match[1] : undefined;
   const codeText = String(children).replace(/\n$/, '');
   const lines = codeText.split('\n');
 

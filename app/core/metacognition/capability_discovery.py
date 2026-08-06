@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -125,18 +125,17 @@ class CapabilityDiscovery:
                 )
 
         # Pattern: database access
-        if any(kw in missing_lower for kw in ["database", "db", "query", "sql"]):
-            if "run_command" in tool_set:
-                return ComposedCapability(
-                    name=self._make_name(missing),
-                    description=f"Composed capability: {missing} (via CLI)",
-                    tool_chain=[
-                        {"tool": "run_command", "purpose": "Execute database CLI command"},
-                        {"tool": "read_file", "purpose": "Read query results"},
-                    ],
-                    inputs={"query": {"type": "string"}},
-                    output_description="Database query results",
-                )
+        if any(kw in missing_lower for kw in ["database", "db", "query", "sql"]) and "run_command" in tool_set:
+            return ComposedCapability(
+                name=self._make_name(missing),
+                description=f"Composed capability: {missing} (via CLI)",
+                tool_chain=[
+                    {"tool": "run_command", "purpose": "Execute database CLI command"},
+                    {"tool": "read_file", "purpose": "Read query results"},
+                ],
+                inputs={"query": {"type": "string"}},
+                output_description="Database query results",
+            )
 
         return None
 

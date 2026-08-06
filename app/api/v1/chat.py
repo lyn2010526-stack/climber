@@ -13,6 +13,7 @@ from app.core.agent_engine import AgentEngine
 from app.core.api_key_crypto import decrypt_api_key
 from app.core.auth import get_current_user
 from app.core.di import resolve as di_resolve
+from app.core.recovery import RecoveryManager
 from app.storage import async_session
 from app.storage.database import Agent as AgentModel
 from app.storage.database import ApiKey as ApiKeyModel
@@ -74,7 +75,7 @@ async def chat(
                     key_result = await db.execute(
                         select(ApiKeyModel)
                         .where(ApiKeyModel.provider == provider)
-                        .where(ApiKeyModel.is_active == True)
+                        .where(ApiKeyModel.is_active)
                     )
                     key_row = key_result.scalar_one_or_none()
                     if key_row:
@@ -98,6 +99,16 @@ async def chat(
             tools=tool_ids,
             session_id=session_id,
         )
+        try:
+            await RecoveryManager().restore_session(session)
+        except Exception as e:
+            import structlog
+
+            structlog.get_logger().warning(
+                "chat_session_recovery_failed",
+                session_id=session_id,
+                error=str(e),
+            )
         engine._sessions[session_id] = session
 
     if session.user_id and session.user_id != user_id:

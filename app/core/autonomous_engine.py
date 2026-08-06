@@ -7,18 +7,23 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import logging
 import time
-from enum import Enum
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 from app.core import AgentEvent, AgentEventType
 from app.core.agent_engine import AgentEngine, AgentSession
 from app.core.goal_guard import CorrectionStrategy, GoalGuard
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -85,7 +90,6 @@ class AutonomousEngine:
     """
 
     def __init__(self, engine: AgentEngine | None = None):
-        from app.tools import ToolRegistry
         if engine is not None:
             self.agent_engine = engine
         else:
@@ -153,7 +157,7 @@ class AutonomousEngine:
             yield AgentEvent(type=AgentEventType.ERROR, data={"error": "Max concurrent sessions reached"})
             return
 
-        guard = self._get_or_create_guard(session, task)
+        self._get_or_create_guard(session, task)
 
         async for event in self.agent_engine.run(session, task):
             yield event
@@ -213,10 +217,8 @@ class AutonomousEngine:
         task = self._running_sessions.pop(session_id, None)
         if task and not task.done():
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
         self._goal_guards.pop(session_id, None)
 
     def get_running_sessions(self) -> list[str]:

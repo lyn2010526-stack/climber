@@ -13,7 +13,7 @@ import os
 import subprocess
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import structlog
@@ -21,7 +21,7 @@ import structlog
 logger = structlog.get_logger()
 
 
-class FileCategory(str, Enum):
+class FileCategory(StrEnum):
     SOURCE = "source"
     TEST = "test"
     SCRATCH = "scratch"

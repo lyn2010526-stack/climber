@@ -28,20 +28,24 @@ export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: stri
           backdropFilter: 'blur(24px) saturate(180%)',
           WebkitBackdropFilter: 'blur(24px) saturate(180%)',
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          /* iOS Safe Area */
+          paddingInline: 'env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px)',
         }}
       >
-        <div className="flex items-center justify-around h-14 px-2">
+        <div className="flex items-center justify-around h-[64px] px-2">
           {MOBILE_TABS.map(({ id, icon: Icon, label }) => {
             const isActive = currentPage === id;
             return (
               <button
                 key={id}
                 onClick={() => onNavigate(id)}
-                className="relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all duration-200 active:scale-[0.92]"
+                className="mobile-touch-target relative flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all duration-200 active:scale-[0.92] hover:active:scale-[0.94]"
                 style={{
                   color: isActive ? 'var(--color-accent)' : 'var(--color-text-muted)',
                   backgroundColor: isActive ? 'var(--color-accent-subtle)' : 'transparent',
                 }}
+                aria-label={label}
+                aria-current={isActive ? 'page' : undefined}
               >
                 {isActive && (
                   <div
@@ -62,7 +66,7 @@ export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: stri
                   )}
                 </div>
                 <span
-                  className="text-[10px] font-medium truncate"
+                  className="text-[10px] font-medium truncate max-w-full"
                   style={{ color: isActive ? 'var(--color-accent)' : 'var(--color-text-muted)' }}
                 >
                   {label}
@@ -73,11 +77,12 @@ export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: stri
 
           <button
             onClick={() => setMoreOpen(true)}
-            className="relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all duration-200 active:scale-[0.92]"
+            className="mobile-touch-target relative flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all duration-200 active:scale-[0.92] hover:active:scale-[0.94]"
             style={{
               color: currentPage === 'settings' ? 'var(--color-accent)' : 'var(--color-text-muted)',
               backgroundColor: currentPage === 'settings' ? 'var(--color-accent-subtle)' : 'transparent',
             }}
+            aria-label="更多"
           >
             {currentPage === 'settings' && (
               <div
@@ -114,7 +119,7 @@ export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: stri
                     onNavigate(id);
                     setMoreOpen(false);
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 active:scale-[0.98]"
+                  className="w-full mobile-text-button flex items-center gap-3 rounded-2xl transition-all duration-200 active:scale-[0.98]"
                   style={{
                     color: currentPage === id ? 'var(--color-accent)' : 'var(--color-text-primary)',
                     backgroundColor: currentPage === id ? 'var(--color-accent-subtle)' : 'var(--color-bg-surface-2)',

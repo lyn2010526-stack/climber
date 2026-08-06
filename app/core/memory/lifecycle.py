@@ -6,12 +6,12 @@ Handles the complete memory lifecycle: write -> index -> retrieve -> decay -> fo
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, String, select, delete, and_, update
+from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, String, and_, select
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.storage import Base, async_session
@@ -80,8 +80,8 @@ class MemoryRecord(Base):
     days_since_access: Mapped[int] = mapped_column(Integer, default=0)
     access_count: Mapped[int] = mapped_column(Integer, default=0)
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     forgotten_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -108,7 +108,7 @@ class MemoryLifecycleManager:
     ) -> MemoryWriteResult:
         """Create a new memory entry."""
         memory_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         async with async_session() as db:
             record = MemoryRecord(
                 id=memory_id,
@@ -147,9 +147,9 @@ class MemoryLifecycleManager:
             record.metadata_ = {
                 **(record.metadata_ or {}),
                 "indexed": True,
-                "indexed_at": datetime.now(timezone.utc).isoformat(),
+                "indexed_at": datetime.now(UTC).isoformat(),
             }
-            record.updated_at = datetime.now(timezone.utc)
+            record.updated_at = datetime.now(UTC)
             await db.commit()
         logger.info("memory_indexed", memory_id=memory_id)
         return True
@@ -169,8 +169,8 @@ class MemoryLifecycleManager:
             stmt = select(MemoryRecord).where(
                 and_(
                     MemoryRecord.user_id == user_id,
-                    MemoryRecord.is_archived == False,
-                    MemoryRecord.is_forgotten == False,
+                    ~MemoryRecord.is_archived,
+                    ~MemoryRecord.is_forgotten,
                 )
             )
             if agent_id:
@@ -196,7 +196,7 @@ class MemoryLifecycleManager:
                 scored.append((score, record))
 
             scored.sort(key=lambda x: x[0], reverse=True)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             results = []
             for score, record in scored[:limit]:
@@ -225,8 +225,8 @@ class MemoryLifecycleManager:
             stmt = select(MemoryRecord).where(
                 and_(
                     MemoryRecord.user_id == user_id,
-                    MemoryRecord.is_archived == False,
-                    MemoryRecord.is_forgotten == False,
+                    ~MemoryRecord.is_archived,
+                    ~MemoryRecord.is_forgotten,
                 )
             )
             if agent_id:
@@ -242,14 +242,14 @@ class MemoryLifecycleManager:
                     avg_importance_after=0.0,
                 )
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             total_before = 0.0
             total_after = 0.0
             decayed = 0
 
             for record in records:
                 if record.last_accessed_at:
-                    delta = now - record.last_accessed_at.replace(tzinfo=timezone.utc) if record.last_accessed_at.tzinfo is None else now - record.last_accessed_at
+                    delta = now - record.last_accessed_at.replace(tzinfo=UTC) if record.last_accessed_at.tzinfo is None else now - record.last_accessed_at
                     days = delta.days
                 else:
                     days = 0
@@ -281,13 +281,13 @@ class MemoryLifecycleManager:
             if not record:
                 return False
             record.is_forgotten = True
-            record.forgotten_at = datetime.now(timezone.utc)
+            record.forgotten_at = datetime.now(UTC)
             record.metadata_ = {
                 **(record.metadata_ or {}),
                 "forgotten": True,
-                "forgotten_at": datetime.now(timezone.utc).isoformat(),
+                "forgotten_at": datetime.now(UTC).isoformat(),
             }
-            record.updated_at = datetime.now(timezone.utc)
+            record.updated_at = datetime.now(UTC)
             await db.commit()
         logger.info("memory_forgotten", memory_id=memory_id)
         return True
@@ -300,14 +300,14 @@ class MemoryLifecycleManager:
     ) -> ArchiveReport:
         """Move old, low-importance memories to archive state."""
         async with async_session() as db:
-            cutoff = datetime.now(timezone.utc).timestamp() - (threshold_days * 86400)
-            cutoff_dt = datetime.fromtimestamp(cutoff, tz=timezone.utc)
+            cutoff = datetime.now(UTC).timestamp() - (threshold_days * 86400)
+            cutoff_dt = datetime.fromtimestamp(cutoff, tz=UTC)
 
             stmt = select(MemoryRecord).where(
                 and_(
                     MemoryRecord.user_id == user_id,
-                    MemoryRecord.is_archived == False,
-                    MemoryRecord.is_forgotten == False,
+                    ~MemoryRecord.is_archived,
+                    ~MemoryRecord.is_forgotten,
                     MemoryRecord.created_at < cutoff_dt,
                     MemoryRecord.importance < 0.3,
                 )
@@ -318,7 +318,7 @@ class MemoryLifecycleManager:
             records = result.scalars().all()
 
             archived = 0
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             for record in records:
                 record.is_archived = True
                 record.archived_at = now
@@ -336,8 +336,8 @@ class MemoryLifecycleManager:
             remaining_stmt = select(MemoryRecord).where(
                 and_(
                     MemoryRecord.user_id == user_id,
-                    MemoryRecord.is_archived == False,
-                    MemoryRecord.is_forgotten == False,
+                    ~MemoryRecord.is_archived,
+                    ~MemoryRecord.is_forgotten,
                 )
             )
             remaining_result = await db.execute(remaining_stmt)

@@ -183,12 +183,11 @@ class ContextCompressor:
             # Keep sentences with important keywords
             for s in sentences[1:-1]:
                 words = set(s.lower().split())
-                if words - self._stop_words:
-                    if any(kw in s.lower() for kw in [
-                        "important", "must", "critical", "key", "note",
-                        "result", "found", "error", "issue", "fix",
-                    ]):
-                        key_sentences.append(s)
+                if words - self._stop_words and any(kw in s.lower() for kw in [
+                    "important", "must", "critical", "key", "note",
+                    "result", "found", "error", "issue", "fix",
+                ]):
+                    key_sentences.append(s)
         key_sentences.append(sentences[-1])
 
         return " ".join(key_sentences)

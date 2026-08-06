@@ -10,7 +10,7 @@ import json
 import sqlite3
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.task_state_machine import TaskState
@@ -47,8 +47,8 @@ class Task:
     goal: str = ""
     status: str = TaskState.PENDING.value
     sub_tasks: list[SubTask] = field(default_factory=list)
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     max_iterations: int = 100
     current_iteration: int = 0
     timeout_seconds: int = 3600
@@ -96,7 +96,7 @@ class TaskStore:
         self._conn.commit()
 
     def save(self, task: Task) -> None:
-        task.updated_at = datetime.now(timezone.utc).isoformat()
+        task.updated_at = datetime.now(UTC).isoformat()
         self._conn.execute(
             """
             INSERT OR REPLACE INTO tasks

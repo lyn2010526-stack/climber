@@ -6,14 +6,17 @@
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from enum import StrEnum
+from typing import TYPE_CHECKING, Any
 
-from app.core import AgentEventType
 from app.core.exceptions import InvalidStateTransitionError
 
+if TYPE_CHECKING:
+    from app.core import SessionStatus
 
-class TaskState(str, Enum):
+
+class TaskState(StrEnum):
     """Task lifecycle states.
 
     Single source of truth for task state across the engine.
@@ -47,7 +50,7 @@ TRANSITIONS: dict[TaskState, list[TaskState]] = {
 }
 
 
-def to_session_status(state: TaskState) -> "SessionStatus":
+def to_session_status(state: TaskState) -> SessionStatus:
     """Map TaskState to the view-level SessionStatus enum."""
     from app.core import SessionStatus
 

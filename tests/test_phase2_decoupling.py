@@ -20,13 +20,13 @@ from app.core.exceptions import (
     SubagentError,
     ToolExecutionError,
 )
+from app.core.scheduler_abstraction import TaskState as SchedulerTaskState
 from app.core.task_state_machine import (
     StateTransitionError,
     TaskState,
     TaskStateMachine,
     to_session_status,
 )
-from app.core.scheduler_abstraction import TaskState as SchedulerTaskState
 
 
 class TestExceptionHierarchy:
@@ -223,7 +223,8 @@ class TestProtocolClasses:
 
     def test_protocols_are_protocol_type(self):
         from typing import Protocol
-        from app.core.protocols import MemoryBackend, CheckpointStore, ToolExecutor, ModelProvider
+
+        from app.core.protocols import CheckpointStore, MemoryBackend, ModelProvider, ToolExecutor
         assert issubclass(MemoryBackend, Protocol)
         assert issubclass(CheckpointStore, Protocol)
         assert issubclass(ToolExecutor, Protocol)

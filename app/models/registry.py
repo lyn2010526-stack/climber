@@ -145,7 +145,7 @@ class ModelRegistry:
     def list_models(self) -> list[dict[str, Any]]:
         """List all registered models."""
         result = []
-        for key, adapter in self._models.items():
+        for _key, adapter in self._models.items():
             caps = adapter.capabilities
             result.append({
                 "provider": adapter.provider,

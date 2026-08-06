@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
-import os
 import asyncio
+import os
 
 # Set testing mode before importing app
 os.environ["APP_TESTING"] = "true"
+# Tests assume authentication is disabled by default; the repo .env may
+# enable it for local dev, so pin it off for the test run.
+os.environ["ENABLE_AUTH"] = "false"
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 from app.main import app
-from app.storage import init_db, engine, async_session, Base
-from app.storage.database import Agent, Session, Message, ApiKey, Tool, Document, CheckpointRecord
-from app.storage import models_memory
+from sqlalchemy import text
+from app.storage import Base, engine, init_db
 
 
 @pytest.fixture(scope="session")
@@ -46,16 +48,21 @@ def setup_test_db():
 
 @pytest.fixture(autouse=True)
 def cleanup_db():
-    """Clean up database after each test."""
+    """Clean up database after each test by deleting data from tables."""
     yield
     import asyncio
+    from sqlalchemy.exc import OperationalError
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
         async def _cleanup():
             async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.drop_all)
-            await init_db()
+                for table in reversed(Base.metadata.sorted_tables):
+                    try:
+                        await conn.execute(text(f"DELETE FROM {table.name}"))
+                    except OperationalError:
+                        pass  # Table may not exist
+                await conn.commit()
         loop.run_until_complete(_cleanup())
     finally:
         loop.close()

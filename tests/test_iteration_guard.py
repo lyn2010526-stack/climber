@@ -1,5 +1,5 @@
-import pytest
-from app.core.iteration_guard import IterationGuard, GuardConfig
+from app.core.iteration_guard import GuardConfig, IterationGuard
+
 
 def test_max_rounds_limit():
     config = GuardConfig(max_rounds=5)

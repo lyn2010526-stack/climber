@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.api.v1.chat import get_engine
+from app.core.auth_manager import require_admin
 from app.core.permission_rules import (
     PermissionConfig,
     PermissionMode,
@@ -73,7 +74,10 @@ async def get_permission_config():
 
 
 @router.put("/config")
-async def update_permission_config(update: PermissionConfigUpdate):
+async def update_permission_config(
+    update: PermissionConfigUpdate,
+    current_user: dict = Depends(require_admin),
+):
     engine = get_engine()
     current = engine.get_permission_config()
 

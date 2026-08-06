@@ -19,10 +19,9 @@ Memory directory structure:
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -209,10 +208,7 @@ class MemFS:
             except Exception:
                 pass
 
-        if existing_block is None:
-            block = MemoryBlock.new(path=path, content=content)
-        else:
-            block = existing_block
+        block = MemoryBlock.new(path=path, content=content) if existing_block is None else existing_block
 
         file_path.write_text(block.to_markdown(), encoding="utf-8")
 
@@ -365,7 +361,7 @@ class MemFS:
                 rel = str(entry.relative_to(self._base_path))
                 size = entry.stat().st_size
                 mtime = datetime.fromtimestamp(
-                    entry.stat().st_mtime, tz=timezone.utc
+                    entry.stat().st_mtime, tz=UTC
                 ).isoformat()
                 tree["_files"].append({
                     "path": rel,

@@ -6,7 +6,8 @@ import asyncio
 import json
 import subprocess
 import textwrap
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import httpx
 import structlog
@@ -165,7 +166,7 @@ class ToolRegistry:
     def get_openai_tools(self) -> list[dict[str, Any]]:
         """Return tools in OpenAI function calling format."""
         result = []
-        for name, defn in self._definitions.items():
+        for _name, defn in self._definitions.items():
             result.append({
                 "type": "function",
                 "function": {

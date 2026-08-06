@@ -11,7 +11,7 @@ import logging
 import logging.handlers
 import sys
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -118,11 +118,11 @@ def write_crash_dump(exc: BaseException, context: dict[str, Any] | None = None) 
     try:
         directory = get_log_dir() / "crashes"
         directory.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
         path = directory / f"crash-{stamp}.log"
 
         lines = [
-            f"timestamp: {datetime.now(timezone.utc).isoformat()}",
+            f"timestamp: {datetime.now(UTC).isoformat()}",
             f"exception: {type(exc).__name__}: {exc}",
             "",
         ]

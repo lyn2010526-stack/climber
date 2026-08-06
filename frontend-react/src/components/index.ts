@@ -1,7 +1,7 @@
 // UI Components
 export { Button, buttonVariants } from './ui/Button';
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './ui/Card';
-export { Input, inputVariants } from './ui/Input';
+export { Input } from './ui/Input';
 export { Badge, badgeVariants } from './ui/Badge';
 export { Spinner, spinnerVariants } from './ui/Spinner';
 export { LoadingDots } from './ui/LoadingDots';

@@ -8,7 +8,6 @@ Implements the hidden high-tier prompt engineering features:
 
 from __future__ import annotations
 
-
 # ─── Few-Shot Examples for Tool Call Stability ─────────────────────────────
 
 POSITIVE_FEW_SHOT = """## Tool Call Examples — CORRECT Patterns

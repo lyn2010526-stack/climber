@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import select
 
-from app.workflow.io import WorkflowIO
-from app.workflow.templates import WorkflowTemplates
+from app.api.v1.helpers import payload as _payload
 from app.storage import async_session
 from app.storage.models_platform import Workflow as WorkflowModel
-from app.api.v1.generic import _payload
+from app.workflow import Workflow, WorkflowEdge, WorkflowNode
+from app.workflow.io import WorkflowIO
+from app.workflow.templates import WorkflowTemplates
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -48,9 +48,7 @@ async def list_workflow_templates() -> list[dict[str, Any]]:
                     workflow = template_fn(provider="openai", model_id="gpt-4o", api_key="")
                 elif tpl["id"] == "tool_use":
                     workflow = template_fn(tool_name="list_files", provider="openai", model_id="gpt-4o", api_key="")
-                elif tpl["id"] == "chain_of_thought":
-                    workflow = template_fn(provider="openai", model_id="gpt-4o", api_key="")
-                elif tpl["id"] == "map_reduce":
+                elif tpl["id"] == "chain_of_thought" or tpl["id"] == "map_reduce":
                     workflow = template_fn(provider="openai", model_id="gpt-4o", api_key="")
                 elif tpl["id"] == "conditional_branch":
                     workflow = template_fn(
@@ -171,7 +169,6 @@ async def export_workflow(workflow_id: str, request: Request) -> Response:
         if wf is None:
             raise HTTPException(status_code=404, detail="Workflow not found")
 
-    from app.workflow import Workflow, WorkflowNode, WorkflowEdge
     workflow = Workflow(
         id=wf.id,
         name=wf.name,
@@ -195,7 +192,6 @@ async def export_workflow_get(workflow_id: str, format: str = "json") -> Respons
         if wf is None:
             raise HTTPException(status_code=404, detail="Workflow not found")
 
-    from app.workflow import Workflow, WorkflowNode, WorkflowEdge
     workflow = Workflow(
         id=wf.id,
         name=wf.name,

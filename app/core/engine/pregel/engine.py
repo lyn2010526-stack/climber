@@ -11,8 +11,10 @@ Executes the compiled graph using the Pregel model:
 from __future__ import annotations
 
 import asyncio
+import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator
+from typing import Any
 
 import structlog
 
@@ -32,7 +34,7 @@ from app.core.engine.pregel.policies import (
     TimeoutPolicy,
     execute_with_retry,
 )
-from app.core.engine.pregel.state import GraphState, merge_states
+from app.core.engine.pregel.state import GraphState
 from app.core.engine.pregel.streaming import StreamEvent, StreamEventType
 
 logger = structlog.get_logger(__name__)
@@ -48,6 +50,7 @@ class SuperStepResult:
     next_active: list[str] = field(default_factory=list)
     interrupted: bool = False
     checkpoint_id: str | None = None
+    errors: dict[str, Exception] = field(default_factory=dict)
 
 
 @dataclass
@@ -60,6 +63,17 @@ class ExecutionResult:
     interrupted: bool = False
     interrupt_node: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ExecutionContext:
+    """Mutable execution data isolated to one graph invocation."""
+
+    thread_id: str
+    active_nodes: list[str] = field(default_factory=list)
+    step: int = 0
+    checkpoint_ids: list[str] = field(default_factory=list)
+    skip_interrupt_before: set[str] = field(default_factory=set)
 
 
 class PregelEngine:
@@ -86,9 +100,6 @@ class PregelEngine:
         self._error_handler = error_handler or DefaultErrorHandler()
         self._hitl = hitl_manager or HITLManager()
         self._debug = debug
-        self._active_nodes: list[str] = []
-        self._step: int = 0
-        self._checkpoint_ids: list[str] = []
 
     async def run(self, state: GraphState, config: dict | None = None) -> GraphState:
         """Run the graph until completion.
@@ -100,9 +111,10 @@ class PregelEngine:
         Returns:
             Final state after graph completes.
         """
-        config = config or {}
-        thread_id = config.get("thread_id", "default")
+        config = dict(config or {})
+        thread_id = config.setdefault("thread_id", str(uuid.uuid4()))
         max_steps = config.get("max_steps", 100)
+        context = ExecutionContext(thread_id=thread_id)
 
         # Check for resume config
         resume_value = config.get("__resume_value__")
@@ -115,8 +127,10 @@ class PregelEngine:
             logger.info("restoring_from_checkpoint", thread_id=thread_id, step=existing.step)
             state = GraphState(existing.values, schema=self._graph.schema)
             state.step = existing.step
-            self._step = existing.step
-            self._active_nodes = list(existing.next_nodes)
+            context.step = existing.step
+            context.active_nodes = list(existing.next_nodes)
+            if resume_value is not None and existing.metadata.get("interrupt_type") == "before":
+                context.skip_interrupt_before.update(existing.next_nodes)
 
         # Apply resume value if present
         if resume_value is not None:
@@ -124,13 +138,12 @@ class PregelEngine:
             state["__interrupted__"] = False
 
         if resume_nodes:
-            self._active_nodes = resume_nodes
-        elif not self._active_nodes:
+            context.active_nodes = resume_nodes
+        elif not context.active_nodes:
             # Check if we're resuming from an interrupt
             interrupt_node = state.get("__interrupt_node__")
             if interrupt_node and state.get("__interrupted__"):
-                successors = self._graph.get_outgoing_edges(interrupt_node)
-                self._active_nodes = successors
+                context.active_nodes = list(existing.next_nodes) if existing else []
             else:
                 entry = self._graph._entry_point
                 if entry is None:
@@ -139,37 +152,30 @@ class PregelEngine:
                 if branch:
                     next_node = await self._resolve_router(branch.router, state)
                     entry = next_node
-                self._active_nodes = [entry] if entry else []
+                context.active_nodes = [entry] if entry else []
 
-        self._checkpoint_ids = []
+        async def execute() -> None:
+            for _ in range(max_steps):
+                if not context.active_nodes:
+                    logger.info("execution_complete", steps=context.step)
+                    break
+                step_result = await self._execute_super_step(state, config, context)
+                state.step = context.step
+                context.active_nodes = step_result.next_active
+                if step_result.interrupted:
+                    logger.info("execution_interrupted", node=step_result.active_nodes, step=context.step)
+                    break
 
-        for _ in range(max_steps):
-            if not self._active_nodes:
-                logger.info("execution_complete", steps=self._step)
-                break
-
-            step_result = await self._execute_super_step(state, config)
-            state.step = self._step
-
-            if step_result.interrupted:
-                logger.info("execution_interrupted", node=self._active_nodes, step=self._step)
-                state["__interrupted__"] = True
-                state["__interrupt_node__"] = step_result.active_nodes[0] if step_result.active_nodes else None
-                # Save final checkpoint with interrupt state
-                checkpoint = Checkpoint(
-                    values=dict(state),
-                    next_nodes=[],
-                    step=self._step,
-                    parent_id=self._checkpoint_ids[-1] if self._checkpoint_ids else None,
-                    metadata={"thread_id": thread_id, "interrupted": True},
-                )
-                await self._checkpointer.put(
-                    CheckpointConfig(thread_id=thread_id),
-                    checkpoint,
-                )
-                break
-
-            self._active_nodes = step_result.next_active
+        try:
+            if self._timeout_policy.run_timeout is None:
+                await execute()
+            else:
+                await asyncio.wait_for(execute(), timeout=self._timeout_policy.run_timeout)
+        except TimeoutError as error:
+            handler_result = await self._error_handler.handle(error, dict(state), "__run__")
+            if handler_result is None:
+                raise
+            self._merge_error_update(state, handler_result)
 
         return state
 
@@ -183,40 +189,46 @@ class PregelEngine:
         Yields:
             State dict after each super-step.
         """
-        config = config or {}
-        thread_id = config.get("thread_id", "default")
+        config = dict(config or {})
+        thread_id = config.setdefault("thread_id", str(uuid.uuid4()))
         max_steps = config.get("max_steps", 100)
+        context = ExecutionContext(thread_id=thread_id)
 
         checkpoint_config = CheckpointConfig(thread_id=thread_id)
         existing = await self._checkpointer.get(checkpoint_config)
         if existing:
             state = GraphState(existing.values, schema=self._graph.schema)
             state.step = existing.step
-            self._step = existing.step
-            self._active_nodes = list(existing.next_nodes)
+            context.step = existing.step
+            context.active_nodes = list(existing.next_nodes)
 
-        if not self._active_nodes:
+        if not context.active_nodes:
             entry = self._graph._entry_point
             if entry is None:
                 branch = self._graph.get_conditional_edges("__start__")
                 if branch:
                     entry = await self._resolve_router(branch.router, state)
-            self._active_nodes = [entry] if entry else []
+            context.active_nodes = [entry] if entry else []
 
         yield state.clone()
 
-        for _ in range(max_steps):
-            if not self._active_nodes:
-                break
-
-            step_result = await self._execute_super_step(state, config)
-            state.step = self._step
+        try:
+            async with asyncio.timeout(self._timeout_policy.run_timeout):
+                for _ in range(max_steps):
+                    if not context.active_nodes:
+                        break
+                    step_result = await self._execute_super_step(state, config, context)
+                    state.step = context.step
+                    yield state.clone()
+                    context.active_nodes = step_result.next_active
+                    if step_result.interrupted:
+                        break
+        except TimeoutError as error:
+            handler_result = await self._error_handler.handle(error, dict(state), "__run__")
+            if handler_result is None:
+                raise
+            self._merge_error_update(state, handler_result)
             yield state.clone()
-
-            if step_result.interrupted:
-                break
-
-            self._active_nodes = step_result.next_active
 
     async def astream_events(self, state: GraphState, config: dict | None = None) -> AsyncIterator[StreamEvent]:
         """Stream detailed execution events.
@@ -228,61 +240,89 @@ class PregelEngine:
         Yields:
             StreamEvent objects.
         """
-        config = config or {}
-        thread_id = config.get("thread_id", "default")
+        config = dict(config or {})
+        thread_id = config.setdefault("thread_id", str(uuid.uuid4()))
         max_steps = config.get("max_steps", 100)
+        context = ExecutionContext(thread_id=thread_id)
 
         checkpoint_config = CheckpointConfig(thread_id=thread_id)
         existing = await self._checkpointer.get(checkpoint_config)
         if existing:
             state = GraphState(existing.values, schema=self._graph.schema)
             state.step = existing.step
-            self._step = existing.step
-            self._active_nodes = list(existing.next_nodes)
+            context.step = existing.step
+            context.active_nodes = list(existing.next_nodes)
 
-        if not self._active_nodes:
+        if not context.active_nodes:
             entry = self._graph._entry_point
             if entry is None:
                 branch = self._graph.get_conditional_edges("__start__")
                 if branch:
                     entry = await self._resolve_router(branch.router, state)
-            self._active_nodes = [entry] if entry else []
+            context.active_nodes = [entry] if entry else []
 
         yield StreamEvent(type=StreamEventType.START, data={"input": dict(state)})
 
-        for _ in range(max_steps):
-            if not self._active_nodes:
-                yield StreamEvent(type=StreamEventType.END, data={"total_steps": self._step})
-                break
+        try:
+            async with asyncio.timeout(self._timeout_policy.run_timeout):
+                for _ in range(max_steps):
+                    if not context.active_nodes:
+                        yield StreamEvent(type=StreamEventType.END, data={"total_steps": context.step})
+                        break
 
-            for node in self._active_nodes:
-                yield StreamEvent(
-                    type=StreamEventType.NODE_START,
-                    data={"node": node},
-                    node=node,
-                    step=self._step,
-                )
+                    for node in context.active_nodes:
+                        yield StreamEvent(
+                            type=StreamEventType.NODE_START,
+                            data={"node": node},
+                            node=node,
+                            step=context.step,
+                        )
 
-            step_result = await self._execute_super_step(state, config)
-            state.step = self._step
+                    step_result = await self._execute_super_step(state, config, context)
+                    state.step = context.step
 
-            for node, result in step_result.node_results.items():
-                yield StreamEvent(
-                    type=StreamEventType.NODE_END,
-                    data={"node": node, "result": result},
-                    node=node,
-                    step=self._step,
-                )
+                    for node, result in step_result.node_results.items():
+                        yield StreamEvent(
+                            type=StreamEventType.NODE_END,
+                            data={"node": node, "result": result},
+                            node=node,
+                            step=context.step,
+                        )
+                    for node, error in step_result.errors.items():
+                        yield StreamEvent(
+                            type=StreamEventType.ERROR,
+                            data={"error": str(error), "error_type": type(error).__name__},
+                            node=node,
+                            step=context.step,
+                        )
+                    if step_result.checkpoint_id:
+                        yield StreamEvent(
+                            type=StreamEventType.CHECKPOINT,
+                            data={"checkpoint_id": step_result.checkpoint_id},
+                            step=context.step,
+                        )
 
-            if step_result.interrupted:
-                yield StreamEvent(
-                    type=StreamEventType.INTERRUPT,
-                    data={"node": step_result.active_nodes},
-                    step=self._step,
-                )
-                break
-
-            self._active_nodes = step_result.next_active
+                    context.active_nodes = step_result.next_active
+                    if step_result.interrupted:
+                        yield StreamEvent(
+                            type=StreamEventType.INTERRUPT,
+                            data={"node": step_result.active_nodes},
+                            step=context.step,
+                        )
+                        break
+        except TimeoutError as error:
+            handler_result = await self._error_handler.handle(error, dict(state), "__run__")
+            if handler_result is None:
+                yield StreamEvent(type=StreamEventType.ERROR, data={"error": str(error)})
+                raise
+            self._merge_error_update(state, handler_result)
+            yield StreamEvent(
+                type=StreamEventType.ERROR,
+                data={"error": str(error), "error_type": type(error).__name__},
+                node="__run__",
+                step=context.step,
+            )
+            yield StreamEvent(type=StreamEventType.END, data={"total_steps": context.step})
 
     async def get_state(self, config: dict) -> GraphState:
         """Get current state from the latest checkpoint."""
@@ -298,84 +338,77 @@ class PregelEngine:
     async def update_state(self, config: dict, values: dict) -> dict:
         """Update state by saving a new checkpoint."""
         thread_id = config.get("thread_id", "default")
-        state = await self.get_state(config)
+        checkpoint_config = CheckpointConfig(thread_id=thread_id)
+        existing = await self._checkpointer.get(checkpoint_config)
+        state = GraphState(
+            existing.values if existing else {},
+            schema=self._graph.schema,
+        )
+        if existing:
+            state.step = existing.step
         state.merge_update(values)
         checkpoint = Checkpoint(
             values=dict(state),
-            next_nodes=self._active_nodes,
-            step=self._step,
-            parent_id=self._checkpoint_ids[-1] if self._checkpoint_ids else None,
+            next_nodes=list(existing.next_nodes) if existing else [],
+            step=state.step,
+            parent_id=existing.id if existing else None,
         )
-        await self._checkpointer.put(CheckpointConfig(thread_id=thread_id), checkpoint)
+        await self._checkpointer.put(checkpoint_config, checkpoint)
         return config
 
     async def resume_with(self, config: dict, value: Any) -> dict:
         """Resume from an interrupt with a human-provided value."""
         # Inject resume value into config so run() can apply it after checkpoint restore
         config = {**config, "__resume_value__": value}
-        thread_id = config.get("thread_id", "default")
-
-        # Determine which node to resume from:
-        # After an interrupt at node X, we continue with X's successors
-        checkpoint_config = CheckpointConfig(thread_id=thread_id)
-        existing = await self._checkpointer.get(checkpoint_config)
-        interrupt_node = existing.values.get("__interrupt_node__") if existing else None
-
-        if interrupt_node and interrupt_node in self._graph.nodes:
-            successors = self._graph.get_outgoing_edges(interrupt_node)
-            branch = self._graph.get_conditional_edges(interrupt_node)
-            if branch:
-                # Need a temporary state for router resolution
-                temp_state = GraphState(existing.values, schema=self._graph.schema)
-                next_node = await self._resolve_router(branch.router, temp_state)
-                successors = [next_node] if next_node in self._graph.nodes else []
-            if successors:
-                config["__resume_nodes__"] = successors
-            elif self._graph._entry_point:
-                config["__resume_nodes__"] = [self._graph._entry_point]
-        elif self._graph._entry_point:
-            config["__resume_nodes__"] = [self._graph._entry_point]
 
         result = await self.run(GraphState(schema=self._graph.schema), config)
         return dict(result)
 
-    async def _execute_super_step(self, state: GraphState, config: dict) -> SuperStepResult:
+    async def _execute_super_step(
+        self, state: GraphState, config: dict, context: ExecutionContext
+    ) -> SuperStepResult:
         """Execute a single super-step: run all active nodes in parallel."""
-        self._step += 1
-        step = self._step
-        logger.debug("super_step_start", step=step, active_nodes=self._active_nodes)
+        context.step += 1
+        step = context.step
+        active_nodes = list(context.active_nodes)
+        logger.debug("super_step_start", step=step, active_nodes=active_nodes)
 
         tasks = []
-        for node_name in self._active_nodes:
-            if node_name in self._interrupt_before:
+        for node_name in active_nodes:
+            if node_name in self._interrupt_before and node_name not in context.skip_interrupt_before:
+                state["__interrupted__"] = True
+                state["__interrupt_node__"] = node_name
+                checkpoint = await self._save_checkpoint(
+                    state, active_nodes, step, context, interrupt_type="before"
+                )
                 return SuperStepResult(
                     step=step,
-                    active_nodes=self._active_nodes,
+                    active_nodes=active_nodes,
+                    next_active=active_nodes,
                     interrupted=True,
+                    checkpoint_id=checkpoint.id,
                 )
-            tasks.append(self._execute_node(node_name, state, config))
+            tasks.append(self._execute_node(node_name, state, config, context))
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         node_results: dict[str, Any] = {}
         next_active: list[str] = []
         all_interrupted = False
+        interrupt_node: str | None = None
+        errors: dict[str, Exception] = {}
 
-        for node_name, result in zip(self._active_nodes, results):
+        for node_name, result in zip(active_nodes, results, strict=False):
             if isinstance(result, Exception):
+                errors[node_name] = result
                 logger.error("node_error", node=node_name, error=str(result), step=step)
                 handler_result = await self._error_handler.handle(result, dict(state), node_name)
                 if handler_result is None:
                     raise result
-                state.merge_update(handler_result)
+                self._merge_error_update(state, handler_result)
                 continue
 
             node_results[node_name] = result
-
-            # Handle interrupt commands
-            if is_command(result) and result.metadata.get("interrupt"):
-                all_interrupted = True
-                continue
 
             # Route output to next nodes
             update, goto, resume = self._parse_output(result)
@@ -386,6 +419,9 @@ class PregelEngine:
 
             next_nodes = await self._route_next(node_name, goto, state)
             next_active.extend(next_nodes)
+            if is_command(result) and result.metadata.get("interrupt"):
+                all_interrupted = True
+                interrupt_node = node_name
 
         # Remove duplicates while preserving order
         seen: set[str] = set()
@@ -395,19 +431,19 @@ class PregelEngine:
                 seen.add(n)
                 unique_next.append(n)
 
-        # Save checkpoint
-        checkpoint = Checkpoint(
-            values=dict(state),
-            next_nodes=unique_next,
-            step=step,
-            parent_id=self._checkpoint_ids[-1] if self._checkpoint_ids else None,
-            metadata={"thread_id": config.get("thread_id", "default")},
+        if all_interrupted:
+            state["__interrupted__"] = True
+            state["__interrupt_node__"] = interrupt_node
+        else:
+            state["__interrupted__"] = False
+            state.pop("__interrupt_node__", None)
+        checkpoint = await self._save_checkpoint(
+            state,
+            unique_next,
+            step,
+            context,
+            interrupt_type="after" if all_interrupted else None,
         )
-        cp_config = await self._checkpointer.put(
-            CheckpointConfig(thread_id=config.get("thread_id", "default")),
-            checkpoint,
-        )
-        self._checkpoint_ids.append(checkpoint.id)
 
         if self._debug:
             logger.debug(
@@ -420,28 +456,62 @@ class PregelEngine:
         return SuperStepResult(
             step=step,
             node_results=node_results,
-            active_nodes=self._active_nodes,
+            active_nodes=active_nodes,
             next_active=unique_next,
             interrupted=all_interrupted,
             checkpoint_id=checkpoint.id,
+            errors=errors,
         )
 
-    async def _execute_node(self, node_name: str, state: GraphState, config: dict) -> Any:
+    @staticmethod
+    def _merge_error_update(state: GraphState, update: dict[str, Any]) -> None:
+        state.merge_update(update)
+        state.update({key: value for key, value in update.items() if key.startswith("__")})
+
+    async def _save_checkpoint(
+        self,
+        state: GraphState,
+        next_nodes: list[str],
+        step: int,
+        context: ExecutionContext,
+        interrupt_type: str | None = None,
+    ) -> Checkpoint:
+        metadata: dict[str, Any] = {"thread_id": context.thread_id}
+        if interrupt_type:
+            metadata.update({"interrupted": True, "interrupt_type": interrupt_type})
+        checkpoint = Checkpoint(
+            values=dict(state),
+            next_nodes=next_nodes,
+            step=step,
+            parent_id=context.checkpoint_ids[-1] if context.checkpoint_ids else None,
+            metadata=metadata,
+        )
+        await self._checkpointer.put(CheckpointConfig(thread_id=context.thread_id), checkpoint)
+        context.checkpoint_ids.append(checkpoint.id)
+        return checkpoint
+
+    async def _execute_node(
+        self, node_name: str, state: GraphState, config: dict, context: ExecutionContext
+    ) -> Any:
         """Execute a single node with retry and timeout."""
         func = self._graph.get_node(node_name)
         if not func:
             raise ValueError(f"Node '{node_name}' not found in graph")
 
         state.current_node = node_name
-        logger.debug("node_executing", node=node_name, step=self._step)
+        logger.debug("node_executing", node=node_name, step=context.step)
 
         try:
-            result = await execute_with_retry(
+            execution = execute_with_retry(
                 func,
                 state,
                 retry_policy=self._retry_policy,
                 node_name=node_name,
             )
+            if self._timeout_policy.node_timeout is None:
+                result = await execution
+            else:
+                result = await asyncio.wait_for(execution, timeout=self._timeout_policy.node_timeout)
 
             if node_name in self._interrupt_after:
                 if not is_command(result):

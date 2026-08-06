@@ -13,13 +13,13 @@ import hashlib
 import logging
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class CircuitBreakerReason(str, Enum):
+class CircuitBreakerReason(StrEnum):
     INFINITE_LOOP = "infinite_loop"
     RUNAWAY_TASK = "runaway_task"
     STAGNANT_EXECUTION = "stagnant_execution"
@@ -28,7 +28,7 @@ class CircuitBreakerReason(str, Enum):
     USER_STOP = "user_stop"
 
 
-class CircuitBreakerAction(str, Enum):
+class CircuitBreakerAction(StrEnum):
     PAUSE = "pause"
     ABORT = "abort"
     NOTIFY_CONTINUE = "notify_continue"

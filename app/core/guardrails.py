@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 import re
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
-class ActionType(str, Enum):
+class ActionType(StrEnum):
     ALLOW = "allow"
     BLOCK = "block"
     SANITIZE = "sanitize"

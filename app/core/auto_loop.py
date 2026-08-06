@@ -5,15 +5,17 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 import uuid
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Callable, Coroutine
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 import structlog
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from app.core.task_state_machine import TaskState, TaskStateMachine
 from app.storage import async_session
@@ -22,7 +24,7 @@ from app.storage.models_platform import AutoLoopTask
 logger = structlog.get_logger()
 
 
-class AutoLoopTaskStatus(str, Enum):
+class AutoLoopTaskStatus(StrEnum):
     """Autonomous task execution status."""
 
     PENDING = "pending"
@@ -85,30 +87,29 @@ class AutoLoopEngine:
             self._monitor_loop(), name="auto-loop-monitor"
         )
         logger.info("auto_loop_engine_started")
-        # Keep the start task alive so watchdog considers it running
-        try:
-            await self._monitor
-        except asyncio.CancelledError:
-            pass
+
+    async def run_forever(self) -> None:
+        """Block until the monitor loop exits (for watchdog/long-running modes)."""
+        if not self._running:
+            await self.start()
+        if self._monitor is not None and not self._monitor.done():
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._monitor
 
     async def stop(self) -> None:
         """Clean shutdown preserving state."""
         self._running = False
         if self._monitor is not None and not self._monitor.done():
             self._monitor.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._monitor
-            except (asyncio.CancelledError, Exception):
-                pass
             self._monitor = None
 
         for record in self._tasks.values():
             if record.asyncio_task is not None and not record.asyncio_task.done():
                 record.asyncio_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError, Exception):
                     await record.asyncio_task
-                except (asyncio.CancelledError, Exception):
-                    pass
 
         for record in self._tasks.values():
             if record.status in (
@@ -344,32 +345,29 @@ class AutoLoopEngine:
         """Detect and handle stalled tasks."""
         now = time.time()
         for record in self._tasks.values():
-            if record.status == AutoLoopTaskStatus.RUNNING:
-                if record.heartbeat_at is None or (
-                    now - record.heartbeat_at > self._heartbeat_timeout
+            if record.status == AutoLoopTaskStatus.RUNNING and (record.heartbeat_at is None or (
+                now - record.heartbeat_at > self._heartbeat_timeout
+            )):
+                logger.warning(
+                    "auto_loop_task_stalled",
+                    task_id=record.task_id,
+                    heartbeat_age=now - record.heartbeat_at
+                    if record.heartbeat_at
+                    else None,
+                )
+                if (
+                    record.asyncio_task is not None
+                    and not record.asyncio_task.done()
                 ):
-                    logger.warning(
-                        "auto_loop_task_stalled",
-                        task_id=record.task_id,
-                        heartbeat_age=now - record.heartbeat_at
-                        if record.heartbeat_at
-                        else None,
-                    )
-                    if (
-                        record.asyncio_task is not None
-                        and not record.asyncio_task.done()
-                    ):
-                        record.asyncio_task.cancel()
-                        try:
-                            await record.asyncio_task
-                        except asyncio.CancelledError:
-                            pass
-                    record.status = AutoLoopTaskStatus.FAILED
-                    record.error = "Task stalled (no heartbeat)"
-                    record.finished_at = time.time()
-                    await self._persist_status(
-                        record, AutoLoopTaskStatus.FAILED
-                    )
+                    record.asyncio_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await record.asyncio_task
+                record.status = AutoLoopTaskStatus.FAILED
+                record.error = "Task stalled (no heartbeat)"
+                record.finished_at = time.time()
+                await self._persist_status(
+                    record, AutoLoopTaskStatus.FAILED
+                )
 
     async def _persist_status(
         self,
@@ -386,7 +384,7 @@ class AutoLoopEngine:
                 )
                 existing = result.scalars().first()
 
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 if existing:
                     existing.status = status.value
                     existing.current_step = record.current_step

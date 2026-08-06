@@ -70,7 +70,7 @@ class AgentRepository:
 
     async def list_by_user(self, user_id: str) -> Sequence[Agent]:
         result = await self._session.execute(
-            select(Agent).where(Agent.user_id == user_id).where(Agent.is_active == True)
+            select(Agent).where(Agent.user_id == user_id).where(Agent.is_active)
         )
         return result.scalars().all()
 
@@ -336,7 +336,7 @@ class ApiKeyRepository:
 
     async def list_by_user(self, user_id: str) -> Sequence[ApiKey]:
         result = await self._session.execute(
-            select(ApiKey).where(ApiKey.user_id == user_id).where(ApiKey.is_active == True)
+            select(ApiKey).where(ApiKey.user_id == user_id).where(ApiKey.is_active)
         )
         return result.scalars().all()
 

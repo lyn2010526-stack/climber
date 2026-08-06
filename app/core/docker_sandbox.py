@@ -14,14 +14,13 @@ Features:
 from __future__ import annotations
 
 import os
-import shutil
-import structlog
 import tempfile
 import time
 from dataclasses import dataclass, field
-from typing import Any
 
-from app.core.safety_pipeline import SafetyResult, ExecutionResult, RiskLevel
+import structlog
+
+from app.core.safety_pipeline import ExecutionResult
 
 logger = structlog.get_logger()
 

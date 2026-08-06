@@ -201,8 +201,23 @@ class ForkRequest(BaseModel):
     new_session_id: str | None = None
 
 
+async def _ensure_owned_session(session_id: str, user_id: str) -> None:
+    """Raise 404 unless the session exists and belongs to the given user."""
+    async with async_session() as session:
+        row = (
+            await session.execute(select(SessionModel).where(SessionModel.id == session_id))
+        ).scalar_one_or_none()
+        if not row or (row.user_id and row.user_id != user_id):
+            raise HTTPException(status_code=404, detail="Session not found")
+
+
 @router.post("/{session_id}/checkpoint")
-async def save_checkpoint(session_id: str, body: CheckpointRequest) -> dict:
+async def save_checkpoint(
+    session_id: str,
+    body: CheckpointRequest,
+    user_id: str = Depends(get_current_user),
+) -> dict:
+    await _ensure_owned_session(session_id, user_id)
     from app.core.session_manager import SessionManager
     mgr = SessionManager()
     mgr.save_checkpoint(
@@ -216,7 +231,8 @@ async def save_checkpoint(session_id: str, body: CheckpointRequest) -> dict:
 
 
 @router.get("/{session_id}/checkpoint")
-async def get_latest_checkpoint(session_id: str) -> dict:
+async def get_latest_checkpoint(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+    await _ensure_owned_session(session_id, user_id)
     from app.core.session_manager import SessionManager
     mgr = SessionManager()
     checkpoint = mgr.get_latest_checkpoint(session_id)
@@ -226,7 +242,8 @@ async def get_latest_checkpoint(session_id: str) -> dict:
 
 
 @router.get("/{session_id}/history")
-async def get_checkpoint_history(session_id: str) -> dict:
+async def get_checkpoint_history(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+    await _ensure_owned_session(session_id, user_id)
     from app.core.session_manager import SessionManager
     mgr = SessionManager()
     history = mgr.get_checkpoint_history(session_id)
@@ -234,7 +251,8 @@ async def get_checkpoint_history(session_id: str) -> dict:
 
 
 @router.post("/{session_id}/fork")
-async def fork_session(session_id: str, body: ForkRequest) -> dict:
+async def fork_session(session_id: str, body: ForkRequest, user_id: str = Depends(get_current_user)) -> dict:
+    await _ensure_owned_session(session_id, user_id)
     from app.core.session_manager import SessionManager
     mgr = SessionManager()
     try:
@@ -245,7 +263,8 @@ async def fork_session(session_id: str, body: ForkRequest) -> dict:
 
 
 @router.post("/{session_id}/resume")
-async def resume_session(session_id: str) -> dict:
+async def resume_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+    await _ensure_owned_session(session_id, user_id)
     from app.core.session_manager import SessionManager
     mgr = SessionManager()
     state = mgr.resume_session(session_id)

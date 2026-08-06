@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import re
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 import httpx
 import structlog
@@ -26,7 +28,7 @@ class OpenAIAdapter(ModelAdapter):
         model_id: str,
         api_key: str,
         base_url: str = "https://api.openai.com/v1",
-        capabilities: "ModelCapability | None" = None,
+        capabilities: ModelCapability | None = None,
     ):
         self._model_id = model_id
         self._api_key = api_key
@@ -149,7 +151,7 @@ class OpenAIAdapter(ModelAdapter):
                             idle_event.wait(), timeout=idle_timeout
                         )
                         idle_event.clear()
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         if response is not None:
                             logger.info(
                                 "stream_idle_timeout",
@@ -299,10 +301,8 @@ class OpenAIAdapter(ModelAdapter):
         finally:
             if watchdog_task and not watchdog_task.done():
                 watchdog_task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await watchdog_task
-                except asyncio.CancelledError:
-                    pass
             if response is not None:
                 await response.aclose()
 
@@ -322,9 +322,7 @@ class OpenAIAdapter(ModelAdapter):
         if chunk.get("end_of_stream") is True:
             return True
         choices = chunk.get("choices", [])
-        if choices and choices[0].get("finish_reason"):
-            return True
-        return False
+        return bool(choices and choices[0].get("finish_reason"))
 
     async def _chat_non_streaming(
         self,
@@ -390,7 +388,7 @@ class OpenAIAdapter(ModelAdapter):
             chunks.append(chunk)
         if not chunks:
             return ChatResult(content="", tool_calls=[], finish_reason="stop", tokens_used=0)
-        last = chunks[-1]
+        chunks[-1]
         full_content = "".join(c.content or "" for c in chunks)
         all_tool_calls: list[dict] = []
         for c in chunks:

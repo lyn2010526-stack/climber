@@ -9,9 +9,8 @@ from __future__ import annotations
 import sqlite3
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
-
 
 HITLStatusPending = "pending"
 HITLStatusApproved = "approved"
@@ -88,7 +87,7 @@ class HITLManager:
         payload: dict[str, Any] | None = None,
         ttl_seconds: int | None = None,
     ) -> HITLRequest:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ttl = ttl_seconds if ttl_seconds is not None else self._default_ttl
         request = HITLRequest(
             id=str(uuid.uuid4()),
@@ -110,7 +109,7 @@ class HITLManager:
         if not request or request.status != HITLStatusPending:
             return None
         request.status = HITLStatusApproved
-        request.resolved_at = datetime.now(timezone.utc).isoformat()
+        request.resolved_at = datetime.now(UTC).isoformat()
         request.resolved_by = resolved_by
         self._persist_request(request)
         return request
@@ -120,7 +119,7 @@ class HITLManager:
         if not request or request.status != HITLStatusPending:
             return None
         request.status = HITLStatusRejected
-        request.resolved_at = datetime.now(timezone.utc).isoformat()
+        request.resolved_at = datetime.now(UTC).isoformat()
         request.resolved_by = resolved_by
         self._persist_request(request)
         return request
@@ -130,13 +129,13 @@ class HITLManager:
         if not request or request.status != HITLStatusPending:
             return None
         request.status = HITLStatusExpired
-        request.resolved_at = datetime.now(timezone.utc).isoformat()
+        request.resolved_at = datetime.now(UTC).isoformat()
         request.resolved_by = "system"
         self._persist_request(request)
         return request
 
     def get_pending(self, task_id: str | None = None) -> list[HITLRequest]:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         if task_id:
             rows = self._conn.execute(
                 "SELECT * FROM hitl_requests WHERE task_id = ? AND status = ? AND expires_at > ?",
@@ -150,7 +149,7 @@ class HITLManager:
         return [self._row_to_request(row) for row in rows]
 
     def get_expired(self) -> list[HITLRequest]:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         rows = self._conn.execute(
             "SELECT * FROM hitl_requests WHERE status = ? AND expires_at <= ?",
             (HITLStatusPending, now),

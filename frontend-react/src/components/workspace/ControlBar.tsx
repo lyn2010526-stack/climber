@@ -45,43 +45,47 @@ export function ControlBar() {
   };
 
   return (
-    <div className="h-12 bg-[#0F0F14]/80 backdrop-blur-2xl border-b border-white/10 flex items-center px-4 gap-2 shadow-sm shadow-white/5">
+    <div className="workspace-control-bar">
       {/* Run controls */}
       <div className="flex items-center gap-1">
-        <button
+         <button
           onClick={handlePause}
           disabled={!activeSession || (!isRunning && !isPaused)}
-           className="p-2 rounded-2xl hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
-           title={isPaused ? '继续' : '暂停'}
+           className="icon-button text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] disabled:opacity-30"
+            title={isPaused ? '继续' : '暂停'}
+            aria-label={isPaused ? '继续会话' : '暂停会话'}
         >
           {isPaused ? <Play size={14} /> : <Pause size={14} />}
         </button>
         <button
           onClick={handleStop}
           disabled={!activeSession}
-           className="p-2 rounded-2xl hover:bg-red-500/10 text-[var(--color-text-secondary)] hover:text-red-400 transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
+            className="icon-button text-[var(--color-text-secondary)] hover:bg-[var(--color-error-subtle)] hover:text-[var(--color-error)] disabled:opacity-30"
           title="停止"
+          aria-label="停止会话"
         >
           <Square size={14} />
         </button>
         <button
           onClick={handleSnapshot}
           disabled={!activeSession}
-           className="p-2 rounded-2xl hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
+            className="icon-button text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] disabled:opacity-30"
            title="保存快照"
+           aria-label="保存快照"
         >
           <Camera size={14} />
         </button>
         <button
-           className="p-2 rounded-2xl hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-all duration-200 hover:scale-105 active:scale-95"
-          title="回滚到快照"
+            className="icon-button text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)]"
+           title="回滚到快照"
+           aria-label="回滚到快照"
         >
           <RotateCcw size={14} />
         </button>
       </div>
 
       {/* Divider */}
-      <div className="w-px h-6 bg-white/10 mx-1" />
+      <div className="h-6 w-px bg-[var(--color-border-subtle)] mx-1" />
 
       {/* Right panel tabs */}
       <div className="flex items-center gap-1">
@@ -94,12 +98,13 @@ export function ControlBar() {
           <button
             key={id}
             onClick={() => rightPanelTab === id && rightPanelOpen ? toggleRightPanel() : setRightPanelTab(id)}
-            className={`p-2 rounded-2xl transition-all duration-200 ${
+            className={`icon-button ${
                rightPanelTab === id && rightPanelOpen
-                 ? 'bg-white/10 text-white shadow-sm shadow-white/5 border border-white/10'
-                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-white/5 border border-transparent'
+                  ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]'
+                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)]'
             }`}
-            title={label}
+             title={label}
+             aria-label={`${label}面板`}
           >
             <Icon size={14} />
           </button>
@@ -139,27 +144,29 @@ export function ControlBar() {
       )}
 
       {/* Divider */}
-      <div className="w-px h-6 bg-white/10 mx-1" />
+      <div className="h-6 w-px bg-[var(--color-border-subtle)] mx-1" />
 
       {/* Permission mode */}
-      <PermissionModeToggle
-        value={permissionMode}
-        onChange={setPermissionMode}
-      />
+      <div className="hidden xl:contents">
+        <PermissionModeToggle
+          value={permissionMode}
+          onChange={setPermissionMode}
+        />
 
-      {/* Autonomy level */}
-      <AutonomySlider
-        value={autonomyLevel}
-        onChange={setAutonomyLevel}
-      />
+        <AutonomySlider
+          value={autonomyLevel}
+          onChange={setAutonomyLevel}
+        />
+      </div>
 
       {/* Expert mode */}
       <button
         onClick={toggleExpertMode}
-        className={`p-2 rounded-2xl transition-all duration-200 ${
-          expertMode ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20 shadow-sm shadow-purple-500/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-white/5 border border-transparent'
+        className={`icon-button ${
+          expertMode ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)]'
         }`}
         title={expertMode ? '关闭专家模式' : '开启专家模式'}
+        aria-label={expertMode ? '关闭专家模式' : '开启专家模式'}
       >
         {expertMode ? <Eye size={14} /> : <EyeOff size={14} />}
       </button>
@@ -167,10 +174,11 @@ export function ControlBar() {
       {/* Focus mode */}
       <button
         onClick={toggleFocusMode}
-        className={`p-2 rounded-2xl transition-all duration-200 ${
-          focusMode ? 'bg-white/10 text-white shadow-sm shadow-white/5 border border-white/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-white/5 border border-transparent'
+        className={`icon-button ${
+          focusMode ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)]'
         }`}
           title="专注模式"
+          aria-label="切换专注模式"
       >
         {focusMode ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
       </button>

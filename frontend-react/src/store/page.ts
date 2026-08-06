@@ -34,6 +34,8 @@ interface PageState {
   setPage: (page: Page) => void;
 }
 
+export const PROTECTED_PAGES: Page[] = ['chat', 'agents', 'workflows', 'settings'];
+
 export const useCurrentPage = create<PageState>((set) => ({
   page: 'chat',
   setPage: (page) => set({ page }),

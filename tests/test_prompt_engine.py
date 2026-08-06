@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from app.core.prompt_engine.engine import PromptEngine
 from app.core.prompt_engine.models import (
     ModelAdaptation,

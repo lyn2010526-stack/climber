@@ -7,10 +7,10 @@ enabling dependency injection and testability.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, AsyncIterator, Callable
-
+from enum import StrEnum
+from typing import Any
 
 # ── Events ──
 
@@ -40,12 +40,12 @@ class EventBus:
 
 
 import asyncio
-import structlog
 
+import structlog
 
 # ── Enums ──
 
-class ExecutionStatus(str, Enum):
+class ExecutionStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -53,7 +53,7 @@ class ExecutionStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class NodeType(str, Enum):
+class NodeType(StrEnum):
     START = "start"
     END = "end"
     AGENT = "agent"

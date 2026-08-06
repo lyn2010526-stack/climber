@@ -7,13 +7,12 @@ the internal Workflow model and executes them via WorkflowEngine.
 
 from __future__ import annotations
 
-import time
 from typing import Any
 from uuid import uuid4
 
 from app.core.agent_engine import AgentEngine
 from app.core.di import resolve as di_resolve
-from app.workflow import Workflow, WorkflowEdge, WorkflowNode, NodeType, NodeStatus
+from app.workflow import NodeType, Workflow, WorkflowEdge, WorkflowNode
 from app.workflow.engine import WorkflowEngine
 
 
@@ -187,7 +186,7 @@ def validate_workflow_graph(
     warnings: list[str] = []
 
     node_ids = {n["id"] for n in nodes}
-    node_types = {n["id"]: n.get("type", "") for n in nodes}
+    {n["id"]: n.get("type", "") for n in nodes}
 
     # Check for input and output nodes
     has_input = any(n.get("type") == "input" for n in nodes)

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from enum import Enum
+import contextlib
+from enum import StrEnum
 from typing import Any
 
 import structlog
@@ -13,7 +14,7 @@ from app.config import settings
 logger = structlog.get_logger()
 
 
-class McpStatus(str, Enum):
+class McpStatus(StrEnum):
     """MCP process status."""
 
     DISCONNECTED = "disconnected"
@@ -74,7 +75,7 @@ class MCPHealthMonitor:
                     status=McpStatus.READY,
                     latency_ms=(time.monotonic() - start) * 1000,
                 )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             result = HealthCheckResult(
                 status=McpStatus.ERROR,
                 error="Health check timed out",
@@ -122,20 +123,16 @@ class MCPHealthMonitor:
         task = self._monitors.pop(name, None)
         if task:
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
             logger.info("Health monitoring stopped", server=name)
 
     async def stop_all(self) -> None:
         """Stop all monitoring tasks."""
-        for name, task in list(self._monitors.items()):
+        for _name, task in list(self._monitors.items()):
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
         self._monitors.clear()
 
     def get_last_result(self, name: str) -> HealthCheckResult | None:

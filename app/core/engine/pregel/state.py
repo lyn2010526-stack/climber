@@ -7,7 +7,8 @@ state dict. Without a reducer, the default behavior is last-write-wins.
 from __future__ import annotations
 
 import copy
-from typing import Any, Callable, TypeVar, get_args, get_origin, get_type_hints
+from collections.abc import Callable
+from typing import Any, TypeVar, get_args, get_origin, get_type_hints
 
 import structlog
 

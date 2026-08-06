@@ -6,10 +6,43 @@ export interface ApiError {
   detail: string;
 }
 
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
+
+function onTokenRefreshed(token: string) {
+  refreshSubscribers.forEach(cb => cb(token));
+  refreshSubscribers = [];
+}
+
+function subscribeTokenRefresh(cb: (token: string) => void) {
+  refreshSubscribers.push(cb);
+}
+
 class ApiClient {
   private getAuthHeaders(): Record<string, string> {
     const token = localStorage.getItem('auth_token');
     return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
+  private async refreshToken(): Promise<string | null> {
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) return null;
+
+    try {
+      const response = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (!response.ok) return null;
+
+      const data = await response.json();
+      localStorage.setItem('auth_token', data.access_token);
+      return data.access_token;
+    } catch {
+      return null;
+    }
   }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -19,10 +52,29 @@ class ApiClient {
       ...options.headers as Record<string, string>,
     };
 
-    const response = await fetch(`${BASE_URL}${path}`, {
+    let response = await fetch(`${BASE_URL}${path}`, {
       ...options,
       headers,
     });
+
+    if (response.status === 401) {
+      const newToken = await this.refreshToken();
+      if (newToken) {
+        headers['Authorization'] = `Bearer ${newToken}`;
+        response = await fetch(`${BASE_URL}${path}`, {
+          ...options,
+          headers,
+        });
+      } else {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('user_info');
+        if (!window.location.hash.includes('login')) {
+          window.location.hash = 'login';
+        }
+        throw new Error('Authentication required');
+      }
+    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Request failed' }));
@@ -356,7 +408,7 @@ class ApiClient {
   }
 
   async runDoctor() {
-    return this.request<any>('/doctor');
+    return this.request<any>('/doctor/');
   }
 
   // Reasoning
@@ -452,10 +504,6 @@ class ApiClient {
     });
   }
 
-  async cancelTask(id: string) {
-    return this.request<any>(`/tasks/${id}/cancel`, { method: 'POST' });
-  }
-
   async pauseTask(id: string) {
     return this.request<any>(`/tasks/${id}/pause`, { method: 'POST' });
   }
@@ -545,12 +593,11 @@ class ApiClient {
     return this.request<any[]>('/eval/datasets');
   }
 
-  async seedBuiltinDatasets() {
-    return this.request<any>('/eval/datasets/seed-builtin', { method: 'POST' });
-  }
-
-  async runEvalDataset(id: string) {
-    return this.request<any>(`/eval/datasets/${id}/run`, { method: 'POST' });
+  async runEvaluation(datasetId: string, agentId: string) {
+    return this.request<any>('/eval/run', {
+      method: 'POST',
+      body: JSON.stringify({ dataset_id: datasetId, agent_id: agentId }),
+    });
   }
 
   // Search
@@ -574,6 +621,65 @@ class ApiClient {
     return this.request<any>('/permissions/config', {
       method: 'PUT',
       body: JSON.stringify(config),
+    });
+  }
+
+  // Auth
+  async login(username: string, password: string) {
+    const response = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Login failed' }));
+      throw new Error(error.detail || 'Login failed');
+    }
+    return response.json();
+  }
+
+  async logout() {
+    try {
+      await this.request('/auth/logout', { method: 'POST' });
+    } catch {
+      // Ignore logout errors
+    }
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user_info');
+  }
+
+  async getCurrentUser() {
+    return this.request<any>('/auth/me');
+  }
+
+  async getAuthHealth() {
+    const response = await fetch(`${BASE_URL}/auth/health`);
+    if (response.ok) {
+      return response.json();
+    }
+    return { authentication_enabled: false };
+  }
+
+  async listAuthApiKeys() {
+    return this.request<any>('/auth/keys');
+  }
+
+  async createAuthApiKey(data: { name: string; owner: string; scopes: string[]; ttl_days: number | null }) {
+    return this.request<any>('/auth/keys', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async revokeAuthApiKey(keyId: string) {
+    return this.request<any>(`/auth/keys/${keyId}`, { method: 'DELETE' });
+  }
+
+  async changePassword(currentPassword: string, newPassword: string) {
+    return this.request<any>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
     });
   }
 

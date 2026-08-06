@@ -11,7 +11,7 @@ Features:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import structlog
@@ -19,7 +19,7 @@ import structlog
 logger = structlog.get_logger()
 
 
-class CompressionStrategy(str, Enum):
+class CompressionStrategy(StrEnum):
     SUMMARIZE = "summarize"  # Summarize older messages
     DROP_TOOL_RESULTS = "drop_tool_results"  # Remove old tool outputs
     KEEP_SYSTEM = "keep_system"  # Only keep system + last N messages
@@ -144,10 +144,7 @@ class MemoryPressureManager:
 
         # Warning-level: check cooldown
         turns_since_last = current_turn - self._last_compression_turn
-        if turns_since_last < self._config.compression_cooldown_turns:
-            return False
-
-        return True
+        return not turns_since_last < self._config.compression_cooldown_turns
 
     def compress(
         self,

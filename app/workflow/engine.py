@@ -30,7 +30,6 @@ from app.workflow import (
     WorkflowResult,
 )
 
-
 _SAFE_EVAL_BUILTINS = {
     "len": len, "str": str, "int": int, "float": float,
     "bool": bool, "list": list, "dict": dict, "range": range,
@@ -94,9 +93,8 @@ def _validate_code_ast(node: ast.AST) -> None:
     for child in ast.walk(node):
         if not isinstance(child, allowed_nodes):
             raise ValueError(f"Unsafe code node: {type(child).__name__}")
-        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if child.name.startswith("_"):
-                raise ValueError(f"Private function definition not allowed: {child.name}")
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name.startswith("_"):
+            raise ValueError(f"Private function definition not allowed: {child.name}")
         if isinstance(child, (ast.Import, ast.ImportFrom)):
             if child.module and child.module not in {"json", "math", "datetime", "re", "collections"}:
                 raise ValueError(f"Unsafe import: {child.module}")
@@ -399,9 +397,7 @@ class WorkflowEngine:
 
         for edge in edges:
             edge_condition = edge.condition
-            if edge_condition == "true" and not condition_result:
-                skip_targets.append(edge.target)
-            elif edge_condition == "false" and condition_result:
+            if edge_condition == "true" and not condition_result or edge_condition == "false" and condition_result:
                 skip_targets.append(edge.target)
 
         return {
@@ -486,11 +482,6 @@ class WorkflowEngine:
                 collection = []
 
         results: list[Any] = []
-        safe_builtins = {
-            "len": len, "str": str, "int": int, "float": float,
-            "bool": bool, "list": list, "dict": dict, "range": range,
-            "enumerate": enumerate, "abs": abs, "round": round,
-        }
 
         for i, item in enumerate(collection[:max_iterations]):
             local_vars = {item_var: item, "index": i, **inputs}

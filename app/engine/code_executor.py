@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import ast
 import operator
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 import structlog
 
@@ -580,7 +581,7 @@ class SafeExecutor:
         """Assign value to an assignment target."""
         if isinstance(target, ast.Name):
             self.state[target.id] = value
-        elif isinstance(target, ast.Tuple) or isinstance(target, ast.List):
+        elif isinstance(target, (ast.Tuple, ast.List)):
             if not hasattr(value, "__iter__"):
                 raise TypeError(f"Cannot unpack non-iterable: {type(value).__name__}")
             items = list(value)
@@ -859,12 +860,11 @@ class _Function:
 
         # Bind positional args
         num_pos = len(params.args)
-        if len(args) > num_pos:
-            if params.vararg is None:
-                raise TypeError(
-                    f"{self.name}() takes {num_pos} positional arguments "
-                    f"but {len(args)} were given"
-                )
+        if len(args) > num_pos and params.vararg is None:
+            raise TypeError(
+                f"{self.name}() takes {num_pos} positional arguments "
+                f"but {len(args)} were given"
+            )
 
         local_state: dict[str, Any] = {}
 

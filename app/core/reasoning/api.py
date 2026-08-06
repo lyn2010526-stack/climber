@@ -3,50 +3,59 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
-from sse_starlette.sse import EventSourceResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette.sse import EventSourceResponse
 
-from app.core.agent_engine import AgentEngine
+from app.api.v1.common import current_user_id
 from app.core.reasoning import (
-    ReasoningFeedback,
     ReasoningRequest,
     ReasoningResult,
 )
+from app.middleware.rate_limit import RateLimit
 from app.storage import get_db
 from app.storage.repository_reasoning import (
-    ReasoningTraceRepository,
     ReasoningFeedbackRepository,
+    ReasoningTraceRepository,
 )
-from app.middleware.rate_limit import RateLimit
 
 DEFAULT_USER = "default-user"
 
 router = APIRouter(tags=["reasoning"], redirect_slashes=False)
 
 
+async def _get_owned_trace(trace_repo: ReasoningTraceRepository, trace_id: str, user_id: str) -> Any:
+    """Fetch a trace owned by the given user, or None."""
+    trace = await trace_repo.get_by_trace_id(trace_id)
+    if trace is None or (getattr(trace, "user_id", None) and trace.user_id != user_id):
+        return None
+    return trace
+
+
 @router.post("/")
 async def reason_with_slash(
-    request: ReasoningRequest,
+    request: Request,
+    req: ReasoningRequest,
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = RateLimit,
 ) -> ReasoningResult:
     from app.api.v1 import get_engine
 
+    user_id = current_user_id(request)
     engine = get_engine()
     if not hasattr(engine, 'reasoning') or not engine.reasoning or not engine.reasoning.is_available():
         raise HTTPException(status_code=503, detail="Reasoning engine not initialized")
 
     try:
-        result = await engine.reasoning.pipeline.reason(request)
+        result = await engine.reasoning.pipeline.reason(req)
 
         if result.trace:
             trace_repo = ReasoningTraceRepository(db)
             await trace_repo.create({
                 "trace_id": result.trace.trace_id,
-                "user_id": DEFAULT_USER,
+                "user_id": user_id,
                 "task": result.trace.task,
                 "mode": result.mode_used.value,
                 "candidates_count": len(result.candidates),
@@ -69,35 +78,38 @@ async def reason_with_slash(
 
 @router.post("")
 async def reason_no_slash(
-    request: ReasoningRequest,
+    request: Request,
+    req: ReasoningRequest,
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = RateLimit,
 ) -> ReasoningResult:
-    return await reason_with_slash(request, db)
+    return await reason_with_slash(request, req, db, _rate_limit)
 
 
 @router.post("/stream")
 async def reason_stream(
-    request: ReasoningRequest,
+    request: Request,
+    req: ReasoningRequest,
     db: AsyncSession = Depends(get_db),
 ) -> EventSourceResponse:
     from app.api.v1 import get_engine
 
+    user_id = current_user_id(request)
     engine = get_engine()
     if not hasattr(engine, 'reasoning') or not engine.reasoning or not engine.reasoning.is_available():
         raise HTTPException(status_code=503, detail="Reasoning engine not initialized")
 
     async def event_generator():
-        yield {"event": "reasoning_start", "data": json.dumps({"mode": request.mode.value, "task": request.task[:100]})}
+        yield {"event": "reasoning_start", "data": json.dumps({"mode": req.mode.value, "task": req.task[:100]})}
 
         try:
-            result = await engine.reasoning.pipeline.reason(request)
+            result = await engine.reasoning.pipeline.reason(req)
 
             if result.trace:
                 trace_repo = ReasoningTraceRepository(db)
                 await trace_repo.create({
                     "trace_id": result.trace.trace_id,
-                    "user_id": DEFAULT_USER,
+                    "user_id": user_id,
                     "task": result.trace.task,
                     "mode": result.mode_used.value,
                     "candidates_count": len(result.candidates),
@@ -140,34 +152,8 @@ async def reason_stream(
     return EventSourceResponse(event_generator())
 
 
-@router.get("/{trace_id}")
-async def get_reasoning_trace(
-    trace_id: str,
-    db: AsyncSession = Depends(get_db),
-) -> dict[str, Any] | None:
-    repo = ReasoningTraceRepository(db)
-    trace = await repo.get_by_trace_id(trace_id)
-    if not trace:
-        return None
-    return {
-        "trace_id": trace.trace_id,
-        "task": trace.task,
-        "mode": trace.mode,
-        "candidates_count": trace.candidates_count,
-        "best_confidence": trace.best_confidence,
-        "coverage_score": trace.coverage_score,
-        "duration_ms": trace.duration_ms,
-        "total_tokens": trace.total_tokens,
-        "estimated_cost": trace.estimated_cost,
-        "result_summary": trace.result_summary,
-        "path_traces": trace.path_traces,
-        "coverage_report": trace.coverage_report,
-        "created_at": trace.created_at.isoformat() if trace.created_at else None,
-    }
-
-
 @router.get("/modes")
-async def list_reasoning_modes() -> list[dict[str, str]]:
+async def list_reasoning_modes() -> list[dict[str, Any]]:
     modes = [
         {"id": "auto", "name": "Auto", "description": "Automatically select best strategy", "available": True},
         {"id": "tree", "name": "Tree of Thought", "description": "Parallel multi-path + self-refine", "available": True},
@@ -180,19 +166,21 @@ async def list_reasoning_modes() -> list[dict[str, str]]:
 @router.post("/{trace_id}/feedback")
 async def submit_feedback(
     trace_id: str,
+    request: Request,
     feedback: dict[str, Any],
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = RateLimit,
 ) -> dict[str, str]:
+    user_id = current_user_id(request)
     trace_repo = ReasoningTraceRepository(db)
-    trace = await trace_repo.get_by_trace_id(trace_id)
+    trace = await _get_owned_trace(trace_repo, trace_id, user_id)
     if not trace:
         raise HTTPException(status_code=404, detail="Trace not found")
 
     feedback_repo = ReasoningFeedbackRepository(db)
     await feedback_repo.create({
         "trace_id": trace_id,
-        "user_id": DEFAULT_USER,
+        "user_id": user_id,
         "rating": feedback.get("rating", 3),
         "thumbs": feedback.get("thumbs"),
         "comment": feedback.get("comment", ""),
@@ -205,9 +193,16 @@ async def submit_feedback(
 @router.get("/{trace_id}/feedback")
 async def get_feedback(
     trace_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = RateLimit,
 ) -> list[dict[str, Any]]:
+    user_id = current_user_id(request)
+    trace_repo = ReasoningTraceRepository(db)
+    trace = await _get_owned_trace(trace_repo, trace_id, user_id)
+    if not trace:
+        raise HTTPException(status_code=404, detail="Trace not found")
+
     feedback_repo = ReasoningFeedbackRepository(db)
     entries = await feedback_repo.list_by_trace_id(trace_id)
     return [
@@ -225,11 +220,13 @@ async def get_feedback(
 
 @router.get("/history")
 async def list_reasoning_history(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     limit: int = 50,
 ) -> list[dict[str, Any]]:
+    user_id = current_user_id(request)
     trace_repo = ReasoningTraceRepository(db)
-    items = await trace_repo.list_by_user(DEFAULT_USER, limit=limit)
+    items = await trace_repo.list_by_user(user_id, limit=limit)
     return [
         {
             "trace_id": t.trace_id,
@@ -243,3 +240,31 @@ async def list_reasoning_history(
         }
         for t in items
     ]
+
+
+@router.get("/{trace_id}")
+async def get_reasoning_trace(
+    trace_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any] | None:
+    user_id = current_user_id(request)
+    repo = ReasoningTraceRepository(db)
+    trace = await _get_owned_trace(repo, trace_id, user_id)
+    if not trace:
+        return None
+    return {
+        "trace_id": trace.trace_id,
+        "task": trace.task,
+        "mode": trace.mode,
+        "candidates_count": trace.candidates_count,
+        "best_confidence": trace.best_confidence,
+        "coverage_score": trace.coverage_score,
+        "duration_ms": trace.duration_ms,
+        "total_tokens": trace.total_tokens,
+        "estimated_cost": trace.estimated_cost,
+        "result_summary": trace.result_summary,
+        "path_traces": trace.path_traces,
+        "coverage_report": trace.coverage_report,
+        "created_at": trace.created_at.isoformat() if trace.created_at else None,
+    }

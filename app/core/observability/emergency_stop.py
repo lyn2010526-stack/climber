@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -22,7 +22,7 @@ class EmergencyStopRecord:
     action: str = ""
     triggered_by: str = ""
     reason: str = ""
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     auto_trigger: bool = False
 
     def to_dict(self) -> dict[str, Any]:
@@ -109,7 +109,7 @@ class EmergencyStopManager:
         self._activated = True
         self._activation_reason = reason
         self._activated_by = triggered_by
-        self._activated_at = datetime.now(timezone.utc).isoformat()
+        self._activated_at = datetime.now(UTC).isoformat()
         self._persist_state()
         record = EmergencyStopRecord(
             action="activate",

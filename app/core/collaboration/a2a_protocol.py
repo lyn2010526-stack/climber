@@ -13,11 +13,11 @@ import json
 import time
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class A2AMessageType(str, Enum):
+class A2AMessageType(StrEnum):
     REQUEST = "request"
     RESPONSE = "response"
     EVENT = "event"

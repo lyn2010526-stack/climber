@@ -11,11 +11,11 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -23,7 +23,7 @@ class TaskStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
-class TaskFrequency(str, Enum):
+class TaskFrequency(StrEnum):
     ONCE = "once"
     HOURLY = "hourly"
     DAILY = "daily"

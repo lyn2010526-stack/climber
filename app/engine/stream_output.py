@@ -8,11 +8,11 @@ code execution events.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Protocol
+from typing import Any
 
 import structlog
 
-from app.engine.planning import Plan, PlanStep
+from app.engine.planning import Plan
 
 logger = structlog.get_logger()
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.prompt_engine.models import PromptTemplate
@@ -147,7 +147,7 @@ class PromptTemplateRepository:
         model_id: str | None = None,
     ) -> PromptTemplate:
         """Create a new prompt template."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         template = PromptTemplate(
             id=str(uuid.uuid4()),
             name=name,
@@ -199,7 +199,7 @@ class PromptTemplateRepository:
             if hasattr(template, key) and key != "id":
                 setattr(template, key, value)
 
-        template.updated_at = datetime.now(timezone.utc).isoformat()
+        template.updated_at = datetime.now(UTC).isoformat()
         return template
 
     def delete(self, template_id: str) -> bool:
@@ -219,7 +219,7 @@ class PromptTemplateRepository:
         if not template:
             return None
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         new_template = PromptTemplate(
             id=str(uuid.uuid4()),
             name=new_name or f"{template.name} (Copy)",
@@ -258,7 +258,7 @@ class PromptTemplateRepository:
             template = PromptTemplate.from_dict(data)
             template.id = str(uuid.uuid4())
             template.is_builtin = False
-            template.created_at = datetime.now(timezone.utc).isoformat()
+            template.created_at = datetime.now(UTC).isoformat()
             template.updated_at = template.created_at
             self._templates[template.id] = template
             return template
@@ -279,7 +279,7 @@ class PromptTemplateRepository:
                     template = PromptTemplate.from_dict(item)
                     template.id = str(uuid.uuid4())
                     template.is_builtin = False
-                    template.created_at = datetime.now(timezone.utc).isoformat()
+                    template.created_at = datetime.now(UTC).isoformat()
                     template.updated_at = template.created_at
                     self._templates[template.id] = template
                     imported.append(template)

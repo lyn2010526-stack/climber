@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import secrets
 from pathlib import Path
 
 from dotenv import load_dotenv
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -14,10 +13,35 @@ load_dotenv(BASE_DIR / ".env")
 
 
 class Settings(BaseSettings):
+    app_env: str = Field(default="local")
     app_testing: bool = Field(default=False)
     app_debug: bool = Field(default=False)
     app_log_level: str = Field(default="INFO")
-    app_secret_key: str = Field(default_factory=lambda: secrets.token_hex(32))
+    app_secret_key: str = Field(default="")
+
+    # Authentication settings
+    enable_auth: bool = Field(default=False)
+    auth_public_endpoints: list[str] = Field(
+        default_factory=lambda: [
+            "/health",
+            "/health/logs",
+            "/metrics",
+            "/docs",
+            "/openapi.json",
+            "/favicon.ico",
+            "/",
+        ]
+    )
+
+    websocket_paths: list[str] = Field(
+        default_factory=lambda: [
+            "/api/v1/ws/{session_id}",
+            "/api/v1/ws/groups/{group_id}",
+            "/api/v1/ws/agents/{agent_id}",
+        ]
+    )
+    jwt_algorithm: str = Field(default="HS256")
+    jwt_expire_minutes: int = Field(default=1440)
 
     # Local-first: SQLite by default. Point database_url at PostgreSQL only if
     # you actually need multi-user concurrency.
@@ -51,6 +75,7 @@ class Settings(BaseSettings):
     host: str = Field(default="127.0.0.1")
     port: int = Field(default=8000)
     enable_lan_access: bool = Field(default=False)
+    trusted_proxies: str = Field(default="127.0.0.1,::1")
 
     cors_origins: str = Field(default="http://localhost:5173,http://localhost:3000")
     cors_origins_list: list[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"])
@@ -95,9 +120,31 @@ class Settings(BaseSettings):
     ])
 
     @property
+    def auth_public_endpoints_set(self) -> set[str]:
+        return set(self.auth_public_endpoints)
+
+    @property
     def is_sqlite(self) -> bool:
         url = self.test_database_url if self.app_testing else self.database_url
         return url.startswith("sqlite")
+
+    @property
+    def trusted_proxies_list(self) -> list[str]:
+        return [proxy.strip() for proxy in self.trusted_proxies.split(",") if proxy.strip()]
+
+    @model_validator(mode="after")
+    def _require_stable_secret(self) -> Settings:
+        if self.app_secret_key:
+            return self
+        environment = self.app_env.strip().lower()
+        if self.enable_auth:
+            raise ValueError("APP_SECRET_KEY must be configured when authentication is enabled")
+        if self.app_testing or environment in {"local", "development", "test", "testing"}:
+            self.app_secret_key = "agent-engine-local-persistent-development-key"
+            return self
+        if environment in {"production", "prod", "staging"}:
+            raise ValueError("APP_SECRET_KEY must be configured for authentication or production")
+        raise ValueError("APP_SECRET_KEY must be configured outside local/test environments")
 
 
 settings = Settings()

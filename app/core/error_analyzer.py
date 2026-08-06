@@ -6,11 +6,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class ErrorType(str, Enum):
+class ErrorType(StrEnum):
     """Classification of error categories for auto-debug."""
 
     SYNTAX_ERROR = "syntax_error"

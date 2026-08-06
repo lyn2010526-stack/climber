@@ -1,5 +1,7 @@
 import pytest
-from app.core.metrics import MetricsCollector, SessionMetrics
+
+from app.core.metrics import MetricsCollector
+
 
 @pytest.fixture
 def collector():

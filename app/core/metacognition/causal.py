@@ -7,12 +7,12 @@ or context insufficiency.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 
-class RootCause(str, Enum):
+class RootCause(StrEnum):
     PLANNING_ERROR = "planning_error"
     TOOL_PARAMETER_ERROR = "tool_parameter_error"
     MODEL_HALLUCINATION = "model_hallucination"

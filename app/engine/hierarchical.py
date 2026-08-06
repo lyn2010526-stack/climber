@@ -8,14 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
 from pydantic import BaseModel, Field
 
-from app.multi_agent import AgentRole, AgentTask, CrewOutput, TaskStatus
+from app.multi_agent import AgentRole, AgentTask, CrewOutput
 
 logger = structlog.get_logger()
 
@@ -114,7 +113,7 @@ class ManagerAgent:
         self._plan_history.append({
             "task": task,
             "assignments": [a.model_dump() for a in assignments],
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         })
 
         logger.info("manager_plan_created", assignment_count=len(assignments))
@@ -325,7 +324,7 @@ class HierarchicalCrew:
                 return_exceptions=True,
             )
 
-            for assignment, result in zip(ready, batch_results):
+            for assignment, result in zip(ready, batch_results, strict=False):
                 if isinstance(result, Exception):
                     logger.error(
                         "hierarchical_task_failed",

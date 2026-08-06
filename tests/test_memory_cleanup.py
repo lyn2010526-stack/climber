@@ -1,21 +1,21 @@
 """TDD: memory decay + archive wired into cleanup cycle."""
 
 import os
-import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 os.environ["APP_TESTING"] = "true"
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./data/test_memory_cleanup.db")
 
 import pytest
 import pytest_asyncio
-from app.core.cleanup import cleanup_memory_decay, cleanup_memory_archive
+
+from app.core.cleanup import cleanup_memory_archive, cleanup_memory_decay
 from app.core.persistent_memory import PersistentMemoryService
 
 
 @pytest_asyncio.fixture
 async def env():
-    from app.storage import async_session, init_db
+    from app.storage import init_db
 
     await init_db()
     yield
@@ -52,7 +52,7 @@ async def test_decay_reduces_recency_scores(env):
     await _create_episodic(
         user_id="u1", content="old memory", importance=0.5,
         recency_score=1.0,
-        last_accessed_at=datetime.now(timezone.utc) - timedelta(days=10),
+        last_accessed_at=datetime.now(UTC) - timedelta(days=10),
     )
     await cleanup_memory_decay()
 
@@ -70,7 +70,7 @@ async def test_archive_moves_old_low_importance(env):
     await _create_episodic(
         user_id="u1", content="old trivial", importance=0.1,
         recency_score=0.1,
-        created_at=datetime.now(timezone.utc) - timedelta(days=60),
+        created_at=datetime.now(UTC) - timedelta(days=60),
     )
     await cleanup_memory_archive()
 

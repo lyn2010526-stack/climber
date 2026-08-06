@@ -8,13 +8,14 @@ StateGraph is the builder API for defining graph topology:
 
 from __future__ import annotations
 
-import enum
+import uuid
 from collections import defaultdict
-from typing import Any, Awaitable, Callable, Protocol, runtime_checkable
+from collections.abc import Awaitable, Callable
+from typing import Any, Protocol, runtime_checkable
 
 import structlog
 
-from app.core.engine.pregel.command import Command, is_command, parse_node_output
+from app.core.engine.pregel.command import Command
 from app.core.engine.pregel.state import GraphState, StateReducer
 
 logger = structlog.get_logger(__name__)
@@ -239,6 +240,12 @@ class CompiledGraphImpl:
     def graph(self) -> StateGraph:
         return self._graph
 
+    @staticmethod
+    def _execution_config(config: dict | None) -> dict:
+        execution_config = dict(config or {})
+        execution_config.setdefault("thread_id", str(uuid.uuid4()))
+        return execution_config
+
     async def invoke(self, input: dict, config: dict | None = None) -> dict:
         """Execute the graph synchronously and return final state.
 
@@ -249,7 +256,7 @@ class CompiledGraphImpl:
         Returns:
             Final state dict after graph completes.
         """
-        config = config or {}
+        config = self._execution_config(config)
         state = GraphState(input, schema=self._graph.schema)
         result = await self._engine.run(state, config=config)
         return dict(result)
@@ -264,7 +271,7 @@ class CompiledGraphImpl:
         Yields:
             State dict after each super-step.
         """
-        config = config or {}
+        config = self._execution_config(config)
         state = GraphState(input, schema=self._graph.schema)
         async for step_state in self._engine.astream(state, config=config):
             yield dict(step_state)
@@ -279,7 +286,7 @@ class CompiledGraphImpl:
         Yields:
             StreamEvent objects with node-level detail.
         """
-        config = config or {}
+        config = self._execution_config(config)
         state = GraphState(input, schema=self._graph.schema)
         async for event in self._engine.astream_events(state, config=config):
             yield event

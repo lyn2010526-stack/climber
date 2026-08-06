@@ -18,9 +18,8 @@ from app.core.checkpoint import CheckpointData, SQLiteCheckpointStore
 from app.core.recovery import RecoveryManager
 from app.core.task_state_machine import TaskState
 from app.models.registry import ModelRegistry
-from app.storage import init_db, engine, Base
-from app.storage.database import CheckpointRecord, Turn
-from app.storage.repository import SessionRepository, TurnRepository
+from app.storage import Base, engine, init_db
+from app.storage.repository import TurnRepository
 from app.tools import ToolRegistry
 
 
@@ -231,7 +230,7 @@ async def test_checkpoint_get_latest(checkpoint_store):
 async def _create_test_session(session_id: str) -> None:
     """Helper to create a session row so turn FK constraint passes."""
     from app.storage import async_session
-    from app.storage.database import Session, Agent
+    from app.storage.database import Agent, Session
     async with async_session() as db:
         agent = await db.execute(
             __import__("sqlalchemy").select(Agent).where(Agent.id == "test-agent")
@@ -306,7 +305,7 @@ async def test_turn_fail(turn_repository):
 @pytest.mark.asyncio
 async def test_turn_list_by_session(turn_repository):
     await _create_test_session("sess-turn-list")
-    for i in range(3):
+    for _i in range(3):
         await turn_repository.start_turn(session_id="sess-turn-list")
 
     turns = await turn_repository.list_by_session("sess-turn-list")

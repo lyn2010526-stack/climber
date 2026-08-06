@@ -8,6 +8,8 @@ that, so the pragmas below are applied to every new connection.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from pathlib import Path
 from typing import Any
 
@@ -21,10 +23,7 @@ from app.config import settings
 
 logger = structlog.get_logger()
 
-if settings.app_testing:
-    db_url = settings.test_database_url
-else:
-    db_url = settings.database_url
+db_url = settings.test_database_url if settings.app_testing else settings.database_url
 
 _is_sqlite = db_url.startswith("sqlite")
 
@@ -114,39 +113,53 @@ async def get_db() -> Any:
 async def db_health() -> dict[str, Any]:
     """Report backend, journal mode and connectivity for diagnostics."""
     info: dict[str, Any] = {"backend": "sqlite" if _is_sqlite else "other", "url": db_url.split("://")[0]}
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-            info["connected"] = True
-            if _is_sqlite:
-                mode = await conn.execute(text("PRAGMA journal_mode"))
-                info["journal_mode"] = mode.scalar()
-                busy = await conn.execute(text("PRAGMA busy_timeout"))
-                info["busy_timeout_ms"] = busy.scalar()
-    except Exception as exc:
-        info["connected"] = False
-        info["error"] = str(exc)
+    from sqlalchemy.exc import OperationalError
+
+    for attempt in range(3):
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+                info["connected"] = True
+                if _is_sqlite:
+                    mode = await conn.execute(text("PRAGMA journal_mode"))
+                    info["journal_mode"] = mode.scalar()
+                    busy = await conn.execute(text("PRAGMA busy_timeout"))
+                    info["busy_timeout_ms"] = busy.scalar()
+            return info
+        except OperationalError as exc:
+            if "locked" in str(exc).lower() and attempt < 2:
+                await asyncio.sleep(0.05 * (attempt + 1))
+                continue
+            info["connected"] = False
+            info["error"] = str(exc)
+            return info
+        except Exception as exc:
+            info["connected"] = False
+            info["error"] = str(exc)
+            return info
     return info
 
 
 async def init_db() -> None:
     """Create all tables. Ensure all models are imported for registration."""
     # Import all models so SQLAlchemy registers them with Base
-    from app.storage import database  # noqa: F401
-    from app.storage import models_memory  # noqa: F401
-    from app.storage import models_traces  # noqa: F401
-    from app.storage import models_eval  # noqa: F401
-    from app.storage import models_cost  # noqa: F401
-    from app.storage import models_skills  # noqa: F401
-    from app.storage import models_groups  # noqa: F401
-    from app.storage import models_feedback  # noqa: F401
-    from app.storage import models_files  # noqa: F401
-    from app.storage import models_plugins  # noqa: F401
-    from app.storage import models_reasoning  # noqa: F401
-    from app.storage import models_platform  # noqa: F401
+    from app.storage import (
+        database,  # noqa: F401
+        models_cost,  # noqa: F401
+        models_eval,  # noqa: F401
+        models_feedback,  # noqa: F401
+        models_files,  # noqa: F401
+        models_groups,  # noqa: F401
+        models_memory,  # noqa: F401
+        models_platform,  # noqa: F401
+        models_plugins,  # noqa: F401
+        models_reasoning,  # noqa: F401
+        models_skills,  # noqa: F401
+        models_traces,  # noqa: F401
+    )
+
+    from app.models import users as _users_model  # noqa: F401
 
     async with engine.begin() as conn:
-        try:
+        with contextlib.suppress(Exception):
             await conn.run_sync(Base.metadata.create_all)
-        except Exception:
-            pass

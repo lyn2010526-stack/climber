@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
-
-import pytest
-
 from app.core.output_auditor import AuditConfig, AuditResult, OutputAuditor, get_output_auditor
 
 

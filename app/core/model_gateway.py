@@ -10,25 +10,24 @@ Provides:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class ModelStatus(str, Enum):
+class ModelStatus(StrEnum):
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
     DISABLED = "disabled"
 
 
-class TaskType(str, Enum):
+class TaskType(StrEnum):
     CODE_GENERATION = "code_generation"
     CODE_REVIEW = "code_review"
     CHAT = "chat"
@@ -75,12 +74,7 @@ class ModelCapability:
         if self.status == ModelStatus.DISABLED:
             return False
         if self.status == ModelStatus.UNHEALTHY:
-            if self.last_failure_time > 0 and (
-                time.time() - self.last_failure_time
-                > self.circuit_breaker_recovery_seconds
-            ):
-                return True
-            return False
+            return bool(self.last_failure_time > 0 and time.time() - self.last_failure_time > self.circuit_breaker_recovery_seconds)
         return True
 
     def record_success(self, latency_ms: float = 0.0) -> None:
@@ -190,13 +184,12 @@ class ModelGateway:
         """Determine the best model for a task."""
         if preferred_model and preferred_model in self._models:
             model = self._models[preferred_model]
-            if model.is_available:
-                if not require_tools or model.supports_tools:
-                    return RoutingDecision(
-                        model_id=preferred_model,
-                        reason="User preferred model",
-                        fallback_chain=self._build_fallback_chain(preferred_model, task_type),
-                    )
+            if model.is_available and (not require_tools or model.supports_tools):
+                return RoutingDecision(
+                    model_id=preferred_model,
+                    reason="User preferred model",
+                    fallback_chain=self._build_fallback_chain(preferred_model, task_type),
+                )
 
         task_chain = self._task_routes.get(task_type, [])
         fallback_chain: list[str] = []

@@ -31,9 +31,8 @@ def validate_structured_output(output: str, schema: dict[str, Any]) -> tuple[boo
         return True, parsed, []
 
     schema_type = schema.get("type")
-    if schema_type:
-        if not _check_type(parsed, schema_type):
-            errors.append(f"Expected type '{schema_type}', got '{type(parsed).__name__}'")
+    if schema_type and not _check_type(parsed, schema_type):
+        errors.append(f"Expected type '{schema_type}', got '{type(parsed).__name__}'")
 
     properties = schema.get("properties", {})
     if isinstance(parsed, dict) and properties:
@@ -101,10 +100,9 @@ def _validate_value(value: Any, schema: dict[str, Any]) -> tuple[bool, list[str]
     """Validate a single value against a schema fragment."""
     errors: list[str] = []
 
-    if "type" in schema:
-        if not _check_type(value, schema["type"]):
-            errors.append(f"Expected type '{schema['type']}', got '{type(value).__name__}'")
-            return False, errors
+    if "type" in schema and not _check_type(value, schema["type"]):
+        errors.append(f"Expected type '{schema['type']}', got '{type(value).__name__}'")
+        return False, errors
 
     if "enum" in schema and value not in schema["enum"]:
         errors.append(f"Value must be one of: {schema['enum']}")

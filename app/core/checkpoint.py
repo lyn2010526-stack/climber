@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import asdict, dataclass, field
+from typing import TYPE_CHECKING, Any
 
 from app.storage import async_session
+
+if TYPE_CHECKING:
+    from app.storage.database import CheckpointRecord
 
 
 @dataclass
@@ -108,10 +111,21 @@ class SQLiteCheckpointStore:
         checkpoint_id: str = "",
         parent_id: str | None = None,
     ) -> str:
-        from app.storage.database import CheckpointRecord
         from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+        from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
+
+        await ensure_checkpoint_schema()
         cid = checkpoint_id or f"cp-{int(time.time()*1000)}"
-        metadata_payload = {**checkpoint.metadata, "parent_id": parent_id}
+        metadata_payload = {
+            **checkpoint.metadata,
+            "parent_id": parent_id,
+            "thread_id": thread_id or "",
+        }
+        pending_writes = [
+            asdict(write) if isinstance(write, PendingWrite) else write
+            for write in checkpoint.pending_writes
+        ]
         async with async_session() as db:
             stmt = sqlite_insert(CheckpointRecord).values(
                 id=cid,
@@ -122,6 +136,10 @@ class SQLiteCheckpointStore:
                 status=checkpoint.status,
                 tool_results=json.dumps(checkpoint.tool_results, ensure_ascii=False),
                 metadata_=json.dumps(metadata_payload, ensure_ascii=False),
+                channel_values=json.dumps(checkpoint.channel_values, ensure_ascii=False),
+                channel_versions=json.dumps(checkpoint.channel_versions, ensure_ascii=False),
+                versions_seen=json.dumps(checkpoint.versions_seen, ensure_ascii=False),
+                pending_writes=json.dumps(pending_writes, ensure_ascii=False),
                 parent_id=parent_id,
             )
             stmt = stmt.on_conflict_do_update(
@@ -134,6 +152,10 @@ class SQLiteCheckpointStore:
                     "status": checkpoint.status,
                     "tool_results": json.dumps(checkpoint.tool_results, ensure_ascii=False),
                     "metadata": json.dumps(metadata_payload, ensure_ascii=False),
+                    "channel_values": json.dumps(checkpoint.channel_values, ensure_ascii=False),
+                    "channel_versions": json.dumps(checkpoint.channel_versions, ensure_ascii=False),
+                    "versions_seen": json.dumps(checkpoint.versions_seen, ensure_ascii=False),
+                    "pending_writes": json.dumps(pending_writes, ensure_ascii=False),
                     "parent_id": parent_id,
                 },
             )
@@ -142,7 +164,9 @@ class SQLiteCheckpointStore:
         return cid
 
     async def get(self, _thread_id: str | None, checkpoint_id: str) -> CheckpointData | None:
-        from app.storage.database import CheckpointRecord
+        from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
+
+        await ensure_checkpoint_schema()
         async with async_session() as db:
             record = (
                 await db.execute(
@@ -155,7 +179,9 @@ class SQLiteCheckpointStore:
 
     async def load(self, session_id: str, turn_id: str) -> CheckpointData | None:
         """Retrieve a checkpoint by session_id + turn_id (thread_id)."""
-        from app.storage.database import CheckpointRecord
+        from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
+
+        await ensure_checkpoint_schema()
         async with async_session() as db:
             record = (
                 await db.execute(
@@ -172,15 +198,21 @@ class SQLiteCheckpointStore:
             return self._to_checkpoint(record)
 
     async def get_latest(self, _thread_id: str | None, session_id: str, thread_id: str = "") -> tuple[CheckpointData, str] | None:
-        from app.storage.database import CheckpointRecord
+        from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
+
+        await ensure_checkpoint_schema()
         async with async_session() as db:
+            query = __import__("sqlalchemy").select(CheckpointRecord).where(
+                CheckpointRecord.session_id == session_id
+            )
+            if thread_id:
+                query = query.where(CheckpointRecord.thread_id == thread_id)
             record = (
                 await db.execute(
-                    __import__("sqlalchemy")
-                    .select(CheckpointRecord)
-                    .where(CheckpointRecord.session_id == session_id)
-                    .order_by(CheckpointRecord.iteration.desc(), CheckpointRecord.created_at.desc())
-                    .limit(1)
+                    query.order_by(
+                        CheckpointRecord.iteration.desc(),
+                        CheckpointRecord.created_at.desc(),
+                    ).limit(1)
                 )
             ).scalar_one_or_none()
             if record is None:
@@ -189,7 +221,9 @@ class SQLiteCheckpointStore:
             return cp, record.id
 
     async def list_for_session(self, _thread_id: str | None, session_id: str) -> list[str]:
-        from app.storage.database import CheckpointRecord
+        from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
+
+        await ensure_checkpoint_schema()
         async with async_session() as db:
             rows = (
                 await db.execute(
@@ -203,7 +237,9 @@ class SQLiteCheckpointStore:
 
     async def list(self, session_id: str) -> list[CheckpointData]:
         """Return all checkpoints for a session as CheckpointData objects."""
-        from app.storage.database import CheckpointRecord
+        from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
+
+        await ensure_checkpoint_schema()
         async with async_session() as db:
             rows = (
                 await db.execute(
@@ -244,7 +280,9 @@ class SQLiteCheckpointStore:
             return result.rowcount > 0
 
     async def put_writes(self, checkpoint_id: str, writes: list[PendingWrite]) -> None:
-        metadata: dict[str, Any] = {}
+        from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
+
+        await ensure_checkpoint_schema()
         async with async_session() as db:
             record = (
                 await db.execute(
@@ -253,25 +291,15 @@ class SQLiteCheckpointStore:
             ).scalar_one_or_none()
             if record is None:
                 return
-            try:
-                metadata = json.loads(record.metadata_ or "{}")
-            except Exception:
-                metadata = {}
-            metadata.setdefault("pending_writes", [])
-            for w in writes:
-                metadata["pending_writes"].append(
-                    {
-                        "channel": w.channel,
-                        "value": w.value,
-                        "write_id": w.write_id,
-                        "status": w.status,
-                    }
-                )
-            record.metadata_ = json.dumps(metadata, ensure_ascii=False)
+            pending = self._load_json(getattr(record, "pending_writes", "[]"), [])
+            pending.extend(asdict(write) for write in writes)
+            record.pending_writes = json.dumps(pending, ensure_ascii=False)
             await db.commit()
 
     async def get_writes(self, checkpoint_id: str) -> list[PendingWrite]:
-        from app.storage.database import CheckpointRecord
+        from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
+
+        await ensure_checkpoint_schema()
         async with async_session() as db:
             record = (
                 await db.execute(
@@ -280,31 +308,40 @@ class SQLiteCheckpointStore:
             ).scalar_one_or_none()
             if record is None:
                 return []
-            try:
-                metadata = json.loads(record.metadata_ or "{}")
-            except Exception:
-                return []
-            raw = metadata.get("pending_writes", [])
-            return [PendingWrite(**item) for item in raw]
+            raw = self._load_json(getattr(record, "pending_writes", "[]"), [])
+            if not raw:
+                metadata = self._load_json(record.metadata_ or "{}", {})
+                raw = metadata.get("pending_writes", [])
+            return self._parse_pending_writes(raw)
 
-    def _to_checkpoint(self, record: "CheckpointRecord") -> CheckpointData:
+    @staticmethod
+    def _load_json(value: str | None, default: Any) -> Any:
         try:
-            messages = json.loads(record.messages or "[]")
-        except Exception:
-            messages = []
+            return json.loads(value or "")
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _parse_pending_writes(raw: Any) -> list[PendingWrite]:
+        if not isinstance(raw, list):
+            return []
         try:
-            tool_results = json.loads(record.tool_results or "[]")
-        except Exception:
-            tool_results = []
-        try:
-            metadata = json.loads(record.metadata_ or "{}")
-        except Exception:
-            metadata = {}
-        pending_writes_raw = metadata.pop("pending_writes", [])
-        try:
-            pending_writes = [PendingWrite(**item) for item in pending_writes_raw]
-        except Exception:
-            pending_writes = []
+            return [PendingWrite(**item) for item in raw if isinstance(item, dict)]
+        except (TypeError, ValueError):
+            return []
+
+    def _to_checkpoint(self, record: CheckpointRecord) -> CheckpointData:
+        messages = self._load_json(getattr(record, "messages", "[]"), [])
+        tool_results = self._load_json(getattr(record, "tool_results", "[]"), [])
+        metadata = self._load_json(getattr(record, "metadata_", "{}"), {})
+        legacy_pending_writes = metadata.pop("pending_writes", [])
+        pending_writes_value = getattr(record, "pending_writes", None)
+        pending_writes_raw = (
+            self._load_json(pending_writes_value, legacy_pending_writes)
+            if pending_writes_value is not None
+            else legacy_pending_writes
+        )
+        pending_writes = self._parse_pending_writes(pending_writes_raw)
         return CheckpointData(
             session_id=record.session_id,
             messages=messages,
@@ -312,5 +349,12 @@ class SQLiteCheckpointStore:
             status=record.status,
             tool_results=tool_results,
             metadata=metadata,
+            channel_values=self._load_json(
+                getattr(record, "channel_values", "{}"), {}
+            ),
+            channel_versions=self._load_json(
+                getattr(record, "channel_versions", "{}"), {}
+            ),
+            versions_seen=self._load_json(getattr(record, "versions_seen", "{}"), {}),
             pending_writes=pending_writes,
         )

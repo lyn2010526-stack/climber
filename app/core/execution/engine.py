@@ -11,15 +11,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
-from app.core.execution.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, TimeoutManager
+from app.core.execution.circuit_breaker import CircuitBreaker, TimeoutManager
 from app.core.execution.event_bus import EventBus, TaskEvent
 from app.core.execution.hitl import (
     HITLManager,
     HITLStatusApproved,
-    HITLStatusPending,
     HITLStatusRejected,
 )
 from app.core.execution.task_model import SubTask, Task, TaskStore
@@ -77,7 +77,7 @@ class TaskExecutionEngine:
                 self._circuit_breaker.record_failure()
                 self._timeout.fail_task(task.id)
                 await self._publish_event(EventBus.EVENT_FAILED, task.id)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             task.status = TaskState.FAILED.value
             task.metadata["failure_reason"] = "timeout"
             self._circuit_breaker.record_failure()
@@ -90,7 +90,7 @@ class TaskExecutionEngine:
             self._timeout.fail_task(task.id)
             await self._publish_event(EventBus.EVENT_FAILED, task.id, {"error": str(e)})
         finally:
-            task.metadata["completed_at"] = datetime.now(timezone.utc).isoformat()
+            task.metadata["completed_at"] = datetime.now(UTC).isoformat()
             self._store.save(task)
             self._running_tasks.pop(task.id, None)
 
@@ -107,7 +107,7 @@ class TaskExecutionEngine:
 
         while remaining:
             if self._timeout.check_timeout(task.id):
-                raise asyncio.TimeoutError(f"Task {task.id} exceeded timeout")
+                raise TimeoutError(f"Task {task.id} exceeded timeout")
 
             ready = self._get_ready_subtasks(subtask_map, completed, remaining)
             if not ready:
@@ -119,7 +119,7 @@ class TaskExecutionEngine:
             for subtask_id in ready:
                 subtask = subtask_map[subtask_id]
                 subtask.status = TaskState.RUNNING.value
-                subtask.started_at = datetime.now(timezone.utc).isoformat()
+                subtask.started_at = datetime.now(UTC).isoformat()
                 self._store.save(task)
 
                 if self._requires_hitl(subtask):
@@ -152,7 +152,7 @@ class TaskExecutionEngine:
                     )
                     subtask.result = str(result) if result else ""
                     subtask.status = TaskState.COMPLETED.value
-                    subtask.completed_at = datetime.now(timezone.utc).isoformat()
+                    subtask.completed_at = datetime.now(UTC).isoformat()
                     completed.add(subtask_id)
                     remaining.discard(subtask_id)
                     await self._publish_event(
@@ -160,7 +160,7 @@ class TaskExecutionEngine:
                         task.id,
                         {"subtask_id": subtask.id},
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     subtask.status = TaskState.FAILED.value
                     subtask.error = "timeout"
                     completed.add(subtask_id)

@@ -19,7 +19,6 @@ from app.core.reasoning.base import (
     Candidate,
     CoverageReport,
     EdgeCase,
-    IssueSeverity,
     Risk,
 )
 
@@ -191,7 +190,7 @@ class CoverageChecker:
                 timeout=timeout,
             )
             return self._extract_json(result.content)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Coverage LLM call timed out", timeout=timeout)
             return {}
         except Exception as exc:

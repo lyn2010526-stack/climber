@@ -10,11 +10,14 @@ from __future__ import annotations
 import contextvars
 from dataclasses import dataclass
 
+from app.core.principal import Principal, get_context_principal
+
 
 @dataclass
 class MemoryToolContext:
     user_id: str
     agent_id: str
+    principal: Principal | None = None
 
 
 # Set by AgentEngine at the start of each run(); read by memory tool wrappers.
@@ -24,8 +27,13 @@ memory_tool_ctx: contextvars.ContextVar[MemoryToolContext | None] = contextvars.
 
 
 def get_memory_tool_context() -> MemoryToolContext:
-    """Return the current memory tool context, falling back to defaults."""
+    """Return memory identity from tool context or the propagated principal."""
     ctx = memory_tool_ctx.get()
-    if ctx is None:
-        return MemoryToolContext(user_id="default-user", agent_id="default-agent")
-    return ctx
+    if ctx is not None:
+        return ctx
+    principal = get_context_principal()
+    return MemoryToolContext(
+        user_id=principal.subject_id,
+        agent_id="default-agent",
+        principal=principal,
+    )

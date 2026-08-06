@@ -6,14 +6,13 @@ memory sandboxes. Supports回收, destroy, and merge operations.
 
 from __future__ import annotations
 
-import asyncio
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class SubAgentState(str, Enum):
+class SubAgentState(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"

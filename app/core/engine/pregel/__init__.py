@@ -33,7 +33,7 @@ from app.core.engine.pregel.checkpoint import (
     SqliteCheckpointSaver,
 )
 from app.core.engine.pregel.command import Command
-from app.core.engine.pregel.engine import PregelEngine, ExecutionResult, SuperStepResult
+from app.core.engine.pregel.engine import ExecutionResult, PregelEngine, SuperStepResult
 from app.core.engine.pregel.graph import CompiledGraph, StateGraph
 from app.core.engine.pregel.hitl import HITLManager, Interrupt
 from app.core.engine.pregel.policies import DefaultErrorHandler, RetryPolicy, TimeoutPolicy

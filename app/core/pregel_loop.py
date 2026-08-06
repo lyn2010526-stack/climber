@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from app.core.state_graph import StateGraph
 
@@ -94,7 +94,7 @@ class PregelLoop:
                 results = await asyncio.gather(*tasks, return_exceptions=True)
 
                 # Process results and update channels
-                for node_name, result in zip(ready, results):
+                for node_name, result in zip(ready, results, strict=False):
                     if isinstance(result, Exception):
                         logger.error("node_failed", node=node_name, error=str(result))
                         continue
@@ -156,7 +156,7 @@ class PregelLoop:
             else:
                 result = spec.func(self.graph, thread_id)
             return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("node_timeout", node=node_name)
             if spec.on_error:
                 return spec.on_error(node_name, None)

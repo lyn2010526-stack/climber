@@ -10,7 +10,7 @@ Provides:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -109,7 +109,7 @@ class PersistentMemoryService:
                         if vid in memory_map:
                             mem = memory_map[vid]
                             mem.access_count += 1
-                            mem.last_accessed_at = datetime.now(timezone.utc)
+                            mem.last_accessed_at = datetime.now(UTC)
                             ordered.append(mem)
                     for mem in ordered[:limit]:
                         log = MemoryRetrievalLog(
@@ -147,7 +147,7 @@ class PersistentMemoryService:
                     if any(word in content_lower for word in query_lower.split() if len(word) > 3):
                         score *= 1.5
                         mem.access_count += 1
-                        mem.last_accessed_at = datetime.now(timezone.utc)
+                        mem.last_accessed_at = datetime.now(UTC)
                     scored.append((score, mem))
 
                 scored.sort(key=lambda x: x[0], reverse=True)
@@ -242,14 +242,14 @@ class PersistentMemoryService:
         """
         stats: dict[str, int] = {"archived": 0, "skipped": 0, "failed": 0}
         async with async_session() as db:
-            cutoff = datetime.now(timezone.utc).timestamp() - (max_episodic_age_days * 86400)
+            cutoff = datetime.now(UTC).timestamp() - (max_episodic_age_days * 86400)
             result = await db.execute(
                 select(EpisodicMemory)
                 .where(
                     and_(
                         EpisodicMemory.user_id == user_id,
                         EpisodicMemory.importance < min_importance,
-                        EpisodicMemory.created_at < datetime.fromtimestamp(cutoff, tz=timezone.utc),
+                        EpisodicMemory.created_at < datetime.fromtimestamp(cutoff, tz=UTC),
                     )
                 )
                 .limit(batch_size)
@@ -258,7 +258,7 @@ class PersistentMemoryService:
 
             for mem in old_memories:
                 try:
-                    archive_id = f"auto-{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+                    archive_id = f"auto-{datetime.now(UTC).strftime('%Y-%m-%d')}"
                     await self.create_archival_passage(
                         user_id=user_id,
                         text=mem.content,
@@ -314,7 +314,7 @@ class PersistentMemoryService:
             existing = result.scalar_one_or_none()
             if existing:
                 existing.confidence = max(existing.confidence, confidence)
-                existing.updated_at = datetime.now(timezone.utc)
+                existing.updated_at = datetime.now(UTC)
                 await db.commit()
                 return existing
 
@@ -418,7 +418,7 @@ class PersistentMemoryService:
             "category": category,
             "content": fact,
             "confidence": confidence,
-            "added_at": datetime.now(timezone.utc).isoformat(),
+            "added_at": datetime.now(UTC).isoformat(),
         })
         # Keep facts list manageable
         if len(profile.facts) > 100:
@@ -452,7 +452,7 @@ class PersistentMemoryService:
     ) -> None:
         """Record a user interaction for behavioral tracking."""
         profile = await self.get_or_create_profile(user_id)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         profile.total_sessions += 1
         profile.total_messages += message_count
         profile.last_interaction = now
@@ -617,7 +617,7 @@ class PersistentMemoryService:
                         if vid in passage_map:
                             passage = passage_map[vid]
                             passage.access_count += 1
-                            passage.last_accessed_at = datetime.now(timezone.utc)
+                            passage.last_accessed_at = datetime.now(UTC)
                             ordered.append(passage)
                     for p in ordered:
                         await vector_memory.update_access("archival", p.id)
@@ -657,11 +657,11 @@ class PersistentMemoryService:
         async with async_session() as db:
             result = await db.execute(select(EpisodicMemory))
             memories = result.scalars().all()
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             updated = 0
             for mem in memories:
                 if mem.last_accessed_at:
-                    days = (now - mem.last_accessed_at.replace(tzinfo=timezone.utc)).days
+                    days = (now - mem.last_accessed_at.replace(tzinfo=UTC)).days
                     mem.recency_score = 1.0 / (1.0 + days)
                     updated += 1
             await db.commit()

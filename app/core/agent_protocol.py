@@ -7,12 +7,12 @@ Replaces free-text communication that causes ambiguity.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from datetime import UTC, datetime
+from enum import Enum, StrEnum
 from typing import Any
-from datetime import datetime, timezone
 
 
-class MessageType(str, Enum):
+class MessageType(StrEnum):
     # Task lifecycle
     TASK_ASSIGNED = "task_assigned"
     TASK_STARTED = "task_started"
@@ -41,7 +41,7 @@ class MessageType(str, Enum):
     QUESTION = "question"
 
 
-class Priority(str, Enum):
+class Priority(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
@@ -93,7 +93,7 @@ class AgentMessage:
     references: list[str] = field(default_factory=list)  # message IDs this responds to
 
     # Metadata
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     message_id: str = ""
     session_id: str = ""
     iteration: int = 0
@@ -136,7 +136,7 @@ class AgentMessage:
         return result
 
     @classmethod
-    def from_dict(cls, data: dict) -> "AgentMessage":
+    def from_dict(cls, data: dict) -> AgentMessage:
         """Create from dictionary."""
         msg = cls(
             type=MessageType(data["type"]),

@@ -1,7 +1,5 @@
-import pytest
-from app.core.model_scheduler import (
-    ModelScheduler, SchedulerConfig, TaskComplexity, ModelCapability
-)
+from app.core.model_scheduler import ModelCapability, ModelScheduler, SchedulerConfig, TaskComplexity
+
 
 def test_select_model_basic():
     scheduler = ModelScheduler()

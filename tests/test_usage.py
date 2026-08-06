@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.storage.usage import UsageTracker, UsageRecord
+from app.storage.usage import UsageRecord, UsageTracker
 
 
 @pytest.fixture

@@ -5,10 +5,10 @@ import tempfile
 
 os.environ.setdefault("APP_TESTING", "true")
 
-import asyncio
 import pytest
-from app.core.sandbox import SandboxConfig, SandboxExecutor
+
 from app.core.safety_pipeline import StaticAnalyzer
+from app.core.sandbox import SandboxConfig, SandboxExecutor
 
 
 class TestStaticAnalyzerP0:

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import App from '../App';
-import { ThemeProvider } from '../hooks/useTheme';
+import { ThemeProvider } from '../hooks/useTheme.tsx';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
 vi.mock('../pages/MobileChatPage', () => ({
@@ -35,7 +35,7 @@ describe('App mobile routing', () => {
     Object.defineProperty(window, 'innerWidth', { value: originalInnerWidth, writable: true });
   });
 
-  it('renders mobile layout on small screens', () => {
+  it('renders mobile layout on small screens', async () => {
     render(
       <ThemeProvider>
         <ErrorBoundary>
@@ -43,10 +43,12 @@ describe('App mobile routing', () => {
         </ErrorBoundary>
       </ThemeProvider>
     );
-    expect(screen.getByText('Climber')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText('Climber')).toBeDefined();
+    });
   });
 
-  it('renders mobile chat page by default', () => {
+  it('renders mobile chat page by default', async () => {
     render(
       <ThemeProvider>
         <ErrorBoundary>
@@ -54,6 +56,8 @@ describe('App mobile routing', () => {
         </ErrorBoundary>
       </ThemeProvider>
     );
-    expect(screen.getByText('Mobile Chat')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText('Mobile Chat')).toBeDefined();
+    });
   });
 });

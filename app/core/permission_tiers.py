@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from enum import Enum, IntEnum
+from enum import IntEnum, StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class PermissionTier(IntEnum):
     HIGH_RISK = 3
 
 
-class PermissionAction(str, Enum):
+class PermissionAction(StrEnum):
     """Common permission actions."""
 
     READ = "read"

@@ -13,8 +13,9 @@ Inspired by HuggingFace smolagents.
 from __future__ import annotations
 
 import re
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Callable
+from typing import Any
 
 import structlog
 
@@ -23,8 +24,7 @@ from app.engine.code_executor import (
     ExecutionStatus,
     SafeExecutor,
 )
-from app.engine.harness import HarnessRegistry
-from app.engine.planning import Plan, Planner, PlanStep
+from app.engine.planning import Plan, Planner
 from app.engine.stream_output import (
     DefaultStreamOutput,
     StreamOutput,
@@ -145,15 +145,14 @@ class CodeAgent:
                         return result
 
                 # Update plan if enabled
-                if result.plan and self.planning_interval:
-                    if step_num % self.planning_interval == 0:
-                        result.plan = await self.planner.update_plan(
-                            result.plan,
-                            step_num - 1,
-                            step_result.execution_result.output if step_result.execution_result else None,
-                            step_result.error,
-                        )
-                        await self.stream_output.on_plan_update(result.plan)
+                if result.plan and self.planning_interval and step_num % self.planning_interval == 0:
+                    result.plan = await self.planner.update_plan(
+                        result.plan,
+                        step_num - 1,
+                        step_result.execution_result.output if step_result.execution_result else None,
+                        step_result.error,
+                    )
+                    await self.stream_output.on_plan_update(result.plan)
 
                 await self.stream_output.on_step_end(step_num, step_result.execution_result)
 

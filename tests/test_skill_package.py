@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 
 from app.skills.package_manager import SkillPackageManager
-from app.skills.skill_package import RiskLevel, SkillPackage, FailureStrategy
+from app.skills.skill_package import FailureStrategy, RiskLevel, SkillPackage
 
 
 @pytest.fixture

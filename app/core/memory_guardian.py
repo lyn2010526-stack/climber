@@ -8,10 +8,12 @@ pressure-relief callbacks (context compaction, cache eviction) at the hard one.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import gc
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import structlog
 
@@ -129,10 +131,8 @@ class MemoryGuardian:
     async def stop(self) -> None:
         if self._task is not None and not self._task.done():
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._task
-            except (asyncio.CancelledError, Exception):
-                pass
         self._task = None
 
     def stats(self) -> dict[str, Any]:

@@ -8,22 +8,23 @@ model produces non-conforming output.
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any, AsyncIterator
+from typing import Any
 
 import structlog
 from pydantic import ValidationError
 
 from app.core.collab_prompts import get_reviewer_prompt
-from app.core.review_models import ReviewOutputModel, ReviewIssueModel, REVIEW_OUTPUT_SCHEMA
+from app.core.di import resolve as di_resolve
+from app.core.guardrails import GuardrailAction, GuardrailsEngine, OutputLengthRule, PIIDetectionRule
+from app.core.review_models import ReviewIssueModel, ReviewOutputModel
 from app.core.stream_events import (
     CollabEvent,
     CollabEventType,
     make_reviewer_issues,
     make_text_delta,
 )
-from app.core.di import resolve as di_resolve
-from app.core.guardrails import GuardrailsEngine, GuardrailAction, PIIDetectionRule, OutputLengthRule
 
 logger = structlog.get_logger()
 
@@ -102,7 +103,6 @@ class ReviewerExecutor:
             return
 
         full_output = ""
-        total_tokens = 0
 
         try:
             async for chunk in adapter.stream_chat(messages=messages):
@@ -116,7 +116,7 @@ class ReviewerExecutor:
                         avatar=member.avatar_url,
                     )
                 if chunk.tokens_used:
-                    total_tokens = chunk.tokens_used
+                    pass
         except Exception as e:
             logger.error("Reviewer execution failed", error=str(e), member=member.name)
             yield CollabEvent(

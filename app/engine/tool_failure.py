@@ -10,8 +10,8 @@ Also tracks failure counts per tool and enforces max failure limits.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 import structlog
@@ -27,11 +27,11 @@ class ToolFailure(BaseModel):
     code: str | None = None
     retryable: bool = False
     tool_name: str = ""
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     context: dict[str, Any] = Field(default_factory=dict)
 
 
-class ToolFailurePolicy(str, Enum):
+class ToolFailurePolicy(StrEnum):
     """Policy for handling tool call failures."""
 
     IGNORE = "ignore"

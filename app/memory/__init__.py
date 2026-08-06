@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from collections import deque
 from typing import Any
 
@@ -31,10 +32,8 @@ class SessionMemory:
         }
         self._messages.append(message)
         if self._persist_callback is not None:
-            try:
+            with contextlib.suppress(Exception):
                 self._persist_callback(message)
-            except Exception:
-                pass
 
     def get_context(self, last_n: int | None = None) -> list[dict[str, Any]]:
         """Get recent messages as context for the model."""

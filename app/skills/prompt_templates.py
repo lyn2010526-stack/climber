@@ -6,13 +6,12 @@ improving output quality without needing to write prompts themselves.
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Any
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class PromptCategory(str, Enum):
+class PromptCategory(StrEnum):
     ENGINEERING = "engineering"
     RESEARCH = "research"
     WRITING = "writing"

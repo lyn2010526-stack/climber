@@ -236,7 +236,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-8 py-6 chat-container">
         {messages.length === 0 && (
-          <div className="flex items-center justify-center h-full">
+         <div className="flex items-center justify-center h-full">
             <div className="text-center max-w-lg">
               <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-[#5E6AD2]/20 to-[#8B5CF6]/20 flex items-center justify-center mx-auto mb-6 p-5" style={{ boxShadow: '0 0 40px rgba(94,106,210,0.15)' }}>
                 <Bot size={36} className="text-[#8B5CF6]" />
@@ -250,8 +250,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     onClick={() => onSend(suggestion)}
                     className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl text-sm text-[var(--color-text-secondary)] hover:border-[#5E6AD2]/40 hover:text-[var(--color-text-primary)] hover:bg-white/[0.06] transition-all duration-200 active:scale-[0.97] text-left flex items-center gap-3"
                   >
-                    <span className="w-6 h-6 rounded-lg bg-[#5E6AD2]/10 flex items-center justify-center shrink-0">
-                      <span className="text-[10px] text-[#5E6AD2] font-bold">{idx + 1}</span>
+                     <span className="w-6 h-6 rounded-lg bg-[#5E6AD2]/10 flex items-center justify-center shrink-0">
+                       <span className="text-[10px] text-[#5E6AD2] font-bold">{idx + 1}</span>
                     </span>
                     {suggestion}
                   </button>
@@ -279,12 +279,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
        <form onSubmit={handleSubmit} className="border-t border-white/[0.04] p-4 md:p-5 bg-[#0F0F14]/90 backdrop-blur-xl">
          <div className="flex gap-2.5 max-w-4xl mx-auto">
            {isLoading ? (
-             <Button type="button" variant="destructive" size="icon" onClick={onStop} className="rounded-2xl">
+              <Button type="button" variant="destructive" size="icon" onClick={onStop} className="rounded-2xl">
                <Square size={16} />
              </Button>
            ) : (
              <>
-               <Button type="button" variant="ghost" size="icon" className="rounded-2xl text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">
+                <Button type="button" variant="ghost" size="icon" className="rounded-2xl text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">
                  <span className="text-base leading-none">+</span>
                </Button>
                <div className="flex-1 flex flex-col">
@@ -316,7 +316,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                    )}
                  </div>
                </div>
-               <Button type="submit" size="icon" disabled={!input.trim()} className="rounded-2xl shadow-lg shadow-[#5E6AD2]/20 hover:shadow-[#5E6AD2]/30">
+                <Button type="submit" size="icon" disabled={!input.trim()} className="rounded-2xl shadow-lg shadow-[#5E6AD2]/20 hover:shadow-[#5E6AD2]/30">
                  <Send size={16} />
                </Button>
              </>

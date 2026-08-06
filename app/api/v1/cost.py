@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
-from sqlalchemy import select, func
+from fastapi import APIRouter, Request
+from sqlalchemy import func, select
 
+from app.api.v1.common import current_user_id
 from app.api.v1.helpers import DEFAULT_USER
 from app.storage import async_session
-from app.storage.models_cost import CostRecord, BudgetConfig, UsageQuota
+from app.storage.models_cost import BudgetConfig, CostRecord, UsageQuota
 
 router = APIRouter()
 
@@ -57,9 +58,10 @@ async def get_quota() -> dict[str, Any]:
 
 @router.get("/cost/usage")
 @router.get("/cost/usage/")
-async def get_cost_usage() -> dict[str, Any]:
+async def get_cost_usage(request: Request) -> dict[str, Any]:
     async with async_session() as db:
-        stmt = select(func.sum(CostRecord.total_cost), func.sum(CostRecord.total_tokens), func.count(CostRecord.id)).where(CostRecord.user_id == DEFAULT_USER)
+        user_id = current_user_id(request)
+        stmt = select(func.sum(CostRecord.total_cost), func.sum(CostRecord.total_tokens), func.count(CostRecord.id)).where(CostRecord.user_id == user_id)
         row = (await db.execute(stmt)).one()
         total_cost = row[0] or 0
         total_tokens = row[1] or 0

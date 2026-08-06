@@ -1,11 +1,18 @@
 import { useState, useCallback } from 'react';
 import {
   Network, Play, CheckCircle2, Clock, Loader2,
-  Bot, Shield, Search, Wrench, Plus, ArrowLeft, Hash, Users,
+  Bot, Shield, Search, Wrench, Plus, ArrowLeft, Hash, Users, X,
 } from 'lucide-react';
 import { GroupRoom } from '../components/group/GroupRoom';
 import { CollaborationConsole } from '../components/collaboration/CollaborationConsole';
 import { api } from '../api';
+import { PageHeader } from '../components/ui/PageHeader';
+import { Card, CardContent } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
+import { Input } from '../components/ui/Input';
+import { EmptyState } from '../components/ui/EmptyState';
+import { SkeletonList } from '../components/ui/Skeleton';
 
 interface ClusterTask {
   id: string;
@@ -52,7 +59,7 @@ const ROLE_ICONS: Record<string, any> = {
 };
 
 const ROLE_COLORS: Record<string, string> = {
-  planner: 'bg-blue-600/10 text-blue-400 border-blue-500/20',
+  planner: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
   researcher: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
   executor: 'bg-green-500/10 text-green-400 border-green-500/20',
   auditor: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
@@ -74,6 +81,105 @@ const STATUS_COLORS: Record<string, string> = {
 
 type ViewMode = 'cluster' | 'groups' | 'group-room' | 'collab-console';
 
+function TaskCard({ task, isSelected, onClick, loading }: { task: ClusterTask; isSelected: boolean; onClick: () => void; loading: boolean }) {
+  const StatusIcon = STATUS_ICONS[task.status] || Clock;
+  const statusColor = STATUS_COLORS[task.status] || 'text-[var(--color-text-muted)]';
+
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full text-left p-4 rounded-xl border transition-all duration-200 group ${
+        isSelected
+          ? 'bg-[var(--color-accent)]/5 border-[var(--color-accent)]/30'
+          : 'bg-[var(--color-bg-surface-1)] border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/20 hover:bg-[var(--color-bg-surface-2)]'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <div className={`p-2 rounded-lg ${task.status === 'completed' ? 'bg-[var(--color-success)]/10' : task.status === 'running' ? 'bg-blue-500/10' : 'bg-[var(--color-bg-surface-2)]'}`}>
+          <StatusIcon size={16} className={`${statusColor} ${task.status === 'running' ? 'animate-spin' : ''}`} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-[var(--color-text-primary)] truncate font-medium">{task.description}</p>
+          <div className="flex items-center gap-2 mt-2">
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${ROLE_COLORS[task.role] || 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] border-[var(--color-border-subtle)]'}`}>
+              {task.role}
+            </span>
+            <span className={`text-[10px] font-medium ${statusColor}`}>{task.status}</span>
+          </div>
+        </div>
+        {loading && <Loader2 size={14} className="text-[var(--color-accent)] animate-spin shrink-0 mt-1" />}
+      </div>
+    </button>
+  );
+}
+
+function TaskDetailsPanel({ taskId, details, loading }: { taskId: string; details: any; loading: boolean }) {
+  if (loading) {
+    return (
+      <Card variant="default">
+        <CardContent className="p-6">
+          <SkeletonList count={3} />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!details) {
+    return (
+      <Card variant="default">
+        <CardContent className="p-6 text-center">
+          <p className="text-sm text-[var(--color-text-muted)]">点击任务查看详情</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card variant="default">
+      <CardContent className="p-6">
+        <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">任务详情</h3>
+        <div className="space-y-2 text-xs">
+          <div className="flex justify-between">
+            <span className="text-[var(--color-text-muted)]">ID</span>
+            <span className="text-[var(--color-text-primary)] font-mono">{taskId}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[var(--color-text-muted)]">状态</span>
+            <span className="text-[var(--color-text-primary)]">{details.status || '-'}</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProgressBar({ progress }: { progress: { total: number; completed: number; failed: number; running: number; pending: number; progress_pct: number } }) {
+  const { total, completed, failed, running, progress_pct } = progress;
+
+  return (
+    <Card variant="default" className="mb-6">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs text-[var(--color-text-muted)]">执行进度</span>
+          <span className="text-sm font-semibold text-[var(--color-text-primary)]">{progress_pct}%</span>
+        </div>
+        <div className="w-full h-2 bg-[var(--color-bg-surface-3)] rounded-full overflow-hidden mb-3">
+          <div
+            className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-500"
+            style={{ width: `${progress_pct}%` }}
+          />
+        </div>
+        <div className="flex items-center gap-4 text-xs text-[var(--color-text-muted)]">
+          <span>总计 {total}</span>
+          <span className="text-[var(--color-success)]">{completed} 完成</span>
+          <span className="text-blue-400">{running} 运行中</span>
+          <span className="text-[var(--color-error)]">{failed} 失败</span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function ClusterPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('cluster');
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
@@ -84,7 +190,6 @@ export function ClusterPage() {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [availableTasks, setAvailableTasks] = useState<Array<{ id: string; description: string }>>([]);
 
-  // Cluster state
   const [requirements, setRequirements] = useState('');
   const [tasks, setTasks] = useState<ClusterTask[]>([]);
   const [progress, setProgress] = useState({ total: 0, completed: 0, failed: 0, running: 0, pending: 0, progress_pct: 0 });
@@ -93,7 +198,6 @@ export function ClusterPage() {
   const [taskDetails, setTaskDetails] = useState<any>(null);
   const [loadingTaskDetails, setLoadingTaskDetails] = useState(false);
 
-  // Groups state
   const [groups, setGroups] = useState<AgentGroup[]>([]);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
@@ -104,10 +208,8 @@ export function ClusterPage() {
     setLoadingTaskDetails(true);
     try {
       const data = await api.getTask(taskId);
-        setTaskDetails(data);
-    } catch {
-      // skip
-    }
+      setTaskDetails(data);
+    } catch { /* skip */ }
     setLoadingTaskDetails(false);
   }, []);
 
@@ -127,45 +229,43 @@ export function ClusterPage() {
     try {
       const res = await api.createCluster(requirements);
       if (res.plan) {
-          const planTasks = res.plan.map((p: any, idx: number) => ({
-            id: p.id || String(idx + 1),
-            role: p.role || 'executor',
-            description: p.description || p.task || '',
-            status: p.status || 'pending',
-            dependencies: p.dependencies || [],
-            process_type: p.process_type || 'sequential',
-            guardrails: p.guardrails || [],
-            context: p.context || [],
-            human_review_required: p.human_review_required || false,
-          }));
-          setTasks(planTasks);
-        } else {
-          // Fallback: create a group with the requirements as topic
-          const groupRes = await api.createGroup({ name: requirements.slice(0, 50), topic: requirements } as any);
-          if (groupRes.id) {
-            setTasks([{
-              id: groupRes.id,
-              role: 'planner',
-              description: `群组已创建：${requirements.slice(0, 80)}`,
-              status: 'completed',
-              dependencies: [],
-              process_type: 'sequential',
-              guardrails: [],
-              context: [],
-              human_review_required: false,
-            }]);
-            setProgress({ total: 1, completed: 1, failed: 0, running: 0, pending: 0, progress_pct: 100 });
-          }
+        const planTasks = res.plan.map((p: any, idx: number) => ({
+          id: p.id || String(idx + 1),
+          role: p.role || 'executor',
+          description: p.description || p.task || '',
+          status: p.status || 'pending',
+          dependencies: p.dependencies || [],
+          process_type: p.process_type || 'sequential',
+          guardrails: p.guardrails || [],
+          context: p.context || [],
+          human_review_required: p.human_review_required || false,
+        }));
+        setTasks(planTasks);
+      } else {
+        const groupRes = await api.createGroup({ name: requirements.slice(0, 50), topic: requirements } as any);
+        if (groupRes.id) {
+          setTasks([{
+            id: groupRes.id,
+            role: 'planner',
+            description: `群组已创建：${requirements.slice(0, 80)}`,
+            status: 'completed',
+            dependencies: [],
+            process_type: 'sequential',
+            guardrails: [],
+            context: [],
+            human_review_required: false,
+          }]);
+          setProgress({ total: 1, completed: 1, failed: 0, running: 0, pending: 0, progress_pct: 100 });
         }
-        if (res.progress) {
-          setProgress(res.progress);
-        }
+      }
+      if (res.progress) {
+        setProgress(res.progress);
+      }
     } catch {
-      // Show error state
       setTasks([{
         id: 'error',
         role: 'planner',
-         description: '创建集群失败，请重试。',
+        description: '创建集群失败，请重试。',
         status: 'failed',
         dependencies: [],
         process_type: 'sequential',
@@ -181,7 +281,7 @@ export function ClusterPage() {
   const loadGroups = useCallback(async () => {
     try {
       const res = await api.listGroups();
-        setGroups(res);
+      setGroups(res);
     } catch { /* skip */ }
   }, []);
 
@@ -189,11 +289,11 @@ export function ClusterPage() {
     if (!groupName.trim()) return;
     try {
       const res = await api.createGroup({
-          name: groupName,
-          topic: groupTopic,
-          template: useTemplate ? 'default' : undefined,
-        } as any);
-        if (res.id) {
+        name: groupName,
+        topic: groupTopic,
+        template: useTemplate ? 'default' : undefined,
+      } as any);
+      if (res.id) {
         setGroupName('');
         setGroupTopic('');
         setUseTemplate(false);
@@ -206,10 +306,7 @@ export function ClusterPage() {
   const openGroup = async (groupId: string, mode: 'chat' | 'collab' = 'chat') => {
     setActiveGroupId(groupId);
     setViewMode(mode === 'collab' ? 'collab-console' : 'group-room');
-
-    // Fetch available tasks for context selection
     if (mode === 'collab') {
-      // Task list API not available; use empty list
       setAvailableTasks([]);
     }
   };
@@ -224,7 +321,6 @@ export function ClusterPage() {
   const openManageMembers = async (groupId: string) => {
     setManagingGroupId(groupId);
     setLoadingMembers(true);
-    // Members API not available; use empty list
     setMembers([]);
     setLoadingMembers(false);
   };
@@ -236,9 +332,7 @@ export function ClusterPage() {
       setMemberForm({ agent_id: '', role: 'participant', model_provider: '', model_id: '', tools: [] });
       setShowAddMember(false);
       openManageMembers(managingGroupId);
-    } catch {
-      // skip
-    }
+    } catch { /* skip */ }
   };
 
   const removeMember = async (memberId: string) => {
@@ -246,24 +340,21 @@ export function ClusterPage() {
     try {
       await api.removeGroupMember(managingGroupId, memberId);
       openManageMembers(managingGroupId);
-    } catch {
-      // skip
-    }
+    } catch { /* skip */ }
   };
 
-  // Collaboration Console View (new auto-collab mode)
   if (viewMode === 'collab-console' && activeGroupId) {
     return (
       <div className="h-full flex flex-col">
-        <div className="h-10 flex items-center px-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)]">
+        <div className="h-12 flex items-center px-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] shrink-0">
           <button
             onClick={leaveGroup}
-            className="flex items-center gap-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
+            className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
           >
             <ArrowLeft size={14} />
             返回群组列表
           </button>
-           <span className="ml-3 text-xs font-medium text-[var(--color-text-primary)]">自动协作</span>
+          <span className="ml-3 text-xs font-semibold text-[var(--color-text-primary)]">自动协作</span>
         </div>
         <div className="flex-1 min-h-0">
           <CollaborationConsole groupId={activeGroupId} availableTasks={availableTasks} />
@@ -272,23 +363,22 @@ export function ClusterPage() {
     );
   }
 
-  // Group Room View
   if (viewMode === 'group-room' && activeGroupId) {
     return (
       <div className="h-full flex flex-col">
-        <div className="h-10 flex items-center px-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)]">
+        <div className="h-12 flex items-center px-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] shrink-0">
           <button
             onClick={leaveGroup}
-            className="flex items-center gap-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
+            className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
           >
             <ArrowLeft size={14} />
             返回群组列表
           </button>
           <button
             onClick={() => setViewMode('collab-console')}
-            className="ml-3 flex items-center gap-1 text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors"
+            className="ml-3 flex items-center gap-1.5 text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors"
           >
-            <Wrench size={12} />
+            <Wrench size={14} />
             自动协作
           </button>
         </div>
@@ -299,227 +389,166 @@ export function ClusterPage() {
     );
   }
 
-  // Groups List View
   if (viewMode === 'groups') {
     return (
-      <div className="h-full overflow-y-auto p-6">
-        <div className="max-w-4xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div>
-            <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">智能体群组</h1>
-            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">多智能体协作空间</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setViewMode('cluster')}
-                  className="px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
-              >
-                集群视图
-              </button>
-              <button
-                onClick={() => setShowCreateGroup(true)}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-[var(--color-accent)] text-white rounded-xl hover:bg-[var(--color-accent-hover)] transition-all duration-200 active:scale-[0.97]"
-              >
-                <Plus size={12} />
-                新建群组
-              </button>
-            </div>
-          </div>
+      <div className="h-full overflow-y-auto page-transition">
+        <div className="p-4 md:p-6 lg:p-8 max-w-4xl mx-auto">
+          <PageHeader
+            title="智能体群组"
+            description="多智能体协作空间"
+            icon={<Network size={20} />}
+            actions={
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setViewMode('cluster')}>
+                  集群视图
+                </Button>
+                <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setShowCreateGroup(true)}>
+                  新建群组
+                </Button>
+              </div>
+            }
+          />
 
-          {/* Create Group Form */}
           {showCreateGroup && (
-            <div className="p-4 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl space-y-3">
-              <input
-                type="text"
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
-                placeholder="群组名称..."
-                className="w-full px-3 py-2 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
-              />
-              <input
-                type="text"
-                value={groupTopic}
-                onChange={(e) => setGroupTopic(e.target.value)}
-                placeholder="讨论主题（可选）..."
-                className="w-full px-3 py-2 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
-              />
-              <label className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={useTemplate}
-                  onChange={(e) => setUseTemplate(e.target.checked)}
-                  className="rounded border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] text-[var(--color-accent)] focus:ring-[var(--color-accent)]/50"
+            <Card variant="default" className="mb-6">
+              <CardContent className="p-5 space-y-3">
+                <Input
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  placeholder="群组名称..."
                 />
-                快速开始：自动添加 Planner + Executor + Reviewer 默认成员
-              </label>
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => { setShowCreateGroup(false); setUseTemplate(false); }}
-                className="px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
-                >
-                   取消
-                </button>
-                <button
-                  onClick={createGroup}
-                  disabled={!groupName.trim()}
-                  className="px-3 py-1.5 text-xs bg-[var(--color-accent)] text-white rounded-xl hover:bg-[var(--color-accent-hover)] disabled:opacity-50 transition-all duration-200"
-                >
-                   创建
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Member Management Panel */}
-          {managingGroupId && (
-            <div className="p-4 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-[var(--color-text-primary)]">群组成员</h3>
-                <button
-                  onClick={() => setManagingGroupId(null)}
-                  className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
-                >
-                  关闭
-                </button>
-              </div>
-
-              {loadingMembers ? (
-                <div className="text-xs text-[var(--color-text-muted)]">加载中...</div>
-              ) : (
-                <>
-                  {/* Add Member Form */}
-                  {showAddMember ? (
-                    <div className="p-3 bg-[var(--color-bg-surface-2)] rounded-xl space-y-2">
-                      <input
-                        type="text"
-                        value={memberForm.agent_id}
-                        onChange={(e) => setMemberForm({ ...memberForm, agent_id: e.target.value })}
-                        placeholder="Agent ID"
-                        className="w-full px-2 py-1.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl text-xs text-[var(--color-text-primary)]"
-                      />
-                      <select
-                        value={memberForm.role}
-                        onChange={(e) => setMemberForm({ ...memberForm, role: e.target.value })}
-                        className="w-full px-2 py-1.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl text-xs text-[var(--color-text-primary)]"
-                      >
-                        <option value="planner">Planner</option>
-                        <option value="researcher">Researcher</option>
-                        <option value="executor">Executor</option>
-                        <option value="auditor">Auditor</option>
-                        <option value="participant">Participant</option>
-                        <option value="observer">Observer</option>
-                      </select>
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => setShowAddMember(false)}
-                          className="px-2 py-1 text-xs text-[var(--color-text-muted)]"
-                        >
-                          取消
-                        </button>
-                        <button
-                          onClick={addMember}
-                          disabled={!memberForm.agent_id.trim()}
-                          className="px-2 py-1 text-xs bg-[var(--color-accent)] text-white rounded-xl disabled:opacity-50 transition-all duration-200"
-                        >
-                          添加
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setShowAddMember(true)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors"
-                    >
-                      <Plus size={12} />
-                      添加成员
-                    </button>
-                  )}
-
-                  {/* Members List */}
-                  <div className="space-y-2">
-                    {members.map((member) => (
-                      <div
-                        key={member.id}
-                        className="flex items-center justify-between p-2 bg-white/[0.02] border border-[var(--color-border-subtle)] rounded-xl"
-                      >
-                        <div>
-                          <span className="text-xs text-[var(--color-text-primary)]">{member.agent_id || member.id}</span>
-                          <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-[var(--color-accent)]/10 text-[var(--color-accent)] border border-[var(--color-accent)]/20">
-                            {member.role}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => removeMember(member.id)}
-                          className="text-[10px] text-[var(--color-error)] hover:text-red-300 transition-colors"
-                        >
-                          移除
-                        </button>
-                      </div>
-                    ))}
-                    {members.length === 0 && (
-                      <p className="text-xs text-[var(--color-text-muted)] text-center py-2">暂无成员</p>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Groups List */}
-          {groups.length === 0 ? (
-            <div className="text-center py-12">
-              <Network size={40} className="mx-auto text-[var(--color-text-muted)]/30" />
-               <p className="text-sm text-[var(--color-text-muted)] mt-3">暂无群组</p>
-               <p className="text-xs text-[var(--color-text-muted)]/60 mt-1">创建一个群组以开始多智能体协作</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {groups.map((group) => (
-                <div
-                  key={group.id}
-                  className="p-4 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl hover:border-[var(--color-accent)]/30 transition-all duration-200"
-                >
-                  <div className="flex items-center gap-2">
-                    <Hash size={14} className="text-[var(--color-accent)]" />
-                    <span className="text-sm font-medium text-[var(--color-text-primary)]">{group.name}</span>
-                    <span className={`ml-auto px-2 py-0.5 text-[10px] rounded-full ${
-                      group.status === 'active' ? 'bg-[var(--color-success)]/10 text-[var(--color-success)] border border-[var(--color-success)]/20' : 'bg-white/[0.03] text-[var(--color-text-muted)] border border-[var(--color-border-subtle)]'
-                    }`}>
-                      {group.status}
-                    </span>
-                  </div>
-                  {group.description && (
-                    <p className="text-[11px] text-[var(--color-text-muted)] mt-2 line-clamp-2">{group.description}</p>
-                  )}
-                  <div className="flex items-center gap-3 mt-3 text-[10px] text-[var(--color-text-muted)]">
-                    <span>{group.member_count} 名成员</span>
-                    <span>{new Date(group.created_at).toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[var(--color-border-subtle)]">
-                    <button
-                      onClick={() => openGroup(group.id, 'chat')}
-                      className="flex items-center gap-1 px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] bg-white/[0.03] border border-[var(--color-border-subtle)] rounded-xl hover:bg-white/[0.06] transition-all duration-200"
-                    >
-                      <Users size={10} />
-                      Chat
-                    </button>
-                    <button
-                      onClick={() => openGroup(group.id, 'collab')}
-                      className="flex items-center gap-1 px-2 py-1 text-[10px] text-[var(--color-accent)] bg-[var(--color-accent)]/10 hover:bg-[var(--color-accent)]/20 border border-[var(--color-accent)]/20 rounded-xl transition-all duration-200"
-                    >
-                      <Wrench size={10} />
-                      自动协作
-                    </button>
-                    <button
-                      onClick={() => openManageMembers(group.id)}
-                      className="flex items-center gap-1 px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] bg-white/[0.03] border border-[var(--color-border-subtle)] rounded-xl hover:bg-white/[0.06] transition-all duration-200"
-                    >
-                      <Users size={10} />
-                      管理
-                    </button>
-                  </div>
+                <Input
+                  value={groupTopic}
+                  onChange={(e) => setGroupTopic(e.target.value)}
+                  placeholder="讨论主题（可选）..."
+                />
+                <label className="flex items-center gap-2 text-xs text-[var(--color-text-secondary)] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useTemplate}
+                    onChange={(e) => setUseTemplate(e.target.checked)}
+                    className="rounded border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] text-[var(--color-accent)] focus:ring-[var(--color-accent)]/50"
+                  />
+                  快速开始：自动添加 Planner + Executor + Reviewer 默认成员
+                </label>
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button variant="ghost" size="sm" onClick={() => { setShowCreateGroup(false); setUseTemplate(false); }}>
+                    取消
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={createGroup} disabled={!groupName.trim()}>
+                    创建
+                  </Button>
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {managingGroupId && (
+            <Card variant="default" className="mb-6">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">群组成员</h3>
+                  <Button variant="ghost" size="icon" onClick={() => setManagingGroupId(null)}>
+                    <X size={16} />
+                  </Button>
+                </div>
+
+                {loadingMembers ? (
+                  <SkeletonList count={2} />
+                ) : (
+                  <>
+                    {showAddMember ? (
+                      <div className="p-4 bg-[var(--color-bg-surface-2)] rounded-xl space-y-3 mb-4">
+                        <Input
+                          value={memberForm.agent_id}
+                          onChange={(e) => setMemberForm({ ...memberForm, agent_id: e.target.value })}
+                          placeholder="Agent ID"
+                        />
+                        <select
+                          value={memberForm.role}
+                          onChange={(e) => setMemberForm({ ...memberForm, role: e.target.value })}
+                          className="w-full px-3 py-2 bg-[var(--color-bg-surface-3)] border border-[var(--color-border-subtle)] rounded-xl text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/50"
+                        >
+                          <option value="planner">Planner</option>
+                          <option value="researcher">Researcher</option>
+                          <option value="executor">Executor</option>
+                          <option value="auditor">Auditor</option>
+                          <option value="participant">Participant</option>
+                          <option value="observer">Observer</option>
+                        </select>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => setShowAddMember(false)}>取消</Button>
+                          <Button variant="primary" size="sm" onClick={addMember} disabled={!memberForm.agent_id.trim()}>添加</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button variant="outline" size="sm" icon={<Plus size={14} />} onClick={() => setShowAddMember(true)} className="mb-4">
+                        添加成员
+                      </Button>
+                    )}
+
+                    <div className="space-y-2">
+                      {members.map((member) => (
+                        <div key={member.id} className="flex items-center justify-between p-3 bg-[var(--color-bg-surface-2)] rounded-xl border border-[var(--color-border-subtle)]">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-[var(--color-text-primary)]">{member.agent_id || member.id}</span>
+                            <Badge variant="primary" size="xs">{member.role}</Badge>
+                          </div>
+                          <Button variant="ghost" size="xs" onClick={() => removeMember(member.id)} className="text-[var(--color-error)]">
+                            移除
+                          </Button>
+                        </div>
+                      ))}
+                      {members.length === 0 && (
+                        <p className="text-xs text-[var(--color-text-muted)] text-center py-4">暂无成员</p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {groups.length === 0 ? (
+            <EmptyState
+              icon="file"
+              title="暂无群组"
+              description="创建一个群组以开始多智能体协作"
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 stagger-children">
+              {groups.map((group) => (
+                <Card key={group.id} variant="default" className="hover-lift">
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="p-1.5 rounded-lg bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20">
+                        <Hash size={14} className="text-[var(--color-accent)]" />
+                      </div>
+                      <span className="text-sm font-semibold text-[var(--color-text-primary)] truncate flex-1">{group.name}</span>
+                      <Badge variant={group.status === 'active' ? 'success' : 'default'} size="xs">
+                        {group.status}
+                      </Badge>
+                    </div>
+                    {group.description && (
+                      <p className="text-xs text-[var(--color-text-muted)] line-clamp-2 mb-3">{group.description}</p>
+                    )}
+                    <div className="flex items-center gap-3 text-[10px] text-[var(--color-text-muted)] mb-4">
+                      <span className="flex items-center gap-1"><Users size={10} /> {group.member_count} 名成员</span>
+                      <span>{new Date(group.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex items-center gap-2 pt-3 border-t border-[var(--color-border-subtle)]">
+                      <Button variant="outline" size="xs" onClick={() => openGroup(group.id, 'chat')}>
+                        进入聊天
+                      </Button>
+                      <Button variant="ghost" size="xs" onClick={() => openGroup(group.id, 'collab')}>
+                        自动协作
+                      </Button>
+                      <Button variant="ghost" size="xs" onClick={() => openManageMembers(group.id)}>
+                        成员
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           )}
@@ -528,229 +557,75 @@ export function ClusterPage() {
     );
   }
 
-  // Default: Cluster View
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">多智能体集群</h1>
-            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">协作式智能体流水线：规划 → 研究 → 执行 → 审计</p>
-          </div>
-          <button
-            onClick={() => { setViewMode('groups'); loadGroups(); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] rounded-xl hover:border-[var(--color-accent)]/30 transition-all duration-200"
-          >
-            <Network size={12} />
-            智能体群组
-          </button>
-        </div>
+    <div className="h-full overflow-y-auto page-transition">
+      <div className="p-4 md:p-6 lg:p-8 max-w-4xl mx-auto">
+        <PageHeader
+          title="集群"
+          description="输入需求，自动分解为多智能体协作任务"
+          icon={<Network size={20} />}
+          actions={
+            <Button variant="ghost" size="sm" onClick={() => { setViewMode('groups'); loadGroups(); }}>
+              群组列表
+            </Button>
+          }
+        />
 
-        {/* Input */}
-        <div className="p-4 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl space-y-3">
-          <textarea
-            value={requirements}
-            onChange={(e) => setRequirements(e.target.value)}
-              placeholder="描述你想要构建的内容..."
-            rows={3}
-            className="w-full px-3 py-2 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 resize-none transition-all duration-200"
-          />
-          <div className="flex justify-end">
-            <button
-              onClick={createCluster}
-              disabled={!requirements.trim() || creating}
-              className="flex items-center gap-1.5 px-4 py-2 text-xs bg-[var(--color-accent)] text-white rounded-xl hover:bg-[var(--color-accent-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-[0.97]"
-            >
-              {creating ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
-              {creating ? '创建中...' : '创建集群'}
-            </button>
-          </div>
-        </div>
-
-        {/* Progress */}
-        {progress.total > 0 && (
-          <div className="p-4 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-[var(--color-text-secondary)]">进度</span>
-              <span className="text-xs font-medium text-[var(--color-accent)]">{progress.progress_pct}%</span>
-            </div>
-            <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-accent-hover)] rounded-full transition-all duration-500"
-                style={{ width: `${progress.progress_pct}%` }}
+        <Card variant="default" className="mb-6">
+          <CardContent className="p-5">
+            <div className="flex gap-3">
+              <textarea
+                value={requirements}
+                onChange={(e) => setRequirements(e.target.value)}
+                placeholder="描述您的需求，智能体集群将自动分解并执行..."
+                className="flex-1 px-4 py-3 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200 resize-none min-h-[80px]"
+                rows={3}
               />
             </div>
-            <div className="flex items-center gap-4 mt-2 text-[10px] text-[var(--color-text-muted)]">
-              <span className="flex items-center gap-1"><CheckCircle2 size={10} className="text-[var(--color-success)]" /> {progress.completed} 已完成</span>
-              <span className="flex items-center gap-1"><Loader2 size={10} className="text-[var(--color-accent)]" /> {progress.running} 运行中</span>
-              <span className="flex items-center gap-1"><Clock size={10} /> {progress.pending} 等待中</span>
-            </div>
-          </div>
-        )}
-
-        {/* Task DAG */}
-        {tasks.length > 0 && (
-          <div className="space-y-3">
-            <h2 className="text-sm font-medium text-[var(--color-text-primary)]">执行计划</h2>
-            <div className="relative">
-              {/* Connection line */}
-              <div className="absolute left-6 top-8 bottom-8 w-px bg-[var(--color-border-subtle)]" />
-
-              {tasks.map((task) => {
-                const Icon = ROLE_ICONS[task.role] || Bot;
-                const statusIcon = STATUS_ICONS[task.status] || Clock;
-                const StatusIcon = statusIcon;
-                const isSelected = selectedTaskId === task.id;
-
-                return (
-                  <div key={task.id} className="relative flex items-start gap-4 py-3">
-                    {/* Node circle */}
-                    <div className={`relative z-10 w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0 cursor-pointer transition-all duration-200 ${
-                      task.status === 'completed' ? 'bg-[var(--color-success)]/10 border-[var(--color-success)]/20' :
-                      task.status === 'running' ? 'bg-[var(--color-accent)]/10 border-[var(--color-accent)]/20' :
-                      'bg-[var(--color-bg-surface-1)] border-[var(--color-border-subtle)]'
-                    }`} onClick={() => handleTaskClick(task.id)}>
-                      <Icon size={18} className={
-                        task.status === 'completed' ? 'text-[var(--color-success)]' :
-                        task.status === 'running' ? 'text-[var(--color-accent)]' :
-                        'text-[var(--color-text-muted)]'
-                      } />
-                    </div>
-
-                    {/* Card */}
-                    <div className={`flex-1 p-3 rounded-2xl cursor-pointer transition-all duration-200 border ${
-                      isSelected ? 'bg-[var(--color-accent)]/10 border-[var(--color-accent)]/30' : 'bg-[var(--color-bg-surface-1)] border-[var(--color-border-subtle)]'
-                    }`} onClick={() => handleTaskClick(task.id)}>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`px-2 py-0.5 rounded-lg text-[10px] font-medium border ${ROLE_COLORS[task.role] || ROLE_COLORS['planner']}`}>
-                          {task.role}
-                        </span>
-                        <StatusIcon size={12} className={STATUS_COLORS[task.status]} />
-                        <span className="text-[10px] text-[var(--color-text-muted)] capitalize">{task.status}</span>
-                        {task.process_type && task.process_type !== 'sequential' && (
-                          <span className="px-2 py-0.5 rounded-lg text-[9px] bg-[var(--color-accent-secondary)]/10 text-[var(--color-accent-secondary)] border border-[var(--color-accent-secondary)]/20">
-                            {task.process_type}
-                          </span>
-                        )}
-                        {task.human_review_required && (
-                          <span className="px-2 py-0.5 rounded-lg text-[9px] bg-[var(--color-warning)]/10 text-[var(--color-warning)] border border-[var(--color-warning)]/20">
-                            人工审批
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-[var(--color-text-primary)] mt-1.5">{task.description}</p>
-                      {task.dependencies.length > 0 && (
-                         <p className="text-[10px] text-[var(--color-text-muted)] mt-1">依赖：{task.dependencies.join(', ')}</p>
-                      )}
-                      {task.guardrails && task.guardrails.length > 0 && (
-                        <div className="flex items-center gap-1 mt-1.5">
-                          <Shield size={10} className="text-[var(--color-text-muted)]" />
-                          <span className="text-[10px] text-[var(--color-text-muted)]">{task.guardrails.length} 个校验规则</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Task Detail Panel */}
-        {selectedTaskId && (
-          <div className="p-4 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-[var(--color-text-primary)]">任务详情</h3>
-              <button
-                onClick={() => { setSelectedTaskId(null); setTaskDetails(null); }}
-                className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
+            <div className="flex justify-end mt-3">
+              <Button
+                variant="primary"
+                onClick={createCluster}
+                disabled={!requirements.trim()}
+                loading={creating}
+                icon={<Play size={14} />}
               >
-                关闭
-              </button>
+                创建集群
+              </Button>
             </div>
-            {loadingTaskDetails ? (
-              <div className="text-xs text-[var(--color-text-muted)]">加载中...</div>
-            ) : taskDetails ? (
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-2 text-[10px]">
-                  <div>
-                    <span className="text-[var(--color-text-muted)]">状态:</span>
-                    <span className="ml-1 text-[var(--color-text-secondary)]">{taskDetails.status}</span>
-                  </div>
-                  <div>
-                    <span className="text-[var(--color-text-muted)]">轮次:</span>
-                    <span className="ml-1 text-[var(--color-text-secondary)]">{taskDetails.current_round || 0}/{taskDetails.max_rounds || 5}</span>
-                  </div>
-                  <div>
-                    <span className="text-[var(--color-text-muted)]">流程类型:</span>
-                    <span className="ml-1 text-[var(--color-text-secondary)]">{taskDetails.process_type || 'sequential'}</span>
-                  </div>
-                  <div>
-                    <span className="text-[var(--color-text-muted)]">人工审批:</span>
-                    <span className="ml-1 text-[var(--color-text-secondary)]">{taskDetails.human_review_required ? '需要' : '不需要'}</span>
-                  </div>
-                  <div>
-                    <span className="text-[var(--color-text-muted)]">Token 消耗:</span>
-                    <span className="ml-1 text-[var(--color-text-secondary)]">{taskDetails.total_tokens || 0}</span>
-                  </div>
-                  <div>
-                    <span className="text-[var(--color-text-muted)]">开始时间:</span>
-                    <span className="ml-1 text-[var(--color-text-secondary)]">{taskDetails.started_at ? new Date(taskDetails.started_at).toLocaleString() : '-'}</span>
-                  </div>
-                </div>
-                {taskDetails.context && taskDetails.context.length > 0 && (
-                  <div>
-                    <span className="text-[10px] text-[var(--color-text-muted)]">依赖任务:</span>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {taskDetails.context.map((ctx: string) => (
-                        <span key={ctx} className="px-2 py-0.5 rounded-lg text-[9px] bg-white/[0.03] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)]">{ctx.slice(0, 8)}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {taskDetails.guardrails && taskDetails.guardrails.length > 0 && (
-                  <div>
-                    <span className="text-[10px] text-[var(--color-text-muted)]">校验规则:</span>
-                    <div className="space-y-1 mt-1">
-                      {taskDetails.guardrails.map((g: any, i: number) => (
-                        <div key={i} className="p-2 bg-white/[0.02] border border-[var(--color-border-subtle)] rounded-xl">
-                          <p className="text-[10px] text-[var(--color-text-primary)]">{g.name}</p>
-                          {g.description && <p className="text-[9px] text-[var(--color-text-muted)]">{g.description}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {taskDetails.final_output && (
-                  <div>
-                    <span className="text-[10px] text-[var(--color-text-muted)]">最终输出:</span>
-                    <pre className="mt-1 p-2 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl text-[10px] text-[var(--color-text-primary)] whitespace-pre-wrap overflow-x-auto max-h-48 overflow-y-auto">
-                      {taskDetails.final_output}
-                    </pre>
-                  </div>
-                )}
-                {taskDetails.structured_output && Object.keys(taskDetails.structured_output).length > 0 && (
-                  <div>
-                    <span className="text-[10px] text-[var(--color-text-muted)]">结构化输出:</span>
-                    <pre className="mt-1 p-2 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl text-[10px] text-[var(--color-text-primary)] whitespace-pre-wrap overflow-x-auto max-h-32 overflow-y-auto">
-                      {JSON.stringify(taskDetails.structured_output, null, 2)}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-xs text-[var(--color-text-muted)]">暂无详情</div>
-            )}
-          </div>
+          </CardContent>
+        </Card>
+
+        {progress.total > 0 && <ProgressBar progress={progress} />}
+
+        {tasks.length === 0 && !creating && (
+          <EmptyState
+            icon="file"
+            title="暂无任务"
+            description="输入需求并点击「创建集群」开始"
+          />
         )}
 
-        {/* Empty State */}
-        {tasks.length === 0 && (
-          <div className="text-center py-12">
-            <Network size={40} className="mx-auto text-[var(--color-text-muted)]/30" />
-            <p className="text-sm text-[var(--color-text-muted)] mt-3">暂无活跃集群</p>
-            <p className="text-xs text-[var(--color-text-muted)]/60 mt-1">在上方描述你的需求以创建一个</p>
+        {tasks.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 space-y-3">
+              {tasks.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  isSelected={selectedTaskId === task.id}
+                  onClick={() => handleTaskClick(task.id)}
+                  loading={loadingTaskDetails && selectedTaskId === task.id}
+                />
+              ))}
+            </div>
+            <div>
+              <TaskDetailsPanel
+                taskId={selectedTaskId || ''}
+                details={taskDetails}
+                loading={loadingTaskDetails}
+              />
+            </div>
           </div>
         )}
       </div>

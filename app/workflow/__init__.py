@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class NodeType(str, Enum):
+class NodeType(StrEnum):
     START = "start"
     LLM = "llm"
     TOOL = "tool"
@@ -19,7 +19,7 @@ class NodeType(str, Enum):
     END = "end"
 
 
-class NodeStatus(str, Enum):
+class NodeStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"

@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, Enum as SQLEnum, String, func
+from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.storage import Base
 
 
-class McpStatus(str, Enum):
+class McpStatus(StrEnum):
     """MCP process status."""
 
     DISCONNECTED = "disconnected"

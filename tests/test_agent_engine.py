@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 import pytest
 import pytest_asyncio
 
 from app.core import AgentEventType, ChatResult, SessionStatus
-from app.core.agent_engine import AgentEngine, AgentSession
-from app.models import ModelCapability, ModelAdapter
+from app.core.agent_engine import AgentEngine
+from app.models import ModelCapability
 from app.models.registry import ModelRegistry
-from app.tools import ToolRegistry, tool
+from app.tools import ToolRegistry
 
 
 class FakeModelAdapter:

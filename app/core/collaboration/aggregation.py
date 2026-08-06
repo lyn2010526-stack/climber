@@ -9,11 +9,11 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class AggregationStrategy(str, Enum):
+class AggregationStrategy(StrEnum):
     MAJORITY_VOTE = "majority_vote"
     WEIGHTED_AVERAGE = "weighted_average"
     BEST_CONFIDENCE = "best_confidence"

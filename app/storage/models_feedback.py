@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from uuid import uuid4
 
 from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func
@@ -12,12 +12,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.storage import Base
 
 
-class Rating(str, Enum):
+class Rating(StrEnum):
     UP = "up"
     DOWN = "down"
 
 
-class FeedbackReason(str, Enum):
+class FeedbackReason(StrEnum):
     FACTUAL_ERROR = "factual_error"
     FORMAT = "format"
     INCOMPLETE = "incomplete"

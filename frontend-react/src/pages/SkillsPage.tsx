@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Search, Package, RefreshCw, AlertCircle, Power, PowerOff } from 'lucide-react';
 import { api } from '../api';
+import { PageHeader } from '../components/ui/PageHeader';
+import { Card, CardContent } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
+import { Input } from '../components/ui/Input';
+import { EmptyState } from '../components/ui/EmptyState';
+import { SkeletonCard } from '../components/ui/Skeleton';
 
 interface Skill {
   id: number;
@@ -38,7 +45,7 @@ export function SkillsPage() {
       setError(null);
       try {
         const res = await api.listSkills();
-          setSkills((res as any).skills || []);
+        setSkills((res as any).skills || []);
       } catch (e: any) {
         setError(e.message || '加载技能失败');
       }
@@ -65,41 +72,36 @@ export function SkillsPage() {
     try {
       await api.updateSkill(String(skill.id), { enabled: !skill.is_enabled });
       setSkills(prev => prev.map(s => s.id === skill.id ? { ...s, is_enabled: !s.is_enabled } : s));
-    } catch {
-      // ignore
-    } finally {
+    } catch { /* ignore */ } finally {
       setToggling(null);
     }
   };
 
   return (
-    <div className="h-full overflow-y-auto p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">技能中心</h2>
-          <p className="text-[var(--color-text-secondary)] text-sm mt-1.5">
-            发现并管理本地技能包，扩展智能体能力。
-          </p>
-        </div>
+    <div className="h-full overflow-y-auto page-transition">
+      <div className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto">
+        <PageHeader
+          title="技能中心"
+          description="发现并管理本地技能包，扩展智能体能力"
+          icon={<Package size={20} />}
+        />
 
-        <div className="flex items-center gap-3 mb-6">
-          <div className="relative flex-1 max-w-md">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
-            <input
-              type="text"
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
+          <div className="w-full sm:max-w-xs">
+            <Input
+              placeholder="搜索技能..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="搜索技能..."
-              className="w-full pl-9 pr-4 py-2.5 bg-white/[0.03] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
+              icon={<Search size={16} />}
             />
           </div>
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => setSelectedCategory('')}
-              className={`px-4 py-2 rounded-2xl text-xs font-semibold transition-all duration-200 border ${
+              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 border ${
                 !selectedCategory
                   ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)] shadow-lg shadow-[var(--color-accent)]/20'
-                  : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] border-[var(--color-border-subtle)] bg-white/[0.03]'
+                  : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)]'
               }`}
             >
               全部
@@ -108,10 +110,10 @@ export function SkillsPage() {
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-4 py-2 rounded-2xl text-xs font-semibold transition-all duration-200 border ${
+                className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 border ${
                   selectedCategory === cat
                     ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)] shadow-lg shadow-[var(--color-accent)]/20'
-                    : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] border-[var(--color-border-subtle)] bg-white/[0.03]'
+                    : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)]'
                 }`}
               >
                 {CATEGORY_LABELS[cat] || cat}
@@ -121,39 +123,24 @@ export function SkillsPage() {
         </div>
 
         {error && (
-          <div className="bg-[var(--color-error)]/10 border border-[var(--color-error)]/30 rounded-2xl p-4 mb-6 flex items-center gap-3">
-            <AlertCircle size={18} className="text-[var(--color-error)] shrink-0" />
-            <p className="text-sm text-[var(--color-error)] flex-1">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-[var(--color-error)] hover:bg-[var(--color-error)]/10 rounded-xl transition-colors"
-            >
-              <RefreshCw size={14} /> 重试
-            </button>
-          </div>
+          <Card variant="default" className="mb-6 border-[var(--color-error)]/30">
+            <CardContent className="p-4 flex items-center gap-3">
+              <AlertCircle size={18} className="text-[var(--color-error)] shrink-0" />
+              <p className="text-sm text-[var(--color-error)] flex-1">{error}</p>
+              <Button variant="outline" size="sm" icon={<RefreshCw size={14} />} onClick={() => window.location.reload()}>
+                重试
+              </Button>
+            </CardContent>
+          </Card>
         )}
 
         {loading && (
           <div className="space-y-6">
             {[1, 2].map(i => (
-              <div key={i} className="animate-pulse">
-                <div className="h-5 w-24 bg-white/5 rounded-xl mb-4" />
-                <div className="grid grid-cols-2 gap-4">
-                  {[1, 2].map(j => (
-                    <div key={j} className="border border-[var(--color-border-subtle)] rounded-2xl p-5">
-                      <div className="flex items-start gap-3">
-                        <div className="w-5 h-5 rounded bg-white/5" />
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 bg-white/5 rounded-xl" />
-                            <div className="h-4 w-24 bg-white/5 rounded-xl" />
-                          </div>
-                          <div className="h-3 w-full bg-white/5 rounded-xl" />
-                          <div className="h-3 w-3/4 bg-white/5 rounded-xl" />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+              <div key={i}>
+                <div className="h-5 w-24 bg-[var(--color-bg-surface-2)] rounded-xl mb-4" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[1, 2].map(j => <SkeletonCard key={j} />)}
                 </div>
               </div>
             ))}
@@ -161,56 +148,52 @@ export function SkillsPage() {
         )}
 
         {!loading && !error && filtered.length === 0 && (
-          <div className="text-center py-16">
-            <div className="w-16 h-16 rounded-3xl bg-white/5 border border-[var(--color-border-subtle)] flex items-center justify-center mx-auto mb-4">
-              <Package size={28} className="text-[var(--color-text-muted)]" />
-            </div>
-            <p className="text-[var(--color-text-muted)] text-sm">未找到匹配的技能。</p>
-          </div>
+          <EmptyState
+            icon="file"
+            title="未找到匹配的技能"
+            description="尝试其他搜索关键词或分类"
+          />
         )}
 
         {!loading && !error && filtered.length > 0 && (
-          <div className="space-y-8">
+          <div className="space-y-8 stagger-children">
             {Object.entries(grouped).map(([category, items]) => (
               <div key={category}>
                 <h3 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-4">
                   {CATEGORY_LABELS[category] || category}
                 </h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {items.map(skill => (
-                    <div
-                      key={skill.id}
-                      className="border border-[var(--color-border-subtle)] rounded-2xl p-5 bg-[var(--color-bg-surface-1)] hover:border-[var(--color-accent)]/30 transition-all duration-200"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{skill.name}</h4>
-                            <span className="text-[10px] text-[var(--color-text-muted)] px-2 py-0.5 bg-white/[0.03] border border-[var(--color-border-subtle)] rounded-full shrink-0">
-                              {skill.category}
-                            </span>
+                    <Card key={skill.id} variant="default" className="hover-lift">
+                      <CardContent className="p-5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{skill.name}</h4>
+                              <Badge variant="default" size="xs">{skill.category}</Badge>
+                            </div>
+                            <p className="text-xs text-[var(--color-text-muted)] line-clamp-2 mb-3">{skill.description}</p>
+                            <div className="flex items-center gap-3 text-[11px] text-[var(--color-text-muted)]">
+                              <span>使用 {skill.use_count} 次</span>
+                              {skill.tools.length > 0 && <span>{skill.tools.length} 工具</span>}
+                              <span className="truncate">{skill.path.split('/').pop()}</span>
+                            </div>
                           </div>
-                          <p className="text-xs text-[var(--color-text-muted)] line-clamp-2 mb-3">{skill.description}</p>
-                          <div className="flex items-center gap-3 text-[11px] text-[var(--color-text-muted)]">
-                            <span>使用 {skill.use_count} 次</span>
-                            {skill.tools.length > 0 && <span>· {skill.tools.length} 工具</span>}
-                            <span className="truncate">{skill.path.split('/').pop()}</span>
-                          </div>
+                          <button
+                            onClick={() => toggleSkill(skill)}
+                            disabled={toggling === `skill-${skill.id}`}
+                            className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200 border ${
+                              skill.is_enabled
+                                ? 'bg-[var(--color-success)]/10 text-[var(--color-success)] border-[var(--color-success)]/20 hover:bg-[var(--color-success)]/20'
+                                : 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-surface-3)]'
+                            }`}
+                            title={skill.is_enabled ? '禁用' : '启用'}
+                          >
+                            {skill.is_enabled ? <Power size={14} /> : <PowerOff size={14} />}
+                          </button>
                         </div>
-                        <button
-                          onClick={() => toggleSkill(skill)}
-                          disabled={toggling === `skill-${skill.id}`}
-                          className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200 ${
-                            skill.is_enabled
-                              ? 'bg-[var(--color-success)]/10 text-[var(--color-success)] hover:bg-[var(--color-success)]/20'
-                              : 'bg-white/[0.03] text-[var(--color-text-muted)] hover:bg-white/[0.06]'
-                          }`}
-                          title={skill.is_enabled ? '禁用' : '启用'}
-                        >
-                          {skill.is_enabled ? <Power size={14} /> : <PowerOff size={14} />}
-                        </button>
-                      </div>
-                    </div>
+                      </CardContent>
+                    </Card>
                   ))}
                 </div>
               </div>

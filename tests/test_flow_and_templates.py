@@ -1,23 +1,22 @@
 """Tests for the Flow system and workflow templates."""
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from app.core.agent_engine import AgentEngine
 from app.multi_agent.flow import (
     FlowExecutor,
     FlowState,
-    FlowStatus,
     listen,
     listen_or,
     listen_route,
     router,
     start,
 )
-from app.workflow import NodeType, Workflow, WorkflowNode, WorkflowEdge
+from app.workflow import NodeType, Workflow, WorkflowEdge, WorkflowNode
 from app.workflow.engine import WorkflowEngine
 from app.workflow.templates import WorkflowTemplates
-
 
 # ── Flow system tests ──
 

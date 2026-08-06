@@ -1,83 +1,93 @@
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import {
   MessageSquare, Bot, Network, Cpu, BarChart3,
   PanelLeftClose, PanelLeft, Sparkles, Search, Bell, Menu, X,
   Settings, Workflow, Terminal, Key, Activity, FlaskConical, DollarSign,
-  Puzzle, Package, Clock, Users, History,
+  Puzzle, Package, Clock, Users, History, LogOut,
 } from 'lucide-react';
-import { WorkspaceLayout } from './components/workspace/WorkspaceLayout';
-import { AgentsPage } from './pages/AgentsPage';
-import { WorkflowsPage } from './pages/WorkflowsPage';
-import { ApiKeysPage } from './pages/ApiKeysPage';
-import { StatsPage } from './pages/StatsPage';
-import { SkillsPage } from './pages/SkillsPage';
-import { NotificationsPage } from './pages/NotificationsPage';
-import { DoctorPage } from './pages/DoctorPage';
-import { MCPPage } from './pages/MCPPage';
-import { FactoryModePage } from './pages/FactoryModePage';
-import { PluginsPage } from './pages/PluginsPage';
-import { SchedulerPage } from './pages/SchedulerPage';
-import { ClusterPage } from './pages/ClusterPage';
-import TracesPage from './pages/TracesPage';
-import EvalPage from './pages/EvalPage';
-import CostPage from './pages/CostPage';
-import PluginPage from './pages/PluginPage';
-import { SettingsPage } from './pages/SettingsPage';
-import TaskMonitorPage from './pages/TaskMonitorPage';
-import { TaskHistoryPage } from './pages/TaskHistoryPage';
-import { ReasoningPage } from './pages/ReasoningPage';
-import { ReasoningHistoryPage } from './pages/ReasoningHistoryPage';
 import { GlobalSearch } from './components/workspace/GlobalSearch';
 import { PageTransition } from './components/workspace/PageTransition';
+import { IOsToaster } from './components/ios';
 import { ThemeToggle } from './components/ui/ThemeToggle';
-import TerminalPage from './pages/TerminalPage';
 import CommandPalette from './components/workspace/CommandPalette';
-import { MobileLayout } from './components/mobile/MobileLayout';
+import { AdaptiveMobileLayout } from './components/layout/AdaptiveMobileLayout';
 import { MobileChatPage } from './pages/MobileChatPage';
 import { MobileFactoryPage } from './pages/mobile/MobileFactoryPage';
 import { MobileClusterPage } from './pages/mobile/MobileClusterPage';
 import { MobileTasksPage } from './pages/mobile/MobileTasksPage';
-import { MobileAgentsPage } from './pages/mobile/MobileAgentsPage';
+import { useI18n } from './i18n';
+import { LanguageSwitcher } from './components/LanguageSwitcher';
 
-type Page = 'chat' | 'agents' | 'workflows' | 'crews' | 'apikeys' | 'skills' | 'notifications' | 'doctor' | 'mcp' | 'stats' | 'factory' | 'plugins' | 'scheduler' | 'cluster' | 'traces' | 'eval' | 'cost' | 'plugin-manage' | 'settings' | 'tasks' | 'task-history' | 'reasoning' | 'reasoning-history' | 'terminal';
+const WorkspaceLayout = lazy(() => import('./components/workspace/WorkspaceLayout').then(m => ({ default: m.WorkspaceLayout })));
+const AgentsPage = lazy(() => import('./pages/AgentsPage').then(m => ({ default: m.AgentsPage })));
+const WorkflowsPage = lazy(() => import('./pages/WorkflowsPage').then(m => ({ default: m.WorkflowsPage })));
+const ApiKeysPage = lazy(() => import('./pages/ApiKeysPage').then(m => ({ default: m.ApiKeysPage })));
+const StatsPage = lazy(() => import('./pages/StatsPage').then(m => ({ default: m.StatsPage })));
+const SkillsPage = lazy(() => import('./pages/SkillsPage').then(m => ({ default: m.SkillsPage })));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then(m => ({ default: m.NotificationsPage })));
+const DoctorPage = lazy(() => import('./pages/DoctorPage').then(m => ({ default: m.DoctorPage })));
+const MCPPage = lazy(() => import('./pages/MCPPage').then(m => ({ default: m.MCPPage })));
+const FactoryModePage = lazy(() => import('./pages/FactoryModePage').then(m => ({ default: m.FactoryModePage })));
+const PluginsPage = lazy(() => import('./pages/PluginsPage').then(m => ({ default: m.PluginsPage })));
+const SchedulerPage = lazy(() => import('./pages/SchedulerPage').then(m => ({ default: m.SchedulerPage })));
+const ClusterPage = lazy(() => import('./pages/ClusterPage').then(m => ({ default: m.ClusterPage })));
+const TracesPage = lazy(() => import('./pages/TracesPage'));
+const EvalPage = lazy(() => import('./pages/EvalPage'));
+const CostPage = lazy(() => import('./pages/CostPage'));
+const PluginPage = lazy(() => import('./pages/PluginPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const TaskMonitorPage = lazy(() => import('./pages/TaskMonitorPage'));
+const TaskHistoryPage = lazy(() => import('./pages/TaskHistoryPage').then(m => ({ default: m.TaskHistoryPage })));
+const ReasoningPage = lazy(() => import('./pages/ReasoningPage').then(m => ({ default: m.ReasoningPage })));
+const ReasoningHistoryPage = lazy(() => import('./pages/ReasoningHistoryPage').then(m => ({ default: m.ReasoningHistoryPage })));
+const TerminalPage = lazy(() => import('./pages/TerminalPage'));
+const DemoVisualHierarchy = lazy(() => import('./pages/DemoVisualHierarchy'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const AuthApiKeysPage = lazy(() => import('./pages/AuthApiKeysPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 
-const CORE_NAV_ITEMS: { id: Page; icon: typeof MessageSquare; label: string; group?: string }[] = [
-  { id: 'chat', icon: MessageSquare, label: '工作台', group: 'main' },
-  { id: 'factory', icon: Sparkles, label: '自主执行', group: 'main' },
-  { id: 'cluster', icon: Network, label: '集群协作', group: 'main' },
-  { id: 'tasks', icon: Cpu, label: '任务监控', group: 'main' },
-  { id: 'agents', icon: Bot, label: '智能体', group: 'manage' },
-  { id: 'settings', icon: Settings, label: '设置', group: 'config' },
+type Page = 'dashboard' | 'chat' | 'agents' | 'workflows' | 'crews' | 'apikeys' | 'authapikeys' | 'skills' | 'notifications' | 'doctor' | 'mcp' | 'stats' | 'factory' | 'plugins' | 'scheduler' | 'cluster' | 'traces' | 'eval' | 'cost' | 'plugin-manage' | 'settings' | 'tasks' | 'task-history' | 'reasoning' | 'reasoning-history' | 'terminal' | 'demo' | 'login';
+
+const CORE_NAV_ITEMS_BASE: { id: Page; icon: typeof MessageSquare; labelKey?: string; label?: string; group?: string }[] = [
+  { id: 'dashboard', icon: Activity, label: 'Overview', group: 'main' },
+  { id: 'chat', icon: MessageSquare, labelKey: 'navigation.chat', group: 'main' },
+  { id: 'agents', icon: Bot, labelKey: 'navigation.agents', group: 'manage' },
+  { id: 'workflows', icon: Workflow, labelKey: 'navigation.workflows', group: 'manage' },
+  { id: 'tasks', icon: Cpu, labelKey: 'navigation.tasks', group: 'main' },
+  { id: 'factory', icon: Sparkles, label: 'Factory', group: 'main' },
+  { id: 'settings', icon: Settings, labelKey: 'navigation.settings', group: 'config' },
 ];
 
-const ALL_NAV_ITEMS: { id: Page; icon: typeof MessageSquare; label: string; group?: string; keywords?: string }[] = [
-  { id: 'chat', icon: MessageSquare, label: '工作台', group: 'main', keywords: 'home workspace dashboard 工作台' },
-  { id: 'factory', icon: Sparkles, label: '自主执行', group: 'main', keywords: 'auto agent execute 自主执行' },
-  { id: 'cluster', icon: Network, label: '集群协作', group: 'main', keywords: 'multi agent team 集群协作' },
-  { id: 'tasks', icon: Cpu, label: '任务监控', group: 'main', keywords: 'monitor task running 任务监控' },
-  { id: 'task-history', icon: History, label: '任务历史', group: 'main', keywords: 'history past 任务历史' },
-  { id: 'reasoning', icon: Activity, label: '推理引擎', group: 'main', keywords: 'reason think 推理引擎' },
-  { id: 'reasoning-history', icon: History, label: '推理历史', group: 'main', keywords: 'reasoning history 推理历史' },
-  { id: 'agents', icon: Bot, label: '智能体', group: 'manage', keywords: 'agent config 智能体' },
-  { id: 'workflows', icon: Workflow, label: '工作流', group: 'manage', keywords: 'workflow dag 工作流' },
-  { id: 'crews', icon: Users, label: '团队协作', group: 'manage', keywords: 'crew team 团队协作' },
-  { id: 'scheduler', icon: Clock, label: '定时任务', group: 'manage', keywords: 'cron schedule 定时任务' },
-  { id: 'plugins', icon: Puzzle, label: '插件市场', group: 'config', keywords: 'plugin marketplace 插件市场' },
-  { id: 'plugin-manage', icon: Package, label: '插件管理', group: 'config', keywords: 'plugin manage installed 插件管理' },
-  { id: 'skills', icon: Package, label: '技能中心', group: 'config', keywords: 'skill tool 技能中心' },
-  { id: 'notifications', icon: Bell, label: '通知中心', group: 'config', keywords: 'notification alert 通知中心' },
-  { id: 'doctor', icon: Activity, label: '系统诊断', group: 'config', keywords: 'health debug 系统诊断' },
-  { id: 'mcp', icon: Terminal, label: 'MCP 市场', group: 'config', keywords: 'mcp protocol tool  MCP 市场' },
-  { id: 'apikeys', icon: Key, label: 'API 密钥', group: 'config', keywords: 'api key secret API 密钥' },
-  { id: 'stats', icon: BarChart3, label: '数据统计', group: 'config', keywords: 'stats analytics chart 数据统计' },
-  { id: 'traces', icon: Activity, label: '链路追踪', group: 'config', keywords: 'trace debug 链路追踪' },
-  { id: 'eval', icon: FlaskConical, label: '效果评估', group: 'config', keywords: 'eval benchmark 效果评估' },
-  { id: 'cost', icon: DollarSign, label: '成本控制', group: 'config', keywords: 'cost billing token 成本控制' },
-  { id: 'settings', icon: Settings, label: '系统设置', group: 'config', keywords: 'settings config preference 系统设置' },
-  { id: 'terminal', icon: Terminal, label: '终端沙箱', group: 'config', keywords: 'terminal shell 终端沙箱' },
+const ALL_NAV_ITEMS_BASE: { id: Page; icon: typeof MessageSquare; labelKey?: string; label?: string; group?: string; keywords?: string }[] = [
+  { id: 'dashboard', icon: Activity, label: 'Overview', group: 'main', keywords: 'dashboard health status' },
+  { id: 'chat', icon: MessageSquare, labelKey: 'navigation.chat', group: 'main', keywords: 'home workspace dashboard' },
+  { id: 'factory', icon: Sparkles, label: 'Factory', group: 'main', keywords: 'auto agent execute' },
+  { id: 'cluster', icon: Network, label: 'Cluster', group: 'main', keywords: 'multi agent team' },
+  { id: 'tasks', icon: Cpu, labelKey: 'navigation.tasks', group: 'main', keywords: 'monitor task running' },
+  { id: 'task-history', icon: History, labelKey: 'navigation.tasks', group: 'main', keywords: 'history past' },
+  { id: 'reasoning', icon: Activity, labelKey: 'navigation.agents', group: 'main', keywords: 'reason think' },
+  { id: 'reasoning-history', icon: History, labelKey: 'navigation.tasks', group: 'main', keywords: 'reasoning history' },
+  { id: 'agents', icon: Bot, labelKey: 'navigation.agents', group: 'manage', keywords: 'agent config' },
+  { id: 'workflows', icon: Workflow, labelKey: 'navigation.workflows', group: 'manage', keywords: 'workflow dag' },
+  { id: 'crews', icon: Users, labelKey: 'navigation.users', group: 'manage', keywords: 'crew team' },
+  { id: 'scheduler', icon: Clock, labelKey: 'navigation.scheduler', group: 'manage', keywords: 'cron schedule' },
+  { id: 'plugins', icon: Puzzle, labelKey: 'navigation.plugins', group: 'config', keywords: 'plugin marketplace' },
+  { id: 'plugin-manage', icon: Package, labelKey: 'navigation.plugins', group: 'config', keywords: 'plugin manage installed' },
+  { id: 'skills', icon: Package, labelKey: 'navigation.skills', group: 'config', keywords: 'skill tool' },
+  { id: 'notifications', icon: Bell, labelKey: 'navigation.notifications', group: 'config', keywords: 'notification alert' },
+  { id: 'doctor', icon: Activity, labelKey: 'navigation.monitoring', group: 'config', keywords: 'health debug' },
+  { id: 'mcp', icon: Terminal, labelKey: 'navigation.mcp', group: 'config', keywords: 'mcp protocol tool' },
+  { id: 'apikeys', icon: Key, labelKey: 'navigation.api_keys', group: 'config', keywords: 'api key secret' },
+  { id: 'stats', icon: BarChart3, labelKey: 'navigation.analytics', group: 'config', keywords: 'stats analytics chart' },
+  { id: 'traces', icon: Activity, labelKey: 'navigation.tasks', group: 'config', keywords: 'trace debug' },
+  { id: 'eval', icon: FlaskConical, labelKey: 'navigation.reports', group: 'config', keywords: 'eval benchmark' },
+  { id: 'cost', icon: DollarSign, labelKey: 'navigation.costs', group: 'config', keywords: 'cost billing token' },
+  { id: 'settings', icon: Settings, labelKey: 'navigation.settings', group: 'config', keywords: 'settings config preference' },
+  { id: 'terminal', icon: Terminal, labelKey: 'navigation.settings', group: 'config', keywords: 'terminal shell' },
+  { id: 'demo', icon: Sparkles, labelKey: 'navigation.settings', group: 'config', keywords: 'demo visual design' },
 ];
 
-const VALID_PAGES = new Set(ALL_NAV_ITEMS.map(n => n.id));
+const VALID_PAGES = new Set([...ALL_NAV_ITEMS_BASE.map(n => n.id), 'demo', 'login']);
 
 function getPageFromHash(): Page {
   const hash = window.location.hash.replace('#', '') || 'chat';
@@ -96,11 +106,45 @@ function PageFallback() {
 }
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<Page>(getPageFromHash);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeOverlay, setActiveOverlay] = useState<'search' | 'commands' | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+   const { t } = useI18n();
+   const CORE_NAV_ITEMS = CORE_NAV_ITEMS_BASE.map(item => ({ ...item, label: item.label ?? t(item.labelKey!) }));
+   const [currentPage, setCurrentPage] = useState<Page>(getPageFromHash);
+   const [sidebarOpen, setSidebarOpen] = useState(true);
+   const [activeOverlay, setActiveOverlay] = useState<'search' | 'commands' | null>(null);
+   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+   const [isMobile, setIsMobile] = useState(false);
+   const [authEnabled, setAuthEnabled] = useState(false);
+   const [isAuthenticated, setIsAuthenticated] = useState(false);
+   const [userInfo, setUserInfo] = useState<any>(null);
+   const [authLoading, setAuthLoading] = useState(true);
+
+   useEffect(() => {
+     const initAuth = async () => {
+       try {
+         const token = localStorage.getItem('auth_token');
+         const storedUser = localStorage.getItem('user_info');
+
+         const response = await fetch('/api/v1/auth/health');
+         const data = await response.json();
+         const enabled = data.authentication_enabled;
+         setAuthEnabled(enabled);
+
+         if (enabled && token) {
+           if (storedUser) {
+             setUserInfo(JSON.parse(storedUser));
+             setIsAuthenticated(true);
+           } else {
+             localStorage.removeItem('auth_token');
+           }
+         }
+       } catch {
+         setAuthEnabled(false);
+       } finally {
+         setAuthLoading(false);
+       }
+     };
+     initAuth();
+   }, []);
 
   useEffect(() => {
     const onHashChange = () => {
@@ -124,9 +168,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
+     const handleResize = () => {
+       const mobile = window.innerWidth < 768;
+       setIsMobile(mobile);
+       if (window.innerWidth >= 768 && window.innerWidth < 1024) {
+         setSidebarOpen(false);
+       }
       if (mobile) {
         setMobileMenuOpen(false);
       }
@@ -144,59 +191,111 @@ export default function App() {
     }
   }, [isMobile]);
 
-  const renderPage = () => {
-    if (isMobile) {
-      switch (currentPage) {
-        case 'chat': return <MobileChatPage />;
-        case 'factory': return <MobileFactoryPage />;
-        case 'cluster': return <MobileClusterPage />;
-        case 'tasks': return <MobileTasksPage />;
-        case 'agents': return <MobileAgentsPage />;
-        case 'settings': return <SettingsPage />;
-        default: return <MobileChatPage />;
-      }
-    }
-    switch (currentPage) {
-      case 'chat': return <WorkspaceLayout />;
-      case 'agents': return <AgentsPage />;
-      case 'workflows': return <WorkflowsPage />;
-      case 'crews': return <ClusterPage />;
-      case 'apikeys': return <ApiKeysPage />;
-      case 'skills': return <SkillsPage />;
-      case 'notifications': return <NotificationsPage />;
-      case 'doctor': return <DoctorPage />;
-      case 'mcp': return <MCPPage />;
-      case 'stats': return <StatsPage />;
-      case 'factory': return <FactoryModePage />;
-      case 'plugins': return <PluginsPage />;
-      case 'plugin-manage': return <PluginPage />;
-      case 'scheduler': return <SchedulerPage />;
-      case 'cluster': return <ClusterPage />;
-      case 'traces': return <TracesPage />;
-      case 'eval': return <EvalPage />;
-      case 'cost': return <CostPage />;
-      case 'settings': return <SettingsPage />;
-      case 'terminal': return <TerminalPage />;
-      case 'tasks': return <TaskMonitorPage />;
-      case 'task-history': return <TaskHistoryPage />;
-      case 'reasoning': return <ReasoningPage />;
-      case 'reasoning-history': return <ReasoningHistoryPage />;
-    }
-  };
+  const handleLogout = async () => {
+     const token = localStorage.getItem('auth_token');
+     if (token) {
+       try {
+         await fetch('/api/v1/auth/logout', {
+           method: 'POST',
+           headers: { 'Authorization': `Bearer ${token}` },
+         });
+       } catch {
+         // Ignore logout errors
+       }
+     }
+     localStorage.removeItem('auth_token');
+     localStorage.removeItem('refresh_token');
+     localStorage.removeItem('user_info');
+     setIsAuthenticated(false);
+     setUserInfo(null);
+     setCurrentPage('login');
+     window.location.hash = 'login';
+   };
 
-  return (
-    <div className="app-shell flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--color-bg-page)' }}>
-      {isMobile ? (
-        <MobileLayout currentPage={currentPage} onNavigate={(page) => navigate(page as any)}>
-          <Suspense fallback={<PageFallback />}>
-            <PageTransition transitionKey={currentPage}>
-              {renderPage()}
-            </PageTransition>
-          </Suspense>
-        </MobileLayout>
-      ) : (
+  const renderPage = () => {
+     if (currentPage === 'login') {
+       return <LoginPage onLogin={(token, user) => { setIsAuthenticated(true); setUserInfo(user); }} />;
+     }
+
+     if (authEnabled && !isAuthenticated) {
+       return <LoginPage onLogin={(token, user) => { setIsAuthenticated(true); setUserInfo(user); }} />;
+     }
+
+      if (isMobile) {
+        switch (currentPage) {
+          case 'dashboard': return <DashboardPage />;
+         case 'chat': return <MobileChatPage />;
+         case 'factory': return <MobileFactoryPage />;
+         case 'cluster': return <MobileClusterPage />;
+         case 'tasks': return <MobileTasksPage />;
+         case 'agents': return <AgentsPage />;
+         case 'settings': return <SettingsPage />;
+       }
+     }
+      switch (currentPage) {
+        case 'dashboard': return <DashboardPage />;
+       case 'chat': return <WorkspaceLayout />;
+       case 'agents': return <AgentsPage />;
+       case 'workflows': return <WorkflowsPage />;
+       case 'crews': return <ClusterPage />;
+       case 'apikeys': return <ApiKeysPage />;
+       case 'authapikeys': return <AuthApiKeysPage />;
+       case 'skills': return <SkillsPage />;
+       case 'notifications': return <NotificationsPage />;
+       case 'doctor': return <DoctorPage />;
+       case 'mcp': return <MCPPage />;
+       case 'stats': return <StatsPage />;
+       case 'factory': return <FactoryModePage />;
+       case 'plugins': return <PluginsPage />;
+       case 'plugin-manage': return <PluginPage />;
+       case 'scheduler': return <SchedulerPage />;
+       case 'cluster': return <ClusterPage />;
+       case 'traces': return <TracesPage />;
+       case 'eval': return <EvalPage />;
+       case 'cost': return <CostPage />;
+       case 'settings': return <SettingsPage />;
+       case 'terminal': return <TerminalPage />;
+       case 'tasks': return <TaskMonitorPage />;
+       case 'task-history': return <TaskHistoryPage />;
+       case 'reasoning': return <ReasoningPage />;
+       case 'reasoning-history': return <ReasoningHistoryPage />;
+       case 'demo': return <DemoVisualHierarchy />;
+     }
+   };
+
+   if (authLoading) {
+     return (
+        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--color-bg-page)' }} aria-busy="true">
+         <div className="flex items-center gap-3">
+            <div className="workspace-mark">
+             <Sparkles size={16} className="text-white" />
+           </div>
+           <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--color-accent)', borderTopColor: 'transparent' }} />
+         </div>
+       </div>
+     );
+   }
+
+   if (currentPage === 'login' || (authEnabled && !isAuthenticated)) {
+     return (
+       <Suspense fallback={<PageFallback />}>
+         {renderPage()}
+       </Suspense>
+     );
+   }
+
+   return (
+     <div className="app-shell flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--color-bg-page)' }}>
+       {isMobile ? (
+          <AdaptiveMobileLayout currentPage={currentPage} onNavigate={(page) => navigate(page as Page)}>
+           <Suspense fallback={<PageFallback />}>
+             <PageTransition transitionKey={currentPage}>
+               {renderPage()}
+             </PageTransition>
+           </Suspense>
+          </AdaptiveMobileLayout>
+       ) : (
         <>
-          {/* Mobile Overlay */}
           {mobileMenuOpen && (
             <div
               className="mobile-overlay md:hidden"
@@ -205,254 +304,187 @@ export default function App() {
           )}
 
           {/* Sidebar */}
-          <aside className={`
+           <aside aria-label="主导航" className={`
             fixed md:relative inset-y-0 left-0 z-50
-            ${sidebarOpen ? 'w-60' : 'w-16'}
-            flex flex-col transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]
+             ${sidebarOpen ? 'w-56' : 'w-[60px]'}
+            flex flex-col
             ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-          `} style={{
-            backgroundColor: 'var(--color-bg-surface-1)',
-            borderRight: '1px solid var(--color-border-subtle)',
-          }}>
-        {/* Logo */}
-        <div className="h-14 flex items-center px-4" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-          {sidebarOpen && (
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-2xl flex items-center justify-center" style={{
-                background: 'linear-gradient(135deg, var(--color-accent), #8B5CF6)',
-                boxShadow: '0 0 20px var(--color-accent-glow)'
-              }}>
-                <Sparkles size={16} className="text-white" />
-              </div>
-              <span className="text-sm font-bold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>Climber</span>
-            </div>
-          )}
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            aria-label={sidebarOpen ? '收起侧边栏' : '展开侧边栏'}
-            aria-expanded={sidebarOpen}
-            className="ml-auto p-2 rounded-xl transition-all duration-200 active:scale-[0.95] hidden md:flex"
-            style={{ color: 'var(--color-text-muted)' }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)';
-              e.currentTarget.style.color = 'var(--color-text-primary)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = 'var(--color-text-muted)';
-            }}
-          >
-            {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeft size={16} />}
-          </button>
-          <button
-            onClick={() => setMobileMenuOpen(false)}
-            aria-label="关闭导航菜单"
-            className="ml-auto p-2 rounded-xl transition-all duration-200 active:scale-[0.95] md:hidden"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        {/* Search trigger */}
-        <div className="p-3">
-          <button
-            onClick={() => setActiveOverlay('search')}
-            aria-label="全局搜索"
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl text-sm transition-all duration-200 active:scale-[0.98]"
+          `}
             style={{
-              color: 'var(--color-text-muted)',
-              border: '1px solid var(--color-border-subtle)',
-              backgroundColor: 'var(--color-bg-surface-2)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'var(--color-border-default)';
-              e.currentTarget.style.color = 'var(--color-text-secondary)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'var(--color-border-subtle)';
-              e.currentTarget.style.color = 'var(--color-text-muted)';
+              backgroundColor: 'var(--color-bg-surface-1)',
+              borderRight: '1px solid var(--color-border-subtle)',
+               transition: 'width 180ms ease, transform 180ms ease',
             }}
           >
-            <Search size={14} />
-            {sidebarOpen && (
-              <div className="flex items-center gap-2 flex-1">
-                <span>搜索...</span>
-                <kbd className="ml-auto text-[10px] px-1.5 py-0.5 rounded-md font-mono" style={{
-                  backgroundColor: 'var(--color-bg-surface-3)',
-                  color: 'var(--color-text-muted)',
-                  border: '1px solid var(--color-border-subtle)'
-                }}>搜索</kbd>
-              </div>
-            )}
-          </button>
-        </div>
-
-        {/* Core Navigation */}
-        <nav className="flex-1 py-3 px-2.5 overflow-y-auto">
-          <div className="space-y-0.5">
-            {CORE_NAV_ITEMS.map(({ id, icon: Icon, label }) => (
-              <button
-                key={id}
-                onClick={() => navigate(id)}
-                className={`
-                  w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm
-                  transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] border relative
-                `}
-                style={{
-                  color: currentPage === id ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                  backgroundColor: currentPage === id ? 'var(--color-accent-subtle)' : 'transparent',
-                  borderColor: currentPage === id ? 'var(--color-border-accent)' : 'transparent',
-                }}
-                onMouseEnter={(e) => {
-                  if (currentPage !== id) {
-                    e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)';
-                    e.currentTarget.style.color = 'var(--color-text-secondary)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (currentPage !== id) {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = 'var(--color-text-muted)';
-                  }
-                }}
-              >
-                {currentPage === id && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{
-                    backgroundColor: 'var(--color-accent)',
-                    boxShadow: '0 0 8px var(--color-accent-glow)'
-                  }} />
-                )}
-                <div className={`
-                  p-1.5 rounded-xl transition-all duration-200
-                  ${currentPage === id ? '' : ''}
-                `} style={{
-                  backgroundColor: currentPage === id ? 'rgba(94,106,210,0.15)' : 'var(--color-bg-surface-2)',
-                  color: currentPage === id ? 'var(--color-accent)' : 'var(--color-text-muted)',
-                }}>
-                  <Icon size={14} />
+            {/* Logo */}
+             <div className="h-14 flex items-center px-3 shrink-0" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+              {sidebarOpen && (
+                <div className="flex items-center gap-2.5">
+                    <div className="workspace-mark">
+                    <Sparkles size={16} className="text-white" />
+                  </div>
+                  <span className="text-sm font-bold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>Climber</span>
                 </div>
+              )}
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                aria-label={sidebarOpen ? '收起侧边栏' : '展开侧边栏'}
+                aria-expanded={sidebarOpen}
+                 className="ml-auto hidden h-11 w-11 items-center justify-center rounded-lg text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)] md:flex"
+              >
+                {sidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeft size={16} />}
+              </button>
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                aria-label="关闭导航菜单"
+                className="ml-auto p-2 rounded-xl transition-all duration-150 active:scale-[0.95] md:hidden"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Search trigger */}
+            <div className="p-3">
+              <button
+                onClick={() => setActiveOverlay('search')}
+                aria-label="全局搜索"
+                  className="flex h-11 w-full items-center gap-3 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] px-3 text-sm text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-border-default)] hover:text-[var(--color-text-secondary)]"
+              >
+                <Search size={14} />
                 {sidebarOpen && (
-                  <span className="font-medium">{label}</span>
+                  <div className="flex items-center gap-2 flex-1">
+                    <span>{t('common.search')}...</span>
+                    <kbd className="ml-auto text-[10px] px-1.5 py-0.5 rounded-md font-mono" style={{
+                      backgroundColor: 'var(--color-bg-surface-3)',
+                      color: 'var(--color-text-muted)',
+                      border: '1px solid var(--color-border-subtle)'
+                     }}>⌘K</kbd>
+                  </div>
                 )}
               </button>
-            ))}
-          </div>
-
-          {/* Separator */}
-          {sidebarOpen && (
-            <div className="my-4 mx-2" style={{ borderBottom: '1px solid var(--color-border-subtle)' }} />
-          )}
-
-          {/* More pages list (compact) */}
-          {sidebarOpen && (
-            <div className="space-y-0.5">
-              {ALL_NAV_ITEMS.filter(item => !CORE_NAV_ITEMS.find(core => core.id === item.id)).slice(0, 8).map(({ id, icon: Icon, label }) => (
-                <button
-                  key={id}
-                  onClick={() => navigate(id)}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl text-sm transition-all duration-200"
-                  style={{
-                    color: currentPage === id ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                    backgroundColor: currentPage === id ? 'var(--color-accent-subtle)' : 'transparent',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)';
-                    e.currentTarget.style.color = 'var(--color-text-secondary)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = currentPage === id ? 'var(--color-accent-subtle)' : 'transparent';
-                    e.currentTarget.style.color = currentPage === id ? 'var(--color-text-primary)' : 'var(--color-text-muted)';
-                  }}
-                >
-                  <div className="p-1.5 rounded-xl" style={{
-                    backgroundColor: 'var(--color-bg-surface-2)',
-                    color: 'var(--color-text-muted)',
-                  }}>
-                    <Icon size={13} />
-                  </div>
-                  <span className="text-xs">{label}</span>
-                </button>
-              ))}
             </div>
-          )}
-        </nav>
 
-        {/* Bottom: Theme + Cmd+K */}
-        <div className="p-3 space-y-2" style={{ borderTop: '1px solid var(--color-border-subtle)' }}>
-          {sidebarOpen && (
-            <button
-              onClick={() => setActiveOverlay('commands')}
-              aria-label="打开命令面板"
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-2xl text-xs transition-all duration-200 active:scale-[0.98]"
-              style={{
-                color: 'var(--color-text-muted)',
-                border: '1px solid var(--color-border-subtle)',
-                backgroundColor: 'var(--color-bg-surface-2)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = 'var(--color-border-default)';
-                e.currentTarget.style.color = 'var(--color-text-secondary)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = 'var(--color-border-subtle)';
-                e.currentTarget.style.color = 'var(--color-text-muted)';
-              }}
-            >
-              <Search size={13} />
-              <span className="flex-1 text-left">命令面板</span>
-              <kbd className="text-[10px] px-1.5 py-0.5 rounded-md font-mono" style={{
-                backgroundColor: 'var(--color-bg-surface-3)',
-                color: 'var(--color-text-muted)',
-                border: '1px solid var(--color-border-subtle)'
-              }}>⌘K</kbd>
-            </button>
-          )}
-          <div className="flex items-center justify-between px-1">
-            {sidebarOpen && <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>主题</span>}
-            <ThemeToggle />
-          </div>
-        </div>
-      </aside>
+            {/* Core Navigation */}
+             <nav className="flex-1 overflow-y-auto px-2.5 py-2" aria-label="工作区">
+              <div className="space-y-0.5">
+                {CORE_NAV_ITEMS.map(({ id, icon: Icon, label }) => (
+                  <button
+                    key={id}
+                     onClick={() => navigate(id)}
+                     aria-label={label}
+                     aria-current={currentPage === id ? 'page' : undefined}
+                     title={sidebarOpen ? undefined : label}
+                     className="relative flex h-11 w-full items-center gap-3 rounded-lg border px-3 text-sm transition-colors"
+                    style={{
+                      color: currentPage === id ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+                      backgroundColor: currentPage === id ? 'var(--color-accent-subtle)' : 'transparent',
+                      borderColor: currentPage === id ? 'var(--color-border-accent)' : 'transparent',
+                    }}
+                  >
+                    {currentPage === id && (
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{
+                        backgroundColor: 'var(--color-accent)',
+                        boxShadow: '0 0 8px var(--color-accent-glow)'
+                      }} />
+                    )}
+                     <div className="p-1.5 rounded-md transition-colors" style={{
+                       backgroundColor: currentPage === id ? 'var(--color-accent-subtle)' : 'transparent',
+                      color: currentPage === id ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                    }}>
+                      <Icon size={14} />
+                    </div>
+                    {sidebarOpen && (
+                      <span className="font-medium">{label}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-hidden flex flex-col relative" style={{ backgroundColor: 'var(--color-bg-page)' }}>
-        {/* Mobile Header */}
-        <div className="md:hidden h-12 flex items-center px-4" style={{
-          borderBottom: '1px solid var(--color-border-subtle)',
-          backgroundColor: 'rgba(10,10,15,0.9)',
-          backdropFilter: 'blur(24px)',
-        }}>
-          <button
-            onClick={() => setMobileMenuOpen(true)}
-            aria-label="打开导航菜单"
-            aria-expanded={mobileMenuOpen}
-            className="p-2 rounded-xl transition-all duration-200 active:scale-[0.95]"
-            style={{ color: 'var(--color-text-muted)' }}
-          >
-            <Menu size={20} />
-          </button>
-          <div className="ml-3 flex items-center gap-2">
-            <div className="w-7 h-7 rounded-xl flex items-center justify-center" style={{
-              background: 'linear-gradient(135deg, var(--color-accent), #8B5CF6)',
+                {sidebarOpen && <p className="px-3 pt-4 text-xs leading-5 text-[var(--color-text-muted)]">命令菜单可访问诊断、技能、插件和高级工具</p>}
+            </nav>
+
+            {/* Bottom: Theme + Language + Cmd+K */}
+            <div className="p-3 space-y-2 shrink-0" style={{ borderTop: '1px solid var(--color-border-subtle)' }}>
+              {sidebarOpen && (
+                <LanguageSwitcher showFlag compact />
+              )}
+           {authEnabled && isAuthenticated && sidebarOpen && (
+             <div className="px-3 py-2 mb-2">
+               <div className="flex items-center gap-2 p-2 rounded-xl" style={{ backgroundColor: 'var(--color-bg-surface-2)' }}>
+                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--color-accent)]">
+                   <span className="text-white text-xs font-bold">{userInfo?.username?.charAt(0).toUpperCase() || 'A'}</span>
+                 </div>
+                 <div className="flex-1 min-w-0">
+                   <p className="text-xs font-medium truncate" style={{ color: 'var(--color-text-primary)' }}>{userInfo?.username || 'Admin'}</p>
+                   <p className="text-[10px] truncate" style={{ color: 'var(--color-text-muted)' }}>{userInfo?.role || 'admin'}</p>
+                 </div>
+                 <button
+                   onClick={handleLogout}
+                    title={t('user_menu.log_out')}
+                    aria-label={t('user_menu.log_out')}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-error-subtle)] hover:text-[var(--color-error)]"
+                 >
+                   <LogOut size={14} />
+                 </button>
+               </div>
+             </div>
+           )}
+           <div className="flex items-center justify-between px-1">
+             {sidebarOpen && <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>主题</span>}
+             <ThemeToggle />
+           </div>
+         </div>
+       </aside>
+
+          {/* Main Content */}
+           <main id="main-content" className="min-w-0 flex-1 overflow-hidden flex flex-col relative" style={{ backgroundColor: 'var(--color-bg-page)' }}>
+             <header className="desktop-context-bar">
+               <div className="min-w-0">
+                 <p className="workspace-eyebrow">Workspace / {currentPage}</p>
+                 <p className="truncate text-sm font-semibold text-[var(--color-text-primary)]">{ALL_NAV_ITEMS_BASE.find(item => item.id === currentPage)?.label ?? currentPage}</p>
+               </div>
+               <button className="context-command" onClick={() => setActiveOverlay('commands')} aria-label="打开命令菜单">
+                 <Search size={14} /><span>Command menu</span><kbd>⌘K</kbd>
+               </button>
+             </header>
+            {/* Mobile Header */}
+            <div className="md:hidden h-12 flex items-center px-4" style={{
+              borderBottom: '1px solid var(--color-border-subtle)',
+              backgroundColor: 'rgba(10,10,15,0.9)',
+              backdropFilter: 'blur(24px)',
             }}>
-              <Sparkles size={14} className="text-white" />
+              <button
+                onClick={() => setMobileMenuOpen(true)}
+                aria-label="打开导航菜单"
+                aria-expanded={mobileMenuOpen}
+                className="p-2 rounded-xl transition-all duration-150 active:scale-[0.95]"
+                style={{ color: 'var(--color-text-muted)' }}
+              >
+                <Menu size={20} />
+              </button>
+              <div className="ml-3 flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl flex items-center justify-center" style={{
+                  background: 'linear-gradient(135deg, #5E6AD2, #6366F1)',
+                }}>
+                  <Sparkles size={14} className="text-white" />
+                </div>
+                <span className="text-sm font-bold" style={{ color: 'var(--color-text-primary)' }}>Climber</span>
+              </div>
             </div>
-            <span className="text-sm font-bold" style={{ color: 'var(--color-text-primary)' }}>Climber</span>
-          </div>
-        </div>
 
-        <Suspense fallback={<PageFallback />}>
-          <PageTransition transitionKey={currentPage}>
-            {renderPage()}
-          </PageTransition>
-        </Suspense>
-      </main>
+            <Suspense fallback={<PageFallback />}>
+              <PageTransition transitionKey={currentPage}>
+                {renderPage()}
+              </PageTransition>
+            </Suspense>
+          </main>
 
-        <GlobalSearch isOpen={activeOverlay === 'search'} onClose={() => setActiveOverlay(null)} />
-        <CommandPalette isOpen={activeOverlay === 'commands'} onClose={() => setActiveOverlay(null)} onNavigate={(page) => navigate(page as Page)} />
-      </>
-    )}
-  </div>
+          <GlobalSearch isOpen={activeOverlay === 'search'} onClose={() => setActiveOverlay(null)} />
+          <CommandPalette isOpen={activeOverlay === 'commands'} onClose={() => setActiveOverlay(null)} onNavigate={(page) => navigate(page as Page)} />
+          <IOsToaster position="top-center" theme="dark" />
+        </>
+      )}
+    </div>
   );
 }

@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.memory_reflection import memory_reflection
+from app.core.memory_tool_context import get_memory_tool_context
 from app.core.persistent_memory import persistent_memory
 from app.core.vector_memory import vector_memory
 from app.tools import tool
@@ -28,8 +29,9 @@ async def register_memories(content: str, importance: float = 0.5, memory_type: 
     if not content:
         return "Error: content is required"
     try:
+        ctx = get_memory_tool_context()
         mem = await persistent_memory.create_episodic_memory(
-            user_id="default-user",
+            user_id=ctx.user_id,
             content=content,
             memory_type=memory_type,
             importance=importance,
@@ -40,7 +42,7 @@ async def register_memories(content: str, importance: float = 0.5, memory_type: 
             doc_id=mem.id,
             text=content,
             metadata={
-                "user_id": "default-user",
+                "user_id": ctx.user_id,
                 "memory_id": mem.id,
                 "memory_type": memory_type,
                 "importance": importance,
@@ -64,9 +66,10 @@ async def recall_memories(query: str, limit: int = 5, memory_type: str | None = 
     if not query:
         return "Error: query is required"
     try:
-        where: dict[str, Any] | None = {"user_id": "default-user"}
+        ctx = get_memory_tool_context()
+        where: dict[str, Any] | None = {"user_id": ctx.user_id}
         if memory_type:
-            where = {"user_id": "default-user", "memory_type": memory_type}
+            where = {"user_id": ctx.user_id, "memory_type": memory_type}
 
         vector_results = await vector_memory.search(
             collection="episodic",
@@ -77,7 +80,7 @@ async def recall_memories(query: str, limit: int = 5, memory_type: str | None = 
 
         if not vector_results:
             memories = await persistent_memory.retrieve_memories(
-                user_id="default-user",
+                user_id=ctx.user_id,
                 query=query,
                 limit=limit,
             )
@@ -118,8 +121,9 @@ async def reflect_on_task(
     if not task_description or not outcome:
         return "Error: task_description and outcome are required"
     try:
+        ctx = get_memory_tool_context()
         result = await memory_reflection.reflect_on_task(
-            user_id="default-user",
+            user_id=ctx.user_id,
             task_description=task_description,
             outcome=outcome,
             success=success,
@@ -127,7 +131,7 @@ async def reflect_on_task(
             improvements=improvements,
         )
         similar = await memory_reflection.get_similar_reflections(
-            user_id="default-user",
+            user_id=ctx.user_id,
             task_description=task_description,
             limit=3,
         )

@@ -6,12 +6,11 @@ import asyncio
 import logging
 import time
 from collections import deque
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Coroutine
+from typing import Any
 
 import httpx
-
-from app.config import settings
 
 logger = logging.getLogger(__name__)
 

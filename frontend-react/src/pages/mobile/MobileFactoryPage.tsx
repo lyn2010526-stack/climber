@@ -1,9 +1,15 @@
-import { FactoryModePage } from '../FactoryModePage';
+import { useCallback, lazy, Suspense } from 'react';
+
+const FactoryModePage = lazy(() => import('../FactoryModePage').then(m => ({ default: m.FactoryModePage })));
 
 export function MobileFactoryPage() {
+  const handleRefresh = useCallback(async () => {
+    // Implement pull-to-refresh functionality here
+  }, []);
+
   return (
-    <div className="mobile-page-container">
-      <div className="px-4 py-4">
+    <div className="mobile-page-container mobile-touch-feedback">
+      <div className="px-4 py-4 safe-area-top">
         <div className="mb-4">
           <h2 className="text-lg font-bold" style={{ color: 'var(--color-text-primary)' }}>
             自主执行
@@ -13,8 +19,10 @@ export function MobileFactoryPage() {
           </p>
         </div>
       </div>
-      <div className="px-4">
-        <FactoryModePage />
+      <div className="px-4 mobile-content-shift-fix">
+        <Suspense fallback={null}>
+          <FactoryModePage />
+        </Suspense>
       </div>
     </div>
   );

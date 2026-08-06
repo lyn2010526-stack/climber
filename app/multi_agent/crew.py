@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import structlog
 
-from app.core import ChatResult
+from app.core import AgentEventType
 from app.core.agent_engine import AgentEngine
-from app.core.di import resolve as di_resolve
 from app.multi_agent import AgentRole, AgentTask, CrewOutput, TaskStatus
-from app.tools import tool_registry
 
 logger = structlog.get_logger()
 
@@ -103,7 +100,7 @@ class Crew:
         full_response_parts: list[str] = []
 
         async for event in self.engine.run(session, task_message):
-            if event.type.value == "text":
+            if event.type == AgentEventType.TEXT:
                 full_response_parts.append(event.data.get("content", ""))
 
         return "".join(full_response_parts)

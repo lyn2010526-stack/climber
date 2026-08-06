@@ -10,13 +10,13 @@ Supports:
 from __future__ import annotations
 
 import asyncio
-import time
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 import structlog
 
-from app.core import ChatResult, ModelRoute, FallbackStrategy, AgentEvent, AgentEventType
-from app.models import ModelAdapter, ModelCapability
+from app.core import AgentEvent, AgentEventType, ChatResult, FallbackStrategy, ModelRoute
+from app.models import ModelAdapter
 from app.models.registry import ModelRegistry
 
 logger = structlog.get_logger()

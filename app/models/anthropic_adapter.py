@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 import httpx
 import structlog
@@ -24,7 +25,7 @@ class AnthropicAdapter(ModelAdapter):
         model_id: str,
         api_key: str,
         base_url: str = "https://api.anthropic.com",
-        capabilities: "ModelCapability | None" = None,
+        capabilities: ModelCapability | None = None,
     ):
         self._model_id = model_id
         self._api_key = api_key

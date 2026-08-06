@@ -9,13 +9,13 @@ Prevents and resolves:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
 
-class ConflictType(str, Enum):
+class ConflictType(StrEnum):
     DISAGREEMENT = "disagreement"       # Different technical opinions
     SCOPE = "scope"                     # Disagreement on what to build
     APPROACH = "approach"               # How to implement
@@ -23,7 +23,7 @@ class ConflictType(str, Enum):
     QUALITY = "quality"                 # Standards disagreement
 
 
-class ResolutionStrategy(str, Enum):
+class ResolutionStrategy(StrEnum):
     MAJORITY_VOTE = "majority_vote"     # Take the majority opinion
     HYBRID = "hybrid"                   # Merge both approaches
     ESCALATE = "escalate"               # Ask human

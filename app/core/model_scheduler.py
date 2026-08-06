@@ -8,16 +8,15 @@ is down or rate-limited.
 from __future__ import annotations
 
 import logging
-import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 from app.core.error_handler import CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
 
-class TaskComplexity(str, Enum):
+class TaskComplexity(StrEnum):
     SIMPLE = "simple"       # Single-step, factual
     MODERATE = "moderate"   # Multi-step reasoning
     COMPLEX = "complex"     # Deep analysis, multi-file

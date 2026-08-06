@@ -87,4 +87,4 @@ async def test_executor_validator_allows_safe():
         "function": {"name": "safe_tool", "arguments": {"x": 1}},
     }])
     assert res[0].success is True
-    assert "ran safe_tool" == res[0].result
+    assert res[0].result == "ran safe_tool"

@@ -28,7 +28,7 @@ export function RightPanel() {
   ];
 
   return (
-    <div className="w-80 bg-[#0F0F14]/80 backdrop-blur-2xl border-l border-white/10 flex flex-col shadow-sm shadow-white/5">
+    <div className="flex w-full min-w-0 flex-col border-l border-white/10 bg-[#0F0F14]/80 shadow-sm shadow-white/5 backdrop-blur-2xl">
       {/* Tab bar */}
       <div className="flex border-b border-white/10">
         {tabs.map(({ id, icon: Icon, label }) => (

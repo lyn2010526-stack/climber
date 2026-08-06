@@ -21,7 +21,6 @@ from app.core.execution.engine import TaskExecutionEngine
 from app.core.execution.event_bus import EventBus, TaskEvent
 from app.core.execution.hitl import (
     HITLManager,
-    HITLRequest,
     HITLStatusApproved,
     HITLStatusExpired,
     HITLStatusPending,
@@ -29,7 +28,6 @@ from app.core.execution.hitl import (
 )
 from app.core.execution.task_model import SubTask, Task, TaskStore
 from app.core.task_state_machine import TaskState
-
 
 # ---------------------------------------------------------------------------
 # Task Model Tests

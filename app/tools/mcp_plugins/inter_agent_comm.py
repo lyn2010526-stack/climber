@@ -10,12 +10,12 @@ import json
 import os
 import time
 import uuid
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 
-class MessageType(str, Enum):
+class MessageType(StrEnum):
     TASK_ASSIGN = "task_assign"
     RESULT_REPORT = "result_report"
     HELP_REQUEST = "help_request"
@@ -23,7 +23,7 @@ class MessageType(str, Enum):
     STATUS_UPDATE = "status_update"
 
 
-class MessagePriority(str, Enum):
+class MessagePriority(StrEnum):
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"

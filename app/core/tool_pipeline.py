@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from app.core import AgentEvent, AgentEventType, MessageRole
 from app.core.parallel import ParallelToolExecutor, ToolExecutionResult
@@ -148,7 +149,7 @@ class ToolExecutionPipeline:
     def to_events(self, results: list[ToolExecutionResult], tool_calls: list[dict[str, Any]]) -> list[AgentEvent]:
         """Convert execution results to AgentEvents."""
         events = []
-        for i, tc in enumerate(tool_calls):
+        for _i, tc in enumerate(tool_calls):
             tc_name = tc.get("function", {}).get("name", "")
             tc_args = tc.get("function", {}).get("arguments", {})
             events.append(AgentEvent(

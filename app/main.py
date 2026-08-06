@@ -2,28 +2,33 @@
 
 from __future__ import annotations
 
-import importlib.util
 import asyncio
-import structlog
+import importlib.util
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import structlog
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import IntegrityError
 
 from app.api.v1 import router as api_router
+from app.api.v1.routes.websocket import websocket_router
 from app.config import settings
-from app.core.di import register as di_register, resolve as di_resolve, ScopeContext
+from app.core.di import ScopeContext
+from app.core.di import register as di_register
+from app.core.di import resolve as di_resolve
+from app.core.interfaces import IExecutor, IModelAdapter, ISkillRegistry, IToolRegistry
 from app.core.logging_setup import configure_logging, get_recent_logs, write_crash_dump
 from app.core.memory_guardian import get_memory_guardian
 from app.core.watchdog import get_watchdog
-from app.core.interfaces import IModelAdapter, IToolRegistry, ISkillRegistry, IExecutor
-from app.middleware.metrics import MetricsMiddleware, metrics_endpoint, APP_INFO
-from app.middleware.security import SecurityHeadersMiddleware, RequestValidationMiddleware
+from app.middleware.auth import AuthMiddleware
+from app.middleware.metrics import APP_INFO, MetricsMiddleware, metrics_endpoint
+from app.middleware.security import RateLimitMiddleware, RequestValidationMiddleware, SecurityHeadersMiddleware
 from app.storage import db_health, init_db
-from app.storage.cache import get_redis, close_redis
+from app.storage.cache import close_redis, get_redis
 from app.tools import register_builtins
 
 logger = structlog.get_logger()
@@ -37,24 +42,28 @@ del importlib, _missing
 
 _APP_VERSION = "0.2.0"
 
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend-react" / "dist"
 
+STATIC_AUTH_DIR = Path(__file__).parent / "static" / "auth"
 
 def _register_core_services() -> None:
     from app.core.agent_engine import AgentEngine
     from app.core.auto_loop import AutoLoopEngine
+    from app.core.executor import (
+        CrewExecutorAdapter,
+        SkillComposerExecutorAdapter,
+        UnifiedExecutor,
+        WorkflowExecutorAdapter,
+    )
+    from app.core.sandbox import SandboxConfig, SandboxExecutor
     from app.core.scheduler import TaskScheduler
     from app.core.skill_composition import SkillComposer
     from app.models.registry import ModelRegistry
-    from app.models.openai_adapter import OpenAIAdapter
-    from app.models.anthropic_adapter import AnthropicAdapter
-    from app.skills.registry import SkillRegistry, LegacySkillRegistry
-    from app.tools.mcp_client import MCPRegistry
-    from app.tools import tool_registry as global_tool_registry
-    from app.core.sandbox import SandboxExecutor, SandboxConfig
-    from app.workflow.engine import WorkflowEngine
     from app.multi_agent.crew import Crew
-    from app.core.executor import UnifiedExecutor, WorkflowExecutorAdapter, CrewExecutorAdapter, SkillComposerExecutorAdapter
+    from app.skills.registry import LegacySkillRegistry, SkillRegistry
+    from app.tools import tool_registry as global_tool_registry
+    from app.tools.mcp_client import MCPRegistry
+    from app.workflow.engine import WorkflowEngine
 
     model_registry = ModelRegistry()
     skill_registry = SkillRegistry()
@@ -107,13 +116,23 @@ async def lifespan(app: FastAPI):
     log_dir = configure_logging(settings.app_log_level)
     logger.info("Agent Engine starting", debug=settings.app_debug, version=_APP_VERSION, log_dir=str(log_dir))
 
-    with ScopeContext("app_lifespan") as scope:
+    with ScopeContext("app_lifespan"):
         _register_core_services()
 
         try:
             await init_db()
             health = await db_health()
             logger.info("Database ready", backend=health.get("backend"), journal_mode=health.get("journal_mode"))
+
+            from app.core.auth_manager import initialize_auth_system
+
+            admin_creds = await initialize_auth_system()
+            if admin_creds:
+                logger.info(
+                    "Auth system initialized",
+                    admin_username=admin_creds["username"],
+                    admin_password_set=True,
+                )
         except Exception as e:
             logger.warning("Database initialization failed", error=str(e))
 
@@ -133,7 +152,7 @@ async def lifespan(app: FastAPI):
         task_scheduler = di_resolve("TaskScheduler")
         watchdog = get_watchdog()
         watchdog.register("scheduler", lambda: _run_scheduler(task_scheduler))
-        watchdog.register("auto_loop", auto_loop_engine.start)
+        watchdog.register("auto_loop", auto_loop_engine.run_forever)
         await watchdog.start()
         logger.info("Task scheduler started under watchdog")
 
@@ -148,7 +167,7 @@ async def lifespan(app: FastAPI):
         await guardian.start()
 
         try:
-            from app.services.telegram_bot import start_telegram_bot, configure_bot
+            from app.services.telegram_bot import configure_bot, start_telegram_bot
             model_registry = di_resolve("ModelRegistry")
             tool_registry = di_resolve("ToolRegistry")
             configure_bot(model_registry, tool_registry)
@@ -181,8 +200,8 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             logger.warning("main.telegram_bot_stop_failed", error=str(exc))
         await close_redis()
-        from app.models.openai_adapter import OpenAIAdapter
         from app.models.anthropic_adapter import AnthropicAdapter
+        from app.models.openai_adapter import OpenAIAdapter
         await OpenAIAdapter.close_client()
         await AnthropicAdapter.close_client()
         logger.info("Agent Engine shutting down")
@@ -202,6 +221,11 @@ app = FastAPI(
     redirect_slashes=False,
 )
 
+app.add_middleware(RequestValidationMiddleware)
+app.add_middleware(RateLimitMiddleware, trusted_proxies=settings.trusted_proxies_list)
+app.add_middleware(AuthMiddleware, public_endpoints=set(settings.auth_public_endpoints))
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(MetricsMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -209,11 +233,24 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
 )
-app.add_middleware(MetricsMiddleware)
-app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(RequestValidationMiddleware)
 
 app.include_router(api_router, prefix="/api/v1")
+for websocket_route in websocket_router.routes:
+    app.add_api_websocket_route(
+        f"/api/v1{websocket_route.path}",
+        websocket_route.endpoint,
+        name=websocket_route.name,
+        dependencies=websocket_route.dependencies,
+    )
+
+
+def create_app() -> FastAPI:
+    """Create a FastAPI application instance.
+
+    The application is a module-level singleton; this factory exists so
+    tests and tooling can obtain the configured app through a stable API.
+    """
+    return app
 
 
 @app.exception_handler(Exception)
@@ -226,6 +263,15 @@ async def global_exception_handler(request: Request, exc: Exception):
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "type": "http_error"})
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request: Request, exc: IntegrityError):
+    logger.warning("Database integrity constraint rejected request", path=request.url.path)
+    return JSONResponse(
+        status_code=409,
+        content={"detail": "Request conflicts with existing or related data", "type": "integrity_error"},
+    )
 
 
 @app.get("/health")
@@ -283,20 +329,45 @@ async def metrics():
     return await metrics_endpoint()
 
 
+
+# Serve auth static files
+auth_static_path = Path(__file__).parent / "static" / "auth"
+if auth_static_path.exists():
+    app.mount("/auth", StaticFiles(directory=str(auth_static_path), html=True), name="auth")
 if FRONTEND_DIR.exists():
-    app.mount("/css", StaticFiles(directory=FRONTEND_DIR / "css"), name="css")
-    app.mount("/js", StaticFiles(directory=FRONTEND_DIR / "js"), name="js")
+    frontend_index = FRONTEND_DIR / "index.html"
+    if not frontend_index.is_file():
+        raise RuntimeError(f"Static frontend deployment is incomplete: missing {frontend_index}")
+    assets_dir = FRONTEND_DIR / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
     @app.get("/")
     async def serve_frontend():
-        return FileResponse(FRONTEND_DIR / "index.html")
+        return FileResponse(frontend_index)
 
-    @app.get("/{full_path:path}")
-    async def serve_frontend_spa(request: Request, full_path: str):
-        file_path = FRONTEND_DIR / full_path
-        if full_path and file_path.exists() and file_path.is_file():
-            return FileResponse(file_path)
-        return FileResponse(FRONTEND_DIR / "index.html")
+    @app.middleware("http")
+    async def spa_fallback_middleware(request: Request, call_next):
+        # SPA fallback: only intercept responses where the request was NOT
+        # routed to a registered endpoint (i.e. a 404) and the path is not a
+        # backend/API path. Registered routes, including dynamically added
+        # ones, always take precedence.
+        response = await call_next(request)
+        if response.status_code == 404:
+            path = request.url.path
+            if (
+                path.startswith("/api/")
+                or path.startswith("/docs")
+                or path == "/openapi.json"
+                or path == "/health"
+                or path.startswith("/_test/")
+            ):
+                return response
+            file_path = (FRONTEND_DIR / path.lstrip("/")).resolve()
+            if file_path.is_relative_to(FRONTEND_DIR.resolve()) and file_path.is_file():
+                return FileResponse(file_path)
+            return FileResponse(frontend_index)
+        return response
 else:
     @app.get("/")
     async def redirect_to_frontend():

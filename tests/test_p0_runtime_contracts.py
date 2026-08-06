@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
-from fastapi.security import HTTPAuthorizationCredentials
 
 from app.api.v1.chat import ChatRequest, chat
 from app.api.v1.doctor import _run_diagnostics
@@ -134,9 +133,8 @@ async def test_chat_rejects_in_memory_session_owned_by_another_user() -> None:
     )
     engine = type("Engine", (), {"_sessions": {session.session_id: session}})()
 
-    with patch("app.api.v1.chat.get_engine", return_value=engine):
-        with pytest.raises(HTTPException) as exc_info:
-            await chat(session.session_id, ChatRequest(message="hello"), user_id="other-user")
+    with patch("app.api.v1.chat.get_engine", return_value=engine), pytest.raises(HTTPException) as exc_info:
+        await chat(session.session_id, ChatRequest(message="hello"), user_id="other-user")
 
     assert exc_info.value.status_code == 403
 

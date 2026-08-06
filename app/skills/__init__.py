@@ -8,15 +8,17 @@ Categories:
 - MCP Plugins: External service integrations
 """
 
+import structlog
+
+from app.skills.definitions import BUILTIN_HANDLER_MAP, BUILTIN_SKILLS
 from app.skills.registry import (
     LegacySkillRegistry,
     SkillCategory,
     SkillInfo,
+)
+from app.skills.registry import (
     SkillRegistry as _BaseSkillRegistry,
 )
-from app.skills.definitions import BUILTIN_HANDLER_MAP, BUILTIN_SKILLS
-
-import structlog
 
 logger = structlog.get_logger()
 

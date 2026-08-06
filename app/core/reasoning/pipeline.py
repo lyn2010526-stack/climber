@@ -13,19 +13,15 @@ from typing import Any
 import structlog
 
 from app.core.reasoning.base import (
-    Candidate,
-    CoverageReport,
     ReasoningMode,
     ReasoningRequest,
     ReasoningResult,
-    ReasoningTrace,
 )
 from app.core.reasoning.components.coverage import CoverageChecker
 from app.core.reasoning.components.scorer import CandidateScorer
 from app.core.reasoning.components.self_refine import SelfRefineLoop
 from app.core.reasoning.components.trace import ReasoningTracer
 from app.core.reasoning.selector import StrategySelector
-from app.core.reasoning.strategies.tree_of_thought import TreeOfThoughtStrategy
 
 logger = structlog.get_logger()
 
@@ -144,7 +140,7 @@ class ReasoningPipeline:
                 _run(),
                 timeout=request.timeout_seconds,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             elapsed = (time.monotonic() - start) * 1000
             logger.error(
                 "reasoning_timeout", timeout=request.timeout_seconds, elapsed_ms=f"{elapsed:.0f}"

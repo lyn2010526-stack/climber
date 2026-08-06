@@ -17,11 +17,13 @@ Trigger modes:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable
+from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 
@@ -96,7 +98,7 @@ class ConsolidatedFact:
     tags: list[str] = field(default_factory=list)
     source_session_id: str = ""
     extracted_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
     def to_memory_block(self, path: str) -> MemoryBlock:
@@ -198,7 +200,7 @@ class DreamingEngine:
 
         elapsed = self._last_consolidation.get(session_id, 0)
         if elapsed > 0:
-            elapsed_seconds = datetime.now(timezone.utc).timestamp() - elapsed
+            elapsed_seconds = datetime.now(UTC).timestamp() - elapsed
             if elapsed_seconds < self._config.periodic_interval_seconds:
                 return count >= self._config.message_threshold
 
@@ -237,7 +239,7 @@ class DreamingEngine:
         Returns:
             ConsolidationResult with stats about the operation.
         """
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         consolidation_id = str(uuid.uuid4())[:12]
 
         async with self._lock:
@@ -246,7 +248,7 @@ class DreamingEngine:
             )
 
         self._consolidation_history.append(result)
-        self._last_consolidation[session_id] = datetime.now(timezone.utc).timestamp()
+        self._last_consolidation[session_id] = datetime.now(UTC).timestamp()
         self._message_counts[session_id] = 0
 
         if len(self._consolidation_history) > 100:
@@ -318,7 +320,7 @@ class DreamingEngine:
                     error=str(e),
                 )
 
-        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+        elapsed = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
         return ConsolidationResult(
             consolidation_id=consolidation_id,
@@ -341,7 +343,7 @@ class DreamingEngine:
         trigger: str,
     ) -> ConsolidationResult:
         """Create an empty consolidation result."""
-        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+        elapsed = (datetime.now(UTC) - start_time).total_seconds() * 1000
         return ConsolidationResult(
             consolidation_id=consolidation_id,
             session_id=session_id,
@@ -554,7 +556,7 @@ class DreamingEngine:
         Returns:
             The memory file path where the fact was stored.
         """
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         short_id = uuid.uuid4().hex[:8]
         category = fact.category.replace(" ", "_")
         path = f"reference/consolidated/{category}/{timestamp}_{short_id}.md"
@@ -603,10 +605,8 @@ class DreamingEngine:
         self._running = False
         if self._periodic_task is not None:
             self._periodic_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._periodic_task
-            except asyncio.CancelledError:
-                pass
             self._periodic_task = None
         logger.info("dreaming_periodic_stopped")
 
@@ -646,7 +646,7 @@ class DreamingEngine:
             "tracked_sessions": len(self._message_counts),
             "total_messages_tracked": sum(self._message_counts.values()),
             "last_consolidations": {
-                k: datetime.fromtimestamp(v, tz=timezone.utc).isoformat()
+                k: datetime.fromtimestamp(v, tz=UTC).isoformat()
                 for k, v in self._last_consolidation.items()
             },
         }

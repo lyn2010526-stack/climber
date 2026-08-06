@@ -20,7 +20,7 @@ export function ChatPage() {
   }, [stopStreaming]);
 
   return (
-    <div className="flex h-full">
+    <section className="relative flex h-full min-w-0 bg-[var(--color-bg-page)]" aria-label="对话内容" aria-busy={isStreaming}>
       <ChatInterface
         messages={messages as Message[]}
         onSend={handleSend}
@@ -30,10 +30,11 @@ export function ChatPage() {
         emptyStateDescription="输入任何问题或任务，Climber 将为你自主执行。"
       />
       {error && (
-        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-red-500/10 border border-red-500/30 rounded-2xl px-5 py-3 text-sm text-red-400 backdrop-blur-xl">
-          {error}
+        <div role="alert" className="absolute bottom-24 left-1/2 z-20 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-bg-surface-1)] px-4 py-3 text-sm text-[var(--color-error)] shadow-lg">
+          <span className="min-w-0">{error}</span>
+          <button type="button" onClick={() => window.location.reload()} className="min-h-11 shrink-0 px-3 font-medium">重试</button>
         </div>
       )}
-    </div>
+    </section>
   );
 }

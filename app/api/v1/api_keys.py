@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from app.api.v1.common import current_user_id
 from app.core.api_key_crypto import encrypt_api_key
 from app.storage import async_session
 from app.storage.database import ApiKey as ApiKeyModel
 
 router = APIRouter()
+
 
 class ApiKeyCreate(BaseModel):
     provider: str
@@ -30,10 +32,11 @@ class ApiKeyOut(BaseModel):
 
 @router.get("", response_model=list[ApiKeyOut])
 @router.get("/", response_model=list[ApiKeyOut])
-async def list_api_keys() -> list[ApiKeyOut]:
+async def list_api_keys(request: Request) -> list[ApiKeyOut]:
+    user_id = current_user_id(request)
     async with async_session() as session:
         result = await session.execute(
-            select(ApiKeyModel).where(ApiKeyModel.user_id == "default-user").order_by(ApiKeyModel.created_at.desc())
+            select(ApiKeyModel).where(ApiKeyModel.user_id == user_id).order_by(ApiKeyModel.created_at.desc())
         )
         rows = result.scalars().all()
         return [
@@ -51,11 +54,12 @@ async def list_api_keys() -> list[ApiKeyOut]:
 
 @router.post("", response_model=ApiKeyOut)
 @router.post("/", response_model=ApiKeyOut)
-async def add_api_key(payload: ApiKeyCreate) -> ApiKeyOut:
+async def add_api_key(payload: ApiKeyCreate, request: Request) -> ApiKeyOut:
     encrypted = encrypt_api_key(payload.api_key)
+    user_id = current_user_id(request)
     async with async_session() as session:
         row = ApiKeyModel(
-            user_id="default-user",
+            user_id=user_id,
             provider=payload.provider,
             name=payload.name,
             api_key_encrypted=encrypted,
@@ -75,12 +79,13 @@ async def add_api_key(payload: ApiKeyCreate) -> ApiKeyOut:
 
 
 @router.delete("/{key_id}")
-async def delete_api_key(key_id: str) -> dict:
+async def delete_api_key(key_id: str, request: Request) -> dict:
+    user_id = current_user_id(request)
     async with async_session() as session:
         result = await session.execute(
             select(ApiKeyModel).where(
                 ApiKeyModel.id == key_id,
-                ApiKeyModel.user_id == "default-user",
+                ApiKeyModel.user_id == user_id,
             )
         )
         row = result.scalar_one_or_none()

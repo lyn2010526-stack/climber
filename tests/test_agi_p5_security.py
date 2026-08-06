@@ -11,13 +11,13 @@ Tests for:
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 os.environ.setdefault("APP_TESTING", "true")
 
 import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 from app.core.security import (
     DockerSandbox,
@@ -29,7 +29,6 @@ from app.core.security import (
     ResourceQuota,
 )
 from app.core.security.resource_quotas import QuotaExceededError, ResourceUsage
-
 
 # === Docker Sandbox Tests ===
 

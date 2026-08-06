@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Protocol, runtime_checkable
+from collections.abc import AsyncIterator
+from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
@@ -54,7 +55,7 @@ class ModelAdapter(Protocol):
         **kwargs: Any,
     ) -> AsyncIterator[ChatResult]:
         """Stream chat completion - yields ChatResult chunks with partial content.
-        
+
         Each yielded ChatResult has:
         - content: incremental text delta
         - tool_calls: complete tool calls (only in final chunk)

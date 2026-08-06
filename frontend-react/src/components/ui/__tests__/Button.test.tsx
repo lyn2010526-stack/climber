@@ -22,6 +22,8 @@ describe('Button', () => {
 
   it('applies variant classes', () => {
     const { container } = render(<Button variant="ghost">Ghost</Button>);
-    expect(container.querySelector('.hover\\:bg-secondary')).not.toBeNull();
+    const button = container.querySelector('button');
+    expect(button?.className).toContain('bg-transparent');
+    expect(button?.className).toContain('hover:bg-[var(--color-bg-surface-2)]');
   });
 });

@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import re
 import urllib.parse
 
 import httpx
 
-from app.skills.memory_manager import persistent_memory, MemoryType
+from app.skills.memory_manager import MemoryType, persistent_memory
 
 
 async def skill_recursive_research(topic: str, depth: int = 3, max_sources: int = 5) -> str:
@@ -53,7 +54,7 @@ async def skill_recursive_research(topic: str, depth: int = 3, max_sources: int 
     for i, finding in enumerate(findings, 1):
         report += f"## Finding {i}\n{finding}\n\n"
 
-    report += f"""---
+    report += """---
 **Synthesis Required:**
 - Cross-reference findings for consensus
 - Note contradictions or gaps
@@ -389,7 +390,6 @@ async def skill_git_master(
     message: str = "",
 ) -> str:
     """Git Workflow Manager: branch strategy, PR analysis, conflict resolution."""
-    import asyncio
 
     commands = {
         "status": "git status",
@@ -425,7 +425,7 @@ async def skill_git_master(
         if stderr:
             output += f"\n[stderr]: {stderr.decode()[:1000]}"
         return output or "Git command completed (no output)"
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return "Git command timed out (30s)"
     except Exception as e:
         return f"Git error: {e}"
@@ -949,10 +949,8 @@ async def skill_memory_action(action: str = "recall", query: str = "", content: 
         return "# Memory Recall Results\n\n" + "\n".join(results)
     elif action == "store":
         mt = MemoryType.FACT
-        try:
+        with contextlib.suppress(ValueError):
             mt = MemoryType(memory_type)
-        except ValueError:
-            pass
         entry = persistent_memory.store(content, memory_type=mt, source="agent")
         return f"Memory stored: {entry.id}"
     elif action == "stats":

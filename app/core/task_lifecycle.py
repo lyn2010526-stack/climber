@@ -8,12 +8,14 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 import uuid
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from typing import Any, Callable, Coroutine
+from typing import Any
 
-from app.core.task_state_machine import TaskState, TaskStateMachine, TaskHook
+from app.core.task_state_machine import TaskHook, TaskState, TaskStateMachine
 
 
 @dataclass
@@ -90,10 +92,8 @@ class TaskLifecycleManager:
         asyncio_task = self._running_tasks.get(task_id)
         if asyncio_task and not asyncio_task.done():
             asyncio_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await asyncio_task
-            except asyncio.CancelledError:
-                pass
         if task.state_machine.state in (TaskState.PENDING, TaskState.PROCESSING):
             await task.state_machine.transition(TaskState.CANCELLED, trigger="scheduler_cancel")
         task.finished_at = time.time()

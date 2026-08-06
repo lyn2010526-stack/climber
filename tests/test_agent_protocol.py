@@ -1,8 +1,5 @@
-import pytest
-from app.core.agent_protocol import (
-    AgentMessage, MessageType, Priority, Confidence,
-    FileChange, TestConclusion, MessageBus
-)
+from app.core.agent_protocol import AgentMessage, FileChange, MessageBus, MessageType
+
 
 def test_message_creation():
     msg = AgentMessage(

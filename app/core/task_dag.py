@@ -116,24 +116,24 @@ class TaskDAG:
 
     def update_task_dependencies(self, task_id: str, new_deps: list[str]) -> bool:
         """Update the dependencies of a task.
-        
+
         Returns True if successful, False if task not found or cycle detected.
         """
         if task_id not in self._nodes:
             return False
-        
+
         # Save original deps for rollback
         original_deps = self._nodes[task_id].dependencies
-        
+
         # Apply new deps
         self._nodes[task_id].dependencies = new_deps
-        
+
         # Check for cycles
         if self.detect_cycle() is not None:
             # Rollback
             self._nodes[task_id].dependencies = original_deps
             return False
-        
+
         return True
 
 

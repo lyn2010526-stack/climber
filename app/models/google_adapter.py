@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import json
 import uuid
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 import httpx
 
@@ -15,7 +15,7 @@ from app.models import ModelAdapter, ModelCapability
 class GoogleGeminiAdapter(ModelAdapter):
     """Google Gemini adapter using the native Google AI API format."""
 
-    def __init__(self, model_id: str, api_key: str, base_url: str | None = None, capabilities: "ModelCapability | None" = None):
+    def __init__(self, model_id: str, api_key: str, base_url: str | None = None, capabilities: ModelCapability | None = None):
         self._model_id = model_id
         self._api_key = api_key
         self._base_url = base_url or "https://generativelanguage.googleapis.com/v1beta"

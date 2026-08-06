@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
 from functools import wraps
+from typing import Any
 
 import structlog
 
@@ -19,6 +19,7 @@ async def get_redis():
     global _redis_client
     if _redis_client is None:
         import redis.asyncio as redis
+
         from app.config import settings
         _redis_client = redis.from_url(settings.redis_url, decode_responses=True)
         try:

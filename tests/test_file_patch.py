@@ -75,13 +75,13 @@ class TestPreviewEdit:
 
 class TestApplyPatchToFile:
     def test_applies_simple_patch(self, tmp_file):
-        old = open(tmp_file, "r", encoding="utf-8").read()
+        old = open(tmp_file, encoding="utf-8").read()
         new = old.replace("line2", "line2 changed")
         patch = FilePatchService.create_patch(old, new, tmp_file)
         ok, msg = FilePatchService.apply_patch_to_file(tmp_file, patch)
         assert ok is True
         assert "applied" in msg.lower()
-        assert "line2 changed" in open(tmp_file, "r", encoding="utf-8").read()
+        assert "line2 changed" in open(tmp_file, encoding="utf-8").read()
 
     def test_missing_file_returns_error(self):
         ok, msg = FilePatchService.apply_patch_to_file("/nonexistent/path.txt", "@@ -1 +1 @@\n-foo\n+bar\n")
@@ -98,7 +98,7 @@ class TestPlanMode:
             assert "Preview generated" in msg
             assert "PLAN mode preview" in result
             assert "line2 changed" in result
-            assert "line2" in open(tmp_file, "r", encoding="utf-8").read()
+            assert "line2" in open(tmp_file, encoding="utf-8").read()
         finally:
             set_current_agent_mode(None)
 

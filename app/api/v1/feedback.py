@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
+from app.api.v1.common import current_user_id
 from app.storage import async_session
-DEFAULT_USER_ID = "default-user"
+from app.storage.database import Message, Session
 from app.storage.models_feedback import Feedback
+from app.storage.models_reasoning import ReasoningFeedbackDB, ReasoningTraceDB
+
+DEFAULT_USER_ID = "default-user"
 
 router = APIRouter()
 
@@ -31,12 +36,14 @@ class FeedbackResponse(BaseModel):
 @router.post("/")
 @router.post("")
 async def submit_feedback(
+    request: Request,
     message_id: str = "",
     rating: str = "",
     reason: str | None = None,
     comment: str | None = None,
     payload: FeedbackRequest | None = None,
 ) -> dict:
+    user_id = current_user_id(request)
     if payload is not None:
         message_id = payload.message_id or message_id
         rating = payload.rating if payload.rating is not None else rating
@@ -44,11 +51,22 @@ async def submit_feedback(
         comment = payload.comment or comment
     rating_str = str(rating) if rating is not None else ""
     async with async_session() as db:
+        if not message_id:
+            raise HTTPException(status_code=422, detail="message_id is required")
+        message = (
+            await db.execute(
+                select(Message)
+                .join(Session, Session.id == Message.session_id)
+                .where(Message.id == message_id, Session.user_id == user_id)
+            )
+        ).scalar_one_or_none()
+        if message is None:
+            raise HTTPException(status_code=404, detail="Message not found")
         existing = (
             await db.execute(
                 select(Feedback).where(
                     Feedback.message_id == message_id,
-                    Feedback.user_id == DEFAULT_USER_ID,
+                    Feedback.user_id == user_id,
                 )
             )
         ).scalar_one_or_none()
@@ -56,26 +74,39 @@ async def submit_feedback(
             existing.rating = rating_str
             existing.reason = reason
             existing.comment = comment
-            await db.commit()
+            try:
+                await db.commit()
+            except IntegrityError as exc:
+                await db.rollback()
+                raise HTTPException(status_code=409, detail="Feedback already exists") from exc
             return {"ok": True, "id": existing.id}
         fb = Feedback(
-            user_id=DEFAULT_USER_ID,
+            user_id=user_id,
             message_id=message_id,
             rating=rating_str,
             reason=reason,
             comment=comment,
         )
         db.add(fb)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError as exc:
+            await db.rollback()
+            raise HTTPException(status_code=422, detail="Feedback references invalid data") from exc
         await db.refresh(fb)
         return {"ok": True, "id": fb.id}
 
 
 @router.get("/stats")
 @router.get("stats")
-async def feedback_stats() -> dict:
+async def feedback_stats(request: Request) -> dict:
+    user_id = current_user_id(request)
     async with async_session() as db:
-        rows = (await db.execute(select(Feedback))).scalars().all()
+        rows = (
+            await db.execute(
+                select(Feedback).where(Feedback.user_id == user_id)
+            )
+        ).scalars().all()
         total = len(rows)
         up = sum(1 for r in rows if r.rating == "up")
         down = total - up
@@ -108,56 +139,78 @@ class ReasoningFeedbackResponse(BaseModel):
 
 @router.post("/reason/{trace_id}/feedback")
 @router.post("reason/{trace_id}/feedback")
-async def submit_reasoning_feedback(trace_id: str, payload: ReasoningFeedbackRequest) -> dict:
-    rating = payload.thumbs or (str(payload.rating) if payload.rating is not None else "")
-    message_id = f"reason:{trace_id}"
+async def submit_reasoning_feedback(trace_id: str, request: Request, payload: ReasoningFeedbackRequest) -> dict:
+    user_id = current_user_id(request)
+    thumbs = payload.thumbs
+    if isinstance(payload.rating, int):
+        rating = payload.rating
+    else:
+        rating = 1 if thumbs == "up" else -1 if thumbs == "down" else 0
     async with async_session() as db:
-        existing = (
+        trace = (
             await db.execute(
-                select(Feedback).where(
-                    Feedback.message_id == message_id,
-                    Feedback.user_id == DEFAULT_USER_ID,
+                select(ReasoningTraceDB).where(
+                    ReasoningTraceDB.trace_id == trace_id,
+                    ReasoningTraceDB.user_id == user_id,
                 )
             )
         ).scalar_one_or_none()
+        if trace is None:
+            raise HTTPException(status_code=404, detail="Reasoning trace not found")
+        existing = (
+            await db.execute(
+                select(ReasoningFeedbackDB).where(
+                    ReasoningFeedbackDB.trace_id == trace_id,
+                    ReasoningFeedbackDB.user_id == user_id,
+                )
+            )
+        ).scalars().first()
         if existing is not None:
-            existing.rating = str(rating)
-            existing.reason = payload.comment
+            existing.rating = rating
+            existing.thumbs = thumbs
             existing.comment = payload.comment
-            await db.commit()
+            try:
+                await db.commit()
+            except IntegrityError as exc:
+                await db.rollback()
+                raise HTTPException(status_code=409, detail="Reasoning feedback conflicts with stored data") from exc
             return {"ok": True, "id": existing.id}
-        fb = Feedback(
-            user_id=DEFAULT_USER_ID,
-            message_id=message_id,
-            rating=str(rating),
-            reason=payload.comment,
-            comment=payload.comment,
+        fb = ReasoningFeedbackDB(
+            user_id=user_id,
+            trace_id=trace_id,
+            rating=rating,
+            thumbs=thumbs,
+            comment=payload.comment or "",
         )
         db.add(fb)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError as exc:
+            await db.rollback()
+            raise HTTPException(status_code=422, detail="Reasoning feedback references invalid data") from exc
         await db.refresh(fb)
         return {"ok": True, "id": fb.id}
 
 
 @router.get("/reason/{trace_id}/feedback")
 @router.get("reason/{trace_id}/feedback")
-async def get_reasoning_feedback(trace_id: str) -> list[dict]:
-    message_id = f"reason:{trace_id}"
+async def get_reasoning_feedback(trace_id: str, request: Request) -> list[dict]:
+    user_id = current_user_id(request)
     async with async_session() as db:
         rows = (
             await db.execute(
-                select(Feedback).where(
-                    Feedback.message_id == message_id,
-                    Feedback.user_id == DEFAULT_USER_ID,
+                select(ReasoningFeedbackDB).where(
+                    ReasoningFeedbackDB.trace_id == trace_id,
+                    ReasoningFeedbackDB.user_id == user_id,
                 )
             )
         ).scalars().all()
         return [
             {
                 "id": r.id,
-                "message_id": r.message_id,
+                "trace_id": r.trace_id,
                 "rating": r.rating,
-                "reason": r.reason,
+                "thumbs": r.thumbs,
                 "comment": r.comment,
             }
             for r in rows

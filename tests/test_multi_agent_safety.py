@@ -1,8 +1,12 @@
-import pytest
 from app.multi_agent.safety import (
-    DeadlockDetector, ConflictArbitrator, CommunicationEnforcer,
-    ConflictRecord, ConflictType, ResolutionStrategy, CommunicationRule
+    CommunicationEnforcer,
+    CommunicationRule,
+    ConflictArbitrator,
+    ConflictRecord,
+    ConflictType,
+    DeadlockDetector,
 )
+
 
 class TestDeadlockDetector:
     def test_no_deadlock_initially(self):

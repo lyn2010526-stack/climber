@@ -13,15 +13,14 @@ Merges and replaces:
 from __future__ import annotations
 
 import base64
-import os
 import re
-import resource
-import structlog
 import urllib.parse
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -289,17 +288,16 @@ class StaticAnalyzer:
 
 # --- SafetyPipeline (统一入口) --------------------------------------
 
-from dataclasses import dataclass, field
-from typing import Any
-
-from app.core.safety_pipeline_base import (
-    SafetyResult,
-    ExecutionResult,
-    RiskLevel,
-    StaticAnalyzer,
-)
+from dataclasses import dataclass
 
 import structlog
+
+from app.core.safety_pipeline_base import (
+    ExecutionResult,
+    RiskLevel,
+    SafetyResult,
+    StaticAnalyzer,
+)
 
 logger = structlog.get_logger()
 
@@ -328,7 +326,7 @@ class SafetyPipeline:
     @property
     def l2(self):
         if self._l2 is None:
-            from app.core.sandbox import SandboxExecutor, SandboxConfig
+            from app.core.sandbox import SandboxConfig, SandboxExecutor
             self._l2 = SandboxExecutor(SandboxConfig(
                 workdir=self.config.workdir,
                 timeout_seconds=self.config.timeout_seconds,

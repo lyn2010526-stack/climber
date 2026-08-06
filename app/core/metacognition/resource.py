@@ -6,12 +6,12 @@ Expands resources for complex tasks, throttles for simple ones.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 
-class TaskComplexity(str, Enum):
+class TaskComplexity(StrEnum):
     SIMPLE = "simple"
     MODERATE = "moderate"
     COMPLEX = "complex"

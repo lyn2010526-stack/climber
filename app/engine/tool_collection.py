@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import inspect
 import typing
-from typing import Any, Callable, Protocol
+from collections.abc import Callable
+from typing import Any, Protocol
 
 import structlog
 

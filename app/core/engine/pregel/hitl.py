@@ -8,12 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
-
 import structlog
+from pydantic import BaseModel, Field
 
 logger = structlog.get_logger(__name__)
 
@@ -40,7 +39,7 @@ class Interrupt(BaseModel):
     checkpoint_id: str | None = None
     status: str = "pending"
     response: Any = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     resolved_at: datetime | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -130,7 +129,7 @@ class HITLManager:
                 )
             intr.status = "resolved"
             intr.response = value
-            intr.resolved_at = datetime.now(timezone.utc)
+            intr.resolved_at = datetime.now(UTC)
             event = self._pending_events.get(interrupt_id)
 
         if event:
@@ -151,7 +150,7 @@ class HITLManager:
             if not intr:
                 raise KeyError(f"Interrupt {interrupt_id} not found")
             intr.status = "cancelled"
-            intr.resolved_at = datetime.now(timezone.utc)
+            intr.resolved_at = datetime.now(UTC)
             event = self._pending_events.get(interrupt_id)
 
         if event:
@@ -208,7 +207,7 @@ class HITLManager:
             intr = self._interrupts.get(interrupt_id)
             if intr and intr.status == "pending":
                 intr.status = "expired"
-                intr.resolved_at = datetime.now(timezone.utc)
+                intr.resolved_at = datetime.now(UTC)
                 event = self._pending_events.get(interrupt_id)
                 if event:
                     event.set()

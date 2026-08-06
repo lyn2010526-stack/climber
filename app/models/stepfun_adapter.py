@@ -8,7 +8,7 @@ from app.models.openai_adapter import ModelCapability, OpenAIAdapter
 class StepFunAdapter(OpenAIAdapter):
     """Adapter for StepFun API (OpenAI-compatible)."""
 
-    def __init__(self, model_id: str, api_key: str, base_url: str = "https://api.stepfun.com/v1", capabilities: "ModelCapability | None" = None):
+    def __init__(self, model_id: str, api_key: str, base_url: str = "https://api.stepfun.com/v1", capabilities: ModelCapability | None = None):
         super().__init__(model_id, api_key, base_url)
         self._capabilities = capabilities
 

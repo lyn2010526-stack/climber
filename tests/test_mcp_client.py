@@ -7,7 +7,6 @@ import pytest
 
 from app.tools.mcp_client import MCPClient
 
-
 SERVER_PATH = Path(__file__).parent / "fixtures" / "mcp_stdio_server.py"
 
 

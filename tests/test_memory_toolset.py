@@ -55,7 +55,7 @@ async def test_get_tools_returns_three_tools():
     orchestrator = FakeMemoryOrchestrator()
     toolset = MemoryToolSet(orchestrator)
     tools = toolset.get_tools()
-    
+
     assert len(tools) == 3
     names = [t["function"]["name"] for t in tools]
     assert "remember" in names
@@ -68,14 +68,14 @@ async def test_remember_creates_episodic_memory():
     """Test that remember tool creates an episodic memory."""
     orchestrator = FakeMemoryOrchestrator()
     toolset = MemoryToolSet(orchestrator)
-    
+
     result = await toolset.execute(
         tool_name="remember",
         arguments={"content": "User likes Python", "importance": 0.8, "memory_type": "episodic"},
         user_id="user1",
         agent_id="agent1",
     )
-    
+
     assert "Remembered" in result
     assert len(orchestrator.episodic_calls) == 1
     assert orchestrator.episodic_calls[0]["content"] == "User likes Python"
@@ -87,14 +87,14 @@ async def test_remember_requires_content():
     """Test that remember tool requires content."""
     orchestrator = FakeMemoryOrchestrator()
     toolset = MemoryToolSet(orchestrator)
-    
+
     result = await toolset.execute(
         tool_name="remember",
         arguments={"importance": 0.8},
         user_id="user1",
         agent_id="agent1",
     )
-    
+
     assert "Error" in result
     assert "content is required" in result
 
@@ -105,14 +105,14 @@ async def test_recall_returns_memories():
     fake_result = FakeResult(core="[CORE]\nI am helpful.", episodic="- User asked about Python")
     orchestrator = FakeMemoryOrchestrator(retrieval_result=fake_result)
     toolset = MemoryToolSet(orchestrator)
-    
+
     result = await toolset.execute(
         tool_name="recall",
         arguments={"query": "Python", "limit": 5},
         user_id="user1",
         agent_id="agent1",
     )
-    
+
     assert "I am helpful" in result
     assert "User asked about Python" in result
 
@@ -122,14 +122,14 @@ async def test_recall_requires_query():
     """Test that recall tool requires query."""
     orchestrator = FakeMemoryOrchestrator()
     toolset = MemoryToolSet(orchestrator)
-    
+
     result = await toolset.execute(
         tool_name="recall",
         arguments={"limit": 5},
         user_id="user1",
         agent_id="agent1",
     )
-    
+
     assert "Error" in result
     assert "query is required" in result
 
@@ -157,14 +157,14 @@ async def test_forget_requires_memory_id():
     """Test that forget tool requires memory_id."""
     orchestrator = FakeMemoryOrchestrator()
     toolset = MemoryToolSet(orchestrator)
-    
+
     result = await toolset.execute(
         tool_name="forget",
         arguments={"reason": "outdated"},
         user_id="user1",
         agent_id="agent1",
     )
-    
+
     assert "Error" in result
     assert "memory_id is required" in result
 
@@ -174,13 +174,13 @@ async def test_unknown_tool_returns_error():
     """Test that unknown tool returns error."""
     orchestrator = FakeMemoryOrchestrator()
     toolset = MemoryToolSet(orchestrator)
-    
+
     result = await toolset.execute(
         tool_name="unknown_tool",
         arguments={},
         user_id="user1",
         agent_id="agent1",
     )
-    
+
     assert "Unknown memory tool" in result
     assert "unknown_tool" in result

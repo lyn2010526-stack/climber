@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.core.checkpoint import SQLiteCheckpointStore
+from app.core.checkpoint import CheckpointData, SQLiteCheckpointStore
+from app.core.session import AgentSession
 
 
 class RecoveryManager:
@@ -19,20 +20,47 @@ class RecoveryManager:
         if not result:
             return None
         checkpoint, checkpoint_id = result
+        interrupted = self._is_interrupted(checkpoint)
         return {
             "session_id": checkpoint.session_id,
             "turn_id": checkpoint.metadata.get("thread_id", ""),
             "messages": checkpoint.messages,
             "iteration": checkpoint.iteration,
             "status": checkpoint.status,
+            "tool_results": checkpoint.tool_results,
+            "channel_values": checkpoint.channel_values,
+            "channel_versions": checkpoint.channel_versions,
+            "versions_seen": checkpoint.versions_seen,
+            "pending_writes": checkpoint.pending_writes,
+            "interrupted": interrupted,
             "checkpoint_id": checkpoint_id,
+            "checkpoint": checkpoint,
         }
+
+    async def restore_session(self, session: AgentSession) -> bool:
+        """Restore checkpoint state into an existing canonical session."""
+        recovered = await self.recover_session(session.session_id)
+        if recovered is None:
+            return False
+        session.restore_checkpoint(
+            recovered["checkpoint"],
+            interrupted=recovered["interrupted"],
+        )
+        return True
+
+    @staticmethod
+    def _is_interrupted(checkpoint: CheckpointData) -> bool:
+        if checkpoint.status not in {"running", "processing", "retrying"}:
+            return False
+        final_keys = {"final_content", "final_result"}
+        return final_keys.isdisjoint(checkpoint.channel_values)
 
     async def list_recoverable_sessions(self) -> list[dict[str, Any]]:
         """List all sessions that have recoverable checkpoints."""
+        from sqlalchemy import func, select
+
         from app.storage import async_session
         from app.storage.database import CheckpointRecord
-        from sqlalchemy import func, select
 
         async with async_session() as session:
             result = await session.execute(
@@ -47,9 +75,10 @@ class RecoveryManager:
 
     async def auto_recover(self) -> list[dict[str, Any]]:
         """Auto-recover all sessions that have recoverable checkpoints."""
+        from sqlalchemy import select
+
         from app.storage import async_session
         from app.storage.database import CheckpointRecord, Turn
-        from sqlalchemy import select
 
         async with async_session() as session:
             result = await session.execute(

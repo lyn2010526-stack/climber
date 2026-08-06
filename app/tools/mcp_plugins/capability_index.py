@@ -66,7 +66,7 @@ class CapabilityIndex:
         results = []
         query_words = self._tokenize(query)
 
-        for name, entry in self._entries.items():
+        for _name, entry in self._entries.items():
             if entry_type and entry.entry_type != entry_type:
                 continue
 

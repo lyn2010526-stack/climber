@@ -1,8 +1,10 @@
 # tests/test_mcp_bridge.py
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from app.engine.mcp_bridge import MCPBridge
+
 from app.core.tool_runtime import ToolRuntime
+from app.engine.mcp_bridge import MCPBridge
 
 
 @pytest.fixture

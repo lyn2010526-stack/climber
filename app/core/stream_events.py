@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 
-class CollabEventType(str, Enum):
+class CollabEventType(StrEnum):
     """Event types for collaboration streaming."""
 
     # Lifecycle
@@ -53,7 +53,7 @@ class CollabEvent:
     member_name: str | None = None
     member_avatar: str | None = None
     data: dict[str, Any] = field(default_factory=dict)
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary for JSON push."""

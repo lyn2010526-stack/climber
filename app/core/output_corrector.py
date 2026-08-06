@@ -25,7 +25,7 @@ class ModelOutputCorrector:
 
         Returns (corrected_output, success).
         """
-        for attempt in range(self._max_attempts):
+        for _attempt in range(self._max_attempts):
             corrected = self._try_fix(raw_output, expected_schema)
             if self._validate_schema(corrected, expected_schema):
                 return corrected, True
@@ -60,9 +60,8 @@ class ModelOutputCorrector:
             if not isinstance(data, dict):
                 return False
             for prop, rules in schema.get("properties", {}).items():
-                if prop in data:
-                    if not self._validate_value(data[prop], rules):
-                        return False
+                if prop in data and not self._validate_value(data[prop], rules):
+                    return False
             return True
         except (json.JSONDecodeError, TypeError):
             return False
@@ -75,9 +74,7 @@ class ModelOutputCorrector:
             return False
         if expected == "object" and not isinstance(value, dict):
             return False
-        if expected == "number" and not isinstance(value, (int, float)):
-            return False
-        return True
+        return not (expected == "number" and not isinstance(value, (int, float)))
 
 
 model_output_corrector = ModelOutputCorrector()

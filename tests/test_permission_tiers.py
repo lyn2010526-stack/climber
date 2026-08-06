@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from app.core.permission_tiers import (
-    PermissionAction,
     PermissionTier,
-    TierEscalationRequest,
-    TierEvaluationResult,
     PermissionTierManager,
+    TierEscalationRequest,
 )
 
 

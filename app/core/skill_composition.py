@@ -11,15 +11,14 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import select, and_, desc
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import and_, desc, select
 
 from app.storage import async_session
-from app.storage.models_skills import SkillVersion, SkillTestCase, SkillTestResult
+from app.storage.models_skills import SkillTestCase, SkillTestResult, SkillVersion
 
 logger = structlog.get_logger()
 
@@ -207,7 +206,7 @@ class SkillVersionManager:
         # Create new version with rolled-back content
         new_version = await self.create_version(
             skill_id=skill_id,
-            version=f"{version}_rollback_{datetime.now(timezone.utc).strftime('%Y%m%d')}",
+            version=f"{version}_rollback_{datetime.now(UTC).strftime('%Y%m%d')}",
             prompt=target["prompt"],
             tools=target["tools"],
             author="system",
@@ -263,12 +262,12 @@ class SkillTester:
                 return {"error": "Test not found"}
 
             input_params = json.loads(test.input_params)
-            start = datetime.now(timezone.utc)
+            start = datetime.now(UTC)
 
             try:
                 output = await skill_handler(**input_params)
                 passed = test.expected_output_contains in output if test.expected_output_contains else True
-                duration = (datetime.now(timezone.utc) - start).total_seconds() * 1000
+                duration = (datetime.now(UTC) - start).total_seconds() * 1000
 
                 result_record = SkillTestResult(
                     test_id=test_id,

@@ -6,8 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Any
-
+from app.core.memory_tool_context import get_memory_tool_context
 from app.core.persistent_memory import persistent_memory
 from app.tools import tool
 
@@ -24,8 +23,9 @@ async def store_memory(content: str, importance: float = 0.5, memory_type: str =
     if not content:
         return "Error: content is required"
     try:
+        ctx = get_memory_tool_context()
         mem = await persistent_memory.create_episodic_memory(
-            user_id="default-user",
+            user_id=ctx.user_id,
             content=content,
             memory_type=memory_type,
             importance=importance,
@@ -46,8 +46,9 @@ async def search_memories(query: str, limit: int = 5) -> str:
     if not query:
         return "Error: query is required"
     try:
+        ctx = get_memory_tool_context()
         memories = await persistent_memory.retrieve_memories(
-            user_id="default-user",
+            user_id=ctx.user_id,
             query=query,
             limit=limit,
         )
@@ -72,8 +73,9 @@ async def remember_user_fact(fact: str, category: str = "general") -> str:
     if not fact:
         return "Error: fact is required"
     try:
-        profile = await persistent_memory.add_user_fact(
-            user_id="default-user",
+        ctx = get_memory_tool_context()
+        await persistent_memory.add_user_fact(
+            user_id=ctx.user_id,
             fact=fact,
             category=category,
         )

@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import re
-from typing import TYPE_CHECKING, Any, AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from app.core import AgentEvent, AgentEventType, ChatResult, CheckpointData
 from app.core.compressor import ContextCompressor, estimate_tokens
-from app.core.engine.session import AgentSession
 from app.core.parallel import ParallelToolExecutor
+from app.core.session import AgentSession
 from app.core.task_state_machine import TaskState
 from app.models.openai_adapter import OpenAIAdapter
 
@@ -46,7 +46,8 @@ class ReActLoopExecutor:
         message: str,
         on_error: Callable[[str], None] | None = None,
     ) -> AsyncIterator[AgentEvent]:
-        iteration = 0
+        iteration = session._last_iteration if session._resume_interrupted else 0
+        session._resume_interrupted = False
         executor = ParallelToolExecutor(
             self.tool_registry,
             validator=self._validate_tool_call_fn,
@@ -147,6 +148,14 @@ class ReActLoopExecutor:
                         messages=session.messages,
                         iteration=iteration,
                         status=session.state_machine.state.value,
+                        tool_results=[
+                            {
+                                "tool_name": tr.tool_name,
+                                "result": tr.result,
+                                "error": tr.error,
+                            }
+                            for tr in tool_results
+                        ],
                         channel_values={
                             "last_tool_calls": result.tool_calls,
                             "last_tool_results": [tr.result for tr in tool_results],

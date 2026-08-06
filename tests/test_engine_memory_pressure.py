@@ -1,6 +1,5 @@
 """Tests for memory pressure manager."""
 
-import pytest
 
 from app.core.engine.memory_pressure import (
     CompressionStrategy,

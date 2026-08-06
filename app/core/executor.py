@@ -10,7 +10,10 @@ All three implement the same IExecutor interface, enabling polymorphic use.
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Callable
+from collections.abc import AsyncIterator
+from typing import Any
+
+import structlog
 
 from app.core.interfaces import (
     ExecutionContext,
@@ -18,8 +21,6 @@ from app.core.interfaces import (
     ExecutionStatus,
     IExecutor,
 )
-
-import structlog
 
 logger = structlog.get_logger()
 
@@ -78,9 +79,13 @@ class CrewExecutorAdapter:
         try:
             output = await self._crew.execute(user_id=context.user_id)
             return ExecutionResult(
-                status=ExecutionStatus.COMPLETED if output.success else ExecutionStatus.FAILED,
-                output=output.data,
-                error=output.error if hasattr(output, "error") else None,
+                status=ExecutionStatus.COMPLETED,
+                output=output.final_output,
+                metrics={
+                    "crew_id": output.crew_id,
+                    "total_iterations": output.total_iterations,
+                    "results": output.results,
+                },
             )
         except Exception as exc:
             logger.error("crew_execution_failed", error=str(exc))

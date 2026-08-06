@@ -7,12 +7,13 @@ os.environ["TEST_DATABASE_URL"] = "sqlite+aiosqlite:///./data/test_identity_memo
 
 import pytest
 import pytest_asyncio
+
 from app.core.persistent_memory import PersistentMemoryService
 
 
 @pytest_asyncio.fixture
 async def env():
-    from app.storage import async_session, init_db
+    from app.storage import init_db
 
     await init_db()
     yield

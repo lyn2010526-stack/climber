@@ -9,11 +9,11 @@ os.environ["APP_TESTING"] = "true"
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.main import app
-from app.storage import init_db, engine, async_session, Base
+from app.storage import Base, async_session, engine, init_db
 from app.storage.database import Agent
 from app.storage.models_memory import EpisodicMemory
 
@@ -49,8 +49,23 @@ def cleanup_db():
     asyncio.set_event_loop(loop)
     try:
         async def _cleanup():
-            from app.storage import models_memory, models_platform, models_plugins, models_groups, models_eval, models_cost  # noqa: F401
-            from app.storage.database import Agent, Session, Message, ApiKey, Tool, Document, CheckpointRecord  # noqa: F401
+            from app.storage import (  # noqa: F401
+                models_cost,
+                models_eval,
+                models_groups,
+                models_memory,
+                models_platform,
+                models_plugins,
+            )
+            from app.storage.database import (  # noqa: F401
+                Agent,
+                ApiKey,
+                CheckpointRecord,
+                Document,
+                Message,
+                Session,
+                Tool,
+            )
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.drop_all)
             await init_db()

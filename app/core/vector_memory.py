@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import chromadb
@@ -73,7 +73,7 @@ class VectorMemoryService:
         """Add a document to the vector store."""
         coll = self._get_collection(collection)
         meta = metadata or {}
-        meta.setdefault("created_at", datetime.now(timezone.utc).isoformat())
+        meta.setdefault("created_at", datetime.now(UTC).isoformat())
         meta.setdefault("access_count", 0)
         # ChromaDB rejects empty list values in metadata
         meta = {k: v for k, v in meta.items() if not (isinstance(v, list) and len(v) == 0)}
@@ -140,7 +140,7 @@ class VectorMemoryService:
         if existing and existing.get("metadatas"):
             meta = existing["metadatas"][0] or {}
             meta["access_count"] = meta.get("access_count", 0) + 1
-            meta["last_accessed"] = datetime.now(timezone.utc).isoformat()
+            meta["last_accessed"] = datetime.now(UTC).isoformat()
             await self._run(
                 coll.update,
                 ids=[doc_id],

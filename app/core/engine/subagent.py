@@ -13,9 +13,10 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Awaitable, Callable, Protocol
+from enum import StrEnum
+from typing import Any
 
 import structlog
 
@@ -24,7 +25,7 @@ logger = structlog.get_logger()
 logger = structlog.get_logger()
 
 
-class SubagentState(str, Enum):
+class SubagentState(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -189,10 +190,10 @@ class SubagentManager:
             parent.child_ids.append(spec.task_id)
 
         # Acquire concurrency slot
-        acquired = self._semaphore.locked()
+        self._semaphore.locked()
         try:
             await asyncio.wait_for(self._semaphore.acquire(), timeout=5.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             record.state = SubagentState.FAILED
             record.error = "Concurrency acquisition timeout"
             return record
@@ -209,7 +210,7 @@ class SubagentManager:
             record.result = result
             record.usage = usage
             record.state = SubagentState.COMPLETED
-        except asyncio.TimeoutError:
+        except TimeoutError:
             record.state = SubagentState.TIMED_OUT
             record.error = f"Timeout after {spec.timeout_seconds}s"
         except asyncio.CancelledError:

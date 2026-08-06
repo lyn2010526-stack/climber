@@ -5,11 +5,12 @@
 from __future__ import annotations
 
 import json
-import structlog
-from datetime import datetime, timezone
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -53,7 +54,7 @@ class UserPreferenceManager:
         path = self._storage_path / f"{user_id}.json"
         if path.exists():
             try:
-                with open(path, "r", encoding="utf-8") as f:
+                with open(path, encoding="utf-8") as f:
                     data = json.load(f)
                 pref = UserPreference(
                     user_id=data.get("user_id", user_id),
@@ -69,7 +70,7 @@ class UserPreferenceManager:
         return pref
 
     def _save(self, pref: UserPreference) -> None:
-        pref.updated_at = datetime.now(timezone.utc).isoformat()
+        pref.updated_at = datetime.now(UTC).isoformat()
         path = self._storage_path / f"{pref.user_id}.json"
         data = {
             "user_id": pref.user_id,

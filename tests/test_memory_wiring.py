@@ -6,20 +6,20 @@ Expected after fix: PASS.
 """
 
 import os
-import uuid
 
 os.environ["APP_TESTING"] = "true"
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./data/test_memory_wiring.db")
 
 import pytest
 import pytest_asyncio
+
 from app.core.hierarchical_memory import HierarchicalMemoryOrchestrator
 from app.core.persistent_memory import PersistentMemoryService
 
 
 @pytest_asyncio.fixture
 async def env():
-    from app.storage import async_session, init_db
+    from app.storage import init_db
 
     await init_db()
 
@@ -46,7 +46,7 @@ async def test_bug2_episodic_retrieval_works(env):
 async def test_bug3_user_profile_retrieval_works(env):
     """BUG 3 lock: _retrieve_user_profile calls a method that doesn't exist."""
     orch = HierarchicalMemoryOrchestrator(persistent_memory=env)
-    profile = await orch._retrieve_user_profile("u1")
+    await orch._retrieve_user_profile("u1")
     # Even with no facts, must not raise AttributeError internally.
     # With the fix it should call get_or_create_profile correctly.
 

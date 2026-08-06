@@ -12,7 +12,6 @@ import shutil
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import structlog
 
@@ -61,9 +60,8 @@ class FSIsolationManager:
         if self._is_blocked(abs_path):
             return False, f"Path is blocked: {abs_path}"
 
-        if self.config.allowed_paths:
-            if not self._is_allowed(abs_path):
-                return False, f"Path outside allowed directories: {abs_path}"
+        if self.config.allowed_paths and not self._is_allowed(abs_path):
+            return False, f"Path outside allowed directories: {abs_path}"
 
         return True, ""
 

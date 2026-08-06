@@ -11,14 +11,12 @@ insufficient. The flow:
 
 from __future__ import annotations
 
-import asyncio
+import ast
 import textwrap
 from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
-
-import ast
 
 from app.core.sandbox import SandboxConfig, SandboxExecutor
 from app.tools import tool_registry
@@ -116,9 +114,7 @@ class ToolSelfExtender:
         """Check if tool name is valid Python identifier."""
         if not name or not name.replace("_", "").isalnum():
             return False
-        if name[0].isdigit():
-            return False
-        return True
+        return not name[0].isdigit()
 
     def _validate_code_safety(self, code: str) -> list[str]:
         """AST-based static analysis for code safety."""
@@ -145,10 +141,9 @@ class ToolSelfExtender:
                     root_module = node.module.split(".")[0]
                     if root_module in dangerous_imports:
                         issues.append(f"Dangerous import from: {node.module}")
-            elif isinstance(node, ast.Call):
-                if isinstance(node.func, ast.Name):
-                    if node.func.id in dangerous_calls:
-                        issues.append(f"Dangerous call: {node.func.id}")
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                if node.func.id in dangerous_calls:
+                    issues.append(f"Dangerous call: {node.func.id}")
 
         return issues
 
@@ -178,8 +173,8 @@ async def _test():
 asyncio.run(_test())
 """)
 
-        import tempfile as _tf
         import os as _os
+        import tempfile as _tf
 
         fd, tmp_path = _tf.mkstemp(suffix=".py")
         output = ""
@@ -255,12 +250,11 @@ asyncio.run(_test())
                                 "signal", "pty", "fcntl"}:
                         unsafe_nodes.append(("from import", root))
             # Block dangerous call targets
-            elif isinstance(node, _ast.Call):
-                if isinstance(node.func, _ast.Name):
-                    if node.func.id in {"eval", "exec", "compile", "__import__",
-                                        "open", "getattr", "setattr", "delattr",
-                                        "globals", "locals"}:
-                        unsafe_nodes.append(("call", node.func.id))
+            elif isinstance(node, _ast.Call) and isinstance(node.func, _ast.Name):
+                if node.func.id in {"eval", "exec", "compile", "__import__",
+                                    "open", "getattr", "setattr", "delattr",
+                                    "globals", "locals"}:
+                    unsafe_nodes.append(("call", node.func.id))
 
         if unsafe_nodes:
             flagged = ", ".join(f"{kind}({name})" for kind, name in unsafe_nodes)

@@ -8,7 +8,7 @@ import json
 import logging
 import zipfile
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -26,7 +26,7 @@ class SkillPackage:
     tags: list[str] = field(default_factory=list)
     config: dict[str, Any] = field(default_factory=dict)
     files: dict[str, str] = field(default_factory=dict)  # path -> content
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class SkillPackageManager:
@@ -92,7 +92,7 @@ class SkillPackageManager:
                 tags=manifest.get("tags", []),
                 config=manifest.get("config", {}),
                 files=files,
-                created_at=datetime.fromisoformat(manifest.get("created_at", datetime.now(timezone.utc).isoformat())),
+                created_at=datetime.fromisoformat(manifest.get("created_at", datetime.now(UTC).isoformat())),
             )
         self._save_to_registry(package)
         return package
@@ -101,7 +101,7 @@ class SkillPackageManager:
         path = self._storage_path / f"{skill_id}.json"
         if not path.exists():
             return None
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         return SkillPackage(**data)
 

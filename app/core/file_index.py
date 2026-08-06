@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -57,8 +57,8 @@ class FileIndexService:
             path=path,
             content_hash=content_hash,
             size_bytes=size_bytes,
-            modified_at=datetime.now(timezone.utc),
-            indexed_at=datetime.now(timezone.utc),
+            modified_at=datetime.now(UTC),
+            indexed_at=datetime.now(UTC),
             chunk_count=chunk_count,
             metadata=metadata or {},
         )

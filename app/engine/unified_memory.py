@@ -9,9 +9,8 @@ Provides a single memory interface with:
 
 from __future__ import annotations
 
-import asyncio
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -80,7 +79,7 @@ class MemoryRecord(BaseModel):
     scope: str = "/"
     categories: list[str] = Field(default_factory=list)
     importance: float = 0.5
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = Field(default_factory=dict)
     access_count: int = 0
     last_accessed: datetime | None = None
@@ -256,9 +255,9 @@ class UnifiedMemory:
 
         scored.sort(key=lambda x: x[0], reverse=True)
         results = []
-        for score, record in scored[:limit]:
+        for _score, record in scored[:limit]:
             record.access_count += 1
-            record.last_accessed = datetime.now(timezone.utc)
+            record.last_accessed = datetime.now(UTC)
             results.append(record)
         return results
 
@@ -332,9 +331,9 @@ class UnifiedMemory:
 
     def _compute_recency_score(self, created_at: datetime) -> float:
         """Compute a recency score with exponential decay."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=timezone.utc)
+            created_at = created_at.replace(tzinfo=UTC)
         age_days = (now - created_at).total_seconds() / 86400.0
         import math
         return math.exp(-0.693 * age_days / self.decay_half_life_days)

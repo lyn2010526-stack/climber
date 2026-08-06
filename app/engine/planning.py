@@ -6,17 +6,16 @@ tasks into manageable steps and adapt the plan based on execution results.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
-
 import structlog
+from pydantic import BaseModel, Field
 
 logger = structlog.get_logger()
 
 
-class PlanStatus(str, Enum):
+class PlanStatus(StrEnum):
     """Status of a plan step."""
     PENDING = "pending"
     IN_PROGRESS = "in_progress"

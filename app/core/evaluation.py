@@ -6,7 +6,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from collections.abc import Callable
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ class EvalRun:
     failed: int = 0
     avg_score: float = 0.0
     avg_latency_ms: float = 0.0
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class EvaluationRunner:
@@ -59,8 +60,8 @@ class EvaluationRunner:
 
     async def run_dataset(self, dataset: EvalDataset, agent_runner: Callable) -> EvalRun:
         """Run an evaluation dataset."""
-        import uuid
         import time
+        import uuid
 
         run_id = str(uuid.uuid4())
         run = EvalRun(id=run_id, dataset_id=dataset.id, agent_id="")

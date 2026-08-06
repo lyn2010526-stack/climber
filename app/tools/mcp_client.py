@@ -6,16 +6,15 @@ promissions, and tool routing.
 
 from __future__ import annotations
 
-import asyncio
-import json
-from typing import Any, Callable
+import contextlib
+from collections.abc import Callable
+from typing import Any
 
 import structlog
 from mcp import ClientSession
 from mcp.client.stdio import stdio_client
-from mcp.client.streamable_http import streamable_http_client
+from mcp.client.streamable_http import streamablehttp_client
 
-from app.config import settings
 from app.tools.mcp_models import (
     MCPContent,
     MCPPrompt,
@@ -111,7 +110,7 @@ class MCPClient:
         if not self.url:
             raise ValueError("streamable_http transport requires 'url' parameter")
 
-        self._connect_cm = streamable_http_client(
+        self._connect_cm = streamablehttp_client(
             url=self.url,
             headers=self.headers,
         )
@@ -392,17 +391,13 @@ class MCPClient:
     async def close(self) -> None:
         """Close connection and cleanup resources."""
         if self.session:
-            try:
+            with contextlib.suppress(Exception):
                 await self.session.__aexit__(None, None, None)
-            except Exception:
-                pass
             self.session = None
 
         if self._connect_cm:
-            try:
+            with contextlib.suppress(Exception):
                 await self._connect_cm.__aexit__(None, None, None)
-            except Exception:
-                pass
             self._connect_cm = None
 
         self._notification_handlers.clear()
@@ -421,7 +416,7 @@ class MCPClient:
     def get_tool_definitions(self) -> list[dict[str, Any]]:
         """Return tools in OpenAI function calling format (backward compat)."""
         result = []
-        for name, tool in self.tools.items():
+        for _name, tool in self.tools.items():
             result.append({
                 "type": "function",
                 "function": {
@@ -463,7 +458,7 @@ class MCPRegistry:
     def list_tools(self) -> list[dict[str, Any]]:
         tools = []
         for client in self._clients.values():
-            for name, tool in client.tools.items():
+            for _name, tool in client.tools.items():
                 tools.append({
                     "type": "function",
                     "function": {

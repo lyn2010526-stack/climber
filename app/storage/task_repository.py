@@ -8,8 +8,8 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.storage.models_groups import AgentGroupTask
 from app.core.task_state_machine import TaskState, TaskStateMachine
+from app.storage.models_groups import AgentGroupTask
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class TaskRepository:
         task = result.scalar_one_or_none()
         if task is None:
             return None
-        
+
         status_map = {
             "pending": "pending",
             "processing": "processing",

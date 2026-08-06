@@ -11,12 +11,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.collaboration import (
-    AgentResult,
     AggregationStrategy,
     HandoffManager,
     ResultAggregator,
     RoleRegistry,
 )
+
 router = APIRouter(
     prefix="/api/v1/collaboration",
     tags=["collaboration"],

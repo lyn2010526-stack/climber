@@ -6,12 +6,10 @@ at runtime, breaking free from fixed tool sets.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
-import textwrap
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -102,12 +100,12 @@ class DynamicToolGenerator:
             }
 
             # Add safe utility modules
-            import math
-            import json as json_mod
-            import re as re_mod
+            import collections
             import datetime
             import itertools
-            import collections
+            import json as json_mod
+            import math
+            import re as re_mod
             import statistics
 
             namespace["math"] = math

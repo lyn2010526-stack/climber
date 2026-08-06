@@ -7,10 +7,9 @@ has a dedicated MemFS instance for its memory files.
 
 from __future__ import annotations
 
-import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -26,7 +25,7 @@ class AgentSession:
     agent_id: str
     user_id: str
     created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
     message_count: int = 0
     context: dict[str, Any] = field(default_factory=dict)
@@ -75,7 +74,7 @@ class AgentIdentity:
         self.memfs = memfs
 
         self._sessions: dict[str, AgentSession] = {}
-        self._created_at = datetime.now(timezone.utc).isoformat()
+        self._created_at = datetime.now(UTC).isoformat()
         self._metadata: dict[str, Any] = {}
 
     @property
@@ -159,14 +158,14 @@ class AgentIdentity:
             logger.warning("agent_remember_no_memfs", agent_id=self.agent_id)
             return None
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         path = f"reference/{category}/{timestamp}_{uuid.uuid4().hex[:8]}.md"
 
         content = f"**Category:** {category}\n"
         content += f"**Importance:** {importance}\n"
         if tags:
             content += f"**Tags:** {', '.join(tags)}\n"
-        content += f"**Date:** {datetime.now(timezone.utc).isoformat()}\n\n"
+        content += f"**Date:** {datetime.now(UTC).isoformat()}\n\n"
         content += fact
 
         try:
