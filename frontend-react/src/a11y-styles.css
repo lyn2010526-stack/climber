@@ -1,0 +1,328 @@
+/* Accessibility Guidelines */
+
+/* ===== Skip to Main Content Link ===== */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--color-accent);
+  color: white;
+  padding: 8px 16px;
+  z-index: 1000;
+  text-decoration: none;
+  font-weight: 500;
+  border-radius: 0 0 4px 0;
+  transition: top 0.3s;
+}
+
+.skip-link:focus {
+  top: 0;
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ===== Focus Styles ===== */
+.focus-visible-ring:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.focus-visible-ring-dark:focus-visible {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 2px;
+}
+
+/* ===== Reduced Motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===== High Contrast Mode Support ===== */
+@media (prefers-contrast: high) {
+  :root {
+    --color-text-primary: #FFFFFF;
+    --color-text-secondary: #F3F4F6;
+    --color-text-muted: #D1D5DB;
+    --color-border-subtle: rgba(255, 255, 255, 0.2);
+    --color-border-default: rgba(255, 255, 255, 0.3);
+  }
+}
+
+[data-high-contrast="true"] {
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #F3F4F6;
+  --color-text-muted: #D1D5DB;
+  --color-bg-page: #000000;
+  --color-bg-surface-1: #111111;
+  --color-bg-surface-2: #222222;
+  --color-border-subtle: rgba(255, 255, 255, 0.3);
+  --color-border-default: rgba(255, 255, 255, 0.5);
+  --color-accent: #00FFFF;
+}
+
+/* ===== Screen Reader Only Text ===== */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.sr-only-focusable:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* ===== Live Regions ===== */
+.live-region {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.live-region[aria-live="polite"] {
+  /* Polite announcements */
+}
+
+.live-region[aria-live="assertive"] {
+  /* Assertive announcements */
+}
+
+/* ===== Icon Buttons ===== */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.icon-button:hover {
+  background-color: var(--color-bg-surface-2);
+}
+
+.icon-button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ===== Form Labels ===== */
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  font-size: 14px;
+}
+
+.form-label-required::after {
+  content: " *";
+  color: var(--color-error);
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  background-color: var(--color-bg-surface-1);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(94, 106, 210, 0.15);
+}
+
+.form-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.form-input[aria-invalid="true"] {
+  border-color: var(--color-error);
+}
+
+.form-input[aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.15);
+}
+
+.form-error-message {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-error);
+}
+
+/* ===== Button Sizes for Touch ===== */
+.btn-sm {
+  min-height: 36px;
+  min-width: 36px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.btn-md {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 12px 16px;
+  font-size: 14px;
+}
+
+.btn-lg {
+  min-height: 48px;
+  min-width: 48px;
+  padding: 14px 20px;
+  font-size: 16px;
+}
+
+/* ===== Keyboard Navigation Indicators ===== */
+.keyboard-navigation [tabindex]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ===== Color Contrast Check Class ===== */
+/* Use these classes to ensure WCAG AA contrast ratios:
+   - Normal text: 4.5:1 minimum
+   - Large text (18pt+ or 14pt+ bold): 3:1 minimum
+   - UI components: 3:1 minimum
+*/
+
+/* ===== Landmark Roles ===== */
+.main-content {
+  main {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+}
+
+.navigation[role="navigation"] {
+  /* Navigation landmark */
+}
+
+/* ===== Heading Hierarchy ===== */
+/* Ensure proper heading hierarchy: h1 > h2 > h3 > h4 > h5 > h6
+   Do not skip levels
+*/
+
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.4;
+}
+
+/* ===== Modal/Dialog Focus Trap ===== */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+}
+
+.modal-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+/* ===== Dropdown Menu ===== */
+.dropdown-menu {
+  position: absolute;
+  z-index: 100;
+  min-width: 160px;
+  background: var(--color-bg-surface-1);
+  border: 1px solid var(--color-border-default);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  padding: 4px;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background-color: var(--color-bg-surface-2);
+}
+
+/* ===== Tooltip ===== */
+.tooltip {
+  position: absolute;
+  z-index: 1000;
+  padding: 6px 10px;
+  background: var(--color-bg-surface-elevated);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  border-radius: 4px;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* ===== Loading States ===== */
+.loading-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-surface-2) 25%,
+    var(--color-bg-surface-3) 50%,
+    var(--color-bg-surface-2) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

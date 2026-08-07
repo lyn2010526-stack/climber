@@ -1,0 +1,64 @@
+# Climber Agent Engine - Code Owners
+#
+# Code owners are automatically requested for review when someone opens a
+# PR that modifies files in their owned paths.
+#
+# Format: <pattern> <team-or-person>
+# Patterns follow gitignore syntax.
+#
+# References:
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global fallback - core maintainers own everything
+* @climber/core-team
+
+# Backend - Python application code
+/app/ @climber/backend-team
+/app/api/ @climber/api-team
+/app/core/ @climber/core-maintainers
+/app/models/ @climber/ml-team
+/app/tools/ @climber/tools-team
+/app/workflow/ @climber/workflow-team
+/app/storage/ @climber/backend-team
+/app/security/ @climber/security-team
+
+# Frontend - React application
+/frontend-react/ @climber/frontend-team
+/frontend-react/src/components/ @climber/ui-team
+/frontend-react/src/pages/ @climber/frontend-team
+/frontend-react/src/hooks/ @climber/frontend-team
+/frontend-react/src/stores/ @climber/frontend-team
+
+# Infrastructure & DevOps
+/Dockerfile @climber/devops-team
+/Dockerfile.frontend @climber/devops-team
+/docker-compose.yml @climber/devops-team
+/docker-compose.dev.yml @climber/devops-team
+/.github/ @climber/devops-team
+/gunicorn.conf.py @climber/devops-team
+
+# Database migrations
+/alembic/ @climber/backend-team
+/alembic.ini @climber/backend-team
+
+# Tests
+/tests/ @climber/qa-team
+/frontend-react/e2e/ @climber/qa-team
+
+# Documentation
+/docs/ @climber/docs-team
+*.md @climber/docs-team
+
+# Configuration files
+/pyproject.toml @climber/core-maintainers
+/ruff.toml @climber/core-maintainers
+/.editorconfig @climber/core-maintainers
+/requirements.txt @climber/backend-team
+/frontend-react/package.json @climber/frontend-team
+/frontend-react/tsconfig*.json @climber/frontend-team
+
+# Security-sensitive files
+/app/security/ @climber/security-team
+/app/middleware/auth* @climber/security-team
+*auth* @climber/security-team
+*token* @climber/security-team

@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "webhook_url": null,
+  "slack_webhook": null,
+  "email_recipient": null,
+  "email_sender": null,
+  "smtp_host": "localhost",
+  "smtp_port": 587,
+  "consecutive_threshold": 3,
+  "cooldown_seconds": 300
+}

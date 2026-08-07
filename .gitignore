@@ -1,0 +1,67 @@
+# Python Virtual Environment
+venv/
+.venv/
+env/
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+*.whl
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+.pytype/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Frontend (in subfolder, but include for safety)
+frontend-react/node_modules/
+frontend-react/dist/
+frontend-react/build/
+frontend-react/coverage/
+frontend-react/playwright-report/
+frontend-react/test-results/
+
+# Local development
+.env.local
+.env.*.local
+
+# Backup files
+*.bak
+*.backup

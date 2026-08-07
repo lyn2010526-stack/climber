@@ -1,0 +1,151 @@
+/* RTL (Right-to-Left) Layout Support */
+/* This file provides RTL overrides for languages like Arabic, Hebrew, Persian, Urdu */
+
+[dir="rtl"] {
+  /* Text alignment */
+  text-align: right;
+}
+
+[dir="rtl"] .text-left {
+  text-align: right;
+}
+
+[dir="rtl"] .text-right {
+  text-align: left;
+}
+
+/* Navigation and layout */
+[dir="rtl"] .sidebar {
+  border-right: none;
+  border-left: 1px solid var(--color-border-subtle, #e5e7eb);
+}
+
+[dir="rtl"] .ml-auto {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+[dir="rtl"] .mr-auto {
+  margin-right: 0;
+  margin-left: auto;
+}
+
+/* Margins and paddings */
+[dir="rtl"] .ml-1 { margin-left: 0; margin-right: 0.25rem; }
+[dir="rtl"] .ml-2 { margin-left: 0; margin-right: 0.5rem; }
+[dir="rtl"] .ml-3 { margin-left: 0; margin-right: 0.75rem; }
+[dir="rtl"] .ml-4 { margin-left: 0; margin-right: 1rem; }
+
+[dir="rtl"] .mr-1 { margin-right: 0; margin-left: 0.25rem; }
+[dir="rtl"] .mr-2 { margin-right: 0; margin-left: 0.5rem; }
+[dir="rtl"] .mr-3 { margin-right: 0; margin-left: 0.75rem; }
+[dir="rtl"] .mr-4 { margin-right: 0; margin-left: 1rem; }
+
+/* Flex direction */
+[dir="rtl"] .flex-row {
+  flex-direction: row-reverse;
+}
+
+/* Border radius */
+[dir="rtl"] .rounded-l {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-top-right-radius: 0.25rem;
+  border-bottom-right-radius: 0.25rem;
+}
+
+[dir="rtl"] .rounded-r {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-top-left-radius: 0.25rem;
+  border-bottom-left-radius: 0.25rem;
+}
+
+/* Transforms */
+[dir="rtl"] .rotate-90 {
+  transform: rotate(-90deg);
+}
+
+[dir="rtl"] .-rotate-90 {
+  transform: rotate(90deg);
+}
+
+[dir="rtl"] .rotate-180 {
+  transform: rotate(-180deg);
+}
+
+/* Flip icons that imply direction */
+[dir="rtl"] .rtl-flip {
+  transform: scaleX(-1);
+}
+
+/* Language switcher */
+[dir="rtl"] .language-switcher {
+  right: auto;
+  left: 1rem;
+}
+
+/* Dropdown positioning */
+[dir="rtl"] .dropdown-right {
+  right: auto;
+  left: 0;
+}
+
+/* Chevron rotation for RTL */
+[dir="rtl"] .chevron-right {
+  transform: rotate(180deg);
+}
+
+[dir="rtl"] .chevron-left {
+  transform: rotate(180deg);
+}
+
+/* Specific component overrides */
+[dir="rtl"] nav .active-indicator {
+  left: auto;
+  right: 0;
+}
+
+[dir="rtl"] .notification-badge {
+  left: auto;
+  right: -0.5rem;
+}
+
+/* Table headers */
+[dir="rtl"] th {
+  text-align: right;
+}
+
+/* Form elements */
+[dir="rtl"] input,
+[dir="rtl"] textarea {
+  text-align: right;
+}
+
+[dir="rtl"] select {
+  background-position: left 0.5rem center;
+  padding-right: 0.75rem;
+  padding-left: 2rem;
+}
+
+/* Breadcrumbs */
+[dir="rtl"] .breadcrumb-separator {
+  transform: rotate(180deg);
+}
+
+/* Progress bars */
+[dir="rtl"] .progress-bar {
+  right: 0;
+  left: auto;
+}
+
+/* Tooltips */
+[dir="rtl"] .tooltip-left {
+  left: auto;
+  right: 100%;
+}
+
+[dir="rtl"] .tooltip-right {
+  right: auto;
+  left: 100%;
+}

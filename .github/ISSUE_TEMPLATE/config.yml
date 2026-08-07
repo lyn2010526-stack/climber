@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Climber Community Discussions
+    url: https://github.com/lyn2010526-stack/climber/discussions
+    about: Please ask and answer questions here
+  - name: Climber Documentation
+    url: https://github.com/lyn2010526-stack/climber/tree/main/agent-engine/docs
+    about: Check the documentation before opening an issue

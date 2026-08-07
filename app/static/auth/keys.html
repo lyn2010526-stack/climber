@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API 密钥管理 - Agent Engine</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+        }
+        .badge-success {
+            background: #10b981;
+        }
+        .badge-danger {
+            background: #ef4444;
+        }
+        .key-display {
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            word-break: break-all;
+        }
+        .expired {
+            color: #ef4444;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark mb-4">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">🔑 API 密钥管理</span>
+            <button id="logout-btn" class="btn btn-outline-light btn-sm">退出登录</button>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card mb-4">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">现有密钥列表</h5>
+                        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createKeyModal">
+                            + 创建新密钥
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="loading">加载中...</div>
+                        <table class="table table-hover" id="keys-table" style="display: none;">
+                            <thead>
+                                <tr>
+                                    <th>密钥 ID</th>
+                                    <th>所有者</th>
+                                    <th>权限范围</th>
+                                    <th>状态</th>
+                                    <th>创建时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="keys-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">系统信息</h5>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-6">认证状态：</dt>
+                            <dd class="col-sm-6"><span id="auth-enabled" class="badge badge-success">启用</span></dd>
+                            
+                            <dt class="col-sm-6">认证方式：</dt>
+                            <dd class="col-sm-6" id="auth-method">-</dd>
+                            
+                            <dt class="col-sm-6">JWT 算法：</dt>
+                            <dd class="col-sm-6" id="jwt-algo">-</dd>
+                            
+                            <dt class="col-sm-6">令牌有效期：</dt>
+                            <dd class="col-sm-6" id="token-expiry">-</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Key Modal -->
+    <div class="modal fade" id="createKeyModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">创建新 API 密钥</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="create-key-form">
+                        <div class="mb-3">
+                            <label for="owner" class="form-label">所有者</label>
+                            <input type="text" class="form-control" id="owner" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="name" class="form-label">密钥名称（可选）</label>
+                            <input type="text" class="form-control" id="name" placeholder="例如：生产环境密钥">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="scopes" class="form-label">权限范围</label>
+                            <select class="form-select" id="scopes">
+                                <option value='["read", "write"]'>读取 + 写入</option>
+                                <option value='["read"]'>仅读取</option>
+                                <option value='["admin"]'>管理员权限</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="ttl_days" class="form-label">过期时间（天）</label>
+                            <select class="form-select" id="ttl_days">
+                                <option value="null">永不过期</option>
+                                <option value="30">30 天</option>
+                                <option value="90">90 天</option>
+                                <option value="365">1 年</option>
+                            </select>
+                        </div>
+
+                        <div id="error-alert" class="alert alert-danger hidden"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" form="create-key-form" class="btn btn-primary">创建密钥</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Key Generated Modal -->
+    <div class="modal fade" id="newKeyModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header modal-header-success">
+                    <h5 class="modal-title">✅ 密钥创建成功</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-warning">⚠️ 重要提示：此密钥仅在首次创建时显示，请妥善保管！</p>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">所有者</label>
+                        <p id="new-owner" class="fw-bold"></p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">密钥 ID</label>
+                        <p id="new-key-id" class="key-display"></p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">API 密钥</label>
+                        <div class="key-display text-primary fw-bold" id="new-key-value"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">权限范围</label>
+                        <p id="new-scopes" class="badge bg-primary"></p>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">过期时间</label>
+                        <p id="new-expires" class="expired"></p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">知道了</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let token = localStorage.getItem('access_token');
+
+        async function checkAuth() {
+            const healthResp = await fetch('/api/v1/auth/health');
+            const health = await healthResp.json();
+            
+            document.getElementById('auth-enabled').textContent = health.authentication_enabled ? '启用' : '禁用';
+            document.getElementById('auth-method').textContent = health.auth_method;
+            document.getElementById('jwt-algo').textContent = health.jwt_algorithm;
+            document.getElementById('token-expiry').textContent = `${health.token_expiry_minutes}分钟`;
+        }
+
+        async function loadKeys() {
+            if (!token) {
+                window.location.href = '/auth/login';
+                return;
+            }
+
+            try {
+                const resp = await fetch('/api/v1/auth/keys', {
+                    headers: {
+                        'X-API-Key': token,
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (resp.status === 401 || resp.status === 403) {
+                    localStorage.removeItem('access_token');
+                    window.location.href = '/auth/login';
+                    return;
+                }
+
+                const data = await resp.json();
+                const tbody = document.getElementById('keys-body');
+                
+                tbody.innerHTML = '';
+                data.keys.forEach(key => {
+                    const row = document.createElement('tr');
+                    const isExpired = key.expires_at && new Date(key.expires_at) < new Date();
+                    row.innerHTML = `
+                        <td><small>${key.key_id}</small></td>
+                        <td>${key.owner}</td>
+                        <td>${key.scopes.join(', ')}</td>
+                        <td>${key.is_active ? '<span class="badge badge-success">有效</span>' : '<span class="badge badge-danger">已撤销</span>'}</td>
+                        <td>${new Date(key.created_at).toLocaleString('zh-CN')}</td>
+                        <td>
+                            ${!key.is_expired ? `<button class="btn btn-danger btn-sm delete-key" data-key-id="${key.key_id}">删除</button>` : '-'}
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('keys-table').style.display = 'table';
+
+            } catch (error) {
+                console.error('Failed to load keys:', error);
+                document.getElementById('loading').textContent = '加载失败：' + error.message;
+            }
+        }
+
+        async function createApiKey() {
+            const owner = document.getElementById('owner').value;
+            const scopes = JSON.parse(document.getElementById('scopes').value);
+            const ttlDays = document.getElementById('ttl_days').value;
+
+            try {
+                const resp = await fetch('/api/v1/auth/keys/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ owner, scopes, ttl_days: ttlDays === 'null' ? null : parseInt(ttlDays) })
+                });
+
+                if (!resp.ok) {
+                    throw new Error(await resp.text());
+                }
+
+                const data = await resp.json();
+                
+                // Display new key in modal
+                document.getElementById('new-owner').textContent = data.owner;
+                document.getElementById('new-key-id').textContent = data.key_id;
+                document.getElementById('new-key-value').textContent = data.raw_key;
+                document.getElementById('new-scopes').textContent = data.scopes.join(', ');
+                document.getElementById('new-expires').textContent = data.expires_at || '永不过期';
+                
+                // Close create modal and show new key modal
+                const createModal = bootstrap.Modal.getInstance(document.getElementById('createKeyModal'));
+                createModal.hide();
+                
+                // Clear form
+                document.getElementById('create-key-form').reset();
+                document.getElementById('error-alert').classList.add('hidden');
+
+                // Show new key modal
+                const newKeyModal = new bootstrap.Modal(document.getElementById('newKeyModal'));
+                newKeyModal.show();
+
+                // Reload keys list
+                await loadKeys();
+
+            } catch (error) {
+                document.getElementById('error-alert').textContent = error.message;
+                document.getElementById('error-alert').classList.remove('hidden');
+            }
+        }
+
+        async function deleteApiKey(keyId) {
+            if (!confirm(`确定要删除此密钥吗？\n密钥 ID: ${keyId}`)) return;
+
+            try {
+                const resp = await fetch(`/api/v1/auth/keys/${keyId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!resp.ok) {
+                    throw new Error(await resp.text());
+                }
+
+                // Reload keys list
+                await loadKeys();
+
+            } catch (error) {
+                alert('删除失败：' + error.message);
+            }
+        }
+
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('user_id');
+            localStorage.removeItem('scopes');
+            window.location.href = '/auth/login';
+        });
+
+        document.getElementById('create-key-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            createApiKey();
+        });
+
+        // Delegate delete button events
+        document.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('delete-key')) {
+                const keyId = e.target.dataset.keyId;
+                await deleteApiKey(keyId);
+            }
+        });
+
+        // Check auth and load keys on page load
+        checkAuth().then(loadKeys);
+    </script>
+</body>
+</html>
