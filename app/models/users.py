@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
 
 from app.storage import Base
@@ -134,6 +134,8 @@ class UserUpdate(BaseModel):
 
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes = True)
+
     id: int
     username: str
     email: str
@@ -144,9 +146,6 @@ class UserResponse(BaseModel):
     avatar_url: str
     last_login_at: datetime | None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class UserListResponse(BaseModel):
@@ -208,6 +207,8 @@ class ApiKeyCreate(BaseModel):
 
 
 class ApiKeyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes = True)
+
     id: str
     name: str
     owner: str
@@ -216,9 +217,6 @@ class ApiKeyResponse(BaseModel):
     expires_at: datetime | None
     last_used_at: datetime | None
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ApiKeyCreatedResponse(BaseModel):

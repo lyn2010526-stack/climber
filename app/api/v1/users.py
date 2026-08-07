@@ -1,1 +1,0 @@
-"""User management removed — application is now local-only."""

@@ -17926,3 +17926,83 @@
 {"limit_mb": 2048, "event": "memory_guardian_started", "level": "info", "logger": "app.core.memory_guardian", "timestamp": "2026-08-07T03:49:31.860172Z"}
 {"event": "Telegram bot disabled (no TELEGRAM_BOT_TOKEN)", "level": "info", "logger": "app.services.telegram_bot", "timestamp": "2026-08-07T03:49:31.862360Z"}
 {"event": "auto_loop_engine_started", "level": "info", "logger": "app.core.auto_loop", "timestamp": "2026-08-07T03:49:31.870703Z"}
+{"debug": false, "version": "0.2.0", "log_dir": "/workspace/agent-engine/logs", "event": "Agent Engine starting", "level": "info", "logger": "app.main", "timestamp": "2026-08-07T16:18:40.779024Z"}
+{"skill_id": "recursive_research", "category": "core", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.799259Z"}
+{"skill_id": "task_decomposition", "category": "core", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.799569Z"}
+{"skill_id": "self_evolving", "category": "core", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.799704Z"}
+{"skill_id": "memory_manager", "category": "core", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.799816Z"}
+{"skill_id": "frontend_engineer", "category": "engineering", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.799910Z"}
+{"skill_id": "backend_engineer", "category": "engineering", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.800006Z"}
+{"skill_id": "database_architect", "category": "engineering", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.800099Z"}
+{"skill_id": "devops_engineer", "category": "engineering", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.800223Z"}
+{"skill_id": "git_master", "category": "engineering", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.800330Z"}
+{"skill_id": "code_reviewer", "category": "quality", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.800416Z"}
+{"skill_id": "security_auditor", "category": "quality", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.800512Z"}
+{"skill_id": "tdd_engineer", "category": "quality", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.800597Z"}
+{"skill_id": "systematic_debugger", "category": "quality", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.800675Z"}
+{"skill_id": "data_analyst", "category": "knowledge", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.800755Z"}
+{"skill_id": "tech_researcher", "category": "knowledge", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.800833Z"}
+{"skill_id": "doc_generator", "category": "knowledge", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.800911Z"}
+{"skill_id": "rag_organizer", "category": "knowledge", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.800989Z"}
+{"skill_id": "incident_analyzer", "category": "knowledge", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.801065Z"}
+{"skill_id": "dependency_auditor", "category": "knowledge", "event": "skill_registered", "level": "info", "logger": "app.skills.registry", "timestamp": "2026-08-07T16:18:40.801146Z"}
+{"backend": "sqlite", "journal_mode": "wal", "event": "Database ready", "level": "info", "logger": "app.main", "timestamp": "2026-08-07T16:18:41.987008Z"}
+{"event": "Redis connected", "level": "info", "logger": "app.storage.cache", "timestamp": "2026-08-07T16:18:43.253688Z"}
+{"event": "Redis cache connected", "level": "info", "logger": "app.main", "timestamp": "2026-08-07T16:18:43.254210Z"}
+{"name": "browser_navigate", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.257925Z"}
+{"name": "browser_screenshot", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.258340Z"}
+{"name": "browser_click", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.258647Z"}
+{"name": "browser_type", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.258928Z"}
+{"name": "browser_extract_links", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.259168Z"}
+{"name": "browser_extract_text", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.259330Z"}
+{"name": "core_memory_append", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.263143Z"}
+{"name": "core_memory_replace", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.263410Z"}
+{"name": "core_memory_create", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.263597Z"}
+{"name": "store_memory", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.264158Z"}
+{"name": "search_memories", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.264528Z"}
+{"name": "remember_user_fact", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.264795Z"}
+{"name": "register_memories", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.265678Z"}
+{"name": "recall_memories", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.265912Z"}
+{"name": "reflect_on_task", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.266182Z"}
+{"event": "easyocr not available, OCR will be degraded", "level": "warning", "logger": "app.core.vision_pipeline", "timestamp": "2026-08-07T16:18:43.269105Z"}
+{"name": "capture_screen", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.269363Z"}
+{"name": "ocr_screen", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.269534Z"}
+{"name": "describe_screen", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.269676Z"}
+{"name": "find_and_click", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.269834Z"}
+{"name": "find_and_type", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.269988Z"}
+{"name": "get_datetime", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.270202Z"}
+{"name": "fetch_url", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.270484Z"}
+{"name": "web_search", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.270701Z"}
+{"name": "calculator", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.270873Z"}
+{"name": "get_weather", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.271030Z"}
+{"name": "read_file", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.271262Z"}
+{"name": "write_file", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.271444Z"}
+{"name": "list_files", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.271584Z"}
+{"name": "run_command", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.271706Z"}
+{"name": "generate_image", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.271837Z"}
+{"name": "translate", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.272000Z"}
+{"name": "wikipedia_summary", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.272150Z"}
+{"name": "summarize", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.272335Z"}
+{"name": "base64_encode", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.272507Z"}
+{"name": "json_get", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.272641Z"}
+{"name": "edit_file", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.272793Z"}
+{"name": "file_diff", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.272944Z"}
+{"name": "append_file", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.273090Z"}
+{"name": "file_exists", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.273247Z"}
+{"name": "file_info", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.273402Z"}
+{"name": "handoff_task", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.273510Z"}
+{"name": "run_group_tasks", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.273620Z"}
+{"name": "apply_patch", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.273714Z"}
+{"name": "stream_command", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.273815Z"}
+{"name": "container_exec", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.273911Z"}
+{"name": "auto_decompose_task", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.274115Z"}
+{"name": "analyze_error", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.274226Z"}
+{"name": "suggest_fix", "event": "Tool registered", "level": "info", "logger": "app.tools", "timestamp": "2026-08-07T16:18:43.274319Z"}
+{"tasks": ["scheduler", "auto_loop"], "event": "watchdog_started", "level": "info", "logger": "app.core.watchdog", "timestamp": "2026-08-07T16:18:43.330758Z"}
+{"event": "Task scheduler started under watchdog", "level": "info", "logger": "app.main", "timestamp": "2026-08-07T16:18:43.331108Z"}
+{"limit_mb": 2048, "event": "memory_guardian_started", "level": "info", "logger": "app.core.memory_guardian", "timestamp": "2026-08-07T16:18:43.331263Z"}
+{"event": "Telegram bot disabled (no TELEGRAM_BOT_TOKEN)", "level": "info", "logger": "app.services.telegram_bot", "timestamp": "2026-08-07T16:18:43.333337Z"}
+{"event": "auto_loop_engine_started", "level": "info", "logger": "app.core.auto_loop", "timestamp": "2026-08-07T16:18:43.334646Z"}
+{"name": "auto_loop", "event": "supervised_task_completed", "level": "info", "logger": "app.core.watchdog", "timestamp": "2026-08-07T16:18:48.878416Z"}
+{"event": "watchdog_stopped", "level": "info", "logger": "app.core.watchdog", "timestamp": "2026-08-07T16:18:48.879114Z"}
+{"event": "Agent Engine shutting down", "level": "info", "logger": "app.main", "timestamp": "2026-08-07T16:18:48.879793Z"}
