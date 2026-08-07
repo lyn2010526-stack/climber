@@ -22,6 +22,9 @@ logger = structlog.get_logger()
 class _DefaultEmbeddingWrapper(EmbeddingFunction):
     """Wrap ChromaDB's default embedding function for stability across versions."""
 
+    def __init__(self) -> None:
+        self._default_ef: Any = None
+
     def name(self) -> str:
         return "default"
 
@@ -29,8 +32,9 @@ class _DefaultEmbeddingWrapper(EmbeddingFunction):
         return self.embed(input)
 
     def embed(self, input: list[str]) -> list[list[float]]:
-        default_ef = chromadb.utils.embedding_functions.DefaultEmbeddingFunction()
-        return default_ef(input)
+        if self._default_ef is None:
+            self._default_ef = chromadb.utils.embedding_functions.DefaultEmbeddingFunction()
+        return self._default_ef(input)
 
 
 class VectorMemoryService:
