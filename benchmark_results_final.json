@@ -1,0 +1,101 @@
+{
+  "timestamp": "2026-08-03",
+  "results": {
+    "db_query/tasks_limit=10": {
+      "value": "354.0",
+      "unit": "ms"
+    },
+    "db_query/tasks_limit=50": {
+      "value": "4.1",
+      "unit": "ms"
+    },
+    "db_query/tasks_limit=100": {
+      "value": "28.2",
+      "unit": "ms"
+    },
+    "db_query/tasks_limit=500": {
+      "value": "4.2",
+      "unit": "ms"
+    },
+    "db_query/sessions_limit=10": {
+      "value": "45.1",
+      "unit": "ms"
+    },
+    "db_query/sessions_limit=50": {
+      "value": "2.9",
+      "unit": "ms"
+    },
+    "db_query/sessions_limit=100": {
+      "value": "3.0",
+      "unit": "ms"
+    },
+    "db_query/file_test.db": {
+      "value": "0.73",
+      "unit": "MB"
+    },
+    "db_query/file_test.db-shm": {
+      "value": "0.03",
+      "unit": "MB"
+    },
+    "db_query/file_test.db-wal": {
+      "value": "455.08",
+      "unit": "MB"
+    },
+    "frontend/build_time": {
+      "value": "85.6",
+      "unit": "s"
+    },
+    "frontend/build_errors": {
+      "value": 0,
+      "unit": ""
+    },
+    "memory/VmPeak": {
+      "value": "43.1",
+      "unit": "MB"
+    },
+    "memory/VmSize": {
+      "value": "42.9",
+      "unit": "MB"
+    },
+    "memory/VmLck": {
+      "value": "0.0",
+      "unit": "MB"
+    },
+    "memory/VmPin": {
+      "value": "0.0",
+      "unit": "MB"
+    },
+    "memory/VmHWM": {
+      "value": "34.7",
+      "unit": "MB"
+    },
+    "memory/VmRSS": {
+      "value": "28.6",
+      "unit": "MB"
+    },
+    "memory/VmData": {
+      "value": "24.7",
+      "unit": "MB"
+    },
+    "memory/VmStk": {
+      "value": "0.1",
+      "unit": "MB"
+    },
+    "memory/VmExe": {
+      "value": "2.7",
+      "unit": "MB"
+    },
+    "memory/VmLib": {
+      "value": "5.5",
+      "unit": "MB"
+    },
+    "memory/VmPTE": {
+      "value": "0.1",
+      "unit": "MB"
+    },
+    "memory/VmSwap": {
+      "value": "0.0",
+      "unit": "MB"
+    }
+  }
+}

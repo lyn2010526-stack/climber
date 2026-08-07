@@ -1,0 +1,91 @@
+# Caddy Web Server Configuration (for production deployment)
+# Optimized for performance, caching, and compression
+
+:8000 {
+    # Root directory for static files
+    root * /workspace/agent-engine/frontend-react/dist
+    
+    # Enable compression (gzip and brotli)
+    encode {
+        gzip
+        brotli
+    }
+    
+    # Static asset caching strategies
+    @static {
+        pathregexp \.(ico|png|jpg|jpeg|gif|svg|webp|woff2?|ttf|eot)$
+    }
+    respond @static {
+        header Cache-Control "public, max-age=31536000, immutable"
+    }
+    
+    @js {
+        pathregexp \.js$
+    }
+    respond @js {
+        header Cache-Control "public, max-age=604800, must-revalidate"
+    }
+    
+    @css {
+        pathregexp \.css$
+    }
+    respond @css {
+        header Cache-Control "public, max-age=604800, must-revalidate"
+    }
+    
+    # API proxy to backend
+    reverse_proxy localhost:8000 {
+        transport http {
+            compress true
+        }
+        
+        # Connection timeout
+        flush_interval -1
+        
+        # Keep-alive settings
+        dial_timeout 30s
+        keepalive 10
+        keepalive_interval 1m
+    }
+    
+    # Health check endpoint
+    handle /health {
+        respond "OK" 200
+    }
+    
+    # Security headers
+    header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    header X-Content-Type-Options "nosniff"
+    header X-Frame-Options "DENY"
+    header X-XSS-Protection "1; mode=block"
+    header Referrer-Policy "strict-origin-when-cross-origin"
+    
+    # Performance headers
+    header Cross-Origin-Opener-Policy "same-origin"
+    header Cross-Origin-Embedder-Policy "require-corp"
+    header Cross-Origin-Resource-Policy "same-site"
+    
+    # Compression levels
+    encode {
+        zstd     0.9
+        gzip     9
+        brotli   11
+    }
+    
+    # Rate limiting for API endpoints
+    @api_requests {
+        path /api/*
+    }
+    limit_rate @api_requests 100 kbytes/sec
+    
+    # Logging with response times
+    log {
+        output file /var/log/caddy/agent_engine.log
+        format json
+    }
+    
+    errors {
+        on * /health
+        respond "Internal Server Error" 500
+    }
+}

@@ -1,0 +1,120 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379/0
+      - APP_ENV=development
+      - APP_DEBUG=true
+      # Multi-worker gunicorn configuration (dev: fewer workers)
+      - GUNICORN_WORKERS=2
+      - GUNICORN_BIND=0.0.0.0:8000
+      - GUNICORN_TIMEOUT=60
+      - GUNICORN_GRACEFUL_TIMEOUT=15
+      - GUNICORN_LOG_LEVEL=debug
+      - GUNICORN_MAX_REQUESTS=500
+    volumes:
+      - ./app:/app/app
+      - api_data:/app/data
+      - type: tmpfs
+        target: /dev/shm/agent-engine
+        tmpfs:
+          size: 128M
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - backend-dev
+
+  frontend:
+    image: node:20-alpine
+    working_dir: /app/frontend-react
+    command: sh -c "npm install && npx vite --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend-react:/app/frontend-react
+      - /app/frontend-react/node_modules
+    environment:
+      - VITE_API_URL=/api
+      - VITE_PROXY_TARGET=http://api:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - backend-dev
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-climber}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-climber}
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-climber}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend-dev
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data_dev:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend-dev
+
+  chroma:
+    image: chromadb/chroma:latest
+    volumes:
+      - chroma_data_dev:/chroma/chroma
+    ports:
+      - "8001:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - backend-dev
+
+volumes:
+  postgres_data_dev:
+  redis_data_dev:
+  chroma_data_dev:
+  api_data:
+
+networks:
+  backend-dev:
+    driver: bridge

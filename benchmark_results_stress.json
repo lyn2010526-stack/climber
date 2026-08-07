@@ -1,0 +1,406 @@
+{
+  "timestamp": "2026-08-04T05:13:28.758752",
+  "target": "http://127.0.0.1:8000",
+  "results": {
+    "single/GET /health avg": {
+      "value": "12.3",
+      "unit": "ms"
+    },
+    "single/GET /health median": {
+      "value": "11.2",
+      "unit": "ms"
+    },
+    "single/GET /health p95": {
+      "value": "23.0",
+      "unit": "ms"
+    },
+    "single/GET /health p99": {
+      "value": "23.0",
+      "unit": "ms"
+    },
+    "single/GET tasks_qlimit=50 avg": {
+      "value": "21.9",
+      "unit": "ms"
+    },
+    "single/GET tasks_qlimit=50 median": {
+      "value": "19.3",
+      "unit": "ms"
+    },
+    "single/GET tasks_qlimit=50 p95": {
+      "value": "47.4",
+      "unit": "ms"
+    },
+    "single/GET tasks_qlimit=50 p99": {
+      "value": "47.4",
+      "unit": "ms"
+    },
+    "single/GET crews_qlimit=50 avg": {
+      "value": "14.5",
+      "unit": "ms"
+    },
+    "single/GET crews_qlimit=50 median": {
+      "value": "12.5",
+      "unit": "ms"
+    },
+    "single/GET crews_qlimit=50 p95": {
+      "value": "24.4",
+      "unit": "ms"
+    },
+    "single/GET crews_qlimit=50 p99": {
+      "value": "24.4",
+      "unit": "ms"
+    },
+    "single/GET sessions_qlimit=50 avg": {
+      "value": "13.5",
+      "unit": "ms"
+    },
+    "single/GET sessions_qlimit=50 median": {
+      "value": "12.3",
+      "unit": "ms"
+    },
+    "single/GET sessions_qlimit=50 p95": {
+      "value": "26.9",
+      "unit": "ms"
+    },
+    "single/GET sessions_qlimit=50 p99": {
+      "value": "26.9",
+      "unit": "ms"
+    },
+    "single/GET /metrics avg": {
+      "value": "14.1",
+      "unit": "ms"
+    },
+    "single/GET /metrics median": {
+      "value": "15.0",
+      "unit": "ms"
+    },
+    "single/GET /metrics p95": {
+      "value": "17.0",
+      "unit": "ms"
+    },
+    "single/GET /metrics p99": {
+      "value": "17.0",
+      "unit": "ms"
+    },
+    "concurrent/c=100 avg": {
+      "value": "1837.7",
+      "unit": "ms"
+    },
+    "concurrent/c=100 median": {
+      "value": "1383.2",
+      "unit": "ms"
+    },
+    "concurrent/c=100 p95": {
+      "value": "4165.1",
+      "unit": "ms"
+    },
+    "concurrent/c=100 p99": {
+      "value": "5360.0",
+      "unit": "ms"
+    },
+    "concurrent/c=100 min": {
+      "value": "46.6",
+      "unit": "ms"
+    },
+    "concurrent/c=100 max": {
+      "value": "5590.8",
+      "unit": "ms"
+    },
+    "concurrent/c=100 stdev": {
+      "value": "1494.3",
+      "unit": "ms"
+    },
+    "concurrent/c=100 QPS": {
+      "value": "52.1",
+      "unit": "req/s"
+    },
+    "concurrent/c=100 total_time": {
+      "value": "9561",
+      "unit": "ms"
+    },
+    "concurrent/c=100 success": {
+      "value": 498,
+      "unit": "req"
+    },
+    "concurrent/c=100 errors": {
+      "value": 2,
+      "unit": ""
+    },
+    "concurrent/c=100 err_0": {
+      "value": 2,
+      "unit": ""
+    },
+    "concurrent/c=500 avg": {
+      "value": "3683.3",
+      "unit": "ms"
+    },
+    "concurrent/c=500 median": {
+      "value": "3950.4",
+      "unit": "ms"
+    },
+    "concurrent/c=500 p95": {
+      "value": "5850.3",
+      "unit": "ms"
+    },
+    "concurrent/c=500 p99": {
+      "value": "5858.4",
+      "unit": "ms"
+    },
+    "concurrent/c=500 min": {
+      "value": "582.2",
+      "unit": "ms"
+    },
+    "concurrent/c=500 max": {
+      "value": "5861.6",
+      "unit": "ms"
+    },
+    "concurrent/c=500 stdev": {
+      "value": "1978.3",
+      "unit": "ms"
+    },
+    "concurrent/c=500 QPS": {
+      "value": "85.1",
+      "unit": "req/s"
+    },
+    "concurrent/c=500 total_time": {
+      "value": "5879",
+      "unit": "ms"
+    },
+    "concurrent/c=500 success": {
+      "value": 500,
+      "unit": "req"
+    },
+    "concurrent/c=500 errors": {
+      "value": 0,
+      "unit": ""
+    },
+    "concurrent/c=1000 avg": {
+      "value": "11785.2",
+      "unit": "ms"
+    },
+    "concurrent/c=1000 median": {
+      "value": "11745.3",
+      "unit": "ms"
+    },
+    "concurrent/c=1000 p95": {
+      "value": "14411.9",
+      "unit": "ms"
+    },
+    "concurrent/c=1000 p99": {
+      "value": "14425.8",
+      "unit": "ms"
+    },
+    "concurrent/c=1000 min": {
+      "value": "8310.5",
+      "unit": "ms"
+    },
+    "concurrent/c=1000 max": {
+      "value": "14433.2",
+      "unit": "ms"
+    },
+    "concurrent/c=1000 stdev": {
+      "value": "2136.8",
+      "unit": "ms"
+    },
+    "concurrent/c=1000 QPS": {
+      "value": "34.5",
+      "unit": "req/s"
+    },
+    "concurrent/c=1000 total_time": {
+      "value": "14510",
+      "unit": "ms"
+    },
+    "concurrent/c=1000 success": {
+      "value": 500,
+      "unit": "req"
+    },
+    "concurrent/c=1000 errors": {
+      "value": 0,
+      "unit": ""
+    },
+    "api_concurrent//health avg": {
+      "value": "963.8",
+      "unit": "ms"
+    },
+    "api_concurrent//health p95": {
+      "value": "1773.3",
+      "unit": "ms"
+    },
+    "api_concurrent//health QPS": {
+      "value": "81.7",
+      "unit": "req/s"
+    },
+    "api_concurrent//health errors": {
+      "value": 0,
+      "unit": ""
+    },
+    "api_concurrent/tasks_qlimit=50 avg": {
+      "value": "1206.9",
+      "unit": "ms"
+    },
+    "api_concurrent/tasks_qlimit=50 p95": {
+      "value": "2718.7",
+      "unit": "ms"
+    },
+    "api_concurrent/tasks_qlimit=50 QPS": {
+      "value": "62.8",
+      "unit": "req/s"
+    },
+    "api_concurrent/tasks_qlimit=50 errors": {
+      "value": 0,
+      "unit": ""
+    },
+    "api_concurrent/sessions_qlimit=50 avg": {
+      "value": "959.4",
+      "unit": "ms"
+    },
+    "api_concurrent/sessions_qlimit=50 p95": {
+      "value": "1969.6",
+      "unit": "ms"
+    },
+    "api_concurrent/sessions_qlimit=50 QPS": {
+      "value": "92.7",
+      "unit": "req/s"
+    },
+    "api_concurrent/sessions_qlimit=50 errors": {
+      "value": 0,
+      "unit": ""
+    },
+    "health_component/status": {
+      "value": "ok",
+      "unit": ""
+    },
+    "health_component/version": {
+      "value": "0.2.0",
+      "unit": ""
+    },
+    "health_component/database": {
+      "value": "{'backend': 'sqlite', 'url': 'sqlite+aiosqlite', 'connected': True, 'journal_mode': 'wal', 'busy_timeout_ms': 5000}",
+      "unit": ""
+    },
+    "health_component/redis": {
+      "value": "ok",
+      "unit": ""
+    },
+    "health_component/chroma": {
+      "value": "ok",
+      "unit": ""
+    },
+    "health_component/watchdog": {
+      "value": "{'running': True, 'healthy': True, 'total_tasks': 2, 'alive_tasks': 2, 'total_restarts': 0, 'tasks': [{'name': 'scheduler', 'alive': True, 'restarts': 0, 'failures': 0, 'last_error': None, 'uptime_seconds': 55.1, 'stopped': False}, {'name': 'auto_loop', 'alive': True, 'restarts': 0, 'failures': 0, 'last_error': None, 'uptime_seconds': 55.1, 'stopped': False}]}",
+      "unit": ""
+    },
+    "health_component/memory": {
+      "value": "{'current_mb': 172.1, 'peak_mb': 0.0, 'limit_mb': 2048, 'soft_threshold_mb': 1536.0, 'hard_threshold_mb': 1843.2, 'gc_runs': 0, 'relief_runs': 0, 'samples': 0, 'running': True}",
+      "unit": ""
+    },
+    "health_component/browser_pool": {
+      "value": "{'active_sessions': 0, 'max_instances': 2, 'idle_timeout': 300.0, 'evictions': 0, 'reclaimed': 0, 'sessions': []}",
+      "unit": ""
+    },
+    "health/avg": {
+      "value": "5.3",
+      "unit": "ms"
+    },
+    "health/median": {
+      "value": "1.9",
+      "unit": "ms"
+    },
+    "health/p95": {
+      "value": "20.5",
+      "unit": "ms"
+    },
+    "health/min": {
+      "value": "1.8",
+      "unit": "ms"
+    },
+    "health/max": {
+      "value": "20.5",
+      "unit": "ms"
+    },
+    "sustained/round_1_avg": {
+      "value": "185.4",
+      "unit": "ms"
+    },
+    "sustained/round_1_p95": {
+      "value": "256.3",
+      "unit": "ms"
+    },
+    "sustained/round_1_errors": {
+      "value": 0,
+      "unit": ""
+    },
+    "sustained/round_2_avg": {
+      "value": "672.9",
+      "unit": "ms"
+    },
+    "sustained/round_2_p95": {
+      "value": "1205.9",
+      "unit": "ms"
+    },
+    "sustained/round_2_errors": {
+      "value": 0,
+      "unit": ""
+    },
+    "sustained/round_3_avg": {
+      "value": "818.8",
+      "unit": "ms"
+    },
+    "sustained/round_3_p95": {
+      "value": "1582.3",
+      "unit": "ms"
+    },
+    "sustained/round_3_errors": {
+      "value": 0,
+      "unit": ""
+    },
+    "sustained/round_4_avg": {
+      "value": "1550.6",
+      "unit": "ms"
+    },
+    "sustained/round_4_p95": {
+      "value": "2131.0",
+      "unit": "ms"
+    },
+    "sustained/round_4_errors": {
+      "value": 0,
+      "unit": ""
+    },
+    "sustained/round_5_avg": {
+      "value": "762.0",
+      "unit": "ms"
+    },
+    "sustained/round_5_p95": {
+      "value": "1250.7",
+      "unit": "ms"
+    },
+    "sustained/round_5_errors": {
+      "value": 0,
+      "unit": ""
+    },
+    "memory/baseline_rss": {
+      "value": "1.0",
+      "unit": "MB"
+    },
+    "memory/post_test_rss": {
+      "value": "1.0",
+      "unit": "MB"
+    },
+    "memory/delta": {
+      "value": "0.0",
+      "unit": "MB"
+    },
+    "memory/system_used": {
+      "value": "7800",
+      "unit": "MB"
+    },
+    "memory/system_available": {
+      "value": "166",
+      "unit": "MB"
+    },
+    "memory/system_total": {
+      "value": "7966",
+      "unit": "MB"
+    }
+  }
+}

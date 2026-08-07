@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - Agent Engine</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            padding: 40px;
+            max-width: 400px;
+            width: 100%;
+        }
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .login-header h2 {
+            color: #333;
+            font-weight: bold;
+        }
+        .login-header p {
+            color: #666;
+            margin-top: 10px;
+        }
+        .form-label {
+            font-weight: 500;
+            color: #555;
+        }
+        .btn-login {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 12px;
+            font-weight: 600;
+            width: 100%;
+        }
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .alert-info {
+            background: #e7f3ff;
+            border-color: #b3d9ff;
+            color: #004085;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="login-header">
+            <h2>🚀 Agent Engine</h2>
+            <p>生产级认证系统</p>
+        </div>
+
+        <div id="error-alert" class="alert alert-danger hidden" role="alert"></div>
+
+        <form id="login-form">
+            <div class="mb-3">
+                <label for="username" class="form-label">用户名</label>
+                <input type="text" class="form-control" id="username" placeholder="请输入用户名" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="password" class="form-label">密码</label>
+                <input type="password" class="form-control" id="password" placeholder="请输入密码" required>
+            </div>
+
+            <button type="submit" class="btn btn-login text-white">登录</button>
+        </form>
+
+        <div class="mt-4 p-3 bg-light rounded">
+            <small class="text-muted">
+                <strong>默认账户：</strong><br>
+                用户名：<code>admin</code><br>
+                密码：<code>admin123</code>
+            </small>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorAlert = document.getElementById('error-alert');
+
+            errorAlert.classList.add('hidden');
+
+            try {
+                const response = await fetch('/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.detail || '登录失败');
+                }
+
+                // Store token in localStorage
+                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('user_id', data.user_id);
+                localStorage.setItem('scopes', JSON.stringify(data.scopes));
+
+                // Redirect to dashboard
+                window.location.href = '/auth/keys';
+            } catch (error) {
+                errorAlert.textContent = error.message;
+                errorAlert.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

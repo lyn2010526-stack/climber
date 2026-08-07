@@ -1,0 +1,172 @@
+name: Test Daemon CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-daemon-check:
+    name: Continuous Test Daemon Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: climber
+          POSTGRES_PASSWORD: climber
+          POSTGRES_DB: climber
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio pytest-cov watchdog
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend-react/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend-react
+        run: npm ci
+
+      - name: Run full test suite (daemon mode)
+        env:
+          DATABASE_URL: postgresql+asyncpg://climber:climber@localhost:5432/climber
+          REDIS_URL: redis://localhost:6379/0
+          APP_ENV: testing
+        run: |
+          echo "Running test daemon full suite..."
+          python scripts/watch_tests.py --full
+
+      - name: Run quick tests on changed files
+        env:
+          DATABASE_URL: postgresql+asyncpg://climber:climber@localhost:5432/climber
+          REDIS_URL: redis://localhost:6379/0
+          APP_ENV: testing
+        run: |
+          echo "Identifying and testing changed files..."
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD 2>/dev/null || echo "")
+
+          if [ -n "${CHANGED_FILES}" ]; then
+            echo "Changed files:"
+            echo "${CHANGED_FILES}"
+
+            TEST_FILES=""
+            for f in ${CHANGED_FILES}; do
+              if [[ "$f" == app/* ]]; then
+                STEM=$(basename "$f" .py)
+                CANDIDATE="tests/test_${STEM}.py"
+                if [ -f "${CANDIDATE}" ]; then
+                  TEST_FILES="${TEST_FILES} ${CANDIDATE}"
+                fi
+              fi
+            done
+
+            if [ -n "${TEST_FILES}" ]; then
+              echo "Running tests: ${TEST_FILES}"
+              python -m pytest ${TEST_FILES} -x -v --tb=short --no-header -m "not integration and not slow"
+            else
+              echo "No matching test files for changed source files"
+            fi
+          else
+            echo "No changed files detected"
+          fi
+
+      - name: Generate coverage report
+        env:
+          DATABASE_URL: postgresql+asyncpg://climber:climber@localhost:5432/climber
+          REDIS_URL: redis://localhost:6379/0
+          APP_ENV: testing
+        run: |
+          python -m pytest tests/ --cov=app --cov-report=xml --cov-report=html --cov-report=term-missing -q -m "not integration and not slow"
+
+      - name: Upload coverage to artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ github.run_number }}
+          path: |
+            htmlcov/
+            coverage.xml
+          retention-days: 14
+
+      - name: Check coverage threshold
+        run: |
+          python -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('coverage.xml')
+          root = tree.getroot()
+          line_rate = float(root.get('line-rate', 0)) * 100
+          branch_rate = float(root.get('branch-rate', 0)) * 100
+          print(f'Line coverage: {line_rate:.2f}%')
+          print(f'Branch coverage: {branch_rate:.2f}%')
+          if line_rate < 80:
+              print(f'::warning::Coverage {line_rate:.2f}% is below 80% threshold')
+          "
+
+  frontend-test-daemon:
+    name: Frontend Test Daemon
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend-react
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend-react/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit -p tsconfig.app.json
+
+      - name: Run tests
+        run: npm test -- --run --reporter=verbose
+
+      - name: Build check
+        run: npm run build

@@ -1,0 +1,14 @@
+{
+  "id": "85ca9b0c-e08b-4264-821d-7b03c261a423",
+  "session_id": "02cfe9c5-657e-4771-834c-c205a90eac91",
+  "messages": [
+    {
+      "role": "user",
+      "content": "hi"
+    }
+  ],
+  "iteration": 1,
+  "status": "active",
+  "metadata": {},
+  "timestamp": 1785822671.6355734
+}

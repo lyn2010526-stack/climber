@@ -1,0 +1,165 @@
+{
+  "timestamp": "2026-08-04 08:57:58",
+  "base_url": "http://127.0.0.1:3001",
+  "total_tests": 8,
+  "scenarios": {
+    "scenario_1_baseline": {
+      "description": "Single Request Baseline - 1000 Health Checks",
+      "test_name": "Single Request Baseline"
+    },
+    "scenario_2_concurrent": {
+      "description": "Concurrent Stress Test - 100/500/1000 concurrent",
+      "concurrency_levels": [
+        100,
+        500,
+        1000
+      ]
+    },
+    "scenario_3_database": {
+      "description": "Database CRUD Operations - 1000 records",
+      "operations": [
+        "INSERT",
+        "SELECT",
+        "UPDATE",
+        "DELETE"
+      ]
+    },
+    "scenario_4_sessions": {
+      "description": "Memory Session CRUD - 1000 sessions",
+      "operations": [
+        "List",
+        "Get",
+        "Create",
+        "Update"
+      ]
+    },
+    "scenario_5_websocket": {
+      "description": "WebSocket/SSE Concurrent Connections - 100",
+      "connection_type": "SSE/WebSocket"
+    },
+    "scenario_6_comprehensive": {
+      "description": "Comprehensive API Endpoint Analysis",
+      "endpoints_tested": 7
+    }
+  },
+  "results": [
+    {
+      "name": "Single Request Baseline",
+      "category": "baseline",
+      "status": "PASS",
+      "total_requests": 1000,
+      "successful_requests": 1000,
+      "failed_requests": 0,
+      "avg_response_time_ms": 8.48,
+      "p95_response_time_ms": 13.53,
+      "p99_response_time_ms": 22.85,
+      "rps": 117.54,
+      "memory_peak_mb": 0.7,
+      "error_rate_percent": 0.0
+    },
+    {
+      "name": "Concurrent Stress - 100",
+      "category": "stress",
+      "status": "PASS",
+      "total_requests": 100,
+      "successful_requests": 100,
+      "failed_requests": 0,
+      "avg_response_time_ms": 825.59,
+      "p95_response_time_ms": 1224.5,
+      "p99_response_time_ms": 1277.07,
+      "rps": 73.8,
+      "memory_peak_mb": 2.75,
+      "error_rate_percent": 0.0
+    },
+    {
+      "name": "Concurrent Stress - 500",
+      "category": "stress",
+      "status": "PASS",
+      "total_requests": 500,
+      "successful_requests": 500,
+      "failed_requests": 0,
+      "avg_response_time_ms": 6536.04,
+      "p95_response_time_ms": 8425.5,
+      "p99_response_time_ms": 8468.47,
+      "rps": 58.33,
+      "memory_peak_mb": 13.62,
+      "error_rate_percent": 0.0
+    },
+    {
+      "name": "Concurrent Stress - 1000",
+      "category": "stress",
+      "status": "PASS",
+      "total_requests": 1000,
+      "successful_requests": 1000,
+      "failed_requests": 0,
+      "avg_response_time_ms": 11536.12,
+      "p95_response_time_ms": 13363.57,
+      "p99_response_time_ms": 13514.15,
+      "rps": 73.12,
+      "memory_peak_mb": 27.3,
+      "error_rate_percent": 0.0
+    },
+    {
+      "name": "Database CRUD Operations",
+      "category": "database",
+      "status": "PASS",
+      "total_requests": 1000,
+      "successful_requests": 0,
+      "failed_requests": 4,
+      "avg_response_time_ms": 4.74,
+      "p95_response_time_ms": 9.62,
+      "p99_response_time_ms": 9.62,
+      "rps": 11.61,
+      "memory_peak_mb": 0.33,
+      "error_rate_percent": 0
+    },
+    {
+      "name": "Memory Session Operations",
+      "category": "database",
+      "status": "PASS",
+      "total_requests": 1000,
+      "successful_requests": 0,
+      "failed_requests": 4,
+      "avg_response_time_ms": 2.41,
+      "p95_response_time_ms": 0,
+      "p99_response_time_ms": 0,
+      "rps": 131.06,
+      "memory_peak_mb": 0.3,
+      "error_rate_percent": 0
+    },
+    {
+      "name": "WebSocket/SSE Concurrent Connections",
+      "category": "websocket",
+      "status": "PARTIAL",
+      "total_requests": 100,
+      "successful_requests": 0,
+      "failed_requests": 50,
+      "avg_response_time_ms": 0,
+      "p95_response_time_ms": 0,
+      "p99_response_time_ms": 0,
+      "rps": 0.0,
+      "memory_peak_mb": 1.29,
+      "error_rate_percent": 50.0
+    },
+    {
+      "name": "API Endpoint Performance Analysis",
+      "category": "comprehensive",
+      "status": "PASS",
+      "total_requests": 7,
+      "successful_requests": 2,
+      "failed_requests": 5,
+      "avg_response_time_ms": 4.0,
+      "p95_response_time_ms": 0,
+      "p99_response_time_ms": 0,
+      "rps": 7.0,
+      "memory_peak_mb": 0.31,
+      "error_rate_percent": 0
+    }
+  ],
+  "summary": {
+    "total_success": 2602,
+    "total_failed": 63,
+    "average_rps": 131.06,
+    "worst_p95": 13363.57
+  }
+}

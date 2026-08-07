@@ -1,0 +1,218 @@
+{
+  "timestamp": "2026-08-03T11:52:21.299172",
+  "target": "http://127.0.0.1:8000",
+  "results": {
+    "response_time/GET /health (avg)": {
+      "value": "14.8",
+      "unit": "ms"
+    },
+    "response_time/GET /health (median)": {
+      "value": "14.4",
+      "unit": "ms"
+    },
+    "response_time/GET /health (p95)": {
+      "value": "17.3",
+      "unit": "ms"
+    },
+    "response_time/GET tasks_qlimit=50 (avg)": {
+      "value": "3.3",
+      "unit": "ms"
+    },
+    "response_time/GET tasks_qlimit=50 (median)": {
+      "value": "2.8",
+      "unit": "ms"
+    },
+    "response_time/GET tasks_qlimit=50 (p95)": {
+      "value": "4.8",
+      "unit": "ms"
+    },
+    "response_time/GET crews_qlimit=50 (avg)": {
+      "value": "5.1",
+      "unit": "ms"
+    },
+    "response_time/GET crews_qlimit=50 (median)": {
+      "value": "3.3",
+      "unit": "ms"
+    },
+    "response_time/GET crews_qlimit=50 (p95)": {
+      "value": "13.5",
+      "unit": "ms"
+    },
+    "response_time/GET sessions_qlimit=50 (avg)": {
+      "value": "3.4",
+      "unit": "ms"
+    },
+    "response_time/GET sessions_qlimit=50 (median)": {
+      "value": "2.5",
+      "unit": "ms"
+    },
+    "response_time/GET sessions_qlimit=50 (p95)": {
+      "value": "6.8",
+      "unit": "ms"
+    },
+    "response_time/GET /metrics (avg)": {
+      "value": "10.3",
+      "unit": "ms"
+    },
+    "response_time/GET /metrics (median)": {
+      "value": "10.2",
+      "unit": "ms"
+    },
+    "response_time/GET /metrics (p95)": {
+      "value": "11.5",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=10 avg": {
+      "value": "193.1",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=10 median": {
+      "value": "147.2",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=10 p95": {
+      "value": "511.8",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=10 p99": {
+      "value": "520.9",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=10 QPS": {
+      "value": "50.9",
+      "unit": "req/s"
+    },
+    "concurrent/concurrency=10 total_time": {
+      "value": "3928",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=10 errors": {
+      "value": 0,
+      "unit": ""
+    },
+    "concurrent/concurrency=50 avg": {
+      "value": "670.0",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=50 median": {
+      "value": "665.8",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=50 p95": {
+      "value": "1009.4",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=50 p99": {
+      "value": "1490.8",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=50 QPS": {
+      "value": "66.8",
+      "unit": "req/s"
+    },
+    "concurrent/concurrency=50 total_time": {
+      "value": "2993",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=50 errors": {
+      "value": 0,
+      "unit": ""
+    },
+    "concurrent/concurrency=100 avg": {
+      "value": "1952.9",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=100 median": {
+      "value": "2192.2",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=100 p95": {
+      "value": "4139.4",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=100 p99": {
+      "value": "4317.4",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=100 QPS": {
+      "value": "40.4",
+      "unit": "req/s"
+    },
+    "concurrent/concurrency=100 total_time": {
+      "value": "4950",
+      "unit": "ms"
+    },
+    "concurrent/concurrency=100 errors": {
+      "value": 0,
+      "unit": ""
+    },
+    "db_query/tasks_limit=10": {
+      "value": "13.1",
+      "unit": "ms"
+    },
+    "db_query/tasks_limit=50": {
+      "value": "8.8",
+      "unit": "ms"
+    },
+    "db_query/tasks_limit=100": {
+      "value": "9.3",
+      "unit": "ms"
+    },
+    "db_query/tasks_limit=500": {
+      "value": "9.3",
+      "unit": "ms"
+    },
+    "db_query/sessions_limit=10": {
+      "value": "13.0",
+      "unit": "ms"
+    },
+    "db_query/sessions_limit=50": {
+      "value": "9.4",
+      "unit": "ms"
+    },
+    "db_query/sessions_limit=100": {
+      "value": "7.4",
+      "unit": "ms"
+    },
+    "db_query/db_file_test.db-wal_size": {
+      "value": "0.53",
+      "unit": "MB"
+    },
+    "db_query/db_file_test.db_size": {
+      "value": "0.74",
+      "unit": "MB"
+    },
+    "db_query/db_file_test.db-shm_size": {
+      "value": "0.03",
+      "unit": "MB"
+    },
+    "db_query/db_file_chroma_size": {
+      "value": "0.00",
+      "unit": "MB"
+    },
+    "db_query/tasks_count": {
+      "value": 0,
+      "unit": "records"
+    },
+    "db_query/sessions_count": {
+      "value": 0,
+      "unit": "records"
+    },
+    "memory/baseline_rss": {
+      "value": "137.8",
+      "unit": "MB"
+    },
+    "memory/post_test_rss": {
+      "value": "148.5",
+      "unit": "MB"
+    },
+    "memory/delta": {
+      "value": "10.7",
+      "unit": "MB"
+    },
+    "frontend/build_time": {
+      "value": "53.3",
+      "unit": "s"
+    }
+  }
+}
