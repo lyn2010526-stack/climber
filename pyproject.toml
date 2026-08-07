@@ -154,6 +154,7 @@ addopts = [
     "--showlocals",
     "-ra",
     "--color=yes",
+    "--timeout=120",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
