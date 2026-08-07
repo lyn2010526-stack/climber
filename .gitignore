@@ -65,3 +65,32 @@ frontend-react/test-results/
 # Backup files
 *.bak
 *.backup
+
+# Database files
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Test artifacts
+.pytest_cache/
+.ruff_cache/
+.superpowers/
+MagicMock/
+.coverage
+htmlcov/
+
+# Frontend
+frontend-react/node_modules/
+frontend-react/build/
+frontend-react/dist/
+frontend-react/coverage/
+
+# OS
+.DS_Store
+Thumbs.db
