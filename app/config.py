@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import secrets
 from pathlib import Path
 
@@ -13,11 +14,35 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 
+def _load_or_create_secret_key() -> str:
+    """Resolve a stable application secret key.
+
+    Priority: explicit APP_SECRET_KEY env var -> persisted key file ->
+    ephemeral random key (fallback when the data dir is not writable).
+    A stable key keeps API-key HMAC derivations valid across restarts.
+    """
+    env_key = os.getenv("APP_SECRET_KEY")
+    if env_key and env_key not in ("change-me", "change-me-in-production"):
+        return env_key
+    key_file = BASE_DIR / "data" / ".secret_key"
+    try:
+        key_file.parent.mkdir(parents=True, exist_ok=True)
+        if key_file.exists():
+            stored = key_file.read_text(encoding="utf-8").strip()
+            if stored:
+                return stored
+        generated = secrets.token_hex(32)
+        key_file.write_text(generated, encoding="utf-8")
+        return generated
+    except OSError:
+        return secrets.token_hex(32)
+
+
 class Settings(BaseSettings):
     app_testing: bool = Field(default=False)
     app_debug: bool = Field(default=False)
     app_log_level: str = Field(default="INFO")
-    app_secret_key: str = Field(default_factory=lambda: secrets.token_hex(32))
+    app_secret_key: str = Field(default_factory=_load_or_create_secret_key)
 
     # Local-first: SQLite by default. Point database_url at PostgreSQL only if
     # you actually need multi-user concurrency.

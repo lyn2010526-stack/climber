@@ -43,8 +43,6 @@ def _is_noise(line: str) -> bool:
         r"^(menu|导航|navigation)",
     ]
     lower = line.lower()
-    if len(lower) < 20:
-        return True
     for pattern in noise_patterns:
         if re.search(pattern, lower):
             return True

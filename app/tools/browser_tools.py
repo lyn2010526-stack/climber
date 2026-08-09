@@ -53,7 +53,11 @@ async def browser_navigate(url: str, session_id: str = "default") -> str:
     """Navigate to URL in browser."""
     try:
         page = await _get_or_create_page(session_id)
-        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        await page.goto(url, wait_until="load", timeout=30000)
+        await page.wait_for_function(
+            "() => document.body && document.body.innerText.trim().length > 0",
+            timeout=10000,
+        )
         title = await page.title()
         raw_text = await page.inner_text("body")
         cleaned = clean_web_content("", raw_text)

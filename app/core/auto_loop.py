@@ -85,7 +85,17 @@ class AutoLoopEngine:
             self._monitor_loop(), name="auto-loop-monitor"
         )
         logger.info("auto_loop_engine_started")
-        # Keep the start task alive so watchdog considers it running
+
+    async def run(self) -> None:
+        """Run the engine in the foreground until stopped.
+
+        Used by the watchdog as the supervised coroutine factory: it must
+        remain alive for the duration of the process so the engine stays
+        supervised and healthy.
+        """
+        await self.start()
+        if self._monitor is None:
+            return
         try:
             await self._monitor
         except asyncio.CancelledError:

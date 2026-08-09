@@ -133,7 +133,7 @@ async def lifespan(app: FastAPI):
         task_scheduler = di_resolve("TaskScheduler")
         watchdog = get_watchdog()
         watchdog.register("scheduler", lambda: _run_scheduler(task_scheduler))
-        watchdog.register("auto_loop", auto_loop_engine.start)
+        watchdog.register("auto_loop", auto_loop_engine.run)
         await watchdog.start()
         logger.info("Task scheduler started under watchdog")
 
