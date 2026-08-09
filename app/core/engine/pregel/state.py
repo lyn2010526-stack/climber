@@ -14,12 +14,12 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-StateT = TypeVar("StateT", bound=dict)
+StateT = TypeVar("StateT", bound=dict[str, Any])
 
 ReducerFn = Callable[[Any, Any], Any]
 
 
-def add_reducer(existing: list, new: list) -> list:
+def add_reducer(existing: list[Any], new: list[Any]) -> list[Any]:
     """Append new values to existing list."""
     if existing is None:
         return list(new) if new else []
@@ -36,7 +36,7 @@ def overwrite_reducer(existing: Any, new: Any) -> Any:
     return new
 
 
-def merge_dicts_reducer(existing: dict | None, new: dict | None) -> dict:
+def merge_dicts_reducer(existing: dict[str, Any] | None, new: dict[str, Any] | None) -> dict[str, Any]:
     """Deep merge two dictionaries."""
     if existing is None:
         return dict(new) if new else {}
@@ -82,13 +82,13 @@ class StateReducer:
         self._reducers[key] = reducer
 
 
-class GraphState(dict):
+class GraphState(dict[str, Any]):
     """Typed state container for graph execution.
 
     Extends dict with reducer-aware merge semantics.
     """
 
-    def __init__(self, *args, schema: type | None = None, **kwargs) -> None:
+    def __init__(self, *args: Any, schema: type | None = None, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._reducer = StateReducer(schema)
         self._step: int = 0
@@ -135,7 +135,7 @@ class GraphState(dict):
         return new_state
 
 
-def merge_states(base: dict, update: dict, reducers: dict[str, ReducerFn] | None = None) -> dict:
+def merge_states(base: dict[str, Any], update: dict[str, Any], reducers: dict[str, ReducerFn] | None = None) -> dict[str, Any]:
     """Merge update into base using optional reducers for each key.
 
     Args:
@@ -150,7 +150,7 @@ def merge_states(base: dict, update: dict, reducers: dict[str, ReducerFn] | None
     reducers = reducers or {}
     for key, value in update.items():
         if key in reducers:
-            result[key] = reducers[key].__call__(result.get(key), value)
+            result[key] = reducers[key](result.get(key), value)
         else:
             result[key] = value
     return result

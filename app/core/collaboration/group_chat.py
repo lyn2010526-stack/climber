@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import select
 
 from app.core.collaboration.agent_runner import run_agent_simple
 from app.core.collaboration.callbacks import invoke_step_callback, invoke_task_callback

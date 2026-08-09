@@ -6,7 +6,6 @@ import asyncio
 from typing import Any
 
 import structlog
-from sqlalchemy import select
 
 from app.core.collaboration.constants import CALLBACK_REGISTRY
 from app.core.group_ws_hub import group_ws_hub

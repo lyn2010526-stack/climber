@@ -291,7 +291,6 @@ class AgentSession:
     def stop(self) -> None:
         """Request the session to stop processing."""
         self._stop_requested = True
-        import asyncio
         try:
             loop = asyncio.get_running_loop()
             loop.create_task(self.state_machine.transition(TaskState.CANCELLED, trigger="user_stop"))
@@ -331,7 +330,6 @@ class AgentSession:
         Returns:
             The created asyncio Task.
         """
-        import asyncio
         task = asyncio.create_task(coro)
         self._pending_tasks.add(task)
         task.add_done_callback(self._pending_tasks.discard)
@@ -339,7 +337,6 @@ class AgentSession:
 
     async def _await_pending_tasks(self) -> None:
         """Await all pending fire-and-forget tasks and clear the set."""
-        import asyncio
         if self._pending_tasks:
             await asyncio.gather(*self._pending_tasks, return_exceptions=True)
             self._pending_tasks.clear()

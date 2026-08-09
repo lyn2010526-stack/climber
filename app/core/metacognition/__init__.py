@@ -8,7 +8,8 @@ from app.core.metacognition.goal_adjuster import GoalDynamicAdjuster
 from app.core.metacognition.hypothesis import HypothesisSimulator
 from app.core.metacognition.memory_pruner import LongTermMemoryPruner
 from app.core.metacognition.monitor import MetaCognitionMonitor
-from app.core.metacognition.orchestrator import ExecutionContext, MetacognitionOrchestrator
+from app.core.metacognition.orchestrator import ExecutionContext as ExecutionContext
+from app.core.metacognition.orchestrator import MetacognitionOrchestrator
 from app.core.metacognition.resource import ResourceOrchestrator
 from app.core.metacognition.self_refactor import SelfModuleRefactor
 from app.core.metacognition.sub_agent import SubAgentOrchestrator

@@ -117,8 +117,9 @@ class GroupCollaborationEngine:
         ``MAX_RETRIES + 1`` calls to ``_run_agent_simple`` for the primary
         attempts, and one final fallback call before returning ``("", 0)``.
         """
-        from app.core.collaboration.constants import MAX_RETRIES as _MAX_RETRIES, TASK_TIMEOUT as _TASK_TIMEOUT
         from app.core.collaboration.agent_runner import _get_fallback_model
+        from app.core.collaboration.constants import MAX_RETRIES as _MAX_RETRIES
+        from app.core.collaboration.constants import TASK_TIMEOUT as _TASK_TIMEOUT
         from app.core.group_ws_hub import group_ws_hub as _hub
 
         last_error: Exception | None = None

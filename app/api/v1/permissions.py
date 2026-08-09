@@ -76,7 +76,7 @@ async def get_permission_config():
 @router.put("/config")
 async def update_permission_config(
     update: PermissionConfigUpdate,
-    current_user: dict = Depends(require_admin),
+    current_user: dict = Depends(require_admin()),
 ):
     engine = get_engine()
     current = engine.get_permission_config()
@@ -85,8 +85,8 @@ async def update_permission_config(
     if update.mode:
         try:
             mode = PermissionMode(update.mode)
-        except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid mode: {update.mode}")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid mode: {update.mode}") from exc
 
     rules = current.rules
     if update.rules is not None:
@@ -94,14 +94,16 @@ async def update_permission_config(
         for r in update.rules:
             try:
                 decision = RuleDecision(r.decision)
-            except ValueError:
-                raise HTTPException(status_code=400, detail=f"Invalid rule decision: {r.decision}")
-            rules.append(PermissionRule(
-                decision=decision,
-                tool=r.tool,
-                pattern=r.pattern,
-                description=r.description,
-            ))
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=f"Invalid rule decision: {r.decision}") from exc
+            rules.append(
+                PermissionRule(
+                    decision=decision,
+                    tool=r.tool,
+                    pattern=r.pattern,
+                    description=r.description,
+                )
+            )
 
     allowed_tools = current.allowed_tools
     if update.allowed_tools is not None:

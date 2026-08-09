@@ -367,24 +367,6 @@ class AgentEngine:
             await session.state_machine.transition(TaskState.COMPLETED, trigger="run_complete")
             self._send_completion_notification(session, result)
 
-    async def _call_llm(self, adapter: Any, session: AgentSession, tools: list) -> ChatResult | None:
-        """Call the LLM adapter and return the result.
-
-        Args:
-            adapter: The LLM adapter.
-            session: The current session.
-            tools: Available tool definitions.
-
-        Returns:
-            ChatResult or None if stopped.
-        """
-        from app.core.task_state_machine import TaskState
-
-        if session._stop_requested:
-            await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
-            return None
-        return await adapter.chat(messages=session.messages, tools=tools or None)
-
     async def _call_llm_with_resilience(
         self,
         session: AgentSession,
@@ -487,10 +469,6 @@ class AgentEngine:
             tool_registry=self.tool_registry,
         )
 
-    def _build_tools(self, tool_names: list[str]) -> list[dict[str, Any]]:
-        """Build OpenAI-style tool definitions for the given tool names."""
-        return build_tools(self.tool_registry, list(tool_names or []), self.tool_prioritizer)
-
     async def graceful_shutdown(self) -> None:
         """Gracefully shut down the engine and all tracked sessions."""
         self._shutdown_event.set()
@@ -543,48 +521,6 @@ class AgentEngine:
                 elif not isinstance(arguments, str):
                     arguments = str(arguments)
                 target["function"]["arguments"] += arguments
-
-    async def _stream_chat(self, adapter: Any, session: AgentSession, tools: list) -> ChatResult | None:
-        """Handle streaming chat response.
-
-        Args:
-            adapter: The LLM adapter.
-            session: The current session.
-            tools: Available tool definitions.
-
-        Returns:
-            ChatResult with accumulated content, or None if stopped.
-        """
-        from app.core import ChatResult
-
-        full_content = ""
-        accumulated_tool_calls = []
-        total_tokens = 0
-        async for chunk in adapter.stream_chat(messages=session.messages, tools=tools or None):
-            if session._stop_requested:
-                return None
-            if chunk.content:
-                full_content += chunk.content
-            for tc in chunk.tool_calls:
-                idx = tc.get("index", 0) if "index" in tc else 0
-                while len(accumulated_tool_calls) <= idx:
-                    accumulated_tool_calls.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
-                if tc.get("id"):
-                    accumulated_tool_calls[idx]["id"] = tc["id"]
-                if tc.get("function", {}).get("name"):
-                    accumulated_tool_calls[idx]["function"]["name"] = tc["function"]["name"]
-                if tc.get("function", {}).get("arguments"):
-                    new_args = tc["function"]["arguments"]
-                    if isinstance(new_args, dict):
-                        new_args = json.dumps(new_args, ensure_ascii=False)
-                    elif not isinstance(new_args, str):
-                        new_args = str(new_args)
-                    accumulated_tool_calls[idx]["function"]["arguments"] += new_args
-            if hasattr(chunk, "usage") and chunk.usage:
-                total_tokens = chunk.usage
-            elif hasattr(chunk, "tokens_used") and chunk.tokens_used:
-                total_tokens = chunk.tokens_used
-        return ChatResult(content=full_content, tool_calls=accumulated_tool_calls, finish_reason="stop", tokens_used=total_tokens)
 
     async def _handle_text_result(self, session: AgentSession, result: Any, adapter: Any) -> AsyncIterator[AgentEvent]:
         """Handle text content from LLM response.

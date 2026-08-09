@@ -116,7 +116,7 @@ class LongTermMemoryPruner:
 
     def _remove_low_value(self) -> list[str]:
         """Remove memories with lowest decayed importance."""
-        removed = []
+        removed: list[str] = []
         target_size = int(self._max_entries * 0.8)
 
         if len(self._memories) <= target_size:

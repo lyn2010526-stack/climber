@@ -68,21 +68,6 @@ def on_starting(server):
     )
 
 
-def post_fork(server, worker):
-    """Called just after a worker has been forked.
-
-    Re-seeds random for each worker to avoid duplicate random sequences.
-    """
-    server.log.info(f"Worker spawned (pid: {worker.pid})")
-
-    try:
-        import random
-        import secrets
-        random.seed(secrets.token_bytes(16))
-    except Exception:
-        pass
-
-
 def post_exec(server):
     """Called when a worker receives the SIGUSR2 signal (graceful restart)."""
     server.log.info("Worker re-executing (graceful restart)")
@@ -121,20 +106,20 @@ def pre_exec(server):
 def post_fork_optimized(server, worker):
     """Optimized post-fork hook for better memory sharing and performance"""
     server.log.info(f"Worker spawned (pid: {worker.pid}) - Optimized settings applied")
-    
+
     try:
         import random
         import secrets
-        
+
         # Seed randomness per worker
         random.seed(secrets.token_bytes(16))
-        
+
         # Enable TCP keepalive at OS level
         import socket
         sock = server.socket
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        
+
     except Exception as e:
         server.log.warning(f"Post-fork optimization failed: {e}")
 

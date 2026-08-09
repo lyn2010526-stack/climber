@@ -67,7 +67,7 @@ class TimeoutPolicy:
 class ErrorHandler(Protocol):
     """Protocol for custom error handlers."""
 
-    async def handle(self, error: Exception, state: dict, node: str) -> dict | None:
+    async def handle(self, error: Exception, state: dict[str, Any], node: str) -> dict[str, Any] | None:
         """Handle a node error after retries are exhausted.
 
         Returns:
@@ -83,7 +83,7 @@ class DefaultErrorHandler:
         self.fallback_value = fallback_value
         self.continue_on_error = continue_on_error
 
-    async def handle(self, error: Exception, state: dict, node: str) -> dict | None:
+    async def handle(self, error: Exception, state: dict[str, Any], node: str) -> dict[str, Any] | None:
         """Log error and return fallback state update if configured."""
         logger.error(
             "node_error_final",
@@ -155,8 +155,8 @@ class CircuitBreaker:
 
 
 async def execute_with_retry(
-    func: Callable,
-    state: dict,
+    func: Callable[..., Any],
+    state: dict[str, Any],
     *,
     retry_policy: RetryPolicy | None = None,
     node_name: str = "",

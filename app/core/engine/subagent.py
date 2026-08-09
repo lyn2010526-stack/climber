@@ -237,8 +237,10 @@ class SubagentManager:
             return await runner(spec)
 
         # Create a task that can be cancelled
-        task = asyncio.create_task(runner(spec))
-        cancel_task = asyncio.create_task(cancel_event.wait())
+        task: asyncio.Task[tuple[str, SubagentUsage]] = asyncio.ensure_future(
+            runner(spec)
+        )
+        cancel_task: asyncio.Task[bool] = asyncio.create_task(cancel_event.wait())
 
         done, pending = await asyncio.wait(
             {task, cancel_task},

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import smtplib
 from datetime import datetime
 from email.mime.text import MIMEText
@@ -41,7 +40,7 @@ class AlertConfig:
             self.cooldown_seconds = config.get("cooldown_seconds", 300)
 
     @classmethod
-    def load(cls) -> "AlertConfig":
+    def load(cls) -> AlertConfig:
         if ALERT_CONFIG_FILE.exists():
             try:
                 data = json.loads(ALERT_CONFIG_FILE.read_text())

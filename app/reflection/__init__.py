@@ -2,3 +2,13 @@
 from app.reflection.improvement import ImprovementAdvisor, ImprovementSuggestion
 from app.reflection.reflection_engine import ReflectionEngine, ReflectionResult
 from app.reflection.self_evaluation import EvaluationResult, QualityScore, SelfEvaluator
+
+__all__ = [
+    "ImprovementAdvisor",
+    "ImprovementSuggestion",
+    "ReflectionEngine",
+    "ReflectionResult",
+    "EvaluationResult",
+    "QualityScore",
+    "SelfEvaluator",
+]

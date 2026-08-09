@@ -71,9 +71,9 @@ async def reason_with_slash(
 
         return result
     except NotImplementedError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Reasoning failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Reasoning failed: {str(e)}") from e
 
 
 @router.post("")

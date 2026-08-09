@@ -10,7 +10,7 @@ import json
 import sqlite3
 import uuid
 from collections import defaultdict
-from collections.abc import Callable, Coroutine
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -97,7 +97,7 @@ class EventBus:
         for handler in handlers:
             try:
                 result = handler(event)
-                if hasattr(result, "__await__"):
+                if isinstance(result, Awaitable):
                     await result
             except Exception as e:
                 logger.warning("event_bus.handler_execution_failed", error=str(e))

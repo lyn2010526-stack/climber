@@ -167,7 +167,7 @@ class AuditChain:
             ).fetchone()
         else:
             row = self._conn.execute("SELECT COUNT(*) as cnt FROM audit_entries").fetchone()
-        return row["cnt"]
+        return int(row["cnt"])
 
     def _fetch_entries(
         self,

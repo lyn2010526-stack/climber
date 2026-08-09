@@ -1,40 +1,68 @@
 #!/usr/bin/env python3
-"""Initialize the first admin user and API key."""
+"""Initialize the first administrator and a matching API key."""
 
+from __future__ import annotations
+
+import asyncio
+import getpass
+import os
 import sys
-sys.path.insert(0, '/workspace/agent-engine')
 
+from sqlalchemy import select
+
+from app.core.auth_manager import hash_password
 from app.middleware.auth import get_user_store
+from app.models.users import User, UserRole, UserStatus
+from app.storage import async_session, init_db
 
-def init_admin():
-    """Create admin user and API key."""
-    store = get_user_store()
-    
-    # Create admin user's API key with full permissions
-    raw_key, key_id = store.create_key(
-        owner="admin",
+
+async def ensure_admin(password: str) -> User:
+    """Create the administrator or promote the existing admin account."""
+    await init_db()
+    async with async_session() as session:
+        result = await session.execute(select(User).where(User.username == "admin"))
+        user = result.scalar_one_or_none()
+        if user is None:
+            user = User(
+                username="admin",
+                email="admin@localhost",
+                hashed_password=hash_password(password),
+                role=UserRole.ADMIN.value,
+                status=UserStatus.ACTIVE.value,
+                is_verified=True,
+            )
+            session.add(user)
+        else:
+            user.hashed_password = hash_password(password)
+            user.role = UserRole.ADMIN.value
+            user.status = UserStatus.ACTIVE.value
+        await session.commit()
+        await session.refresh(user)
+        return user
+
+
+async def init_admin() -> str:
+    """Create or update the administrator and issue a one-time API key."""
+    password = os.environ.get("ADMIN_PASSWORD") or getpass.getpass("Administrator password: ")
+    if len(password) < 12:
+        raise ValueError("Administrator password must contain at least 12 characters")
+
+    user = await ensure_admin(password)
+    raw_key, key_id = get_user_store().create_key(
+        owner=user.username,
         scopes=["read", "write", "admin"],
-        ttl_days=None  # Never expires
+        name="Initial administrator key",
     )
-    
-    print("=" * 60)
-    print("ADMIN USER INITIALIZED")
-    print("=" * 60)
-    print(f"Owner: admin")
-    print(f"API Key ID: {key_id}")
-    print(f"API Key: {raw_key}")
-    print(f"Scopes: read, write, admin")
-    print("=" * 60)
-    print("\n⚠️  IMPORTANT: Save this API Key securely!")
-    print("   The raw key is only returned once at creation.")
-    print("   You cannot retrieve it later.")
-    print("=" * 60)
-    
+
+    print(f"Administrator initialized: {user.username}")
+    print(f"API key ID: {key_id}")
+    print(f"API key (shown once): {raw_key}")
     return raw_key
+
 
 if __name__ == "__main__":
     try:
-        init_admin()
-    except Exception as e:
-        print(f"Error: {e}")
-        sys.exit(1)
+        asyncio.run(init_admin())
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc

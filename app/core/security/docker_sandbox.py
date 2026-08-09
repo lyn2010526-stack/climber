@@ -45,8 +45,8 @@ class DockerSandbox:
 
     def __init__(self, config: DockerSandboxConfig | None = None):
         self.config = config or DockerSandboxConfig()
-        self._client = None
-        self._available = None
+        self._client: Any = None
+        self._available: bool | None = None
         self._active_containers: dict[str, Any] = {}
 
     @property
@@ -152,8 +152,8 @@ class DockerSandbox:
         except Exception as e:
             try:
                 container.kill()
-            except Exception as e:
-                logger.warning("security_docker_sandbox.container_kill_timeout", error=str(e))
+            except Exception as kill_error:
+                logger.warning("security_docker_sandbox.container_kill_timeout", error=str(kill_error))
             logger.warning("docker_execution_timeout", error=str(e))
             return ExecutionResult(
                 error=f"Docker execution timeout/error: {e}",

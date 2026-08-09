@@ -6,13 +6,11 @@ Set ENABLE_AUTH=true to activate.
 
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Mapping
-from datetime import UTC, datetime, timedelta
-
 import hashlib
 import json
 import secrets
+from collections.abc import Mapping
+from datetime import UTC, datetime, timedelta
 
 import jwt
 from fastapi import Request

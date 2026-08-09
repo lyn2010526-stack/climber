@@ -6,14 +6,14 @@ Tests all 5 required scenarios with detailed analysis
 
 import asyncio
 import json
+import random
 import time
 import tracemalloc
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Tuple
-from statistics import mean, stdev, median
+from statistics import mean, median
+
 import httpx
-from concurrent.futures import ThreadPoolExecutor
-import random
+
 
 @dataclass
 class TestResult:
@@ -33,34 +33,34 @@ class TestResult:
     memory_peak_mb: float = 0.0
     error_rate: float = 0.0
     throughput_mbps: float = 0.0
-    details: List[str] = field(default_factory=list)
+    details: list[str] = field(default_factory=list)
 
 class PerformanceTester:
     def __init__(self, base_url: str = "http://127.0.0.1:3001"):
         self.base_url = base_url
-        self.results: List[TestResult] = []
-        
+        self.results: list[TestResult] = []
+
     async def scenario_1_health_baseline(self, requests: int = 1000) -> TestResult:
         """Scenario 1: Single request baseline - 1000 /health requests"""
         print(f"\n{'='*80}")
         print("[TEST 1/6] SCENARIO 1: Single Request Baseline - 1000 Health Checks")
         print(f"{'='*80}")
-        
+
         tracemalloc.start()
         start_time = time.time()
-        
+
         success_count = 0
         fail_count = 0
         response_times = []
         errors = []
-        
+
         async with httpx.AsyncClient(timeout=60.0) as client:
-            for i in range(requests):
+            for _ in range(requests):
                 try:
                     t0 = time.perf_counter()
                     resp = await client.get(f"{self.base_url}/health")
                     elapsed_ms = (time.perf_counter() - t0) * 1000
-                    
+
                     if resp.status_code == 200:
                         success_count += 1
                         response_times.append(elapsed_ms)
@@ -72,15 +72,15 @@ class PerformanceTester:
                     errors.append(str(e))
                     if len(errors) >= 10:
                         break
-        
+
         end_time = time.time()
         _, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
-        
+
         duration = end_time - start_time
         sorted_times = sorted(response_times)
         n = len(sorted_times)
-        
+
         result = TestResult(
             name="Single Request Baseline",
             category="baseline",
@@ -102,55 +102,56 @@ class PerformanceTester:
                 f"Success Rate: {success_count/requests*100:.2f}%",
             ] + errors[:5]
         )
-        
+
         self.results.append(result)
         self.print_result(result)
         return result
-    
-    async def scenario_2_concurrent_stress(self, concurrency_levels: List[int] = [100, 500, 1000]) -> List[TestResult]:
+
+    async def scenario_2_concurrent_stress(self, concurrency_levels: list[int] | None = None) -> list[TestResult]:
         """Scenario 2: Concurrent stress test at multiple levels"""
         print(f"\n{'='*80}")
         print("[TEST 2/6] SCENARIO 2: Concurrent Stress Test")
         print(f"{'='*80}")
-        
+
         results = []
-        
+        concurrency_levels = concurrency_levels or [100, 500, 1000]
+
         for concurrency in concurrency_levels:
             print(f"\n--- Testing Concurrency Level: {concurrency} concurrent connections ---")
-            
+
             tracemalloc.start()
             start_time = time.time()
-            
+
             success_count = 0
             fail_count = 0
             response_times = []
             errors = []
-            
+
             async def make_request(client, session_id):
                 try:
                     t0 = time.perf_counter()
                     resp = await client.get(f"{self.base_url}/health")
                     elapsed_ms = (time.perf_counter() - t0) * 1000
-                    
+
                     if resp.status_code == 200:
                         return ('success', elapsed_ms)
                     else:
                         return ('fail', None)
                 except Exception as e:
                     return ('error', str(e))
-            
+
             # Use semaphore for concurrency control
             from asyncio import Semaphore
             sem = Semaphore(concurrency)
-            
-            async def limited_request(client):
-                async with sem:
+
+            async def limited_request(client, _sem=sem):
+                async with _sem:
                     return await make_request(client, 0)
-            
+
             async with httpx.AsyncClient(timeout=120.0, limits=httpx.Limits(max_connections=concurrency+20)) as client:
                 tasks = [limited_request(client) for _ in range(concurrency)]
                 results_list = await asyncio.gather(*tasks, return_exceptions=True)
-                
+
                 for i, result in enumerate(results_list):
                     if isinstance(result, Exception):
                         fail_count += 1
@@ -163,15 +164,15 @@ class PerformanceTester:
                         else:
                             fail_count += 1
                             errors.append(value)
-            
+
             end_time = time.time()
             _, peak = tracemalloc.get_traced_memory()
             tracemalloc.stop()
-            
+
             duration = end_time - start_time
             sorted_times = sorted(response_times)
             n = len(sorted_times)
-            
+
             result = TestResult(
                 name=f"Concurrent Stress - {concurrency}",
                 category="stress",
@@ -194,29 +195,29 @@ class PerformanceTester:
                     f"Error Rate: {fail_count/concurrency*100:.2f}%"
                 ]
             )
-            
+
             results.append(result)
             self.results.append(result)
             self.print_result(result)
-        
+
         return results
-    
+
     async def scenario_3_database_operations(self, records: int = 1000) -> TestResult:
         """Scenario 3: Database CRUD operations on 1000 records"""
         print(f"\n{'='*80}")
         print(f"[TEST 3/6] SCENARIO 3: Database CRUD Operations ({records} records)")
         print(f"{'='*80}")
-        
+
         tracemalloc.start()
         start_time = time.time()
-        
+
         operations = {
             'insert': {'times': [], 'status': 'pending'},
             'select': {'times': [], 'status': 'pending'},
             'update': {'times': [], 'status': 'pending'},
             'delete': {'times': [], 'status': 'pending'}
         }
-        
+
         # Generate sample data
         sample_data = []
         for i in range(min(records, 100)):  # Limit batch size
@@ -227,10 +228,10 @@ class PerformanceTester:
                 "status": random.choice(["active", "inactive", "pending"]),
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
             })
-        
+
         async with httpx.AsyncClient(timeout=180.0) as client:
             headers = {"Authorization": "Bearer test_token"}
-            
+
             # Test 1: INSERT operation
             print("  [INSERT] Performing batch insert...")
             t0 = time.perf_counter()
@@ -247,8 +248,8 @@ class PerformanceTester:
             except Exception as e:
                 operations['insert']['status'] = f'error: {e}'
                 print(f"        ERROR: {e}")
-            
-            # Test 2: SELECT operation  
+
+            # Test 2: SELECT operation
             print("  [SELECT] Querying database...")
             t0 = time.perf_counter()
             try:
@@ -264,7 +265,7 @@ class PerformanceTester:
             except Exception as e:
                 operations['select']['status'] = f'error: {e}'
                 print(f"        ERROR: {e}")
-            
+
             # Test 3: UPDATE operation
             print("  [UPDATE] Bulk update test...")
             t0 = time.perf_counter()
@@ -281,7 +282,7 @@ class PerformanceTester:
             except Exception as e:
                 operations['update']['status'] = f'error: {e}'
                 print(f"        ERROR: {e}")
-            
+
             # Test 4: DELETE operation
             print("  [DELETE] Cleanup simulation...")
             t0 = time.perf_counter()
@@ -298,14 +299,14 @@ class PerformanceTester:
             except Exception as e:
                 operations['delete']['status'] = f'error: {e}'
                 print(f"        ERROR: {e}")
-        
+
         end_time = time.time()
         _, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
-        
+
         duration = end_time - start_time
         all_times = [t for op in operations.values() for t in op['times']]
-        
+
         result = TestResult(
             name="Database CRUD Operations",
             category="database",
@@ -330,40 +331,40 @@ class PerformanceTester:
                 f"Total Duration: {duration:.2f}s"
             ]
         )
-        
+
         self.results.append(result)
         self.print_result(result)
         return result
-    
+
     async def scenario_4_memories_crud(self, sessions: int = 1000) -> TestResult:
         """Extended Scenario 3: Memory session operations (more realistic)"""
         print(f"\n{'='*80}")
         print(f"[TEST 4/6] SCENARIO 4: Memory Session CRUD ({sessions} sessions)")
         print(f"{'='*80}")
-        
+
         tracemalloc.start()
         start_time = time.time()
-        
+
         operations = {}
-        
+
         async with httpx.AsyncClient(timeout=180.0) as client:
             headers = {"Authorization": "Bearer test"}
-            
+
             # List sessions
             print("  [LIST] Listing sessions...")
             t0 = time.perf_counter()
             resp = await client.get(f"{self.base_url}/api/v1/sessions?limit=100", headers=headers)
             operations['list'] = (time.perf_counter() - t0) * 1000, resp.status_code
-            
+
             # Get single session
             print("  [GET] Fetching single session...")
             t0 = time.perf_counter()
             try:
                 resp = await client.get(f"{self.base_url}/api/v1/sessions/test-session-id", headers=headers)
                 operations['get'] = (time.perf_counter() - t0) * 1000, resp.status_code
-            except:
+            except Exception:
                 operations['get'] = (0, 'error')
-            
+
             # Create session
             print("  [CREATE] Creating session...")
             t0 = time.perf_counter()
@@ -376,7 +377,7 @@ class PerformanceTester:
                 headers=headers
             )
             operations['create'] = (time.perf_counter() - t0) * 1000, resp.status_code
-            
+
             # Update session
             print("  [UPDATE] Updating session...")
             t0 = time.perf_counter()
@@ -386,14 +387,14 @@ class PerformanceTester:
                 headers=headers
             )
             operations['update'] = (time.perf_counter() - t0) * 1000, resp.status_code
-        
+
         end_time = time.time()
         _, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
-        
+
         duration = end_time - start_time
         all_times = [v[0] for v in operations.values() if v[0] > 0]
-        
+
         result = TestResult(
             name="Memory Session Operations",
             category="database",
@@ -412,49 +413,46 @@ class PerformanceTester:
             error_rate=0,
             details=[f"{k}: {v[0]:.2f}ms, Status: {v[1]}" for k, v in operations.items()]
         )
-        
+
         self.results.append(result)
         self.print_result(result)
         return result
-    
+
     async def scenario_5_websocket_test(self, connections: int = 100) -> TestResult:
         """Scenario 5: WebSocket concurrent connections"""
         print(f"\n{'='*80}")
         print(f"[TEST 5/6] SCENARIO 5: WebSocket Concurrent Connections ({connections})")
         print(f"{'='*80}")
-        
+
         tracemalloc.start()
         start_time = time.time()
-        
+
         connected = 0
         errors = []
-        
+
         # WebSocket test would require actual websocket endpoint
         # For now, simulate HTTP long-polling equivalent
         print("  Note: Testing HTTP-based real-time endpoints as WebSocket proxy")
-        
+
         async with httpx.AsyncClient(timeout=60.0) as client:
             headers = {"Authorization": "Bearer test"}
-            
+
             # Test event streaming endpoint
             tasks = []
             for i in range(min(connections, 50)):  # Limit for this test
                 async def stream_test(idx):
                     try:
-                        async with client.stream("GET", 
+                        async with client.stream("GET",
                                                f"{self.base_url}/api/v1/tasks/stream",
                                                headers=headers) as resp:
-                            if resp.status_code == 200:
-                                return True
-                            else:
-                                return False
-                    except:
+                            return resp.status_code == 200
+                    except Exception:
                         return False
-                
+
                 tasks.append(stream_test(i))
-            
+
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            
+
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
                     errors.append(str(result))
@@ -462,13 +460,13 @@ class PerformanceTester:
                     errors.append(f"Connection {i} failed")
                 else:
                     connected += 1
-        
+
         end_time = time.time()
         _, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
-        
+
         duration = end_time - start_time
-        
+
         result = TestResult(
             name="WebSocket/SSE Concurrent Connections",
             category="websocket",
@@ -487,19 +485,19 @@ class PerformanceTester:
             error_rate=round(len(errors) / connections * 100, 2) if connections > 0 else 0,
             details=[f"SSE Connections Established: {connected}/{connections}"] + errors[:5]
         )
-        
+
         self.results.append(result)
         self.print_result(result)
         return result
-    
+
     async def scenario_6_api_endpoints_comprehensive(self) -> TestResult:
         """Additional comprehensive API testing"""
         print(f"\n{'='*80}")
-        print(f"[TEST 6/6] SCENARIO 6: Comprehensive API Endpoint Analysis")
+        print("[TEST 6/6] SCENARIO 6: Comprehensive API Endpoint Analysis")
         print(f"{'='*80}")
-        
+
         tracemalloc.start()
-        
+
         endpoints = [
             ("/health", "GET"),
             ("/metrics", "GET"),
@@ -509,9 +507,9 @@ class PerformanceTester:
             ("/api/v1/crews?limit=10", "GET"),
             ("/api/v1/models/list", "GET"),
         ]
-        
+
         responses = {}
-        
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             for path, method in endpoints:
                 try:
@@ -528,11 +526,11 @@ class PerformanceTester:
                     }
                 except Exception as e:
                     responses[path] = {'status': 'error', 'time': 0, 'error': str(e)}
-        
+
         _, peak = tracemalloc.get_traced_memory()
-        
+
         times = [v['time'] for v in responses.values() if v.get('time', 0) > 0]
-        
+
         result = TestResult(
             name="API Endpoint Performance Analysis",
             category="comprehensive",
@@ -549,14 +547,14 @@ class PerformanceTester:
             rps=round(len(responses)/1, 2),
             memory_peak_mb=round(peak / 1024 / 1024, 2),
             error_rate=0,
-            details=[f"{method} {path}: {resp['status']} ({resp['time']:.2f}ms, {resp.get('size', 0)} bytes)" 
+            details=[f"{method} {path}: {resp['status']} ({resp['time']:.2f}ms, {resp.get('size', 0)} bytes)"
                     for path, method in endpoints for resp in [responses[path]]]
         )
-        
+
         self.results.append(result)
         self.print_result(result)
         return result
-    
+
     def print_result(self, result: TestResult):
         """Print formatted test result"""
         print("\n" + "-"*80)
@@ -567,7 +565,7 @@ class PerformanceTester:
         print(f"Error Rate:   {result.error_rate:.2f}%")
         print(f"Throughput:   {result.rps:.2f} RPS")
         print("-"*80)
-        print(f"Response Time:")
+        print("Response Time:")
         print(f"  Min:    {result.min_response_time:>8.2f} ms")
         print(f"  Avg:    {result.avg_response_time:>8.2f} ms")
         print(f"  Max:    {result.max_response_time:>8.2f} ms")
@@ -585,9 +583,9 @@ async def main():
     print("="*80)
     print("AGENT ENGINE COMPREHENSIVE PERFORMANCE TESTING SUITE")
     print("="*80)
-    
+
     tester = PerformanceTester()
-    
+
     # Verify server is running
     print("\nVerifying server connectivity...")
     try:
@@ -601,33 +599,33 @@ async def main():
         print(f"✗ ERROR: Server not accessible: {e}")
         print("Please start the server first with: cd /workspace/agent-engine && gunicorn app.main:app")
         return
-    
+
     # Run all 6 scenarios
     tests_run = []
-    
+
     # Scenario 1: Baseline health check
     tests_run.append(await tester.scenario_1_health_baseline(1000))
-    
+
     # Scenario 2: Concurrent stress test
     tests_run.extend(await tester.scenario_2_concurrent_stress([100, 500, 1000]))
-    
+
     # Scenario 3: Database operations
     tests_run.append(await tester.scenario_3_database_operations(1000))
-    
+
     # Scenario 4: Memory sessions
     tests_run.append(await tester.scenario_4_memories_crud(1000))
-    
+
     # Scenario 5: WebSocket/SSE
     tests_run.append(await tester.scenario_5_websocket_test(100))
-    
+
     # Scenario 6: Comprehensive API
     tests_run.append(await tester.scenario_6_api_endpoints_comprehensive())
-    
+
     # Generate final report
     print("\n\n" + "="*80)
     print("COMPREHENSIVE PERFORMANCE TEST RESULTS SUMMARY")
     print("="*80)
-    
+
     report = {
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "base_url": tester.base_url,
@@ -666,7 +664,7 @@ async def main():
             "worst_p95": 0
         }
     }
-    
+
     for result in tests_run:
         entry = {
             "name": result.name,
@@ -685,24 +683,24 @@ async def main():
         report["results"].append(entry)
         report["summary"]["total_success"] += result.successful_requests
         report["summary"]["total_failed"] += result.failed_requests
-        
+
         if result.rps > report["summary"]["average_rps"]:
             report["summary"]["average_rps"] = result.rps
-        
+
         if result.p95_response_time > report["summary"]["worst_p95"]:
             report["summary"]["worst_p95"] = result.p95_response_time
-    
+
     # Save results
     output_file = "/workspace/agent-engine/comprehensive_performance_report.json"
     with open(output_file, "w") as f:
         json.dump(report, f, indent=2)
-    
+
     print(f"\n✓ Detailed results saved to: {output_file}")
     print(f"✓ Total tests completed: {len(tests_run)}")
     print(f"✓ Average RPS: {report['summary']['average_rps']:.2f}")
     print(f"✓ Worst P95 Latency: {report['summary']['worst_p95']:.2f}ms")
     print("="*80)
-    
+
     return report
 
 if __name__ == "__main__":

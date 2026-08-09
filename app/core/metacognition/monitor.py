@@ -44,7 +44,7 @@ class MonitoringResult:
 class MetaCognitionMonitor:
     """Analyzes agent execution trace for defects and health issues."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._call_history: list[dict[str, Any]] = []
         self._goal: str = ""
         self._token_budget: int = 8000
@@ -155,15 +155,14 @@ class MetaCognitionMonitor:
         defects = []
         for i, call in enumerate(self._call_history):
             result = call.get("result", "")
-            if result.startswith("Error") or result.startswith("ERROR"):
-                if i > 0 and self._call_history[i - 1].get("tool") == call["tool"]:
-                    defects.append(DefectReport(
-                        type=DefectType.TOOL_MISUSE,
-                        description=f"Repeated errors with '{call['tool']}': {result[:80]}",
-                        severity=0.7,
-                        iteration=call["iteration"],
-                        suggestion=f"Stop using '{call['tool']}' with current parameters. Read error message carefully.",
-                    ))
+            if (result.startswith("Error") or result.startswith("ERROR")) and i > 0 and self._call_history[i - 1].get("tool") == call["tool"]:
+                defects.append(DefectReport(
+                    type=DefectType.TOOL_MISUSE,
+                    description=f"Repeated errors with '{call['tool']}': {result[:80]}",
+                    severity=0.7,
+                    iteration=call["iteration"],
+                    suggestion=f"Stop using '{call['tool']}' with current parameters. Read error message carefully.",
+                ))
         return defects
 
     def _check_capability_gap(self, output: str) -> list[DefectReport]:

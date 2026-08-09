@@ -184,7 +184,7 @@ registry_code += 'logger = structlog.get_logger(__name__)\n\n\n'
 registry_code += 'def register_all() -> None:\n'
 registry_code += '    """Register all extended builtin tools."""\n'
 
-for tool_name, description in tools:
+for tool_name, _description in tools:
     registry_code += '    tool_registry.register("' + tool_name + '", ' + tool_name + '_tool)\n'
 
 registry_code += '    logger.info("registered_extended_tools", count=' + str(len(tools)) + ')\n\n\n'

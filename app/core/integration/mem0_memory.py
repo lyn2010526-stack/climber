@@ -7,7 +7,7 @@ seamlessly integrating with the existing memory subsystem.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from mem0 import Memory
 
@@ -20,7 +20,7 @@ class Mem0MemoryService:
     def __init__(
         self,
         collection_name: str = "agent_memory",
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
     ):
         self._collection = collection_name
         self._user_id = user_id
@@ -50,6 +50,8 @@ class Mem0MemoryService:
         """Add a memory entry."""
         if not self.is_available:
             return None
+        if self._client is None:
+            return None
 
         try:
             result = self._client.add(
@@ -73,6 +75,8 @@ class Mem0MemoryService:
         """Search memories by semantic similarity."""
         if not self.is_available:
             return []
+        if self._client is None:
+            return []
 
         try:
             results = self._client.search(
@@ -94,6 +98,8 @@ class Mem0MemoryService:
         """Get all memories for a user."""
         if not self.is_available:
             return []
+        if self._client is None:
+            return []
 
         try:
             results = self._client.get_all(user_id=user_id or self._user_id)
@@ -108,6 +114,8 @@ class Mem0MemoryService:
         """Delete a memory by ID."""
         if not self.is_available:
             return False
+        if self._client is None:
+            return False
 
         try:
             self._client.delete(memory_id)
@@ -119,6 +127,8 @@ class Mem0MemoryService:
     async def delete_all(self, user_id: str | None = None) -> bool:
         """Delete all memories for a user."""
         if not self.is_available:
+            return False
+        if self._client is None:
             return False
 
         try:

@@ -43,7 +43,7 @@ class AttributionResult:
 class CausalAttribution:
     """Post-execution root cause analysis engine."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._execution_log: list[dict[str, Any]] = []
 
     def log_event(

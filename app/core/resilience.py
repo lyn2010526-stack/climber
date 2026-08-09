@@ -20,7 +20,6 @@ from typing import Any
 
 from app.core.exceptions import AgentEngineError
 
-
 # ── Errors ───────────────────────────────────────────────────────────────
 
 
@@ -79,10 +78,13 @@ class CircuitBreaker:
 
     @property
     def state(self) -> CircuitState:
-        if self._state == CircuitState.OPEN and self._opened_at is not None:
-            if time.monotonic() - self._opened_at >= self.config.recovery_timeout:
-                self._state = CircuitState.HALF_OPEN
-                self._half_open_used = 0
+        if (
+            self._state == CircuitState.OPEN
+            and self._opened_at is not None
+            and time.monotonic() - self._opened_at >= self.config.recovery_timeout
+        ):
+            self._state = CircuitState.HALF_OPEN
+            self._half_open_used = 0
         return self._state
 
     @property
@@ -182,7 +184,7 @@ class RetryHandler:
         return False
 
     def _calculate_delay(self, attempt: int) -> float:
-        delay = self.config.base_delay * (2 ** attempt)
+        delay: float = self.config.base_delay * (2 ** attempt)
         delay = min(delay, self.config.max_delay)
         if self.config.jitter:
             delay = random.uniform(0.0, delay)

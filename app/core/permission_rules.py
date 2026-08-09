@@ -90,10 +90,11 @@ class PermissionConfig:
             if self._is_high_risk(tool_name, arguments):
                 return RuleDecision.ASK
             return RuleDecision.ALLOW
-        if self.mode == PermissionMode.ACCEPT_EDITS:
+        if self.mode == PermissionMode.ACCEPT_EDITS and tool_name in (
+            "read_file", "file_read", "write_file", "file_write", "edit", "list_dir"
+        ):
             # 自动接受编辑和读取
-            if tool_name in ("read_file", "file_read", "write_file", "file_write", "edit", "list_dir"):
-                return RuleDecision.ALLOW
+            return RuleDecision.ALLOW
         if self.mode == PermissionMode.PLAN:
             # 计划模式只允许读取
             if tool_name in ("read_file", "file_read", "list_dir", "search"):

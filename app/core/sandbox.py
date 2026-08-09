@@ -152,7 +152,7 @@ class SandboxExecutor:
                 await proc.wait()
                 return f"TIMEOUT: Command exceeded {effective_timeout}s limit"
 
-            return self._build_output(stdout, stderr, proc.returncode)
+            return self._build_output(stdout, stderr, proc.returncode or 0)
 
         except Exception as e:
             logger.error("Sandbox execution error", error=str(e))

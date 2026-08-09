@@ -7,10 +7,11 @@ and structured responses with validation.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent
 
 logger = logging.getLogger(__name__)
 

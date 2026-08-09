@@ -16,12 +16,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -328,7 +327,7 @@ async def run_guard(args: argparse.Namespace) -> RegressionReport:
     total_duration = sum(r.duration_seconds for r in results)
 
     report = RegressionReport(
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         overall_passed=overall_passed,
         test_results=results,
         total_duration=total_duration,

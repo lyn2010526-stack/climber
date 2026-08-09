@@ -272,8 +272,8 @@ class MemoryConsolidator:
                 entity_block = self._store.get_block("entities")
                 if entity_block and not entity_block.read_only:
                     lines = []
-                    for etype, values in all_entities.items():
-                        lines.append(f"- {etype}: {', '.join(list(values)[:20])}")
+                    for etype, entity_values in all_entities.items():
+                        lines.append(f"- {etype}: {', '.join(list(entity_values)[:20])}")
                     entity_block.update("\n".join(lines))
                     report["archive_indexed"] = len(recent_passages)
 
@@ -293,7 +293,7 @@ class MemoryConsolidator:
         return stale
 
 
-def create_persona_block(agent_id: str, persona_data: dict) -> MemoryBlock:
+def create_persona_block(agent_id: str, persona_data: dict[str, Any]) -> MemoryBlock:
     """Create a persona memory block from persona data.
 
     Persona blocks are persona-aware: different agents have different

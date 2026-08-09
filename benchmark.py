@@ -179,8 +179,8 @@ def benchmark_memory():
     # System memory
     with open("/proc/meminfo") as f:
         lines = f.readlines()
-    mem_total = next((l for l in lines if "MemTotal" in l), "")
-    mem_avail = next((l for l in lines if "MemAvailable" in l), "")
+    mem_total = next((line for line in lines if "MemTotal" in line), "")
+    mem_avail = next((line for line in lines if "MemAvailable" in line), "")
     if mem_total and mem_avail:
         total_kb = int(mem_total.split()[1])
         avail_kb = int(mem_avail.split()[1])

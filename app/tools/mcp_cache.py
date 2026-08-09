@@ -108,7 +108,7 @@ class ToolResultCache:
             del self._cache[k]
 
     @property
-    def stats(self) -> dict[str, int]:
+    def stats(self) -> dict[str, float]:
         """Get cache statistics."""
         return {
             "size": len(self._cache),

@@ -20,8 +20,7 @@ import shutil
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -318,7 +317,7 @@ async def run_all_checks(
         overall = "healthy"
 
     return HealthReport(
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         overall_status=overall,
         checks=checks,
     )

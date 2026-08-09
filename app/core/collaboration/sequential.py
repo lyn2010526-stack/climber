@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
-from sqlalchemy import select
 
 from app.core.collaboration.agent_runner import run_agent_with_retry
 from app.core.collaboration.callbacks import invoke_step_callback, invoke_task_callback, wait_for_human_review
 from app.core.collaboration.checkpoint import save_checkpoint
 from app.core.collaboration.guardrails import run_guardrails
 from app.core.collaboration.memory import build_context_from_dependencies, inject_memory, merge_context, store_memory
-from app.core.collaboration.prompts import build_initial_prompt, build_sequential_prompt, build_worker_prompt, build_reviewer_prompt, build_review_prompt
+from app.core.collaboration.prompts import (
+    build_initial_prompt,
+    build_review_prompt,
+    build_reviewer_prompt,
+    build_sequential_prompt,
+    build_worker_prompt,
+)
 from app.core.collaboration.resolver import resolve_api_key, resolve_base_url
 from app.core.group_ws_hub import group_ws_hub
 from app.storage import async_session
@@ -81,13 +86,12 @@ async def run_sequential_process(
             )
             all_issues.extend(reviewer_results)
 
-            if not all_issues:
-                if await _validate_and_finalize(task, worker_output):
-                    await store_memory(task.group_id, task.id, worker.agent_id, worker_output, "task_result")
-                    await invoke_task_callback(task, worker_output)
-                    await _checkpoint_and_broadcast(task, current_round, worker_output, [])
-                    await _broadcast_task_completed(task, worker_output, current_round)
-                    return
+            if not all_issues and await _validate_and_finalize(task, worker_output):
+                await store_memory(task.group_id, task.id, worker.agent_id, worker_output, "task_result")
+                await invoke_task_callback(task, worker_output)
+                await _checkpoint_and_broadcast(task, current_round, worker_output, [])
+                await _broadcast_task_completed(task, worker_output, current_round)
+                return
 
             await _checkpoint_and_broadcast(task, current_round, worker_output, all_issues)
 
@@ -107,9 +111,8 @@ async def _refresh_task_state(task: Any) -> bool:
             return False
         if t.status == "stopped":
             return False
-        if t.status == "paused":
-            if not await _wait_while_paused(t):
-                return False
+        if t.status == "paused" and not await _wait_while_paused(t):
+            return False
         task.__dict__.update(t.__dict__)
         return True
 

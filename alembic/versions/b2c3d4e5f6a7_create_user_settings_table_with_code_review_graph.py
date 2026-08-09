@@ -8,6 +8,7 @@ Create Date: 2026-07-28 12:45:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 from alembic import op
 
@@ -18,10 +19,12 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    if inspect(op.get_bind()).has_table('user_settings'):
+        return
     op.create_table(
         'user_settings',
         sa.Column('id', sa.String(length=36), nullable=False),
-        sa.Column('user_id', sa.String(length=36), nullable=False),
+        sa.Column('user_id', sa.Integer(), nullable=False),
         sa.Column('autonomous_agent_mode', sa.Boolean(), nullable=False),
         sa.Column('token_throttle_mcp_enabled', sa.Boolean(), nullable=False),
         sa.Column('enhanced_prompt_enabled', sa.Boolean(), nullable=False),

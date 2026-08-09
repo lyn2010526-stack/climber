@@ -55,7 +55,7 @@ class Command:
     @property
     def is_interrupt(self) -> bool:
         """Check if this command represents an interrupt request."""
-        return self.metadata.get("interrupt", False)
+        return bool(self.metadata.get("interrupt", False))
 
     @property
     def is_end(self) -> bool:

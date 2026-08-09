@@ -7,8 +7,6 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, Form, HTTPException, Request
-
-logger = structlog.get_logger()
 from pydantic import BaseModel
 
 from app.api.v1.common import current_user_id
@@ -16,6 +14,8 @@ from app.core.enhanced_rag import rerank_results
 from app.storage import async_session
 from app.storage.database import Document
 from app.tools.rag import chunk_text
+
+logger = structlog.get_logger()
 
 router = APIRouter()
 

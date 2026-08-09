@@ -259,7 +259,7 @@ async def fork_session(session_id: str, body: ForkRequest, user_id: str = Depend
         new_id = mgr.fork_session(session_id, body.new_session_id)
         return {"session_id": new_id, "status": "forked"}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.post("/{session_id}/resume")

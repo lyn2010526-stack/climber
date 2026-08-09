@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Awaitable, Callable
 
 from fastapi import Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, Info, generate_latest
@@ -52,7 +53,7 @@ TOOL_CALL_LATENCY = Histogram(
 TOKEN_USAGE = Counter(
     "token_usage_total",
     "Token usage",
-    ["provider", "model_id", "type"],  # type: prompt/completion/total
+    ["provider", "model_id", "type"],  # Values: prompt/completion/total
 )
 
 # Active sessions
@@ -71,7 +72,11 @@ APP_INFO = Info(
 class MetricsMiddleware(BaseHTTPMiddleware):
     """Middleware to collect request metrics."""
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
         start_time = time.time()
         method = request.method
         path = request.url.path
