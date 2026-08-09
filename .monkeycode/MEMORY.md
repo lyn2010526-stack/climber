@@ -138,3 +138,18 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 前端完整 vitest 用默认并发 worker 会长时间无输出（卡死/超时）；可信全量用 `NODE_OPTIONS="--max-old-space-size=4096" npx vitest run --maxWorkers=2`，并串行执行 typecheck/build/test，避免并行争抢内存
   - 依赖 Task 子代理生成项目文档时可能返回空结果或失败报 `Upstream HTTP/2 stream failed`；文档与规格类产出应直接由主会话写入，不要反复重试子代理
 
+
+[项目知识摘要]
+- Date: 2026-08-08
+- Context: Agent 在 mypy 类型错误分类治理任务中发现
+- Category: 排错调试
+- Instructions:
+  - 用户指定基线 `timeout 100 python3 -m mypy app/ --follow-imports=skip --ignore-missing-imports` 会因 `--follow-imports=skip` 把所有导入（含 pydantic/structlog 等有 py.typed 的库及内部 app 模块）视为 Any，产生 719 个假象错误（199 misc/174 type-arg/108 no-untyped-def 等大量 "cannot subclass BaseModel"）；真实基线须用 `--ignore-missing-imports --explicit-package-bases --namespace-packages --no-incremental`（app 为 namespace package，无 __init__.py）
+  - mypy 权威基线必须带 `--no-incremental`（缓存不可靠，实测 65 与 85 差异）
+  - structlog `logger.warning/info(..., error=str(e))` 这类 kwargs 调用报 Unexpected keyword argument 是标准库 logging typeshed 缺陷，属 C 类不修（mem0_memory.py、ollama_queue.py 同）
+  - 无 stub 三方库（mem0、docker）返回 Any 导致 no-any-return 属 B 类；但 self._client 加 None 守卫、httpx（有 py.typed 且是硬依赖）标注 `httpx.AsyncClient | None` 属 A 类可修
+  - asyncio 收窄：`hasattr(x, "__await__")` 不能收窄类型，改用 `isinstance(x, Awaitable)`；`asyncio.create_task` 需要 Coroutine 而 Callable 返回 Awaitable 时报错，用 `asyncio.ensure_future` 解决；gather return_exceptions 返回 `BaseException`，判断异常用 `isinstance(r, BaseException)` 才能收窄
+  - 类内方法 `def list()` 会遮蔽内置 list，导致类内所有 `list[...]` 注解报 valid-type 错误，重命名方法即可；局部变量先赋 Path 再赋 str 会触发 assignment/arg-type 错误
+  - 嵌套 `except Exception as e` 会删除外层 `e` 变量导致 "Trying to read deleted attribute"（真实运行 bug），内层改名为 `kill_error` 等即可
+  - 接口 async def execute_stream 与实现 async generator（yield）不匹配时，mypy 提示去接口去掉 async 并返回 AsyncIterator
+  - 治理结果：真实基线 85 → A 类全部清零（剩余 21 个 B/C 类：mem0/ollama logging kwargs、docker_sandbox 2 处 docker Any 返回、github_client Response.json 返回 Any、mem0 self._client 返回 Any）；用户 skip 基线 719 → 611（其余为 skip 假象）；41 个 pytest 全通过，ruff 全通过

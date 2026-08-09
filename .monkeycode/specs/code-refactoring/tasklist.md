@@ -3,6 +3,7 @@
 ## 目标：代码质量评分 >= 90/100
 
 - [ ] 1. 提取公共工具模块
+  - 备注：`app/api/v1/common.py`（DEFAULT_USER、parse_request_payload、get_or_404、entities_to_dicts）与 `app/core/exceptions.py`（AgentEngineError 异常体系）已实现；但 `app/api/v1/schemas/response.py`（统一响应模型）未创建，该项部分完成
   - 创建 `app/api/v1/common.py`，提取通用辅助函数
     - 提取 `_payload()` 请求体解析函数
     - 提取 `DEFAULT_USER` 常量
@@ -17,7 +18,7 @@
     - 定义 `NotFoundException`、`ValidationException`、`ConflictException`
     - 定义全局异常处理器注册函数
 
-- [ ] 2. 拆分 generic.py — Agents 路由
+- [x] 2. 拆分 generic.py — Agents 路由
   - 创建 `app/api/v1/routes/agents.py`
     - 迁移 agents 相关端点（list_agents, create_agent, get_agent, delete_agent）
     - 添加完整的 docstring 和返回类型注解
@@ -26,7 +27,7 @@
   - 更新 `app/api/v1/generic.py`，移除已迁移的 agents 端点
   - 在 `app/api/v1/__init__.py` 中注册新路由
 
-- [ ] 3. 拆分 generic.py — Workflows 路由
+- [x] 3. 拆分 generic.py — Workflows 路由
   - 创建 `app/api/v1/routes/workflows.py`
     - 迁移 workflows 相关端点（list_workflows, create_workflow, get_workflow, update_workflow, delete_workflow, run_workflow, list_workflow_runs）
     - 提取 `_workflow_dict()` 辅助函数
@@ -34,7 +35,7 @@
     - 添加完整的 docstring 和返回类型注解
   - 更新 `app/api/v1/generic.py`，移除已迁移的 workflows 端点
 
-- [ ] 4. 拆分 generic.py — Crews 路由
+- [x] 4. 拆分 generic.py — Crews 路由
   - 创建 `app/api/v1/routes/crews.py`
     - 迁移 crews 相关端点（list_crews, create_crew, delete_crew, run_crew）
     - 提取 `_crew_dict()` 辅助函数
@@ -42,14 +43,14 @@
     - 添加完整的 docstring 和返回类型注解
   - 更新 `app/api/v1/generic.py`，移除已迁移的 crews 端点
 
-- [ ] 5. 拆分 generic.py — Skills 路由
+- [x] 5. 拆分 generic.py — Skills 路由
   - 创建 `app/api/v1/routes/skills.py`
     - 迁移 skills 相关端点（list_skills, create_skill, enable_skill, disable_skill, delete_skill）
     - 提取 `_skill_dict()` 辅助函数
     - 添加完整的 docstring 和返回类型注解
   - 更新 `app/api/v1/generic.py`，移除已迁移的 skills 端点
 
-- [ ] 6. 拆分 generic.py — Groups 路由
+- [x] 6. 拆分 generic.py — Groups 路由
   - 创建 `app/api/v1/routes/groups.py`
     - 迁移 groups 相关端点（list_groups, create_group, get_group, delete_group, add_group_member, remove_group_member, update_group_member, list_group_messages）
     - 提取 `_group_dict()`、`_member_dict()` 辅助函数
@@ -57,13 +58,13 @@
     - 添加完整的 docstring 和返回类型注解
   - 更新 `app/api/v1/generic.py`，移除已迁移的 groups 端点
 
-- [ ] 7. 拆分 generic.py — Tasks 路由
+- [x] 7. 拆分 generic.py — Tasks 路由
   - 创建 `app/api/v1/routes/tasks.py`
     - 迁移 tasks 相关端点（list_tasks, create_task, get_task, run_task, pause_task, resume_task, stop_task）
     - 添加完整的 docstring 和返回类型注解
   - 更新 `app/api/v1/generic.py`，移除已迁移的 tasks 端点
 
-- [ ] 8. 拆分 generic.py — 其余路由
+- [x] 8. 拆分 generic.py — 其余路由
   - 创建 `app/api/v1/routes/misc.py`
     - 迁移 cluster、traces、plugins、scheduler、mcp、eval、cost、search、stats、profile、models、tools 相关端点
     - 提取各领域的 dict 转换函数
@@ -73,11 +74,11 @@
     - 添加完整的 docstring 和返回类型注解
   - 更新 `app/api/v1/generic.py`，确保所有端点已迁移完毕
 
-- [ ] 9. 检查点 - 确保 generic.py 拆分后所有测试通过
+- [x] 9. 检查点 - 确保 generic.py 拆分后所有测试通过
   - 运行 `pytest tests/ -x -q` 确认无回归
   - 如有问题请询问用户
 
-- [ ] 10. 重构 group_collaboration.py — 提取基类和公共逻辑
+- [x] 10. 重构 group_collaboration.py — 提取基类和公共逻辑
   - 创建 `app/core/collaboration/base.py`
     - 提取 `GroupCollaborationEngine` 的初始化逻辑和共享状态管理
     - 提取 `_resolve_api_key`、`_resolve_base_url` 辅助函数
@@ -92,7 +93,7 @@
     - 提取所有 prompt 构建方法（`_build_initial_prompt`、`_build_sequential_prompt`、`_build_group_chat_prompt` 等共 8 个）
     - 添加完整的 docstring 和返回类型注解
 
-- [ ] 11. 重构 group_collaboration.py — 拆分流程类型
+- [x] 11. 重构 group_collaboration.py — 拆分流程类型
   - 创建 `app/core/collaboration/sequential.py`
     - 提取 `_run_sequential_process` 方法
     - 将超过 100 行的方法拆分为 `_execute_worker_turn`、`_execute_reviewer_turn`、`_finalize_sequential_task` 子函数
@@ -107,7 +108,7 @@
     - 将方法拆分为 `_execute_chat_round`、`_check_consensus`、`_summarize_discussion` 子函数
     - 添加完整的 docstring 和返回类型注解
 
-- [ ] 12. 重构 group_collaboration.py — 拆分辅助功能
+- [x] 12. 重构 group_collaboration.py — 拆分辅助功能
   - 创建 `app/core/collaboration/guardrails.py`
     - 提取 `_run_guardrails`、`_run_llm_guardrail`、`_run_function_guardrail`、`_validate_structured_output` 方法
     - 添加完整的 docstring 和返回类型注解
@@ -123,7 +124,7 @@
     - 将 `_run_agent_with_retry` 中重复的 agent 调用逻辑提取为 `_try_run_agent` 辅助函数
     - 添加完整的 docstring 和返回类型注解
 
-- [ ] 13. 重构 group_collaboration.py — 主文件精简
+- [x] 13. 重构 group_collaboration.py — 主文件精简
   - 重写 `app/core/group_collaboration.py`
     - 保留 `GroupCollaborationEngine` 类作为 facade，组合各子模块
     - 保留 `run_task`、`run_group_tasks`、`handoff_task`、`cancel_task` 等公共 API
@@ -133,11 +134,12 @@
     - 改为懒加载模式，通过 `get_group_collaboration_engine()` 统一获取
     - 添加完整的 docstring 和返回类型注解
 
-- [ ] 14. 检查点 - 确保 group_collaboration.py 重构后所有测试通过
+- [x] 14. 检查点 - 确保 group_collaboration.py 重构后所有测试通过
   - 运行 `pytest tests/ -x -q` 确认无回归
   - 如有问题请询问用户
 
-- [ ] 15. 重构 agent_engine.py — 拆分 AgentSession 初始化
+- [x] 15. 重构 agent_engine.py — 拆分 AgentSession 初始化
+  - 备注：`app/core/session.py` 已创建（含 `AgentSession`、`SessionConfig` dataclass、`_SessionMemory` 类）；`session_memory.py` 未单独创建，`_SessionMemory` 位于 session.py 内
   - 创建 `app/core/session.py`
     - 提取 `AgentSession` 类到独立文件
     - 将 `__init__` 中超过 30 行的初始化逻辑拆分为 `_init_permission_system`、`_init_sandbox`、`_init_state_machine` 子方法
@@ -147,7 +149,7 @@
     - 提取 `_SessionMemory` 类
     - 添加完整的 docstring 和返回类型注解
 
-- [ ] 16. 重构 agent_engine.py — 拆分 AgentEngine 核心逻辑
+- [x] 16. 重构 agent_engine.py — 拆分 AgentEngine 核心逻辑
   - 创建 `app/core/engine/validation.py`
     - 提取 `_validate_tool_call` 方法
     - 将超过 60 行的方法拆分为 `_check_plan_mode`、`_check_permission_rules`、`_check_permission_overlay`、`_check_schema_validation`、`_check_sandbox` 子函数
@@ -161,6 +163,7 @@
     - 添加完整的 docstring 和返回类型注解
 
 - [ ] 17. 重构 agent_engine.py — 精简主文件
+  - 备注：拆分后的 `app/core/agent_engine.py` 仍有 883 行，超过 300 行目标，未达标
   - 重写 `app/core/agent_engine.py`
     - 保留 `AgentEngine` 类作为 facade
     - 将 `_run_locked` 中超过 150 行的核心循环拆分为 `_prepare_session_context`、`_run_iteration_loop`、`_handle_tool_execution`、`_create_checkpoint` 子函数
@@ -169,11 +172,12 @@
     - 添加完整的 docstring 和返回类型注解
     - 确保主文件不超过 300 行
 
-- [ ] 18. 检查点 - 确保 agent_engine.py 重构后所有测试通过
+- [x] 18. 检查点 - 确保 agent_engine.py 重构后所有测试通过
   - 运行 `pytest tests/ -x -q` 确认无回归
   - 如有问题请询问用户
 
 - [ ] 19. 统一错误处理和日志格式
+  - 备注：`app/core/error_handlers.py` 不存在，统一 FastAPI 异常处理器未实现
   - 创建 `app/core/error_handlers.py`
     - 实现全局 FastAPI 异常处理器
     - 统一 HTTP 错误响应格式
@@ -182,6 +186,7 @@
   - 确保所有 `except` 块使用结构化日志（包含 context 参数）
 
 - [ ] 20. 最终检查点 - 全面质量验证
+  - 备注：pytest 41 passed、`ruff check app/` 通过，但 `app/core/agent_engine.py` 883 行超过 500 行目标，该项部分达标
   - 运行 `pytest tests/ -x -q` 确认所有测试通过
   - 运行 `ruff check app/` 确认无 lint 错误
   - 确认所有文件不超过 500 行
