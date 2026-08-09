@@ -34,11 +34,21 @@ def _check_dependencies() -> dict:
 
 
 def _check_workspace() -> dict:
-    root = Path(__file__).resolve().parent.parent.parent
+    from app.config import BASE_DIR
+
+    root = BASE_DIR
     checks = []
     for rel in ("logs", "skills", "data", "workspace"):
         p = root / rel
-        checks.append({"name": f"dir_{rel}", "ok": p.exists(), "detail": str(p)})
+        ok = p.exists()
+        detail = str(p)
+        if not ok:
+            try:
+                p.mkdir(parents=True, exist_ok=True)
+                ok = True
+            except OSError as exc:
+                detail = f"{p}: {exc}"
+        checks.append({"name": f"dir_{rel}", "ok": ok, "detail": detail})
     return {"section": "workspace", "checks": checks}
 
 
