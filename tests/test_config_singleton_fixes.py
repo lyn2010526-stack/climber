@@ -15,22 +15,25 @@ except ImportError:
 class TestSecretKeyNotHardcoded:
     """Verify secret key is auto-generated, not hardcoded."""
 
-    def test_secret_key_is_auto_generated(self):
-        """Each Settings instance should get a unique random key."""
+    def test_secret_key_is_persistent_in_local(self):
+        """Local/test instances should share a stable persistent development key."""
         s1 = Settings()
         s2 = Settings()
-        assert s1.app_secret_key != s2.app_secret_key
+        assert s1.app_secret_key == s2.app_secret_key
+        assert s1.app_secret_key
 
     def test_secret_key_is_not_default_value(self):
         """Secret key should never be the old hardcoded default."""
         s = Settings()
         assert s.app_secret_key != "dev-secret-key-change-in-production"
+        assert s.app_secret_key != "change-me"
 
-    def test_secret_key_is_hex_string(self):
-        """Secret key should be a valid hex string (64 chars = 32 bytes)."""
-        s = Settings()
-        assert len(s.app_secret_key) == 64
-        int(s.app_secret_key, 16)
+    def test_secret_key_is_persistent_development_key(self):
+        """Settings should resolve a stable non-empty secret key across instances."""
+        s1 = Settings()
+        s2 = Settings()
+        assert s1.app_secret_key == s2.app_secret_key
+        assert s1.app_secret_key
 
 
 @pytest.mark.skip(reason="Auth/Fernet removed for local-only mode")

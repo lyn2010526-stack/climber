@@ -7,6 +7,9 @@ import asyncio
 
 # Set testing mode before importing app
 os.environ["APP_TESTING"] = "true"
+# Tests exercise the full API stack without real auth credentials;
+# disable auth so integration/TestClient flows are deterministic.
+os.environ["ENABLE_AUTH"] = "false"
 
 import pytest
 import pytest_asyncio
