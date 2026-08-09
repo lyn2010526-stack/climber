@@ -117,7 +117,16 @@
     "messages": "메시지",
     "calendar": "캘린더",
     "costs": "비용 분석",
-    "reports": "보고서"
+    "reports": "보고서",
+    "traces": "추적",
+    "terminal": "터미널",
+    "reasoning": "추론",
+    "crews": "크루",
+    "task_history": "작업 기록",
+    "reasoning_history": "추론 기록",
+    "eval": "평가",
+    "demo": "데모",
+    "plugin_manage": "플러그인 관리"
   },
   "home": {
     "title": "대시보드",
@@ -138,7 +147,14 @@
     "this_week": "이번 주",
     "this_month": "이번 달",
     "last_7_days": "최근 7 일",
-    "last_30_days": "최근 30 일"
+    "last_30_days": "최근 30 일",
+    "subtitle": "에이전트 플랫폼 상태를 모니터링하고 새 작업을 시작합니다",
+    "quick_actions": "빠른 작업",
+    "quick_actions_desc": "일반적인 워크플로우로 바로 이동",
+    "create_agent": "에이전트 만들기",
+    "create_agent_desc": "자체 도구와 모델을 가진 새 에이전트 정의",
+    "start_task": "작업 시작",
+    "start_task_desc": "에이전트 전반에서 작업 실행"
   },
   "chat": {
     "title": "채팅 인터페이스",

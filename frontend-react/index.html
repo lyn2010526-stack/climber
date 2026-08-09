@@ -49,7 +49,7 @@
       
       // Safe area detection
       function getSafeAreaInsets() {
-        if (window.screen?..orientation?.type) {
+        if (window.screen?.orientation?.type) {
           return {
             top: window.screen.orientation.type.includes('portrait') ? 44 : 20,
             bottom: window.screen.orientation.type.includes('portrait') ? 34 : 20

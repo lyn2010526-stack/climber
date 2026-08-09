@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Key, LogIn, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { Card, CardContent } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -10,7 +9,9 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
-    const navigate = useNavigate();
+    const navigateToApp = () => {
+        window.location.hash = 'chat';
+    };
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -21,7 +22,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     useEffect(() => {
         const token = localStorage.getItem('auth_token');
         if (token) {
-            navigate('/chat');
+            navigateToApp();
             return;
         }
 
@@ -29,7 +30,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             .then(r => r.json())
             .then(data => setAuthEnabled(data.authentication_enabled))
             .catch(() => setAuthEnabled(false));
-    }, [navigate]);
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -57,7 +58,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 onLogin(data.access_token, data.user);
             }
 
-            navigate('/chat');
+            navigateToApp();
         } catch (err: any) {
             setError(err.message || 'Invalid credentials');
         } finally {
@@ -66,7 +67,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     };
 
     const handleSkipAuth = () => {
-        navigate('/chat');
+        navigateToApp();
     };
 
     if (!authEnabled) {

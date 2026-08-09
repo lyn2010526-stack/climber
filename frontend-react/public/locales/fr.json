@@ -117,7 +117,16 @@
     "messages": "Messages",
     "calendar": "Calendrier",
     "costs": "Analyse des coûts",
-    "reports": "Rapports"
+    "reports": "Rapports",
+    "traces": "Traces",
+    "terminal": "Terminal",
+    "reasoning": "Raisonnement",
+    "crews": "Équipages",
+    "task_history": "Historique des tâches",
+    "reasoning_history": "Historique de raisonnement",
+    "eval": "Évaluation",
+    "demo": "Démo",
+    "plugin_manage": "Gestionnaire de plugins"
   },
   "home": {
     "title": "Tableau de bord",
@@ -138,7 +147,14 @@
     "this_week": "Cette semaine",
     "this_month": "Ce mois",
     "last_7_days": "7 derniers jours",
-    "last_30_days": "30 derniers jours"
+    "last_30_days": "30 derniers jours",
+    "subtitle": "Surveillez la santé de votre plateforme d’agents et lancez de nouveaux travaux",
+    "quick_actions": "Actions rapides",
+    "quick_actions_desc": "Accédez directement aux flux de travail courants",
+    "create_agent": "Créer un agent",
+    "create_agent_desc": "Définissez un nouvel agent avec ses propres outils et modèle",
+    "start_task": "Lancer une tâche",
+    "start_task_desc": "Exécutez une tâche sur vos agents"
   },
   "chat": {
     "title": "Interface de chat",

@@ -117,7 +117,16 @@
     "messages": "消息",
     "calendar": "日历",
     "costs": "成本分析",
-    "reports": "报告"
+    "reports": "报告",
+    "traces": "链路追踪",
+    "terminal": "终端",
+    "reasoning": "推理",
+    "crews": "团队",
+    "task_history": "任务历史",
+    "reasoning_history": "推理历史",
+    "eval": "效果评估",
+    "demo": "演示",
+    "plugin_manage": "插件管理"
   },
   "home": {
     "title": "仪表盘",
@@ -138,7 +147,14 @@
     "this_week": "本周",
     "this_month": "本月",
     "last_7_days": "最近 7 天",
-    "last_30_days": "最近 30 天"
+    "last_30_days": "最近 30 天",
+    "subtitle": "监控智能体平台健康状态并启动新的工作",
+    "quick_actions": "快捷操作",
+    "quick_actions_desc": "直接进入常用工作流程",
+    "create_agent": "创建智能体",
+    "create_agent_desc": "定义带独立工具和模型的新智能体",
+    "start_task": "启动任务",
+    "start_task_desc": "在你的智能体上启动一个任务"
   },
   "chat": {
     "title": "聊天界面",

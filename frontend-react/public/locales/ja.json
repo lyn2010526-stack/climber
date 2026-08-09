@@ -117,7 +117,16 @@
     "messages": "メッセージ",
     "calendar": "カレンダー",
     "costs": "コスト分析",
-    "reports": "レポート"
+    "reports": "レポート",
+    "traces": "トレース",
+    "terminal": "ターミナル",
+    "reasoning": "推論",
+    "crews": "クルー",
+    "task_history": "タスク履歴",
+    "reasoning_history": "推論履歴",
+    "eval": "評価",
+    "demo": "デモ",
+    "plugin_manage": "プラグインマネージャ"
   },
   "home": {
     "title": "ダッシュボード",
@@ -138,7 +147,14 @@
     "this_week": "今週",
     "this_month": "今月",
     "last_7_days": "過去 7 日間",
-    "last_30_days": "過去 30 日間"
+    "last_30_days": "過去 30 日間",
+    "subtitle": "エージェントプラットフォームのヘルスを監視し、新しい作業を開始します",
+    "quick_actions": "クイックアクション",
+    "quick_actions_desc": "一般的なワークフローへすぐに移動",
+    "create_agent": "エージェントを作成",
+    "create_agent_desc": "独自のツールとモデルを持つ新しいエージェントを定義",
+    "start_task": "タスクを開始",
+    "start_task_desc": "エージェント全体でタスクを起動"
   },
   "chat": {
     "title": "チャットインターフェース",

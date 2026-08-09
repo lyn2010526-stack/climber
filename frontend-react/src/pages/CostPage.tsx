@@ -17,12 +17,11 @@ interface CostData {
 }
 
 interface BudgetData {
-  daily_limit: number;
-  weekly_limit: number;
-  monthly_limit: number;
-  current_daily: number;
-  current_weekly: number;
-  current_monthly: number;
+  amount: number;
+  period: string;
+  is_active: boolean;
+  per_session_limit: number | null;
+  per_request_limit: number | null;
 }
 
 function BudgetBar({ label, current, limit, percent }: { label: string; current: number; limit: number; percent: number }) {
@@ -67,9 +66,8 @@ export default function CostPage() {
     fetchData();
   }, []);
 
-  const dailyPercent = budget ? Math.min((budget.current_daily / budget.daily_limit) * 100, 100) : 0;
-  const weeklyPercent = budget ? Math.min((budget.current_weekly / budget.weekly_limit) * 100, 100) : 0;
-  const monthlyPercent = budget ? Math.min((budget.current_monthly / budget.monthly_limit) * 100, 100) : 0;
+  const currentCost = costData?.total_cost ?? 0;
+  const budgetPercent = budget && budget.amount > 0 ? Math.min((currentCost / budget.amount) * 100, 100) : 0;
 
   return (
     <div className="h-full overflow-y-auto page-transition">
@@ -146,15 +144,17 @@ export default function CostPage() {
               </Card>
             </div>
 
-            {budget && (
+            {budget && budget.is_active && (
               <Card variant="default" className="mb-6">
                 <CardContent className="p-6">
-                  <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">预算使用</h3>
-                  <div className="space-y-4">
-                    <BudgetBar label="每日" current={budget.current_daily} limit={budget.daily_limit} percent={dailyPercent} />
-                    <BudgetBar label="每周" current={budget.current_weekly} limit={budget.weekly_limit} percent={weeklyPercent} />
-                    <BudgetBar label="每月" current={budget.current_monthly} limit={budget.monthly_limit} percent={monthlyPercent} />
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">预算使用</h3>
+                    <span className="text-xs text-[var(--color-text-muted)]">周期：{budget.period}</span>
                   </div>
+                  <BudgetBar label="当前支出" current={currentCost} limit={budget.amount} percent={budgetPercent} />
+                  {budget.per_request_limit != null && (
+                    <p className="text-xs text-[var(--color-text-muted)] mt-3">单次请求限额：${budget.per_request_limit.toFixed(2)}</p>
+                  )}
                 </CardContent>
               </Card>
             )}

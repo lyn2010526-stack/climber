@@ -1,27 +1,24 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronUp, ArrowDown } from 'lucide-react';
 import { ChatInterface } from '../../components/agent/ChatInterface';
-import { useChatStore, useWorkspaceStore } from '../../store';
+import { useWorkspaceStore } from '../../store';
+import { useChat } from '../../useChat';
 import { cn } from '../../lib/utils';
 import type { ChatMessage } from '../../store';
 
 export function MobileChatPage() {
   const { activeSessionId } = useWorkspaceStore();
-  const { messages, isStreaming, error, sendMessage, stopStreaming, setActiveSession } = useChatStore();
+  const { messages, isStreaming, error, sendMessage, stopStreaming } = useChat(activeSessionId);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setActiveSession(activeSessionId);
-  }, [activeSessionId, setActiveSession]);
 
   const handleSend = useCallback(async (message: string) => {
     if (!activeSessionId) {
       alert('请先创建或选择一个会话');
       return;
     }
-    await sendMessage(message, { agent_id: activeSessionId });
+    await sendMessage(message);
   }, [activeSessionId, sendMessage]);
 
   const handleStop = useCallback(() => {
