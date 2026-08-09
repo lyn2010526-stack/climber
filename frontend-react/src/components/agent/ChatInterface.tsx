@@ -1,4 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Drawer } from 'vaul';
 import { Send, Square, Bot, Edit3, Check, X, Maximize2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
@@ -178,7 +180,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
     if (msg.toolCalls && msg.toolCalls.length > 0) {
       return (
-        <div className="flex gap-3 max-w-[85%] message-enter">
+        <motion.div
+          layout
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, transition: { duration: 0.15 } }}
+          transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.9 }}
+          className="flex gap-3 max-w-[85%]"
+        >
           <div className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-blue-500 text-white w-9 h-9 shrink-0">
             <Bot size={16} />
           </div>
@@ -194,22 +203,36 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               />
             ))}
           </div>
-        </div>
+        </motion.div>
       );
     }
 
     if (msg.reasoning && !msg.content) {
       return (
-        <div className="max-w-[85%] message-enter">
+        <motion.div
+          layout
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, transition: { duration: 0.15 } }}
+          transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.9 }}
+          className="max-w-[85%]"
+        >
           <ThinkingDetails defaultOpen={true}>
             {msg.reasoning}
           </ThinkingDetails>
-        </div>
+        </motion.div>
       );
     }
 
     return (
-      <div className={cn('group flex gap-3 max-w-[85%] message-enter', msg.role === 'user' ? 'flex-row-reverse ml-auto' : '')}>
+      <motion.div
+        layout
+        initial={{ opacity: 0, y: 12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.15 } }}
+        transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.9 }}
+        className={cn('group flex gap-3 max-w-[85%]', msg.role === 'user' ? 'flex-row-reverse ml-auto' : '')}
+      >
         <div>
           <MessageContent
             content={msg.content}
@@ -227,7 +250,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           />
           {isLoading && msg.role === 'assistant' && !msg.toolCalls && <StreamingCursor />}
         </div>
-      </div>
+      </motion.div>
     );
   };
 
@@ -245,32 +268,42 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <p className="text-[var(--color-text-secondary)] text-sm mb-8 leading-relaxed max-w-sm mx-auto">{emptyStateDescription}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md mx-auto">
                 {suggestions.map((suggestion, idx) => (
-                  <button
+                  <motion.button
                     key={idx}
                     onClick={() => onSend(suggestion)}
-                    className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl text-sm text-[var(--color-text-secondary)] hover:border-[#5E6AD2]/40 hover:text-[var(--color-text-primary)] hover:bg-white/[0.06] transition-all duration-200 active:scale-[0.97] text-left flex items-center gap-3"
+                    whileTap={{ scale: 0.96 }}
+                    whileHover={{ scale: 1.02 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                    className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl text-sm text-[var(--color-text-secondary)] hover:border-[#5E6AD2]/40 hover:text-[var(--color-text-primary)] hover:bg-white/[0.06] transition-colors duration-200 text-left flex items-center gap-3"
                   >
                     <span className="w-6 h-6 rounded-lg bg-[#5E6AD2]/10 flex items-center justify-center shrink-0">
                       <span className="text-[10px] text-[#5E6AD2] font-bold">{idx + 1}</span>
                     </span>
                     {suggestion}
-                  </button>
+                  </motion.button>
                 ))}
               </div>
             </div>
           </div>
         )}
         <div className="space-y-5">
-          {messages.map(renderMessageContent)}
+          <AnimatePresence initial={false}>
+            {messages.map(renderMessageContent)}
+          </AnimatePresence>
           {isLoading && (
-            <div className="flex gap-3 max-w-[85%]">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+              className="flex gap-3 max-w-[85%]"
+            >
               <div className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500/50 to-blue-500/50 text-white/70 w-9 h-9 shrink-0">
                 <Bot size={16} />
               </div>
               <div className="flex-1">
                 <ThinkingIndicator sparkle />
               </div>
-            </div>
+            </motion.div>
           )}
         </div>
       </div>
@@ -316,19 +349,40 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                    )}
                  </div>
                </div>
-               <Button type="submit" size="icon" disabled={!input.trim()} className="rounded-2xl shadow-lg shadow-[#5E6AD2]/20 hover:shadow-[#5E6AD2]/30">
-                 <Send size={16} />
-               </Button>
+               <motion.button
+                  type="submit"
+                  disabled={!input.trim()}
+                  whileTap={input.trim() ? { scale: 0.9 } : undefined}
+                  whileHover={input.trim() ? { scale: 1.05 } : undefined}
+                  transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+                  className="flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-[#5E6AD2] to-[#8B5CF6] text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-[#5E6AD2]/20 hover:shadow-[#5E6AD2]/30 transition-shadow"
+                >
+                  <Send size={16} />
+                </motion.button>
              </>
            )}
          </div>
        </form>
 
-      {/* Edit Modal */}
-      {editState?.mode === 'modal' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-black/80 backdrop-blur-md fade-enter">
-          <div className="bg-[#121218] border border-white/[0.08] rounded-3xl w-full h-full max-w-7xl max-h-[90vh] flex flex-col shadow-2xl shadow-black/50">
-            <div className="flex items-center justify-between p-5 border-b border-white/[0.06]">
+      {/* Edit Drawer */}
+      <Drawer.Root
+        open={editState?.mode === 'modal'}
+        onOpenChange={(open) => {
+          if (!open) cancelEdit();
+        }}
+      >
+        <Drawer.Portal>
+          <Drawer.Overlay className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md" />
+          <Drawer.Content
+            className="fixed inset-x-0 bottom-0 z-[60] mx-auto flex max-h-[85vh] w-full max-w-xl flex-col rounded-t-3xl outline-none"
+            style={{
+              backgroundColor: 'var(--color-bg-surface-1)',
+              borderTop: '1px solid var(--color-border-subtle)',
+              paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+            }}
+          >
+            <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-white/[0.15]" />
+            <div className="flex items-center justify-between px-5 pt-3 pb-2 border-b border-white/[0.06]">
               <h3 className="text-lg font-semibold text-white tracking-tight">编辑消息</h3>
               <div className="flex items-center gap-2">
                 <Button size="sm" onClick={saveEdit} className="rounded-xl">
@@ -343,13 +397,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="w-full h-full bg-transparent text-[var(--color-text-primary)] text-sm leading-relaxed resize-none focus:outline-none"
+                className="w-full h-48 bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 text-[var(--color-text-primary)] text-sm leading-relaxed resize-none focus:outline-none focus:border-[#5E6AD2]/40"
                 autoFocus
               />
             </div>
-          </div>
-        </div>
-      )}
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer.Root>
 
       {/* Floating Permission Dialog */}
       <FloatingPermissionDialog

@@ -1,0 +1,10 @@
+# Sensitive runtime secrets
+data/.secret_key
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+dist/

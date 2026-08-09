@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { toast } from 'sonner';
 import { ChatInterface } from '../components/agent/ChatInterface';
 import { useChat, type Message } from '../useChat';
 import { useWorkspaceStore } from '../store/workspace';
@@ -9,7 +10,7 @@ export function MobileChatPage() {
 
   const handleSend = useCallback(async (message: string) => {
     if (!activeSessionId) {
-      alert('请先创建或选择一个会话');
+      toast.error('请先创建或选择一个会话');
       return;
     }
     await sendMessage(message);

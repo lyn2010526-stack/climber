@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Drawer } from 'vaul';
 import { MessageSquare, Sparkles, Network, Cpu, Bot, Settings, MoreHorizontal } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/workspace';
 
@@ -97,36 +98,40 @@ export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: stri
       </nav>
 
       {moreOpen && (
-        <div
-          className="fixed inset-0 z-[60]"
-          onClick={() => setMoreOpen(false)}
-        >
-          <div className="absolute inset-x-0 bottom-14 rounded-t-3xl overflow-hidden" style={{
-            backgroundColor: 'var(--color-bg-surface-1)',
-            borderTop: '1px solid var(--color-border-subtle)',
-            maxHeight: '60vh',
-          }}>
-            <div className="p-4 space-y-2">
-              {MORE_ITEMS.map(({ id, icon: Icon, label }) => (
-                <button
-                  key={id}
-                  onClick={() => {
-                    onNavigate(id);
-                    setMoreOpen(false);
-                  }}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 active:scale-[0.98]"
-                  style={{
-                    color: currentPage === id ? 'var(--color-accent)' : 'var(--color-text-primary)',
-                    backgroundColor: currentPage === id ? 'var(--color-accent-subtle)' : 'var(--color-bg-surface-2)',
-                  }}
-                >
-                  <Icon size={20} />
-                  <span className="font-medium">{label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <Drawer.Root open={moreOpen} onOpenChange={setMoreOpen}>
+          <Drawer.Portal>
+            <Drawer.Overlay className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md" />
+            <Drawer.Content
+              className="fixed inset-x-0 bottom-0 z-[60] mx-auto w-full max-w-lg rounded-t-3xl outline-none"
+              style={{
+                backgroundColor: 'var(--color-bg-surface-1)',
+                borderTop: '1px solid var(--color-border-subtle)',
+                paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+              }}
+            >
+              <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-white/[0.15]" />
+              <div className="p-4 space-y-2">
+                {MORE_ITEMS.map(({ id, icon: Icon, label }) => (
+                  <button
+                    key={id}
+                    onClick={() => {
+                      onNavigate(id);
+                      setMoreOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 active:scale-[0.98]"
+                    style={{
+                      color: currentPage === id ? 'var(--color-accent)' : 'var(--color-text-primary)',
+                      backgroundColor: currentPage === id ? 'var(--color-accent-subtle)' : 'var(--color-bg-surface-2)',
+                    }}
+                  >
+                    <Icon size={20} />
+                    <span className="font-medium">{label}</span>
+                  </button>
+                ))}
+              </div>
+            </Drawer.Content>
+          </Drawer.Portal>
+        </Drawer.Root>
       )}
     </>
   );
