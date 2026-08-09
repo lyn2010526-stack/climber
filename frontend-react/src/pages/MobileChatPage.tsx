@@ -2,7 +2,6 @@ import { useCallback, useState } from 'react';
 import { MobileChatInterface } from '../components/mobile/MobileChatInterface';
 import { useChat, type Message } from '../useChat';
 import { useWorkspaceStore } from '../store/workspace';
-import { cacheManager } from '../components/mobile/LazyImage';
 
 export function MobileChatPage() {
   const { activeSessionId } = useWorkspaceStore();
@@ -18,11 +17,11 @@ export function MobileChatPage() {
     await sendMessage(message);
     
     // Cache the last message for offline support
-    await cacheManager.set(`last_message_${activeSessionId}`, {
+    localStorage.setItem(`last_message_${activeSessionId}`, JSON.stringify({
       text: message,
       timestamp: Date.now(),
       sessionId: activeSessionId
-    });
+    }));
   }, [activeSessionId, sendMessage]);
 
   const handleStop = useCallback(() => {

@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
+import type { Transition } from 'framer-motion';
 
 interface PageTransitionProps {
   children: React.ReactNode;
@@ -11,7 +12,7 @@ const pageVariants = {
   exit: { opacity: 0, y: -4 },
 };
 
-const pageTransition = {
+const pageTransition: Transition = {
   duration: 0.22,
   ease: [0.16, 1, 0.3, 1],
 };

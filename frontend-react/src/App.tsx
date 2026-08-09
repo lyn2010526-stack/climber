@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { GlobalSearch } from './components/workspace/GlobalSearch';
 import { PageTransition } from './components/workspace/PageTransition';
-import { IOsToaster } from './components/ios';
+import { Toaster } from 'sonner';
 import { ThemeToggle } from './components/ui/ThemeToggle';
 import CommandPalette from './components/workspace/CommandPalette';
 import { AdaptiveMobileLayout } from './components/layout/AdaptiveMobileLayout';
@@ -64,33 +64,33 @@ const ALL_NAV_ITEMS_BASE: { id: Page; icon: typeof MessageSquare; labelKey?: str
   { id: 'factory', icon: Sparkles, label: 'Factory', group: 'main', keywords: 'auto agent execute' },
   { id: 'cluster', icon: Network, label: 'Cluster', group: 'main', keywords: 'multi agent team' },
   { id: 'tasks', icon: Cpu, labelKey: 'navigation.tasks', group: 'main', keywords: 'monitor task running' },
-  { id: 'task-history', icon: History, labelKey: 'navigation.tasks', group: 'main', keywords: 'history past' },
-  { id: 'reasoning', icon: Activity, labelKey: 'navigation.agents', group: 'main', keywords: 'reason think' },
-  { id: 'reasoning-history', icon: History, labelKey: 'navigation.tasks', group: 'main', keywords: 'reasoning history' },
+  { id: 'task-history', icon: History, labelKey: 'navigation.task_history', group: 'main', keywords: 'history past' },
+  { id: 'reasoning', icon: Activity, labelKey: 'navigation.reasoning', group: 'main', keywords: 'reason think' },
+  { id: 'reasoning-history', icon: History, labelKey: 'navigation.reasoning_history', group: 'main', keywords: 'reasoning history' },
   { id: 'agents', icon: Bot, labelKey: 'navigation.agents', group: 'manage', keywords: 'agent config' },
   { id: 'workflows', icon: Workflow, labelKey: 'navigation.workflows', group: 'manage', keywords: 'workflow dag' },
-  { id: 'crews', icon: Users, labelKey: 'navigation.users', group: 'manage', keywords: 'crew team' },
+  { id: 'crews', icon: Users, labelKey: 'navigation.crews', group: 'manage', keywords: 'crew team' },
   { id: 'scheduler', icon: Clock, labelKey: 'navigation.scheduler', group: 'manage', keywords: 'cron schedule' },
   { id: 'plugins', icon: Puzzle, labelKey: 'navigation.plugins', group: 'config', keywords: 'plugin marketplace' },
-  { id: 'plugin-manage', icon: Package, labelKey: 'navigation.plugins', group: 'config', keywords: 'plugin manage installed' },
+  { id: 'plugin-manage', icon: Package, labelKey: 'navigation.plugin_manage', group: 'config', keywords: 'plugin manage installed' },
   { id: 'skills', icon: Package, labelKey: 'navigation.skills', group: 'config', keywords: 'skill tool' },
   { id: 'notifications', icon: Bell, labelKey: 'navigation.notifications', group: 'config', keywords: 'notification alert' },
   { id: 'doctor', icon: Activity, labelKey: 'navigation.monitoring', group: 'config', keywords: 'health debug' },
   { id: 'mcp', icon: Terminal, labelKey: 'navigation.mcp', group: 'config', keywords: 'mcp protocol tool' },
   { id: 'apikeys', icon: Key, labelKey: 'navigation.api_keys', group: 'config', keywords: 'api key secret' },
   { id: 'stats', icon: BarChart3, labelKey: 'navigation.analytics', group: 'config', keywords: 'stats analytics chart' },
-  { id: 'traces', icon: Activity, labelKey: 'navigation.tasks', group: 'config', keywords: 'trace debug' },
-  { id: 'eval', icon: FlaskConical, labelKey: 'navigation.reports', group: 'config', keywords: 'eval benchmark' },
+  { id: 'traces', icon: Activity, labelKey: 'navigation.traces', group: 'config', keywords: 'trace debug' },
+  { id: 'eval', icon: FlaskConical, labelKey: 'navigation.eval', group: 'config', keywords: 'eval benchmark' },
   { id: 'cost', icon: DollarSign, labelKey: 'navigation.costs', group: 'config', keywords: 'cost billing token' },
   { id: 'settings', icon: Settings, labelKey: 'navigation.settings', group: 'config', keywords: 'settings config preference' },
-  { id: 'terminal', icon: Terminal, labelKey: 'navigation.settings', group: 'config', keywords: 'terminal shell' },
-  { id: 'demo', icon: Sparkles, labelKey: 'navigation.settings', group: 'config', keywords: 'demo visual design' },
+  { id: 'terminal', icon: Terminal, labelKey: 'navigation.terminal', group: 'config', keywords: 'terminal shell' },
+  { id: 'demo', icon: Sparkles, labelKey: 'navigation.demo', group: 'config', keywords: 'demo visual design' },
 ];
 
 const VALID_PAGES = new Set([...ALL_NAV_ITEMS_BASE.map(n => n.id), 'demo', 'login']);
 
 function getPageFromHash(): Page {
-  const hash = window.location.hash.replace('#', '') || 'chat';
+  const hash = window.location.hash.replace('#', '').replace(/^\/+/, '') || 'chat';
   return VALID_PAGES.has(hash as Page) ? (hash as Page) : 'chat';
 }
 
@@ -442,7 +442,12 @@ export default function App() {
              <header className="desktop-context-bar">
                <div className="min-w-0">
                  <p className="workspace-eyebrow">Workspace / {currentPage}</p>
-                 <p className="truncate text-sm font-semibold text-[var(--color-text-primary)]">{ALL_NAV_ITEMS_BASE.find(item => item.id === currentPage)?.label ?? currentPage}</p>
+                 <p className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
+                  {(() => {
+                    const item = ALL_NAV_ITEMS_BASE.find(i => i.id === currentPage);
+                    return item?.label ?? (item?.labelKey ? t(item.labelKey) : currentPage);
+                  })()}
+                </p>
                </div>
                <button className="context-command" onClick={() => setActiveOverlay('commands')} aria-label="打开命令菜单">
                  <Search size={14} /><span>Command menu</span><kbd>⌘K</kbd>
@@ -482,7 +487,7 @@ export default function App() {
 
           <GlobalSearch isOpen={activeOverlay === 'search'} onClose={() => setActiveOverlay(null)} />
           <CommandPalette isOpen={activeOverlay === 'commands'} onClose={() => setActiveOverlay(null)} onNavigate={(page) => navigate(page as Page)} />
-          <IOsToaster position="top-center" theme="dark" />
+          <Toaster position="top-center" theme="dark" />
         </>
       )}
     </div>

@@ -117,7 +117,16 @@
     "messages": "Nachrichten",
     "calendar": "Kalender",
     "costs": "Kostenanalyse",
-    "reports": "Berichte"
+    "reports": "Berichte",
+    "traces": "Traces",
+    "terminal": "Terminal",
+    "reasoning": "Schlussfolgerung",
+    "crews": "Crews",
+    "task_history": "Aufgabenverlauf",
+    "reasoning_history": "Schlussfolgerungsverlauf",
+    "eval": "Auswertung",
+    "demo": "Demo",
+    "plugin_manage": "Plugin-Verwaltung"
   },
   "home": {
     "title": "Dashboard",
@@ -138,7 +147,14 @@
     "this_week": "Diese Woche",
     "this_month": "Diesen Monat",
     "last_7_days": "Letzte 7 Tage",
-    "last_30_days": "Letzte 30 Tage"
+    "last_30_days": "Letzte 30 Tage",
+    "subtitle": "Überwachen Sie den Zustand Ihrer Agentenplattform und starten Sie neue Arbeiten",
+    "quick_actions": "Schnellaktionen",
+    "quick_actions_desc": "Direkt zu häufigen Workflows springen",
+    "create_agent": "Agent erstellen",
+    "create_agent_desc": "Definieren Sie einen neuen Agenten mit eigenen Tools und Modell",
+    "start_task": "Aufgabe starten",
+    "start_task_desc": "Eine Aufgabe über Ihre Agenten starten"
   },
   "chat": {
     "title": "Chat-Oberfläche",

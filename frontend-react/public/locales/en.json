@@ -117,7 +117,16 @@
     "messages": "Messages",
     "calendar": "Calendar",
     "costs": "Cost Analysis",
-    "reports": "Reports"
+    "reports": "Reports",
+    "traces": "Traces",
+    "terminal": "Terminal",
+    "reasoning": "Reasoning",
+    "crews": "Crews",
+    "task_history": "Task History",
+    "reasoning_history": "Reasoning History",
+    "eval": "Evaluation",
+    "demo": "Demo",
+    "plugin_manage": "Plugin Manager"
   },
   "home": {
     "title": "Dashboard",
@@ -138,7 +147,14 @@
     "this_week": "This Week",
     "this_month": "This Month",
     "last_7_days": "Last 7 Days",
-    "last_30_days": "Last 30 Days"
+    "last_30_days": "Last 30 Days",
+    "subtitle": "Monitor your agent platform health and launch new work",
+    "quick_actions": "Quick Actions",
+    "quick_actions_desc": "Jump straight into common workflows",
+    "create_agent": "Create Agent",
+    "create_agent_desc": "Define a new agent with its own tools and model",
+    "start_task": "Start Task",
+    "start_task_desc": "Launch a task to run across your agents"
   },
   "chat": {
     "title": "Chat Interface",
