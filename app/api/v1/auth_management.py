@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -19,10 +19,6 @@ from app.core.auth_manager import (
     get_current_user,
     require_admin,
     require_scopes,
-)
-from app.middleware.auth import (
-    API_KEY_HEADER,
-    _verify_jwt_token,
 )
 from app.models.users import ApiKey, User, UserRole, UserStatus
 from app.storage import async_session
@@ -117,9 +113,7 @@ async def refresh_token(payload: RefreshTokenRequest) -> RefreshTokenResponse:
     user_id = int(payload_data["sub"])
 
     async with async_session() as session:
-        result = await session.execute(
-            select(User).where(User.id == user_id, User.status == UserStatus.ACTIVE.value)
-        )
+        result = await session.execute(select(User).where(User.id == user_id, User.status == UserStatus.ACTIVE.value))
         user = result.scalar_one_or_none()
         if not user:
             raise HTTPException(status_code=401, detail="User not found or inactive")
@@ -132,7 +126,7 @@ async def refresh_token(payload: RefreshTokenRequest) -> RefreshTokenResponse:
 
     return RefreshTokenResponse(
         access_token=new_token,
-        expires_in=60 * 60,
+        expires_in=settings.jwt_expire_minutes * 60,
     )
 
 
@@ -146,9 +140,7 @@ async def logout(request: Request) -> dict:
         async with async_session() as session:
             from app.models.users import UserSession
 
-            result = await session.execute(
-                select(UserSession).where(UserSession.token_hash == token_hash)
-            )
+            result = await session.execute(select(UserSession).where(UserSession.token_hash == token_hash))
             user_session = result.scalar_one_or_none()
             if user_session:
                 await session.delete(user_session)
@@ -170,9 +162,7 @@ async def change_password(
 ) -> dict:
     """Change current user password."""
     async with async_session() as session:
-        result = await session.execute(
-            select(User).where(User.id == current_user["id"])
-        )
+        result = await session.execute(select(User).where(User.id == current_user["id"]))
         user = result.scalar_one_or_none()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -231,16 +221,14 @@ async def create_api_key(
 
 @router.get("/keys", response_model=ListKeysResponse)
 async def list_api_keys(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin()),
 ) -> ListKeysResponse:
     """List all API keys."""
     if not settings.enable_auth:
         raise HTTPException(status_code=400, detail="Authentication is disabled")
 
     async with async_session() as session:
-        result = await session.execute(
-            select(ApiKey).order_by(ApiKey.created_at.desc())
-        )
+        result = await session.execute(select(ApiKey).order_by(ApiKey.created_at.desc()))
         keys = result.scalars().all()
 
         result_keys = []
@@ -272,9 +260,7 @@ async def revoke_api_key(
         raise HTTPException(status_code=400, detail="Authentication is disabled")
 
     async with async_session() as session:
-        result = await session.execute(
-            select(ApiKey).where(ApiKey.id == key_id)
-        )
+        result = await session.execute(select(ApiKey).where(ApiKey.id == key_id))
         key_record = result.scalar_one_or_none()
         if not key_record:
             raise HTTPException(status_code=404, detail=f"API key {key_id} not found")

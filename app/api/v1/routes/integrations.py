@@ -39,10 +39,10 @@ async def invoke_langgraph(graph_name: str, payload: dict[str, Any]) -> dict[str
         result = await bridge.invoke(graph_name, inputs, config)
         return {"result": result, "status": "ok"}
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         logger.warning("langgraph_invoke_failed", graph=graph_name, error=str(exc))
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 # ─── Mem0 Endpoints ───
@@ -71,15 +71,14 @@ async def mem0_search(payload: dict[str, Any]) -> dict[str, Any]:
         limit = payload.get("limit", 10)
         user_id = payload.get("user_id")
 
-        if not svc.is_available:
-            if not await svc.initialize():
-                return {"results": [], "status": "unavailable"}
+        if not svc.is_available and not await svc.initialize():
+            return {"results": [], "status": "unavailable"}
 
         results = await svc.search(query, limit=limit, user_id=user_id)
         return {"results": results, "status": "ok"}
     except Exception as exc:
         logger.warning("mem0_search_failed", error=str(exc))
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/integrations/mem0/add")
@@ -93,9 +92,8 @@ async def mem0_add(payload: dict[str, Any]) -> dict[str, Any]:
         metadata = payload.get("metadata", {})
         user_id = payload.get("user_id")
 
-        if not svc.is_available:
-            if not await svc.initialize():
-                raise HTTPException(status_code=503, detail="Mem0 not available")
+        if not svc.is_available and not await svc.initialize():
+            raise HTTPException(status_code=503, detail="Mem0 not available")
 
         memory_id = await svc.add(content, metadata=metadata, user_id=user_id)
         return {"memory_id": memory_id, "status": "ok"}
@@ -103,7 +101,7 @@ async def mem0_add(payload: dict[str, Any]) -> dict[str, Any]:
         raise
     except Exception as exc:
         logger.warning("mem0_add_failed", error=str(exc))
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 # ─── Pydantic-AI Endpoints ───
@@ -132,4 +130,4 @@ async def agent_run(payload: dict[str, Any]) -> dict[str, Any]:
         }
     except Exception as exc:
         logger.warning("agent_run_failed", error=str(exc))
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc

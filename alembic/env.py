@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path
@@ -14,6 +13,8 @@ from alembic import context
 # Add project root to path so ``app`` imports resolve
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.config import settings  # noqa: E402
+from app.models import users as models_users  # noqa: E402, F401
 from app.storage import (
     Base,  # noqa: E402
     database,  # noqa: F401
@@ -32,6 +33,12 @@ from app.storage import (
 
 config = context.config
 
+
+def migration_url() -> str:
+    url = settings.test_database_url if settings.app_testing else settings.database_url
+    return url.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg")
+
+
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
@@ -39,7 +46,7 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    url = config.get_main_option("sqlalchemy.url")
+    url = migration_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -60,6 +67,7 @@ def do_run_migrations(connection) -> None:
 
 
 def run_migrations_online() -> None:
+    config.set_main_option("sqlalchemy.url", migration_url())
     connectable = engine_from_config(
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",

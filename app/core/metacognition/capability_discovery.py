@@ -62,67 +62,77 @@ class CapabilityDiscovery:
         missing_lower = missing.lower()
 
         # Pattern: need to read + process + write
-        if any(kw in missing_lower for kw in ["analyze", "parse", "extract", "transform"]):
-            if "read_file" in tool_set and "write_file" in tool_set:
-                return ComposedCapability(
-                    name=self._make_name(missing),
-                    description=f"Composed capability: {missing}",
-                    tool_chain=[
-                        {"tool": "read_file", "purpose": "Read input data"},
-                        {"tool": "run_command", "purpose": "Process/transform data"},
-                        {"tool": "write_file", "purpose": "Write processed output"},
-                    ],
-                    inputs={"input_path": {"type": "string"}, "output_path": {"type": "string"}},
-                    output_description="Processed data written to output path",
-                )
+        if (
+            any(kw in missing_lower for kw in ["analyze", "parse", "extract", "transform"])
+            and "read_file" in tool_set
+            and "write_file" in tool_set
+        ):
+            return ComposedCapability(
+                name=self._make_name(missing),
+                description=f"Composed capability: {missing}",
+                tool_chain=[
+                    {"tool": "read_file", "purpose": "Read input data"},
+                    {"tool": "run_command", "purpose": "Process/transform data"},
+                    {"tool": "write_file", "purpose": "Write processed output"},
+                ],
+                inputs={"input_path": {"type": "string"}, "output_path": {"type": "string"}},
+                output_description="Processed data written to output path",
+            )
 
         # Pattern: need to search + collect
-        if any(kw in missing_lower for kw in ["search", "find", "collect", "gather"]):
-            if "web_search" in tool_set or "read_file" in tool_set:
-                chain = []
-                if "web_search" in tool_set:
-                    chain.append({"tool": "web_search", "purpose": "Search for information"})
-                if "read_file" in tool_set:
-                    chain.append({"tool": "read_file", "purpose": "Read local references"})
-                if "write_file" in tool_set:
-                    chain.append({"tool": "write_file", "purpose": "Save collected data"})
-                if chain:
-                    return ComposedCapability(
-                        name=self._make_name(missing),
-                        description=f"Composed capability: {missing}",
-                        tool_chain=chain,
-                        inputs={"query": {"type": "string"}},
-                        output_description="Collected and saved information",
-                    )
+        if any(kw in missing_lower for kw in ["search", "find", "collect", "gather"]) and (
+            "web_search" in tool_set or "read_file" in tool_set
+        ):
+            chain = []
+            if "web_search" in tool_set:
+                chain.append({"tool": "web_search", "purpose": "Search for information"})
+            if "read_file" in tool_set:
+                chain.append({"tool": "read_file", "purpose": "Read local references"})
+            if "write_file" in tool_set:
+                chain.append({"tool": "write_file", "purpose": "Save collected data"})
+            if chain:
+                return ComposedCapability(
+                    name=self._make_name(missing),
+                    description=f"Composed capability: {missing}",
+                    tool_chain=chain,
+                    inputs={"query": {"type": "string"}},
+                    output_description="Collected and saved information",
+                )
 
         # Pattern: need to monitor/watch
-        if any(kw in missing_lower for kw in ["monitor", "watch", "track", "observe"]):
-            if "read_file" in tool_set and "run_command" in tool_set:
-                return ComposedCapability(
-                    name=self._make_name(missing),
-                    description=f"Composed capability: {missing}",
-                    tool_chain=[
-                        {"tool": "read_file", "purpose": "Read current state"},
-                        {"tool": "run_command", "purpose": "Compare with previous state"},
-                        {"tool": "write_file", "purpose": "Log changes"},
-                    ],
-                    inputs={"target_path": {"type": "string"}, "interval": {"type": "number"}},
-                    output_description="Change log of monitored target",
-                )
+        if (
+            any(kw in missing_lower for kw in ["monitor", "watch", "track", "observe"])
+            and "read_file" in tool_set
+            and "run_command" in tool_set
+        ):
+            return ComposedCapability(
+                name=self._make_name(missing),
+                description=f"Composed capability: {missing}",
+                tool_chain=[
+                    {"tool": "read_file", "purpose": "Read current state"},
+                    {"tool": "run_command", "purpose": "Compare with previous state"},
+                    {"tool": "write_file", "purpose": "Log changes"},
+                ],
+                inputs={"target_path": {"type": "string"}, "interval": {"type": "number"}},
+                output_description="Change log of monitored target",
+            )
 
         # Pattern: need to validate/verify
-        if any(kw in missing_lower for kw in ["validate", "verify", "check", "test"]):
-            if "read_file" in tool_set and "run_command" in tool_set:
-                return ComposedCapability(
-                    name=self._make_name(missing),
-                    description=f"Composed capability: {missing}",
-                    tool_chain=[
-                        {"tool": "read_file", "purpose": "Read target to validate"},
-                        {"tool": "run_command", "purpose": "Run validation logic"},
-                    ],
-                    inputs={"target": {"type": "string"}},
-                    output_description="Validation result (pass/fail with details)",
-                )
+        if (
+            any(kw in missing_lower for kw in ["validate", "verify", "check", "test"])
+            and "read_file" in tool_set
+            and "run_command" in tool_set
+        ):
+            return ComposedCapability(
+                name=self._make_name(missing),
+                description=f"Composed capability: {missing}",
+                tool_chain=[
+                    {"tool": "read_file", "purpose": "Read target to validate"},
+                    {"tool": "run_command", "purpose": "Run validation logic"},
+                ],
+                inputs={"target": {"type": "string"}},
+                output_description="Validation result (pass/fail with details)",
+            )
 
         # Pattern: database access
         if any(kw in missing_lower for kw in ["database", "db", "query", "sql"]) and "run_command" in tool_set:

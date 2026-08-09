@@ -143,6 +143,7 @@ async def db_health() -> dict[str, Any]:
 async def init_db() -> None:
     """Create all tables. Ensure all models are imported for registration."""
     # Import all models so SQLAlchemy registers them with Base
+    from app.models import users as _users_model  # noqa: F401
     from app.storage import (
         database,  # noqa: F401
         models_cost,  # noqa: F401
@@ -157,8 +158,6 @@ async def init_db() -> None:
         models_skills,  # noqa: F401
         models_traces,  # noqa: F401
     )
-
-    from app.models import users as _users_model  # noqa: F401
 
     async with engine.begin() as conn:
         with contextlib.suppress(Exception):

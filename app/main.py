@@ -113,6 +113,9 @@ def _local_ip() -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    for _rel in ("logs", "data", "workspace"):
+        (Path(settings.log_dir).parent / _rel).mkdir(parents=True, exist_ok=True)
+
     log_dir = configure_logging(settings.app_log_level)
     logger.info("Agent Engine starting", debug=settings.app_debug, version=_APP_VERSION, log_dir=str(log_dir))
 

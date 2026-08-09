@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
-import traceback
 import uuid
 from collections.abc import Callable, Coroutine
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -192,10 +192,8 @@ class TaskManager:
 
     async def _emit_progress(self, task_id: str, data: dict) -> None:
         for cb in self._progress_callbacks:
-            try:
+            with contextlib.suppress(Exception):
                 await cb(task_id, data)
-            except Exception:
-                pass
 
 
 async def handle_agent_run(payload: dict[str, Any], on_progress) -> dict[str, Any]:

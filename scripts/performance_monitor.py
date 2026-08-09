@@ -23,7 +23,7 @@ import sys
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -96,7 +96,7 @@ class APIMonitor:
             latency_ms = (time.monotonic() - start) * 1000
             return APIMetric(
                 endpoint=endpoint,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 response_time_ms=latency_ms,
                 status_code=resp.status_code,
                 success=200 <= resp.status_code < 500,
@@ -105,7 +105,7 @@ class APIMonitor:
             latency_ms = (time.monotonic() - start) * 1000
             return APIMetric(
                 endpoint=endpoint,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 response_time_ms=latency_ms,
                 status_code=0,
                 success=False,
@@ -140,7 +140,7 @@ class SystemMonitor:
                 connections = 0
 
             metric = SystemMetric(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 cpu_percent=cpu,
                 memory_percent=mem.percent,
                 memory_used_mb=mem.used / (1024**2),
@@ -150,7 +150,7 @@ class SystemMonitor:
             )
         except ImportError:
             metric = SystemMetric(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 cpu_percent=0.0,
                 memory_percent=0.0,
                 memory_used_mb=0.0,
@@ -338,7 +338,7 @@ async def main() -> int:
     )
 
     report = PerformanceReport(
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         duration_seconds=duration,
         api_metrics=api_monitor.metrics,
         system_metrics=sys_monitor.metrics,

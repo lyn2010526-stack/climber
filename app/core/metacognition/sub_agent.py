@@ -148,7 +148,7 @@ class SubAgentOrchestrator:
 
     def merge_results(self, task_ids: list[str]) -> dict[str, Any]:
         """Merge results from multiple sub-agents."""
-        merged = {
+        merged: dict[str, Any] = {
             "goals": [],
             "total_tokens": 0,
             "total_iterations": 0,

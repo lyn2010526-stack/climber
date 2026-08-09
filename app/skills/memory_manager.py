@@ -1,7 +1,6 @@
 """Memory manager for skills — provides persistent memory storage."""
 from __future__ import annotations
 
-import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -30,10 +29,10 @@ class MemoryEntry:
 class PersistentMemory:
     """Simple persistent memory store."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._cache: list[MemoryEntry] = []
 
-    def store(self, content: str, memory_type: MemoryType = MemoryType.FACT, source: str = "system", **kwargs) -> MemoryEntry:
+    def store(self, content: str, memory_type: MemoryType = MemoryType.FACT, source: str = "system", **kwargs: Any) -> MemoryEntry:
         entry = MemoryEntry(
             id=str(uuid.uuid4())[:12],
             content=content,

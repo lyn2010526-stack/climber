@@ -28,7 +28,7 @@ class FileIndexService:
 
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._index: dict[str, FileIndexEntry] = {}
 
     def compute_hash(self, content: str) -> str:

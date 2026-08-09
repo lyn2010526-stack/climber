@@ -1,11 +1,13 @@
 """Task execution API — submit, query, cancel long-running tasks."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+import contextlib
 from typing import Any
 
-from app.core.task_worker import task_manager, TaskStatus
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
+
+from app.core.task_worker import task_manager
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -38,10 +40,8 @@ async def _ws_broadcast(task_id: str, data: dict):
         except Exception:
             disconnected.append(ws)
     for ws in _ws_clients:
-        try:
+        with contextlib.suppress(ValueError):
             _ws_clients.remove(ws)
-        except ValueError:
-            pass
 
 
 task_manager.on_progress(_ws_broadcast)
@@ -54,7 +54,7 @@ async def submit_task(req: SubmitTaskRequest):
         task_id = await task_manager.submit(req.task_type, req.payload)
         return TaskResponse(task_id=task_id, status="pending")
     except ValueError as exc:
-        raise HTTPException(400, str(exc))
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.get("/{task_id}", response_model=TaskResponse)

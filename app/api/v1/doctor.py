@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import platform
 import sys
-from pathlib import Path
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -33,11 +32,13 @@ def _check_dependencies() -> dict:
 
 
 def _check_workspace() -> dict:
-    root = Path(__file__).resolve().parent.parent.parent
+    from app.config import BASE_DIR
+
+    root = BASE_DIR
     checks = []
-    for rel in ("logs", "skills", "data", "workspace"):
+    for rel in ("logs", "app/skills", "data", "workspace"):
         p = root / rel
-        checks.append({"name": f"dir_{rel}", "ok": p.exists(), "detail": str(p)})
+        checks.append({"name": f"dir_{rel.replace('/', '_')}", "ok": p.exists(), "detail": str(p)})
     return {"section": "workspace", "checks": checks}
 
 

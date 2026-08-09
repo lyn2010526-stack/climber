@@ -170,7 +170,7 @@ class GoalTracker:
         ).fetchall()
         if not rows:
             return 0.0
-        avg_scores = [row["avg_score"] for row in rows]
+        avg_scores = [float(row["avg_score"]) for row in rows]
         overall_avg = sum(avg_scores) / len(avg_scores)
         return max(0.0, min(1.0, 1.0 - overall_avg))
 

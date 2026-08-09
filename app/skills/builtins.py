@@ -7,6 +7,7 @@ import contextlib
 import json
 import re
 import urllib.parse
+from typing import Any
 
 import httpx
 
@@ -16,7 +17,7 @@ from app.skills.memory_manager import MemoryType, persistent_memory
 async def skill_recursive_research(topic: str, depth: int = 3, max_sources: int = 5) -> str:
     """Recursive Deep Research: search → extract → follow links → synthesize."""
     findings = []
-    visited = set()
+    visited: set[str] = set()
 
     async def search_and_extract(query: str, level: int) -> list[str]:
         if level <= 0 or len(visited) >= max_sources:
@@ -671,10 +672,10 @@ Begin systematic debugging."""
 async def skill_data_analyst(data: str, question: str = "") -> str:
     """Data Analysis & Visualization Engine."""
     lines = data.strip().split("\n")
-    analysis = {
+    analysis: dict[str, Any] = {
         "total_lines": len(lines),
         "total_chars": len(data),
-        "non_empty": len([l for l in lines if l.strip()]),
+        "non_empty": len([line for line in lines if line.strip()]),
     }
 
     # Detect format
@@ -945,7 +946,7 @@ async def skill_memory_action(action: str = "recall", query: str = "", content: 
             return "No memories found matching the query."
         results = []
         for e in entries:
-            results.append(f"- [{e.type.value}] {e.content} (importance: {e.importance}, accessed: {e.access_count}x)")
+            results.append(f"- [{e.memory_type.value}] {e.content} (importance: {e.metadata.get('importance', 0.5)}, accessed: {e.metadata.get('access_count', 0)}x)")
         return "# Memory Recall Results\n\n" + "\n".join(results)
     elif action == "store":
         mt = MemoryType.FACT

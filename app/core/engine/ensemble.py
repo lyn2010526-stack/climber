@@ -104,7 +104,7 @@ class EnsembleEngine:
         # Process results
         valid_responses: list[ModelResponse] = []
         for r in responses:
-            if isinstance(r, Exception):
+            if isinstance(r, BaseException):
                 continue
             valid_responses.append(r)
 

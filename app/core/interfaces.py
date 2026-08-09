@@ -6,11 +6,14 @@ enabling dependency injection and testability.
 
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
+
+import structlog
 
 # ── Events ──
 
@@ -39,9 +42,9 @@ class EventBus:
                 logger.warning("event_handler_failed", event=event.type, error=str(exc))
 
 
-import asyncio
 
-import structlog
+
+
 
 # ── Enums ──
 
@@ -115,7 +118,7 @@ class IModelAdapter(ABC):
 
 class IToolRegistry(ABC):
     @abstractmethod
-    def register(self, name: str, description: str, parameters: dict[str, Any], func: Callable) -> None:
+    def register(self, name: str, description: str, parameters: dict[str, Any], func: Callable[..., Any]) -> None:
         raise NotImplementedError
 
     @abstractmethod
@@ -147,5 +150,5 @@ class IExecutor(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def execute_stream(self, context: ExecutionContext, **kwargs: Any) -> AsyncIterator[Any]:
+    def execute_stream(self, context: ExecutionContext, **kwargs: Any) -> AsyncIterator[Any]:
         raise NotImplementedError

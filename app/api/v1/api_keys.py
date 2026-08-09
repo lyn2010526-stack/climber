@@ -14,14 +14,14 @@ from app.storage.database import ApiKey as ApiKeyModel
 router = APIRouter()
 
 
-class ApiKeyCreate(BaseModel):
+class ApiKeyCreate(BaseModel):  # type: ignore[misc]  # pydantic v2 + mypy 兼容限制
     provider: str
     name: str
     api_key: str
     base_url: str | None = None
 
 
-class ApiKeyOut(BaseModel):
+class ApiKeyOut(BaseModel):  # type: ignore[misc]  # pydantic v2 + mypy 兼容限制
     id: str
     provider: str
     name: str
@@ -79,7 +79,7 @@ async def add_api_key(payload: ApiKeyCreate, request: Request) -> ApiKeyOut:
 
 
 @router.delete("/{key_id}")
-async def delete_api_key(key_id: str, request: Request) -> dict:
+async def delete_api_key(key_id: str, request: Request) -> dict[str, bool]:
     user_id = current_user_id(request)
     async with async_session() as session:
         result = await session.execute(

@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum, StrEnum
+from enum import StrEnum
 from typing import Any
 
-from app.core.security_sandbox import AgentMode
+from app.core.checkpoint import CheckpointData as CheckpointData
 
 
 class MessageRole(StrEnum):
@@ -105,5 +103,3 @@ class ContextConfig:
     keep_recent_messages: int = 4
     summarize_threshold: float = 0.8
     compression_ratio: float = 0.5
-
-from app.core.checkpoint import CheckpointData

@@ -12,6 +12,8 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
+import httpx
+
 logger = logging.getLogger(__name__)
 
 
@@ -159,7 +161,7 @@ class GitHubClient:
 
     def __init__(self, config: GitHubConfig | None = None) -> None:
         self._config = config or GitHubConfig()
-        self._session: Any = None
+        self._session: httpx.AsyncClient | None = None
         self._rate_limit_remaining: int = 5000
         self._rate_limit_reset: datetime | None = None
 
@@ -173,10 +175,9 @@ class GitHubClient:
         """Get rate limit reset time."""
         return self._rate_limit_reset
 
-    async def _get_session(self) -> Any:
+    async def _get_session(self) -> httpx.AsyncClient:
         """Get or create HTTP session."""
         if self._session is None:
-            import httpx
             headers = {
                 "Accept": "application/vnd.github.v3+json",
                 "User-Agent": "AgentEngine-GitHub-Client/1.0",
@@ -347,7 +348,7 @@ class GitHubClient:
             title=data["title"],
             body=data.get("body", ""),
             state=data.get("state", "open"),
-            labels=[l["name"] for l in data.get("labels", [])],
+            labels=[label["name"] for label in data.get("labels", [])],
             author=data["user"]["login"] if data.get("user") else "",
             url=data.get("html_url", ""),
         )
@@ -397,7 +398,7 @@ class GitHubClient:
                 title=item["title"],
                 body=item.get("body", ""),
                 state=item.get("state", "open"),
-                labels=[l["name"] for l in item.get("labels", [])],
+                labels=[label["name"] for label in item.get("labels", [])],
                 author=item["user"]["login"] if item.get("user") else "",
                 url=item.get("html_url", ""),
             ))

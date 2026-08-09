@@ -10,10 +10,16 @@ import contextvars
 import difflib
 import re
 from pathlib import Path
+from typing import TypedDict
 
 import structlog
 
 logger = structlog.get_logger()
+
+class _Hunk(TypedDict):
+    old_start: int
+    old_count: int
+    lines: list[str]
 
 # Context-local current agent mode (PLAN / ACT / etc.)
 _current_agent_mode: contextvars.ContextVar[str | None] = contextvars.ContextVar(
@@ -174,8 +180,8 @@ class FilePatchService:
                 line_ending = "\n"
                 break
 
-        hunks = []
-        current_hunk = None
+        hunks: list[_Hunk] = []
+        current_hunk: _Hunk | None = None
 
         for line in patch_lines:
             if line.startswith("--- ") or line.startswith("+++ "):
@@ -193,7 +199,11 @@ class FilePatchService:
                         "lines": [],
                     }
                 else:
-                    current_hunk = {"lines": []}
+                    current_hunk = {
+                        "old_start": 0,
+                        "old_count": 0,
+                        "lines": [],
+                    }
             elif current_hunk is not None and line:
                 if line[0] in (" ", "+", "-"):
                     current_hunk["lines"].append(line)

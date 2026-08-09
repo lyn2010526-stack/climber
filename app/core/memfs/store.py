@@ -264,7 +264,7 @@ class MemFS:
         if self._auto_commit and self._git_available:
             self._git_commit_file(path, "append")
 
-    async def list(self, prefix: str = "") -> list[str]:
+    async def list_files(self, prefix: str = "") -> list[str]:
         """List all memory files, optionally filtered by prefix.
 
         Args:
@@ -287,8 +287,8 @@ class MemFS:
             return []
 
         if search_dir.is_file():
-            rel = search_dir.relative_to(self._base_path)
-            return [str(rel)]
+            rel = str(search_dir.relative_to(self._base_path))
+            return [rel]
 
         for root, dirs, files in os.walk(str(search_dir)):
             dirs[:] = [d for d in dirs if not d.startswith(".") and d != "__pycache__"]

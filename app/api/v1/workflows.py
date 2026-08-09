@@ -211,7 +211,7 @@ def _build_export_response(workflow: Workflow, workflow_id: str, fmt: str) -> Re
             media_type = "application/x-yaml"
             filename = f"workflow-{workflow_id}.yaml"
         except ImportError:
-            raise HTTPException(status_code=400, detail="PyYAML is required for YAML export. Install it with: pip install pyyaml")
+            raise HTTPException(status_code=400, detail="PyYAML is required for YAML export. Install it with: pip install pyyaml") from None
     else:
         content = json.dumps(WorkflowIO.export_workflow(workflow), indent=2, ensure_ascii=False)
         media_type = "application/json"
