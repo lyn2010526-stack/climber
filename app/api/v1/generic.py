@@ -172,14 +172,14 @@ async def list_tools() -> list[dict[str, Any]]:
 @router.get("/models/")
 async def list_models() -> list[dict[str, Any]]:
     """Return known models per provider, plus locally discovered Ollama models."""
-    from app.models.registry import ModelRegistry
+    from app.models.registry import MODEL_ALIASES, ModelRegistry
 
     model_registry = di_resolve("ModelRegistry")
     models: list[dict[str, Any]] = []
     seen: set[str] = set()
 
     # Build from registry's known aliases (deduplicated by provider:model_id)
-    for alias, (provider, model_id) in ModelRegistry.MODEL_ALIASES.items():
+    for alias, (provider, model_id) in MODEL_ALIASES.items():
         key = f"{provider}:{model_id}"
         if key not in seen:
             seen.add(key)
