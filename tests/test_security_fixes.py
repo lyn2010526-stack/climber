@@ -121,22 +121,22 @@ async def test_login_with_wrong_password(client):
 
 @pytest.mark.asyncio
 async def test_login_invalid_email_format(client):
-    """Auth system removed — login endpoint should not exist (404)."""
+    """Auth is configurable; in local-only mode login returns disabled (400/404)."""
     resp = await client.post(
         "/api/v1/auth/login",
-        json={"email": "not-an-email", "password": "password123"},
+        json={"username": "not-an-email", "password": "password123"},
     )
-    assert resp.status_code == 404
+    assert resp.status_code in (400, 404)
 
 
 @pytest.mark.asyncio
 async def test_login_short_password(client):
-    """Auth system removed — login endpoint should not exist (404)."""
+    """Auth is configurable; in local-only mode login returns disabled (400/404)."""
     resp = await client.post(
         "/api/v1/auth/login",
-        json={"email": "short@example.com", "password": "short"},
+        json={"username": "short@example.com", "password": "short"},
     )
-    assert resp.status_code == 404
+    assert resp.status_code in (400, 404)
 
 
 # ── 3. API key ownership enforced ─────────────────────────────────────────
