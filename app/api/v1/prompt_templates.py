@@ -55,6 +55,13 @@ async def list_templates(
     return [t.to_dict() for t in templates]
 
 
+@router.get("/export-all")
+async def export_all() -> dict[str, str]:
+    """Export all custom templates as JSON."""
+    repo = get_repository()
+    return {"json": repo.export_all()}
+
+
 @router.get("/{template_id}")
 async def get_template(template_id: str) -> dict[str, Any]:
     """Get a specific template by ID."""
@@ -180,10 +187,3 @@ async def export_template(template_id: str) -> dict[str, str]:
     if exported is None:
         raise HTTPException(status_code=404, detail="Template not found")
     return {"json": exported}
-
-
-@router.get("/export-all")
-async def export_all() -> dict[str, str]:
-    """Export all custom templates as JSON."""
-    repo = get_repository()
-    return {"json": repo.export_all()}
