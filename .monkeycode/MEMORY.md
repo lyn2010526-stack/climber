@@ -87,3 +87,16 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - app/tools/browser_tools.py 导航后要 wait_for_function 等 body 文本非空再提取，wait_until=domcontentloaded 可能过早
   - app/config.py 的 app_secret_key 持久化到 data/.secret_key（优先级 env APP_SECRET_KEY > 文件 > ephemeral），已在 .gitignore 排除
   - 全量测试时单独跑通过的测试可能报 OSError（如 context_manager 系列），是 ChromaDB/vector_memory 残留状态或资源问题，非代码 bug，重跑即可
+
+[运行时 API 三修复与 git 收口]
+- Date: 2026-08-10
+- Context: Agent 修复预览页 500 并收口工作区时发现
+- Category: 排错调试
+- Instructions:
+  - app/api/v1/generic.py 的 MODEL_ALIASES 是模块级变量（app/models/registry.py），不能写成 ModelRegistry.MODEL_ALIASES 类属性引用，否则 /api/v1/models 返回 500
+  - doctor 的 workspace 检查路径要用 config.BASE_DIR（/workspace），不能自行 Path.parent 叠三层（会指到 /workspace/app）；缺失目录应 mkdir 自动创建而非要求预存在
+  - FastAPI 静态路由（/export-all）必须定义在泛化路由（/{template_id}）之前，否则被吞导致 404；同 method 才冲突
+  - 冒烟测试全部无参 GET 路由：/usr/bin/python3 /tmp/opencode/smoke_routes.py；页面实测用 /tmp/opencode/verify_final.py
+  - git 收口完成：node_modules/__pycache__/data//logs/ 已 git rm --cached 解除跟踪（磁盘保留），agent-engine/climber-repo/climber_legacy_conflict 嵌套仓库 gitlink 指针已移除，.gitignore 已扩充覆盖
+  - 后端 uvicorn 用 timeout 7200（此前 3600 到期导致服务退出），后台 term 526/527 常驻
+  - 全量回归基线（3 修复后）：1487 passed / 50 skipped / 0 failed，约 13 分钟
