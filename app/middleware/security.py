@@ -78,7 +78,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """Global rate limiting middleware."""
 
     SKIP_PATHS = {
-        "/health", "/health/logs",
+        "/health", "/health/logs", "/metrics", "/api/v1/terminal/health",
     }
 
     async def dispatch(self, request: Request, call_next) -> Response:
@@ -95,4 +95,5 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 content={"detail": reason, "type": "rate_limit_exceeded"},
             )
 
+        await usage_tracker.record_request(user_id)
         return await call_next(request)

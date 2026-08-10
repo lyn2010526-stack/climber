@@ -6,7 +6,7 @@ import type { Node, Edge } from '@xyflow/react';
 
 export function WorkflowsPage() {
   const [workflows, setWorkflows] = useState<any[]>([]);
-  const [templates, _setTemplates] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
@@ -17,8 +17,15 @@ export function WorkflowsPage() {
 
   useEffect(() => {
     loadWorkflows();
-    // Template list API not available; skip loading templates
+    loadTemplates();
   }, []);
+
+  const loadTemplates = async () => {
+    try {
+      const data = await api.listWorkflowTemplates();
+      setTemplates(Array.isArray(data) ? data : []);
+    } catch { /* skip */ }
+  };
 
   const loadWorkflows = async () => {
     setLoading(true);
@@ -43,9 +50,14 @@ export function WorkflowsPage() {
     setRunning(null);
   };
 
-  const applyTemplate = async (_templateId: string) => {
-    // Template creation API not available
-    setShowTemplates(false);
+  const applyTemplate = async (templateId: string) => {
+    try {
+      await api.createWorkflowFromTemplate(templateId);
+      setShowTemplates(false);
+      loadWorkflows();
+    } catch (e: any) {
+      setError(e.message || '应用模板失败');
+    }
   };
 
   const openNewEditor = () => {
@@ -96,7 +108,7 @@ export function WorkflowsPage() {
             <div className="grid grid-cols-2 gap-3">
               {templates.map(t => (
                 <button
-                  key={t.id}
+                  key={t.template_id}
                   onClick={() => applyTemplate(t.template_id)}
                   className="text-left p-4 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl hover:border-[var(--color-accent)]/30 transition-all duration-200"
                 >

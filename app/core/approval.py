@@ -105,6 +105,14 @@ class ApprovalManager:
             requests = [r for r in requests if r.session_id == session_id]
         return requests
 
+    def list_all(self, limit: int | None = None) -> list[ApprovalRequest]:
+        """Return all tracked requests (pending + resolved), newest first."""
+        items = list(self._requests.values())
+        items.sort(key=lambda r: r.created_at, reverse=True)
+        if limit and limit > 0:
+            items = items[:limit]
+        return items
+
     def cleanup_old(self, max_age_seconds: float = 3600) -> None:
         import time
         now = time.time()

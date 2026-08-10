@@ -139,6 +139,15 @@ class UsageTracker:
 
             return True, None
 
+    async def record_request(self, user_id: str) -> None:
+        """Record a raw request timestamp for rate limiting (no usage record)."""
+        async with self._lock:
+            self._request_timestamps[user_id].append(time.time())
+            cutoff = time.time() - 86400
+            self._request_timestamps[user_id] = [
+                t for t in self._request_timestamps[user_id] if t > cutoff
+            ]
+
     async def get_usage_summary(self, user_id: str) -> dict[str, Any]:
         """Get usage summary for a user."""
         async with self._lock:
@@ -193,4 +202,8 @@ class UsageTracker:
 
 
 # Global singleton
-usage_tracker = UsageTracker()
+usage_tracker = UsageTracker(
+    requests_per_minute=600,
+    tokens_per_day=1_000_000,
+    tool_calls_per_hour=100,
+)

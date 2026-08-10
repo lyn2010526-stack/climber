@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.v1 import api_keys as api_keys_router
+from app.api.v1 import approvals as approvals_router
 from app.api.v1 import chat as chat_router
 from app.api.v1 import cluster as cluster_router
 from app.api.v1 import cost as cost_router
@@ -23,6 +24,7 @@ from app.api.v1 import sessions as sessions_router
 from app.api.v1 import settings as settings_router
 from app.api.v1 import skills_router as skills_router_module
 from app.api.v1 import tasks as tasks_router
+from app.api.v1 import terminal as terminal_router
 from app.api.v1 import workflows as workflows_router
 from app.core.reasoning import api as reasoning_router
 
@@ -48,6 +50,8 @@ router.include_router(cost_router.router, tags=["cost"])
 router.include_router(scheduler_router.router, tags=["scheduler"])
 router.include_router(mcp_router.router, tags=["mcp"])
 router.include_router(skills_router_module.router, tags=["skills"])
+router.include_router(terminal_router.router, prefix="/terminal", tags=["terminal"])
+router.include_router(approvals_router.router, prefix="/approvals", tags=["approvals"])
 
 
 def get_engine():

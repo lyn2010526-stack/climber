@@ -127,3 +127,25 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - RUF006 fire-and-forget create_task 统一 `_spawn` helper：模块级 `_background_tasks: set[asyncio.Task]` + done_callback discard，防任务被 GC 回收
   - S306 tempfile.mktemp 改 `mkstemp`(fd 关闭后路径已占位，无 TOCTOU 竞态)
   - 教训：`for t_name, t_config in ...` 中 B007 报 t_config 未用时，只改未用的那个变量为 `_`，循环体内若引用了 `t_name` 必须保留原名，误改 `_` 会导致 F821 回归
+
+[权威后端启动方式与 pth 遮蔽根因]
+- Date: 2026-08-10
+- Context: Agent 新增后端端点后重启发现 AutoLoopEngine 缺 run 属性，排查出模块解析错误
+- Category: 环境配置
+- Instructions:
+  - 根因：pip editable 留下的 `/usr/local/lib/python3.11/dist-packages/_editable_impl_agent_engine.pth` 把 `/workspace/agent-engine` 注入 sys.path 且优先，导致 `import app` 解析到参考项目而非权威 `/workspace/app`。已重命名禁用到 `/tmp/opencode/_editable_impl_agent_engine.pth.bak`。
+  - 权威后端正确启动：`cd /workspace && PYTHONPATH=/workspace /usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000`（cwd 必须是 /workspace 使 `import app` 命中 /workspace/app/__init__.py；用 `app.main:app` 非 `main:app`）。之前 `cd /workspace/app && python -m uvicorn main:app` 实际解析到 agent-engine 版本，新端点全部失效。
+  - pth 禁用前先备份到 /tmp/opencode 防丢；`_pth` 会影响参考项目导入但参考项目仅作功能参考不运行。
+- Category: 排错调试
+
+[限流中间件启用与 WS 代理修复]
+- Date: 2026-08-10
+- Context: Agent 启用 RateLimitMiddleware、新增 terminal/approvals 端点并验证 WS 时发现
+- Category: 排错调试
+- Instructions:
+  - RateLimitMiddleware 原 check_rate_limit 从不记时间戳（record 从未被调用）导致限流形同虚设；已在 UsageTracker 加 `record_request`（仅记时间戳），中间件 check 通过后调用；单例默认放宽到 600 req/min 避免开发冒烟误伤（此前 120/min 连续 curl 触发 429）。
+  - RateLimitMiddleware 在 main.py add_middleware 最后（最外层最先执行）；SKIP_PATHS 已含 /metrics、/api/v1/terminal/health。
+  - 前端 vite 代理 `/api` 必须加 `ws: true`，否则浏览器经 vite 访问 `/api/v1/ws/...`（前端 TaskMonitorPage 用 `/api/v1/ws/task` 前缀）WS 握手超时；`/ws` 独立代理无此问题。
+  - approvals/terminal/notifications 等端点历史遗留写法 `@router.get("xxx")`（无前导斜杠）与 prefix 拼接成 `/api/v1/xxx`（缺分隔符，如 notificationssend、approvalsapprove），属死路由冗余，统一改为单独 `@router.get("/xxx")`；`""` 空串路由（prefix 本身）是正确写法需保留。
+  - 审批双系统：app/core/approval.py 的 ApprovalManager(单例 approval_manager) 被新 approvals API 使用；app/core/security_sandbox.py 的 PermissionApprovalSystem 是另一套。前端审批请求仍无产生点（_validate_tool_call 的 ASK 直接 return False 而非入队）是残余缺口。
+

@@ -73,7 +73,6 @@ async def submit_feedback(
 
 
 @router.get("/stats")
-@router.get("stats")
 async def feedback_stats() -> dict:
     async with async_session() as db:
         rows = (await db.execute(select(Feedback))).scalars().all()
@@ -108,7 +107,6 @@ class ReasoningFeedbackResponse(BaseModel):
 
 
 @router.post("/reason/{trace_id}/feedback")
-@router.post("reason/{trace_id}/feedback")
 async def submit_reasoning_feedback(trace_id: str, payload: ReasoningFeedbackRequest) -> dict:
     rating = payload.thumbs or (str(payload.rating) if payload.rating is not None else "")
     message_id = f"reason:{trace_id}"
@@ -141,7 +139,6 @@ async def submit_reasoning_feedback(trace_id: str, payload: ReasoningFeedbackReq
 
 
 @router.get("/reason/{trace_id}/feedback")
-@router.get("reason/{trace_id}/feedback")
 async def get_reasoning_feedback(trace_id: str) -> list[dict]:
     message_id = f"reason:{trace_id}"
     async with async_session() as db:

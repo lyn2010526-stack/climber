@@ -56,10 +56,12 @@ export function FactoryModePage() {
     setPlan([]);
 
     try {
+      const token = localStorage.getItem('auth_token');
       const res = await fetch('/api/v1/skills/autonomous/run', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
           goal,

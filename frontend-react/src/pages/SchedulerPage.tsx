@@ -56,9 +56,11 @@ export function SchedulerPage() {
   }, [fetchTasks]);
 
   const toggleTask = async (id: string) => {
+    const target = tasks.find(t => t.id === id);
+    if (!target) return;
     try {
-      await api.updateSchedulerTask(id, {});
-      fetchTasks();
+      await api.updateSchedulerTask(id, { enabled: !target.enabled });
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, enabled: !target.enabled } : t));
     } catch { /* skip */ }
   };
 

@@ -4,6 +4,7 @@ import { Drawer } from 'vaul';
 import { Send, Square, Bot, Edit3, Check, X, Maximize2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
+import { api } from '../../api';
 import { MessageContent, MessageActions, ToolCallCard } from '../chat/MessageContent';
 import { ThinkingDetails } from '../chat/ThinkingDetails';
 import { ThinkingIndicator } from './ThinkingIndicator';
@@ -67,16 +68,24 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const handleApprovePermission = useCallback(async (id: string) => {
+    try {
+      await api.resolvePermission(id, 'allow');
+    } catch { /* skip */ }
     setPermissionRequests(prev => prev.filter(r => r.id !== id));
   }, []);
 
   const handleDenyPermission = useCallback(async (id: string) => {
+    try {
+      await api.resolvePermission(id, 'deny');
+    } catch { /* skip */ }
     setPermissionRequests(prev => prev.filter(r => r.id !== id));
   }, []);
 
   const handleApproveAllPermissions = useCallback(async () => {
+    const ids = permissionRequests.map(r => r.id);
+    await Promise.all(ids.map(id => api.resolvePermission(id, 'allow').catch(() => undefined)));
     setPermissionRequests([]);
-  }, []);
+  }, [permissionRequests]);
 
   useEffect(() => {
     if (scrollRef.current) {

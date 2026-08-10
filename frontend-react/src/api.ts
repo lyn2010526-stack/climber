@@ -148,6 +148,16 @@ class ApiClient {
     return this.request<any[]>('/workflows/');
   }
 
+  async listWorkflowTemplates() {
+    return this.request<any[]>('/workflows/templates');
+  }
+
+  async createWorkflowFromTemplate(templateId: string) {
+    return this.request<any>(`/workflows/templates/${templateId}`, {
+      method: 'POST',
+    });
+  }
+
   async createWorkflow(data: any) {
     return this.request<any>('/workflows/', {
       method: 'POST',
@@ -559,7 +569,7 @@ class ApiClient {
   }
 
   // Permissions
-  async resolvePermission(toolCallId: string, decision: 'approve' | 'deny') {
+  async resolvePermission(toolCallId: string, decision: 'allow' | 'allow_session' | 'allow_always' | 'deny') {
     return this.request<any>(`/permissions/resolve`, {
       method: 'POST',
       body: JSON.stringify({ tool_call_id: toolCallId, decision }),
@@ -574,6 +584,43 @@ class ApiClient {
     return this.request<any>('/permissions/config', {
       method: 'PUT',
       body: JSON.stringify(config),
+    });
+  }
+
+  // Terminal sandbox
+  async executeCommand(command: string, timeout?: number) {
+    return this.request<any>('/terminal/execute', {
+      method: 'POST',
+      body: JSON.stringify({ command, timeout }),
+    });
+  }
+
+  // Notifications
+  async listNotifications(limit = 50) {
+    return this.request<any>(`/notifications/history?limit=${limit}`);
+  }
+
+  async clearNotifications() {
+    return this.request<any>('/notifications/history', { method: 'DELETE' });
+  }
+
+  // Approvals
+  async listApprovals(sessionId?: string) {
+    const q = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
+    return this.request<any>(`/approvals/pending${q}`);
+  }
+
+  async approveRequest(requestId: string, reason = '') {
+    return this.request<any>('/approvals/approve', {
+      method: 'POST',
+      body: JSON.stringify({ request_id: requestId, reason }),
+    });
+  }
+
+  async rejectRequest(requestId: string, reason = '') {
+    return this.request<any>('/approvals/reject', {
+      method: 'POST',
+      body: JSON.stringify({ request_id: requestId, reason }),
     });
   }
 

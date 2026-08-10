@@ -1,9 +1,20 @@
-import { TerminalPanel } from '../components/terminal/TerminalPanel';
+import { useCallback, useRef } from 'react';
+import { TerminalPanel, type TerminalPanelHandle } from '../components/terminal/TerminalPanel';
+import { api } from '../api';
 
 export default function TerminalPage() {
-  const handleCommand = (command: string) => {
-    console.log('Terminal command:', command);
-  };
+  const termRef = useRef<TerminalPanelHandle>(null);
+
+  const handleCommand = useCallback(async (command: string) => {
+    if (!command) return;
+    try {
+      const res = await api.executeCommand(command, 30);
+      const output = res?.output || '命令已完成（无输出）';
+      termRef.current?.appendOutput(output);
+    } catch (e: any) {
+      termRef.current?.appendOutput(`错误: ${e?.message || String(e)}`);
+    }
+  }, []);
 
   return (
     <div className="h-full flex flex-col">
@@ -12,7 +23,7 @@ export default function TerminalPage() {
         <p className="text-xs text-[var(--color-text-muted)]">安全的命令执行环境</p>
       </div>
       <div className="flex-1 p-4">
-        <TerminalPanel onCommand={handleCommand} className="h-full" />
+        <TerminalPanel ref={termRef} onCommand={handleCommand} className="h-full" />
       </div>
     </div>
   );

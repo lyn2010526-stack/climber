@@ -1,12 +1,31 @@
-import { useState } from 'react';
-import { Bell, Send, CheckCircle, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Bell, Send, CheckCircle, AlertCircle, Trash2, Inbox } from 'lucide-react';
 import { api } from '../api';
+
+interface NotificationItem {
+  id?: string;
+  title: string;
+  message: string;
+  created_at?: string;
+}
 
 export function NotificationsPage() {
   const [title, setTitle] = useState('Climber 通知测试');
   const [message, setMessage] = useState('这是一条测试通知');
   const [result, setResult] = useState<{ ok: boolean; error?: string } | null>(null);
   const [sending, setSending] = useState(false);
+  const [items, setItems] = useState<NotificationItem[]>([]);
+
+  const fetchHistory = useCallback(async () => {
+    try {
+      const data = await api.listNotifications(50);
+      setItems(Array.isArray(data) ? data : data?.notifications || []);
+    } catch { /* skip */ }
+  }, []);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
 
   const send = async () => {
     setSending(true);
@@ -14,6 +33,7 @@ export function NotificationsPage() {
     try {
       const data = await api.sendNotification(title, message);
       setResult(data);
+      fetchHistory();
     } catch (e: any) {
       setResult({ ok: false, error: e.message });
     } finally {
@@ -27,10 +47,27 @@ export function NotificationsPage() {
     try {
       const data = await api.testNotification();
       setResult(data);
+      fetchHistory();
     } catch (e: any) {
       setResult({ ok: false, error: e.message });
     } finally {
       setSending(false);
+    }
+  };
+
+  const clearAll = async () => {
+    try {
+      await api.clearNotifications();
+      setItems([]);
+    } catch { /* skip */ }
+  };
+
+  const formatTime = (ts?: string) => {
+    if (!ts) return '';
+    try {
+      return new Date(ts).toLocaleString();
+    } catch {
+      return '';
     }
   };
 
@@ -102,6 +139,39 @@ export function NotificationsPage() {
               </p>
             </div>
           )}
+
+          <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-3xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">通知历史</h3>
+              {items.length > 0 && (
+                <button
+                  onClick={clearAll}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-error)] border border-[var(--color-border-subtle)] rounded-xl transition-colors"
+                >
+                  <Trash2 size={12} />
+                  清空
+                </button>
+              )}
+            </div>
+            {items.length === 0 ? (
+              <div className="py-10 flex flex-col items-center gap-2 text-[var(--color-text-muted)]">
+                <Inbox size={24} />
+                <span className="text-sm">暂无通知记录</span>
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {items.map((n, i) => (
+                  <li key={n.id || i} className="p-3 bg-white/[0.03] border border-[var(--color-border-subtle)] rounded-2xl">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-medium text-[var(--color-text-primary)] truncate">{n.title}</span>
+                      <span className="text-[10px] text-[var(--color-text-muted)] shrink-0">{formatTime(n.created_at)}</span>
+                    </div>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-1">{n.message}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
           <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-3xl p-6">
             <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">通知说明</h3>

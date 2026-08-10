@@ -23,7 +23,11 @@ from app.core.logging_setup import configure_logging, get_recent_logs, write_cra
 from app.core.memory_guardian import get_memory_guardian
 from app.core.watchdog import get_watchdog
 from app.middleware.metrics import APP_INFO, MetricsMiddleware, metrics_endpoint
-from app.middleware.security import RequestValidationMiddleware, SecurityHeadersMiddleware
+from app.middleware.security import (
+    RateLimitMiddleware,
+    RequestValidationMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.storage import db_health, init_db
 from app.storage.cache import close_redis, get_redis
 from app.tools import register_builtins
@@ -222,6 +226,7 @@ app.add_middleware(
 app.add_middleware(MetricsMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestValidationMiddleware)
+app.add_middleware(RateLimitMiddleware)
 
 app.include_router(api_router, prefix="/api/v1")
 
