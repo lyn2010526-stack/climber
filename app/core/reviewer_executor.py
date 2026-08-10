@@ -17,7 +17,8 @@ from pydantic import ValidationError
 
 from app.core.collab_prompts import get_reviewer_prompt
 from app.core.di import resolve as di_resolve
-from app.core.guardrails import GuardrailAction, GuardrailsEngine, OutputLengthRule, PIIDetectionRule
+from app.core.guardrails import ActionType as GuardrailAction
+from app.core.guardrails import GuardrailsEngine, OutputLengthRule, PIIDetectionRule
 from app.core.review_models import ReviewIssueModel, ReviewOutputModel
 from app.core.stream_events import (
     CollabEvent,

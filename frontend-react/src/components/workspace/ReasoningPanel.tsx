@@ -83,7 +83,7 @@ export function ReasoningPanel() {
     if (modes.length === 0) await loadModes();
 
     try {
-      const data = await api.reasonStream(task, mode, maxPaths, maxRounds, coverageEnabled, () => {});
+      const data = await api.submitReason(task, mode, maxPaths, maxRounds, coverageEnabled);
       setResult(data);
     } catch (err: any) {
       setError(err.message || 'Reasoning failed');

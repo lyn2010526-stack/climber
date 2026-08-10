@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { Play, Square, Brain, Wrench, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { api } from '../api';
 
 interface SubTask {
   id: string;
@@ -22,9 +23,10 @@ export function FactoryModePage() {
   const [plan, setPlan] = useState<PlanStep[]>([]);
   const [tasks, setTasks] = useState<SubTask[]>([]);
   const [finalReport, setFinalReport] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [selectedSkills, setSelectedSkills] = useState<string[]>(['code_executor', 'web_search']);
   const [selectedPrompt, setSelectedPrompt] = useState('senior-engineer');
-  const abortRef = useRef(false);
+  const abortRef = useRef<(() => void) | null>(null);
 
   const skills = [
     { id: 'code_executor', name: 'Code Executor', icon: '\u2699\ufe0f' },
@@ -49,59 +51,26 @@ export function FactoryModePage() {
 
   const startExecution = async () => {
     if (!goal.trim()) return;
-    abortRef.current = false;
+    if (abortRef.current) abortRef.current();
+    abortRef.current = null;
     setIsRunning(true);
+    setError(null);
     setFinalReport('');
     setTasks([]);
     setPlan([]);
 
-    try {
-      const token = localStorage.getItem('auth_token');
-      const res = await fetch('/api/v1/skills/autonomous/run', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          goal,
-          skills: selectedSkills,
-          prompt_template: selectedPrompt,
-        }),
-      });
-
-       if (!res.ok) throw new Error('启动失败');
-
-       const reader = res.body?.getReader();
-       if (!reader) throw new Error('无数据流');
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done || abortRef.current) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6);
-          if (data === '[DONE]') break;
-
-          try {
-            const event = JSON.parse(data);
-            handleEvent(event);
-          } catch (e) { /* skip */ }
-        }
+    abortRef.current = api.runAutonomousSkillStream(goal, selectedSkills, selectedPrompt, (event) => {
+      if (event.type === 'error') {
+        setError(event.data?.detail || '执行失败');
+        setIsRunning(false);
+        return;
       }
-    } catch (e) {
-      console.error('Execution error:', e);
-    } finally {
-      setIsRunning(false);
-    }
+      if (event.type === 'done') {
+        setIsRunning(false);
+        return;
+      }
+      handleEvent(event);
+    });
   };
 
   const handleEvent = (event: any) => {
@@ -138,7 +107,10 @@ export function FactoryModePage() {
   };
 
   const stopExecution = () => {
-    abortRef.current = true;
+    if (abortRef.current) {
+      abortRef.current();
+      abortRef.current = null;
+    }
     setIsRunning(false);
   };
 
@@ -225,6 +197,13 @@ export function FactoryModePage() {
               </button>
             )}
           </div>
+
+          {error && (
+            <div className="mt-4 flex items-center gap-2 p-4 bg-red-900/20 border border-[var(--color-error)]/40 rounded-2xl text-sm text-red-300">
+              <AlertCircle size={16} className="shrink-0" />
+              {error}
+            </div>
+          )}
         </div>
 
         {plan.length > 0 && (

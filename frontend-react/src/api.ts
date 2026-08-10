@@ -314,13 +314,12 @@ class ApiClient {
     return this.request<any[]>('/reason/modes');
   }
 
-  async reasonStream(
+  async submitReason(
     task: string,
     mode: string,
     maxPaths: number,
     maxRefineRounds: number,
     coverageEnabled: boolean,
-    _onEvent: (event: any) => void,
   ): Promise<any> {
     const body = { task, mode, max_paths: maxPaths, max_refine_rounds: maxRefineRounds, coverage_enabled: coverageEnabled };
 
@@ -328,6 +327,66 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(body),
     });
+  }
+
+  runAutonomousSkillStream(
+    goal: string,
+    skills: string[],
+    promptTemplate: string,
+    onEvent: (event: { type: string; data?: any }) => void,
+  ): () => void {
+    const url = `${BASE_URL}/skills/autonomous/run`;
+    const abortController = new AbortController();
+
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() },
+      body: JSON.stringify({ goal, skills, prompt_template: promptTemplate }),
+      signal: abortController.signal,
+    }).then(async (response) => {
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: response.statusText }));
+        throw new Error(error.detail || `HTTP ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) return;
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          onEvent({ type: 'done' });
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6);
+          if (data === '[DONE]') {
+            onEvent({ type: 'done' });
+            return;
+          }
+
+          try {
+            const event = JSON.parse(data);
+            onEvent(event);
+          } catch { /* skip */ }
+        }
+      }
+    }).catch((err) => {
+      if (err.name !== 'AbortError') {
+        onEvent({ type: 'error', data: { detail: err.message } });
+      }
+    });
+
+    return () => abortController.abort();
   }
 
   // Feedback

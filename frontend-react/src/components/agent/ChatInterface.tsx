@@ -251,7 +251,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               msg.role === 'assistant' ? (
                 <MessageActions
                   onCopy={() => navigator.clipboard.writeText(msg.content)}
-                  onFeedback={(type) => console.log('feedback', type)}
+                  onFeedback={(type) => {
+                    api.submitFeedback(msg.id, type).catch(() => undefined);
+                  }}
                   onEdit={() => startEditing(msg.id, msg.content)}
                 />
               ) : undefined

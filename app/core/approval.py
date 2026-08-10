@@ -69,18 +69,20 @@ class ApprovalManager:
 
     def approve(self, request_id: str, resolved_by: str = "human") -> ApprovalRequest | None:
         req = self._requests.get(request_id)
-        if req and req.status == ApprovalStatus.PENDING:
-            req.approve(resolved_by)
-            if request_id in self._pending:
-                self._pending[request_id].set()
+        if req is None or req.status != ApprovalStatus.PENDING:
+            return None
+        req.approve(resolved_by)
+        if request_id in self._pending:
+            self._pending[request_id].set()
         return req
 
     def reject(self, request_id: str, reason: str = "", resolved_by: str = "human") -> ApprovalRequest | None:
         req = self._requests.get(request_id)
-        if req and req.status == ApprovalStatus.PENDING:
-            req.reject(reason, resolved_by)
-            if request_id in self._pending:
-                self._pending[request_id].set()
+        if req is None or req.status != ApprovalStatus.PENDING:
+            return None
+        req.reject(reason, resolved_by)
+        if request_id in self._pending:
+            self._pending[request_id].set()
         return req
 
     async def wait_for_decision(self, request_id: str, timeout: float | None = None) -> ApprovalRequest | None:
