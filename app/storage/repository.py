@@ -160,6 +160,7 @@ class TurnRepository:
             )
             db.add(turn)
             await db.flush()
+            await db.commit()
             return turn
 
     async def get_by_id(self, turn_id: str) -> Turn | None:

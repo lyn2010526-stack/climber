@@ -6,6 +6,7 @@ Supports HTML content, attachments, CC/BCC, and multiple providers.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import smtplib
@@ -196,8 +197,6 @@ async def send_batch_emails(
         failed = 0
         errors = []
 
-        import time
-
         with smtplib.SMTP(host, port, timeout=30) as server:
             server.ehlo()
             server.starttls()
@@ -219,7 +218,7 @@ async def send_batch_emails(
 
                     server.sendmail(sender, [to_addr], msg.as_string())
                     sent += 1
-                    time.sleep(delay_seconds)
+                    await asyncio.sleep(delay_seconds)
                 except Exception as e:
                     failed += 1
                     errors.append(f"  {row.get(to_column, '?')}: {e!s}")

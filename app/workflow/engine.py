@@ -70,12 +70,9 @@ def safe_eval(expression: str, local_vars: dict[str, Any]) -> Any:
     restricted to a controlled builtin set and should not be used
     with untrusted input in production.
     """
-    try:
-        tree = ast.parse(expression, mode="eval")
-        _validate_ast(tree)
-        return eval(compile(tree, "<workflow>", "eval"), {"__builtins__": _SAFE_EVAL_BUILTINS}, local_vars)  # noqa: S307 - AST-validated sandboxed eval
-    except Exception:
-        raise
+    tree = ast.parse(expression, mode="eval")
+    _validate_ast(tree)
+    return eval(compile(tree, "<workflow>", "eval"), {"__builtins__": _SAFE_EVAL_BUILTINS}, local_vars)  # noqa: S307 - AST-validated sandboxed eval
 
 
 def _validate_code_ast(node: ast.AST) -> None:
@@ -92,14 +89,11 @@ def _validate_code_ast(node: ast.AST) -> None:
 
 
 def safe_exec(code: str, local_vars: dict[str, Any]) -> dict[str, Any]:
-    try:
-        tree = ast.parse(code, mode="exec")
-        _validate_code_ast(tree)
-        exec_globals: dict[str, Any] = {"__builtins__": _SAFE_EVAL_BUILTINS}
-        exec(compile(tree, "<workflow>", "exec"), exec_globals, local_vars)  # noqa: S102 - sandboxed AST-validated exec
-        return local_vars
-    except Exception:
-        raise
+    tree = ast.parse(code, mode="exec")
+    _validate_code_ast(tree)
+    exec_globals: dict[str, Any] = {"__builtins__": _SAFE_EVAL_BUILTINS}
+    exec(compile(tree, "<workflow>", "exec"), exec_globals, local_vars)  # noqa: S102 - sandboxed AST-validated exec
+    return local_vars
 
 logger = structlog.get_logger()
 
