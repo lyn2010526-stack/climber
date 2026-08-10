@@ -55,6 +55,7 @@ export interface WorkspaceState {
   snapshots: Array<{ id: string; sessionId: string; timestamp: number; label: string }>;
 
   setActiveSession: (id: string | null) => void;
+  setSessions: (sessions: Session[]) => void;
   setRightPanelTab: (tab: 'config' | 'diff' | 'toolcalls' | 'dag' | 'trace' | 'reasoning' | 'files') => void;
   toggleRightPanel: () => void;
   toggleFocusMode: () => void;
@@ -82,6 +83,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   snapshots: [],
 
   setActiveSession: (id) => set({ activeSessionId: id }),
+  setSessions: (sessions) => set({ sessions }),
   setRightPanelTab: (tab) => set({ rightPanelTab: tab, rightPanelOpen: true }),
   toggleRightPanel: () => set((s) => ({ rightPanelOpen: !s.rightPanelOpen })),
   toggleFocusMode: () => set((s) => ({ focusMode: !s.focusMode })),

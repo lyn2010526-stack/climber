@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { api } from '../api';
+import { useWorkspaceStore, type Session as WorkspaceSession } from '../store/workspace';
 
 export interface Session {
   id: string;
@@ -7,6 +8,20 @@ export interface Session {
   status: string;
   created_at: string;
   updated_at: string;
+}
+
+function toWorkspaceSession(s: Session): WorkspaceSession {
+  return {
+    id: s.id,
+    title: s.title ?? 'Untitled',
+    status: (s.status as WorkspaceSession['status']) || 'idle',
+    messages: [],
+    activeSkills: [],
+    activeTools: [],
+    modelConfig: { provider: '', modelId: '', temperature: 0, maxTokens: 0 },
+    tokenUsage: { used: 0, limit: 0 },
+    createdAt: Date.parse(s.created_at) || Date.now(),
+  };
 }
 
 export function useSessions() {
@@ -20,6 +35,7 @@ export function useSessions() {
     try {
       const data = await api.listSessions();
       setSessions(data);
+      useWorkspaceStore.getState().setSessions(data.map(toWorkspaceSession));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load sessions');
     } finally {
@@ -39,8 +55,10 @@ export function useSessions() {
 
   const deleteSession = useCallback(async (id: string) => {
     await api.deleteSession(id);
-    setSessions(prev => prev.filter(s => s.id !== id));
-  }, []);
+    const next = sessions.filter(s => s.id !== id);
+    setSessions(next);
+    useWorkspaceStore.getState().setSessions(next.map(toWorkspaceSession));
+  }, [sessions]);
 
   return { sessions, loading, error, createSession, deleteSession, refresh: fetchSessions };
 }
