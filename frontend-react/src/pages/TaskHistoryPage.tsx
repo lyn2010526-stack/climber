@@ -47,7 +47,7 @@ export function TaskHistoryPage() {
   const loadTasks = async () => {
     try {
       const data = await api.listTasks();
-      setTasks(data);
+      setTasks(data as TaskRecord[]);
     } catch (e) {
       console.error('Failed to load tasks:', e);
     } finally {

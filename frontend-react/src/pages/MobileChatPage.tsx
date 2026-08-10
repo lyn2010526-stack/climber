@@ -1,13 +1,17 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { MessageSquare, PanelLeft } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { ChatInterface } from '../components/agent/ChatInterface';
 import { MobileSessionDrawer } from '../components/mobile/MobileSessionDrawer';
 import { useChat, type Message } from '../useChat';
 import { useWorkspaceStore } from '../store/workspace';
 
 export function MobileChatPage() {
-  const { activeSessionId, sessions } = useWorkspaceStore();
+  const { activeSessionId, sessions } = useWorkspaceStore(useShallow(s => ({
+    activeSessionId: s.activeSessionId,
+    sessions: s.sessions,
+  })));
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { messages, isStreaming, error, sendMessage, stopStreaming } = useChat(activeSessionId);
 

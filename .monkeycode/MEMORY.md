@@ -149,3 +149,13 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - approvals/terminal/notifications 等端点历史遗留写法 `@router.get("xxx")`（无前导斜杠）与 prefix 拼接成 `/api/v1/xxx`（缺分隔符，如 notificationssend、approvalsapprove），属死路由冗余，统一改为单独 `@router.get("/xxx")`；`""` 空串路由（prefix 本身）是正确写法需保留。
   - 审批双系统：app/core/approval.py 的 ApprovalManager(单例 approval_manager) 被新 approvals API 使用；app/core/security_sandbox.py 的 PermissionApprovalSystem 是另一套。前端审批请求仍无产生点（_validate_tool_call 的 ASK 直接 return False 而非入队）是残余缺口。
 
+[后端 WS 端到端与 agent_engine 边界测试要点]
+- Date: 2026-08-10
+- Context: Agent 新增 tests/test_websocket_endpoints.py 与 tests/test_agent_engine_edges.py 时发现
+- Category: 测试方法
+- Instructions:
+  - WS 端到端用 fastapi TestClient（sync）的 websocket_connect，AsyncClient 不支持；module scope `with TestClient(app)` 先例见 test_new_routes.py；非法 group 关闭后 `ws.receive()` 返回 {"type":"websocket.close"}，非法 task 连接保持打开仍可收 pong
+  - agent_engine 测试必须 mock `engine._persist_message`（async no-op）和 `engine.memory_service`（假对象），否则每轮真实 DB commit + chromadb 查询使单测试 50s+ 甚至 120s 超时；engine.debug_loop 置 None 防自动恢复干扰
+  - ToolRegistry.execute 吞掉工具异常，把 `Error executing {name}: {e}` 作为 result 返回（error 字段为空），断言工具失败须看 TOOL_RESULT 的 result 字段
+  - 已知 bug：group_ws_hub._save_group_message 用 `sender_id=` 构造 AgentGroupMessage，但模型只有 agent_id/sender_name，任何 group message 都会 TypeError 断开；测 group ack 路径须 monkeypatch handle_message，非法 group 路径不受影响
+

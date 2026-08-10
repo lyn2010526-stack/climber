@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Drawer } from 'vaul';
 import { MessageSquare, Sparkles, Network, Cpu, Bot, Settings, MoreHorizontal } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/workspace';
-
 const MOBILE_TABS: { id: string; icon: typeof MessageSquare; label: string }[] = [
   { id: 'chat', icon: MessageSquare, label: '工作台' },
   { id: 'factory', icon: Sparkles, label: '执行' },
@@ -17,7 +16,7 @@ const MORE_ITEMS: { id: string; icon: typeof Settings; label: string }[] = [
 
 export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: string; onNavigate: (page: string) => void }) {
   const [moreOpen, setMoreOpen] = useState(false);
-  const { sessions } = useWorkspaceStore();
+  const sessions = useWorkspaceStore(s => s.sessions);
 
   return (
     <>

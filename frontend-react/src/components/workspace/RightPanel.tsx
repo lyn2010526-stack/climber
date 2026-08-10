@@ -3,6 +3,7 @@ import {
   Settings, GitBranch, Activity, FolderTree, ChevronDown, ChevronRight,
   Zap, Brain, Sliders, Timer, Shield, FileDiff, Wrench,
 } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useWorkspaceStore } from '../../store/workspace';
 import { ReasoningPanel } from './ReasoningPanel';
 import { DiffPanel } from '../code/DiffPanel';
@@ -11,7 +12,13 @@ import type { ToolCall } from '../agent/ToolCallVisualization';
 import { api } from '../../api';
 
 export function RightPanel() {
-  const { rightPanelTab, setRightPanelTab, rightPanelOpen, activeSessionId, sessions } = useWorkspaceStore();
+  const { rightPanelTab, rightPanelOpen, activeSessionId, sessions } = useWorkspaceStore(useShallow(s => ({
+    rightPanelTab: s.rightPanelTab,
+    rightPanelOpen: s.rightPanelOpen,
+    activeSessionId: s.activeSessionId,
+    sessions: s.sessions,
+  })));
+  const setRightPanelTab = useWorkspaceStore(s => s.setRightPanelTab);
 
   if (!rightPanelOpen) return null;
 
@@ -381,7 +388,7 @@ function DiffPanelTab({ sessionId }: { sessionId: string | null }) {
     if (!sessionId) return;
     setLoading(true);
     api.getSessionMessages(sessionId).then((messages) => {
-      const toolResults = messages.filter((m: any) => m.type === 'tool-result');
+      const toolResults = (messages as any).filter((m: any) => m.type === 'tool-result');
       const diffMessages = toolResults.filter((m: any) =>
         m.content && typeof m.content === 'string' && m.content.includes('diff --git')
       );
@@ -437,7 +444,7 @@ function ToolCallsTab({ sessionId }: { sessionId: string | null }) {
     if (!sessionId) return;
     setLoading(true);
     api.getSessionMessages(sessionId).then((messages) => {
-      const toolMessages = messages.filter((m: any) => m.type === 'tool-call' || m.type === 'tool_call');
+      const toolMessages = (messages as any).filter((m: any) => m.type === 'tool-call' || m.type === 'tool_call');
       const calls: ToolCall[] = toolMessages.map((m: any, idx: number) => ({
         id: m.id || `tool-${idx}`,
         name: m.metadata?.toolName || m.content?.name || 'unknown',

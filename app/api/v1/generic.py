@@ -1147,7 +1147,8 @@ async def list_group_messages(group_id: str, limit: int = 50) -> dict[str, Any]:
             "messages": [
                 {
                     "id": m.id,
-                    "sender_id": m.sender_id,
+                    "sender_id": m.agent_id or "",
+                    "agent_id": m.agent_id,
                     "sender_name": m.sender_name,
                     "content": m.content,
                     "message_type": m.message_type,

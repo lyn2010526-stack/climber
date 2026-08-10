@@ -53,7 +53,7 @@ export function MobileTasksPage() {
   const fetchTasks = useCallback(async () => {
     try {
       const data = await api.listTasks();
-      setTasks(data);
+      setTasks(data as unknown as Task[]);
     } catch { /* skip */ }
   }, []);
 

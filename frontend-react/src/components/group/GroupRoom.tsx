@@ -10,7 +10,7 @@ interface GroupMember {
   agent_id: string;
   role: string;
   status: string;
-  message_count: number;
+  message_count?: number;
 }
 
 interface GroupMessage {

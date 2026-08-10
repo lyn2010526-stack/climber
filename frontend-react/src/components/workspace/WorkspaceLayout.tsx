@@ -6,7 +6,7 @@ import { useWorkspaceStore } from '../../store/workspace';
 import { ChatPage } from '../../pages/ChatPage';
 
 export function WorkspaceLayout() {
-  const { rightPanelOpen } = useWorkspaceStore();
+  const rightPanelOpen = useWorkspaceStore(s => s.rightPanelOpen);
 
   return (
     <div className="flex-1 flex flex-col bg-[#0A0A0F]">

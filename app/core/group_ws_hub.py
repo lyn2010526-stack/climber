@@ -119,7 +119,7 @@ class GroupWebSocketHub:
         async with async_session() as db:
             msg = AgentGroupMessage(
                 group_id=group_id,
-                sender_id=payload.get("sender_id", ""),
+                agent_id=payload.get("agent_id") or payload.get("sender_id"),
                 sender_name=payload.get("sender_name", "Anonymous"),
                 content=payload.get("content", ""),
                 message_type=payload.get("message_type", "text"),

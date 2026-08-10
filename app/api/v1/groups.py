@@ -131,7 +131,7 @@ async def add_group_member(group_id: str, request: Request) -> dict[str, Any]:
 async def list_group_messages(group_id: str, limit: int = 50) -> dict[str, Any]:
     async with async_session() as db:
         rows = (await db.execute(select(AgentGroupMessage).where(AgentGroupMessage.group_id == group_id).order_by(AgentGroupMessage.created_at.desc()).limit(limit))).scalars().all()
-        return {"messages": [{"id": m.id, "sender_id": m.sender_id, "sender_name": m.sender_name, "content": m.content, "message_type": m.message_type, "created_at": m.created_at.isoformat() if m.created_at else ""} for m in rows]}
+        return {"messages": [{"id": m.id, "sender_id": m.agent_id or "", "agent_id": m.agent_id, "sender_name": m.sender_name, "content": m.content, "message_type": m.message_type, "created_at": m.created_at.isoformat() if m.created_at else ""} for m in rows]}
 
 
 @router.delete("/groups/{group_id}/members/{member_id}")

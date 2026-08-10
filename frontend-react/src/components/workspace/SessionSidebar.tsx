@@ -10,7 +10,8 @@ import { PermissionModes } from '../agent/PermissionModes';
 import type { PermissionMode } from '../agent/PermissionModes';
 
 export function SessionSidebar() {
-  const { activeSessionId, setActiveSession } = useWorkspaceStore();
+  const activeSessionId = useWorkspaceStore(s => s.activeSessionId);
+  const setActiveSession = useWorkspaceStore(s => s.setActiveSession);
   const { sessions, loading, createSession, deleteSession, refresh } = useSessions();
 
   const [agents, setAgents] = useState<any[]>([]);
@@ -24,7 +25,7 @@ export function SessionSidebar() {
   useEffect(() => {
     api.listAgents().then((data) => {
       setAgents(data);
-      if (data.length > 0) setSelectedAgent(data[0].id);
+      if (data.length > 0) setSelectedAgent(data[0]?.id ?? '');
     }).catch(() => {});
   }, []);
 

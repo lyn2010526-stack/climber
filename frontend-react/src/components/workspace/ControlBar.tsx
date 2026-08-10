@@ -2,6 +2,7 @@ import {
   Play, Pause, Square, Camera, RotateCcw, Maximize2, Minimize2,
   FolderTree, GitBranch, Activity, Settings, Eye, EyeOff,
 } from 'lucide-react';
+import { useShallow } from 'zustand/react/shallow';
 import { useWorkspaceStore } from '../../store/workspace';
 import { PermissionModeToggle } from './PermissionModeToggle';
 import { AutonomySlider } from './AutonomySlider';
@@ -9,13 +10,27 @@ import { SessionStatusBadge } from './SessionStatusBadge';
 
 export function ControlBar() {
   const {
-    activeSessionId, sessions, rightPanelOpen, toggleRightPanel,
-    rightPanelTab, setRightPanelTab, focusMode, toggleFocusMode,
-    expertMode, toggleExpertMode,
-    permissionMode, setPermissionMode,
-    autonomyLevel, setAutonomyLevel,
-    updateSession, addSnapshot, snapshots,
-  } = useWorkspaceStore();
+    activeSessionId, sessions, rightPanelOpen, rightPanelTab,
+    focusMode, expertMode, permissionMode, autonomyLevel, snapshots,
+  } = useWorkspaceStore(useShallow(s => ({
+    activeSessionId: s.activeSessionId,
+    sessions: s.sessions,
+    rightPanelOpen: s.rightPanelOpen,
+    rightPanelTab: s.rightPanelTab,
+    focusMode: s.focusMode,
+    expertMode: s.expertMode,
+    permissionMode: s.permissionMode,
+    autonomyLevel: s.autonomyLevel,
+    snapshots: s.snapshots,
+  })));
+  const toggleRightPanel = useWorkspaceStore(s => s.toggleRightPanel);
+  const setRightPanelTab = useWorkspaceStore(s => s.setRightPanelTab);
+  const toggleFocusMode = useWorkspaceStore(s => s.toggleFocusMode);
+  const toggleExpertMode = useWorkspaceStore(s => s.toggleExpertMode);
+  const setPermissionMode = useWorkspaceStore(s => s.setPermissionMode);
+  const setAutonomyLevel = useWorkspaceStore(s => s.setAutonomyLevel);
+  const updateSession = useWorkspaceStore(s => s.updateSession);
+  const addSnapshot = useWorkspaceStore(s => s.addSnapshot);
 
   const activeSession = sessions.find(s => s.id === activeSessionId);
   const isRunning = activeSession?.status === 'running';

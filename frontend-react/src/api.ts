@@ -1,5 +1,25 @@
 // API client for backend communication
 
+import type {
+  AgentSummary,
+  CreateSessionResult,
+  DeleteResult,
+  DocumentSummary,
+  GroupSummary,
+  MessagesResponse,
+  NotificationResult,
+  NotificationsResponse,
+  PlatformStats,
+  ReasoningMode,
+  SessionSummary,
+  SkillSummary,
+  TaskDetail,
+  TaskSummary,
+  ToolSummary,
+  WorkflowSummary,
+  WorkflowTemplate,
+} from './types/api';
+
 const BASE_URL = '/api/v1';
 
 export interface ApiError {
@@ -33,8 +53,8 @@ class ApiClient {
   }
 
   // Agents
-  async listAgents() {
-    const response = await this.request<any[] | { items: any[] }>('/agents');
+  async listAgents(): Promise<AgentSummary[]> {
+    const response = await this.request<AgentSummary[] | { items: AgentSummary[] }>('/agents');
     return Array.isArray(response) ? response : response.items;
   }
 
@@ -50,24 +70,24 @@ class ApiClient {
   }
 
   // Sessions
-  async listSessions() {
-    const response = await this.request<any[] | { items: any[] }>('/sessions');
+  async listSessions(): Promise<SessionSummary[]> {
+    const response = await this.request<SessionSummary[] | { items: SessionSummary[] }>('/sessions');
     return Array.isArray(response) ? response : response.items;
   }
 
-  async createSession(data: any) {
-    return this.request<any>('/sessions', {
+  async createSession(data: any): Promise<CreateSessionResult> {
+    return this.request<CreateSessionResult>('/sessions', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async deleteSession(id: string) {
-    return this.request(`/sessions/${id}`, { method: 'DELETE' });
+  async deleteSession(id: string): Promise<DeleteResult> {
+    return this.request<DeleteResult>(`/sessions/${id}`, { method: 'DELETE' });
   }
 
-  async getSessionMessages(sessionId: string) {
-    return this.request<any>(`/sessions/${sessionId}/messages`);
+  async getSessionMessages(sessionId: string): Promise<MessagesResponse> {
+    return this.request<MessagesResponse>(`/sessions/${sessionId}/messages`);
   }
 
   // Chat (SSE)
@@ -134,8 +154,8 @@ class ApiClient {
   }
 
   // Tools
-  async listTools() {
-    return this.request<any[]>('/tools');
+  async listTools(): Promise<ToolSummary[]> {
+    return this.request<ToolSummary[]>('/tools');
   }
 
   // Models
@@ -144,16 +164,16 @@ class ApiClient {
   }
 
   // Workflows
-  async listWorkflows() {
-    return this.request<any[]>('/workflows/');
+  async listWorkflows(): Promise<WorkflowSummary[]> {
+    return this.request<WorkflowSummary[]>('/workflows/');
   }
 
-  async listWorkflowTemplates() {
-    return this.request<any[]>('/workflows/templates');
+  async listWorkflowTemplates(): Promise<WorkflowTemplate[]> {
+    return this.request<WorkflowTemplate[]>('/workflows/templates');
   }
 
-  async createWorkflowFromTemplate(templateId: string) {
-    return this.request<any>(`/workflows/templates/${templateId}`, {
+  async createWorkflowFromTemplate(templateId: string): Promise<WorkflowSummary> {
+    return this.request<WorkflowSummary>(`/workflows/templates/${templateId}`, {
       method: 'POST',
     });
   }
@@ -196,8 +216,8 @@ class ApiClient {
   }
 
   // Stats
-  async getStats() {
-    return this.request<any>('/stats');
+  async getStats(): Promise<PlatformStats> {
+    return this.request<PlatformStats>('/stats');
   }
   // Cluster / Groups
   async createCluster(requirements: string) {
@@ -211,8 +231,8 @@ class ApiClient {
     return this.request<any>('/cluster/status');
   }
 
-  async listGroups() {
-    return this.request<any[]>('/groups/');
+  async listGroups(): Promise<GroupSummary[]> {
+    return this.request<GroupSummary[]>('/groups/');
   }
 
   async createGroup(data: { name: string; description?: string; topic?: string }) {
@@ -222,8 +242,8 @@ class ApiClient {
     });
   }
 
-  async getGroup(id: string) {
-    return this.request<any>(`/groups/${id}`);
+  async getGroup(id: string): Promise<GroupSummary> {
+    return this.request<GroupSummary>(`/groups/${id}`);
   }
 
   async addGroupMember(groupId: string, data: Record<string, any>) {
@@ -242,8 +262,8 @@ class ApiClient {
   }
 
   // Documents
-  async listDocuments() {
-    return this.request<any[]>('/documents/');
+  async listDocuments(): Promise<DocumentSummary[]> {
+    return this.request<DocumentSummary[]>('/documents/');
   }
 
   // Traces
@@ -290,19 +310,19 @@ class ApiClient {
     });
   }
 
-  async listSkills() {
-    return this.request<any[]>('/skills');
+  async listSkills(): Promise<SkillSummary[]> {
+    return this.request<SkillSummary[]>('/skills');
   }
 
-  async sendNotification(title: string, message: string) {
-    return this.request<any>('/notifications/send', {
+  async sendNotification(title: string, message: string): Promise<NotificationResult> {
+    return this.request<NotificationResult>('/notifications/send', {
       method: 'POST',
       body: JSON.stringify({ title, message }),
     });
   }
 
-  async testNotification() {
-    return this.request<any>('/notifications/test');
+  async testNotification(): Promise<NotificationResult> {
+    return this.request<NotificationResult>('/notifications/test');
   }
 
   async runDoctor() {
@@ -310,8 +330,8 @@ class ApiClient {
   }
 
   // Reasoning
-  async listReasoningModes() {
-    return this.request<any[]>('/reason/modes');
+  async listReasoningModes(): Promise<ReasoningMode[]> {
+    return this.request<ReasoningMode[]>('/reason/modes');
   }
 
   async submitReason(
@@ -430,13 +450,13 @@ class ApiClient {
   }
 
   // Tasks
-  async listTasks(params?: { status?: string; limit?: number }) {
+  async listTasks(params?: { status?: string; limit?: number }): Promise<TaskSummary[]> {
     const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
-    return this.request<any[]>(`/tasks${qs}`);
+    return this.request<TaskSummary[]>(`/tasks${qs}`);
   }
 
-  async getTask(taskId: string) {
-    return this.request<any>(`/tasks/${taskId}`);
+  async getTask(taskId: string): Promise<TaskDetail> {
+    return this.request<TaskDetail>(`/tasks/${taskId}`);
   }
 
   async createTask(data: any) {
@@ -569,12 +589,12 @@ class ApiClient {
   }
 
   // Notifications
-  async listNotifications(limit = 50) {
-    return this.request<any>(`/notifications/history?limit=${limit}`);
+  async listNotifications(limit = 50): Promise<NotificationsResponse> {
+    return this.request<NotificationsResponse>(`/notifications/history?limit=${limit}`);
   }
 
-  async clearNotifications() {
-    return this.request<any>('/notifications/history', { method: 'DELETE' });
+  async clearNotifications(): Promise<NotificationResult> {
+    return this.request<NotificationResult>('/notifications/history', { method: 'DELETE' });
   }
 
 }
