@@ -12,11 +12,10 @@ from pathlib import Path
 from typing import Any
 
 import structlog
+from sqlalchemy import select
 
 from app.storage import async_session
 from app.storage.models_platform import Skill
-from app.storage.models_plugins import MCPServerRecord
-from sqlalchemy import select
 
 logger = structlog.get_logger()
 

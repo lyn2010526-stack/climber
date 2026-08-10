@@ -19,8 +19,6 @@ Directory structure:
 from __future__ import annotations
 
 import logging
-import os
-import re
 from pathlib import Path
 from string import Template
 

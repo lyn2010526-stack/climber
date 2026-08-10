@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -155,7 +155,7 @@ class TurnRepository:
                 session_id=session_id,
                 status=status,
                 checkpoint_id=checkpoint_id,
-                started_at=datetime.utcnow() if status == "running" else None,
+                started_at=datetime.now(UTC).replace(tzinfo=None) if status == "running" else None,
                 metadata_=metadata_ or {},
             )
             db.add(turn)
@@ -185,7 +185,7 @@ class TurnRepository:
             return result.scalar_one_or_none()
 
     async def complete(self, turn_id: str, result: str | None = None, error: str | None = None) -> Turn | None:
-        now = datetime.utcnow()
+        now = datetime.now(UTC).replace(tzinfo=None)
         values: dict[str, Any] = {"completed_at": now}
         if result is not None:
             values["result"] = result
@@ -209,7 +209,7 @@ class TurnRepository:
                 session_id=session_id,
                 status="running",
                 checkpoint_id=checkpoint_id,
-                started_at=datetime.utcnow(),
+                started_at=datetime.now(UTC).replace(tzinfo=None),
                 metadata_=metadata_ or {},
             )
             db.add(turn)
@@ -225,7 +225,7 @@ class TurnRepository:
         tokens_used: int = 0,
     ) -> Turn | None:
         """Mark a turn as completed with metrics."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC).replace(tzinfo=None)
         values: dict[str, Any] = {
             "completed_at": now,
             "status": "completed",
@@ -244,7 +244,7 @@ class TurnRepository:
         tokens_used: int = 0,
     ) -> Turn | None:
         """Mark a turn as failed with error details."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC).replace(tzinfo=None)
         values: dict[str, Any] = {
             "completed_at": now,
             "status": "failed",

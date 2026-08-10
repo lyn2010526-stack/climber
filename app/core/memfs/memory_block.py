@@ -17,10 +17,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
-
 
 FRONTMATTER_PATTERN = re.compile(
     r"^---\s*\n(.*?)\n---\s*\n(.*)",
@@ -45,7 +44,7 @@ class MemoryBlock:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         if "created" not in self.metadata:
             self.metadata["created"] = now
         if "updated" not in self.metadata:
@@ -67,7 +66,7 @@ class MemoryBlock:
     def to_markdown(self) -> str:
         """Serialize to markdown with YAML frontmatter."""
         meta = dict(self.metadata)
-        meta["updated"] = datetime.now(timezone.utc).isoformat()
+        meta["updated"] = datetime.now(UTC).isoformat()
 
         if self.description:
             meta["description"] = self.description
@@ -110,7 +109,7 @@ class MemoryBlock:
         tags: list[str] | None = None,
     ) -> MemoryBlock:
         """Factory method to create a new MemoryBlock with standard metadata."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         meta: dict[str, Any] = {
             "id": str(uuid4()),
             "created": now,

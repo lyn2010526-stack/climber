@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import os
-import sys
 import tempfile
-from unittest.mock import patch
 
 import pytest
 
@@ -17,17 +15,15 @@ os.environ["CLIMBER_SANDBOX_WORKDIR"] = tempfile.mkdtemp(prefix="climber_test_")
 # ─── Import modules under test ──────────────────────────────────────────────
 
 from app.core.security_sandbox import (
-    SecuritySandbox,
     SandboxConfig,
+    SecuritySandbox,
     validate_command_allowlist,
 )
+from app.tools.builtins import _safe_eval_math, calculator
 from app.tools.native_tools import (
     _validate_command_safety,
     _validate_path_within_workspace,
-    _get_workspace_root,
 )
-from app.tools.builtins import calculator, _safe_eval_math
-
 
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -120,14 +116,14 @@ class TestPathTraversalBlocked:
 
     def test_workspace_root_is_valid(self, workspace_root):
         """Workspace root path itself should be valid."""
-        valid, msg = _validate_path_within_workspace(workspace_root)
+        valid, _msg = _validate_path_within_workspace(workspace_root)
         # Returns the resolved path (True) or (False, error)
         assert valid
 
     def test_subdirectory_within_workspace_valid(self, workspace_root):
         """Subdirectories within workspace should be valid."""
         subdir = os.path.join(workspace_root, "subdir", "file.txt")
-        valid, msg = _validate_path_within_workspace(subdir)
+        valid, _msg = _validate_path_within_workspace(subdir)
         assert valid
 
     def test_sandbox_blocks_traversal(self, sandbox):
@@ -138,7 +134,7 @@ class TestPathTraversalBlocked:
 
     def test_sandbox_blocks_outside_paths(self, sandbox):
         """Sandbox should reject paths outside allowed directories."""
-        ok, reason = sandbox.validate_file_access("/etc/shadow")
+        ok, _reason = sandbox.validate_file_access("/etc/shadow")
         assert not ok
 
     def test_sandbox_blocks_blocked_paths(self, sandbox):
@@ -228,11 +224,9 @@ class TestContainerNameValidation:
 
     def test_container_exec_validates_name(self, workspace_root):
         """container_exec should validate container name before execution."""
-        import asyncio
         # This will fail because docker is not available, but the validation
         # should happen before the docker call
         # We can test the validation logic directly
-        from app.tools.builtins import container_exec
         # Test that the pattern matching works
         import re
         container_pattern = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_-]+$')
@@ -253,17 +247,17 @@ class TestSecuritySandboxAllowlist:
 
     def test_validate_command_allowlist_blocks_dangerous(self):
         """Dangerous commands should be blocked by allowlist."""
-        is_allowed, reason = validate_command_allowlist("rm -rf /home")
+        is_allowed, _reason = validate_command_allowlist("rm -rf /home")
         assert not is_allowed
 
     def test_validate_command_allowlist_empty_command(self):
         """Empty commands should be blocked."""
-        is_allowed, reason = validate_command_allowlist("")
+        is_allowed, _reason = validate_command_allowlist("")
         assert not is_allowed
 
     def test_validate_command_allowlist_invalid_syntax(self):
         """Commands with invalid shell syntax should be blocked."""
-        is_allowed, reason = validate_command_allowlist("echo 'unclosed")
+        is_allowed, _reason = validate_command_allowlist("echo 'unclosed")
         assert not is_allowed
 
 
@@ -280,7 +274,7 @@ class TestSecuritySandboxValidateCommand:
 
     def test_blocks_allowlist_violations(self, sandbox):
         """Commands not in allowlist should be blocked."""
-        ok, reason = sandbox.validate_command("evilcmd --attack")
+        ok, _reason = sandbox.validate_command("evilcmd --attack")
         assert not ok
 
     def test_allows_safe_commands(self, sandbox):
@@ -291,10 +285,10 @@ class TestSecuritySandboxValidateCommand:
 
     def test_allows_git_commands(self, sandbox):
         """Git commands should be allowed."""
-        ok, reason = sandbox.validate_command("git status")
+        ok, _reason = sandbox.validate_command("git status")
         assert ok
 
     def test_allows_npm_commands(self, sandbox):
         """NPM commands should be allowed."""
-        ok, reason = sandbox.validate_command("npm test")
+        ok, _reason = sandbox.validate_command("npm test")
         assert ok

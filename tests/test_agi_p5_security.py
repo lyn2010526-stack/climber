@@ -11,13 +11,13 @@ Tests for:
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 os.environ.setdefault("APP_TESTING", "true")
 
 import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 from app.core.security import (
     DockerSandbox,
@@ -29,7 +29,6 @@ from app.core.security import (
     ResourceQuota,
 )
 from app.core.security.resource_quotas import QuotaExceededError, ResourceUsage
-
 
 # === Docker Sandbox Tests ===
 
@@ -216,19 +215,19 @@ class TestFSIsolationManager:
             manager = FSIsolationManager(config)
             safe_path = os.path.join(tmp, "file.txt")
             Path(safe_path).touch()
-            ok, reason = manager.validate_path(safe_path)
+            ok, _reason = manager.validate_path(safe_path)
             assert ok is True
 
     def test_validate_path_outside_allowed(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = FSIsolationConfig(allowed_paths=[tmp])
             manager = FSIsolationManager(config)
-            ok, reason = manager.validate_path("/tmp/outside/file.txt")
+            ok, _reason = manager.validate_path("/tmp/outside/file.txt")
             assert ok is False
 
     def test_validate_empty_path(self):
         manager = FSIsolationManager()
-        ok, reason = manager.validate_path("")
+        ok, _reason = manager.validate_path("")
         assert ok is False
 
     def test_sanitize_path_resolves_traversal(self):
@@ -269,7 +268,7 @@ class TestFSIsolationManager:
 
     def test_validate_file_type_allowed(self):
         manager = FSIsolationManager()
-        ok, reason = manager.validate_file_type("script.py")
+        ok, _reason = manager.validate_file_type("script.py")
         assert ok is True
 
     def test_validate_file_type_blocked(self):
@@ -283,7 +282,7 @@ class TestFSIsolationManager:
             path = os.path.join(tmp, "small.txt")
             Path(path).write_text("small content")
             manager = FSIsolationManager()
-            ok, reason = manager.validate_file_size(path)
+            ok, _reason = manager.validate_file_size(path)
             assert ok is True
 
     def test_validate_file_size_exceeds_limit(self):
@@ -311,7 +310,7 @@ class TestFSIsolationManager:
     def test_wildcard_blocked_path(self):
         config = FSIsolationConfig(blocked_paths=["/home/*/.ssh"])
         manager = FSIsolationManager(config)
-        ok, reason = manager.validate_path("/home/user/.ssh/id_rsa")
+        ok, _reason = manager.validate_path("/home/user/.ssh/id_rsa")
         assert ok is False
 
 
@@ -344,7 +343,7 @@ class TestNetworkAllowlist:
 
     def test_check_url_allowed(self):
         allowlist = NetworkAllowlist()
-        ok, reason = allowlist.check_url("https://api.openai.com/v1/chat")
+        ok, _reason = allowlist.check_url("https://api.openai.com/v1/chat")
         assert ok is True
 
     def test_check_url_blocked(self):
@@ -355,7 +354,7 @@ class TestNetworkAllowlist:
 
     def test_check_url_no_hostname(self):
         allowlist = NetworkAllowlist()
-        ok, reason = allowlist.check_url("file:///etc/passwd")
+        ok, _reason = allowlist.check_url("file:///etc/passwd")
         assert ok is False
 
     def test_get_allowed_domains(self):
@@ -371,7 +370,7 @@ class TestNetworkAllowlist:
 
     def test_validate_dns_invalid_domain(self):
         allowlist = NetworkAllowlist(allowed_domains=[])
-        ok, reason = allowlist.validate_dns("this-domain-does-not-exist-12345.xyz")
+        ok, _reason = allowlist.validate_dns("this-domain-does-not-exist-12345.xyz")
         assert ok is False or ok is True
 
 

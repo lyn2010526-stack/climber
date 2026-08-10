@@ -10,7 +10,7 @@ import json
 import os
 import re
 import time
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import structlog
@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 logger = structlog.get_logger()
 
 
-class MemoryType(str, Enum):
+class MemoryType(StrEnum):
     FACT = "fact"                  # Short factual statements
     PREFERENCE = "preference"      # User preferences
     PROJECT = "project"            # Project-specific context
@@ -73,7 +73,7 @@ class PersistentMemoryManager:
             for fname in files:
                 if fname.endswith(".json"):
                     try:
-                        with open(os.path.join(root, fname), "r") as f:
+                        with open(os.path.join(root, fname)) as f:
                             data = json.load(f)
                         entry = MemoryEntry(**data)
                         self._cache[entry.id] = entry

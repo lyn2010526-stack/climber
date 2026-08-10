@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import httpx
@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 logger = structlog.get_logger()
 
 
-class ConfidenceLevel(str, Enum):
+class ConfidenceLevel(StrEnum):
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
@@ -110,10 +110,9 @@ class HallucinationGuard:
 
         if ratio > 0.6:
             return ConfidenceLevel.HIGH
-        elif ratio > 0.3:
+        if ratio > 0.3:
             return ConfidenceLevel.MEDIUM
-        else:
-            return ConfidenceLevel.LOW
+        return ConfidenceLevel.LOW
 
     async def verify_response(self, response: str) -> dict[str, Any]:
         """Full verification of a model response."""
@@ -155,9 +154,9 @@ class HallucinationGuard:
     def _get_recommendation(self, confidence: ConfidenceLevel, uncertainty_count: int) -> str:
         if confidence == ConfidenceLevel.HIGH and uncertainty_count == 0:
             return "Response appears well-supported. No action needed."
-        elif confidence == ConfidenceLevel.MEDIUM:
+        if confidence == ConfidenceLevel.MEDIUM:
             return "Some claims could benefit from additional verification."
-        elif confidence in (ConfidenceLevel.LOW, ConfidenceLevel.UNVERIFIABLE):
+        if confidence in (ConfidenceLevel.LOW, ConfidenceLevel.UNVERIFIABLE):
             return "Key claims lack supporting evidence. Recommend human review."
         if uncertainty_count > 2:
             return "Response contains multiple uncertainty flags. Verify before acting."

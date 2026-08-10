@@ -16,7 +16,6 @@ import asyncio
 import os
 import shlex
 import subprocess
-from typing import Any
 
 import structlog
 
@@ -75,10 +74,10 @@ async def native_run(command: str, timeout: int = 120, cwd: str | None = None) -
         if proc.returncode != 0:
             output += f"\n[exit code: {proc.returncode}]"
         return output if output else "Command completed (no output)"
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return f"TIMEOUT: Command exceeded {timeout}s limit"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool(description="Read any file from the system. Returns file content as text.")
@@ -88,11 +87,11 @@ async def native_read_file(path: str) -> str:
     if not valid:
         return f"Error: {reason}"
     try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             content = f.read()
         return content[:50000]
     except Exception as e:
-        return f"Error reading {path}: {str(e)}"
+        return f"Error reading {path}: {e!s}"
 
 
 @tool(description="Write content to any file path. Creates directories if needed.")
@@ -109,7 +108,7 @@ async def native_write_file(path: str, content: str) -> str:
             f.write(content)
         return f"Written {len(content)} chars to {path}"
     except Exception as e:
-        return f"Error writing {path}: {str(e)}"
+        return f"Error writing {path}: {e!s}"
 
 
 @tool(description="List files and directories at a given path.")
@@ -126,7 +125,7 @@ async def native_list_dir(path: str = ".") -> str:
             entries.append(f"{prefix}{item}{suffix}")
         return "\n".join(entries) if entries else "(empty directory)"
     except Exception as e:
-        return f"Error listing {path}: {str(e)}"
+        return f"Error listing {path}: {e!s}"
 
 
 @tool(description="Open a URL in the default web browser.")
@@ -137,7 +136,7 @@ async def open_browser(url: str) -> str:
         webbrowser.open(url)
         return f"Opened {url} in browser"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool(description="Take a screenshot of the screen. Returns the saved file path.")
@@ -154,7 +153,7 @@ async def take_screenshot(output_path: str = "/tmp/screenshot.png") -> str:
         subprocess.run(["screencapture", output_path], check=True, timeout=10)
         return output_path
     except Exception as e:
-        return f"Error taking screenshot: {str(e)}"
+        return f"Error taking screenshot: {e!s}"
 
 
 @tool(description="Click at x,y coordinates on screen.")
@@ -167,7 +166,7 @@ async def click_mouse(x: int, y: int, button: str = "left") -> str:
     except ImportError:
         return "pyautogui not installed. Install with: pip install pyautogui"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool(description="Type text at the current cursor position.")
@@ -180,7 +179,7 @@ async def type_text(text: str, interval: float = 0.02) -> str:
     except ImportError:
         return "pyautogui not installed. Install with: pip install pyautogui"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool(description="Process video with ffmpeg. Example: cut segment, convert format, extract audio.")
@@ -195,13 +194,13 @@ async def process_video(command: str) -> str:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
         output = stderr.decode("utf-8", errors="replace")[:5000]
         return output if output else "Video processing completed"
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return "TIMEOUT: Video processing exceeded 5 minutes"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool(description="Process image with ImageMagick convert command.")
@@ -222,18 +221,19 @@ async def process_image(command: str) -> str:
         if err:
             output += f"\n{err}"
         return output if output else "Image processing completed"
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return "TIMEOUT: Image processing exceeded 60s"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool(description="Search the web using a search engine. Returns top results (native mode — enhanced with num_results).")
 async def native_web_search(query: str, num_results: int = 10) -> str:
     """Search the web with enhanced result count (native mode only)."""
     try:
-        import httpx
         import re
+
+        import httpx
         url = "https://html.duckduckgo.com/html/"
         resp = await httpx.AsyncClient(timeout=15).post(url, data={"q": query})
         results = re.findall(
@@ -245,7 +245,7 @@ async def native_web_search(query: str, num_results: int = 10) -> str:
             formatted.append(f"- {title.strip()}\n  {href}")
         return "\n".join(formatted) if formatted else "No results found"
     except Exception as e:
-        return f"Error searching: {str(e)}"
+        return f"Error searching: {e!s}"
 
 
 @tool(description="Download a file from URL to a local path.")
@@ -263,7 +263,7 @@ async def download_file(url: str, output_path: str) -> str:
                 f.write(resp.content)
         return f"Downloaded {len(resp.content):,} bytes to {output_path}"
     except Exception as e:
-        return f"Error downloading: {str(e)}"
+        return f"Error downloading: {e!s}"
 
 
 # ─── Security validation helpers ──────────────────────────────────────────
@@ -283,7 +283,7 @@ _DANGEROUS_SHELL_PATTERNS = [
 
 def _validate_command_safety(command: str) -> tuple[bool, str]:
     """Check if a shell command contains dangerous patterns.
-    
+
     Returns (is_safe, reason) where reason explains the result.
     """
     for pattern in _DANGEROUS_SHELL_PATTERNS:

@@ -11,18 +11,18 @@ Provides real-time event streams for:
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, AsyncIterator
-
-from pydantic import BaseModel, Field
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 import structlog
+from pydantic import BaseModel, Field
 
 logger = structlog.get_logger(__name__)
 
 
-class StreamEventType(str, Enum):
+class StreamEventType(StrEnum):
     """Types of stream events."""
 
     UPDATES = "updates"
@@ -53,7 +53,7 @@ class StreamEvent(BaseModel):
     data: Any
     node: str | None = None
     step: int = 0
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         return {

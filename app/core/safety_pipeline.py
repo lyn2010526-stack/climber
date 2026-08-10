@@ -13,15 +13,14 @@ Merges and replaces:
 from __future__ import annotations
 
 import base64
-import os
 import re
-import resource
-import structlog
 import urllib.parse
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
@@ -207,15 +206,15 @@ class StaticAnalyzer:
             expected = prop.get("type")
             if expected == "string" and not isinstance(value, str):
                 return SafetyResult.block(f"Field {key} must be string", risk=0.2, layer="L1")
-            elif expected == "integer" and not isinstance(value, int):
+            if expected == "integer" and not isinstance(value, int):
                 return SafetyResult.block(f"Field {key} must be integer", risk=0.2, layer="L1")
-            elif expected == "number" and not isinstance(value, (int, float)):
+            if expected == "number" and not isinstance(value, (int, float)):
                 return SafetyResult.block(f"Field {key} must be number", risk=0.2, layer="L1")
-            elif expected == "boolean" and not isinstance(value, bool):
+            if expected == "boolean" and not isinstance(value, bool):
                 return SafetyResult.block(f"Field {key} must be boolean", risk=0.2, layer="L1")
-            elif expected == "array" and not isinstance(value, list):
+            if expected == "array" and not isinstance(value, list):
                 return SafetyResult.block(f"Field {key} must be array", risk=0.2, layer="L1")
-            elif expected == "object" and not isinstance(value, dict):
+            if expected == "object" and not isinstance(value, dict):
                 return SafetyResult.block(f"Field {key} must be object", risk=0.2, layer="L1")
 
         return SafetyResult.pass_(layer="L1")
@@ -226,7 +225,7 @@ class StaticAnalyzer:
         if not result.allowed:
             if result.risk_score >= 0.9:
                 return RiskLevel.CRITICAL
-            elif result.risk_score >= 0.6:
+            if result.risk_score >= 0.6:
                 return RiskLevel.HIGH
             return RiskLevel.MEDIUM
 
@@ -313,7 +312,7 @@ class SafetyPipeline:
     @property
     def l2(self):
         if self._l2 is None:
-            from app.core.sandbox import SandboxExecutor, SandboxConfig
+            from app.core.sandbox import SandboxConfig, SandboxExecutor
             self._l2 = SandboxExecutor(SandboxConfig(
                 workdir=self.config.workdir,
                 timeout_seconds=self.config.timeout_seconds,
@@ -358,7 +357,7 @@ class SafetyPipeline:
             if not result.allowed:
                 return result
         if "path" in arguments:
-            allowed = [self.config.workdir] + self.config.allowed_paths
+            allowed = [self.config.workdir, *self.config.allowed_paths]
             result = self.l1.check_path(arguments["path"], allowed)
             if not result.allowed:
                 return result

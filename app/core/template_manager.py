@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -21,8 +21,8 @@ class OutputTemplate:
     category: str  # code / doc / report / test
     schema: dict[str, Any]
     prompt_template: str
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class TemplateManager:
@@ -131,7 +131,7 @@ class TemplateManager:
         path = Path(file_path)
         if not path.exists():
             raise FileNotFoundError(file_path)
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         for item in data.get("templates", []):
             template = OutputTemplate(

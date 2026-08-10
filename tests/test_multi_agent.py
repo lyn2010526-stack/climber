@@ -1,6 +1,8 @@
 # tests/test_multi_agent.py
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
 from app.engine.multi_agent import MultiAgentOrchestrator, SubTask
 
 

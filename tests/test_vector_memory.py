@@ -9,6 +9,8 @@ import pytest
 
 os.environ["APP_TESTING"] = "true"
 
+from datetime import UTC
+
 from app.core.memory_reflection import memory_reflection
 from app.core.persistent_memory import persistent_memory
 from app.core.vector_memory import vector_memory
@@ -32,7 +34,7 @@ def cleanup_vector_memory():
                     results = await vector_memory.search(collection_name, "cleanup", top_k=100)
                     for r in results:
                         await vector_memory.delete(collection_name, r["id"])
-                except Exception:
+                except Exception:  # noqa: S110 - test-specific pattern
                     pass
         loop.run_until_complete(_cleanup())
     finally:
@@ -157,13 +159,13 @@ class TestPersistentMemoryVectorIntegration:
             memory_type="observation",
             importance=0.1,
         )
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         from sqlalchemy import update as sa_update
 
         from app.storage import async_session
         from app.storage.models_memory import EpisodicMemory
-        old_date = datetime.now(timezone.utc) - timedelta(days=60)
+        old_date = datetime.now(UTC) - timedelta(days=60)
         async with async_session() as db:
             await db.execute(
                 sa_update(EpisodicMemory)

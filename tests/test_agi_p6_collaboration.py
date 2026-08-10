@@ -9,29 +9,27 @@ Tests for:
 """
 
 import os
-import time
 
 os.environ.setdefault("APP_TESTING", "true")
 
 import pytest
 from fastapi import FastAPI
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 from app.core.collaboration import (
     A2AMessage,
     A2AMessageType,
     A2AProtocol,
     AgentResult,
+    AgentRole,
     AggregationStrategy,
     Capability,
-    AgentRole,
     HandoffManager,
     HandoffRequest,
     HandoffStatus,
     ResultAggregator,
     RoleRegistry,
 )
-
 
 # === A2A Protocol Tests ===
 
@@ -167,7 +165,7 @@ class TestA2AProtocol:
         protocol = A2AProtocol()
         msg = protocol.create_request("a1", "a2", {})
         assert msg.signature == ""
-        is_valid, error = protocol.validate(msg)
+        is_valid, _error = protocol.validate(msg)
         assert is_valid is True
 
     def test_tampered_message_fails_validation(self):

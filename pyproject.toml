@@ -1,0 +1,47 @@
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+# Core ruleset: correctness (F), style (E/W), imports (I), security (S),
+# bugbear (B), pyupgrade (UP), flake8-return (RET), comprehension (C4),
+# misc ruff rules (RUF).
+select = [
+    "E", "W", "F", "I", "S", "B", "UP", "RET", "C4", "RUF",
+]
+
+# BLE001 (blind except) is intentional: the codebase uses defensive
+# error handling that converts failures into friendly API responses.
+ignore = [
+    "BLE001",
+    "B008",  # FastAPI Depends() in argument defaults is standard usage
+    "E402",  # module-level imports after code (intentional lazy imports)
+    "E501",  # line length handled by formatter
+    "E712",  # SQLAlchemy boolean column comparisons require == True/False
+    "RUF012",  # class-level read-only constants (sets/dicts) are intentional
+    # Sandbox security rules are false positives here: the codebase uses
+    # restricted-exec sandboxes (AST-validated, safe builtins) by design.
+    "S105",  # names containing TOKEN/PASSWORD are enum members, not secrets
+    "S107",  # function defaults named token are config params, not secrets
+    "S108",  # /tmp paths are sandbox workdirs, not temp-file misuse
+    "S603",  # subprocess calls use list args (no shell) with validated input
+    "S607",  # docker/git binary names resolve via PATH as intended
+    # ASYNC best-practice suggestions are advisory only; converting to
+    # aiofiles/anyio is tracked as future work but not correctness fixes.
+    "ASYNC109",  # `timeout` param name passed to asyncio.wait_for
+    "ASYNC220", "ASYNC221", "ASYNC230", "ASYNC240", "ASYNC251",
+    # DTZ007: strptime on user-supplied date strings ("%Y-%m-%d") carries
+    # no timezone; naive parsing is the correct semantic here.
+    "DTZ007",
+    # RUF001/002/003: full-width Chinese punctuation in Chinese comments,
+    # docstrings and user-facing strings is intentional and unambiguous.
+    "RUF001", "RUF002", "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106", "S311"]
+"**/__init__.py" = ["F401"]  # package re-exports form the public API
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

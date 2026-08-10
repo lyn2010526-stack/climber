@@ -8,11 +8,10 @@ Supports:
 
 from __future__ import annotations
 
-import asyncio
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
-from uuid import uuid4
+from typing import Any
 
 
 @dataclass
@@ -100,12 +99,11 @@ class TaskScheduler:
         if len(parts) >= 2 and parts[0].startswith("*/"):
             interval_min = int(parts[0][2:])
             return time.time() + interval_min * 60
-        elif cron == "0 * * * *":
+        if cron == "0 * * * *":
             return time.time() + 3600
-        elif cron == "0 0 * * *":
+        if cron == "0 0 * * *":
             return time.time() + 86400
-        else:
-            return time.time() + 300  # default 5 min
+        return time.time() + 300  # default 5 min
 
 
 # ─── Built-in Scheduled Task Definitions ────────────────────────────────────

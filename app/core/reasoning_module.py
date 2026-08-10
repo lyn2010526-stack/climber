@@ -12,9 +12,9 @@ import structlog
 
 from app.core.reasoning.base import ReasoningMode
 from app.core.reasoning.pipeline import ReasoningPipeline
-from app.core.reasoning.strategies.tree_of_thought import TreeOfThoughtStrategy
-from app.core.reasoning.strategies.deep_refine import DeepRefineStrategy
 from app.core.reasoning.strategies.debate import DebateStrategy
+from app.core.reasoning.strategies.deep_refine import DeepRefineStrategy
+from app.core.reasoning.strategies.tree_of_thought import TreeOfThoughtStrategy
 
 logger = structlog.get_logger()
 

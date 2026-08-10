@@ -14,12 +14,12 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import structlog
 
-from app.core import ChatResult, ModelRoute, AgentEvent, AgentEventType
+from app.core import AgentEvent, AgentEventType, ChatResult, ModelRoute
 from app.models.registry import ModelRegistry
 
 logger = structlog.get_logger()

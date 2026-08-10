@@ -183,12 +183,11 @@ class LongTermMemoryPruner:
             for tag in entry.tags:
                 tag_counts[tag] = tag_counts.get(tag, 0) + 1
 
-        patterns = [
+        return [
             f"Pattern: '{tag}' appears {count} times"
             for tag, count in tag_counts.items()
             if count >= 3
         ]
-        return patterns
 
     def get_stats(self) -> dict[str, Any]:
         if not self._memories:

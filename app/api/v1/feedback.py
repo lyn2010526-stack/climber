@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.storage import async_session
+
 DEFAULT_USER_ID = "default-user"
 from app.storage.models_feedback import Feedback
 

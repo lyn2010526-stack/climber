@@ -25,8 +25,7 @@ def clean_web_content(html: str, text: str) -> str:
 
 def extract_main_content(text: str) -> str:
     """Extract the main content area from a web page."""
-    cleaned = clean_web_content("", text)
-    return cleaned
+    return clean_web_content("", text)
 
 
 def _is_noise(line: str) -> bool:

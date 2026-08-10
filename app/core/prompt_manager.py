@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import List
-
 
 class PromptManager:
     """Manages base system prompt and dynamic constraint fragments."""
@@ -54,7 +52,7 @@ class PromptManager:
             prompt += self.mcp_constraint_prompt
         return prompt
 
-    def get_active_constraints(self, autonomous_mode: bool, mcp_ready: bool) -> List[str]:
+    def get_active_constraints(self, autonomous_mode: bool, mcp_ready: bool) -> list[str]:
         """Return list of active constraint fragment names."""
         constraints = []
         if autonomous_mode:

@@ -1,6 +1,5 @@
 """Tests for memory pressure manager."""
 
-import pytest
 
 from app.core.engine.memory_pressure import (
     CompressionStrategy,
@@ -64,7 +63,7 @@ class TestMemoryPressureManager:
         # First turn 0 — should compress (warning level, no cooldown)
         assert manager.needs_compression(messages, max_tokens=2000, current_turn=0) is True
         # Actually compress at turn 0 — this starts the cooldown
-        compressed, _ = manager.compress(messages, max_tokens=2000, current_turn=0)
+        _compressed, _ = manager.compress(messages, max_tokens=2000, current_turn=0)
         # Turn 1 — cooldown prevents (warning level, within cooldown window)
         assert manager.needs_compression(messages, max_tokens=2000, current_turn=1) is False
         # Turn 6 — cooldown expired, should compress again
@@ -79,7 +78,7 @@ class TestMemoryPressureManager:
             {"role": "user", "content": "query"},
             {"role": "tool", "content": "x" * 10000},  # Very long tool result
         ]
-        compressed, report = manager.compress(messages, max_tokens=500, current_turn=0)
+        _compressed, report = manager.compress(messages, max_tokens=500, current_turn=0)
         assert "truncate" in report["strategies_applied"]
         assert report["original_tokens"] > report["compressed_tokens"]
 
@@ -98,7 +97,7 @@ class TestMemoryPressureManager:
             {"role": "tool", "content": "x" * 500},
             {"role": "assistant", "content": "x" * 500},
         ]
-        compressed, report = manager.compress(messages, max_tokens=500, current_turn=0)
+        _compressed, report = manager.compress(messages, max_tokens=500, current_turn=0)
         assert "drop_tool_results" in report["strategies_applied"]
 
     def test_compress_summarize(self) -> None:
@@ -116,7 +115,7 @@ class TestMemoryPressureManager:
             {"role": "user", "content": "msg3 " + "x" * 200},
             {"role": "assistant", "content": "msg4 " + "x" * 200},
         ]
-        compressed, report = manager.compress(messages, max_tokens=100, current_turn=0)
+        _compressed, report = manager.compress(messages, max_tokens=100, current_turn=0)
         assert "summarize" in report["strategies_applied"]
 
     def test_should_alert_dedup(self) -> None:

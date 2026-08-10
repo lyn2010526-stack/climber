@@ -22,6 +22,15 @@ import structlog
 
 logger = structlog.get_logger()
 
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _spawn(coro: Any) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
 
 # ─── Execution Mode ──────────────────────────────────────────────────────────
 
@@ -127,15 +136,15 @@ def validate_tool_input(schema: dict[str, Any], arguments: dict[str, Any]) -> No
         expected = prop.get("type")
         if expected == "string" and not isinstance(value, str):
             raise SchemaValidationError(f"Field '{key}' must be a string")
-        elif expected == "integer" and not isinstance(value, int):
+        if expected == "integer" and not isinstance(value, int):
             raise SchemaValidationError(f"Field '{key}' must be an integer")
-        elif expected == "number" and not isinstance(value, (int, float)):
+        if expected == "number" and not isinstance(value, (int, float)):
             raise SchemaValidationError(f"Field '{key}' must be a number")
-        elif expected == "boolean" and not isinstance(value, bool):
+        if expected == "boolean" and not isinstance(value, bool):
             raise SchemaValidationError(f"Field '{key}' must be a boolean")
-        elif expected == "array" and not isinstance(value, list):
+        if expected == "array" and not isinstance(value, list):
             raise SchemaValidationError(f"Field '{key}' must be an array")
-        elif expected == "object" and not isinstance(value, dict):
+        if expected == "object" and not isinstance(value, dict):
             raise SchemaValidationError(f"Field '{key}' must be an object")
 
 
@@ -222,7 +231,7 @@ class SecuritySandbox:
                 return False, f"Access denied: path '{abs_path}' is in blocked list"
 
         # Check allowed paths
-        allowed = [self.config.workdir] + self.config.allowed_paths
+        allowed = [self.config.workdir, *self.config.allowed_paths]
         is_allowed = any(abs_path.startswith(p) for p in allowed)
 
         if not is_allowed:
@@ -242,7 +251,7 @@ class SecuritySandbox:
         for pattern in HAZARD_COMMANDS:
             if re.search(pattern, command, re.IGNORECASE):
                 return False, f"Command blocked by safety policy: matches hazard pattern '{pattern}'"
-        
+
         # Check allowlist
         parts = command.strip().split()
         if parts:
@@ -250,7 +259,7 @@ class SecuritySandbox:
             base = os.path.basename(base)
             if base not in _ALLOWED_COMMANDS:
                 return False, f"Command '{base}' is not in the allowed commands list"
-        
+
         return True, "OK"
 
     def sanitize_output(self, output: str) -> str:
@@ -276,25 +285,25 @@ _ALLOWED_COMMANDS = {
 
 def validate_command_allowlist(command: str) -> tuple[bool, str]:
     """Validate that a command base name is in the allowed commands list.
-    
+
     Also checks for dangerous argument patterns (e.g., rm -rf) and
     invalid shell syntax (unclosed quotes).
     """
     parts = command.strip().split()
     if not parts:
         return False, "Empty command"
-    
+
     # Check for invalid shell syntax (unclosed quotes)
     single_quotes = command.count("'")
     double_quotes = command.count('"')
     if single_quotes % 2 != 0 or double_quotes % 2 != 0:
         return False, "Invalid shell syntax: unclosed quote"
-    
+
     base = parts[0].lstrip("./")
     base = os.path.basename(base)
     if base not in _ALLOWED_COMMANDS:
         return False, f"Command '{base}' is not in the allowed commands list"
-    
+
     # Check for dangerous argument patterns
     dangerous_patterns = {
         "rm": [
@@ -517,7 +526,7 @@ class AuditSystem:
             severity=severity,
             details={"path": path, **(details or {})},
         ))
-        asyncio.create_task(self._persist(
+        _spawn(self._persist(
             session_id=session_id, action=f"file:{operation}", severity=severity,
             details={"path": path, **(details or {})}, user_id=user_id,
         ))
@@ -540,7 +549,7 @@ class AuditSystem:
             details={"command": command, "blocked": blocked, "output_preview": result[:200]},
             result=result,
         ))
-        asyncio.create_task(self._persist(
+        _spawn(self._persist(
             session_id=session_id, action="command:execute",
             severity="critical" if blocked else "warning",
             details={"command": command, "blocked": blocked, "output_preview": result[:200]},
@@ -564,7 +573,7 @@ class AuditSystem:
             severity="warning" if status_code >= 400 else "info",
             details={"endpoint": endpoint, "status": status_code, "duration_ms": duration_ms},
         ))
-        asyncio.create_task(self._persist(
+        _spawn(self._persist(
             session_id=session_id, action="api:call",
             severity="warning" if status_code >= 400 else "info",
             details={"endpoint": endpoint, "status": status_code, "duration_ms": duration_ms},
@@ -588,7 +597,7 @@ class AuditSystem:
             severity="warning" if granted else "info",
             details={"granted": granted, "reason": reason},
         ))
-        asyncio.create_task(self._persist(
+        _spawn(self._persist(
             session_id=session_id, action=f"permission:{action}",
             severity="warning" if granted else "info",
             details={"granted": granted, "reason": reason}, user_id=user_id,
@@ -597,8 +606,8 @@ class AuditSystem:
     async def _persist(self, session_id: str, action: str, severity: str, details: dict[str, Any], result: str = "", user_id: str | None = None) -> None:
         """Persist audit entry to database."""
         try:
-            from app.storage.models_memory import AuditLog
             from app.storage import async_session
+            from app.storage.models_memory import AuditLog
             async with async_session() as db:
                 log = AuditLog(
                     session_id=session_id,

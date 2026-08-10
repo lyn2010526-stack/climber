@@ -180,7 +180,7 @@ class BrowserPool:
             try:
                 await self._sweeper
             except (asyncio.CancelledError, Exception):
-                pass
+                logger.debug("tools.browser_pool.suppressed", exc_info=True)
         self._sweeper = None
 
     # ── introspection ──────────────────────────────────────────────────────

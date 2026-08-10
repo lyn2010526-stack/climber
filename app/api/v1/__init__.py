@@ -4,26 +4,26 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.v1 import chat as chat_router
-from app.api.v1 import sessions as sessions_router
-from app.api.v1 import generic as generic_router
 from app.api.v1 import api_keys as api_keys_router
+from app.api.v1 import chat as chat_router
+from app.api.v1 import cluster as cluster_router
+from app.api.v1 import cost as cost_router
+from app.api.v1 import crews as crews_router
+from app.api.v1 import doctor as doctor_router
 from app.api.v1 import documents as documents_router
 from app.api.v1 import feedback as feedback_router
-from app.api.v1 import notifications as notifications_router
-from app.api.v1 import doctor as doctor_router
-from app.api.v1 import workflows as workflows_router
-from app.api.v1 import settings as settings_router
-from app.api.v1 import prompt_templates as prompt_templates_router
-from app.api.v1 import permissions as permissions_router
-from app.api.v1 import crews as crews_router
+from app.api.v1 import generic as generic_router
 from app.api.v1 import groups as groups_router
-from app.api.v1 import cluster as cluster_router
-from app.api.v1 import tasks as tasks_router
-from app.api.v1 import cost as cost_router
-from app.api.v1 import scheduler as scheduler_router
 from app.api.v1 import mcp as mcp_router
+from app.api.v1 import notifications as notifications_router
+from app.api.v1 import permissions as permissions_router
+from app.api.v1 import prompt_templates as prompt_templates_router
+from app.api.v1 import scheduler as scheduler_router
+from app.api.v1 import sessions as sessions_router
+from app.api.v1 import settings as settings_router
 from app.api.v1 import skills_router as skills_router_module
+from app.api.v1 import tasks as tasks_router
+from app.api.v1 import workflows as workflows_router
 from app.core.reasoning import api as reasoning_router
 
 router = APIRouter()

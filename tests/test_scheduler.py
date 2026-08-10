@@ -10,9 +10,7 @@ from app.core.scheduler_abstraction import (
     InMemoryTaskChannel,
     MultiAgentScheduler,
     ScheduledTask,
-    TaskPriority,
     TaskState,
-    TaskChannel,
 )
 
 

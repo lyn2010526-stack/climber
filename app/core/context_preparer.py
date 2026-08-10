@@ -9,9 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.core.hierarchical_memory import HierarchicalMemoryOrchestrator
-from app.core.persistent_memory import PersistentMemoryService
 from app.core import MessageRole
+from app.core.hierarchical_memory import HierarchicalMemoryOrchestrator
 
 logger = logging.getLogger(__name__)
 

@@ -15,8 +15,6 @@ Tools:
 
 from __future__ import annotations
 
-from typing import Optional
-
 import structlog
 
 from app.core.vision_pipeline import vision_pipeline
@@ -39,7 +37,7 @@ logger = structlog.get_logger()
 )
 async def capture_screen(
     source: str = "native",
-    region: Optional[list[int]] = None,
+    region: list[int] | None = None,
     session_id: str = "default",
 ) -> str:
     """Capture a screenshot and return base64 image."""
@@ -54,7 +52,7 @@ async def capture_screen(
             return f"Error: {result.error}"
         return f"data:image/png;base64,{result.metadata['base64']}"
     except Exception as e:
-        return f"Error capturing screen: {str(e)}"
+        return f"Error capturing screen: {e!s}"
 
 
 @tool(
@@ -71,7 +69,7 @@ async def capture_screen(
 )
 async def ocr_screen(
     source: str = "native",
-    region: Optional[list[int]] = None,
+    region: list[int] | None = None,
     session_id: str = "default",
 ) -> str:
     """Extract text from screen using OCR."""
@@ -86,7 +84,7 @@ async def ocr_screen(
             return f"Error: {result.error}"
         return result.content
     except Exception as e:
-        return f"Error performing OCR: {str(e)}"
+        return f"Error performing OCR: {e!s}"
 
 
 @tool(
@@ -114,7 +112,7 @@ async def describe_screen(
             return f"Error: {result.error}"
         return result.content
     except Exception as e:
-        return f"Error describing screen: {str(e)}"
+        return f"Error describing screen: {e!s}"
 
 
 @tool(
@@ -145,7 +143,7 @@ async def find_and_click(
             return f"Error: {result.error}"
         return result.content
     except Exception as e:
-        return f"Error finding and clicking: {str(e)}"
+        return f"Error finding and clicking: {e!s}"
 
 
 @tool(
@@ -179,4 +177,4 @@ async def find_and_type(
             return f"Error: {result.error}"
         return result.content
     except Exception as e:
-        return f"Error finding and typing: {str(e)}"
+        return f"Error finding and typing: {e!s}"

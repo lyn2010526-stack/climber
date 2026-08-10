@@ -8,22 +8,23 @@ model produces non-conforming output.
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any, AsyncIterator
+from typing import Any
 
 import structlog
 from pydantic import ValidationError
 
 from app.core.collab_prompts import get_reviewer_prompt
-from app.core.review_models import ReviewOutputModel, ReviewIssueModel, REVIEW_OUTPUT_SCHEMA
+from app.core.di import resolve as di_resolve
+from app.core.guardrails import GuardrailAction, GuardrailsEngine, OutputLengthRule, PIIDetectionRule
+from app.core.review_models import ReviewIssueModel, ReviewOutputModel
 from app.core.stream_events import (
     CollabEvent,
     CollabEventType,
     make_reviewer_issues,
     make_text_delta,
 )
-from app.core.di import resolve as di_resolve
-from app.core.guardrails import GuardrailsEngine, GuardrailAction, PIIDetectionRule, OutputLengthRule
 
 logger = structlog.get_logger()
 
@@ -97,7 +98,7 @@ class ReviewerExecutor:
                 type=CollabEventType.ERROR,
                 session_id=self._session_id,
                 member_id=member.id,
-                data={"error": f"Model init failed: {str(e)}"},
+                data={"error": f"Model init failed: {e!s}"},
             )
             return
 

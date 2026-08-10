@@ -148,21 +148,19 @@ class HypothesisSimulator:
         return steps
 
     def _plan_parallel(self, goal: str, tools: set[str]) -> list[dict[str, Any]]:
-        steps = [
+        return [
             {"tool": "analysis", "purpose": f"Decompose goal into sub-tasks: {goal[:60]}"},
             {"tool": "dispatch", "purpose": "Dispatch independent sub-tasks to parallel agents"},
             {"tool": "merge", "purpose": "Merge sub-task results into final output"},
         ]
-        return steps
 
     def _plan_iterative(self, goal: str, tools: set[str]) -> list[dict[str, Any]]:
-        steps = [
+        return [
             {"tool": "analysis", "purpose": "Create minimal viable solution"},
             {"tool": "read_file", "purpose": "Verify current state"},
             {"tool": "write_file", "purpose": "Apply incremental change"},
             {"tool": "run_command", "purpose": "Test the change"},
         ]
-        return steps
 
     def _estimate_tokens(self, path: ExecutionPath) -> int:
         total = 500  # base overhead

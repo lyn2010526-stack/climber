@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 import httpx
 import structlog
@@ -26,7 +27,7 @@ class OpenAIAdapter(ModelAdapter):
         model_id: str,
         api_key: str,
         base_url: str = "https://api.openai.com/v1",
-        capabilities: "ModelCapability | None" = None,
+        capabilities: ModelCapability | None = None,
     ):
         self._model_id = model_id
         self._api_key = api_key
@@ -149,7 +150,7 @@ class OpenAIAdapter(ModelAdapter):
                             idle_event.wait(), timeout=idle_timeout
                         )
                         idle_event.clear()
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         if response is not None:
                             logger.info(
                                 "stream_idle_timeout",

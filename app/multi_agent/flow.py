@@ -12,13 +12,13 @@ from __future__ import annotations
 import asyncio
 import inspect
 import uuid
-from enum import Enum
-from typing import Any, Awaitable, Callable, get_type_hints
+from collections.abc import Callable
+from enum import StrEnum
+from typing import Any
 
 import structlog
 from pydantic import BaseModel, Field
 
-from app.core import ChatResult
 from app.core.agent_engine import AgentEngine
 from app.models.registry import ModelRegistry
 from app.tools import ToolRegistry
@@ -26,7 +26,7 @@ from app.tools import ToolRegistry
 logger = structlog.get_logger()
 
 
-class FlowStatus(str, Enum):
+class FlowStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -140,7 +140,7 @@ class FlowExecutor:
             for k, v in initial_state.items():
                 setattr(state, k, v)
 
-        setattr(state, 'flow_id', state.flow_id or str(uuid.uuid4())[:8])
+        state.flow_id = state.flow_id or str(uuid.uuid4())[:8]
 
         # Discover methods
         methods = self._discover_methods(flow_instance)

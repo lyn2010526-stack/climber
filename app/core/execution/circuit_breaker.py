@@ -7,22 +7,18 @@ Provides:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import sqlite3
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
-from enum import Enum
-from typing import Any
-
-from app.core.task_state_machine import TaskState
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
 
-class CircuitBreakerState(str, Enum):
+class CircuitBreakerState(StrEnum):
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half_open"
@@ -42,7 +38,7 @@ class CircuitBreakerRecord:
     failure_count: int = 0
     success_count: int = 0
     last_failure_time: float = 0.0
-    last_state_change: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    last_state_change: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     tripped_at: str = ""
 
 
@@ -63,7 +59,7 @@ class CircuitBreaker:
         self._success_count = 0
         self._failure_timestamps: list[float] = []
         self._last_failure_time = 0.0
-        self._last_state_change = datetime.now(timezone.utc)
+        self._last_state_change = datetime.now(UTC)
         self._tripped_at: datetime | None = None
 
     @property
@@ -89,9 +85,9 @@ class CircuitBreaker:
     def _transition_to(self, new_state: CircuitBreakerState) -> None:
         old_state = self._state
         self._state = new_state
-        self._last_state_change = datetime.now(timezone.utc)
+        self._last_state_change = datetime.now(UTC)
         if new_state == CircuitBreakerState.OPEN:
-            self._tripped_at = datetime.now(timezone.utc)
+            self._tripped_at = datetime.now(UTC)
             logger.warning("circuit_breaker_tripped: breaker=%s failures=%d", self.name, self._failure_count)
         elif new_state == CircuitBreakerState.CLOSED:
             self._failure_count = 0
@@ -148,7 +144,7 @@ class CircuitBreaker:
         self._success_count = 0
         self._failure_timestamps.clear()
         self._last_failure_time = 0.0
-        self._last_state_change = datetime.now(timezone.utc)
+        self._last_state_change = datetime.now(UTC)
         self._tripped_at = None
 
 
@@ -174,7 +170,7 @@ class TimeoutManager:
         self._conn.commit()
 
     def start_task(self, task_id: str, timeout_seconds: int) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         deadline = (now + timedelta(seconds=timeout_seconds)).isoformat()
         self._conn.execute(
             """
@@ -194,7 +190,7 @@ class TimeoutManager:
         if not row:
             return False
         deadline = datetime.fromisoformat(row["deadline"])
-        return datetime.now(timezone.utc) > deadline
+        return datetime.now(UTC) > deadline
 
     def complete_task(self, task_id: str) -> None:
         self._conn.execute(
@@ -211,7 +207,7 @@ class TimeoutManager:
         self._conn.commit()
 
     def get_timed_out_tasks(self) -> list[str]:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         rows = self._conn.execute(
             "SELECT task_id FROM task_timeouts WHERE status = 'running' AND deadline <= ?",
             (now,),
@@ -226,7 +222,7 @@ class TimeoutManager:
         if not row:
             return 0.0
         deadline = datetime.fromisoformat(row["deadline"])
-        remaining = (deadline - datetime.now(timezone.utc)).total_seconds()
+        remaining = (deadline - datetime.now(UTC)).total_seconds()
         return max(0.0, remaining)
 
     def close(self) -> None:

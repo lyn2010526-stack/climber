@@ -10,7 +10,6 @@ Layer 5 (L4): Long-term memory — episodic, core memory blocks, previous sessio
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -130,7 +129,7 @@ class ContextManager:
         system_msgs = [m for m in messages if m.get("role") == "system"]
         recent = messages[-(max_messages - len(system_msgs)):]
         summary_marker = {"role": "system", "content": "<previous conversation summarized>"}
-        return system_msgs + [summary_marker] + recent
+        return [*system_msgs, summary_marker, *recent]
 
     def apply_hot_cold_strategy(
         self,
@@ -161,7 +160,7 @@ class ContextManager:
             "content": f"<cold_memory>\n{self._summarize_messages(cold)}\n</cold_memory>",
         }
 
-        return system_msgs + [cold_summary] + hot
+        return [*system_msgs, cold_summary, *hot]
 
     def _summarize_messages(self, messages: list[dict]) -> str:
         """Generate a brief summary of old messages."""

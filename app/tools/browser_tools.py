@@ -63,7 +63,7 @@ async def browser_navigate(url: str, session_id: str = "default") -> str:
         cleaned = clean_web_content("", raw_text)
         return f"Title: {title}\n\nContent (first 3000 chars):\n{cleaned[:3000]}"
     except Exception as e:
-        return f"Error navigating: {str(e)}"
+        return f"Error navigating: {e!s}"
 
 
 @tool(description="Take screenshot of a webpage. Returns file path.")
@@ -75,7 +75,7 @@ async def browser_screenshot(url: str, output_path: str = "/tmp/browser_screensh
         await page.screenshot(path=output_path, full_page=False)
         return output_path
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool(description="Click an element on the current page by selector.")
@@ -86,7 +86,7 @@ async def browser_click(selector: str, session_id: str = "default") -> str:
         await page.click(selector, timeout=10000)
         return f"Clicked: {selector}"
     except Exception as e:
-        return f"Error clicking: {str(e)}"
+        return f"Error clicking: {e!s}"
 
 
 @tool(description="Type text into an input field.")
@@ -97,7 +97,7 @@ async def browser_type(selector: str, text: str, session_id: str = "default") ->
         await page.fill(selector, text, timeout=10000)
         return f"Typed into {selector}"
     except Exception as e:
-        return f"Error typing: {str(e)}"
+        return f"Error typing: {e!s}"
 
 
 @tool(description="Extract all links from the current page.")
@@ -116,7 +116,7 @@ async def browser_extract_links(session_id: str = "default") -> str:
         ]
         return "\n".join(formatted) if formatted else "No links found"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool(description="Extract text content from the current page.")
@@ -128,4 +128,4 @@ async def browser_extract_text(selector: str = "body", session_id: str = "defaul
         cleaned = clean_web_content("", text)
         return cleaned[:10000]
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"

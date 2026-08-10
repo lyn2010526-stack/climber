@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
-import json
-import logging
 from collections import defaultdict
-from datetime import datetime
 from typing import Any
 
 import structlog
+from sqlalchemy import select
 
 from app.storage import async_session
-from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupMessage, AgentGroupTask
-from sqlalchemy import select
+from app.storage.models_groups import AgentGroupMember, AgentGroupMessage, AgentGroupTask
 
 logger = structlog.get_logger()
 

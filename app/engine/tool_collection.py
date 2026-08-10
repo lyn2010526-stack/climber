@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import inspect
 import typing
-from typing import Any, Callable, Protocol
+from collections.abc import Callable
+from typing import Any, Protocol
 
 import structlog
 
@@ -231,7 +232,7 @@ class ToolCollection:
             return str(result) if not isinstance(result, str) else result
         except Exception as e:
             logger.error("tool_collection.execute_error", tool=name, error=str(e))
-            return f"Error executing {name}: {str(e)}"
+            return f"Error executing {name}: {e!s}"
 
     @staticmethod
     def _make_mcp_wrapper(mcp_client: MCPClientProtocol, tool_name: str) -> Callable:
@@ -266,15 +267,15 @@ class ToolCollection:
                     if args:
                         annot = args[0]
 
-                if annot is int or annot == int:
+                if annot is int:
                     prop["type"] = "integer"
-                elif annot is float or annot == float:
+                elif annot is float:
                     prop["type"] = "number"
-                elif annot is bool or annot == bool:
+                elif annot is bool:
                     prop["type"] = "boolean"
-                elif annot is list or annot == list:
+                elif annot is list:
                     prop["type"] = "array"
-                elif annot is dict or annot == dict:
+                elif annot is dict:
                     prop["type"] = "object"
                 else:
                     prop["type"] = "string"

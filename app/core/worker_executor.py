@@ -8,14 +8,16 @@ while recent messages are preserved intact.
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator
+from typing import Any
 
 import structlog
 
-from app.core import ChatResult, ContextConfig, CompressionStrategy
+from app.core import ContextConfig
 from app.core.collab_prompts import get_worker_prompt
 from app.core.compressor import ContextCompressor, estimate_tokens
+from app.core.di import resolve as di_resolve
 from app.core.stream_events import (
     CollabEvent,
     CollabEventType,
@@ -25,7 +27,6 @@ from app.core.stream_events import (
     make_worker_tool_result,
 )
 from app.core.tool_bridge import ToolBridge
-from app.core.di import resolve as di_resolve
 
 logger = structlog.get_logger()
 
@@ -109,7 +110,7 @@ class WorkerExecutor:
                 type=CollabEventType.ERROR,
                 session_id=self._session_id,
                 member_id=member.id,
-                data={"error": f"Model init failed: {str(e)}"},
+                data={"error": f"Model init failed: {e!s}"},
             )
             return
 

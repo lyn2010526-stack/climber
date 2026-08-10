@@ -6,7 +6,7 @@ import pytest
 
 os.environ.setdefault("APP_TESTING", "true")
 
-from app.core.security_sandbox import SandboxConfig, SecuritySandbox  # noqa: E402
+from app.core.security_sandbox import SandboxConfig, SecuritySandbox
 
 
 @pytest.fixture

@@ -6,22 +6,21 @@ Based on MonkeyCode Skill format + OpenClaw SOUL.md standardization.
 
 from __future__ import annotations
 
-import json
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class RiskLevel(str, Enum):
+class RiskLevel(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
     RESTRICTED = "restricted"
 
 
-class FailureStrategy(str, Enum):
+class FailureStrategy(StrEnum):
     RETRY = "retry"
     ABORT = "abort"
     ASK_USER = "ask_user"
@@ -60,15 +59,15 @@ class SkillPackage(BaseModel):
         return self.model_dump()
 
     @classmethod
-    def from_json(cls, data: str) -> "SkillPackage":
+    def from_json(cls, data: str) -> SkillPackage:
         return cls.model_validate_json(data)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "SkillPackage":
+    def from_dict(cls, data: dict[str, Any]) -> SkillPackage:
         return cls.model_validate(data)
 
     @classmethod
-    def from_file(cls, path: Path | str) -> "SkillPackage":
+    def from_file(cls, path: Path | str) -> SkillPackage:
         p = Path(path)
         if not p.exists():
             raise FileNotFoundError(f"Skill package not found: {p}")

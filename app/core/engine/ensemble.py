@@ -16,9 +16,10 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Awaitable, Callable, Protocol
+from enum import StrEnum
+from typing import Any
 
 import structlog
 
@@ -197,7 +198,7 @@ class EnsembleEngine:
         }
 
 
-class MessageType(str, Enum):
+class MessageType(StrEnum):
     TASK_REQUEST = "task_request"
     TASK_RESPONSE = "task_response"
     BROADCAST = "broadcast"

@@ -5,11 +5,10 @@ Covers Phase 1 (Tree of Thoughts + Self-Refine + Coverage) end-to-end with mock 
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
+
 import pytest
-import pytest_asyncio
 
 os.environ["APP_TESTING"] = "true"
 
@@ -21,7 +20,6 @@ from app.core.reasoning.base import (
     EdgeCase,
     Issue,
     IssueSeverity,
-    PathTrace,
     ReasoningMode,
     ReasoningRequest,
     ReasoningResult,
@@ -31,16 +29,15 @@ from app.core.reasoning.base import (
     Strategy,
 )
 from app.core.reasoning.components.coverage import CoverageChecker
-from app.core.reasoning.components.reflection_memory import ReflectionMemory, ReflectionEntry
-from app.core.reasoning.components.scorer import CandidateScorer, _DEFAULT_WEIGHTS
+from app.core.reasoning.components.reflection_memory import ReflectionMemory
+from app.core.reasoning.components.scorer import CandidateScorer
 from app.core.reasoning.components.self_refine import SelfRefineLoop, _parse_critique_response
 from app.core.reasoning.components.trace import ReasoningTracer
 from app.core.reasoning.pipeline import ReasoningPipeline
 from app.core.reasoning.selector import StrategySelector
-from app.core.reasoning.strategies.tree_of_thought import TreeOfThoughtStrategy
-from app.core.reasoning.strategies.deep_refine import DeepRefineStrategy, Snapshot
 from app.core.reasoning.strategies.debate import DebateStrategy
-
+from app.core.reasoning.strategies.deep_refine import DeepRefineStrategy, Snapshot
+from app.core.reasoning.strategies.tree_of_thought import TreeOfThoughtStrategy
 
 # ─── Mock Model Adapter ───────────────────────────────────────────────────
 
@@ -101,7 +98,7 @@ class TestDataModel:
         assert issue.location == "db.py:42"
 
     def test_issue_min_length(self):
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 - test-specific pattern
             Issue(severity=IssueSeverity.MAJOR, description="short")
 
     def test_critique_result_properties(self):
@@ -203,9 +200,9 @@ class TestDataModel:
         assert request.max_refine_rounds == 2
 
     def test_reasoning_request_bounds(self):
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 - test-specific pattern
             ReasoningRequest(task="Test", max_paths=0)
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 - test-specific pattern
             ReasoningRequest(task="Test", max_paths=6)
 
     def test_reasoning_trace(self):
@@ -280,7 +277,7 @@ class TestSelfRefineLoop:
         })
         adapter = MockModelAdapter(responses=[critique_json])
         loop = SelfRefineLoop()
-        content, critique, traces = await loop.refine(
+        _content, critique, traces = await loop.refine(
             task="Write a hello world function",
             initial="def hello(): return 'world'",
             model_adapter=adapter,
@@ -308,7 +305,7 @@ class TestSelfRefineLoop:
         })
         adapter = MockModelAdapter(responses=[critique1, "def hello(): return 'world'", critique2])
         loop = SelfRefineLoop()
-        content, critique, traces = await loop.refine(
+        _content, critique, traces = await loop.refine(
             task="Write a hello world function",
             initial="def hello(): return 'world'",
             model_adapter=adapter,
@@ -329,7 +326,7 @@ class TestSelfRefineLoop:
         })
         adapter = MockModelAdapter(responses=[critique_fail] * 6)
         loop = SelfRefineLoop()
-        content, critique, traces = await loop.refine(
+        _content, critique, _traces = await loop.refine(
             task="Test task",
             initial="Initial content",
             model_adapter=adapter,

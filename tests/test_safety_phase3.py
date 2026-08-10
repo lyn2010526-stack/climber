@@ -1,6 +1,7 @@
 """TDD: Phase 3 — L3 Docker container isolation."""
 
 import os
+
 import pytest
 
 os.environ.setdefault("APP_TESTING", "true")
@@ -89,6 +90,7 @@ class TestDockerSandboxLive:
 
     def test_container_cleanup(self):
         import asyncio
+
         import docker
         client = docker.from_env()
         before = len(client.containers.list(all=True, filters={"name": "sandbox_"}))

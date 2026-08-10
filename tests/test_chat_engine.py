@@ -1,13 +1,15 @@
 """Tests for chat engine integration."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from app.core.chat_engine import ChatEngine
 from app.core.mcp_controller import McpStatus
 from app.core.prompt_manager import PromptManager
 from app.services.settings_service import SettingsService
-from app.storage.models_settings import McpStatus as ModelMcpStatus, UserSettings
+from app.storage.models_settings import McpStatus as ModelMcpStatus
+from app.storage.models_settings import UserSettings
 
 
 @pytest.fixture
@@ -69,7 +71,7 @@ async def test_get_system_prompt_autonomous_only(
     mock_mcp_controller.get_status.return_value = McpStatus.DISCONNECTED
 
     engine = ChatEngine(mock_prompt_manager, mock_mcp_controller, mock_settings_service)
-    prompt = await engine.get_system_prompt("user-123")
+    await engine.get_system_prompt("user-123")
 
     mock_prompt_manager.assemble_prompt.assert_called_once_with(
         autonomous_mode=True, mcp_ready=False

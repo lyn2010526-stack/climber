@@ -6,8 +6,13 @@ role-based capability boundaries, and multi-agent result aggregation.
 
 from app.core.collaboration.a2a_protocol import (
     A2AMessage,
-    A2AProtocol,
     A2AMessageType,
+    A2AProtocol,
+)
+from app.core.collaboration.aggregation import (
+    AgentResult,
+    AggregationStrategy,
+    ResultAggregator,
 )
 from app.core.collaboration.handoff import (
     HandoffManager,
@@ -19,27 +24,22 @@ from app.core.collaboration.roles import (
     Capability,
     RoleRegistry,
 )
-from app.core.collaboration.aggregation import (
-    AgentResult,
-    AggregationStrategy,
-    ResultAggregator,
-)
 
 __all__ = [
     # A2A Protocol
     "A2AMessage",
-    "A2AProtocol",
     "A2AMessageType",
+    "A2AProtocol",
+    # Aggregation
+    "AgentResult",
+    # Roles
+    "AgentRole",
+    "AggregationStrategy",
+    "Capability",
     # Handoff
     "HandoffManager",
     "HandoffRequest",
     "HandoffStatus",
-    # Roles
-    "AgentRole",
-    "Capability",
-    "RoleRegistry",
-    # Aggregation
-    "AgentResult",
-    "AggregationStrategy",
     "ResultAggregator",
+    "RoleRegistry",
 ]

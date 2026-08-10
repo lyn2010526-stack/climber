@@ -13,13 +13,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
 
-class ErrorSeverity(str, Enum):
+class ErrorSeverity(StrEnum):
     RETRY = "retry"           # Can retry with backoff
     FAILOVER = "failover"     # Switch to backup provider
     STOP = "stop"             # Stop immediately (auth failure, quota exceeded)
@@ -34,19 +34,18 @@ class APIError:
     retry_after: float = 0.0
 
     @classmethod
-    def from_status(cls, status: int, message: str = "") -> "APIError":
+    def from_status(cls, status: int, message: str = "") -> APIError:
         if status == 401:
             return cls(status, message or "Authentication failed", ErrorSeverity.STOP)
-        elif status == 402:
+        if status == 402:
             return cls(status, message or "Quota exhausted", ErrorSeverity.STOP)
-        elif status == 429:
+        if status == 429:
             return cls(status, message or "Rate limited", ErrorSeverity.RETRY, retry_after=60.0)
-        elif status == 503:
+        if status == 503:
             return cls(status, message or "Service unavailable", ErrorSeverity.FAILOVER)
-        elif status >= 500:
+        if status >= 500:
             return cls(status, message or "Server error", ErrorSeverity.FAILOVER)
-        else:
-            return cls(status, message or "Unknown error", ErrorSeverity.RETRY)
+        return cls(status, message or "Unknown error", ErrorSeverity.RETRY)
 
 
 @dataclass
@@ -146,15 +145,14 @@ class RetryWithBackoff:
 
         if "401" in error_str or "unauthorized" in error_str or "authentication" in error_str:
             return APIError(401, str(e), ErrorSeverity.STOP)
-        elif "402" in error_str or "quota" in error_str or "insufficient" in error_str:
+        if "402" in error_str or "quota" in error_str or "insufficient" in error_str:
             return APIError(402, str(e), ErrorSeverity.STOP)
-        elif "429" in error_str or "rate limit" in error_str or "too many requests" in error_str:
+        if "429" in error_str or "rate limit" in error_str or "too many requests" in error_str:
             return APIError(429, str(e), ErrorSeverity.RETRY, retry_after=60.0)
-        elif "503" in error_str or "service unavailable" in error_str:
+        if "503" in error_str or "service unavailable" in error_str:
             return APIError(503, str(e), ErrorSeverity.FAILOVER)
-        elif "timeout" in error_str or "timed out" in error_str:
+        if "timeout" in error_str or "timed out" in error_str:
             return APIError(None, str(e), ErrorSeverity.RETRY)
-        elif "connection" in error_str:
+        if "connection" in error_str:
             return APIError(None, str(e), ErrorSeverity.FAILOVER)
-        else:
-            return APIError(None, str(e), ErrorSeverity.RETRY)
+        return APIError(None, str(e), ErrorSeverity.RETRY)

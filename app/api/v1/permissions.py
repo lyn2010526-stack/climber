@@ -82,7 +82,7 @@ async def update_permission_config(update: PermissionConfigUpdate):
         try:
             mode = PermissionMode(update.mode)
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid mode: {update.mode}")
+            raise HTTPException(status_code=400, detail=f"Invalid mode: {update.mode}") from None
 
     rules = current.rules
     if update.rules is not None:
@@ -91,7 +91,7 @@ async def update_permission_config(update: PermissionConfigUpdate):
             try:
                 decision = RuleDecision(r.decision)
             except ValueError:
-                raise HTTPException(status_code=400, detail=f"Invalid rule decision: {r.decision}")
+                raise HTTPException(status_code=400, detail=f"Invalid rule decision: {r.decision}") from None
             rules.append(PermissionRule(
                 decision=decision,
                 tool=r.tool,

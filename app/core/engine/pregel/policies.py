@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import random
-from dataclasses import dataclass, field
-from typing import Any, Callable, Protocol, runtime_checkable
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any, Protocol, runtime_checkable
 
 import structlog
 
@@ -43,7 +44,7 @@ class RetryPolicy:
         delay = self.initial_interval * (self.backoff_factor ** (attempt - 1))
         delay = min(delay, self.max_interval)
         if self.jitter:
-            delay = delay * (0.5 + random.random() * 0.5)
+            delay = delay * (0.5 + random.random() * 0.5)  # noqa: S311 - retry jitter, non-crypto
         return delay
 
 

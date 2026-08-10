@@ -37,6 +37,7 @@ class CodeRetrievalService:
                     rel = str(path.relative_to(root))
                     self._index[rel] = content
                 except Exception:
+                    logger.debug("code_index_skip", path=str(path), exc_info=True)
                     continue
         logger.info("code_indexed", repo=repo_path, files=len(self._index))
         return self._index

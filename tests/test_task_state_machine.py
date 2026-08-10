@@ -97,7 +97,7 @@ class TestTaskLifecycleManager:
     async def test_list_tasks_by_state(self):
         manager = TaskLifecycleManager()
         manager.register_runner("noop", lambda task: None)
-        t1 = manager.submit("noop", name="noop")
-        t2 = manager.submit("noop", name="noop")
+        manager.submit("noop", name="noop")
+        manager.submit("noop", name="noop")
         pending = manager.list_tasks(TaskState.PENDING)
         assert len(pending) == 2

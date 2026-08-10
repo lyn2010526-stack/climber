@@ -4,12 +4,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
-import re
 import time
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from typing import Any, Callable, Coroutine
+from typing import Any
 
 import structlog
 
@@ -75,7 +74,7 @@ class DebugLoop:
 
     def _load_memory(self) -> None:
         try:
-            with open(self._memory_file, "r", encoding="utf-8") as f:
+            with open(self._memory_file, encoding="utf-8") as f:
                 data = json.load(f)
                 self._memory = [DebugMemory(**m) for m in data.get("entries", [])]
         except (FileNotFoundError, json.JSONDecodeError):
@@ -292,7 +291,6 @@ class DebugLoop:
     async def _write_patch(self, file_path: str, patch_content: str) -> bool:
         """Write patch content to file (atomic)."""
         import os
-        import tempfile
         tmp_path = file_path + ".tmp"
         with open(tmp_path, "w", encoding="utf-8") as f:
             f.write(patch_content)

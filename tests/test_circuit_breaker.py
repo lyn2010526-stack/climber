@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from app.core.task_circuit_breaker import (
     CircuitBreakerAction,
     CircuitBreakerConfig,
@@ -45,7 +43,7 @@ class TestTaskCircuitBreaker:
         config = CircuitBreakerConfig(max_total_iterations=5)
         cb = TaskCircuitBreaker(config=config)
         event = None
-        for i in range(5):
+        for _i in range(5):
             event = cb.record_iteration(progress_delta=0.01)
         assert event is not None
         assert event.reason == CircuitBreakerReason.RUNAWAY_TASK
@@ -58,7 +56,7 @@ class TestTaskCircuitBreaker:
         )
         cb = TaskCircuitBreaker(config=config)
         event = None
-        for i in range(4):
+        for _i in range(4):
             result = cb.record_iteration(progress_delta=0.0)
             if result is not None:
                 event = result
@@ -73,7 +71,7 @@ class TestTaskCircuitBreaker:
         )
         cb = TaskCircuitBreaker(config=config)
         event = None
-        for i in range(3):
+        for _i in range(3):
             event = cb.record_iteration(
                 token_count=2000,
                 progress_delta=0.0,
@@ -83,7 +81,7 @@ class TestTaskCircuitBreaker:
 
     def test_reset(self) -> None:
         cb = TaskCircuitBreaker()
-        for i in range(3):
+        for _i in range(3):
             cb.record_iteration(
                 tool_calls=[{"name": "same", "arguments": {"arg": "same"}}],
                 progress_delta=0.0,

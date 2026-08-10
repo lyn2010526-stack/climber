@@ -1,9 +1,16 @@
 import pytest
-import structlog
+
 from app.core.structured_logging import (
-    setup_logging, get_logger, set_correlation, set_context,
-    clear_context, LogTimer, correlation_id, session_ctx
+    LogTimer,
+    clear_context,
+    correlation_id,
+    get_logger,
+    session_ctx,
+    set_context,
+    set_correlation,
+    setup_logging,
 )
+
 
 def test_setup_logging():
     setup_logging(level="DEBUG")
@@ -25,7 +32,6 @@ def test_clear_context():
     assert session_ctx.get() == ""
 
 def test_log_timer_success(caplog):
-    import logging
     setup_logging(level="INFO", json_format=False)
     logger = get_logger("timer_test")
     with LogTimer(logger, "test_op"):

@@ -22,8 +22,8 @@ from typing import Any
 
 import structlog
 
+from app.core.security_sandbox import PermissionLevel, PermissionOverlay, validate_tool_input
 from app.tools import ToolRegistry, tool_registry
-from app.core.security_sandbox import PermissionOverlay, PermissionLevel, validate_tool_input
 
 logger = structlog.get_logger()
 
@@ -116,7 +116,7 @@ class ToolGateway:
                 if self.tool_prioritizer:
                     self.tool_prioritizer.record_outcome(tool_name, True, duration)
                 return ToolResult(output=str(result), duration_ms=duration)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_error = f"Timeout after {timeout}s"
                 if attempt < max_retries:
                     await asyncio.sleep(0.5 * (attempt + 1))

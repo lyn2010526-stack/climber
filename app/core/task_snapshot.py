@@ -11,12 +11,12 @@ Provides a unified representation of task state including:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 
-class StepStatus(str, Enum):
+class StepStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -25,7 +25,7 @@ class StepStatus(str, Enum):
     BLOCKED = "blocked"
 
 
-class ToolCallStatus(str, Enum):
+class ToolCallStatus(StrEnum):
     SUCCESS = "success"
     FAILED = "failed"
     TIMEOUT = "timeout"
@@ -73,7 +73,7 @@ class ToolCallRecord:
     result: str | None = None
     error: str | None = None
     duration_ms: float = 0.0
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     attempt: int = 1
 
     def to_dict(self) -> dict[str, Any]:
@@ -182,8 +182,8 @@ class TaskSnapshot:
     status: str = "pending"
     iteration: int = 0
     total_tool_calls: int = 0
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def add_step(self, description: str, step_id: str | None = None, **kwargs: Any) -> PlanStep:
@@ -203,7 +203,7 @@ class TaskSnapshot:
         for step in self.plan:
             if step.id == step_id:
                 step.status = StepStatus.RUNNING
-                step.started_at = datetime.now(timezone.utc).isoformat()
+                step.started_at = datetime.now(UTC).isoformat()
                 self.current_step_id = step_id
                 if step_id in self.execution_queue:
                     self.execution_queue.remove(step_id)
@@ -215,7 +215,7 @@ class TaskSnapshot:
         for step in self.plan:
             if step.id == step_id:
                 step.status = StepStatus.COMPLETED
-                step.completed_at = datetime.now(timezone.utc).isoformat()
+                step.completed_at = datetime.now(UTC).isoformat()
                 step.result = result
                 self._touch()
                 return
@@ -226,7 +226,7 @@ class TaskSnapshot:
             if step.id == step_id:
                 step.status = StepStatus.FAILED
                 step.error = error
-                step.completed_at = datetime.now(timezone.utc).isoformat()
+                step.completed_at = datetime.now(UTC).isoformat()
                 self.context_summary.errors_encountered.append(
                     f"Step '{step.description}': {error}"
                 )
@@ -346,4 +346,4 @@ class TaskSnapshot:
 
     def _touch(self) -> None:
         """Update the updated_at timestamp."""
-        self.updated_at = datetime.now(timezone.utc).isoformat()
+        self.updated_at = datetime.now(UTC).isoformat()

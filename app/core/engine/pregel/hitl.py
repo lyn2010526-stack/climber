@@ -8,14 +8,22 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
+import structlog
 from pydantic import BaseModel, Field
 
-import structlog
-
 logger = structlog.get_logger(__name__)
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _spawn(coro: Any) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
 
 
 class Interrupt(BaseModel):
@@ -40,7 +48,7 @@ class Interrupt(BaseModel):
     checkpoint_id: str | None = None
     status: str = "pending"
     response: Any = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     resolved_at: datetime | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -102,7 +110,7 @@ class HITLManager:
         )
 
         if self._default_timeout:
-            asyncio.create_task(self._auto_expire(interrupt_obj.id, self._default_timeout))
+            _spawn(self._auto_expire(interrupt_obj.id, self._default_timeout))
 
         return interrupt_obj.id
 
@@ -130,7 +138,7 @@ class HITLManager:
                 )
             intr.status = "resolved"
             intr.response = value
-            intr.resolved_at = datetime.now(timezone.utc)
+            intr.resolved_at = datetime.now(UTC)
             event = self._pending_events.get(interrupt_id)
 
         if event:
@@ -151,7 +159,7 @@ class HITLManager:
             if not intr:
                 raise KeyError(f"Interrupt {interrupt_id} not found")
             intr.status = "cancelled"
-            intr.resolved_at = datetime.now(timezone.utc)
+            intr.resolved_at = datetime.now(UTC)
             event = self._pending_events.get(interrupt_id)
 
         if event:
@@ -208,7 +216,7 @@ class HITLManager:
             intr = self._interrupts.get(interrupt_id)
             if intr and intr.status == "pending":
                 intr.status = "expired"
-                intr.resolved_at = datetime.now(timezone.utc)
+                intr.resolved_at = datetime.now(UTC)
                 event = self._pending_events.get(interrupt_id)
                 if event:
                     event.set()

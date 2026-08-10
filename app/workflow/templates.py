@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from app.workflow import (
-    NodeType, Workflow, WorkflowEdge, WorkflowNode,
+    NodeType,
+    Workflow,
+    WorkflowEdge,
+    WorkflowNode,
 )
 
 
@@ -118,7 +119,7 @@ class WorkflowTemplates:
                     "model_id": model_id,
                     "api_key": api_key,
                     "prompt": (
-                        f"{{{{question}}}}" if i == 0
+                        "{{question}}" if i == 0
                         else f"Based on previous reasoning:\n{{{{step_{i-1}.response}}}}\n\nContinue reasoning step {i + 1}."
                     ),
                     "system_prompt": (

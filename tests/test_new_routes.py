@@ -1,12 +1,14 @@
 """Smoke tests for the routes that were previously missing."""
 
 import os
+
 import pytest
 
 os.environ["APP_TESTING"] = "true"
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./data/e2e.db")
 
 from fastapi.testclient import TestClient
+
 from app.main import app
 
 

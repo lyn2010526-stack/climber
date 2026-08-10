@@ -10,12 +10,12 @@ import json
 import os
 import time
 import uuid
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 
-class MessageType(str, Enum):
+class MessageType(StrEnum):
     TASK_ASSIGN = "task_assign"
     RESULT_REPORT = "result_report"
     HELP_REQUEST = "help_request"
@@ -23,7 +23,7 @@ class MessageType(str, Enum):
     STATUS_UPDATE = "status_update"
 
 
-class MessagePriority(str, Enum):
+class MessagePriority(StrEnum):
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
@@ -165,15 +165,14 @@ class InterAgentCommunication:
                 "results": all_results,
                 "count": len(all_results),
             }
-        elif merge_strategy == "vote":
+        if merge_strategy == "vote":
             return {
                 "merged": True,
                 "strategy": "vote",
                 "results": all_results,
                 "consensus": all_results[0] if all_results else None,
             }
-        else:
-            return {"merged": False, "error": f"Unknown strategy: {merge_strategy}"}
+        return {"merged": False, "error": f"Unknown strategy: {merge_strategy}"}
 
     def get_tool_definitions(self) -> list[dict[str, Any]]:
         return [

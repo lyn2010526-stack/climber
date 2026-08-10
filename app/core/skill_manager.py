@@ -10,16 +10,15 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
 
 import structlog
+from sqlalchemy import select
 
 from app.storage import async_session
 from app.storage.models_platform import Skill
-from sqlalchemy import select
 
 logger = structlog.get_logger()
 

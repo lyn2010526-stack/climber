@@ -157,4 +157,4 @@ class OAuthFlow:
         except ValueError:
             raise ValueError(
                 f"No valid token for {server_url}. Authorization required."
-            )
+            ) from None

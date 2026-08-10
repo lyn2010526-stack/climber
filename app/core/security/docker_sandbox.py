@@ -200,8 +200,7 @@ class DockerSandbox:
         container_id = None
         try:
             container_id = self.create_container(cmd, cwd, env, network)
-            result = self.execute_command(container_id)
-            return result
+            return self.execute_command(container_id)
         except Exception as e:
             logger.error("docker_execution_error", error=str(e))
             return ExecutionResult(error=f"Docker error: {e}", returncode=-1)

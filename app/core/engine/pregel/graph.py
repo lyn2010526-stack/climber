@@ -8,13 +8,13 @@ StateGraph is the builder API for defining graph topology:
 
 from __future__ import annotations
 
-import enum
 from collections import defaultdict
-from typing import Any, Awaitable, Callable, Protocol, runtime_checkable
+from collections.abc import Awaitable, Callable
+from typing import Any, Protocol, runtime_checkable
 
 import structlog
 
-from app.core.engine.pregel.command import Command, is_command, parse_node_output
+from app.core.engine.pregel.command import Command
 from app.core.engine.pregel.state import GraphState, StateReducer
 
 logger = structlog.get_logger(__name__)

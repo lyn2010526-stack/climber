@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import importlib.util
 import asyncio
-import structlog
+import importlib.util
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import structlog
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -15,15 +15,17 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.v1 import router as api_router
 from app.config import settings
-from app.core.di import register as di_register, resolve as di_resolve, ScopeContext
+from app.core.di import ScopeContext
+from app.core.di import register as di_register
+from app.core.di import resolve as di_resolve
+from app.core.interfaces import IExecutor, IModelAdapter, ISkillRegistry, IToolRegistry
 from app.core.logging_setup import configure_logging, get_recent_logs, write_crash_dump
 from app.core.memory_guardian import get_memory_guardian
 from app.core.watchdog import get_watchdog
-from app.core.interfaces import IModelAdapter, IToolRegistry, ISkillRegistry, IExecutor
-from app.middleware.metrics import MetricsMiddleware, metrics_endpoint, APP_INFO
-from app.middleware.security import SecurityHeadersMiddleware, RequestValidationMiddleware
+from app.middleware.metrics import APP_INFO, MetricsMiddleware, metrics_endpoint
+from app.middleware.security import RequestValidationMiddleware, SecurityHeadersMiddleware
 from app.storage import db_health, init_db
-from app.storage.cache import get_redis, close_redis
+from app.storage.cache import close_redis, get_redis
 from app.tools import register_builtins
 
 logger = structlog.get_logger()
@@ -48,18 +50,21 @@ del _candidate
 def _register_core_services() -> None:
     from app.core.agent_engine import AgentEngine
     from app.core.auto_loop import AutoLoopEngine
+    from app.core.executor import (
+        CrewExecutorAdapter,
+        SkillComposerExecutorAdapter,
+        UnifiedExecutor,
+        WorkflowExecutorAdapter,
+    )
+    from app.core.sandbox import SandboxConfig, SandboxExecutor
     from app.core.scheduler import TaskScheduler
     from app.core.skill_composition import SkillComposer
     from app.models.registry import ModelRegistry
-    from app.models.openai_adapter import OpenAIAdapter
-    from app.models.anthropic_adapter import AnthropicAdapter
-    from app.skills.registry import SkillRegistry, LegacySkillRegistry
-    from app.tools.mcp_client import MCPRegistry
-    from app.tools import tool_registry as global_tool_registry
-    from app.core.sandbox import SandboxExecutor, SandboxConfig
-    from app.workflow.engine import WorkflowEngine
     from app.multi_agent.crew import Crew
-    from app.core.executor import UnifiedExecutor, WorkflowExecutorAdapter, CrewExecutorAdapter, SkillComposerExecutorAdapter
+    from app.skills.registry import LegacySkillRegistry, SkillRegistry
+    from app.tools import tool_registry as global_tool_registry
+    from app.tools.mcp_client import MCPRegistry
+    from app.workflow.engine import WorkflowEngine
 
     model_registry = ModelRegistry()
     skill_registry = SkillRegistry()
@@ -153,7 +158,7 @@ async def lifespan(app: FastAPI):
         await guardian.start()
 
         try:
-            from app.services.telegram_bot import start_telegram_bot, configure_bot
+            from app.services.telegram_bot import configure_bot, start_telegram_bot
             model_registry = di_resolve("ModelRegistry")
             tool_registry = di_resolve("ToolRegistry")
             configure_bot(model_registry, tool_registry)
@@ -186,8 +191,8 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             logger.warning("main.telegram_bot_stop_failed", error=str(exc))
         await close_redis()
-        from app.models.openai_adapter import OpenAIAdapter
         from app.models.anthropic_adapter import AnthropicAdapter
+        from app.models.openai_adapter import OpenAIAdapter
         await OpenAIAdapter.close_client()
         await AnthropicAdapter.close_client()
         logger.info("Agent Engine shutting down")

@@ -10,7 +10,6 @@ from app.core.reasoning.base import (
     Candidate,
     CoverageReport,
     CritiqueResult,
-    IssueSeverity,
 )
 
 logger = structlog.get_logger()

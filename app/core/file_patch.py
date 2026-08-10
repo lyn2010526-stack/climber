@@ -10,24 +10,23 @@ import contextvars
 import difflib
 import re
 from pathlib import Path
-from typing import Optional
 
 import structlog
 
 logger = structlog.get_logger()
 
 # Context-local current agent mode (PLAN / ACT / etc.)
-_current_agent_mode: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+_current_agent_mode: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "current_agent_mode", default=None
 )
 
 
-def set_current_agent_mode(mode: Optional[str]) -> None:
+def set_current_agent_mode(mode: str | None) -> None:
     """Set the current agent mode for tool execution context."""
     _current_agent_mode.set(mode)
 
 
-def get_current_agent_mode() -> Optional[str]:
+def get_current_agent_mode() -> str | None:
     """Get the current agent mode."""
     return _current_agent_mode.get()
 
@@ -78,7 +77,7 @@ class FilePatchService:
             if not Path(file_path).exists():
                 return False, f"File not found: {file_path}"
 
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 old_content = f.read()
 
             new_content = FilePatchService._apply_unified_diff(old_content, patch)
@@ -92,7 +91,7 @@ class FilePatchService:
             return True, f"Patch applied successfully to {file_path}"
         except Exception as e:
             logger.error("patch_apply_failed", file_path=file_path, error=str(e))
-            return False, f"Error applying patch: {str(e)}"
+            return False, f"Error applying patch: {e!s}"
 
     @staticmethod
     def preview_edit(file_path: str, old_string: str, new_string: str) -> tuple[str, str]:
@@ -101,7 +100,7 @@ class FilePatchService:
         Returns (diff_string, message).
         """
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
             if old_string not in content:
@@ -111,7 +110,7 @@ class FilePatchService:
             diff = FilePatchService.create_patch(content, new_content, file_path)
             return diff, "Preview generated"
         except Exception as e:
-            return "", f"Error previewing edit: {str(e)}"
+            return "", f"Error previewing edit: {e!s}"
 
     @staticmethod
     def validate_edit(file_path: str, old_string: str, new_string: str) -> tuple[bool, str]:
@@ -128,7 +127,7 @@ class FilePatchService:
             if not Path(file_path).exists():
                 return False, f"File not found: {file_path}"
 
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 content = f.read()
 
             if old_string not in content:
@@ -154,10 +153,10 @@ class FilePatchService:
 
             return True, "Edit is valid"
         except Exception as e:
-            return False, f"Error validating edit: {str(e)}"
+            return False, f"Error validating edit: {e!s}"
 
     @staticmethod
-    def _apply_unified_diff(old_content: str, patch: str) -> Optional[str]:
+    def _apply_unified_diff(old_content: str, patch: str) -> str | None:
         """Apply a unified diff patch to content using pure Python.
 
         Parses standard unified diff format and applies hunks.

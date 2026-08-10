@@ -9,13 +9,13 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class CorrectionStrategy(str, Enum):
+class CorrectionStrategy(StrEnum):
     RE_STATE_GOAL = "re_state_goal"
     SIMPLIFY_TASK = "simplify_task"
     BREAK_INTO_SUBTASKS = "break_into_subtasks"

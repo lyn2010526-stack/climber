@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 import pytest
 from fastapi.testclient import TestClient
 
@@ -50,7 +49,6 @@ def test_process_upload():
 @pytest.fixture
 def client():
     """Create test client."""
-    import uuid
     # Use unique emails to avoid conflicts with existing data
     with TestClient(app) as c:
         yield c

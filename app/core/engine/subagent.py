@@ -13,9 +13,10 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Awaitable, Callable, Protocol
+from enum import StrEnum
+from typing import Any
 
 import structlog
 
@@ -24,7 +25,7 @@ logger = structlog.get_logger()
 logger = structlog.get_logger()
 
 
-class SubagentState(str, Enum):
+class SubagentState(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -191,7 +192,7 @@ class SubagentManager:
         # Acquire concurrency slot
         try:
             await asyncio.wait_for(self._semaphore.acquire(), timeout=5.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             record.state = SubagentState.FAILED
             record.error = "Concurrency acquisition timeout"
             return record
@@ -208,7 +209,7 @@ class SubagentManager:
             record.result = result
             record.usage = usage
             record.state = SubagentState.COMPLETED
-        except asyncio.TimeoutError:
+        except TimeoutError:
             record.state = SubagentState.TIMED_OUT
             record.error = f"Timeout after {spec.timeout_seconds}s"
         except asyncio.CancelledError:
@@ -248,8 +249,7 @@ class SubagentManager:
 
         if task in done:
             return task.result()
-        else:
-            raise asyncio.CancelledError()
+        raise asyncio.CancelledError()
 
     def cancel(self, task_id: str) -> bool:
         """Cancel a running sub-agent and optionally cascade to children."""

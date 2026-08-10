@@ -5,8 +5,6 @@
 from __future__ import annotations
 
 import logging
-import os
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -64,7 +62,7 @@ class SessionIsolationSandbox:
         try:
             target.relative_to(Path(workspace.root_path))
         except ValueError:
-            raise PermissionError(f"Path escapes session workspace: {target_path}")
+            raise PermissionError(f"Path escapes session workspace: {target_path}") from None
         return str(target)
 
     def list_files(self, session_id: str) -> list[str]:

@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import structlog
 
-from app.core import ChatResult, CompressionStrategy, ContextConfig, MessageRole
+from app.core import CompressionStrategy, ContextConfig, MessageRole
 
 logger = structlog.get_logger()
 
@@ -146,6 +145,6 @@ class ContextCompressor:
                 "role": "system",
                 "content": f"<summary of {summarized_count} earlier messages>",
             }
-            return system_msgs + [summary] + kept
+            return [*system_msgs, summary, *kept]
 
         return system_msgs + kept

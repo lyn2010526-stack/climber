@@ -7,10 +7,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +19,7 @@ class SessionSnapshot:
     branch_name: str
     commit_hash: str | None = None
     message: str = ""
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     files_snapshot: dict[str, str] = field(default_factory=dict)  # path -> sha256
 
 

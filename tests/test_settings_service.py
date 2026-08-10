@@ -1,7 +1,8 @@
 """Tests for settings service."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from app.services.settings_service import SettingsService
 from app.storage.models_settings import McpStatus, UserSettings
@@ -16,8 +17,7 @@ def _create_mock_result(value):
 
 @pytest.fixture
 def mock_db():
-    db = AsyncMock()
-    return db
+    return AsyncMock()
 
 
 class TestSettingsService:

@@ -1,6 +1,8 @@
 # tests/test_permission_controller.py
 import pytest
+
 from app.core.permission_controller import PermissionController, PermissionMode
+
 
 @pytest.fixture
 def ctrl():

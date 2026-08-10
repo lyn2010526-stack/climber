@@ -10,8 +10,9 @@ from __future__ import annotations
 import asyncio
 import gc
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import structlog
 
@@ -132,7 +133,7 @@ class MemoryGuardian:
             try:
                 await self._task
             except (asyncio.CancelledError, Exception):
-                pass
+                logger.debug("core.memory_guardian.suppressed", exc_info=True)
         self._task = None
 
     def stats(self) -> dict[str, Any]:

@@ -1,15 +1,16 @@
 """Tests for Phase 2 meta-cognition modules and MCP plugins."""
 
 import os
+
 import pytest
+
 from app.core.metacognition.capability_discovery import CapabilityDiscovery
-from app.core.metacognition.self_refactor import SelfModuleRefactor
 from app.core.metacognition.goal_adjuster import GoalDynamicAdjuster
+from app.core.metacognition.self_refactor import SelfModuleRefactor
 from app.core.metacognition.sub_agent import SubAgentOrchestrator, SubAgentState
+from app.tools.mcp_plugins.capability_index import CapabilityIndex
 from app.tools.mcp_plugins.causal_graph import CausalGraph
 from app.tools.mcp_plugins.trajectory_storage import TrajectoryStorage
-from app.tools.mcp_plugins.capability_index import CapabilityIndex
-
 
 # === Capability Discovery ===
 

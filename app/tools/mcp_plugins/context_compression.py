@@ -116,13 +116,12 @@ class ContextCompressor:
                 "role": "system",
                 "content": f"[Previous conversation summary]: {compressed_head_text}",
             }
-            return [summary_msg] + tail, result
-        else:
-            summary_msg = {
-                "role": "system",
-                "content": "[Previous conversation compressed — content was redundant]",
-            }
-            return [summary_msg] + tail, result
+            return [summary_msg, *tail], result
+        summary_msg = {
+            "role": "system",
+            "content": "[Previous conversation compressed — content was redundant]",
+        }
+        return [summary_msg, *tail], result
 
     def _split_sections(self, text: str) -> list[dict[str, str]]:
         """Split text into logical sections."""

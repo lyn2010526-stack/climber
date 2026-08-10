@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Any
 
 from app.tools import ToolRegistry
 
@@ -28,7 +29,7 @@ Validator = Callable[[str, dict[str, Any]], tuple[bool, str]]
 class ParallelToolExecutor:
     """Execute multiple tool calls in parallel or sequential."""
 
-    def __init__(self, registry: ToolRegistry, timeout_per_tool: float = 30.0, validator: Optional[Validator] = None, session: Any = None):
+    def __init__(self, registry: ToolRegistry, timeout_per_tool: float = 30.0, validator: Validator | None = None, session: Any = None):
         self._registry = registry
         self._timeout = timeout_per_tool
         self._validator = validator
@@ -84,7 +85,7 @@ class ParallelToolExecutor:
             )
             duration = (asyncio.get_event_loop().time() - start) * 1000
             return ToolExecutionResult(tool_name=name, result=result, duration_ms=duration, arguments=arguments, tool_call_id=tool_call_id)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ToolExecutionResult(tool_name=name, error="timeout", success=False, arguments=arguments, tool_call_id=tool_call_id)
         except asyncio.CancelledError:
             return ToolExecutionResult(tool_name=name, error="cancelled", success=False, arguments=arguments, tool_call_id=tool_call_id)

@@ -7,7 +7,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
-from app.api.v1.helpers import DEFAULT_USER, payload as _payload
+from app.api.v1.helpers import DEFAULT_USER
+from app.api.v1.helpers import payload as _payload
 from app.storage import async_session
 from app.storage.models_platform import Workflow
 
@@ -23,7 +24,7 @@ _SCHEDULER_MARKET = [
 @router.get("/scheduler/")
 async def list_scheduled() -> list[dict[str, Any]]:
     async with async_session() as db:
-        rows = (await db.execute(select(Workflow).where(Workflow.schedule != None))).scalars().all()
+        rows = (await db.execute(select(Workflow).where(Workflow.schedule is not None))).scalars().all()
         return [{"id": w.id, "name": w.name, "schedule": w.schedule, "last_status": w.last_status, "run_count": w.run_count} for w in rows]
 
 
@@ -51,7 +52,7 @@ async def create_scheduled(request: Request) -> dict[str, Any]:
 @router.get("/scheduler/tasks/")
 async def list_scheduler_tasks() -> list[dict[str, Any]]:
     async with async_session() as db:
-        rows = (await db.execute(select(Workflow).where(Workflow.schedule != None).order_by(Workflow.created_at.desc()))).scalars().all()
+        rows = (await db.execute(select(Workflow).where(Workflow.schedule is not None).order_by(Workflow.created_at.desc()))).scalars().all()
         return [{"id": w.id, "name": w.name, "cron": w.schedule, "description": getattr(w, "description", ""), "enabled": True, "last_run": None, "next_run": None, "run_count": w.run_count or 0} for w in rows]
 
 

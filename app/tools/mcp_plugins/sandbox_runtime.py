@@ -87,7 +87,7 @@ class SandboxRuntime:
                 stdout, stderr = await asyncio.wait_for(
                     proc.communicate(), timeout=self._timeout
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 await proc.wait()
                 return SandboxResult(

@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import time
-from enum import Enum
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from enum import StrEnum
+from typing import Any
 
 import structlog
 from pydantic import BaseModel
@@ -21,7 +22,7 @@ from app.core.goal_guard import CorrectionStrategy, GoalGuard
 logger = structlog.get_logger()
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -88,7 +89,6 @@ class AutonomousEngine:
     """
 
     def __init__(self, engine: AgentEngine | None = None):
-        from app.tools import ToolRegistry
         if engine is not None:
             self.agent_engine = engine
         else:

@@ -147,7 +147,7 @@ class SandboxExecutor:
                     proc.communicate(),
                     timeout=effective_timeout,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 proc.kill()
                 await proc.wait()
                 return f"TIMEOUT: Command exceeded {effective_timeout}s limit"

@@ -14,7 +14,6 @@ Architecture:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 from typing import Any
@@ -72,7 +71,7 @@ class DebateAgent:
 
         try:
             result = await self.model_adapter.chat(
-                [{"role": "system", "content": self.system_prompt}] + self.messages[-self.max_history:],
+                [{"role": "system", "content": self.system_prompt}, *self.messages[-self.max_history:]],
                 temperature=temperature,
                 max_tokens=max_tokens,
             )

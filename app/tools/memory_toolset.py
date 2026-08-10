@@ -6,8 +6,9 @@ to manage their own memories.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 from app.core.hierarchical_memory import HierarchicalMemoryOrchestrator
 
@@ -100,22 +101,21 @@ class MemoryToolSet:
         """Execute a memory tool."""
         if tool_name == "remember":
             return await self._remember(arguments, user_id, agent_id)
-        elif tool_name == "recall":
+        if tool_name == "recall":
             return await self._recall(arguments, user_id, agent_id)
-        elif tool_name == "forget":
+        if tool_name == "forget":
             return await self._forget(arguments, user_id, agent_id)
-        else:
-            return f"Unknown memory tool: {tool_name}"
+        return f"Unknown memory tool: {tool_name}"
 
     async def _remember(self, arguments: dict[str, Any], user_id: str, agent_id: str) -> str:
         """Record a new memory."""
         content = arguments.get("content", "")
         if not content:
             return "Error: content is required"
-        
+
         importance = float(arguments.get("importance", 0.5))
         memory_type = arguments.get("memory_type", "episodic")
-        
+
         try:
             if memory_type == "episodic":
                 await self.orchestrator._persistent_memory_service.create_episodic_memory(
@@ -143,7 +143,7 @@ class MemoryToolSet:
         query = arguments.get("query", "")
         if not query:
             return "Error: query is required"
-        
+
         try:
             result = await self.orchestrator.retrieve_for_query(
                 user_id=user_id,
@@ -167,9 +167,10 @@ class MemoryToolSet:
         reason = arguments.get("reason", "no reason provided")
 
         try:
+            from sqlalchemy import delete as sa_delete
+
             from app.storage import async_session
             from app.storage.models_memory import EpisodicMemory
-            from sqlalchemy import delete as sa_delete
 
             async with async_session() as db:
                 result = await db.execute(

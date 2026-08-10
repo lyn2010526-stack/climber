@@ -10,14 +10,15 @@ import asyncio
 import logging
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable, Awaitable
+from enum import StrEnum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class ToolSource(str, Enum):
+class ToolSource(StrEnum):
     """Where the tool originates from."""
 
     LOCAL = "local"
@@ -26,7 +27,7 @@ class ToolSource(str, Enum):
     PLUGIN = "plugin"
 
 
-class ToolCategory(str, Enum):
+class ToolCategory(StrEnum):
     """Tool category for organization."""
 
     FILE = "file"
@@ -270,7 +271,7 @@ class UnifiedToolRegistry:
                     duration_ms=duration,
                     source=tool.source,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 last_error = f"Tool '{name}' timed out after {tool.timeout_seconds}s"
                 logger.warning("Tool timeout: %s (attempt %d)", name, attempt + 1)
             except Exception as e:

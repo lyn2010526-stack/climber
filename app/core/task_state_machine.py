@@ -6,14 +6,20 @@
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
-from app.core import AgentEventType, SessionStatus
+import structlog
+
+from app.core import SessionStatus
 from app.core.exceptions import InvalidStateTransitionError
 
+logger = structlog.get_logger()
 
-class TaskState(str, Enum):
+
+class TaskState(StrEnum):
     """Task lifecycle states.
 
     Single source of truth for task state across the engine.
@@ -136,7 +142,7 @@ class TaskStateMachine:
         self._metadata.update({
             "state": new_state.value,
             "from_state": old_state.value,
-            "updated_at": __import__("datetime").datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(UTC).replace(tzinfo=None).isoformat(),
             "transition_trigger": trigger,
         })
 
@@ -146,7 +152,7 @@ class TaskStateMachine:
                 await hook(self, old_state, new_state)
             except Exception:
                 # Log but don't block transition
-                pass
+                logger.debug("task_state_machine.hook_failed", exc_info=True)
 
     def can_transition_to(self, new_state: TaskState) -> bool:
         """Check if transition to new_state is allowed."""

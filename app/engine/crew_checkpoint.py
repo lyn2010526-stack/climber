@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +28,7 @@ class CrewCheckpoint(BaseModel):
     crew_id: str
     task_index: int
     results: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = Field(default_factory=dict)
     checkpoint_id: str = Field(default_factory=lambda: str(uuid.uuid4())[:12])
 
@@ -80,7 +80,7 @@ class CheckpointManager:
         """Load the latest checkpoint for a crew."""
         latest: CrewCheckpoint | None = None
 
-        for key, cp in self._checkpoints.items():
+        for _, cp in self._checkpoints.items():
             if cp.crew_id == crew_id:
                 if latest is None or cp.task_index > latest.task_index:
                     latest = cp
@@ -135,11 +135,10 @@ class CheckpointManager:
         )
 
         if crew_factory:
-            crew = crew_factory(
+            return crew_factory(
                 task_index=checkpoint.task_index,
                 previous_results=checkpoint.results,
             )
-            return crew
 
         return checkpoint
 
@@ -263,6 +262,7 @@ class CheckpointManager:
                     data["created_at"] = datetime.fromisoformat(data["created_at"])
                     checkpoints.append(CrewCheckpoint(**data))
                 except Exception:
+                    logger.debug("checkpoint_load_skip", exc_info=True)
                     continue
 
             return checkpoints

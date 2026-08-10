@@ -11,16 +11,26 @@ import logging
 import time
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Awaitable, Callable
+from enum import Enum, StrEnum
+from typing import Any
 
 from app.core.task_state_machine import TaskState
 
 logger = logging.getLogger(__name__)
 
+_background_tasks: set[asyncio.Task] = set()
 
-class AgentRole(str, Enum):
+
+def _spawn(coro: Any) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
+
+class AgentRole(StrEnum):
     """Roles that agents can assume in a multi-agent system."""
 
     ORCHESTRATOR = "orchestrator"
@@ -228,7 +238,7 @@ class MultiAgentScheduler:
         if parent_task_id and parent_task_id in self._tasks:
             self._tasks[parent_task_id].subtask_ids.append(task.task_id)
 
-        asyncio.create_task(self._schedule_task(task))
+        _spawn(self._schedule_task(task))
         return task
 
     async def _schedule_task(self, task: ScheduledTask) -> None:
@@ -268,7 +278,7 @@ class MultiAgentScheduler:
                     task.state = TaskState.FAILED
                     agent.total_tasks_failed += 1
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 task.error = f"Task timed out after {task.timeout_seconds}s"
                 task.state = TaskState.FAILED
                 agent.total_tasks_failed += 1
@@ -343,7 +353,7 @@ class MultiAgentScheduler:
             self._tasks[child.task_id] = child
             parent.subtask_ids.append(child.task_id)
             children.append(child)
-            asyncio.create_task(self._schedule_task(child))
+            _spawn(self._schedule_task(child))
 
         return parent, children
 

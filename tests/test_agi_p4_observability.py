@@ -9,13 +9,12 @@ from __future__ import annotations
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
-from app.core.observability.alignment import AlignmentCheck, Goal, GoalTracker
+from app.core.observability.alignment import AlignmentCheck, GoalTracker
 from app.core.observability.audit import AuditChain, AuditEntry
 from app.core.observability.emergency_stop import EmergencyStopManager, EmergencyStopRecord
 from app.core.observability.trace import TraceCollector, TraceSpan
-
 
 # ---------------------------------------------------------------------------
 # Trace Tests
@@ -569,6 +568,7 @@ class TestObservabilityAPI:
     @pytest.fixture
     def app(self):
         from fastapi import FastAPI
+
         from app.core.observability.api import router
 
         test_app = FastAPI()

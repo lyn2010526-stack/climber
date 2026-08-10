@@ -30,9 +30,10 @@ class RecoveryManager:
 
     async def list_recoverable_sessions(self) -> list[dict[str, Any]]:
         """List all sessions that have recoverable checkpoints."""
+        from sqlalchemy import func, select
+
         from app.storage import async_session
         from app.storage.database import CheckpointRecord
-        from sqlalchemy import func, select
 
         async with async_session() as session:
             result = await session.execute(
@@ -47,9 +48,10 @@ class RecoveryManager:
 
     async def auto_recover(self) -> list[dict[str, Any]]:
         """Auto-recover all sessions that have recoverable checkpoints."""
+        from sqlalchemy import select
+
         from app.storage import async_session
         from app.storage.database import CheckpointRecord, Turn
-        from sqlalchemy import select
 
         async with async_session() as session:
             result = await session.execute(

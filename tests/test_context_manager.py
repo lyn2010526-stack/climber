@@ -1,6 +1,8 @@
 # tests/test_context_manager.py
 import pytest
-from app.core.context_manager import ContextManager, ContextLayer
+
+from app.core.context_manager import ContextManager
+
 
 @pytest.fixture
 def mgr(tmp_path):
@@ -15,7 +17,7 @@ def test_claude_md_loading(mgr, tmp_path):
     claude_md = tmp_path / "CLAUDE.md"
     claude_md.write_text("# Project Rules\n- Always write tests\n- Use type hints")
     messages = mgr.assemble_context(session_id="s1", user_id="u1", agent_id="a1", query="hello")
-    content = "\n".join(m.get("", "") for m in messages if isinstance(m, dict))
+    "\n".join(m.get("", "") for m in messages if isinstance(m, dict))
     # Check that CLAUDE.md content is present
     found = any("Always write tests" in str(m.get("content", "")) for m in messages if isinstance(m, dict))
     assert found

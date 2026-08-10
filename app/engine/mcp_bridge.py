@@ -44,8 +44,7 @@ class MCPBridge:
         description = tool.get("description", original_name)
 
         async def handler(**kwargs):
-            result = await client.call_tool(original_name, kwargs)
-            return result
+            return await client.call_tool(original_name, kwargs)
 
         self.runtime.register_mcp_tool(
             name=registered_name,
@@ -66,11 +65,11 @@ class MCPBridge:
         return f"{header}{tool_list}{footer}"
 
     async def disconnect_all(self):
-        for name, server in self._servers.items():
+        for _, server in self._servers.items():
             try:
                 await server["client"].disconnect()
             except Exception:
-                pass
+                logger.debug("engine.mcp_bridge.suppressed", exc_info=True)
         self._servers.clear()
         self._tool_docs.clear()
 

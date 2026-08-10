@@ -6,7 +6,8 @@ import asyncio
 import json
 import subprocess
 import textwrap
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import httpx
 import structlog
@@ -117,11 +118,11 @@ class ToolRegistry:
                     args = getattr(annot, "__args__", ())
                     if args:
                         annot = args[0]
-                if annot is int or annot == int:
+                if annot is int:
                     prop["type"] = "integer"
-                elif annot is float or annot == float:
+                elif annot is float:
                     prop["type"] = "number"
-                elif annot is bool or annot == bool:
+                elif annot is bool:
                     prop["type"] = "boolean"
                 else:
                     prop["type"] = "string"
@@ -160,12 +161,12 @@ class ToolRegistry:
             return str(result)
         except Exception as e:
             logger.error("Tool execution failed", tool=name, error=str(e))
-            return f"Error executing {name}: {str(e)}"
+            return f"Error executing {name}: {e!s}"
 
     def get_openai_tools(self) -> list[dict[str, Any]]:
         """Return tools in OpenAI function calling format."""
         result = []
-        for name, defn in self._definitions.items():
+        for _, defn in self._definitions.items():
             result.append({
                 "type": "function",
                 "function": {
@@ -230,4 +231,4 @@ def tool(
 
 def register_builtins() -> None:
     """Import and register all built-in tools."""
-    from app.tools import builtins  # noqa: F401
+    from app.tools import builtins

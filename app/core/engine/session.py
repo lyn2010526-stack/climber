@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core import ContextConfig, SessionStatus
 from app.core.task_state_machine import TaskState, TaskStateMachine
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _spawn(coro: Any) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 class _SessionMemory:
@@ -69,14 +77,14 @@ class AgentSession:
     def stop(self) -> None:
         self._stop_requested = True
         try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(self.state_machine.transition(TaskState.CANCELLED, trigger="user_stop"))
+            asyncio.get_running_loop()
+            _spawn(self.state_machine.transition(TaskState.CANCELLED, trigger="user_stop"))
         except RuntimeError:
             pass
 
     async def pause(self) -> None:
         await self.state_machine.transition(TaskState.PAUSED, trigger="user_pause")
-        self.paused_at = datetime.now(timezone.utc)
+        self.paused_at = datetime.now(UTC)
 
     async def resume(self) -> None:
         await self.state_machine.transition(TaskState.PROCESSING, trigger="user_resume")

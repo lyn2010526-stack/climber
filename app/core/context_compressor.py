@@ -10,7 +10,7 @@ from __future__ import annotations
 from app.core import CompressionStrategy, ContextConfig
 from app.core.compressor import ContextCompressor, estimate_tokens
 
-__all__ = ["ContextCompressor", "CompressionStrategy", "estimate_tokens"]
+__all__ = ["CompressionStrategy", "ContextCompressor", "estimate_tokens"]
 
 _default_config = ContextConfig(
     max_tokens=8000,

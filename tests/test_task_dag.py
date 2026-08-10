@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
-from app.core.task_dag import TaskDAG, TaskNode, HandoffMessage
+from app.core.task_dag import HandoffMessage, TaskDAG, TaskNode
 
 
 class TestTaskDAG:

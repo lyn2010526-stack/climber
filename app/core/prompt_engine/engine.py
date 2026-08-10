@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from app.core.prompt_engine.models import (
     ModelAdaptation,
@@ -321,9 +320,8 @@ class PromptEngine:
 
         assembled = "\n\n".join(parts)
         assembled = self._apply_model_adaptation(assembled, context.model_id)
-        assembled = self._enforce_token_budget(assembled)
+        return self._enforce_token_budget(assembled)
 
-        return assembled
 
     def _build_runtime_parts(self, context: RuntimeContext) -> list[str]:
         """Build runtime prompt parts based on current context."""

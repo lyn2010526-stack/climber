@@ -25,7 +25,7 @@ class ModelOutputCorrector:
 
         Returns (corrected_output, success).
         """
-        for attempt in range(self._max_attempts):
+        for _ in range(self._max_attempts):
             corrected = self._try_fix(raw_output, expected_schema)
             if self._validate_schema(corrected, expected_schema):
                 return corrected, True

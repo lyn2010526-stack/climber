@@ -21,7 +21,6 @@ from app.core.execution.engine import TaskExecutionEngine
 from app.core.execution.event_bus import EventBus, TaskEvent
 from app.core.execution.hitl import (
     HITLManager,
-    HITLRequest,
     HITLStatusApproved,
     HITLStatusExpired,
     HITLStatusPending,
@@ -29,7 +28,6 @@ from app.core.execution.hitl import (
 )
 from app.core.execution.task_model import SubTask, Task, TaskStore
 from app.core.task_state_machine import TaskState
-
 
 # ---------------------------------------------------------------------------
 # Task Model Tests
@@ -689,7 +687,7 @@ class TestTaskExecutionEngine:
             if pending:
                 hitl.reject(pending[0].id)
 
-        asyncio.create_task(reject_after_delay())
+        asyncio.create_task(reject_after_delay())  # noqa: RUF006 - test-specific pattern
         result = await engine.execute_task(task)
         st_map = {st.id: st for st in result.sub_tasks}
         assert st_map["st-1"].status == TaskState.FAILED.value
@@ -721,7 +719,7 @@ class TestTaskExecutionEngine:
             if pending:
                 hitl.approve(pending[0].id)
 
-        asyncio.create_task(approve_after_delay())
+        asyncio.create_task(approve_after_delay())  # noqa: RUF006 - test-specific pattern
         result = await engine.execute_task(task)
         assert result.status == TaskState.COMPLETED.value
         engine.close()

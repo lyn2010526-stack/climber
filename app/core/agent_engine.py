@@ -6,7 +6,20 @@ import asyncio
 import json
 import re
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any
+
+import structlog
+
+logger = structlog.get_logger()
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _spawn(coro: Any) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 from app.core import (
     AgentEvent,
@@ -82,17 +95,16 @@ class AgentSession:
 
     def stop(self) -> None:
         self._stop_requested = True
-        import asyncio
         try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(self.state_machine.transition(TaskState.CANCELLED, trigger="user_stop"))
+            asyncio.get_running_loop()
+            _spawn(self.state_machine.transition(TaskState.CANCELLED, trigger="user_stop"))
         except RuntimeError:
             pass
 
     async def pause(self) -> None:
         """Pause the session, recording the pause timestamp."""
         await self.state_machine.transition(TaskState.PAUSED, trigger="user_pause")
-        self.paused_at = __import__("datetime").datetime.utcnow().isoformat()
+        self.paused_at = datetime.now(UTC).replace(tzinfo=None).isoformat()
 
     async def resume(self) -> None:
         """Resume from PAUSED back to PROCESSING."""
@@ -315,7 +327,7 @@ class AgentEngine:
                 db.add(msg)
                 await db.commit()
         except Exception:
-            pass
+            logger.debug("agent_engine.suppressed", exc_info=True)
 
     async def run(self, session: AgentSession, message: str) -> AsyncIterator[AgentEvent]:
         # Acquire session-level lock to prevent concurrent requests
@@ -350,14 +362,14 @@ class AgentEngine:
             from app.core.file_patch import set_current_agent_mode
             set_current_agent_mode(session.mode)
         except Exception:
-            pass
+            logger.debug("agent_engine.suppressed", exc_info=True)
 
         # Fire-and-forget notification for agent start
         try:
             from app.services.notifications import notification_service
-            asyncio.create_task(notification_service.agent_message(session.agent_id or "Agent", "开始执行任务..."))
+            _spawn(notification_service.agent_message(session.agent_id or "Agent", "开始执行任务..."))
         except Exception:
-            pass
+            logger.debug("agent_engine.suppressed", exc_info=True)
 
         # Retrieve relevant memories and inject into context (replace if already present)
         try:
@@ -375,7 +387,7 @@ class AgentEngine:
                 else:
                     session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": memory_marker + "\n" + memory_context})
         except Exception:
-            pass
+            logger.debug("agent_engine.suppressed", exc_info=True)
 
         # Inject Core Memory blocks as XML into system prompt (replace if already present)
         try:
@@ -391,7 +403,7 @@ class AgentEngine:
                 else:
                     session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": core_marker + "\n" + core_memory_xml})
         except Exception:
-            pass
+            logger.debug("agent_engine.suppressed", exc_info=True)
 
         iteration = 0
         executor = ParallelToolExecutor(
@@ -588,9 +600,9 @@ class AgentEngine:
                 await session.state_machine.transition(TaskState.COMPLETED, trigger="run_complete")
                 try:
                     from app.services.notifications import notification_service
-                    asyncio.create_task(notification_service.task_complete(f"Agent {session.agent_id}", result.content[:100] if result and result.content else None))
+                    _spawn(notification_service.task_complete(f"Agent {session.agent_id}", result.content[:100] if result and result.content else None))
                 except Exception:
-                    pass
+                    logger.debug("agent_engine.suppressed", exc_info=True)
 
         except Exception as e:
             if session._stop_requested:
@@ -600,9 +612,9 @@ class AgentEngine:
             yield AgentEvent(type=AgentEventType.ERROR, data={"error": str(e)})
             try:
                 from app.services.notifications import notification_service
-                asyncio.create_task(notification_service.task_failed(f"Agent {session.agent_id}", str(e)))
+                _spawn(notification_service.task_failed(f"Agent {session.agent_id}", str(e)))
             except Exception:
-                pass
+                logger.debug("agent_engine.suppressed", exc_info=True)
             return
 
         # Store important interaction in episodic memory
@@ -616,14 +628,14 @@ class AgentEngine:
                     importance=0.7,
                 )
         except Exception:
-            pass
+            logger.debug("agent_engine.suppressed", exc_info=True)
 
         # Trigger memory reflection (fire-and-forget)
         try:
             from app.core.memory_reflection import memory_reflection
-            asyncio.create_task(memory_reflection.maybe_reflect(session.user_id))
+            _spawn(memory_reflection.maybe_reflect(session.user_id))
         except Exception:
-            pass
+            logger.debug("agent_engine.suppressed", exc_info=True)
 
         yield AgentEvent(type=AgentEventType.DONE, data={"status": session.status.value, "iterations": iteration, "content": result.content if result else "", "tokens_used": getattr(result, 'tokens_used', 0) if result else 0})
 
@@ -664,11 +676,11 @@ class AgentEngine:
 
     def resolve_permission(self, tool_call_id: str, decision: str) -> bool:
         """Resolve a pending permission request.
-        
+
         Args:
             tool_call_id: The ID of the tool call awaiting permission.
             decision: One of 'allow', 'allow_session', 'allow_always', 'deny'.
-            
+
         Returns:
             True if the permission was resolved, False if no pending request found.
         """

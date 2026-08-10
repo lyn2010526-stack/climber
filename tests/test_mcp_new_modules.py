@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.tools.mcp_cache import ToolResultCache
+from app.tools.mcp_health import AutoRestart, MCPHealthMonitor, McpStatus
 from app.tools.mcp_models import (
     MCPContent,
     MCPPrompt,
@@ -15,12 +16,9 @@ from app.tools.mcp_models import (
     MCPTool,
     MCPToolResult,
 )
-from app.tools.mcp_cache import ToolResultCache
-from app.tools.mcp_health import AutoRestart, MCPHealthMonitor, McpStatus
 from app.tools.mcp_oauth import OAuthFlow, OAuthTokenStore
 from app.tools.mcp_registry import MCPRegistryClient
 from app.tools.mcp_router import MCPRouter
-
 
 # -- Models Tests --
 
@@ -231,7 +229,7 @@ class TestMCPHealthMonitor:
         monitor = MCPHealthMonitor()
         mock_client = AsyncMock()
         mock_client.name = "test_server"
-        mock_client.list_tools.side_effect = asyncio.TimeoutError()
+        mock_client.list_tools.side_effect = TimeoutError()
 
         result = await monitor.check(mock_client)
         assert result.status == McpStatus.ERROR

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
-from sqlalchemy import select, delete, desc
+from sqlalchemy import delete, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.storage.models_reasoning import ReasoningTraceDB, ReasoningFeedbackDB
+from app.storage.models_reasoning import ReasoningFeedbackDB, ReasoningTraceDB
 
 
 class ReasoningTraceRepository:

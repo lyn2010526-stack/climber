@@ -13,7 +13,6 @@ from email import encoders
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Any
 
 import structlog
 
@@ -130,9 +129,9 @@ async def send_email(
     except smtplib.SMTPAuthenticationError:
         return "Error: SMTP authentication failed. Check your username and password. For Gmail, use an App Password."
     except smtplib.SMTPException as e:
-        return f"SMTP error: {str(e)}"
+        return f"SMTP error: {e!s}"
     except Exception as e:
-        return f"Error sending email: {str(e)}"
+        return f"Error sending email: {e!s}"
 
 
 @tool(description="Send a batch of personalized emails using a template and data file. Each row in the data file generates one email.")
@@ -223,7 +222,7 @@ async def send_batch_emails(
                     time.sleep(delay_seconds)
                 except Exception as e:
                     failed += 1
-                    errors.append(f"  {row.get(to_column, '?')}: {str(e)}")
+                    errors.append(f"  {row.get(to_column, '?')}: {e!s}")
 
         result = f"Batch email complete: {sent} sent, {failed} failed"
         if errors:
@@ -231,7 +230,7 @@ async def send_batch_emails(
         return result
 
     except Exception as e:
-        return f"Error in batch email: {str(e)}"
+        return f"Error in batch email: {e!s}"
 
 
 @tool(description="Preview how a templated email will look with data substitutions applied.")
@@ -278,7 +277,7 @@ async def preview_email(
     except KeyError as e:
         return f"Error: Missing placeholder {e}. Available: {list(row.keys())}"
     except Exception as e:
-        return f"Error previewing email: {str(e)}"
+        return f"Error previewing email: {e!s}"
 
 
 @tool(description="Validate email address format and check if domain has valid MX records.")
@@ -315,7 +314,7 @@ async def validate_email(
 
         return f"Valid email format: {email}"
     except Exception as e:
-        return f"Validation error: {str(e)}"
+        return f"Validation error: {e!s}"
 
 
 @tool(description="Compose an email with a professional template. Generates a complete email from a brief description.")
@@ -368,7 +367,7 @@ async def compose_email(
 
         return f"=== Composed Email ===\n\n{email}"
     except Exception as e:
-        return f"Error composing email: {str(e)}"
+        return f"Error composing email: {e!s}"
 
 
 @tool(description="Create an email signature with contact information, social links, and branding.")
@@ -432,7 +431,7 @@ async def create_email_signature(
 
         else:  # professional
             lines = [
-                f"--",
+                "--",
                 f"{name}",
             ]
             if title:
@@ -454,7 +453,7 @@ async def create_email_signature(
 
         return f"=== Email Signature ({style}) ===\n\n{signature}"
     except Exception as e:
-        return f"Error creating signature: {str(e)}"
+        return f"Error creating signature: {e!s}"
 
 
 def _load_pandas():

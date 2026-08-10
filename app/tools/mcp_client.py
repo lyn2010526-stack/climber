@@ -6,16 +6,14 @@ promissions, and tool routing.
 
 from __future__ import annotations
 
-import asyncio
-import json
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import structlog
 from mcp import ClientSession
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamablehttp_client
 
-from app.config import settings
 from app.tools.mcp_models import (
     MCPContent,
     MCPPrompt,
@@ -129,7 +127,7 @@ class MCPClient:
             raise ImportError(
                 "SSE transport requires mcp[sse] extra. "
                 "Install with: pip install mcp[sse]"
-            )
+            ) from None
 
         if not self.url:
             raise ValueError("sse transport requires 'url' parameter")
@@ -276,7 +274,7 @@ class MCPClient:
         except Exception as e:
             logger.error("Tool call failed", tool=name, server=self.name, error=str(e))
             return MCPToolResult(
-                content=[MCPContent(type="text", text=f"Error: {str(e)}")],
+                content=[MCPContent(type="text", text=f"Error: {e!s}")],
                 isError=True,
             )
 
@@ -395,14 +393,14 @@ class MCPClient:
             try:
                 await self.session.__aexit__(None, None, None)
             except Exception:
-                pass
+                logger.debug("tools.mcp_client.suppressed", exc_info=True)
             self.session = None
 
         if self._connect_cm:
             try:
                 await self._connect_cm.__aexit__(None, None, None)
             except Exception:
-                pass
+                logger.debug("tools.mcp_client.suppressed", exc_info=True)
             self._connect_cm = None
 
         self._notification_handlers.clear()
@@ -421,7 +419,7 @@ class MCPClient:
     def get_tool_definitions(self) -> list[dict[str, Any]]:
         """Return tools in OpenAI function calling format (backward compat)."""
         result = []
-        for name, tool in self.tools.items():
+        for _, tool in self.tools.items():
             result.append({
                 "type": "function",
                 "function": {
@@ -463,7 +461,7 @@ class MCPRegistry:
     def list_tools(self) -> list[dict[str, Any]]:
         tools = []
         for client in self._clients.values():
-            for name, tool in client.tools.items():
+            for _, tool in client.tools.items():
                 tools.append({
                     "type": "function",
                     "function": {

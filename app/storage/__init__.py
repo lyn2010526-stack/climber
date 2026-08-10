@@ -75,7 +75,7 @@ engine = _build_engine()
 if _is_sqlite:
 
     @event.listens_for(engine.sync_engine, "connect")
-    def _apply_sqlite_pragmas(dbapi_connection, connection_record):  # noqa: ANN001
+    def _apply_sqlite_pragmas(dbapi_connection, connection_record):
         """WAL + tuning pragmas, applied per connection."""
         cursor = dbapi_connection.cursor()
         try:
@@ -132,21 +132,23 @@ async def db_health() -> dict[str, Any]:
 async def init_db() -> None:
     """Create all tables. Ensure all models are imported for registration."""
     # Import all models so SQLAlchemy registers them with Base
-    from app.storage import database  # noqa: F401
-    from app.storage import models_memory  # noqa: F401
-    from app.storage import models_traces  # noqa: F401
-    from app.storage import models_eval  # noqa: F401
-    from app.storage import models_cost  # noqa: F401
-    from app.storage import models_skills  # noqa: F401
-    from app.storage import models_groups  # noqa: F401
-    from app.storage import models_feedback  # noqa: F401
-    from app.storage import models_files  # noqa: F401
-    from app.storage import models_plugins  # noqa: F401
-    from app.storage import models_reasoning  # noqa: F401
-    from app.storage import models_platform  # noqa: F401
+    from app.storage import (
+        database,
+        models_cost,
+        models_eval,
+        models_feedback,
+        models_files,
+        models_groups,
+        models_memory,
+        models_platform,
+        models_plugins,
+        models_reasoning,
+        models_skills,
+        models_traces,
+    )
 
     async with engine.begin() as conn:
         try:
             await conn.run_sync(Base.metadata.create_all)
         except Exception:
-            pass
+            logger.debug("storage.__init__.suppressed", exc_info=True)

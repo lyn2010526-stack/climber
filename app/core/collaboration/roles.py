@@ -7,11 +7,11 @@ of capability boundaries at tool execution time.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class AgentRole(str, Enum):
+class AgentRole(StrEnum):
     """Agent role types for capability boundary isolation."""
 
     PLANNER = "planner"

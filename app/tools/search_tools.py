@@ -6,10 +6,8 @@ including keyword search, news search, image search, and site-specific search.
 
 from __future__ import annotations
 
-import json
 import re
 import urllib.parse
-from typing import Any
 
 import httpx
 import structlog
@@ -39,11 +37,11 @@ async def search_web(
     try:
         if engine == "bing":
             return await _search_bing(query, num_results, language, time_range)
-        elif engine == "google":
+        if engine == "google":
             return await _search_google(query, num_results, language, time_range)
         return await _search_duckduckgo(query, num_results, language, time_range)
     except Exception as e:
-        return f"Search error: {str(e)}"
+        return f"Search error: {e!s}"
 
 
 async def _search_duckduckgo(query: str, num: int, lang: str, time_range: str) -> str:
@@ -150,7 +148,7 @@ async def search_news(
         if time_range:
             news_query += f" after:{_time_range_to_date(time_range)}"
 
-        url = f"https://html.duckduckgo.com/html/"
+        url = "https://html.duckduckgo.com/html/"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         resp = await httpx.AsyncClient(timeout=15, follow_redirects=True).post(
             url, data={"q": news_query}, headers=headers
@@ -170,13 +168,13 @@ async def search_news(
 
         return f"News: {query} ({len(formatted)} results)\n\n" + "\n\n".join(formatted)
     except Exception as e:
-        return f"News search error: {str(e)}"
+        return f"News search error: {e!s}"
 
 
 def _time_range_to_date(time_range: str) -> str:
     """Convert time_range to a date string."""
-    from datetime import datetime, timedelta
-    now = datetime.now()
+    from datetime import UTC, datetime, timedelta
+    now = datetime.now(UTC)
     if time_range == "day":
         delta = timedelta(days=1)
     elif time_range == "week":
@@ -203,7 +201,7 @@ async def search_site(
     """
     try:
         full_query = f"site:{site} {query}"
-        url = f"https://html.duckduckgo.com/html/"
+        url = "https://html.duckduckgo.com/html/"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         resp = await httpx.AsyncClient(timeout=15, follow_redirects=True).post(
             url, data={"q": full_query}, headers=headers
@@ -223,7 +221,7 @@ async def search_site(
 
         return f"Site search: {site} ({len(formatted)} results)\n\n" + "\n\n".join(formatted)
     except Exception as e:
-        return f"Site search error: {str(e)}"
+        return f"Site search error: {e!s}"
 
 
 @tool(description="Search for academic papers and research articles. Returns titles, authors, abstracts, and publication info.")
@@ -268,7 +266,7 @@ async def search_academic(
 
         return f"Academic Papers: {query} ({len(formatted)} results)\n\n" + "\n\n".join(formatted)
     except Exception as e:
-        return f"Academic search error: {str(e)}"
+        return f"Academic search error: {e!s}"
 
 
 @tool(description="Get real-time trending topics from social media and news aggregators.")
@@ -293,7 +291,7 @@ async def get_trending_topics(
 
         return f"Trending topics ({region}):\n\n{text[:2000]}"
     except Exception as e:
-        return f"Trending topics error: {str(e)}"
+        return f"Trending topics error: {e!s}"
 
 
 @tool(description="Search for code examples and documentation on GitHub, GitLab, Stack Overflow, and developer forums.")
@@ -314,7 +312,7 @@ async def search_code(
         if language:
             full_query += f" language:{language}"
 
-        url = f"https://html.duckduckgo.com/html/"
+        url = "https://html.duckduckgo.com/html/"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
         resp = await httpx.AsyncClient(timeout=15, follow_redirects=True).post(
             url, data={"q": f"site:github.com OR site:stackoverflow.com {full_query}"}, headers=headers
@@ -334,4 +332,4 @@ async def search_code(
 
         return f"Code Search: {query} ({len(formatted)} results)\n\n" + "\n\n".join(formatted)
     except Exception as e:
-        return f"Code search error: {str(e)}"
+        return f"Code search error: {e!s}"

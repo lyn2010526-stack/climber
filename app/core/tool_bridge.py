@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from app.tools import tool_registry
@@ -83,7 +83,7 @@ class ToolBridge:
         except Exception as e:
             return ToolResult(
                 success=False,
-                output=f"Error: {str(e)}",
+                output=f"Error: {e!s}",
                 tool_name=tool_name,
                 error=str(e),
             )

@@ -11,14 +11,12 @@ insufficient. The flow:
 
 from __future__ import annotations
 
-import asyncio
+import ast
 import textwrap
 from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
-
-import ast
 
 from app.core.sandbox import SandboxConfig, SandboxExecutor
 from app.tools import tool_registry
@@ -178,8 +176,8 @@ async def _test():
 asyncio.run(_test())
 """)
 
-        import tempfile as _tf
         import os as _os
+        import tempfile as _tf
 
         fd, tmp_path = _tf.mkstemp(suffix=".py")
         output = ""
@@ -211,12 +209,11 @@ asyncio.run(_test())
                     message="Smoke test passed",
                     test_output=data.get("result", ""),
                 )
-            else:
-                return ToolCreationResult(
-                    success=False, tool_name=request.name,
-                    message=data.get("error", "Unknown error"),
-                    test_output=output,
-                )
+            return ToolCreationResult(
+                success=False, tool_name=request.name,
+                message=data.get("error", "Unknown error"),
+                test_output=output,
+            )
         except (json.JSONDecodeError, IndexError):
             if "Error" not in output and "Traceback" not in output:
                 return ToolCreationResult(
@@ -306,7 +303,7 @@ asyncio.run(_test())
         ]
 
 
-import json  # noqa: E402
+import json
 
 _extender: ToolSelfExtender | None = None
 

@@ -1,8 +1,8 @@
+
 import pytest
-import asyncio
-from app.core.error_handler import (
-    APIError, ErrorSeverity, CircuitBreaker, RetryWithBackoff, RetryConfig
-)
+
+from app.core.error_handler import APIError, CircuitBreaker, ErrorSeverity, RetryConfig, RetryWithBackoff
+
 
 def test_api_error_classification():
     assert APIError.from_status(401).severity == ErrorSeverity.STOP

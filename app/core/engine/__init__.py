@@ -6,8 +6,6 @@ subagent management, tool rules, ensemble execution, and memory blocks —
 all wired together via dependency injection.
 """
 
-from app.core.engine.react_loop import ReActLoopExecutor
-from app.core.engine.session import AgentSession
 from app.core.engine.ensemble import (
     AgentMessage,
     ConsensusResult,
@@ -41,6 +39,7 @@ from app.core.engine.pipeline import (
     build_pipeline_event,
     run_pipeline,
 )
+from app.core.engine.react_loop import ReActLoopExecutor
 from app.core.engine.router_decision import (
     RouterDecisionEngine,
     RouterDecisionEvent,
@@ -54,6 +53,7 @@ from app.core.engine.runtime_capsule import (
     ToolReceipt,
     WorkspaceSnapshot,
 )
+from app.core.engine.session import AgentSession
 from app.core.engine.subagent import (
     SubagentManager,
     SubagentSpec,
@@ -65,63 +65,63 @@ from app.core.engine.tool_rules import (
     RulesCheckResult,
     ToolCallRecord,
     ToolRule,
-    ToolRuleType,
     ToolRulesSolver,
+    ToolRuleType,
 )
 
 __all__ = [
+    # Ensemble
+    "AgentMessage",
     # Session
     "AgentSession",
+    # Memory Blocks
+    "BlockType",
+    # Runtime Capsule
+    "BlockingFact",
+    # Memory Pressure
+    "CompressionStrategy",
+    "ConsensusResult",
+    "EnsembleCoordinator",
+    "EnsembleEngine",
+    "EntityExtractor",
+    "FileCategory",
+    "FileState",
+    # Tool Rules
+    "HeartbeatController",
+    "MemoryBlock",
+    "MemoryBlockStore",
+    "MemoryConsolidator",
+    "MemoryPressureConfig",
+    "MemoryPressureManager",
+    "MessageBus",
+    "MessageType",
+    "ModelResponse",
+    "PassageRecord",
+    "PersonaAwareBlockStore",
+    "PressureSnapshot",
     # Pipeline
     "RoutePlan",
-    "StepResult",
-    "TurnContext",
-    "TurnStep",
-    "build_pipeline_event",
-    "run_pipeline",
     # Router Decision
     "RouterDecisionEngine",
     "RouterDecisionEvent",
-    "TierConfig",
+    "RulesCheckResult",
+    "RuntimeStateCapsule",
+    "StepResult",
     # Subagent
     "SubagentManager",
     "SubagentSpec",
     "SubagentState",
     "SubagentUsage",
-    # Tool Rules
-    "HeartbeatController",
-    "RulesCheckResult",
+    "TierConfig",
     "ToolCallRecord",
+    "ToolReceipt",
     "ToolRule",
     "ToolRuleType",
     "ToolRulesSolver",
-    # Memory Pressure
-    "CompressionStrategy",
-    "MemoryPressureConfig",
-    "MemoryPressureManager",
-    "PressureSnapshot",
-    # Runtime Capsule
-    "BlockingFact",
-    "FileCategory",
-    "FileState",
-    "RuntimeStateCapsule",
-    "ToolReceipt",
+    "TurnContext",
+    "TurnStep",
     "WorkspaceSnapshot",
-    # Ensemble
-    "AgentMessage",
-    "ConsensusResult",
-    "EnsembleCoordinator",
-    "EnsembleEngine",
-    "MessageBus",
-    "MessageType",
-    "ModelResponse",
-    # Memory Blocks
-    "BlockType",
-    "EntityExtractor",
-    "MemoryBlock",
-    "MemoryBlockStore",
-    "MemoryConsolidator",
-    "PassageRecord",
-    "PersonaAwareBlockStore",
+    "build_pipeline_event",
     "create_persona_block",
+    "run_pipeline",
 ]

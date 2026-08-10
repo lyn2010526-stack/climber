@@ -6,8 +6,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from app.core.core_memory import core_memory
 from app.tools import tool
 

@@ -16,17 +16,18 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Awaitable, Callable
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 import structlog
 
 logger = structlog.get_logger()
 
 
-class SubagentType(str, Enum):
+class SubagentType(StrEnum):
     """Classification of subagent purposes.
 
     Each type determines the subagent's capabilities,
@@ -68,7 +69,7 @@ class SubagentTask:
     parent_id: str | None = None
     context: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
     timeout_seconds: float = 300.0
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -224,7 +225,7 @@ class SubagentManager:
 
         try:
             await asyncio.wait_for(async_task, timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
         except asyncio.CancelledError:
             pass
@@ -332,7 +333,7 @@ class SubagentManager:
                 result.started_at = started_at
                 if result.completed_at == 0:
                     result.completed_at = time.monotonic()
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 result = SubagentResult(
                     task_id=task_spec.task_id,
                     task_type=task_spec.task_type,
@@ -379,7 +380,7 @@ class SubagentManager:
 
         fork_context = {
             "parent_task": task_spec.parent_id,
-            "fork_time": datetime.now(timezone.utc).isoformat(),
+            "fork_time": datetime.now(UTC).isoformat(),
             "original_task": task_spec.task,
             **task_spec.context,
         }

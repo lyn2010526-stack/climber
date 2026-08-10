@@ -1,16 +1,16 @@
 """Tests for the consolidated skill system, memory manager, and MCP marketplace."""
 
-import os
 import tempfile
-import pytest
 from unittest.mock import MagicMock, patch
 
-from app.skills import SkillCategory, SkillRegistry, skill_registry
-from app.skills.memory_manager import (
-    MemoryEntry, MemoryType, PersistentMemoryManager,
-)
-from app.skills.mcp_marketplace import MCPMarketplace, BUILTIN_MCP_SERVERS, mcp_marketplace
+import pytest
 
+from app.skills import SkillCategory, skill_registry
+from app.skills.mcp_marketplace import BUILTIN_MCP_SERVERS, mcp_marketplace
+from app.skills.memory_manager import (
+    MemoryType,
+    PersistentMemoryManager,
+)
 
 # ── Consolidated Skill Registry Tests ──
 
@@ -65,7 +65,7 @@ class TestConsolidatedSkills:
         """Every skill ID must be unique."""
         all_skills = skill_registry.list_skills()
         ids = [s.id for s in all_skills]
-        assert len(ids) == len(set(ids)), f"Duplicate IDs found: {set(i for i in ids if ids.count(i) > 1)}"
+        assert len(ids) == len(set(ids)), f"Duplicate IDs found: { {i for i in ids if ids.count(i) > 1} }"
 
     def test_every_skill_has_system_prompt(self):
         """Every skill must have a substantive system prompt."""

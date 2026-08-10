@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 
 from app.skills.package_manager import SkillPackageManager
-from app.skills.skill_package import RiskLevel, SkillPackage, FailureStrategy
+from app.skills.skill_package import FailureStrategy, RiskLevel, SkillPackage
 
 
 @pytest.fixture
@@ -110,7 +109,7 @@ class TestSkillPackageManager:
         pkg_path = tmp_path / "test.skill.json"
         sample_package.save_to_file(pkg_path)
         manager.install_from_file(pkg_path)
-        ok, msg = manager.install_from_file(pkg_path, overwrite=True)
+        ok, _msg = manager.install_from_file(pkg_path, overwrite=True)
         assert ok is True
 
     def test_list_installed(
@@ -129,12 +128,12 @@ class TestSkillPackageManager:
         pkg_path = tmp_path / "test.skill.json"
         sample_package.save_to_file(pkg_path)
         manager.install_from_file(pkg_path)
-        ok, msg = manager.uninstall("test-skill")
+        ok, _msg = manager.uninstall("test-skill")
         assert ok is True
         assert manager.list_installed() == []
 
     def test_uninstall_not_found(self, manager: SkillPackageManager) -> None:
-        ok, msg = manager.uninstall("nonexistent")
+        ok, _msg = manager.uninstall("nonexistent")
         assert ok is False
 
     def test_get(

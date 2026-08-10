@@ -11,7 +11,7 @@ Features:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import structlog
@@ -19,7 +19,7 @@ import structlog
 logger = structlog.get_logger()
 
 
-class CompressionStrategy(str, Enum):
+class CompressionStrategy(StrEnum):
     SUMMARIZE = "summarize"  # Summarize older messages
     DROP_TOOL_RESULTS = "drop_tool_results"  # Remove old tool outputs
     KEEP_SYSTEM = "keep_system"  # Only keep system + last N messages
@@ -307,4 +307,4 @@ class MemoryPressureManager:
             "content": f"[Previous context summary: {len(to_summarize)} earlier messages. Key points: {'; '.join(summary_parts)}]",
         }
 
-        return system_msgs + [summary_msg] + recent
+        return [*system_msgs, summary_msg, *recent]

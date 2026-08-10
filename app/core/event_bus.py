@@ -7,11 +7,21 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Callable, Coroutine
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _spawn(coro: Any) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
 
 
 @dataclass
@@ -19,7 +29,7 @@ class Event:
     event_type: str
     data: dict[str, Any]
     source: str = ""
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     event_id: str = ""
 
 
@@ -82,7 +92,7 @@ class EventBus:
                 if asyncio.iscoroutine(result) or asyncio.isfuture(result):
                     coros.append(result)
                 else:
-                    asyncio.create_task(self._run_sync(handler, event))
+                    _spawn(self._run_sync(handler, event))
             except Exception as e:
                 logger.error("event_handler_error", event_type=event_type, error=str(e))
 

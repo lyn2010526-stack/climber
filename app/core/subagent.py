@@ -8,18 +8,18 @@ then aggregate their results.
 from __future__ import annotations
 
 import asyncio
-import json
 import time
-from typing import Any, AsyncIterator
-from uuid import uuid4
+from collections.abc import AsyncIterator
+from typing import Any
 
 import structlog
 
 from app.core import (
-    AgentEvent, AgentEventType, ChatResult, MessageRole,
-    SessionStatus, SubAgentTask,
+    AgentEvent,
+    AgentEventType,
+    SubAgentTask,
 )
-from app.core.agent_engine import AgentEngine, AgentSession
+from app.core.agent_engine import AgentEngine
 from app.models.registry import ModelRegistry
 from app.tools import ToolRegistry
 

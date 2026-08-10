@@ -7,7 +7,6 @@ from app.core.engine.pipeline import (
     RoutePlan,
     StepResult,
     TurnContext,
-    TurnStep,
     build_pipeline_event,
     run_pipeline,
 )
@@ -132,7 +131,7 @@ class TestRunPipeline:
             await asyncio.sleep(0.01)
             return ctx
 
-        ctx, results = await run_pipeline(base_context, [("slow", slow_step)])
+        _ctx, results = await run_pipeline(base_context, [("slow", slow_step)])
         assert results[0].duration_ms >= 10
 
 

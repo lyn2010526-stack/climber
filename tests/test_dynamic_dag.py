@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from app.core.task_dag import TaskDAG, TaskNode
 
 

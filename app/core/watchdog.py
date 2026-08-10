@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import structlog
 
@@ -156,7 +157,7 @@ class Watchdog:
             try:
                 await self._monitor
             except (asyncio.CancelledError, Exception):
-                pass
+                logger.debug("core.watchdog.suppressed", exc_info=True)
         self._monitor = None
 
         for supervised in self._tasks.values():
@@ -166,7 +167,7 @@ class Watchdog:
                 try:
                     await supervised.task
                 except (asyncio.CancelledError, Exception):
-                    pass
+                    logger.debug("core.watchdog.suppressed", exc_info=True)
         logger.info("watchdog_stopped")
 
     def health(self) -> dict[str, Any]:

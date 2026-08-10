@@ -1,5 +1,6 @@
 import pytest
-from app.core.tool_runtime import ToolRuntime, ToolResult
+
+from app.core.tool_runtime import ToolRuntime
 
 
 @pytest.fixture

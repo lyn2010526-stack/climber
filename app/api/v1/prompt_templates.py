@@ -7,7 +7,6 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from app.core.prompt_engine.models import PromptTemplate
 from app.core.prompt_engine.template_repository import PromptTemplateRepository
 
 logger = logging.getLogger(__name__)

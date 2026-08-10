@@ -14,24 +14,30 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-import json
-import structlog
-from datetime import datetime, timezone
-from typing import Any, AsyncIterator, Callable
+import os
+from collections.abc import AsyncIterator, Callable
+from datetime import UTC, datetime
+from typing import Any
 
-from app.core import AgentEvent, AgentEventType, ChatResult
-from app.core.agent_engine import AgentEngine, AgentSession
-from app.core.api_key_crypto import decrypt_api_key
-from app.core.di import resolve as di_resolve
-from app.core.group_ws_hub import group_ws_hub
-from app.core.task_dag import TaskDAG, TaskNode, HandoffMessage
-from app.models.registry import ModelRegistry
-from app.storage import async_session
-from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupTask, AgentGroupMemory, AgentGroupTaskCheckpoint
+import structlog
 from fastapi import HTTPException
 from sqlalchemy import select
 
-import os
+from app.core import AgentEvent, AgentEventType
+from app.core.agent_engine import AgentEngine
+from app.core.api_key_crypto import decrypt_api_key
+from app.core.di import resolve as di_resolve
+from app.core.group_ws_hub import group_ws_hub
+from app.core.task_dag import HandoffMessage, TaskDAG, TaskNode
+from app.models.registry import ModelRegistry
+from app.storage import async_session
+from app.storage.models_groups import (
+    AgentGroup,
+    AgentGroupMember,
+    AgentGroupMemory,
+    AgentGroupTask,
+    AgentGroupTaskCheckpoint,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -158,7 +164,7 @@ class GroupCollaborationEngine:
                     ).scalars().all()
                     db_reviewers = list(reviewers)
 
-                    task.started_at = datetime.now(timezone.utc)
+                    task.started_at = datetime.now(UTC)
                     task.status = "running"
                     await db.commit()
 
@@ -204,7 +210,7 @@ class GroupCollaborationEngine:
                             t.status = "stopped"
                             await db.commit()
                 except Exception:
-                    pass
+                    logger.debug("core.group_collaboration.suppressed", exc_info=True)
                 raise
             except Exception as e:
                 logger.exception("group_task_failed", task_id=task_id)
@@ -215,7 +221,7 @@ class GroupCollaborationEngine:
                             t.status = "failed"
                             await db.commit()
                 except Exception:
-                    pass
+                    logger.debug("core.group_collaboration.suppressed", exc_info=True)
                 await group_ws_hub.broadcast(task.group_id, {
                     "type": "task_failed",
                     "data": {"task_id": task_id, "error": str(e)},
@@ -312,7 +318,7 @@ class GroupCollaborationEngine:
             if not t:
                 return
             t.status = "running"
-            t.started_at = datetime.now(timezone.utc)
+            t.started_at = datetime.now(UTC)
             await db.commit()
             task = t
 
@@ -391,7 +397,7 @@ class GroupCollaborationEngine:
                 t.status = "completed"
                 t.final_output = final_output
                 t.total_tokens = (t.total_tokens or 0) + worker_tokens
-                t.completed_at = datetime.now(timezone.utc)
+                t.completed_at = datetime.now(UTC)
                 await db.commit()
 
         await self._store_memory(task.group_id, task.id, worker.agent_id, final_output, "task_result")
@@ -592,7 +598,7 @@ class GroupCollaborationEngine:
                     review_error = None
                     try:
                         async with asyncio.timeout(TASK_TIMEOUT):
-                            review_output, review_tokens = await self._run_agent_simple(
+                            review_output, _ = await self._run_agent_simple(
                                 agent_id=reviewer.agent_id,
                                 provider=reviewer.model_provider or "openai",
                                 model_id=reviewer.model_id or "gpt-4o",
@@ -652,7 +658,7 @@ class GroupCollaborationEngine:
                             t.final_output = worker_output
                             if task.output_schema:
                                 t.structured_output = parsed if 'parsed' in dir() else {}
-                            t.completed_at = datetime.now(timezone.utc)
+                            t.completed_at = datetime.now(UTC)
                             await db.commit()
                             task = t
 
@@ -674,7 +680,7 @@ class GroupCollaborationEngine:
                 if t:
                     t.status = "partial"
                     t.final_output = worker_output
-                    t.completed_at = datetime.now(timezone.utc)
+                    t.completed_at = datetime.now(UTC)
                     await db.commit()
             await group_ws_hub.broadcast(task.group_id, {
                 "type": "task_partial",
@@ -690,7 +696,7 @@ class GroupCollaborationEngine:
                         t.status = "failed"
                         await db.commit()
             except Exception:
-                pass
+                logger.debug("core.group_collaboration.suppressed", exc_info=True)
             await group_ws_hub.broadcast(task.group_id, {
                 "type": "task_failed",
                 "data": {"task_id": task.id, "error": str(e)},
@@ -840,7 +846,7 @@ class GroupCollaborationEngine:
             if t:
                 t.status = "completed" if passed else "partial"
                 t.final_output = final_output
-                t.completed_at = datetime.now(timezone.utc)
+                t.completed_at = datetime.now(UTC)
                 await db.commit()
 
         await self._store_memory(task.group_id, task.id, manager_member.agent_id, final_output, "task_result")
@@ -945,7 +951,7 @@ class GroupCollaborationEngine:
             if t:
                 t.status = "completed" if consensus_reached else "partial"
                 t.final_output = final_output
-                t.completed_at = datetime.now(timezone.utc)
+                t.completed_at = datetime.now(UTC)
                 await db.commit()
 
         await self._store_memory(task.group_id, task.id, "group_chat", final_output, "task_result")
@@ -1067,10 +1073,9 @@ Respond with:
 2. If not passing, list specific issues found."""
 
         review_output = ""
-        review_tokens = 0
         try:
             async with asyncio.timeout(TASK_TIMEOUT):
-                review_output, review_tokens = await self._run_agent_simple(
+                review_output, _ = await self._run_agent_simple(
                     agent_id="guardrail-validator",
                     provider="openai",
                     model_id="gpt-4o",
@@ -1146,14 +1151,13 @@ Respond with:
     async def _load_latest_checkpoint(self, task_id: str) -> AgentGroupTaskCheckpoint | None:
         """Load the latest checkpoint for a task."""
         async with async_session() as db:
-            result = (
+            return (
                 await db.execute(
                     select(AgentGroupTaskCheckpoint).where(
                         AgentGroupTaskCheckpoint.task_id == task_id
                     ).order_by(AgentGroupTaskCheckpoint.created_at.desc()).limit(1)
                 )
             ).scalar_one_or_none()
-            return result
 
     async def _resume_from_checkpoint(self, task: AgentGroupTask, checkpoint: AgentGroupTaskCheckpoint) -> None:
         """Resume task execution from a checkpoint."""
@@ -1379,7 +1383,7 @@ Respond with:
             return FALLBACK_MODELS[key]
         from app.models.registry import MODEL_ALIASES
         if key in MODEL_ALIASES:
-            resolved_provider, resolved_model = MODEL_ALIASES[key]
+            _, resolved_model = MODEL_ALIASES[key]
             if resolved_model.lower() in FALLBACK_MODELS:
                 return FALLBACK_MODELS[resolved_model.lower()]
         return None
@@ -1440,7 +1444,7 @@ Respond with:
                 if output:
                     return output, total_tokens
             except Exception:
-                pass
+                logger.debug("core.group_collaboration.suppressed", exc_info=True)
 
         logger.error(f"{role}_failed_after_retry", agent_id=agent_id, error=str(last_error) if last_error else "unknown")
         return "", 0

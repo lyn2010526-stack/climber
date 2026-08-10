@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -42,8 +41,8 @@ class SettingsService:
     async def update_settings(
         self,
         user_id: str,
-        autonomous_agent_mode: Optional[bool] = None,
-        token_throttle_mcp_enabled: Optional[bool] = None,
+        autonomous_agent_mode: bool | None = None,
+        token_throttle_mcp_enabled: bool | None = None,
     ) -> UserSettings:
         """Update user settings."""
         settings = await self.get_settings(user_id)
@@ -53,7 +52,7 @@ class SettingsService:
         if token_throttle_mcp_enabled is not None:
             settings.token_throttle_mcp_enabled = token_throttle_mcp_enabled
 
-        settings.updated_at = datetime.now(timezone.utc)
+        settings.updated_at = datetime.now(UTC)
         await self.db.commit()
         await self.db.refresh(settings)
 
@@ -63,7 +62,7 @@ class SettingsService:
         """Update MCP status for user."""
         settings = await self.get_settings(user_id)
         settings.mcp_status = status
-        settings.updated_at = datetime.now(timezone.utc)
+        settings.updated_at = datetime.now(UTC)
         await self.db.commit()
 
     def get_effective_mode(self, settings: UserSettings) -> dict:

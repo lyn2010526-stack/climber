@@ -3,25 +3,22 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from sse_starlette.sse import EventSourceResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette.sse import EventSourceResponse
 
-from app.core.agent_engine import AgentEngine
 from app.core.reasoning import (
-    ReasoningFeedback,
     ReasoningRequest,
     ReasoningResult,
 )
+from app.middleware.rate_limit import RateLimit
 from app.storage import get_db
 from app.storage.repository_reasoning import (
-    ReasoningTraceRepository,
     ReasoningFeedbackRepository,
+    ReasoningTraceRepository,
 )
-from app.middleware.rate_limit import RateLimit
 
 DEFAULT_USER = "default-user"
 
@@ -63,9 +60,9 @@ async def reason_with_slash(
 
         return result
     except NotImplementedError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from None
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Reasoning failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Reasoning failed: {e!s}") from None
 
 
 @router.post("")
@@ -143,13 +140,12 @@ async def reason_stream(
 
 @router.get("/modes")
 async def list_reasoning_modes() -> list[dict[str, Any]]:
-    modes = [
+    return [
         {"id": "auto", "name": "Auto", "description": "Automatically select best strategy", "available": True},
         {"id": "tree", "name": "Tree of Thought", "description": "Parallel multi-path + self-refine", "available": True},
         {"id": "deep", "name": "Deep Refine", "description": "Iterative refinement with backtracking", "available": True},
         {"id": "debate", "name": "Debate", "description": "Multi-agent debate convergence", "available": True},
     ]
-    return modes
 
 
 @router.post("/{trace_id}/feedback")

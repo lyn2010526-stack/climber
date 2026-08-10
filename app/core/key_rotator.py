@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 import structlog
@@ -15,7 +15,7 @@ import structlog
 logger = structlog.get_logger()
 
 
-class RotationStrategy(str, Enum):
+class RotationStrategy(StrEnum):
     """Key selection strategy."""
 
     ROUND_ROBIN = "round-robin"
@@ -131,10 +131,9 @@ class ApiKeyRotator:
 
         if strategy == RotationStrategy.ROUND_ROBIN:
             return self._round_robin_select(provider, healthy_keys)
-        elif strategy == RotationStrategy.LEAST_BUSY:
+        if strategy == RotationStrategy.LEAST_BUSY:
             return self._least_busy_select(healthy_keys)
-        else:
-            return self._failover_select(healthy_keys)
+        return self._failover_select(healthy_keys)
 
     async def acquire_key(self, provider: str) -> KeyMetrics | None:
         """Acquire a key for making a request (increments active_requests)."""

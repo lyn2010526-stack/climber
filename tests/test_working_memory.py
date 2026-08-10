@@ -7,6 +7,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///./data/test_working_m
 
 import pytest
 import pytest_asyncio
+
 from app.core.working_memory import WorkingMemoryService, WorkingMemoryState
 
 

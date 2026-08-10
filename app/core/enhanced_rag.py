@@ -40,7 +40,7 @@ def rerank_results(query: str, results: list[dict[str, Any]], top_k: int = 5) ->
         return []
     documents = [r.get("text") or r.get("content", "") for r in results]
     scores = compute_bm25(query, documents)
-    scored = [(score, result) for score, result in zip(scores, results)]
+    scored = [(score, result) for score, result in zip(scores, results, strict=False)]
     scored.sort(key=lambda x: x[0], reverse=True)
     return [result for _, result in scored[:top_k]]
 
@@ -93,6 +93,6 @@ def reciprocal_rank_fusion(results_list: list[list[dict[str, Any] | tuple[str, f
                 doc_id = result.get("id", str(rank))
             scores[doc_id] = scores.get(doc_id, 0) + 1.0 / (k + rank + 1)
 
-    scored = [(doc_id, score) for doc_id, score in scores.items()]
+    scored = list(scores.items())
     scored.sort(key=lambda x: x[1], reverse=True)
     return scored[:10]

@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 from uuid import uuid4
 
 
-class FrameType(str, Enum):
+class FrameType(StrEnum):
     """Frame 类型枚举 — 单一词汇表，不允许随意扩展"""
     # 会话生命周期
     SESSION_START = "session-start"
@@ -45,7 +45,7 @@ class FrameType(str, Enum):
     ERROR = "error"
 
 
-class FrameKind(str, Enum):
+class FrameKind(StrEnum):
     """Frame 子类型"""
     INFO = "info"
     WARN = "warn"
@@ -221,13 +221,10 @@ class FrameFolder:
                 prev.data["content"] = prev.data.get("content", "") + frame.data.get("content", "")
                 prev.timestamp = frame.timestamp  # 更新时间戳
                 return None
-            else:
-                self._buffer.append(frame)
-                return None
-        else:
-            # 不可折叠帧：先刷新缓冲
-            flushed = self._flush()
-            return flushed
+            self._buffer.append(frame)
+            return None
+        # 不可折叠帧：先刷新缓冲
+        return self._flush()
 
     def _flush(self) -> Frame | None:
         """刷新缓冲区，返回第一个累积帧"""

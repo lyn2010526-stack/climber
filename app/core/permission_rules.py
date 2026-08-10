@@ -12,18 +12,17 @@ from __future__ import annotations
 import fnmatch
 import re
 from dataclasses import dataclass, field
-from enum import Enum
-from pathlib import Path
+from enum import StrEnum
 from typing import Any
 
 
-class RuleDecision(str, Enum):
+class RuleDecision(StrEnum):
     ALLOW = "allow"
     ASK = "ask"
     DENY = "deny"
 
 
-class PermissionMode(str, Enum):
+class PermissionMode(StrEnum):
     """权限模式 — 参考 Claude Code 的 mode 系统"""
     DEFAULT = "default"          # 手动模式：只自动允许读取
     ACCEPT_EDITS = "acceptEdits"  # 自动接受编辑

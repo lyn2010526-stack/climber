@@ -1,11 +1,10 @@
 """Skill definitions — builtin SkillInfo registry and handler mapping."""
 
-from app.skills.registry import SkillCategory, SkillInfo
 from app.skills.builtins import (
+    skill_backend_engineer,
     skill_code_reviewer,
     skill_data_analyst,
     skill_database_architect,
-    skill_backend_engineer,
     skill_dependency_auditor,
     skill_devops_engineer,
     skill_doc_generator,
@@ -22,6 +21,7 @@ from app.skills.builtins import (
     skill_tdd_engineer,
     skill_tech_researcher,
 )
+from app.skills.registry import SkillCategory, SkillInfo
 
 BUILTIN_SKILLS = [
     SkillInfo(
@@ -30,7 +30,7 @@ BUILTIN_SKILLS = [
         description="Multi-level web research with source following and synthesis",
         category=SkillCategory.CORE,
         icon="🔬",
-        system_prompt="""You are a senior research analyst. 
+        system_prompt="""You are a senior research analyst.
 - Always cite sources with URLs
 - Cross-reference at least 2 independent sources
 - Rate confidence: HIGH / MEDIUM / LOW

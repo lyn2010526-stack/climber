@@ -9,7 +9,6 @@ from app.core.unified_tool_interface import (
     ToolSource,
     UnifiedToolDefinition,
     UnifiedToolRegistry,
-    UnifiedToolResult,
 )
 
 

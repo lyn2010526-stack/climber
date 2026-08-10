@@ -19,7 +19,6 @@ from app.core.reasoning.base import (
     Candidate,
     CoverageReport,
     EdgeCase,
-    IssueSeverity,
     Risk,
 )
 
@@ -124,7 +123,7 @@ class CoverageChecker:
     ) -> CoverageReport:
         start = time.monotonic()
         checklist_items = _TASK_TYPE_CHECKLISTS.get(task_type, _DEFAULT_CHECKLIST)
-        checklist: dict[str, bool] = {item: False for item in checklist_items}
+        checklist: dict[str, bool] = dict.fromkeys(checklist_items, False)
 
         combined_content = self._combine_candidates(candidates)
 
@@ -191,7 +190,7 @@ class CoverageChecker:
                 timeout=timeout,
             )
             return self._extract_json(result.content)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Coverage LLM call timed out", timeout=timeout)
             return {}
         except Exception as exc:

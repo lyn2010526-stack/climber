@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-import structlog
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+import structlog
 
 from app.config import settings
 
@@ -22,11 +23,13 @@ MEMORY_ARCHIVE_INTERVAL_HOURS = 168  # 7 days
 async def cleanup_expired_sessions() -> int:
     """Remove sessions older than SESSION_TTL_HOURS."""
     try:
-        from app.storage import async_session
-        from app.storage.database import Session as SessionModel, Message as MessageModel
         from sqlalchemy import delete, select
 
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=SESSION_TTL_HOURS)
+        from app.storage import async_session
+        from app.storage.database import Message as MessageModel
+        from app.storage.database import Session as SessionModel
+
+        cutoff = datetime.now(UTC) - timedelta(hours=SESSION_TTL_HOURS)
         async with async_session() as db:
             old_sessions = (
                 await db.execute(select(SessionModel.id).where(SessionModel.created_at < cutoff))
@@ -55,7 +58,7 @@ async def cleanup_crash_logs() -> int:
             return 0
 
         files = sorted(log_dir.glob("crash-*.log"), key=lambda p: p.stat().st_mtime)
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=CRASH_LOG_MAX_AGE_HOURS)
+        cutoff = datetime.now(UTC) - timedelta(hours=CRASH_LOG_MAX_AGE_HOURS)
         cutoff_ts = cutoff.timestamp()
 
         removed = 0
@@ -100,10 +103,11 @@ async def cleanup_memory_decay() -> None:
 async def cleanup_memory_archive() -> None:
     """Archive old episodic memories to long-term storage."""
     try:
+        from sqlalchemy import select
+
         from app.core.persistent_memory import persistent_memory
         from app.storage import async_session
         from app.storage.models_memory import EpisodicMemory
-        from sqlalchemy import select, func
 
         # Get all distinct user_ids that have episodic memories
         async with async_session() as db:

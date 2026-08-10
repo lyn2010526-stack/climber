@@ -16,6 +16,7 @@ from app.core.observability.alignment import GoalTracker
 from app.core.observability.audit import AuditChain
 from app.core.observability.emergency_stop import EmergencyStopManager
 from app.core.observability.trace import TraceCollector
+
 router = APIRouter(prefix="/api/v1/observability", tags=["observability"])
 
 _trace_collector: TraceCollector | None = None

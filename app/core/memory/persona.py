@@ -6,13 +6,12 @@ inheritance. Persona is injected into system prompt as L0 layer.
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import JSON, DateTime, String, select, delete
+from sqlalchemy import JSON, String, delete, select
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.storage import Base, async_session
@@ -35,8 +34,8 @@ class AgentPersona:
     expertise: list[str] = field(default_factory=list)
     communication_style: str = ""
     goals: list[str] = field(default_factory=list)
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    updated_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -70,8 +69,8 @@ class PersonaModel(Base):
     expertise: Mapped[list[str]] = mapped_column(JSON, default=list)
     communication_style: Mapped[str] = mapped_column(String(500), default="")
     goals: Mapped[list[str]] = mapped_column(JSON, default=list)
-    created_at: Mapped[str] = mapped_column(String(50), default=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: Mapped[str] = mapped_column(String(50), default=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: Mapped[str] = mapped_column(String(50), default=lambda: datetime.now(UTC).isoformat())
+    updated_at: Mapped[str] = mapped_column(String(50), default=lambda: datetime.now(UTC).isoformat())
 
 
 class SessionPersonaModel(Base):
@@ -83,7 +82,7 @@ class SessionPersonaModel(Base):
     base_persona_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     overrides: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     learnings: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    created_at: Mapped[str] = mapped_column(String(50), default=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: Mapped[str] = mapped_column(String(50), default=lambda: datetime.now(UTC).isoformat())
 
 
 class PersonaStore:
@@ -91,7 +90,7 @@ class PersonaStore:
 
     async def save(self, persona: AgentPersona) -> AgentPersona:
         """Save or update a persona."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         persona.updated_at = now
         async with async_session() as db:
             existing = await db.get(PersonaModel, persona.agent_id)
@@ -146,7 +145,7 @@ class PersonaStore:
             for key, value in kwargs.items():
                 if hasattr(model, key) and value is not None:
                     setattr(model, key, value)
-            model.updated_at = datetime.now(timezone.utc).isoformat()
+            model.updated_at = datetime.now(UTC).isoformat()
             await db.commit()
             return await self.load(agent_id)
 
@@ -197,7 +196,7 @@ def create_session_persona(
         "base_persona_id": base_persona_id,
         "overrides": overrides or {},
         "learnings": {},
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -267,7 +266,7 @@ async def get_effective_persona(
 
         overrides = session_model.overrides or {}
         if overrides:
-            effective = AgentPersona(
+            return AgentPersona(
                 agent_id=base.agent_id,
                 name=overrides.get("name", base.name),
                 role=overrides.get("role", base.role),
@@ -278,7 +277,6 @@ async def get_effective_persona(
                 created_at=base.created_at,
                 updated_at=base.updated_at,
             )
-            return effective
         return base
 
 

@@ -1,5 +1,7 @@
 import pytest
-from app.core.token_tracker import TokenTracker, TokenBudget, QuotaExceededError
+
+from app.core.token_tracker import QuotaExceededError, TokenBudget, TokenTracker
+
 
 def test_record_usage():
     tracker = TokenTracker()

@@ -1,15 +1,13 @@
 """Tests for Phase 1 meta-cognition modules."""
 
-import pytest
-from app.core.metacognition.monitor import DefectType, MetaCognitionMonitor
-from app.core.metacognition.hypothesis import HypothesisSimulator
 from app.core.metacognition.causal import CausalAttribution, RootCause
-from app.core.metacognition.resource import ResourceOrchestrator, TaskComplexity
+from app.core.metacognition.hypothesis import HypothesisSimulator
+from app.core.metacognition.monitor import DefectType, MetaCognitionMonitor
 from app.core.metacognition.orchestrator import ExecutionContext, MetacognitionOrchestrator
-from app.tools.mcp_plugins.sandbox_runtime import SandboxRuntime
+from app.core.metacognition.resource import ResourceOrchestrator, TaskComplexity
 from app.tools.mcp_plugins.context_compression import ContextCompressor
 from app.tools.mcp_plugins.dynamic_tool import DynamicToolGenerator
-
+from app.tools.mcp_plugins.sandbox_runtime import SandboxRuntime
 
 # === Meta-Cognition Monitor ===
 

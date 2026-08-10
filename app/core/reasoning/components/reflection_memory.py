@@ -9,7 +9,6 @@ The reflection persists across attempts, enabling cross-round learning.
 from __future__ import annotations
 
 import time
-from typing import Any
 
 import structlog
 from pydantic import BaseModel, Field

@@ -30,7 +30,6 @@ from app.workflow import (
     WorkflowResult,
 )
 
-
 _SAFE_EVAL_BUILTINS = {
     "len": len, "str": str, "int": int, "float": float,
     "bool": bool, "list": list, "dict": dict, "range": range,
@@ -74,23 +73,13 @@ def safe_eval(expression: str, local_vars: dict[str, Any]) -> Any:
     try:
         tree = ast.parse(expression, mode="eval")
         _validate_ast(tree)
-        return eval(compile(tree, "<workflow>", "eval"), {"__builtins__": _SAFE_EVAL_BUILTINS}, local_vars)
+        return eval(compile(tree, "<workflow>", "eval"), {"__builtins__": _SAFE_EVAL_BUILTINS}, local_vars)  # noqa: S307 - AST-validated sandboxed eval
     except Exception:
         raise
 
 
 def _validate_code_ast(node: ast.AST) -> None:
-    allowed_nodes = _SAFE_NODES + (
-        ast.Module,
-        ast.Assign, ast.AugAssign, ast.AnnAssign,
-        ast.For, ast.While, ast.If, ast.Return,
-        ast.Break, ast.Continue,
-        ast.FunctionDef, ast.AsyncFunctionDef,
-        ast.arg, ast.arguments, ast.Return,
-        ast.Pass, ast.Assert, ast.Raise,
-        ast.Import, ast.ImportFrom,
-        ast.Expr, ast.Store, ast.NameConstant,
-    )
+    allowed_nodes = (*_SAFE_NODES, ast.Module, ast.Assign, ast.AugAssign, ast.AnnAssign, ast.For, ast.While, ast.If, ast.Return, ast.Break, ast.Continue, ast.FunctionDef, ast.AsyncFunctionDef, ast.arg, ast.arguments, ast.Return, ast.Pass, ast.Assert, ast.Raise, ast.Import, ast.ImportFrom, ast.Expr, ast.Store, ast.NameConstant)
     for child in ast.walk(node):
         if not isinstance(child, allowed_nodes):
             raise ValueError(f"Unsafe code node: {type(child).__name__}")
@@ -107,7 +96,7 @@ def safe_exec(code: str, local_vars: dict[str, Any]) -> dict[str, Any]:
         tree = ast.parse(code, mode="exec")
         _validate_code_ast(tree)
         exec_globals: dict[str, Any] = {"__builtins__": _SAFE_EVAL_BUILTINS}
-        exec(compile(tree, "<workflow>", "exec"), exec_globals, local_vars)
+        exec(compile(tree, "<workflow>", "exec"), exec_globals, local_vars)  # noqa: S102 - sandboxed AST-validated exec
         return local_vars
     except Exception:
         raise
@@ -422,21 +411,21 @@ class WorkflowEngine:
 
         if operator == "equals":
             return actual_str == expected
-        elif operator == "not_equals":
+        if operator == "not_equals":
             return actual_str != expected
-        elif operator == "contains":
+        if operator == "contains":
             return expected in actual_str
-        elif operator == "not_contains":
+        if operator == "not_contains":
             return expected not in actual_str
-        elif operator == "starts_with":
+        if operator == "starts_with":
             return actual_str.startswith(expected)
-        elif operator == "ends_with":
+        if operator == "ends_with":
             return actual_str.endswith(expected)
-        elif operator == "not_empty":
+        if operator == "not_empty":
             return bool(actual_str.strip())
-        elif operator == "empty":
+        if operator == "empty":
             return not actual_str.strip()
-        elif operator == "greater_than":
+        if operator == "greater_than":
             try:
                 return float(actual_str) > float(expected)
             except (ValueError, TypeError):

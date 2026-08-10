@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from app.multi_agent import AgentRole, AgentTask, TaskStatus
 from app.multi_agent.crew import Crew
 

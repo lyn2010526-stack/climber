@@ -6,12 +6,12 @@ CSV, JSON, XML, Excel, Markdown, HTML, YAML, TOML, and plain text.
 
 from __future__ import annotations
 
-import csv
 import json
 import os
 import xml.etree.ElementTree as ET
 from typing import Any
 
+import defusedxml.ElementTree as DefusedET
 import structlog
 
 from app.tools import tool
@@ -79,10 +79,8 @@ async def convert_file(
                 # Step 2: JSON to output
                 from_json_key = f"json_to_{output_format}"
                 if from_json_key in _DIRECT_CONVERTERS:
-                    result = _DIRECT_CONVERTERS[from_json_key](intermediate, output_path, **kwargs)
-                    return result
-                else:
-                    return f"Error: Cannot convert intermediate to {output_format}"
+                    return _DIRECT_CONVERTERS[from_json_key](intermediate, output_path, **kwargs)
+                return f"Error: Cannot convert intermediate to {output_format}"
             finally:
                 if os.path.exists(intermediate):
                     os.remove(intermediate)
@@ -90,7 +88,7 @@ async def convert_file(
         return f"Error: Conversion from {input_format} to {output_format} not supported"
 
     except Exception as e:
-        return f"Error converting file: {str(e)}"
+        return f"Error converting file: {e!s}"
 
 
 def _detect_format(file_path: str) -> str:
@@ -150,7 +148,7 @@ async def csv_to_json(
         size = os.path.getsize(output_path)
         return f"Converted CSV to JSON: {output_path} ({len(df)} rows, {size:,} bytes)"
     except Exception as e:
-        return f"Error converting CSV to JSON: {str(e)}"
+        return f"Error converting CSV to JSON: {e!s}"
 
 
 @tool(description="Convert JSON data to CSV or Excel format. Flattens nested structures if needed.")
@@ -176,7 +174,7 @@ async def json_to_csv(
         if not os.path.exists(input_path):
             return f"Error: File not found: {input_path}"
 
-        with open(input_path, "r", encoding="utf-8") as f:
+        with open(input_path, encoding="utf-8") as f:
             data = json.load(f)
 
         if isinstance(data, dict):
@@ -198,7 +196,7 @@ async def json_to_csv(
         size = os.path.getsize(output_path)
         return f"Converted JSON to CSV: {output_path} ({len(df)} rows, {size:,} bytes)"
     except Exception as e:
-        return f"Error converting JSON to CSV: {str(e)}"
+        return f"Error converting JSON to CSV: {e!s}"
 
 
 @tool(description="Convert Markdown to HTML. Supports tables, code blocks, lists, and common extensions.")
@@ -218,7 +216,7 @@ async def markdown_to_html(
         if not os.path.exists(input_path):
             return f"Error: File not found: {input_path}"
 
-        with open(input_path, "r", encoding="utf-8") as f:
+        with open(input_path, encoding="utf-8") as f:
             md_content = f.read()
 
         try:
@@ -250,7 +248,7 @@ async def markdown_to_html(
         size = os.path.getsize(output_path)
         return f"Converted Markdown to HTML: {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error converting Markdown to HTML: {str(e)}"
+        return f"Error converting Markdown to HTML: {e!s}"
 
 
 @tool(description="Convert HTML to plain text or Markdown. Strips tags and preserves structure.")
@@ -270,7 +268,7 @@ async def html_to_markdown(
         if not os.path.exists(input_path):
             return f"Error: File not found: {input_path}"
 
-        with open(input_path, "r", encoding="utf-8") as f:
+        with open(input_path, encoding="utf-8") as f:
             html_content = f.read()
 
         try:
@@ -295,7 +293,7 @@ async def html_to_markdown(
         size = os.path.getsize(output_path)
         return f"Converted HTML to {output_format}: {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error converting HTML: {str(e)}"
+        return f"Error converting HTML: {e!s}"
 
 
 @tool(description="Convert XML data to JSON. Preserves attributes and nested elements.")
@@ -313,7 +311,7 @@ async def xml_to_json(
         if not os.path.exists(input_path):
             return f"Error: File not found: {input_path}"
 
-        tree = ET.parse(input_path)
+        tree = DefusedET.parse(input_path)
         root = tree.getroot()
 
         def element_to_dict(element):
@@ -348,7 +346,7 @@ async def xml_to_json(
         size = os.path.getsize(output_path)
         return f"Converted XML to JSON: {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error converting XML to JSON: {str(e)}"
+        return f"Error converting XML to JSON: {e!s}"
 
 
 @tool(description="Convert JSON data to XML format.")
@@ -368,7 +366,7 @@ async def json_to_xml(
         if not os.path.exists(input_path):
             return f"Error: File not found: {input_path}"
 
-        with open(input_path, "r", encoding="utf-8") as f:
+        with open(input_path, encoding="utf-8") as f:
             data = json.load(f)
 
         def dict_to_xml(parent, data):
@@ -400,7 +398,7 @@ async def json_to_xml(
         size = os.path.getsize(output_path)
         return f"Converted JSON to XML: {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error converting JSON to XML: {str(e)}"
+        return f"Error converting JSON to XML: {e!s}"
 
 
 @tool(description="Convert between YAML and JSON formats.")
@@ -420,7 +418,7 @@ async def convert_yaml_json(
         if not os.path.exists(input_path):
             return f"Error: File not found: {input_path}"
 
-        with open(input_path, "r", encoding="utf-8") as f:
+        with open(input_path, encoding="utf-8") as f:
             input_content = f.read()
 
         input_ext = os.path.splitext(input_path)[1].lower()
@@ -444,7 +442,7 @@ async def convert_yaml_json(
     except ImportError:
         return "Error: PyYAML not installed. Install with: pip install pyyaml"
     except Exception as e:
-        return f"Error converting: {str(e)}"
+        return f"Error converting: {e!s}"
 
 
 @tool(description="Convert Excel file to CSV, or CSV to Excel. Supports multiple sheets.")
@@ -493,7 +491,7 @@ async def convert_excel(
         size = os.path.getsize(output_path)
         return f"Converted {input_ext} to {output_ext}: {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error converting Excel: {str(e)}"
+        return f"Error converting Excel: {e!s}"
 
 
 @tool(description="Convert a data file to a formatted Markdown table.")
@@ -545,7 +543,7 @@ async def to_markdown_table(
 
         return md_table
     except Exception as e:
-        return f"Error creating Markdown table: {str(e)}"
+        return f"Error creating Markdown table: {e!s}"
 
 
 @tool(description="Convert a data file to an HTML table with styling.")
@@ -613,7 +611,7 @@ async def to_html_table(
         size = os.path.getsize(output_path)
         return f"HTML table saved: {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error creating HTML table: {str(e)}"
+        return f"Error creating HTML table: {e!s}"
 
 
 @tool(description="Merge multiple CSV/JSON files into a single file. Supports concatenation and joining on a key column.")
@@ -673,7 +671,7 @@ async def merge_files(
         size = os.path.getsize(output_path)
         return f"Merged {len(files)} files: {output_path} ({len(result)} rows, {size:,} bytes)"
     except Exception as e:
-        return f"Error merging files: {str(e)}"
+        return f"Error merging files: {e!s}"
 
 
 @tool(description="Split a data file into multiple files based on a column value or row count.")
@@ -729,7 +727,7 @@ async def split_file(
 
         return f"Split into {len(output_files)} files in {output_dir}:\n" + "\n".join(f"  {os.path.basename(f)}" for f in output_files)
     except Exception as e:
-        return f"Error splitting file: {str(e)}"
+        return f"Error splitting file: {e!s}"
 
 
 # ─── Internal converters ──────────────────────────────────────────────────
@@ -747,7 +745,7 @@ def _json_to_csv_converter(input_path: str, output_path: str, **kwargs) -> str:
     pd = _load_pandas()
     if pd is None:
         return "Error: pandas not installed."
-    with open(input_path, "r") as f:
+    with open(input_path) as f:
         data = json.load(f)
     if isinstance(data, dict):
         data = [data]
@@ -769,7 +767,7 @@ def _json_to_xlsx_converter(input_path: str, output_path: str, **kwargs) -> str:
     pd = _load_pandas()
     if pd is None:
         return "Error: pandas not installed."
-    with open(input_path, "r") as f:
+    with open(input_path) as f:
         data = json.load(f)
     if isinstance(data, dict):
         data = [data]
@@ -860,10 +858,9 @@ def _basic_md_to_html(md: str) -> str:
                 in_list = True
             html_lines.append(f"<li>{line[2:]}</li>")
             continue
-        else:
-            if in_list:
-                html_lines.append("</ul>")
-                in_list = False
+        if in_list:
+            html_lines.append("</ul>")
+            in_list = False
 
         # Paragraphs
         if line.strip():

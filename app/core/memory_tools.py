@@ -316,8 +316,7 @@ class MemoryToolRegistry:
             return "Error: MemFS not available"
 
         try:
-            content = await self._memfs.read(path)
-            return content
+            return await self._memfs.read(path)
         except FileNotFoundError:
             return f"Memory file not found: {path}"
         except Exception as e:

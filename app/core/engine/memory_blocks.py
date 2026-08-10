@@ -14,7 +14,7 @@ import re
 import time
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import structlog
@@ -22,7 +22,7 @@ import structlog
 logger = structlog.get_logger()
 
 
-class BlockType(str, Enum):
+class BlockType(StrEnum):
     CORE = "core"  # Always injected, read-only
     USER = "user"  # User-managed, editable
     ARCHIVE = "archive"  # Paged archival memory

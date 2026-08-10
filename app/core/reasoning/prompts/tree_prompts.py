@@ -69,7 +69,7 @@ Evaluate on these 5 dimensions (score 1-5 each):
 
 Be strict but fair. Only give high scores when truly deserved."""
 
-IMPROVE_PROMPT = """The following critique has been provided for your previous output. 
+IMPROVE_PROMPT = """The following critique has been provided for your previous output.
 Address ALL issues raised. Improve the output while preserving what works.
 
 Critique:

@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class MultiVendorLoadBalancer:
         if not available:
             return self._endpoints[0] if self._endpoints else None
         weights = [ep.weight for ep in available]
-        return random.choices(available, weights=weights, k=1)[0]
+        return random.choices(available, weights=weights, k=1)[0]  # noqa: S311 - weighted LB selection, non-crypto
 
     def record_success(self, vendor: str, latency_ms: float) -> None:
         for ep in self._endpoints:

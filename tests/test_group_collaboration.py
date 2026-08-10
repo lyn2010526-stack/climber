@@ -16,26 +16,31 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.core.agent_engine import AgentEngine
+from app.core.auto_loop import AutoLoopEngine
+from app.core.di import ScopeContext
+from app.core.di import register as di_register
+from app.core.executor import (
+    CrewExecutorAdapter,
+    SkillComposerExecutorAdapter,
+    UnifiedExecutor,
+    WorkflowExecutorAdapter,
+)
 from app.core.group_collaboration import (
     GroupCollaborationEngine,
     get_group_collaboration_engine,
 )
-from app.core.di import register as di_register, ScopeContext
-from app.core.interfaces import IModelAdapter, IToolRegistry, ISkillRegistry, IExecutor
-from app.models.registry import ModelRegistry
-from app.tools import tool_registry
-from app.skills import skill_registry, LegacySkillRegistry
-from app.core.agent_engine import AgentEngine
-from app.core.auto_loop import AutoLoopEngine
+from app.core.interfaces import IExecutor, IModelAdapter, ISkillRegistry, IToolRegistry
+from app.core.sandbox import SandboxConfig, SandboxExecutor
 from app.core.scheduler import TaskScheduler
 from app.core.skill_composition import SkillComposer
-from app.core.sandbox import SandboxExecutor, SandboxConfig
-from app.workflow.engine import WorkflowEngine
+from app.models.registry import ModelRegistry
 from app.multi_agent.crew import Crew
-from app.core.executor import UnifiedExecutor, WorkflowExecutorAdapter, CrewExecutorAdapter, SkillComposerExecutorAdapter
-from app.core.task_dag import TaskDAG, TaskNode
+from app.skills import LegacySkillRegistry, skill_registry
 from app.storage import async_session
 from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupTask
+from app.tools import tool_registry
+from app.workflow.engine import WorkflowEngine
 
 
 @pytest.mark.asyncio
@@ -64,7 +69,7 @@ async def test_supervisor_tracks_running_task() -> None:
         new_callable=AsyncMock,
     ) as mock_process:
         mock_process.return_value = None
-        asyncio.create_task(get_group_collaboration_engine().run_task(task_id))
+        asyncio.create_task(get_group_collaboration_engine().run_task(task_id))  # noqa: RUF006 - test-specific pattern
         for _ in range(20):
             async with async_session() as db:
                 t = await db.get(AgentGroupTask, task_id)

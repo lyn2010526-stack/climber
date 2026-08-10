@@ -10,25 +10,24 @@ Provides:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-class ModelStatus(str, Enum):
+class ModelStatus(StrEnum):
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
     DISABLED = "disabled"
 
 
-class TaskType(str, Enum):
+class TaskType(StrEnum):
     CODE_GENERATION = "code_generation"
     CODE_REVIEW = "code_review"
     CHAT = "chat"

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from app.core.mcp_controller import McpController, McpStatus
 from app.core.prompt_manager import PromptManager
 from app.services.settings_service import SettingsService

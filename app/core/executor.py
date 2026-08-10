@@ -10,7 +10,10 @@ All three implement the same IExecutor interface, enabling polymorphic use.
 
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Callable
+from collections.abc import AsyncIterator
+from typing import Any
+
+import structlog
 
 from app.core.interfaces import (
     ExecutionContext,
@@ -18,8 +21,6 @@ from app.core.interfaces import (
     ExecutionStatus,
     IExecutor,
 )
-
-import structlog
 
 logger = structlog.get_logger()
 

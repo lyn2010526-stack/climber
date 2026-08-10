@@ -6,12 +6,10 @@ at runtime, breaking free from fixed tool sets.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
-import textwrap
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -102,12 +100,12 @@ class DynamicToolGenerator:
             }
 
             # Add safe utility modules
-            import math
-            import json as json_mod
-            import re as re_mod
+            import collections
             import datetime
             import itertools
-            import collections
+            import json as json_mod
+            import math
+            import re as re_mod
             import statistics
 
             namespace["math"] = math
@@ -118,11 +116,15 @@ class DynamicToolGenerator:
             namespace["collections"] = collections
             namespace["statistics"] = statistics
 
-            # Inject arguments
-            namespace.update(arguments)
+            # Inject arguments (reserved namespace keys cannot be overridden)
+            _RESERVED = {
+                "__builtins__", "math", "json", "re", "datetime",
+                "itertools", "collections", "statistics",
+            }
+            namespace.update({k: v for k, v in arguments.items() if k not in _RESERVED})
 
             # Execute
-            exec(tool.code, namespace)
+            exec(tool.code, namespace)  # noqa: S102 - sandboxed with restricted builtins
 
             # Find and call the main function
             main_func = namespace.get("run") or namespace.get(name)
@@ -131,8 +133,7 @@ class DynamicToolGenerator:
                 tool.success_count += 1
                 self._save()
                 return {"result": result, "success": True}
-            else:
-                return {"error": "No 'run' function found in tool code", "success": False}
+            return {"error": "No 'run' function found in tool code", "success": False}
 
         except Exception as e:
             return {"error": str(e), "success": False}
@@ -198,7 +199,7 @@ class DynamicToolGenerator:
         params = input_schema.get("properties", {})
         param_names = list(params.keys())
 
-        code = f'''def run():
+        return f'''def run():
     """{description}"""
     # Auto-generated implementation
     result = {{}}
@@ -207,7 +208,6 @@ class DynamicToolGenerator:
     # Expected output: {output_description}
     return result
 '''
-        return code
 
     def _save(self) -> None:
         os.makedirs(os.path.dirname(self._storage_path), exist_ok=True)

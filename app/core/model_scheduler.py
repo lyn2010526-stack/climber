@@ -8,16 +8,15 @@ is down or rate-limited.
 from __future__ import annotations
 
 import logging
-import time
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 from app.core.error_handler import CircuitBreaker
 
 logger = logging.getLogger(__name__)
 
 
-class TaskComplexity(str, Enum):
+class TaskComplexity(StrEnum):
     SIMPLE = "simple"       # Single-step, factual
     MODERATE = "moderate"   # Multi-step reasoning
     COMPLEX = "complex"     # Deep analysis, multi-file
@@ -152,7 +151,7 @@ class ModelScheduler:
         if self.config.prefer_local and cap.provider == "ollama":
             local_bonus = 0.3
 
-        score = (
+        return (
             quality_score * pref +
             speed_score * (1 - pref) * 0.5 +
             cost_score * (1 - pref) * 0.5 +
@@ -160,7 +159,6 @@ class ModelScheduler:
             local_bonus
         )
 
-        return score
 
     def record_success(self, provider_model: str):
         """Record a successful API call."""

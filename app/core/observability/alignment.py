@@ -12,7 +12,7 @@ import re
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -23,7 +23,7 @@ class AlignmentCheck:
     goal_id: str = ""
     current_action: str = ""
     alignment_score: float = 0.0
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     notes: str = ""
 
     def to_dict(self) -> dict[str, Any]:
@@ -44,7 +44,7 @@ class Goal:
     description: str = ""
     keywords: list[str] = field(default_factory=list)
     priority: int = 1
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     is_active: bool = True
 
     def to_dict(self) -> dict[str, Any]:
@@ -219,7 +219,7 @@ class GoalTracker:
     def _generate_notes(self, score: float) -> str:
         if score >= self._alignment_threshold:
             return "aligned"
-        elif score >= self._alignment_threshold * 0.5:
+        if score >= self._alignment_threshold * 0.5:
             return "partial_alignment"
         return "drift_detected"
 

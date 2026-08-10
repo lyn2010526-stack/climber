@@ -11,15 +11,16 @@ States:
 
 from __future__ import annotations
 
-import structlog
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
+
+import structlog
 
 logger = structlog.get_logger()
 
 
-class TurnState(str, Enum):
+class TurnState(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     AWAITING_APPROVAL = "awaiting_approval"
@@ -86,10 +87,10 @@ class TurnStateMachine:
         self.record.state = new_state
 
         if new_state == TurnState.RUNNING and self.record.started_at is None:
-            self.record.started_at = datetime.now(timezone.utc)
+            self.record.started_at = datetime.now(UTC)
 
         if new_state in (TurnState.COMPLETED, TurnState.FAILED, TurnState.CANCELLED):
-            self.record.completed_at = datetime.now(timezone.utc)
+            self.record.completed_at = datetime.now(UTC)
 
         if error:
             self.record.error = error

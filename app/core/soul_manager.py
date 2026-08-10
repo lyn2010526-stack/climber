@@ -84,7 +84,7 @@ class SoulManager:
     def load_from_file(self, file_path: str) -> AgentPersonality:
         import json
         path = Path(file_path)
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
         personality = AgentPersonality(
             agent_id=data["agent_id"],

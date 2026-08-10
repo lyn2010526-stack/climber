@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -48,7 +48,7 @@ class FileIndexService:
         if content is not None:
             return self.compute_hash(content) != entry.content_hash
         if os.path.exists(path):
-            mtime = datetime.fromtimestamp(os.path.getmtime(path))
+            mtime = datetime.fromtimestamp(os.path.getmtime(path), UTC)
             return mtime > entry.modified_at
         return False
 
@@ -57,8 +57,8 @@ class FileIndexService:
             path=path,
             content_hash=content_hash,
             size_bytes=size_bytes,
-            modified_at=datetime.now(timezone.utc),
-            indexed_at=datetime.now(timezone.utc),
+            modified_at=datetime.now(UTC),
+            indexed_at=datetime.now(UTC),
             chunk_count=chunk_count,
             metadata=metadata or {},
         )

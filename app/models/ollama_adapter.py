@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 import httpx
 
@@ -15,7 +16,7 @@ from app.services.ollama_queue import ollama_offline_queue
 class OllamaAdapter(ModelAdapter):
     """Ollama adapter for running local models (Llama, Mistral, Qwen, etc.)."""
 
-    def __init__(self, model_id: str, api_key: str, base_url: str | None = None, capabilities: "ModelCapability | None" = None):
+    def __init__(self, model_id: str, api_key: str, base_url: str | None = None, capabilities: ModelCapability | None = None):
         self._model_id = model_id
         self._api_key = api_key
         self._base_url = (base_url or "http://localhost:11434").rstrip("/")
@@ -123,7 +124,7 @@ class OllamaAdapter(ModelAdapter):
                     )
         except Exception as e:
             yield ChatResult(
-                content=f"\n[Error: {str(e)}]",
+                content=f"\n[Error: {e!s}]",
                 tool_calls=[],
                 finish_reason="error",
             )
@@ -180,7 +181,7 @@ class OllamaAdapter(ModelAdapter):
             )
         except Exception as e:
             return ChatResult(
-                content=f"Error: {str(e)}",
+                content=f"Error: {e!s}",
                 tool_calls=[],
                 finish_reason="error",
             )

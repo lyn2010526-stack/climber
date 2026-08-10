@@ -486,7 +486,7 @@ class MCPMarketplace:
                         self._servers[sid].is_installed = True
                         if cfg.get("env"):
                             self._servers[sid].install_config["env"] = cfg["env"]
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 pass
 
     def _save_installed(self):
@@ -503,7 +503,7 @@ class MCPMarketplace:
         try:
             with open(self.config_path, "w") as f:
                 json.dump(data, f, indent=2)
-        except IOError as e:
+        except OSError as e:
             logger.error("Failed to save MCP config", error=str(e))
 
     def list_servers(
@@ -561,7 +561,7 @@ class MCPMarketplace:
         return True
 
     def get_categories(self) -> list[str]:
-        return sorted(set(s.category for s in self._servers.values()))
+        return sorted({s.category for s in self._servers.values()})
 
     def get_install_config(self, server_id: str) -> dict[str, Any] | None:
         server = self._servers.get(server_id)

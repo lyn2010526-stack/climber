@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
-from unittest.mock import patch
 
 import pytest
 import pytest_asyncio
@@ -113,12 +112,11 @@ def _build_sse_frames(
 @pytest_asyncio.fixture
 def adapter():
     """Create an OpenAIAdapter with mocked client."""
-    adapter = OpenAIAdapter(
+    return OpenAIAdapter(
         model_id="test-model",
         api_key="fake-key",
         base_url="https://fake-api.example.com/v1",
     )
-    return adapter
 
 
 @asynccontextmanager

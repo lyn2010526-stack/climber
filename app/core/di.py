@@ -7,8 +7,8 @@ instead of being instantiated at module level.
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 import structlog
 
@@ -54,7 +54,7 @@ def clear() -> None:
     _scoped.clear()
 
 
-def create_scope(scope_name: str) -> "ScopeContext":
+def create_scope(scope_name: str) -> ScopeContext:
     return ScopeContext(scope_name)
 
 
@@ -63,7 +63,7 @@ class ScopeContext:
         self.name = name
         self._saved: dict[type[T] | str, tuple[Callable[[], T] | T, bool]] = {}
 
-    def __enter__(self) -> "ScopeContext":
+    def __enter__(self) -> ScopeContext:
         _scoped[self.name] = {}
         self._saved = dict(_container)
         return self

@@ -15,13 +15,13 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
 
-class PermissionMode(str, Enum):
+class PermissionMode(StrEnum):
     READ_ONLY = "read_only"
     STANDARD = "standard"
     ACCEPT_EDITS = "accept_edits"

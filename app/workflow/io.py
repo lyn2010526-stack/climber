@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import structlog
 from pydantic import BaseModel
 
-from app.workflow import Workflow, WorkflowEdge, WorkflowNode, NodeType
+from app.workflow import NodeType, Workflow, WorkflowEdge, WorkflowNode
 
 logger = structlog.get_logger()
 
@@ -34,7 +34,7 @@ class WorkflowImportResult(BaseModel):
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _serialize_workflow(workflow: Workflow) -> dict[str, Any]:
@@ -95,7 +95,7 @@ def _deserialize_workflow(data: dict[str, Any]) -> Workflow:
 class WorkflowIO:
     @staticmethod
     def export_workflow(workflow: Workflow) -> dict[str, Any]:
-        payload = {
+        return {
             "version": CURRENT_VERSION,
             "exported_at": _now_iso(),
             "metadata": {
@@ -107,7 +107,6 @@ class WorkflowIO:
             "nodes": _serialize_workflow(workflow)["nodes"],
             "edges": _serialize_workflow(workflow)["edges"],
         }
-        return payload
 
     @staticmethod
     def export_to_file(workflow: Workflow, file_path: str | Path, fmt: str = "json") -> Path:
@@ -118,7 +117,7 @@ class WorkflowIO:
                 import yaml  # type: ignore[import-untyped]
                 content = yaml.dump(data, allow_unicode=True, sort_keys=False)
             except ImportError:
-                raise RuntimeError("PyYAML is required for YAML export. Install it with: pip install pyyaml")
+                raise RuntimeError("PyYAML is required for YAML export. Install it with: pip install pyyaml") from None
         else:
             content = json.dumps(data, indent=2, ensure_ascii=False)
         path.write_text(content, encoding="utf-8")

@@ -60,8 +60,7 @@ class MCPRouter:
         client = self.servers[server_name]
         try:
             if hasattr(client, "call_tool"):
-                result = await client.call_tool(tool_name, arguments)
-                return result
+                return await client.call_tool(tool_name, arguments)
             return MCPToolResult(
                 content=[{
                     "type": "text",
@@ -77,7 +76,7 @@ class MCPRouter:
                 error=str(e),
             )
             return MCPToolResult(
-                content=[{"type": "text", "text": f"Error: {str(e)}"}],
+                content=[{"type": "text", "text": f"Error: {e!s}"}],
                 isError=True,
             )
 

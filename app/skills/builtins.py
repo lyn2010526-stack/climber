@@ -9,7 +9,7 @@ import urllib.parse
 
 import httpx
 
-from app.skills.memory_manager import persistent_memory, MemoryType
+from app.skills.memory_manager import MemoryType, persistent_memory
 
 
 async def skill_recursive_research(topic: str, depth: int = 3, max_sources: int = 5) -> str:
@@ -53,7 +53,7 @@ async def skill_recursive_research(topic: str, depth: int = 3, max_sources: int 
     for i, finding in enumerate(findings, 1):
         report += f"## Finding {i}\n{finding}\n\n"
 
-    report += f"""---
+    report += """---
 **Synthesis Required:**
 - Cross-reference findings for consensus
 - Note contradictions or gaps
@@ -410,7 +410,7 @@ async def skill_git_master(
     elif action == "conflict-resolve":
         cmd = "git diff --name-only --diff-filter=U"
     else:
-        return f"Unknown action: {action}. Available: {list(commands.keys()) + ['commit', 'branch', 'merge', 'rebase', 'conflict-resolve']}"
+        return f"Unknown action: {action}. Available: {[*list(commands.keys()), 'commit', 'branch', 'merge', 'rebase', 'conflict-resolve']}"
 
     try:
         proc = await asyncio.create_subprocess_shell(
@@ -423,7 +423,7 @@ async def skill_git_master(
         if stderr:
             output += f"\n[stderr]: {stderr.decode()[:1000]}"
         return output or "Git command completed (no output)"
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return "Git command timed out (30s)"
     except Exception as e:
         return f"Git error: {e}"
@@ -672,7 +672,7 @@ async def skill_data_analyst(data: str, question: str = "") -> str:
     analysis = {
         "total_lines": len(lines),
         "total_chars": len(data),
-        "non_empty": len([l for l in lines if l.strip()]),
+        "non_empty": len([line for line in lines if line.strip()]),
     }
 
     # Detect format
@@ -945,7 +945,7 @@ async def skill_memory_action(action: str = "recall", query: str = "", content: 
         for e in entries:
             results.append(f"- [{e.type.value}] {e.content} (importance: {e.importance}, accessed: {e.access_count}x)")
         return "# Memory Recall Results\n\n" + "\n".join(results)
-    elif action == "store":
+    if action == "store":
         mt = MemoryType.FACT
         try:
             mt = MemoryType(memory_type)
@@ -953,11 +953,10 @@ async def skill_memory_action(action: str = "recall", query: str = "", content: 
             pass
         entry = persistent_memory.store(content, memory_type=mt, source="agent")
         return f"Memory stored: {entry.id}"
-    elif action == "stats":
+    if action == "stats":
         stats = persistent_memory.get_stats()
         return f"# Memory Statistics\n\n- Total: {stats['total_memories']}\n- By type: {stats['by_type']}\n- Storage: {stats['storage_path']}"
-    else:
-        return f"Unknown action: {action}. Use: recall, store, stats"
+    return f"Unknown action: {action}. Use: recall, store, stats"
 
 
 async def skill_dependency_auditor(project_path: str = ".") -> str:

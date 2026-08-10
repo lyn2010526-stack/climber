@@ -17,11 +17,10 @@ from __future__ import annotations
 import asyncio
 import base64
 import dataclasses
-import logging
 import os
 import tempfile
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import structlog
 
@@ -95,7 +94,8 @@ class VisionPipeline:
             VisionResult with file path and base64 content
         """
         try:
-            output_path = tempfile.mktemp(suffix=".png", prefix="vision_")
+            fd, output_path = tempfile.mkstemp(suffix=".png", prefix="vision_")
+            os.close(fd)
 
             if source == "browser":
                 from app.tools.browser_tools import browser_screenshot
@@ -274,8 +274,8 @@ class VisionPipeline:
     async def _describe_with_llm(self, image_path: str, base64_image: str) -> str | None:
         """Use multimodal LLM to describe the screen."""
         try:
-            from app.core.di import resolve as di_resolve
             from app.config import settings
+            from app.core.di import resolve as di_resolve
 
             registry = di_resolve("ModelRegistry")
             provider = getattr(settings, "DEFAULT_LLM_PROVIDER", "openai")
@@ -362,8 +362,8 @@ class VisionPipeline:
     async def _plan_with_llm(self, goal: str, screen_desc: str) -> str | None:
         """Use LLM to generate action plan from goal and screen description."""
         try:
-            from app.core.di import resolve as di_resolve
             from app.config import settings
+            from app.core.di import resolve as di_resolve
 
             registry = di_resolve("ModelRegistry")
             provider = getattr(settings, "DEFAULT_LLM_PROVIDER", "openai")

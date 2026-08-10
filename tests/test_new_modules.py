@@ -2,21 +2,25 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
+
 import pytest
-import pytest_asyncio
 
 os.environ["APP_TESTING"] = "true"
 
-from app.core.review_models import ReviewOutputModel, ReviewIssueModel, REVIEW_OUTPUT_SCHEMA
-from app.core.guardrails import GuardrailsEngine, PIIDetectionRule, PromptInjectionRule, OutputLengthRule, JSONFormatRule
-from app.core.cost_tracker import calculate_cost, CostTracker
-from app.core.enhanced_rag import compute_bm25, rerank_results, expand_query, compress_context, reciprocal_rank_fusion
-from app.core.smart_router import CircuitBreaker, SmartModelRouter, ModelHealth
-from app.core.sandbox import SandboxExecutor, SandboxConfig
-from app.core.workflow_recovery import classify_error, RecoverableWorkflowExecutor, RetryPolicy, NodeStatus, ErrorType
-
+from app.core.cost_tracker import calculate_cost
+from app.core.enhanced_rag import compress_context, compute_bm25, expand_query, reciprocal_rank_fusion, rerank_results
+from app.core.guardrails import (
+    GuardrailsEngine,
+    JSONFormatRule,
+    OutputLengthRule,
+    PIIDetectionRule,
+    PromptInjectionRule,
+)
+from app.core.review_models import REVIEW_OUTPUT_SCHEMA, ReviewIssueModel, ReviewOutputModel
+from app.core.sandbox import SandboxConfig, SandboxExecutor
+from app.core.smart_router import CircuitBreaker
+from app.core.workflow_recovery import ErrorType, RecoverableWorkflowExecutor, RetryPolicy, classify_error
 
 # ─── Review Models ─────────────────────────────────────────────────────────
 
@@ -38,13 +42,13 @@ class TestReviewModels:
         assert r.to_feedback_string() == ""
 
     def test_invalid_severity_rejected(self):
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 - test-specific pattern
             ReviewOutputModel(passed=False, issues=[
                 ReviewIssueModel(severity="invalid", description="test", location="file.py", fix_suggestion="fix"),
             ])
 
     def test_too_short_description_rejected(self):
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017 - test-specific pattern
             ReviewOutputModel(passed=False, issues=[
                 ReviewIssueModel(severity="major", description="short", location="file.py", fix_suggestion="fix"),
             ])

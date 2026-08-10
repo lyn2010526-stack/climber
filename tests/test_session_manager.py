@@ -1,6 +1,8 @@
 # tests/test_session_manager.py
 import pytest
+
 from app.core.session_manager import SessionManager
+
 
 @pytest.fixture
 def mgr(tmp_path):

@@ -13,22 +13,23 @@ from __future__ import annotations
 import asyncio
 import random
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable, Awaitable
+from enum import StrEnum
+from typing import Any
 
 import structlog
 
 logger = structlog.get_logger()
 
 
-class ErrorType(str, Enum):
+class ErrorType(StrEnum):
     TRANSIENT = "transient"      # Retryable (timeout, rate limit, network)
     PERMANENT = "permanent"      # Not retryable (invalid input, auth)
     UNKNOWN = "unknown"          # Might be transient
 
 
-class NodeStatus(str, Enum):
+class NodeStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -132,7 +133,7 @@ class RecoverableWorkflowExecutor:
                     start_idx = i
                     break
 
-        for i, node in enumerate(nodes[start_idx:], start=start_idx):
+        for _, node in enumerate(nodes[start_idx:], start=start_idx):
             node_id = node["id"]
 
             # Check if already completed (from checkpoint)
@@ -196,7 +197,7 @@ class RecoverableWorkflowExecutor:
                 result.output = output
                 return result
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 error_msg = f"Node {node_id} timed out after {timeout}s"
                 result.error = error_msg
                 result.retry_history.append({
@@ -242,7 +243,7 @@ class RecoverableWorkflowExecutor:
             self.retry_policy.max_delay,
         )
         if self.retry_policy.jitter:
-            delay *= (0.5 + random.random())  # 50%-150% of calculated delay
+            delay *= (0.5 + random.random())  # 50%-150% of calculated delay  # noqa: S311 - retry jitter, non-crypto
         return delay
 
     def get_checkpoint(self) -> dict[str, Any]:

@@ -12,20 +12,20 @@ os.environ["TEST_DATABASE_URL"] = "sqlite+aiosqlite:///./data/test_agi_p2_memory
 import pytest
 import pytest_asyncio
 
-from app.core.memory.persona import (
-    AgentPersona,
-    PersonaStore,
-    create_session_persona,
-    get_effective_persona,
-    merge_session_persona,
-)
-from app.core.memory.lifecycle import MemoryLifecycleManager
 from app.core.engine.memory_blocks import (
     BlockType,
     MemoryBlock,
     MemoryBlockStore,
     PersonaAwareBlockStore,
     create_persona_block,
+)
+from app.core.memory.lifecycle import MemoryLifecycleManager
+from app.core.memory.persona import (
+    AgentPersona,
+    PersonaStore,
+    create_session_persona,
+    get_effective_persona,
+    merge_session_persona,
 )
 
 
@@ -284,7 +284,7 @@ async def test_decay_memories(lifecycle_manager):
 @pytest.mark.asyncio
 async def test_archive_old_memories(lifecycle_manager):
     """Test archiving old, low-importance memories."""
-    written = await lifecycle_manager.write_memory(
+    await lifecycle_manager.write_memory(
         content="Low importance old memory",
         user_id="user-001",
         agent_id="agent-001",

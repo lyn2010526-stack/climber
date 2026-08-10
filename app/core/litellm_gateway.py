@@ -4,17 +4,16 @@
 
 from __future__ import annotations
 
-import asyncio
-import logging
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator
+from typing import Any
 
 import structlog
 
 from app.core import ChatResult
-from app.core.key_rotator import ApiKeyRotator, ApiKeyRotatorError, KeyRotationConfig, RotationStrategy
-from app.models import ModelAdapter, ModelCapability
-from app.models.registry import ModelRegistry, PROVIDERS
+from app.core.key_rotator import ApiKeyRotator, ApiKeyRotatorError
+from app.models import ModelAdapter
+from app.models.registry import PROVIDERS, ModelRegistry
 
 logger = structlog.get_logger()
 
@@ -52,7 +51,7 @@ class LiteLLMGateway:
 
     def _select_least_busy(self, preferred: str) -> str:
         """Select the least busy model."""
-        candidates = [preferred] + self.config.fallbacks
+        candidates = [preferred, *self.config.fallbacks]
         best = preferred
         min_usage = float("inf")
         for model in candidates:

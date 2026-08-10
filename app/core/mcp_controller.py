@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
-import time
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 
 
-class McpStatus(str, Enum):
+class McpStatus(StrEnum):
     """MCP process status."""
 
     DISCONNECTED = "disconnected"
@@ -49,7 +47,7 @@ class McpController:
         self.args = args or ["-y", "jcodemunch-mcp"]
         self.startup_timeout = startup_timeout
         self.max_restarts = max_restarts
-        self.process: Optional[subprocess.Popen] = None
+        self.process: subprocess.Popen | None = None
         self.restart_count = 0
         self._status = McpStatus.DISCONNECTED
         self._last_error: str = ""
@@ -77,7 +75,7 @@ class McpController:
             self._status = McpStatus.READY
             self.restart_count = 0
             return McpStartResult(success=True, status=McpStatus.READY)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._status = McpStatus.ERROR
             self._last_error = f"MCP 启动超时（{self.startup_timeout}秒）"
             return McpStartResult(
@@ -88,7 +86,7 @@ class McpController:
             )
         except Exception as e:
             self._status = McpStatus.ERROR
-            self._last_error = f"MCP 启动失败: {str(e)}"
+            self._last_error = f"MCP 启动失败: {e!s}"
             return McpStartResult(
                 success=False,
                 status=McpStatus.ERROR,
@@ -99,7 +97,7 @@ class McpController:
     async def _start_process(self) -> None:
         """Internal process startup."""
         self.process = subprocess.Popen(
-            [self.command] + self.args,
+            [self.command, *self.args],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )

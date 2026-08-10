@@ -11,16 +11,17 @@ import asyncio
 import copy
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Protocol
+from typing import Any
 
 import structlog
 
-from app.core import AgentEvent, AgentEventType, MessageRole
+from app.core import AgentEvent, AgentEventType
+
 try:
     from app.models import ToolDef
 except ImportError:
-    from dataclasses import dataclass as _dataclass
 
     class ToolDef:  # type: ignore[no-redef]
         """Fallback ToolDef when app.models doesn't export it."""
@@ -159,7 +160,7 @@ async def run_pipeline(
 
         try:
             current_ctx = await asyncio.wait_for(step_fn(current_ctx), timeout=max_step_time)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             success = False
             error = f"Step timeout after {max_step_time}s"
             logger.warning("pipeline.step_timeout", step=step_name, timeout=max_step_time)

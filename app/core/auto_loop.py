@@ -7,13 +7,14 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Callable, Coroutine
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
 
 import structlog
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from app.core.task_state_machine import TaskState, TaskStateMachine
 from app.storage import async_session
@@ -22,7 +23,7 @@ from app.storage.models_platform import AutoLoopTask
 logger = structlog.get_logger()
 
 
-class AutoLoopTaskStatus(str, Enum):
+class AutoLoopTaskStatus(StrEnum):
     """Autonomous task execution status."""
 
     PENDING = "pending"
@@ -109,7 +110,7 @@ class AutoLoopEngine:
             try:
                 await self._monitor
             except (asyncio.CancelledError, Exception):
-                pass
+                logger.debug("core.auto_loop.suppressed", exc_info=True)
             self._monitor = None
 
         for record in self._tasks.values():
@@ -118,7 +119,7 @@ class AutoLoopEngine:
                 try:
                     await record.asyncio_task
                 except (asyncio.CancelledError, Exception):
-                    pass
+                    logger.debug("core.auto_loop.suppressed", exc_info=True)
 
         for record in self._tasks.values():
             if record.status in (
@@ -396,7 +397,7 @@ class AutoLoopEngine:
                 )
                 existing = result.scalars().first()
 
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 if existing:
                     existing.status = status.value
                     existing.current_step = record.current_step
@@ -409,13 +410,9 @@ class AutoLoopEngine:
                     if record.result:
                         existing.result = record.result
                     if record.finished_at:
-                        existing.finished_at = datetime.utcfromtimestamp(
-                            record.finished_at
-                        )
+                        existing.finished_at = datetime.fromtimestamp(record.finished_at, UTC).replace(tzinfo=None)
                     if record.started_at:
-                        existing.started_at = datetime.utcfromtimestamp(
-                            record.started_at
-                        )
+                        existing.started_at = datetime.fromtimestamp(record.started_at, UTC).replace(tzinfo=None)
                 else:
                     task = AutoLoopTask(
                         id=record.task_id,
@@ -425,13 +422,11 @@ class AutoLoopEngine:
                         current_step=record.current_step,
                         result=record.result,
                         error=record.error,
-                        created_at=datetime.utcfromtimestamp(
-                            record.created_at
-                        ),
-                        started_at=datetime.utcfromtimestamp(record.started_at)
+                        created_at=datetime.fromtimestamp(record.created_at, UTC).replace(tzinfo=None),
+                        started_at=datetime.fromtimestamp(record.started_at, UTC).replace(tzinfo=None)
                         if record.started_at
                         else None,
-                        finished_at=datetime.utcfromtimestamp(record.finished_at)
+                        finished_at=datetime.fromtimestamp(record.finished_at, UTC).replace(tzinfo=None)
                         if record.finished_at
                         else None,
                         heartbeat_at=now

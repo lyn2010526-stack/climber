@@ -9,8 +9,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
-from datetime import datetime, timedelta
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 import structlog
 
@@ -58,7 +57,7 @@ async def create_calendar_event(
             dt_end = dt_start + timedelta(hours=1)
 
         event_uid = str(uuid.uuid4())
-        now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        now = datetime.now(UTC).replace(tzinfo=None).strftime("%Y%m%dT%H%M%SZ")
         dt_start_str = dt_start.strftime("%Y%m%dT%H%M%S")
         dt_end_str = dt_end.strftime("%Y%m%dT%H%M%S")
 
@@ -90,7 +89,7 @@ async def create_calendar_event(
         # Reminder
         lines.extend([
             "BEGIN:VALARM",
-            "TRIGGER:-PT{}M".format(reminder_minutes),
+            f"TRIGGER:-PT{reminder_minutes}M",
             "ACTION:DISPLAY",
             "DESCRIPTION:Reminder",
             "END:VALARM",
@@ -131,7 +130,7 @@ async def create_calendar_event(
         return result
 
     except Exception as e:
-        return f"Error creating calendar event: {str(e)}"
+        return f"Error creating calendar event: {e!s}"
 
 
 @tool(description="Create a full-day event (all-day event) in iCalendar format.")
@@ -156,7 +155,7 @@ async def create_allday_event(
         next_day = dt + timedelta(days=1)
 
         event_uid = str(uuid.uuid4())
-        now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        now = datetime.now(UTC).replace(tzinfo=None).strftime("%Y%m%dT%H%M%SZ")
 
         lines = [
             "BEGIN:VCALENDAR",
@@ -188,9 +187,9 @@ async def create_allday_event(
 
         return f"All-day event created: {output_path}\n  Title: {title}\n  Date: {date}"
     except ValueError:
-        return f"Error: Invalid date format. Use YYYY-MM-DD."
+        return "Error: Invalid date format. Use YYYY-MM-DD."
     except Exception as e:
-        return f"Error creating all-day event: {str(e)}"
+        return f"Error creating all-day event: {e!s}"
 
 
 @tool(description="Generate a recurring calendar event series (e.g., daily standup, weekly meeting, monthly review).")
@@ -223,7 +222,7 @@ async def create_recurring_event(
 
         dt_end = dt_start + timedelta(minutes=duration_minutes)
         event_uid = str(uuid.uuid4())
-        now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        now = datetime.now(UTC).replace(tzinfo=None).strftime("%Y%m%dT%H%M%SZ")
 
         freq_map = {"daily": "DAILY", "weekly": "WEEKLY", "biweekly": "WEEKLY", "monthly": "MONTHLY", "yearly": "YEARLY"}
         freq = freq_map.get(recurrence, "WEEKLY")
@@ -273,7 +272,7 @@ async def create_recurring_event(
             f"  Duration: {duration_minutes} min"
         )
     except Exception as e:
-        return f"Error creating recurring event: {str(e)}"
+        return f"Error creating recurring event: {e!s}"
 
 
 @tool(description="Generate a calendar for a given month with events, holidays, and important dates.")
@@ -332,7 +331,7 @@ async def generate_monthly_calendar(
 
         return f"Monthly calendar created: {output_path}\n  Period: {year}-{month:02d}\n  Events: {len(events) if events else 0}"
     except Exception as e:
-        return f"Error generating calendar: {str(e)}"
+        return f"Error generating calendar: {e!s}"
 
 
 @tool(description="Calculate the best meeting time slots based on participants' availability and time zones.")
@@ -393,7 +392,7 @@ async def find_meeting_slots(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error finding meeting slots: {str(e)}"
+        return f"Error finding meeting slots: {e!s}"
 
 
 @tool(description="Create a meeting agenda and attach it to a calendar event.")
@@ -437,7 +436,7 @@ async def create_meeting_agenda(
         description = "\n".join(desc_lines)
 
         event_uid = str(uuid.uuid4())
-        now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        now = datetime.now(UTC).replace(tzinfo=None).strftime("%Y%m%dT%H%M%SZ")
 
         lines = [
             "BEGIN:VCALENDAR",
@@ -481,7 +480,7 @@ async def create_meeting_agenda(
             f"  Agenda items: {len(agenda_items.split(chr(10))) if agenda_items else 0}"
         )
     except Exception as e:
-        return f"Error creating meeting: {str(e)}"
+        return f"Error creating meeting: {e!s}"
 
 
 @tool(description="Parse an existing .ics file and display its events in a readable format.")
@@ -497,7 +496,7 @@ async def parse_ics_file(
         if not os.path.exists(file_path):
             return f"Error: File not found: {file_path}"
 
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read()
 
         events = []
@@ -538,7 +537,7 @@ async def parse_ics_file(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error parsing .ics file: {str(e)}"
+        return f"Error parsing .ics file: {e!s}"
 
 
 @tool(description="Create a countdown timer or reminder event for a future date.")
@@ -562,7 +561,7 @@ async def create_reminder(
             return dt
 
         event_uid = str(uuid.uuid4())
-        now = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        now = datetime.now(UTC).replace(tzinfo=None).strftime("%Y%m%dT%H%M%SZ")
 
         lines = [
             "BEGIN:VCALENDAR",
@@ -596,7 +595,7 @@ async def create_reminder(
 
         return f"Reminder created: {output_path}\n  Title: {title}\n  Time: {dt.strftime('%Y-%m-%d %H:%M')}"
     except Exception as e:
-        return f"Error creating reminder: {str(e)}"
+        return f"Error creating reminder: {e!s}"
 
 
 def _parse_datetime(dt_string: str) -> datetime | str:

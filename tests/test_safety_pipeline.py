@@ -6,7 +6,7 @@ from pathlib import Path
 
 os.environ.setdefault("APP_TESTING", "true")
 
-from app.core.safety_pipeline import StaticAnalyzer, SafetyResult, RiskLevel
+from app.core.safety_pipeline import RiskLevel, StaticAnalyzer
 
 
 def test_blocks_hazardous_command():

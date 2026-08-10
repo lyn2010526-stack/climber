@@ -10,7 +10,7 @@ import random
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -26,7 +26,7 @@ class TraceSpan:
     trace_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     parent_span_id: str = ""
     operation: str = ""
-    started_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    started_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     ended_at: str = ""
     status: str = "ok"
     tags: dict[str, Any] = field(default_factory=dict)
@@ -83,7 +83,7 @@ class TraceCollector:
     def _should_sample(self) -> bool:
         if self._sample_rate >= 1.0:
             return True
-        return random.random() < self._sample_rate
+        return random.random() < self._sample_rate  # noqa: S311 - sampling, non-crypto
 
     def start_span(
         self,
@@ -107,7 +107,7 @@ class TraceCollector:
 
     def end_span(self, span: TraceSpan, status: str = "ok") -> None:
         """End a span and persist the final state."""
-        span.ended_at = datetime.now(timezone.utc).isoformat()
+        span.ended_at = datetime.now(UTC).isoformat()
         span.status = status
         self._persist_span(span)
 
@@ -115,7 +115,7 @@ class TraceCollector:
         """Add an event to an existing span."""
         event = {
             "type": event_type,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "data": data or {},
         }
         span.events.append(event)

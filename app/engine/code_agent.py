@@ -13,8 +13,9 @@ Inspired by HuggingFace smolagents.
 from __future__ import annotations
 
 import re
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Callable
+from typing import Any
 
 import structlog
 
@@ -23,8 +24,7 @@ from app.engine.code_executor import (
     ExecutionStatus,
     SafeExecutor,
 )
-from app.engine.harness import HarnessRegistry
-from app.engine.planning import Plan, Planner, PlanStep
+from app.engine.planning import Plan, Planner
 from app.engine.stream_output import (
     DefaultStreamOutput,
     StreamOutput,

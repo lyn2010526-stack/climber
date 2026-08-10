@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel
 
 
-class ApprovalStatus(str, Enum):
+class ApprovalStatus(StrEnum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
@@ -35,23 +35,23 @@ class ApprovalRequest(BaseModel):
         if data.get("id") is None:
             data["id"] = str(uuid.uuid4())
         if data.get("created_at") is None:
-            data["created_at"] = datetime.now(timezone.utc)
+            data["created_at"] = datetime.now(UTC)
         super().__init__(**data)
 
     def approve(self, resolved_by: str = "human") -> None:
         self.status = ApprovalStatus.APPROVED
-        self.resolved_at = datetime.now(timezone.utc)
+        self.resolved_at = datetime.now(UTC)
         self.resolved_by = resolved_by
 
     def reject(self, reason: str = "", resolved_by: str = "human") -> None:
         self.status = ApprovalStatus.REJECTED
-        self.resolved_at = datetime.now(timezone.utc)
+        self.resolved_at = datetime.now(UTC)
         self.resolved_by = resolved_by
         self.reason = reason
 
     def expire(self) -> None:
         self.status = ApprovalStatus.EXPIRED
-        self.resolved_at = datetime.now(timezone.utc)
+        self.resolved_at = datetime.now(UTC)
 
 
 class ApprovalManager:
@@ -89,7 +89,7 @@ class ApprovalManager:
             return self._requests.get(request_id)
         try:
             await asyncio.wait_for(event.wait(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             req = self._requests.get(request_id)
             if req and req.status == ApprovalStatus.PENDING:
                 req.reject(reason="timeout")

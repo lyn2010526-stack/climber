@@ -1,13 +1,17 @@
 """Tests for autonomous execution engine."""
 
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock
 
-from app.core.autonomous_engine import (
-    AutonomousEngine, AutonomousTask, TaskStatus, SubTask,
-)
+import pytest
+
+from app.core import AgentEvent, AgentEventType
 from app.core.agent_engine import AgentEngine, AgentSession
-from app.core import AgentEvent, AgentEventType, SessionStatus
+from app.core.autonomous_engine import (
+    AutonomousEngine,
+    AutonomousTask,
+    SubTask,
+    TaskStatus,
+)
 from app.models.registry import ModelRegistry
 from app.tools import ToolRegistry
 

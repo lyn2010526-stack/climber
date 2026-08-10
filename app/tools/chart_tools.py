@@ -8,7 +8,6 @@ Outputs are saved as PNG images.
 from __future__ import annotations
 
 import os
-from typing import Any
 
 import structlog
 
@@ -110,7 +109,7 @@ async def chart_line(
         size = os.path.getsize(output_path)
         return f"Line chart saved: {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error creating line chart: {str(e)}"
+        return f"Error creating line chart: {e!s}"
 
 
 @tool(description="Create a bar chart from data. Supports grouped and stacked bars.")
@@ -179,7 +178,7 @@ async def chart_bar(
         size = os.path.getsize(output_path)
         return f"Bar chart saved: {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error creating bar chart: {str(e)}"
+        return f"Error creating bar chart: {e!s}"
 
 
 @tool(description="Create a scatter plot from numeric data. Supports color coding by category and trend lines.")
@@ -239,7 +238,7 @@ async def chart_scatter(
             mask = df[[x_column, y_column]].notna().all(axis=1)
             x = df.loc[mask, x_column]
             y = df.loc[mask, y_column]
-            slope, intercept, r_val, p_val, _ = stats.linregress(x, y)
+            slope, intercept, r_val, _, _ = stats.linregress(x, y)
             line_x = [x.min(), x.max()]
             line_y = [slope * xi + intercept for xi in line_x]
             ax.plot(line_x, line_y, "r--", alpha=0.8, label=f"trend (R={r_val:.2f})")
@@ -258,7 +257,7 @@ async def chart_scatter(
         size = os.path.getsize(output_path)
         return f"Scatter plot saved: {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error creating scatter plot: {str(e)}"
+        return f"Error creating scatter plot: {e!s}"
 
 
 @tool(description="Create a histogram to visualize distribution of a numeric column.")
@@ -320,7 +319,7 @@ async def chart_histogram(
         # Add statistics text
         stats_text = f"Mean: {data.mean():.2f}\nMedian: {data.median():.2f}\nStd: {data.std():.2f}"
         ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, fontsize=9,
-                verticalalignment="top", bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5))
+                verticalalignment="top", bbox={"boxstyle": "round", "facecolor": "wheat", "alpha": 0.5})
 
         plt.tight_layout()
         _ensure_output_path(output_path)
@@ -330,7 +329,7 @@ async def chart_histogram(
         size = os.path.getsize(output_path)
         return f"Histogram saved: {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error creating histogram: {str(e)}"
+        return f"Error creating histogram: {e!s}"
 
 
 @tool(description="Create a pie chart to show proportions of categories.")
@@ -380,7 +379,7 @@ async def chart_pie(
         colors = plt.cm.Set3(range(len(agg)))
         explode = [0.05 if explode_largest and i == 0 else 0 for i in range(len(agg))]
 
-        wedges, texts, autotexts = ax.pie(
+        _, _, autotexts = ax.pie(
             agg.values, labels=agg.index, autopct="%1.1f%%",
             colors=colors, explode=explode, startangle=90,
         )
@@ -398,7 +397,7 @@ async def chart_pie(
         size = os.path.getsize(output_path)
         return f"Pie chart saved: {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error creating pie chart: {str(e)}"
+        return f"Error creating pie chart: {e!s}"
 
 
 @tool(description="Create a heatmap visualization, typically for correlation matrices or 2D data.")
@@ -470,7 +469,7 @@ async def chart_heatmap(
         size = os.path.getsize(output_path)
         return f"Heatmap saved: {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error creating heatmap: {str(e)}"
+        return f"Error creating heatmap: {e!s}"
 
 
 @tool(description="Create a box plot to show distribution statistics and outliers across categories.")
@@ -527,7 +526,7 @@ async def chart_box(
         size = os.path.getsize(output_path)
         return f"Box plot saved: {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error creating box plot: {str(e)}"
+        return f"Error creating box plot: {e!s}"
 
 
 @tool(description="Create a time series chart with date axis. Supports multiple series and date formatting.")
@@ -592,7 +591,7 @@ async def chart_timeseries(
         size = os.path.getsize(output_path)
         return f"Time series chart saved: {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error creating time series: {str(e)}"
+        return f"Error creating time series: {e!s}"
 
 
 @tool(description="Create a dashboard with multiple subplots combining different chart types.")
@@ -664,7 +663,7 @@ async def chart_dashboard(
         size = os.path.getsize(output_path)
         return f"Dashboard saved: {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error creating dashboard: {str(e)}"
+        return f"Error creating dashboard: {e!s}"
 
 
 def _load_df(pd, file_path: str, file_type: str = "auto"):
@@ -679,11 +678,10 @@ def _load_df(pd, file_path: str, file_type: str = "auto"):
 
     if file_type == "csv":
         return pd.read_csv(file_path)
-    elif file_type == "json":
+    if file_type == "json":
         return pd.read_json(file_path)
-    elif file_type == "xlsx":
+    if file_type == "xlsx":
         return pd.read_excel(file_path)
-    elif file_type == "parquet":
+    if file_type == "parquet":
         return pd.read_parquet(file_path)
-    else:
-        return pd.read_csv(file_path)
+    return pd.read_csv(file_path)

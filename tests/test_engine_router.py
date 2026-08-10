@@ -1,6 +1,5 @@
 """Tests for router decision engine."""
 
-import pytest
 
 from app.core.engine.router_decision import (
     RouterDecisionEngine,

@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 import pytest
 import pytest_asyncio
 
 from app.core import AgentEventType, ChatResult, SessionStatus
-from app.core.agent_engine import AgentEngine, AgentSession
-from app.models import ModelCapability, ModelAdapter
+from app.core.agent_engine import AgentEngine
+from app.models import ModelCapability
 from app.models.registry import ModelRegistry
-from app.tools import ToolRegistry, tool
+from app.tools import ToolRegistry
 
 
 class FakeModelAdapter:
@@ -138,7 +139,7 @@ async def test_simple_conversation(engine: AgentEngine):
     assert AgentEventType.DONE in types
     assert session.status.value == "completed"
 
-    done_event = [e for e in events if e.type == AgentEventType.DONE][0]
+    done_event = next(e for e in events if e.type == AgentEventType.DONE)
     assert "Hello!" in done_event.data.get("content", "")
 
 
@@ -168,7 +169,7 @@ async def test_streaming_conversation(engine: AgentEngine):
     # Should have token-level events
     assert len(text_events) >= 2  # At least "Hello" and " world"
     # Final content should be complete
-    done_event = [e for e in events if e.type == AgentEventType.DONE][0]
+    done_event = next(e for e in events if e.type == AgentEventType.DONE)
     assert "Hello world" in done_event.data.get("content", "")
 
 
@@ -207,7 +208,7 @@ async def test_tool_call_flow(engine: AgentEngine):
     types = [e.type for e in events]
     assert AgentEventType.DONE in types
 
-    done_event = [e for e in events if e.type == AgentEventType.DONE][0]
+    done_event = next(e for e in events if e.type == AgentEventType.DONE)
     assert "Echo: hello world" in done_event.data.get("content", "")
 
 
@@ -235,7 +236,7 @@ async def test_session_stop(engine: AgentEngine):
         await asyncio.sleep(0.05)
         session.stop()
 
-    asyncio.create_task(stop_later())
+    asyncio.create_task(stop_later())  # noqa: RUF006 - test-specific pattern
 
     events: list = []
     async for event in engine.run(session, "test"):

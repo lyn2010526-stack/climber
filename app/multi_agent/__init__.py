@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -21,7 +21,7 @@ class AgentRole(BaseModel):
     can_delegate: bool = True
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"

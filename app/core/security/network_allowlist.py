@@ -6,8 +6,6 @@ Supports wildcard domains and DNS resolution validation.
 
 from __future__ import annotations
 
-import re
-from typing import Any
 from urllib.parse import urlparse
 
 import structlog
@@ -27,7 +25,7 @@ class NetworkAllowlist:
 
     def __init__(self, allowed_domains: list[str] | None = None):
         domains = allowed_domains or self.DEFAULT_ALLOWED_DOMAINS
-        self._allowed: set[str] = set(d.strip().lower() for d in domains)
+        self._allowed: set[str] = {d.strip().lower() for d in domains}
         self._wildcards: list[str] = []
         self._rebuild_wildcards()
 

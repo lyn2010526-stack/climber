@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 import structlog
@@ -149,7 +150,7 @@ class DreamingEngine:
             ReflectionResult with extracted insights and stats.
         """
         reflection_id = str(uuid4())[:12]
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         insights: list[str] = []
         new_memories: list[dict[str, Any]] = []
@@ -159,7 +160,7 @@ class DreamingEngine:
             new_memories.append(item)
             insights.append(f"Extracted: {item.get('summary', item.get('content', ''))[:80]}")
 
-        for extractor in self._custom_extractors:
+        for _ in self._custom_extractors:
             try:
                 custom_results = await session_history
                 if isinstance(custom_results, list):
@@ -228,7 +229,7 @@ class DreamingEngine:
             ConsolidationReport with stats about the operation.
         """
         consolidation_id = str(uuid4())[:12]
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         actions: list[str] = []
 
         memories_before = 0
@@ -259,7 +260,7 @@ class DreamingEngine:
                     else:
                         seen_content[normalized] = mem
 
-                for mem_id in to_remove:
+                for _ in to_remove:
                     pass
 
                 for mem in all_memories:

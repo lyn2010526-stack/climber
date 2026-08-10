@@ -7,10 +7,7 @@ and data profiling capabilities.
 
 from __future__ import annotations
 
-import json
 import os
-import statistics
-from typing import Any
 
 import structlog
 
@@ -82,21 +79,21 @@ async def load_data(
         lines = [
             f"Dataset: {file_path}",
             f"Shape: {df.shape[0]} rows x {df.shape[1]} columns",
-            f"",
-            f"Column Types:",
+            "",
+            "Column Types:",
         ]
         for col in df.columns:
             dtype = str(df[col].dtype)
             non_null = df[col].notna().sum()
             lines.append(f"  {col}: {dtype} ({non_null} non-null, {df.shape[0] - non_null} missing)")
 
-        lines.append(f"\nSample (first 5 rows):")
+        lines.append("\nSample (first 5 rows):")
         sample = df.head(5).to_string(index=False)
         lines.append(sample)
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error loading data: {str(e)}"
+        return f"Error loading data: {e!s}"
 
 
 @tool(description="Compute summary statistics for numeric columns: count, mean, std, min, max, quartiles.")
@@ -136,7 +133,7 @@ async def data_summary(
 
         return f"Summary Statistics:\n\n{stats.to_string()}"
     except Exception as e:
-        return f"Error computing summary: {str(e)}"
+        return f"Error computing summary: {e!s}"
 
 
 @tool(description="Filter and query data with conditions. Supports column selection, row filtering, sorting, and grouping.")
@@ -200,7 +197,7 @@ async def query_data(
 
         return f"Query Result ({len(df)} rows):\n\n{df.to_string(index=False)}"
     except Exception as e:
-        return f"Error querying data: {str(e)}"
+        return f"Error querying data: {e!s}"
 
 
 @tool(description="Find and analyze missing values in a dataset. Returns count and percentage of missing values per column.")
@@ -241,7 +238,7 @@ async def analyze_missing(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error analyzing missing values: {str(e)}"
+        return f"Error analyzing missing values: {e!s}"
 
 
 @tool(description="Compute correlation matrix for numeric columns. Returns Pearson correlation coefficients.")
@@ -284,14 +281,14 @@ async def correlation_analysis(
                     high_corr.append((corr.columns[i], corr.columns[j], val))
 
         if high_corr:
-            lines.append(f"\n\nHighly Correlated Pairs (|r| > 0.7):")
+            lines.append("\n\nHighly Correlated Pairs (|r| > 0.7):")
             for col1, col2, val in high_corr:
                 direction = "positive" if val > 0 else "negative"
                 lines.append(f"  {col1} <-> {col2}: {val:.3f} ({direction})")
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error computing correlation: {str(e)}"
+        return f"Error computing correlation: {e!s}"
 
 
 @tool(description="Create pivot table from data. Summarize data by grouping and aggregating across multiple dimensions.")
@@ -339,7 +336,7 @@ async def pivot_table(
 
         return f"Pivot Table ({agg_func}):\n\n{pivot.to_string()}"
     except Exception as e:
-        return f"Error creating pivot table: {str(e)}"
+        return f"Error creating pivot table: {e!s}"
 
 
 @tool(description="Export data to a different file format (CSV, JSON, Excel, Parquet, Markdown table).")
@@ -390,7 +387,7 @@ async def export_data(
         size = os.path.getsize(output_path)
         return f"Exported {len(df)} rows to {output_path} ({size:,} bytes)"
     except Exception as e:
-        return f"Error exporting data: {str(e)}"
+        return f"Error exporting data: {e!s}"
 
 
 @tool(description="Clean data: remove duplicates, handle missing values, normalize strings, and fix data types.")
@@ -452,7 +449,7 @@ async def clean_data(
             for col in str_cols:
                 df[col] = df[col].str.strip()
 
-        result = f"Data Cleaning Report:\n"
+        result = "Data Cleaning Report:\n"
         result += f"  Original: {original_shape[0]} rows x {original_shape[1]} columns\n"
         result += f"  Cleaned:  {df.shape[0]} rows x {df.shape[1]} columns\n"
         result += f"  Removed:  {original_shape[0] - df.shape[0]} rows\n"
@@ -472,7 +469,7 @@ async def clean_data(
 
         return result
     except Exception as e:
-        return f"Error cleaning data: {str(e)}"
+        return f"Error cleaning data: {e!s}"
 
 
 @tool(description="Perform statistical analysis: t-test, chi-square, ANOVA, regression, and distribution fitting.")
@@ -520,11 +517,10 @@ async def statistical_analysis(
                     f"  Mean({column1}): {data1.mean():.4f}\n"
                     f"  Mean({column2}): {data2.mean():.4f}"
                 )
-            else:
-                t_stat, p_val = stats.ttest_1samp(data1, 0)
-                return f"One-sample t-test: {column1}\n  t={t_stat:.4f}, p={p_val:.6f}"
+            t_stat, p_val = stats.ttest_1samp(data1, 0)
+            return f"One-sample t-test: {column1}\n  t={t_stat:.4f}, p={p_val:.6f}"
 
-        elif test_type == "anova":
+        if test_type == "anova":
             from scipy import stats
             groups = [g[column1].dropna().values for _, g in df.groupby(group_column)]
             f_stat, p_val = stats.f_oneway(*groups)
@@ -536,10 +532,10 @@ async def statistical_analysis(
                 f"  Groups: {len(groups)}"
             )
 
-        elif test_type == "chi2":
+        if test_type == "chi2":
             from scipy import stats
             contingency = pd.crosstab(df[column1], df[column2])
-            chi2, p_val, dof, expected = stats.chi2_contingency(contingency)
+            chi2, p_val, dof, _ = stats.chi2_contingency(contingency)
             return (
                 f"Chi-square test: {column1} vs {column2}\n"
                 f"  Chi2: {chi2:.4f}\n"
@@ -548,7 +544,7 @@ async def statistical_analysis(
                 f"  Significant: {'Yes' if p_val < 0.05 else 'No'}"
             )
 
-        elif test_type == "regression":
+        if test_type == "regression":
             from scipy import stats
             x = df[column2].dropna()
             y = df[column1].loc[x.index]
@@ -563,7 +559,7 @@ async def statistical_analysis(
                 f"  Equation: {column1} = {slope:.4f} * {column2} + {intercept:.4f}"
             )
 
-        elif test_type == "normality":
+        if test_type == "normality":
             from scipy import stats
             data = df[column1].dropna()
             stat, p_val = stats.shapiro(data[:5000])
@@ -576,12 +572,11 @@ async def statistical_analysis(
                 f"  Kurtosis: {data.kurtosis():.4f}"
             )
 
-        else:
-            return f"Unknown test type: {test_type}"
+        return f"Unknown test type: {test_type}"
     except ImportError:
         return "Error: scipy is not installed. Install with: pip install scipy"
     except Exception as e:
-        return f"Error in statistical analysis: {str(e)}"
+        return f"Error in statistical analysis: {e!s}"
 
 
 @tool(description="Generate a comprehensive data profile report with distributions, outliers, and data quality metrics.")
@@ -611,8 +606,8 @@ async def data_profile(
             f"Columns: {df.shape[1]}",
             f"Memory Usage: {df.memory_usage(deep=True).sum() / 1024:.1f} KB",
             f"Duplicate Rows: {df.duplicated().sum()}",
-            f"",
-            f"Column Details:",
+            "",
+            "Column Details:",
             f"{'-'*60}",
         ]
 
@@ -635,7 +630,7 @@ async def data_profile(
 
         return "\n".join(lines)
     except Exception as e:
-        return f"Error profiling data: {str(e)}"
+        return f"Error profiling data: {e!s}"
 
 
 def _load_dataframe(pd, file_path: str, file_type: str = "auto"):
@@ -650,13 +645,12 @@ def _load_dataframe(pd, file_path: str, file_type: str = "auto"):
 
     if file_type == "csv":
         return pd.read_csv(file_path)
-    elif file_type == "tsv":
+    if file_type == "tsv":
         return pd.read_csv(file_path, sep="\t")
-    elif file_type == "json":
+    if file_type == "json":
         return pd.read_json(file_path)
-    elif file_type == "xlsx":
+    if file_type == "xlsx":
         return pd.read_excel(file_path)
-    elif file_type == "parquet":
+    if file_type == "parquet":
         return pd.read_parquet(file_path)
-    else:
-        return pd.read_csv(file_path)
+    return pd.read_csv(file_path)

@@ -7,7 +7,7 @@ Packages are stored in the skills/ directory as .skill.json files.
 from __future__ import annotations
 
 import json
-import shutil
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -103,10 +103,10 @@ class SkillPackageManager:
             return False, f"Skill '{pkg.id}' already installed. Use overwrite=True to replace."
 
         pkg.save_to_file(dest)
-        from datetime import datetime, timezone
+        from datetime import datetime
         self._installed[pkg.id] = {
             "version": pkg.version,
-            "installed_at": datetime.now(timezone.utc).isoformat(),
+            "installed_at": datetime.now(UTC).isoformat(),
             "source": "local",
             "risk_level": pkg.risk_level.value,
         }
@@ -152,10 +152,10 @@ class SkillPackageManager:
             return False, f"Skill '{pkg.id}' already installed. Use overwrite=True to replace."
 
         pkg.save_to_file(dest)
-        from datetime import datetime, timezone
+        from datetime import datetime
         self._installed[pkg.id] = {
             "version": pkg.version,
-            "installed_at": datetime.now(timezone.utc).isoformat(),
+            "installed_at": datetime.now(UTC).isoformat(),
             "source": url,
             "risk_level": pkg.risk_level.value,
         }

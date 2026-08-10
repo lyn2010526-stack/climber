@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import structlog
 
-from app.core import ChatResult
 from app.core.agent_engine import AgentEngine
-from app.core.di import resolve as di_resolve
 from app.multi_agent import AgentRole, AgentTask, CrewOutput, TaskStatus
-from app.tools import tool_registry
 
 logger = structlog.get_logger()
 
@@ -137,4 +133,4 @@ class Crew:
         return "\n".join(lines)
 
 
-import uuid  # noqa: E402
+import uuid

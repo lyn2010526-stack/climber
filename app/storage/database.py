@@ -60,7 +60,7 @@ class Agent(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # Relationships
-    sessions: Mapped[list["Session"]] = relationship(back_populates="agent", cascade="all, delete-orphan")
+    sessions: Mapped[list[Session]] = relationship(back_populates="agent", cascade="all, delete-orphan")
 
 
 class Session(Base):
@@ -83,8 +83,8 @@ class Session(Base):
 
     # Relationships
     agent: Mapped[Agent] = relationship(back_populates="sessions")
-    messages: Mapped[list["Message"]] = relationship(back_populates="session", cascade="all, delete-orphan", order_by="Message.created_at")
-    turns: Mapped[list["Turn"]] = relationship(back_populates="session", cascade="all, delete-orphan")
+    messages: Mapped[list[Message]] = relationship(back_populates="session", cascade="all, delete-orphan", order_by="Message.created_at")
+    turns: Mapped[list[Turn]] = relationship(back_populates="session", cascade="all, delete-orphan")
 
 
 class Turn(Base):
@@ -104,7 +104,7 @@ class Turn(Base):
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    session: Mapped["Session"] = relationship(back_populates="turns")
+    session: Mapped[Session] = relationship(back_populates="turns")
 
 
 class Message(Base):
@@ -129,7 +129,7 @@ class Message(Base):
     # Relationships
     session: Mapped[Session] = relationship(back_populates="messages")
     parent: Mapped[Message | None] = relationship(back_populates="children", remote_side="Message.id")
-    children: Mapped[list["Message"]] = relationship(back_populates="parent")
+    children: Mapped[list[Message]] = relationship(back_populates="parent")
 
 
 class Tool(Base):
@@ -209,8 +209,6 @@ class CheckpointRecord(Base):
 
 # Import memory models to register them with SQLAlchemy
 # This must be done after the base models are defined to avoid circular imports
-from app.storage import models_memory  # noqa: E402  # isort: skip
-from app.storage import models_platform  # noqa: E402  # isort: skip
 
 
 

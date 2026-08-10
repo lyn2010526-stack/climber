@@ -24,17 +24,17 @@ from app.core.observability.trace import (
 )
 
 __all__ = [
-    # Trace
-    "TraceSpan",
-    "TraceCollector",
-    # Audit
-    "AuditEntry",
-    "AuditChain",
     # Alignment
     "AlignmentCheck",
-    "Goal",
-    "GoalTracker",
+    "AuditChain",
+    # Audit
+    "AuditEntry",
     # Emergency Stop
     "EmergencyStopManager",
     "EmergencyStopRecord",
+    "Goal",
+    "GoalTracker",
+    "TraceCollector",
+    # Trace
+    "TraceSpan",
 ]

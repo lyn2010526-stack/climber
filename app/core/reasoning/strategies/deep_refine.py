@@ -14,13 +14,11 @@ Architecture:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 from typing import Any
 
 import structlog
-from pydantic import ValidationError
 
 from app.core.reasoning.base import (
     Candidate,
@@ -28,7 +26,6 @@ from app.core.reasoning.base import (
     ReasoningRequest,
     RoundTrace,
 )
-from app.core.reasoning.components.coverage import CoverageChecker
 from app.core.reasoning.components.reflection_memory import ReflectionMemory
 from app.core.reasoning.components.scorer import CandidateScorer
 from app.core.reasoning.components.self_refine import SelfRefineLoop, _parse_critique_response
@@ -273,7 +270,7 @@ class DeepRefineStrategy:
             return _parse_critique_response(result.content)
         except Exception as exc:
             logger.error("deep_refine_critique_error", error=str(exc))
-            return CritiqueResult(passed=False, scores={d: 1.0 for d in ("correctness", "completeness", "clarity", "safety", "actionability")})
+            return CritiqueResult(passed=False, scores=dict.fromkeys(("correctness", "completeness", "clarity", "safety", "actionability"), 1.0))
 
     async def _generate_reflection(
         self,

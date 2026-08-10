@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
 from functools import wraps
+from typing import Any
 
 import structlog
 
@@ -19,6 +19,7 @@ async def get_redis():
     global _redis_client
     if _redis_client is None:
         import redis.asyncio as redis
+
         from app.config import settings
         _redis_client = redis.from_url(settings.redis_url, decode_responses=True)
         try:
@@ -56,7 +57,7 @@ class Cache:
             if data:
                 return json.loads(data)
         except Exception:
-            pass
+            logger.debug("storage.cache.suppressed", exc_info=True)
         return None
 
     async def set(self, key: str, value: Any, ttl: int = 300) -> bool:
@@ -100,7 +101,7 @@ def cached(ttl: int = 300, key_prefix: str = "cache"):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             cache = Cache(await get_redis())
-            cache_key = f"{key_prefix}:{func.__name__}:{hashlib.md5(str(args).encode()).hexdigest()[:8]}:{hashlib.md5(str(sorted(kwargs.items())).encode()).hexdigest()[:8]}"
+            cache_key = f"{key_prefix}:{func.__name__}:{hashlib.md5(str(args).encode()).hexdigest()[:8]}:{hashlib.md5(str(sorted(kwargs.items())).encode()).hexdigest()[:8]}"  # noqa: S324 - cache-key hash, non-crypto
             result = await cache.get(cache_key)
             if result is not None:
                 return result

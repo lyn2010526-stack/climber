@@ -152,9 +152,13 @@ async def update_group_member(group_id: str, member_id: str, request: Request) -
         member = (await db.execute(select(AgentGroupMember).where(AgentGroupMember.id == member_id, AgentGroupMember.group_id == group_id))).scalar_one_or_none()
         if member is None:
             raise HTTPException(status_code=404, detail="Member not found")
-        if "role" in data: member.role = data["role"]
-        if "status" in data: member.status = data["status"]
-        if "is_worker" in data: member.is_worker = bool(data["is_worker"])
-        if "current_task_id" in data: member.current_task_id = data["current_task_id"]
+        if "role" in data:
+            member.role = data["role"]
+        if "status" in data:
+            member.status = data["status"]
+        if "is_worker" in data:
+            member.is_worker = bool(data["is_worker"])
+        if "current_task_id" in data:
+            member.current_task_id = data["current_task_id"]
         await db.commit()
         return {"id": member.id, "role": member.role, "status": member.status, "is_worker": member.is_worker, "current_task_id": member.current_task_id}

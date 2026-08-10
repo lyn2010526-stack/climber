@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import select
 
-from app.workflow.io import WorkflowIO
-from app.workflow.templates import WorkflowTemplates
+from app.api.v1.generic import _payload
 from app.storage import async_session
 from app.storage.models_platform import Workflow as WorkflowModel
-from app.api.v1.generic import _payload
+from app.workflow.io import WorkflowIO
+from app.workflow.templates import WorkflowTemplates
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -171,7 +170,7 @@ async def export_workflow(workflow_id: str, request: Request) -> Response:
         if wf is None:
             raise HTTPException(status_code=404, detail="Workflow not found")
 
-    from app.workflow import Workflow, WorkflowNode, WorkflowEdge
+    from app.workflow import Workflow, WorkflowEdge, WorkflowNode
     workflow = Workflow(
         id=wf.id,
         name=wf.name,
@@ -195,7 +194,7 @@ async def export_workflow_get(workflow_id: str, format: str = "json") -> Respons
         if wf is None:
             raise HTTPException(status_code=404, detail="Workflow not found")
 
-    from app.workflow import Workflow, WorkflowNode, WorkflowEdge
+    from app.workflow import Workflow, WorkflowEdge, WorkflowNode
     workflow = Workflow(
         id=wf.id,
         name=wf.name,
@@ -215,7 +214,7 @@ def _build_export_response(workflow: WorkflowModel, workflow_id: str, fmt: str) 
             media_type = "application/x-yaml"
             filename = f"workflow-{workflow_id}.yaml"
         except ImportError:
-            raise HTTPException(status_code=400, detail="PyYAML is required for YAML export. Install it with: pip install pyyaml")
+            raise HTTPException(status_code=400, detail="PyYAML is required for YAML export. Install it with: pip install pyyaml") from None
     else:
         content = json.dumps(WorkflowIO.export_workflow(workflow), indent=2, ensure_ascii=False)
         media_type = "application/json"

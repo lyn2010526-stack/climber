@@ -1,7 +1,7 @@
 import pytest
-from app.core.security_utils import (
-    PathValidator, ShellRiskAnalyzer, InputSanitizer, SandboxMode, SecurityError
-)
+
+from app.core.security_utils import InputSanitizer, PathValidator, SandboxMode, SecurityError, ShellRiskAnalyzer
+
 
 class TestPathValidator:
     def test_valid_path_within_root(self, tmp_path):

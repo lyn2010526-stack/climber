@@ -13,26 +13,24 @@ import json
 import time
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from enum import StrEnum
 from typing import Any
-from enum import Enum
 
 import structlog
-from sqlalchemy import select, and_, desc
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import desc, select
 
 from app.storage import async_session
 
 logger = structlog.get_logger()
 
 
-class SpanStatus(str, Enum):
+class SpanStatus(StrEnum):
     OK = "ok"
     ERROR = "error"
     CANCELLED = "cancelled"
 
 
-class SpanKind(str, Enum):
+class SpanKind(StrEnum):
     AGENT_SESSION = "agent_session"
     LLM_CALL = "llm_call"
     TOOL_CALL = "tool_call"
@@ -50,7 +48,7 @@ class TraceStore:
     Lightweight — only stores key metrics, not full content.
     """
 
-    async def save_span(self, span: "Span") -> str:
+    async def save_span(self, span: Span) -> str:
         """Persist a completed span."""
         try:
             async with async_session() as db:
@@ -99,7 +97,7 @@ class TraceStore:
         """List traces with filtering."""
         async with async_session() as db:
             from app.storage.models_traces import TraceSpanRecord
-            query = select(TraceSpanRecord).where(TraceSpanRecord.parent_id == None)
+            query = select(TraceSpanRecord).where(TraceSpanRecord.parent_id is None)
             if user_id:
                 query = query.where(TraceSpanRecord.user_id == user_id)
             if kind:
@@ -205,7 +203,7 @@ class Span:
         self.end_time = time.monotonic()
         self.duration_ms = (self.end_time - self.start_time) * 1000
 
-    async def __aenter__(self) -> "Span":
+    async def __aenter__(self) -> Span:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -256,7 +254,7 @@ class TracingContext:
         self.span = Span(name, kind, trace_id=trace_id, parent_id=parent_id, user_id=user_id, metadata=metadata)
         self._child_trace_id = self.span.trace_id
 
-    async def __aenter__(self) -> "TracingContext":
+    async def __aenter__(self) -> TracingContext:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:

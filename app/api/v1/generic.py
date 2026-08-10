@@ -10,17 +10,19 @@ from __future__ import annotations
 
 import asyncio
 import json
-import structlog
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, HTTPException, Request
-from starlette.websockets import WebSocket
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
+from starlette.websockets import WebSocket
 
+from app.core.api_key_crypto import decrypt_api_key, encrypt_api_key
+from app.core.di import resolve as di_resolve
 from app.storage import async_session
 from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupMessage, AgentGroupTask
 from app.storage.models_platform import (
@@ -33,11 +35,17 @@ from app.storage.models_platform import (
     WorkflowRun,
 )
 from app.storage.models_plugins import PluginRecord
-from app.core.api_key_crypto import decrypt_api_key, encrypt_api_key
-from app.core.di import resolve as di_resolve
 
 router = APIRouter()
 logger = structlog.get_logger()
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _spawn(coro: Any) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 DEFAULT_USER = "default-user"
 
@@ -173,7 +181,7 @@ async def list_tools() -> list[dict[str, Any]]:
 @router.get("/models/")
 async def list_models() -> list[dict[str, Any]]:
     """Return known models per provider, plus locally discovered Ollama models."""
-    from app.models.registry import MODEL_ALIASES, ModelRegistry
+    from app.models.registry import MODEL_ALIASES
 
     model_registry = di_resolve("ModelRegistry")
     models: list[dict[str, Any]] = []
@@ -234,7 +242,7 @@ async def list_workflows() -> list[dict[str, Any]]:
     async with async_session() as db:
         rows = (
             await db.execute(
-                select(Workflow).where(Workflow.is_template == False).order_by(Workflow.created_at.desc())  # noqa: E712
+                select(Workflow).where(Workflow.is_template == False).order_by(Workflow.created_at.desc())
             )
         ).scalars().all()
         return [_workflow_dict(w) for w in rows]
@@ -1265,10 +1273,10 @@ async def run_task(task_id: str) -> dict[str, Any]:
     """Start group collaboration task in background."""
     try:
         from app.core.group_collaboration import group_collaboration_engine
-        asyncio.create_task(group_collaboration_engine.run_task(task_id))
+        _spawn(group_collaboration_engine.run_task(task_id))
     except Exception as e:
         logger.error("failed_to_start_task", task_id=task_id, error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to start task: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start task: {e}") from None
     return {"ok": True, "task_id": task_id, "status": "running"}
 
 
@@ -1313,7 +1321,7 @@ async def pause_task(task_id: str) -> dict[str, Any]:
         if task.status not in ("running",):
             raise HTTPException(status_code=400, detail=f"Cannot pause task in status: {task.status}")
         task.status = "paused"
-        task.paused_at = datetime.now(timezone.utc)
+        task.paused_at = datetime.now(UTC)
         await db.commit()
         return {"ok": True, "task_id": task_id, "status": "paused"}
 
@@ -1341,7 +1349,7 @@ async def stop_task(task_id: str) -> dict[str, Any]:
         if task.status in ("completed", "failed", "stopped"):
             raise HTTPException(status_code=400, detail=f"Cannot stop task in status: {task.status}")
         task.status = "stopped"
-        task.completed_at = datetime.now(timezone.utc)
+        task.completed_at = datetime.now(UTC)
         await db.commit()
         return {"ok": True, "task_id": task_id, "status": "stopped"}
 
@@ -1356,7 +1364,7 @@ async def cancel_task(task_id: str) -> dict[str, Any]:
         if task.status in ("completed", "failed", "stopped", "cancelled"):
             raise HTTPException(status_code=400, detail=f"Cannot cancel task in status: {task.status}")
         task.status = "cancelled"
-        task.completed_at = datetime.now(timezone.utc)
+        task.completed_at = datetime.now(UTC)
         await db.commit()
         return {"ok": True, "task_id": task_id, "status": "cancelled"}
 
@@ -1373,7 +1381,7 @@ _SCHEDULER_MARKET = [
 @router.get("/scheduler/")
 async def list_scheduled() -> list[dict[str, Any]]:
     async with async_session() as db:
-        rows = (await db.execute(select(Workflow).where(Workflow.schedule != None))).scalars().all()
+        rows = (await db.execute(select(Workflow).where(Workflow.schedule is not None))).scalars().all()
         return [
             {
                 "id": w.id,
@@ -1656,7 +1664,7 @@ async def run_eval_dataset(dataset_id: str) -> dict[str, Any]:
 
 # ─── Cost ───────────────────────────────────────────────────────────────────
 
-from app.storage.models_cost import CostRecord, BudgetConfig, UsageQuota
+from app.storage.models_cost import BudgetConfig, CostRecord, UsageQuota
 
 
 def _cost_dict(c: CostRecord) -> dict[str, Any]:

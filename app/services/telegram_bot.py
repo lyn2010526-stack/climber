@@ -10,7 +10,6 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import os
 from typing import Any
 
@@ -50,8 +49,8 @@ async def start_telegram_bot() -> bool:
         from telegram.ext import (
             ApplicationBuilder,
             CommandHandler,
-            MessageHandler,
             ContextTypes,
+            MessageHandler,
             filters,
         )
     except ImportError as e:
@@ -142,7 +141,7 @@ async def start_telegram_bot() -> bool:
             state["messages"] = session.messages[-20:]
         except Exception as e:
             logger.error("Telegram handler error", error=str(e))
-            await update.effective_chat.send_message(f"[内部错误] {str(e)}")
+            await update.effective_chat.send_message(f"[内部错误] {e!s}")
 
     application.add_handler(CommandHandler("start", cmd_start))
     application.add_handler(CommandHandler("list", cmd_list_tools))

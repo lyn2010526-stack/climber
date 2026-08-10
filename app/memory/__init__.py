@@ -34,7 +34,7 @@ class SessionMemory:
             try:
                 self._persist_callback(message)
             except Exception:
-                pass
+                logger.debug("memory.__init__.suppressed", exc_info=True)
 
     def get_context(self, last_n: int | None = None) -> list[dict[str, Any]]:
         """Get recent messages as context for the model."""

@@ -27,7 +27,7 @@ def register_mcp_plugins() -> int:
                     if name == "sandbox_execute":
                         result = await sandbox.execute(kwargs.get("command", ""), kwargs.get("cwd"))
                         return {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.exit_code, "blocked": result.blocked}
-                    elif name == "sandbox_run_code":
+                    if name == "sandbox_run_code":
                         result = await sandbox.execute_script(kwargs.get("code", ""), kwargs.get("language", "python"))
                         return {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.exit_code}
                     return {"error": "Unknown sandbox tool"}

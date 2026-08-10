@@ -70,7 +70,7 @@ async def test_approval_manager_request_and_approve():
         await asyncio.sleep(0.05)
         mgr.approve(approval.id)
 
-    asyncio.create_task(approve_later())
+    asyncio.create_task(approve_later())  # noqa: RUF006 - test-specific pattern
 
     # Wait for decision
     result = await mgr.wait_for_decision(approval.id, timeout=5.0)
@@ -87,7 +87,7 @@ async def test_approval_manager_reject():
         await asyncio.sleep(0.05)
         mgr.reject(approval.id)
 
-    asyncio.create_task(reject_later())
+    asyncio.create_task(reject_later())  # noqa: RUF006 - test-specific pattern
 
     result = await mgr.wait_for_decision(approval.id, timeout=5.0)
     assert result.status == "rejected"

@@ -11,8 +11,9 @@ Executes the compiled graph using the Pregel model:
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator
+from typing import Any
 
 import structlog
 
@@ -32,7 +33,7 @@ from app.core.engine.pregel.policies import (
     TimeoutPolicy,
     execute_with_retry,
 )
-from app.core.engine.pregel.state import GraphState, merge_states
+from app.core.engine.pregel.state import GraphState
 from app.core.engine.pregel.streaming import StreamEvent, StreamEventType
 
 logger = structlog.get_logger(__name__)
@@ -361,7 +362,7 @@ class PregelEngine:
         next_active: list[str] = []
         all_interrupted = False
 
-        for node_name, result in zip(self._active_nodes, results):
+        for node_name, result in zip(self._active_nodes, results, strict=False):
             if isinstance(result, Exception):
                 logger.error("node_error", node=node_name, error=str(result), step=step)
                 handler_result = await self._error_handler.handle(result, dict(state), node_name)
@@ -477,8 +478,7 @@ class PregelEngine:
             return []
 
         # Use static edges
-        outgoing = self._graph.get_outgoing_edges(current_node)
-        return outgoing
+        return self._graph.get_outgoing_edges(current_node)
 
     async def _resolve_router(self, router: callable, state: GraphState) -> str:
         """Resolve a router function to a node name."""

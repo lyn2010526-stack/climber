@@ -26,7 +26,6 @@ from app.core.reasoning.base import (
 from app.core.reasoning.components.scorer import CandidateScorer
 from app.core.reasoning.components.self_refine import SelfRefineLoop
 from app.core.reasoning.prompts.tree_prompts import (
-    IMPROVE_PROMPT,
     PATH_SYSTEM_PROMPTS,
 )
 

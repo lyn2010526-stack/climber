@@ -7,7 +7,6 @@ instead of failing or infinite retry.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 
 @dataclass

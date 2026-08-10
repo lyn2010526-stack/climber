@@ -1,11 +1,10 @@
 """Tests for MCP controller."""
 
-import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.core.mcp_controller import McpController, McpStatus, McpStartResult
+from app.core.mcp_controller import McpController, McpStatus
 
 
 @pytest.fixture
@@ -41,7 +40,7 @@ class TestMcpController:
             mock_process.poll.return_value = None
             mock_popen.return_value = mock_process
 
-            with patch('asyncio.sleep', side_effect=asyncio.TimeoutError()):
+            with patch('asyncio.sleep', side_effect=TimeoutError()):
                 result = await mcp_controller.start()
 
             assert result.success is False

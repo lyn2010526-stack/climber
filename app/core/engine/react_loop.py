@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import re
-from typing import TYPE_CHECKING, Any, AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable
+from typing import TYPE_CHECKING, Any
 
 import structlog
 

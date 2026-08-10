@@ -44,7 +44,7 @@ class TaskDAG:
         Returns:
             List of lists, where each inner list contains tasks that can run in parallel.
         """
-        in_degree: dict[str, int] = {tid: 0 for tid in self._nodes}
+        in_degree: dict[str, int] = dict.fromkeys(self._nodes, 0)
         adjacency: dict[str, list[str]] = {tid: [] for tid in self._nodes}
 
         for task in self._nodes.values():
@@ -71,8 +71,8 @@ class TaskDAG:
     def detect_cycle(self) -> list[str] | None:
         """Detect cycles in the DAG. Returns cycle path or None."""
         WHITE, GRAY, BLACK = 0, 1, 2
-        color = {tid: WHITE for tid in self._nodes}
-        parent: dict[str, str | None] = {tid: None for tid in self._nodes}
+        color = dict.fromkeys(self._nodes, WHITE)
+        parent: dict[str, str | None] = dict.fromkeys(self._nodes)
 
         def dfs(node_id: str) -> list[str] | None:
             color[node_id] = GRAY
@@ -116,24 +116,24 @@ class TaskDAG:
 
     def update_task_dependencies(self, task_id: str, new_deps: list[str]) -> bool:
         """Update the dependencies of a task.
-        
+
         Returns True if successful, False if task not found or cycle detected.
         """
         if task_id not in self._nodes:
             return False
-        
+
         # Save original deps for rollback
         original_deps = self._nodes[task_id].dependencies
-        
+
         # Apply new deps
         self._nodes[task_id].dependencies = new_deps
-        
+
         # Check for cycles
         if self.detect_cycle() is not None:
             # Rollback
             self._nodes[task_id].dependencies = original_deps
             return False
-        
+
         return True
 
 

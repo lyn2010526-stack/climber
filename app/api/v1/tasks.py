@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -17,6 +17,14 @@ from app.storage.models_groups import AgentGroupTask
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _spawn(coro: Any) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 @router.get("/tasks")
@@ -52,10 +60,10 @@ async def create_task(request: Request) -> dict[str, Any]:
 async def run_task(task_id: str) -> dict[str, Any]:
     try:
         from app.core.group_collaboration import get_group_collaboration_engine
-        asyncio.create_task(get_group_collaboration_engine().run_task(task_id))
+        _spawn(get_group_collaboration_engine().run_task(task_id))
     except Exception as e:
         logger.error("failed_to_start_task", task_id=task_id, error=str(e))
-        raise HTTPException(status_code=500, detail=f"Failed to start task: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to start task: {e}") from None
     return {"ok": True, "task_id": task_id, "status": "running"}
 
 
@@ -77,7 +85,7 @@ async def pause_task(task_id: str) -> dict[str, Any]:
         if task.status not in ("running",):
             raise HTTPException(status_code=400, detail=f"Cannot pause task in status: {task.status}")
         task.status = "paused"
-        task.paused_at = datetime.now(timezone.utc)
+        task.paused_at = datetime.now(UTC)
         await db.commit()
         return {"ok": True, "task_id": task_id, "status": "paused"}
 
@@ -105,6 +113,6 @@ async def stop_task(task_id: str) -> dict[str, Any]:
         if task.status in ("completed", "failed", "stopped"):
             raise HTTPException(status_code=400, detail=f"Cannot stop task in status: {task.status}")
         task.status = "stopped"
-        task.completed_at = datetime.now(timezone.utc)
+        task.completed_at = datetime.now(UTC)
         await db.commit()
         return {"ok": True, "task_id": task_id, "status": "stopped"}

@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
-from fastapi.security import HTTPAuthorizationCredentials
 
 from app.api.v1.chat import ChatRequest, chat
 from app.api.v1.doctor import _run_diagnostics

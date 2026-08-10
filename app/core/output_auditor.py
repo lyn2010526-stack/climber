@@ -9,7 +9,7 @@ Wraps the SelfRefineLoop into a simple audit pipeline:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import structlog
@@ -89,7 +89,7 @@ class OutputAuditor:
 
             refine_loop = SelfRefineLoop()
 
-            refined, critique, traces = await refine_loop.refine(
+            _, critique, traces = await refine_loop.refine(
                 task=task,
                 initial=output,
                 model_adapter=model_adapter,

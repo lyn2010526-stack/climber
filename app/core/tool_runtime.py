@@ -10,8 +10,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from app.tools import tool_registry as global_registry
 
@@ -105,7 +106,7 @@ class ToolRuntime:
                 duration_ms=(time.monotonic() - start) * 1000,
                 tool_name=name,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ToolResult(
                 success=False, error=f"Tool '{name}' timeout after {tool.timeout}s",
                 duration_ms=(time.monotonic() - start) * 1000, tool_name=name,

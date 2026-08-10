@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Any
 
 import structlog
 
 from app.core.reasoning.base import (
     CoverageReport,
+    PathTrace,
     ReasoningMode,
     ReasoningTrace,
-    PathTrace,
     RoundTrace,
 )
 

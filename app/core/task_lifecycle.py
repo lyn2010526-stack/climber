@@ -10,10 +10,11 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from typing import Any, Callable, Coroutine
+from typing import Any
 
-from app.core.task_state_machine import TaskState, TaskStateMachine, TaskHook
+from app.core.task_state_machine import TaskHook, TaskState, TaskStateMachine
 
 
 @dataclass

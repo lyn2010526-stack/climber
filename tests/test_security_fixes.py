@@ -8,16 +8,18 @@ Validates that critical security vulnerabilities have been properly addressed:
 5. Settings uses authenticated user
 """
 
-import os
 import asyncio
+import os
+
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 os.environ["APP_TESTING"] = "true"
 
 from app.main import app
-from app.storage import init_db, engine, Base
+from app.storage import Base, engine, init_db
+
 try:
     from app.storage.auth import hash_password, verify_password
 except ImportError:

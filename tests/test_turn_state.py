@@ -4,8 +4,7 @@ import os
 
 os.environ["APP_TESTING"] = "true"
 
-import pytest
-from app.core.turn_state import TurnStateMachine, TurnState, can_transition
+from app.core.turn_state import TurnState, TurnStateMachine, can_transition
 
 
 def test_can_transition_valid():

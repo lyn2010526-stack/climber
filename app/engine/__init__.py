@@ -13,12 +13,8 @@ Provides:
 - UnifiedMemory: Composite-scoring memory system
 """
 
-from app.engine.code_executor import SafeExecutor, ExecutionResult, ExecutionStatus
-from app.engine.code_agent import CodeAgent, AgentResult, StepResult
-from app.engine.planning import Planner, PlanStep, PlanStatus
-from app.engine.stream_output import StreamOutput, DefaultStreamOutput, CollectingStreamOutput
-from app.engine.tool_collection import ToolCollection
-from app.engine.harness import Harness, HarnessRegistry
+from app.engine.code_agent import AgentResult, CodeAgent, StepResult
+from app.engine.code_executor import ExecutionResult, ExecutionStatus, SafeExecutor
 
 # Existing exports
 from app.engine.crew_checkpoint import CheckpointManager, CrewCheckpoint
@@ -30,6 +26,7 @@ from app.engine.guardrails import (
     LLMGuardrail,
     OutputPydantic,
 )
+from app.engine.harness import Harness, HarnessRegistry
 from app.engine.hierarchical import HierarchicalCrew, ManagerAgent, TaskAssignment
 from app.engine.knowledge import (
     CSVKnowledgeSource,
@@ -39,53 +36,56 @@ from app.engine.knowledge import (
     PDFKnowledgeSource,
     TextKnowledgeSource,
 )
+from app.engine.planning import Planner, PlanStatus, PlanStep
+from app.engine.stream_output import CollectingStreamOutput, DefaultStreamOutput, StreamOutput
+from app.engine.tool_collection import ToolCollection
 from app.engine.tool_failure import ToolFailure, ToolFailureHandler, ToolFailurePolicy
 from app.engine.unified_memory import MemoryRecord, MemoryScope, UnifiedMemory
 
 __all__ = [
-    # Code Agent
-    "SafeExecutor",
+    "AgentResult",
+    # Guardrails
+    "BaseGuardrail",
+    # Knowledge
+    "CSVKnowledgeSource",
+    # Checkpoint
+    "CheckpointManager",
+    "CodeAgent",
+    "CollectingStreamOutput",
+    "CrewCheckpoint",
+    "DefaultStreamOutput",
     "ExecutionResult",
     "ExecutionStatus",
-    "CodeAgent",
-    "AgentResult",
-    "StepResult",
-    "Planner",
-    "PlanStep",
-    "PlanStatus",
-    "StreamOutput",
-    "DefaultStreamOutput",
-    "CollectingStreamOutput",
-    "ToolCollection",
+    "FunctionGuardrail",
+    "GuardrailChain",
+    "GuardrailResult",
     "Harness",
     "HarnessRegistry",
     # Hierarchical
     "HierarchicalCrew",
-    "ManagerAgent",
-    "TaskAssignment",
-    # Guardrails
-    "BaseGuardrail",
-    "FunctionGuardrail",
-    "GuardrailChain",
-    "GuardrailResult",
-    "LLMGuardrail",
-    "OutputPydantic",
-    # Knowledge
-    "CSVKnowledgeSource",
     "JSONKnowledgeSource",
     "KnowledgeManager",
     "KnowledgeSource",
+    "LLMGuardrail",
+    "ManagerAgent",
+    # Unified Memory
+    "MemoryRecord",
+    "MemoryScope",
+    "OutputPydantic",
     "PDFKnowledgeSource",
+    "PlanStatus",
+    "PlanStep",
+    "Planner",
+    # Code Agent
+    "SafeExecutor",
+    "StepResult",
+    "StreamOutput",
+    "TaskAssignment",
     "TextKnowledgeSource",
+    "ToolCollection",
     # Tool Failure
     "ToolFailure",
     "ToolFailureHandler",
     "ToolFailurePolicy",
-    # Checkpoint
-    "CheckpointManager",
-    "CrewCheckpoint",
-    # Unified Memory
-    "MemoryRecord",
-    "MemoryScope",
     "UnifiedMemory",
 ]

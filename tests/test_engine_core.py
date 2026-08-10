@@ -3,27 +3,26 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
-from uuid import uuid4
 
 import pytest
-import pytest_asyncio
 
 from app.core import (
-    AgentEventType, ChatResult, CheckpointData, CompressionStrategy,
-    ContextConfig, MessageRole, ModelRoute,
-    SessionStatus, SubAgentTask,
+    AgentEventType,
+    ChatResult,
+    CheckpointData,
+    CompressionStrategy,
+    ContextConfig,
+    ModelRoute,
+    SessionStatus,
 )
-from app.core.compressor import ContextCompressor, estimate_tokens
-from app.core.parallel import ParallelToolExecutor, ToolExecutionResult
+from app.core.agent_engine import AgentEngine
 from app.core.checkpoint import InMemoryCheckpointStore
+from app.core.compressor import ContextCompressor, estimate_tokens
+from app.core.parallel import ParallelToolExecutor
 from app.core.router import ModelRouter
-from app.core.subagent import SubAgentRunner, SubAgentResult
-from app.core.agent_engine import AgentEngine, AgentSession
-from app.models import ModelAdapter, ModelCapability
+from app.models import ModelCapability
 from app.models.registry import ModelRegistry
 from app.tools import ToolRegistry
-
 
 # ── Helpers ──
 
@@ -219,7 +218,7 @@ class TestInMemoryCheckpointStore:
             iteration=1,
             status="running",
         )
-        cid = await store.save(None, cp, thread_id="t1", checkpoint_id="cp1")
+        await store.save(None, cp, thread_id="t1", checkpoint_id="cp1")
         retrieved = await store.get(None, "cp1")
         assert retrieved is not None
         assert retrieved.session_id == "s1"
@@ -501,7 +500,7 @@ class TestAgentEngineIntegration:
         )
 
         # Pre-fill with long messages
-        for i in range(10):
+        for _i in range(10):
             session.session_memory.add("user", "x" * 200)
             session.session_memory.add("assistant", "y" * 200)
 

@@ -108,8 +108,9 @@ class SQLiteCheckpointStore:
         checkpoint_id: str = "",
         parent_id: str | None = None,
     ) -> str:
-        from app.storage.database import CheckpointRecord
         from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+        from app.storage.database import CheckpointRecord
         cid = checkpoint_id or f"cp-{int(time.time()*1000)}"
         metadata_payload = {**checkpoint.metadata, "parent_id": parent_id}
         async with async_session() as db:

@@ -171,7 +171,7 @@ class ReActAgent:
             result = await self.engine.run_agent(session, prompt)
             return result.get("output", "")
         except Exception as e:
-            return f"Error: {str(e)}"
+            return f"Error: {e!s}"
 
     async def _execute_action(self, action: str, action_input: dict[str, Any]) -> str:
         if action in self.tools:
@@ -180,5 +180,5 @@ class ReActAgent:
                 result = await tool_registry.execute(action, action_input)
                 return str(result)
             except Exception as e:
-                return f"Error executing {action}: {str(e)}"
+                return f"Error executing {action}: {e!s}"
         return f"Unknown action: {action}"

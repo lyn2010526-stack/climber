@@ -7,8 +7,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.storage import get_db
 from app.services.settings_service import SettingsService
+from app.storage import get_db
 
 router = APIRouter(tags=["settings"])
 
