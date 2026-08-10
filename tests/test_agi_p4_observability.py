@@ -582,41 +582,6 @@ class TestObservabilityAPI:
             yield ac
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    async def test_list_traces_requires_auth(self, client):
-        pass
-
-    @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    async def test_get_trace_requires_auth(self, client):
-        pass
-
-    @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    async def test_list_audit_requires_auth(self, client):
-        pass
-
-    @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    async def test_alignment_requires_auth(self, client):
-        pass
-
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    @pytest.mark.asyncio
-    async def test_emergency_stop_status_requires_auth(self, client):
-        pass
-
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    @pytest.mark.asyncio
-    async def test_emergency_stop_activate_requires_auth(self, client):
-        pass
-
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    @pytest.mark.asyncio
-    async def test_emergency_stop_deactivate_requires_auth(self, client):
-        pass
-
-    @pytest.mark.asyncio
     async def test_list_traces_with_auth(self, client):
         token = "test-user"
         response = await client.get(

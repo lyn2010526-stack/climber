@@ -70,10 +70,6 @@ async def client():
 # ── 1. Placeholder api_key raises proper error ────────────────────────────
 
 
-@pytest.mark.skip(reason="User model removed for local-only mode")
-@pytest.mark.asyncio
-async def test_placeholder_api_key_raises_error(client, monkeypatch):
-    pass
 
 
 # ── 2. Weak password hashing replaced by PBKDF2 ───────────────────────────
@@ -103,22 +99,10 @@ def test_verify_password_incorrect():
     assert verify_password("wrongpassword", hashed) is False
 
 
-@pytest.mark.skip(reason="User model removed for local-only mode")
-@pytest.mark.asyncio
-async def test_register_uses_pbkdf2_hash(client):
-    pass
 
 
-@pytest.mark.skip(reason="User model removed for local-only mode")
-@pytest.mark.asyncio
-async def test_login_with_correct_password(client):
-    pass
 
 
-@pytest.mark.skip(reason="User model removed for local-only mode")
-@pytest.mark.asyncio
-async def test_login_with_wrong_password(client):
-    pass
 
 
 @pytest.mark.asyncio
@@ -144,61 +128,25 @@ async def test_login_short_password(client):
 # ── 3. API key ownership enforced ─────────────────────────────────────────
 
 
-@pytest.mark.skip(reason="Auth removed for local-only mode")
-@pytest.mark.asyncio
-async def test_api_key_list_requires_auth(client):
-    pass
 
 
-@pytest.mark.skip(reason="User model removed for local-only mode")
-@pytest.mark.asyncio
-async def test_api_key_owned_by_user(client):
-    pass
 
 
-@pytest.mark.skip(reason="User model removed for local-only mode")
-@pytest.mark.asyncio
-async def test_delete_api_key_ownership_check(client):
-    pass
 
 
-@pytest.mark.skip(reason="User model removed for local-only mode")
-@pytest.mark.asyncio
-async def test_delete_own_api_key_succeeds(client):
-    pass
 
 
 # ── 4. User enumeration protected ─────────────────────────────────────────
 
 
-@pytest.mark.skip(reason="User model removed for local-only mode")
-@pytest.mark.asyncio
-async def test_list_users_requires_admin(client):
-    pass
 
 
-@pytest.mark.skip(reason="User model removed for local-only mode")
-@pytest.mark.asyncio
-async def test_list_users_admin_allowed(client):
-    pass
 
 
-@pytest.mark.skip(reason="User model removed for local-only mode")
-@pytest.mark.asyncio
-async def test_switch_user_removed(client):
-    pass
 
 
 # ── 5. Settings uses authenticated user ──────────────────────────────────
 
 
-@pytest.mark.skip(reason="User model removed for local-only mode")
-@pytest.mark.asyncio
-async def test_settings_uses_authenticated_user(client):
-    pass
 
 
-@pytest.mark.skip(reason="User model removed for local-only mode")
-@pytest.mark.asyncio
-async def test_settings_update_uses_authenticated_user(client):
-    pass

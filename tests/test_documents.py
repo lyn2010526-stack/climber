@@ -54,11 +54,5 @@ def client():
         yield c
 
 
-@pytest.mark.skip(reason="Auth removed for local-only mode")
-def test_upload_document_flow(client: TestClient):
-    pass
 
 
-@pytest.mark.skip(reason="Auth removed for local-only mode")
-def test_delete_document(client: TestClient):
-    pass

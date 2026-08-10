@@ -55,16 +55,8 @@ def test_auth_endpoint_token_is_verifiable() -> None:
     assert token.access_token == "user-1"
 
 
-@pytest.mark.skip(reason="Auth removed for local-only mode")
-@pytest.mark.asyncio
-async def test_auth_me_rejects_token_for_missing_user(client) -> None:
-    pass
 
 
-@pytest.mark.skip(reason="User model removed for local-only mode")
-@pytest.mark.asyncio
-async def test_auth_me_rejects_token_for_inactive_default_user(client) -> None:
-    pass
 
 
 @pytest.mark.asyncio
@@ -76,10 +68,6 @@ async def test_auth_me_allows_guest_without_credentials(client) -> None:
     assert response.json()["id"] == DEFAULT_USER_ID
 
 
-@pytest.mark.skip(reason="Auth removed for local-only mode")
-@pytest.mark.asyncio
-async def test_explicit_invalid_token_is_rejected() -> None:
-    pass
 
 
 @pytest.mark.skip(reason="Auth removed for local-only mode")

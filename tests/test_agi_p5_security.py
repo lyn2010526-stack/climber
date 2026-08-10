@@ -390,11 +390,6 @@ class TestSecurityAPI:
         token = "admin-user"
         return {"Authorization": f"Bearer {token}"}
 
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    @pytest.mark.asyncio
-    async def test_get_quotas_requires_auth(self, app):
-        pass
-
     @pytest.mark.asyncio
     async def test_get_quotas_with_auth(self, app, auth_headers):
         transport = ASGITransport(app=app)

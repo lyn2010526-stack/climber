@@ -603,36 +603,6 @@ class TestCollaborationAPI:
         token = "test-user"
         return {"Authorization": f"Bearer {token}"}
 
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    @pytest.mark.asyncio
-    async def test_create_handoff_requires_auth(self, app):
-        pass
-
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    @pytest.mark.asyncio
-    async def test_list_handoffs_requires_auth(self, app):
-        pass
-
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    @pytest.mark.asyncio
-    async def test_accept_handoff_requires_auth(self, app):
-        pass
-
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    @pytest.mark.asyncio
-    async def test_reject_handoff_requires_auth(self, app):
-        pass
-
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    @pytest.mark.asyncio
-    async def test_list_roles_requires_auth(self, app):
-        pass
-
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    @pytest.mark.asyncio
-    async def test_get_aggregation_requires_auth(self, app):
-        pass
-
     @pytest.mark.asyncio
     async def test_create_handoff_with_auth(self, app, auth_headers):
         transport = ASGITransport(app=app)

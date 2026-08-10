@@ -715,22 +715,6 @@ class TestTreeOfThoughtStrategy:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# API Endpoints
-# ═══════════════════════════════════════════════════════════════════════════
-
-class TestReasoningAPI:
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    @pytest.mark.asyncio
-    async def test_list_modes_auth_required(self, client):
-        pass
-
-    @pytest.mark.skip(reason="Auth removed for local-only mode")
-    @pytest.mark.asyncio
-    async def test_reason_endpoint_auth_required(self, client):
-        pass
-
-
-# ═══════════════════════════════════════════════════════════════════════════
 # Reflection Memory (Phase 2)
 # ═══════════════════════════════════════════════════════════════════════════
 
