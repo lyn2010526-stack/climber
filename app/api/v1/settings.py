@@ -10,9 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.storage import get_db
 from app.services.settings_service import SettingsService
 
-router = APIRouter(prefix="/settings", tags=["settings"])
+router = APIRouter(tags=["settings"])
 
 
+@router.get("")
 @router.get("/")
 async def get_settings(
     db: AsyncSession = Depends(get_db),
@@ -30,6 +31,7 @@ async def get_settings(
     }
 
 
+@router.patch("")
 @router.patch("/")
 async def update_settings(
     data: dict[str, Any],

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sse_starlette.sse import EventSourceResponse
@@ -140,34 +141,8 @@ async def reason_stream(
     return EventSourceResponse(event_generator())
 
 
-@router.get("/{trace_id}")
-async def get_reasoning_trace(
-    trace_id: str,
-    db: AsyncSession = Depends(get_db),
-) -> dict[str, Any] | None:
-    repo = ReasoningTraceRepository(db)
-    trace = await repo.get_by_trace_id(trace_id)
-    if not trace:
-        return None
-    return {
-        "trace_id": trace.trace_id,
-        "task": trace.task,
-        "mode": trace.mode,
-        "candidates_count": trace.candidates_count,
-        "best_confidence": trace.best_confidence,
-        "coverage_score": trace.coverage_score,
-        "duration_ms": trace.duration_ms,
-        "total_tokens": trace.total_tokens,
-        "estimated_cost": trace.estimated_cost,
-        "result_summary": trace.result_summary,
-        "path_traces": trace.path_traces,
-        "coverage_report": trace.coverage_report,
-        "created_at": trace.created_at.isoformat() if trace.created_at else None,
-    }
-
-
 @router.get("/modes")
-async def list_reasoning_modes() -> list[dict[str, str]]:
+async def list_reasoning_modes() -> list[dict[str, Any]]:
     modes = [
         {"id": "auto", "name": "Auto", "description": "Automatically select best strategy", "available": True},
         {"id": "tree", "name": "Tree of Thought", "description": "Parallel multi-path + self-refine", "available": True},
@@ -243,3 +218,29 @@ async def list_reasoning_history(
         }
         for t in items
     ]
+
+
+@router.get("/{trace_id}")
+async def get_reasoning_trace(
+    trace_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any] | None:
+    repo = ReasoningTraceRepository(db)
+    trace = await repo.get_by_trace_id(trace_id)
+    if not trace:
+        return None
+    return {
+        "trace_id": trace.trace_id,
+        "task": trace.task,
+        "mode": trace.mode,
+        "candidates_count": trace.candidates_count,
+        "best_confidence": trace.best_confidence,
+        "coverage_score": trace.coverage_score,
+        "duration_ms": trace.duration_ms,
+        "total_tokens": trace.total_tokens,
+        "estimated_cost": trace.estimated_cost,
+        "result_summary": trace.result_summary,
+        "path_traces": trace.path_traces,
+        "coverage_report": trace.coverage_report,
+        "created_at": trace.created_at.isoformat() if trace.created_at else None,
+    }

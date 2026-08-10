@@ -37,7 +37,12 @@ del importlib, _missing
 
 _APP_VERSION = "0.2.0"
 
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+FRONTEND_DIR = None
+for _candidate in (Path(__file__).parent.parent / "frontend", Path(__file__).parent.parent / "frontend-react"):
+    if _candidate.exists():
+        FRONTEND_DIR = _candidate
+        break
+del _candidate
 
 
 def _register_core_services() -> None:
@@ -283,19 +288,12 @@ async def metrics():
     return await metrics_endpoint()
 
 
-if FRONTEND_DIR.exists():
+if FRONTEND_DIR:
     app.mount("/css", StaticFiles(directory=FRONTEND_DIR / "css"), name="css")
     app.mount("/js", StaticFiles(directory=FRONTEND_DIR / "js"), name="js")
 
     @app.get("/")
     async def serve_frontend():
-        return FileResponse(FRONTEND_DIR / "index.html")
-
-    @app.get("/{full_path:path}")
-    async def serve_frontend_spa(request: Request, full_path: str):
-        file_path = FRONTEND_DIR / full_path
-        if full_path and file_path.exists() and file_path.is_file():
-            return FileResponse(file_path)
         return FileResponse(FRONTEND_DIR / "index.html")
 else:
     @app.get("/")

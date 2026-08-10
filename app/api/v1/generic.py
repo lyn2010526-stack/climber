@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
+from starlette.websockets import WebSocket
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -1347,6 +1348,21 @@ async def stop_task(task_id: str) -> dict[str, Any]:
         return {"ok": True, "task_id": task_id, "status": "stopped"}
 
 
+@router.post("/tasks/{task_id}/cancel")
+async def cancel_task(task_id: str) -> dict[str, Any]:
+    """Cancel a running task, marking it as cancelled (reuses stop semantics)."""
+    async with async_session() as db:
+        task = (await db.execute(select(AgentGroupTask).where(AgentGroupTask.id == task_id))).scalar_one_or_none()
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task.status in ("completed", "failed", "stopped", "cancelled"):
+            raise HTTPException(status_code=400, detail=f"Cannot cancel task in status: {task.status}")
+        task.status = "cancelled"
+        task.completed_at = datetime.now(timezone.utc)
+        await db.commit()
+        return {"ok": True, "task_id": task_id, "status": "cancelled"}
+
+
 # ─── Scheduler ──────────────────────────────────────────────────────────────
 
 from app.storage.models_platform import Workflow
@@ -1548,6 +1564,100 @@ async def run_evaluation(request: Request) -> dict[str, Any]:
         return _eval_run_dict(run)
 
 
+_BUILTIN_EVAL_DATASETS = [
+    {
+        "name": "general-knowledge",
+        "description": "General knowledge Q&A benchmark with factual questions.",
+        "cases": [
+            {"question": "What is the capital of France?", "expected": "Paris"},
+            {"question": "How many planets are in our solar system?", "expected": "8"},
+            {"question": "Who wrote Romeo and Juliet?", "expected": "Shakespeare"},
+            {"question": "What is the chemical symbol for water?", "expected": "H2O"},
+            {"question": "Which ocean is the largest?", "expected": "Pacific"},
+        ],
+    },
+    {
+        "name": "reasoning",
+        "description": "Logical reasoning and multi-step problem solving benchmark.",
+        "cases": [
+            {"question": "If all A are B and all B are C, then are all A also C?", "expected": "yes"},
+            {"question": "A train leaves at 10:30 and arrives at 14:45. How long is the journey?", "expected": "4 hours 15 minutes"},
+            {"question": "Three consecutive integers sum to 24. What is the smallest?", "expected": "7"},
+        ],
+    },
+    {
+        "name": "tool-usage",
+        "description": "Benchmark for correct tool selection and invocation.",
+        "cases": [
+            {"question": "Find the current time on the server.", "expected": "tool:get_current_time"},
+            {"question": "Search the web for the latest news about AI.", "expected": "tool:web_search"},
+            {"question": "Calculate 42 * 17 using a calculator.", "expected": "tool:calculator"},
+        ],
+    },
+]
+
+
+@router.post("/eval/datasets/seed-builtin")
+@router.post("/eval/datasets/seed-builtin/")
+async def seed_builtin_eval_datasets() -> dict[str, Any]:
+    """Seed the built-in evaluation datasets (idempotent by name)."""
+    async with async_session() as db:
+        existing_names = set(
+            (await db.execute(select(EvalDataset.name))).scalars().all()
+        )
+        added: list[EvalDataset] = []
+        for spec in _BUILTIN_EVAL_DATASETS:
+            if spec["name"] in existing_names:
+                continue
+            ds = EvalDataset(
+                user_id=DEFAULT_USER,
+                name=spec["name"],
+                description=spec["description"],
+                data_json=json.dumps(spec["cases"], ensure_ascii=False),
+                case_count=len(spec["cases"]),
+            )
+            db.add(ds)
+            added.append(ds)
+        await db.commit()
+        for ds in added:
+            await db.refresh(ds)
+        return {"ok": True, "created": len(added), "datasets": [_eval_dataset_dict(ds) for ds in added]}
+
+
+@router.post("/eval/datasets/{dataset_id}/run")
+@router.post("/eval/datasets/{dataset_id}/run/")
+async def run_eval_dataset(dataset_id: str) -> dict[str, Any]:
+    """Run an evaluation against an existing dataset (reuses /eval/run logic)."""
+    from app.storage.database import Agent
+
+    async with async_session() as db:
+        ds = (await db.execute(select(EvalDataset).where(EvalDataset.id == dataset_id))).scalar_one_or_none()
+        if not ds:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+        agent = (await db.execute(
+            select(Agent).where(Agent.user_id == DEFAULT_USER).order_by(Agent.created_at.asc())
+        )).scalars().first()
+        if not agent:
+            agent = (await db.execute(select(Agent).order_by(Agent.created_at.asc()))).scalars().first()
+        if not agent:
+            raise HTTPException(status_code=400, detail="No agent available to run evaluation")
+        run = EvalRun(
+            user_id=DEFAULT_USER,
+            dataset_id=dataset_id,
+            agent_id=agent.id,
+            total_cases=ds.case_count,
+            passed_cases=0,
+            failed_cases=0,
+            average_score=0.0,
+            pass_rate=0.0,
+            results_json="[]",
+        )
+        db.add(run)
+        await db.commit()
+        await db.refresh(run)
+        return _eval_run_dict(run)
+
+
 # ─── Cost ───────────────────────────────────────────────────────────────────
 
 from app.storage.models_cost import CostRecord, BudgetConfig, UsageQuota
@@ -1654,7 +1764,7 @@ async def search_documents(q: str = "", limit: int = 20) -> list[dict[str, Any]]
 # ─── WebSocket ──────────────────────────────────────────────────────────────
 
 @router.websocket("/ws/{session_id}")
-async def ws_endpoint(websocket: Any, session_id: str):
+async def ws_endpoint(websocket: WebSocket, session_id: str):
     await websocket.accept()
     await websocket.send_json({"type": "connected", "session_id": session_id})
     try:
@@ -1671,7 +1781,7 @@ async def ws_endpoint(websocket: Any, session_id: str):
 
 
 @router.websocket("/ws/groups/{group_id}")
-async def ws_group_endpoint(websocket: Any, group_id: str):
+async def ws_group_endpoint(websocket: WebSocket, group_id: str):
     from app.core.group_ws_hub import group_ws_hub
 
     # Accept connection first to read query params

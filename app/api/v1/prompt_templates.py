@@ -12,7 +12,7 @@ from app.core.prompt_engine.template_repository import PromptTemplateRepository
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/prompt-templates", tags=["prompt-templates"])
+router = APIRouter(tags=["prompt-templates"])
 
 _repository: PromptTemplateRepository | None = None
 

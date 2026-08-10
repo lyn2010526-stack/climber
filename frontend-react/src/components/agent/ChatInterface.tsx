@@ -352,8 +352,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                <motion.button
                   type="submit"
                   disabled={!input.trim()}
-                  whileTap={input.trim() ? { scale: 0.9 } : undefined}
-                  whileHover={input.trim() ? { scale: 1.05 } : undefined}
+                   whileTap={input.trim() ? { scale: 0.9 } : { scale: 1 }}
+                   whileHover={input.trim() ? { scale: 1.05 } : { scale: 1 }}
                   transition={{ type: 'spring', stiffness: 500, damping: 20 }}
                   className="flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-[#5E6AD2] to-[#8B5CF6] text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-[#5E6AD2]/20 hover:shadow-[#5E6AD2]/30 transition-shadow"
                 >

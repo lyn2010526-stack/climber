@@ -7,8 +7,9 @@ import secrets
 from pathlib import Path
 
 from dotenv import load_dotenv
+from typing import Annotated
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, NoDecode
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
@@ -77,12 +78,24 @@ class Settings(BaseSettings):
     port: int = Field(default=8000)
     enable_lan_access: bool = Field(default=False)
 
-    cors_origins: str = Field(default="http://localhost:5173,http://localhost:3000")
-    cors_origins_list: list[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"])
+    cors_origins_list: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"],
+        validation_alias="CORS_ORIGINS",
+    )
+
+    @field_validator("cors_origins_list", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, value):
+        if isinstance(value, str):
+            return [x.strip() for x in value.split(",") if x.strip()]
+        return value
 
     mcp_timeout: int = Field(default=30)
     tool_timeout: int = Field(default=60)
     max_tool_retries: int = Field(default=2)
+
+    # LLM providers
+    ollama_base_url: str = Field(default="http://localhost:11434")
 
     telegram_bot_token: str = Field(default="")
 
