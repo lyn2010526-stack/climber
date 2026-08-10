@@ -112,3 +112,18 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 后端补齐前端 3 个缺失 API：/tasks/{id}/cancel、/eval/datasets/seed-builtin、/eval/datasets/{id}/run（都在 generic.py 内新增，注意前端契约：均无 body、返回结构对齐现有端点）
   - 死代码处理用归档到 /tmp/opencode/dead_code_archive/ 而非删除（遵守 no-delete 规则）：前端 styles/ + 6 个文件/组件，后端 10 个未挂载 router（agents/eval/models/search/stats/tools/traces/plugins/users/websocket，均与 generic.py 重复且无任何引用）；前端 UI 组件（Alert/Dialog/Select 等）虽字面 0 引用但有子组件/泛型引用，必须全名核验勿误删
   - 路由验证：OpenAPI paths 数（TestClient /openapi.json）是权威口径，app.routes 数不包含 include 的子 router；WebSocket 路由不出现在 OpenAPI paths 属正常
+
+[ruff 静态检查规则选型经验]
+- Date: 2026-08-10
+- Context: Agent 对标领先项目用 ruff 全规则集（默认 1427 错误）清洗 app/ 与 tests/ 时发现
+- Category: 构建方法
+- Instructions:
+  - 项目此前无 lint 配置，`/usr/local/bin/ruff` 可用；清洗命令：`ruff check app/ --no-cache --output-format=concise`（全清）与 `ruff check tests/ --no-cache`
+  - 规则选型：pyproject.toml 定义 select E/W/F/I/S/B/UP/RET/C4/RUF；ignore BLE001(防御性宽 except)、B008(FastAPI Depends)、E402(延迟导入)、E501(格式化器管行长)、E712(SQLAlchemy 布尔列需 ==True/False)、RUF012(类级只读常量)、S105/107/108/603/607(沙箱设计误报)、ASYNC109/220/221/230/240/251(建议类)、DTZ007(解析用户日期无时区)、RUF001/002/003(中文全角标点在中文注释/文档/字符串正常)
+  - per-file-ignores：tests/* = S101/S105/S106/S311；**/__init__.py = F401(公共 API 重导出)
+  - UP042(str,Enum→StrEnum) 迁移安全前提：枚举值均小写等于成员名且无 str() 依赖 name 的代码；迁移后必须全量回归
+  - 沙箱 eval/exec(有 AST 白名单+受限 builtins) 加 `# noqa: S307/S102` 保留设计意图，勿盲改；S311/S324 用于抖动/采样/缓存键等非加密场景加 noqa
+  - DTZ004/005/006 修复统一模式：`datetime.fromtimestamp(ts, UTC)` 或 `now(UTC)`，DB 时间戳保持 naive 用 `.replace(tzinfo=None)` 防 aware/naive 混合 bug；file_index mtime 比较是真实时区 bug（原 fromtimestamp 用本地时区与 DB naive UTC 比较错位）
+  - RUF006 fire-and-forget create_task 统一 `_spawn` helper：模块级 `_background_tasks: set[asyncio.Task]` + done_callback discard，防任务被 GC 回收
+  - S306 tempfile.mktemp 改 `mkstemp`(fd 关闭后路径已占位，无 TOCTOU 竞态)
+  - 教训：`for t_name, t_config in ...` 中 B007 报 t_config 未用时，只改未用的那个变量为 `_`，循环体内若引用了 `t_name` 必须保留原名，误改 `_` 会导致 F821 回归
