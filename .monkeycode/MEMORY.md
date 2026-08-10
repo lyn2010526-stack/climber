@@ -100,3 +100,15 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - git 收口完成：node_modules/__pycache__/data//logs/ 已 git rm --cached 解除跟踪（磁盘保留），agent-engine/climber-repo/climber_legacy_conflict 嵌套仓库 gitlink 指针已移除，.gitignore 已扩充覆盖
   - 后端 uvicorn 用 timeout 7200（此前 3600 到期导致服务退出），后台 term 526/527 常驻
   - 全量回归基线（3 修复后）：1487 passed / 50 skipped / 0 failed，约 13 分钟
+
+[批量修复盘点与并行子任务经验]
+- Date: 2026-08-10
+- Context: Agent 并行派发 5 个修复子任务后主线程整合复验时发现
+- Category: 排错调试
+- Instructions:
+  - 盘点经验：前端问题用 `npx tsc -b --noEmit`（tsconfig.json 是 solution 聚合文件 files:[]，`-p tsconfig.json` 是假象）；后端用 curl 冒烟 + 路由顺序扫描脚本（静态路由须在泛化路由前）
+  - 后端已修复：settings/prompt_templates 双重 prefix 404（router 自带 prefix 与 __init__.py include prefix 叠加，去掉 router 内部 prefix）；reasoning /modes//history 被 /{trace_id} 吞（移到泛化路由前）；WebSocket 403（websocket 参数必须标 WebSocket 类型不能 Any）；CORS env 不生效（list 字段需 validation_alias + Annotated[list, NoDecode] 防 JSON 解码）；缺 ollama_base_url 字段；FRONTEND_DIR 自动探测 frontend/frontend-react
+  - 前端已修复：ChatInterface whileTap undefined 导致 TS2375 阻塞 build；ChatPage alert→sonner toast；FloatingPermissionDialog 改 vaul Drawer；移动端新增 MobileSessionDrawer（vaul 会话列表/新建/切换，权威数据源是 useSessions() 而非 workspace store 的本地 sessions）
+  - 后端补齐前端 3 个缺失 API：/tasks/{id}/cancel、/eval/datasets/seed-builtin、/eval/datasets/{id}/run（都在 generic.py 内新增，注意前端契约：均无 body、返回结构对齐现有端点）
+  - 死代码处理用归档到 /tmp/opencode/dead_code_archive/ 而非删除（遵守 no-delete 规则）：前端 styles/ + 6 个文件/组件，后端 10 个未挂载 router（agents/eval/models/search/stats/tools/traces/plugins/users/websocket，均与 generic.py 重复且无任何引用）；前端 UI 组件（Alert/Dialog/Select 等）虽字面 0 引用但有子组件/泛型引用，必须全名核验勿误删
+  - 路由验证：OpenAPI paths 数（TestClient /openapi.json）是权威口径，app.routes 数不包含 include 的子 router；WebSocket 路由不出现在 OpenAPI paths 属正常
