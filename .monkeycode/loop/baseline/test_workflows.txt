@@ -1,0 +1,16 @@
+.....................                                                    [100%]
+=============================== warnings summary ===============================
+agent-engine/app/models/users.py:136
+  /workspace/agent-engine/app/models/users.py:136: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class UserResponse(BaseModel):
+
+agent-engine/app/models/users.py:210
+  /workspace/agent-engine/app/models/users.py:210: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ApiKeyResponse(BaseModel):
+
+agent-engine/app/core/vector_memory.py:48
+  /workspace/agent-engine/app/core/vector_memory.py:48: DeprecationWarning: The class _DefaultEmbeddingWrapper does not implement __init__. This will be required in a future version.
+    self._ef = _DefaultEmbeddingWrapper()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+21 passed, 3 warnings in 10.00s

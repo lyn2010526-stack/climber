@@ -1,0 +1,46 @@
+...                                                                      [100%]
+=============================== warnings summary ===============================
+agent-engine/app/models/users.py:136
+  /workspace/agent-engine/app/models/users.py:136: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class UserResponse(BaseModel):
+
+agent-engine/app/models/users.py:210
+  /workspace/agent-engine/app/models/users.py:210: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ApiKeyResponse(BaseModel):
+
+agent-engine/app/core/vector_memory.py:48
+  /workspace/agent-engine/app/core/vector_memory.py:48: DeprecationWarning: The class _DefaultEmbeddingWrapper does not implement __init__. This will be required in a future version.
+    self._ef = _DefaultEmbeddingWrapper()
+
+tests/test_multi_agent.py::test_fork_single_subagent
+  /workspace/tests/test_multi_agent.py:37: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    result = await orchestrator.fork(task="Write a function", context={"lang": "python"})
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_multi_agent.py::test_coordinate_parallel_tasks
+  /workspace/agent-engine/app/engine/multi_agent.py:79: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    result = await self.fork(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_multi_agent.py::test_team_collaboration
+  /workspace/agent-engine/app/engine/multi_agent.py:96: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    plan_result = await self.fork(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_multi_agent.py::test_team_collaboration
+  /workspace/agent-engine/app/engine/multi_agent.py:105: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    work_result = await self.fork(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_multi_agent.py::test_team_collaboration
+  /workspace/agent-engine/app/engine/multi_agent.py:114: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+    review_result = await self.fork(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+3 passed, 8 warnings in 2.76s

@@ -1,0 +1,83 @@
+....F...                                                                 [100%]
+=================================== FAILURES ===================================
+_____________________________ test_health_endpoint _____________________________
+
+client = <starlette.testclient.TestClient object at 0x7fa097cce6d0>
+
+    def test_health_endpoint(client: TestClient):
+        """Test /health returns proper format with dependency checks."""
+        resp = client.get('/health')
+        assert resp.status_code == 200
+        data = resp.json()
+>       assert data['status'] == 'ok'
+E       AssertionError: assert 'degraded' == 'ok'
+E         
+E         - ok
+E         + degraded
+
+tests/test_integration.py:264: AssertionError
+---------------------------- Captured stderr setup -----------------------------
+2026-08-06T06:51:05.402688Z [info     ] Agent Engine starting          [app.main] debug=False log_dir=/workspace/agent-engine/logs version=0.2.0
+2026-08-06T06:51:05.417141Z [info     ] Database ready                 [app.main] backend=sqlite journal_mode=wal
+2026-08-06T06:51:05.420668Z [info     ] Admin user created automatically [app.core.auth_manager] username=admin
+2026-08-06T06:51:05.421180Z [info     ] Auth system initialized        [app.main] admin_password_set=True admin_username=admin
+2026-08-06T06:51:05.424264Z [info     ] Redis connected                [app.storage.cache]
+2026-08-06T06:51:05.424495Z [info     ] Redis cache connected          [app.main]
+2026-08-06T06:51:05.426109Z [info     ] watchdog_started               [app.core.watchdog] tasks=['scheduler', 'auto_loop']
+2026-08-06T06:51:05.426378Z [info     ] Task scheduler started under watchdog [app.main]
+2026-08-06T06:51:05.426585Z [info     ] memory_guardian_started        [app.core.memory_guardian] limit_mb=2048
+2026-08-06T06:51:05.426779Z [info     ] Telegram bot disabled (no TELEGRAM_BOT_TOKEN) [app.services.telegram_bot]
+2026-08-06T06:51:05.427187Z [info     ] supervised_task_completed      [app.core.watchdog] name=auto_loop
+------------------------------ Captured log setup ------------------------------
+INFO     app.main:main.py:117 {'debug': False, 'version': '0.2.0', 'log_dir': '/workspace/agent-engine/logs', 'event': 'Agent Engine starting', 'level': 'info', 'logger': 'app.main', 'timestamp': '2026-08-06T06:51:05.402688Z'}
+INFO     app.main:main.py:125 {'backend': 'sqlite', 'journal_mode': 'wal', 'event': 'Database ready', 'level': 'info', 'logger': 'app.main', 'timestamp': '2026-08-06T06:51:05.417141Z'}
+INFO     app.core.auth_manager:auth_manager.py:125 {'username': 'admin', 'event': 'Admin user created automatically', 'level': 'info', 'logger': 'app.core.auth_manager', 'timestamp': '2026-08-06T06:51:05.420668Z'}
+INFO     app.main:main.py:131 {'admin_username': 'admin', 'admin_password_set': True, 'event': 'Auth system initialized', 'level': 'info', 'logger': 'app.main', 'timestamp': '2026-08-06T06:51:05.421180Z'}
+INFO     app.storage.cache:cache.py:27 {'event': 'Redis connected', 'level': 'info', 'logger': 'app.storage.cache', 'timestamp': '2026-08-06T06:51:05.424264Z'}
+INFO     app.main:main.py:141 {'event': 'Redis cache connected', 'level': 'info', 'logger': 'app.main', 'timestamp': '2026-08-06T06:51:05.424495Z'}
+INFO     app.core.watchdog:watchdog.py:83 {'tasks': ['scheduler', 'auto_loop'], 'event': 'watchdog_started', 'level': 'info', 'logger': 'app.core.watchdog', 'timestamp': '2026-08-06T06:51:05.426109Z'}
+INFO     app.main:main.py:157 {'event': 'Task scheduler started under watchdog', 'level': 'info', 'logger': 'app.main', 'timestamp': '2026-08-06T06:51:05.426378Z'}
+INFO     app.core.memory_guardian:memory_guardian.py:129 {'limit_mb': 2048, 'event': 'memory_guardian_started', 'level': 'info', 'logger': 'app.core.memory_guardian', 'timestamp': '2026-08-06T06:51:05.426585Z'}
+INFO     app.services.telegram_bot:telegram_bot.py:41 {'event': 'Telegram bot disabled (no TELEGRAM_BOT_TOKEN)', 'level': 'info', 'logger': 'app.services.telegram_bot', 'timestamp': '2026-08-06T06:51:05.426779Z'}
+INFO     app.core.watchdog:watchdog.py:101 {'name': 'auto_loop', 'event': 'supervised_task_completed', 'level': 'info', 'logger': 'app.core.watchdog', 'timestamp': '2026-08-06T06:51:05.427187Z'}
+--------------------------- Captured stderr teardown ---------------------------
+2026-08-06T06:51:07.308011Z [info     ] watchdog_stopped               [app.core.watchdog]
+2026-08-06T06:51:07.308899Z [info     ] Agent Engine shutting down     [app.main]
+---------------------------- Captured log teardown -----------------------------
+INFO     app.core.watchdog:watchdog.py:168 {'event': 'watchdog_stopped', 'level': 'info', 'logger': 'app.core.watchdog', 'timestamp': '2026-08-06T06:51:07.308011Z'}
+INFO     app.main:main.py:207 {'event': 'Agent Engine shutting down', 'level': 'info', 'logger': 'app.main', 'timestamp': '2026-08-06T06:51:07.308899Z'}
+=============================== warnings summary ===============================
+agent-engine/app/models/users.py:136
+  /workspace/agent-engine/app/models/users.py:136: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class UserResponse(BaseModel):
+
+agent-engine/app/models/users.py:210
+  /workspace/agent-engine/app/models/users.py:210: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ApiKeyResponse(BaseModel):
+
+agent-engine/app/core/vector_memory.py:48
+  /workspace/agent-engine/app/core/vector_memory.py:48: DeprecationWarning: The class _DefaultEmbeddingWrapper does not implement __init__. This will be required in a future version.
+    self._ef = _DefaultEmbeddingWrapper()
+
+../usr/local/lib/python3.11/dist-packages/fastapi/testclient.py:1
+  /usr/local/lib/python3.11/dist-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/test_integration.py::test_full_chat_flow_with_tool
+  /usr/local/lib/python3.11/dist-packages/chromadb/api/types.py:945: DeprecationWarning: The class _DefaultEmbeddingWrapper does not implement get_config(). This will be required in a future version.
+    or self.get_config() is NotImplemented
+
+tests/test_integration.py::test_full_chat_flow_with_tool
+tests/test_integration.py::test_list_tools_endpoint
+tests/test_integration.py::test_delete_session
+tests/test_integration.py::test_unauthorized_access
+tests/test_integration.py::test_health_endpoint
+tests/test_integration.py::test_session_clear_endpoint
+tests/test_integration.py::test_platform_stats_endpoint
+  /workspace/agent-engine/app/storage/cache.py:38: DeprecationWarning: Call to deprecated close. (Use aclose() instead) -- Deprecated since version 5.0.1.
+    await _redis_client.close()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_integration.py::test_health_endpoint - AssertionError: asse...
+1 failed, 7 passed, 12 warnings in 59.58s

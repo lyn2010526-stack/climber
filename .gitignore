@@ -4,7 +4,31 @@ data/.secret_key
 # Python cache
 __pycache__/
 *.pyc
+.pytest_cache/
 
 # Node
 node_modules/
 dist/
+
+# Runtime data & logs (gitignored, never tracked)
+data/
+logs/
+*.db
+*.db-shm
+*.db-wal
+
+# Nested repo copies / legacy directories
+agent-engine/
+climber-repo/
+climber_legacy_conflict/
+app_legacy_conflict/
+
+# Misc local helper scripts
+run_*.sh
+run_*.py
+start_*.sh
+start_*.py
+test-guardian.service
+test_dashboard.py
+watch_tests.py
+.coveragerc.init
