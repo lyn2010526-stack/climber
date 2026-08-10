@@ -403,7 +403,7 @@ class PregelEngine:
             parent_id=self._checkpoint_ids[-1] if self._checkpoint_ids else None,
             metadata={"thread_id": config.get("thread_id", "default")},
         )
-        cp_config = await self._checkpointer.put(
+        await self._checkpointer.put(
             CheckpointConfig(thread_id=config.get("thread_id", "default")),
             checkpoint,
         )

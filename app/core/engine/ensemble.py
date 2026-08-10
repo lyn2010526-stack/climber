@@ -94,8 +94,6 @@ class EnsembleEngine:
         Returns:
             ConsensusResult with consensus decision
         """
-        start = time.monotonic()
-
         # Execute all runners in parallel
         tasks = [r(task) for r in runners[:self._max_models]]
         responses = await asyncio.gather(*tasks, return_exceptions=True)

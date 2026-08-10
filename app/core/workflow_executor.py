@@ -187,7 +187,6 @@ def validate_workflow_graph(
     warnings: list[str] = []
 
     node_ids = {n["id"] for n in nodes}
-    node_types = {n["id"]: n.get("type", "") for n in nodes}
 
     # Check for input and output nodes
     has_input = any(n.get("type") == "input" for n in nodes)

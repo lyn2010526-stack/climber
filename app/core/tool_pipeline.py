@@ -12,18 +12,6 @@ from app.core.tool_prioritizer import ToolPrioritizer
 logger = structlog.get_logger()
 
 
-class ToolExecutionResult:
-    """Result of a single tool execution."""
-
-    def __init__(self, tool_name: str, result: str, error: str | None, success: bool, arguments: dict | None = None, tool_call_id: str = ""):
-        self.tool_name = tool_name
-        self.result = result
-        self.error = error
-        self.success = success
-        self.arguments = arguments or {}
-        self.tool_call_id = tool_call_id
-
-
 class ToolExecutionPipeline:
     """Orchestrates tool execution with prioritization, debugging, and approval."""
 

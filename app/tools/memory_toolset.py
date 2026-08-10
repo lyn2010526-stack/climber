@@ -144,8 +144,6 @@ class MemoryToolSet:
         if not query:
             return "Error: query is required"
         
-        limit = int(arguments.get("limit", 5))
-        
         try:
             result = await self.orchestrator.retrieve_for_query(
                 user_id=user_id,

@@ -207,7 +207,7 @@ async def export_workflow_get(workflow_id: str, format: str = "json") -> Respons
     return _build_export_response(workflow, workflow_id, fmt)
 
 
-def _build_export_response(workflow: Workflow, workflow_id: str, fmt: str) -> Response:
+def _build_export_response(workflow: WorkflowModel, workflow_id: str, fmt: str) -> Response:
     if fmt == "yaml":
         try:
             import yaml  # type: ignore[import-untyped]

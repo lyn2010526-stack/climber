@@ -11,11 +11,14 @@ import time
 from enum import Enum
 from typing import Any, AsyncIterator
 
+import structlog
 from pydantic import BaseModel
 
 from app.core import AgentEvent, AgentEventType
 from app.core.agent_engine import AgentEngine, AgentSession
 from app.core.goal_guard import CorrectionStrategy, GoalGuard
+
+logger = structlog.get_logger()
 
 
 class TaskStatus(str, Enum):
@@ -153,7 +156,7 @@ class AutonomousEngine:
             yield AgentEvent(type=AgentEventType.ERROR, data={"error": "Max concurrent sessions reached"})
             return
 
-        guard = self._get_or_create_guard(session, task)
+        _ = self._get_or_create_guard(session, task)
 
         async for event in self.agent_engine.run(session, task):
             yield event

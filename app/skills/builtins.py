@@ -389,8 +389,6 @@ async def skill_git_master(
     message: str = "",
 ) -> str:
     """Git Workflow Manager: branch strategy, PR analysis, conflict resolution."""
-    import asyncio
-
     commands = {
         "status": "git status",
         "log": "git log --oneline --graph -20",

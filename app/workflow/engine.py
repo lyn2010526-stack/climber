@@ -486,11 +486,6 @@ class WorkflowEngine:
                 collection = []
 
         results: list[Any] = []
-        safe_builtins = {
-            "len": len, "str": str, "int": int, "float": float,
-            "bool": bool, "list": list, "dict": dict, "range": range,
-            "enumerate": enumerate, "abs": abs, "round": round,
-        }
 
         for i, item in enumerate(collection[:max_iterations]):
             local_vars = {item_var: item, "index": i, **inputs}

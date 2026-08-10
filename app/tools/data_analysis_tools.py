@@ -596,7 +596,6 @@ async def data_profile(
         file_type: csv, json, xlsx, auto.
     """
     pd = _load_pandas()
-    np = _load_numpy()
     if pd is None:
         return "Error: pandas is not installed."
 

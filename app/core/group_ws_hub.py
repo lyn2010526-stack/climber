@@ -12,7 +12,7 @@ from typing import Any
 import structlog
 
 from app.storage import async_session
-from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupMessage
+from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupMessage, AgentGroupTask
 from sqlalchemy import select
 
 logger = structlog.get_logger()

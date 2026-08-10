@@ -25,6 +25,8 @@ from app.core.persistent_memory import PersistentMemoryService
 from app.core.task_state_machine import TaskState, TaskStateMachine
 from app.core.tool_prioritizer import ToolPrioritizer
 from app.models.openai_adapter import OpenAIAdapter
+from app.models.registry import ModelRegistry
+from app.tools import ToolRegistry
 
 
 class AgentSession:

@@ -244,6 +244,7 @@ class SQLiteCheckpointStore:
             return result.rowcount > 0
 
     async def put_writes(self, checkpoint_id: str, writes: list[PendingWrite]) -> None:
+        from app.storage.database import CheckpointRecord
         metadata: dict[str, Any] = {}
         async with async_session() as db:
             record = (
@@ -287,7 +288,7 @@ class SQLiteCheckpointStore:
             raw = metadata.get("pending_writes", [])
             return [PendingWrite(**item) for item in raw]
 
-    def _to_checkpoint(self, record: "CheckpointRecord") -> CheckpointData:
+    def _to_checkpoint(self, record: Any) -> CheckpointData:
         try:
             messages = json.loads(record.messages or "[]")
         except Exception:

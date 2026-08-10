@@ -102,7 +102,6 @@ class ReviewerExecutor:
             return
 
         full_output = ""
-        total_tokens = 0
 
         try:
             async for chunk in adapter.stream_chat(messages=messages):
@@ -115,8 +114,6 @@ class ReviewerExecutor:
                         delta=chunk.content,
                         avatar=member.avatar_url,
                     )
-                if chunk.tokens_used:
-                    total_tokens = chunk.tokens_used
         except Exception as e:
             logger.error("Reviewer execution failed", error=str(e), member=member.name)
             yield CollabEvent(

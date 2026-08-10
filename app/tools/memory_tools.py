@@ -72,7 +72,7 @@ async def remember_user_fact(fact: str, category: str = "general") -> str:
     if not fact:
         return "Error: fact is required"
     try:
-        profile = await persistent_memory.add_user_fact(
+        await persistent_memory.add_user_fact(
             user_id="default-user",
             fact=fact,
             category=category,

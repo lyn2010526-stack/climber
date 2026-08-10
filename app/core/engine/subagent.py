@@ -189,7 +189,6 @@ class SubagentManager:
             parent.child_ids.append(spec.task_id)
 
         # Acquire concurrency slot
-        acquired = self._semaphore.locked()
         try:
             await asyncio.wait_for(self._semaphore.acquire(), timeout=5.0)
         except asyncio.TimeoutError:

@@ -289,21 +289,6 @@ class StaticAnalyzer:
 
 # --- SafetyPipeline (统一入口) --------------------------------------
 
-from dataclasses import dataclass, field
-from typing import Any
-
-from app.core.safety_pipeline_base import (
-    SafetyResult,
-    ExecutionResult,
-    RiskLevel,
-    StaticAnalyzer,
-)
-
-import structlog
-
-logger = structlog.get_logger()
-
-
 @dataclass
 class SafetyConfig:
     workdir: str = "/workspace"

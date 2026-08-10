@@ -9,7 +9,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Callable, Coroutine
 
-from app.core import AgentEventType
+from app.core import AgentEventType, SessionStatus
 from app.core.exceptions import InvalidStateTransitionError
 
 
@@ -47,10 +47,8 @@ TRANSITIONS: dict[TaskState, list[TaskState]] = {
 }
 
 
-def to_session_status(state: TaskState) -> "SessionStatus":
+def to_session_status(state: TaskState) -> SessionStatus:
     """Map TaskState to the view-level SessionStatus enum."""
-    from app.core import SessionStatus
-
     _mapping: dict[TaskState, SessionStatus] = {
         TaskState.PENDING: SessionStatus.PENDING,
         TaskState.ASSIGNED: SessionStatus.RUNNING,

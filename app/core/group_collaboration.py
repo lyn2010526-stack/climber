@@ -17,7 +17,7 @@ import importlib
 import json
 import structlog
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any, AsyncIterator, Callable
 
 from app.core import AgentEvent, AgentEventType, ChatResult
 from app.core.agent_engine import AgentEngine, AgentSession
@@ -25,6 +25,7 @@ from app.core.api_key_crypto import decrypt_api_key
 from app.core.di import resolve as di_resolve
 from app.core.group_ws_hub import group_ws_hub
 from app.core.task_dag import TaskDAG, TaskNode, HandoffMessage
+from app.models.registry import ModelRegistry
 from app.storage import async_session
 from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupTask, AgentGroupMemory, AgentGroupTaskCheckpoint
 from fastapi import HTTPException

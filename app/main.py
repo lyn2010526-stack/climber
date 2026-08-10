@@ -112,7 +112,7 @@ async def lifespan(app: FastAPI):
     log_dir = configure_logging(settings.app_log_level)
     logger.info("Agent Engine starting", debug=settings.app_debug, version=_APP_VERSION, log_dir=str(log_dir))
 
-    with ScopeContext("app_lifespan") as scope:
+    with ScopeContext("app_lifespan"):
         _register_core_services()
 
         try:

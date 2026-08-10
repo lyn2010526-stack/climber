@@ -951,8 +951,6 @@ async def import_plugin(request: Request) -> dict[str, Any]:
 
 # ─── Groups ─────────────────────────────────────────────────────────────────
 
-from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupTask
-
 
 def _group_dict(g: AgentGroup, member_count: int = 0, members: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     return {
@@ -1364,8 +1362,6 @@ async def cancel_task(task_id: str) -> dict[str, Any]:
 
 
 # ─── Scheduler ──────────────────────────────────────────────────────────────
-
-from app.storage.models_platform import Workflow
 
 _SCHEDULER_MARKET = [
     {"name": "daily-summary", "cron": "0 9 * * *", "description": "Daily summary at 9am"},
@@ -1788,7 +1784,6 @@ async def ws_group_endpoint(websocket: WebSocket, group_id: str):
     await websocket.accept()
 
     # Read token from query params (optional for now, required in future)
-    token = websocket.query_params.get("token", "")
     user_id = websocket.query_params.get("user_id", "guest")
 
     # Validate group exists

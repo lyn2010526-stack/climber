@@ -66,9 +66,6 @@ class SkillRegistry:
     def get_handler(self, skill_id: str) -> Callable | None:
         return self._handlers.get(skill_id)
 
-    def list_skills(self) -> list[dict[str, Any]]:
-        return [skill.model_dump() for skill in self._skills.values()]
-
     def list_by_category(self, category: SkillCategory) -> list[SkillInfo]:
         return [s for s in self._skills.values() if s.category == category]
 
