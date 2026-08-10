@@ -8,7 +8,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+import structlog
+
 from app.tools import ToolRegistry
+
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -78,6 +82,29 @@ class ParallelToolExecutor:
             if not allowed:
                 duration = (asyncio.get_event_loop().time() - start) * 1000
                 return ToolExecutionResult(tool_name=name, error=f"blocked by sandbox: {reason}", success=False, duration_ms=duration, tool_call_id=tool_call_id)
+        # Human-in-the-loop approval for sensitive tools
+        if self._session is not None:
+            try:
+                from app.core.approval import approval_manager, tool_requires_approval
+                if tool_requires_approval(name, arguments):
+                    req = await approval_manager.request(
+                        session_id=getattr(self._session, "session_id", "default"),
+                        tool_name=name,
+                        arguments=arguments,
+                    )
+                    decision = await approval_manager.wait_for_decision(req.id, timeout=300)
+                    if decision is None or decision.status.value != "approved":
+                        duration = (asyncio.get_event_loop().time() - start) * 1000
+                        return ToolExecutionResult(
+                            tool_name=name,
+                            error=f"permission denied: {getattr(decision, 'reason', None) or 'rejected by user'}",
+                            success=False,
+                            duration_ms=duration,
+                            arguments=arguments,
+                            tool_call_id=tool_call_id,
+                        )
+            except Exception as e:
+                logger.warning("parallel.approval_check_failed", tool=name, error=str(e))
         try:
             result = await asyncio.wait_for(
                 self._registry.execute(name, arguments),

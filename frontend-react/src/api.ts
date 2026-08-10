@@ -179,25 +179,6 @@ class ApiClient {
     });
   }
 
-  // Crews
-  async listCrews() {
-    return this.request<any[]>('/crews/');
-  }
-
-  async createCrew(data: any) {
-    return this.request<any>('/crews/', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async runCrew(id: string, inputs?: Record<string, string>) {
-    return this.request<any>(`/crews/${id}/run`, {
-      method: 'POST',
-      body: JSON.stringify(inputs || {}),
-    });
-  }
-
   // API Keys
   async listApiKeys() {
     return this.request<any[]>('/api-keys');
@@ -218,16 +199,6 @@ class ApiClient {
   async getStats() {
     return this.request<any>('/stats');
   }
-
-  // Skills toggle
-  async enableSkill(skillId: string) {
-    return this.request<any>(`/skills/${skillId}/enable`, { method: 'POST' });
-  }
-
-  async disableSkill(skillId: string) {
-    return this.request<any>(`/skills/${skillId}/disable`, { method: 'POST' });
-  }
-
   // Cluster / Groups
   async createCluster(requirements: string) {
     return this.request<any>('/cluster/create', {
@@ -255,10 +226,6 @@ class ApiClient {
     return this.request<any>(`/groups/${id}`);
   }
 
-  async deleteGroup(id: string) {
-    return this.request<any>(`/groups/${id}`, { method: 'DELETE' });
-  }
-
   async addGroupMember(groupId: string, data: Record<string, any>) {
     return this.request<any>(`/groups/${groupId}/members`, {
       method: 'POST',
@@ -268,13 +235,6 @@ class ApiClient {
 
   async removeGroupMember(groupId: string, memberId: string) {
     return this.request<any>(`/groups/${groupId}/members/${memberId}`, { method: 'DELETE' });
-  }
-
-  async updateGroupMember(groupId: string, memberId: string, data: Record<string, any>) {
-    return this.request<any>(`/groups/${groupId}/members/${memberId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
   }
 
   async listGroupMessages(groupId: string, limit = 50) {
@@ -304,10 +264,6 @@ class ApiClient {
     return this.request<any>('/plugins/marketplace');
   }
 
-  async getPluginCategories() {
-    return this.request<any[]>('/plugins/categories');
-  }
-
   async installPlugin(id: string, config?: Record<string, any>) {
     return this.request<any>(`/plugins/${id}/install`, {
       method: 'POST',
@@ -327,10 +283,6 @@ class ApiClient {
     return this.request<any>(`/plugins/${id}/disable`, { method: 'POST' });
   }
 
-  async getPluginStatus(id: string) {
-    return this.request<any>(`/plugins/${id}/status`);
-  }
-
   async importPlugin(sourceUrl: string, name?: string, type?: string) {
     return this.request<any>('/plugins/import', {
       method: 'POST',
@@ -340,18 +292,6 @@ class ApiClient {
 
   async listSkills() {
     return this.request<any[]>('/skills');
-  }
-
-  async installSkill(data: { name: string; description?: string; category?: string }) {
-    return this.request<any>('/skills', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async toggleSkill(skillId: string, enabled: boolean) {
-    const path = enabled ? `/skills/${skillId}/enable` : `/skills/${skillId}/disable`;
-    return this.request<any>(path, { method: 'POST' });
   }
 
   async sendNotification(title: string, message: string) {
@@ -390,10 +330,6 @@ class ApiClient {
     });
   }
 
-  async getReasoningTrace(traceId: string) {
-    return this.request<any>(`/reason/${traceId}`);
-  }
-
   // Feedback
   async submitFeedback(messageId: string, rating: string, reason?: string) {
     const params = new URLSearchParams({ message_id: messageId, rating });
@@ -416,10 +352,6 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
-  }
-
-  async getReasoningFeedback(traceId: string) {
-    return this.request<any[]>(`/reason/${traceId}/feedback`);
   }
 
   async listReasoningHistory(limit = 50) {
@@ -518,13 +450,6 @@ class ApiClient {
     });
   }
 
-  async runAutonomousSkill(data: any) {
-    return this.request<any>('/skills/autonomous/run', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
   // MCP
   async listMCPServers() {
     return this.request<any[]>('/mcp/servers');
@@ -576,17 +501,6 @@ class ApiClient {
     });
   }
 
-  async getPermissionConfig() {
-    return this.request<any>('/permissions/config');
-  }
-
-  async updatePermissionConfig(config: Record<string, any>) {
-    return this.request<any>('/permissions/config', {
-      method: 'PUT',
-      body: JSON.stringify(config),
-    });
-  }
-
   // Terminal sandbox
   async executeCommand(command: string, timeout?: number) {
     return this.request<any>('/terminal/execute', {
@@ -602,26 +516,6 @@ class ApiClient {
 
   async clearNotifications() {
     return this.request<any>('/notifications/history', { method: 'DELETE' });
-  }
-
-  // Approvals
-  async listApprovals(sessionId?: string) {
-    const q = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : '';
-    return this.request<any>(`/approvals/pending${q}`);
-  }
-
-  async approveRequest(requestId: string, reason = '') {
-    return this.request<any>('/approvals/approve', {
-      method: 'POST',
-      body: JSON.stringify({ request_id: requestId, reason }),
-    });
-  }
-
-  async rejectRequest(requestId: string, reason = '') {
-    return this.request<any>('/approvals/reject', {
-      method: 'POST',
-      body: JSON.stringify({ request_id: requestId, reason }),
-    });
   }
 
 }

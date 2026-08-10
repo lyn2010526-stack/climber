@@ -2,8 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MobileTasksPage } from '../MobileTasksPage';
 
-vi.mock('../../TaskMonitorPage', () => ({
-  default: () => <div>Tasks Content</div>,
+vi.mock('../../../api', () => ({
+  api: {
+    listTasks: vi.fn().mockResolvedValue([]),
+    createTask: vi.fn(),
+    cancelTask: vi.fn(),
+  },
 }));
 
 describe('MobileTasksPage', () => {
@@ -12,8 +16,8 @@ describe('MobileTasksPage', () => {
     expect(screen.getByText('任务监控')).toBeDefined();
   });
 
-  it('renders TaskMonitorPage content', () => {
+  it('renders empty state', () => {
     render(<MobileTasksPage />);
-    expect(screen.getByText('Tasks Content')).toBeDefined();
+    expect(screen.getByText(/暂无任务/)).toBeDefined();
   });
 });

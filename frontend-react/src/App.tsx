@@ -38,6 +38,9 @@ import { MobileFactoryPage } from './pages/mobile/MobileFactoryPage';
 import { MobileClusterPage } from './pages/mobile/MobileClusterPage';
 import { MobileTasksPage } from './pages/mobile/MobileTasksPage';
 import { MobileAgentsPage } from './pages/mobile/MobileAgentsPage';
+import { MobileNotificationsPage } from './pages/mobile/MobileNotificationsPage';
+import { MobileWorkflowsPage } from './pages/mobile/MobileWorkflowsPage';
+import { MobileSchedulerPage } from './pages/mobile/MobileSchedulerPage';
 
 type Page = 'chat' | 'agents' | 'workflows' | 'crews' | 'apikeys' | 'skills' | 'notifications' | 'doctor' | 'mcp' | 'stats' | 'factory' | 'plugins' | 'scheduler' | 'cluster' | 'traces' | 'eval' | 'cost' | 'plugin-manage' | 'settings' | 'tasks' | 'task-history' | 'reasoning' | 'reasoning-history' | 'terminal';
 
@@ -152,6 +155,9 @@ export default function App() {
         case 'cluster': return <MobileClusterPage />;
         case 'tasks': return <MobileTasksPage />;
         case 'agents': return <MobileAgentsPage />;
+        case 'notifications': return <MobileNotificationsPage />;
+        case 'workflows': return <MobileWorkflowsPage />;
+        case 'scheduler': return <MobileSchedulerPage />;
         case 'settings': return <SettingsPage />;
         default: return <MobileChatPage />;
       }
