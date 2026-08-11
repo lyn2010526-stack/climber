@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import re
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -329,6 +328,72 @@ class AgentEngine:
         except Exception:
             logger.debug("agent_engine.suppressed", exc_info=True)
 
+    def _model_retry_settings(self) -> tuple[int, float]:
+        import os
+        max_retries = int(os.environ.get("MODEL_MAX_RETRIES", "2"))
+        delay = float(os.environ.get("MODEL_RETRY_DELAY", "2.0"))
+        return max_retries, delay
+
+    async def _stream_with_retry(
+        self,
+        adapter: Any,
+        messages: list[dict],
+        tools: list[dict] | None,
+    ) -> tuple[list[tuple[str, list[dict]]], int]:
+        max_retries, delay = self._model_retry_settings()
+        attempt = 0
+        while True:
+            events: list[tuple[str, list[dict]]] = []
+            total_tokens = 0
+            chunks = 0
+            try:
+                async for chunk in adapter.stream_chat(messages=messages, tools=tools):
+                    chunks += 1
+                    content = chunk.content or ""
+                    tool_calls = list(chunk.tool_calls) if chunk.tool_calls else []
+                    events.append((content, tool_calls))
+                    if hasattr(chunk, 'usage') and chunk.usage:
+                        total_tokens = chunk.usage
+                    elif hasattr(chunk, 'tokens_used') and chunk.tokens_used:
+                        total_tokens = chunk.tokens_used
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                if attempt >= max_retries or chunks > 0:
+                    logger.warning("llm_stream_failed", attempt=attempt, chunks=chunks, error=str(exc))
+                    raise
+                attempt += 1
+                logger.warning("llm_stream_retrying", attempt=attempt, chunks=chunks, error=str(exc))
+                await asyncio.sleep(delay * attempt)
+                continue
+            if chunks == 0 and attempt < max_retries:
+                attempt += 1
+                logger.warning("llm_stream_empty_retrying", attempt=attempt)
+                await asyncio.sleep(delay * attempt)
+                continue
+            return events, total_tokens
+
+    async def _chat_with_retry(
+        self,
+        adapter: Any,
+        messages: list[dict],
+        tools: list[dict] | None,
+    ) -> ChatResult:
+        max_retries, delay = self._model_retry_settings()
+        attempt = 0
+        while True:
+            try:
+                return await adapter.chat(messages=messages, tools=tools)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                if attempt >= max_retries:
+                    logger.warning("llm_chat_failed", attempt=attempt, error=str(exc))
+                    raise
+                attempt += 1
+                logger.warning("llm_chat_retrying", attempt=attempt, error=str(exc))
+                await asyncio.sleep(delay * attempt)
+
     async def run(self, session: AgentSession, message: str) -> AsyncIterator[AgentEvent]:
         # Acquire session-level lock to prevent concurrent requests
         if session.session_id not in self._session_locks:
@@ -436,43 +501,22 @@ class AgentEngine:
 
                 try:
                     if adapter.capabilities.streaming:
+                        events, total_tokens = await self._stream_with_retry(adapter, session.messages, tools or None)
                         full_content = ""
                         accumulated_tool_calls = []
-                        total_tokens = 0
-                        async for chunk in adapter.stream_chat(messages=session.messages, tools=tools or None):
+                        for delta_content, tool_calls in events:
                             if session._stop_requested:
                                 yield AgentEvent(type=AgentEventType.STOPPED, data={"reason": "user_requested"})
                                 await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
                                 return
-                            if chunk.content:
-                                full_content += chunk.content
-                                yield AgentEvent(type=AgentEventType.TEXT, data={"content": chunk.content})
-                            for tc in chunk.tool_calls:
-                                idx = tc.get("index", 0) if "index" in tc else 0
-                                while len(accumulated_tool_calls) <= idx:
-                                    accumulated_tool_calls.append({
-                                        "id": "",
-                                        "type": "function",
-                                        "function": {"name": "", "arguments": ""},
-                                    })
-                                if tc.get("id"):
-                                    accumulated_tool_calls[idx]["id"] = tc["id"]
-                                if tc.get("function", {}).get("name"):
-                                    accumulated_tool_calls[idx]["function"]["name"] = tc["function"]["name"]
-                                if tc.get("function", {}).get("arguments"):
-                                    new_args = tc["function"]["arguments"]
-                                    if isinstance(new_args, dict):
-                                        new_args = json.dumps(new_args, ensure_ascii=False)
-                                    elif not isinstance(new_args, str):
-                                        new_args = str(new_args)
-                                    accumulated_tool_calls[idx]["function"]["arguments"] += new_args
-                            if hasattr(chunk, 'usage') and chunk.usage:
-                                total_tokens = chunk.usage
-                            elif hasattr(chunk, 'tokens_used') and chunk.tokens_used:
-                                total_tokens = chunk.tokens_used
+                            if delta_content:
+                                full_content += delta_content
+                                yield AgentEvent(type=AgentEventType.TEXT, data={"content": delta_content})
+                            if tool_calls:
+                                accumulated_tool_calls = tool_calls
                         result = ChatResult(content=full_content, tool_calls=accumulated_tool_calls, finish_reason="stop", tokens_used=total_tokens)
                     else:
-                        result = await adapter.chat(messages=session.messages, tools=tools or None)
+                        result = await self._chat_with_retry(adapter, session.messages, tools or None)
                 except Exception as e:
                     if session._stop_requested:
                         yield AgentEvent(type=AgentEventType.ERROR, data={"error": str(e)})

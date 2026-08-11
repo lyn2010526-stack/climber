@@ -1,5 +1,9 @@
 # Sensitive runtime secrets
 data/.secret_key
+.env
+
+# Runtime-generated agent debug memory
+.agent_debug_memory.json
 
 # Python cache
 __pycache__/

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 from collections.abc import AsyncIterator
 from typing import Any
@@ -17,6 +18,24 @@ from app.models import ModelAdapter, ModelCapability
 logger = structlog.get_logger()
 
 
+def _default_extra_body() -> dict[str, Any]:
+    """Read extra request body params from MODEL_EXTRA_PARAMS (JSON).
+
+    Used to inject provider-specific fields (e.g. reasoning_effort, thinking)
+    into every request for this adapter. Keep the environment-variable path.
+    """
+    raw = os.environ.get("MODEL_EXTRA_PARAMS", "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        logger.warning("model_extra_params_invalid_json", raw=raw[:200])
+    return {}
+
+
 class OpenAIAdapter(ModelAdapter):
     """Adapter for OpenAI Chat Completions API and compatible providers."""
 
@@ -28,11 +47,15 @@ class OpenAIAdapter(ModelAdapter):
         api_key: str,
         base_url: str = "https://api.openai.com/v1",
         capabilities: ModelCapability | None = None,
+        extra_body: dict[str, Any] | None = None,
     ):
         self._model_id = model_id
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._capabilities = capabilities
+        if extra_body is None:
+            extra_body = _default_extra_body()
+        self._extra_body = extra_body or {}
 
     def _build_payload(
         self,
@@ -48,6 +71,7 @@ class OpenAIAdapter(ModelAdapter):
         }
         if tools:
             payload["tools"] = tools
+        payload.update(self._extra_body)
         payload.update(kwargs)
         return payload
 
@@ -55,7 +79,7 @@ class OpenAIAdapter(ModelAdapter):
     def get_client(cls) -> httpx.AsyncClient:
         if cls._client is None:
             cls._client = httpx.AsyncClient(
-                timeout=httpx.Timeout(120.0, connect=10.0),
+                timeout=httpx.Timeout(float(os.environ.get("MODEL_HTTP_TIMEOUT", "600")), connect=10.0),
                 limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
             )
         return cls._client
@@ -130,7 +154,7 @@ class OpenAIAdapter(ModelAdapter):
             headers["Authorization"] = f"Bearer {self._api_key}"
 
         total_timeout = kwargs.get("timeout", 120)
-        idle_timeout = kwargs.get("idle_timeout", 15)
+        idle_timeout = kwargs.get("idle_timeout", int(os.environ.get("MODEL_STREAM_IDLE_TIMEOUT", "120")))
         accumulated_content = ""
         accumulated_tool_calls: list[dict] = []
         finish_reason = None

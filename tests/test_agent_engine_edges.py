@@ -185,3 +185,80 @@ async def test_context_compression_on_long_input(engine: AgentEngine):
     events = await _collect(engine, session, "a" * 1000)
     assert any(e.type == AgentEventType.CONTEXT_COMPRESSION for e in events)
     assert events[-1].type == AgentEventType.DONE
+
+
+class _RetryThenSucceedStream(StreamingFakeModelAdapter):
+    def __init__(self, failures: int = 1):
+        super().__init__(responses=[ChatResult(content="recovered", finish_reason="stop")], stream_chunks=[["recovered"]])
+        self._failures_remaining = failures
+        self._call_count = 0
+
+    async def stream_chat(self, messages, tools=None, **kwargs):
+        self._call_count += 1
+        if self._failures_remaining > 0:
+            self._failures_remaining -= 1
+            raise RuntimeError("transient stream failure")
+        async for c in super().stream_chat(messages, tools=tools, **kwargs):
+            yield c
+
+
+class _RetryThenSucceedChat(FakeModelAdapter):
+    def __init__(self, failures: int = 1):
+        super().__init__(responses=[ChatResult(content="recovered", finish_reason="stop")])
+        self._failures_remaining = failures
+
+    async def chat(self, messages, tools=None, **kwargs):
+        if self._failures_remaining > 0:
+            self._failures_remaining -= 1
+            raise RuntimeError("transient chat failure")
+        return ChatResult(content="recovered", finish_reason="stop")
+
+
+@pytest.mark.asyncio
+async def test_stream_transient_failure_retries_and_succeeds(engine: AgentEngine, monkeypatch):
+    monkeypatch.setenv("MODEL_MAX_RETRIES", "3")
+    monkeypatch.setenv("MODEL_RETRY_DELAY", "0")
+    adapter = _RetryThenSucceedStream(failures=2)
+    _register(engine, adapter)
+    session = _session(engine)
+    events = await _collect(engine, session, "hi")
+    assert events[-1].type == AgentEventType.DONE
+    assert session.status == SessionStatus.COMPLETED
+    text = "".join(e.data.get("content", "") for e in events if e.type == AgentEventType.TEXT)
+    assert "recovered" in text
+    assert adapter._failures_remaining == 0
+
+
+@pytest.mark.asyncio
+async def test_chat_transient_failure_retries_and_succeeds(engine: AgentEngine, monkeypatch):
+    monkeypatch.setenv("MODEL_MAX_RETRIES", "3")
+    monkeypatch.setenv("MODEL_RETRY_DELAY", "0")
+    adapter = _RetryThenSucceedChat(failures=2)
+    _register(engine, adapter)
+    session = _session(engine)
+    events = await _collect(engine, session, "hi")
+    assert events[-1].type == AgentEventType.DONE
+    assert session.status == SessionStatus.COMPLETED
+    text = "".join(e.data.get("content", "") for e in events if e.type == AgentEventType.TEXT)
+    assert text == "recovered"
+
+
+@pytest.mark.asyncio
+async def test_stream_empty_result_retries(engine: AgentEngine, monkeypatch):
+    monkeypatch.setenv("MODEL_MAX_RETRIES", "2")
+    monkeypatch.setenv("MODEL_RETRY_DELAY", "0")
+    calls = {"n": 0}
+
+    class _EmptyThenOk(StreamingFakeModelAdapter):
+        async def stream_chat(self, messages, tools=None, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return
+            yield ChatResult(content="ok", tool_calls=[], finish_reason="stop")
+
+    adapter = _EmptyThenOk(responses=[ChatResult(content="ok", finish_reason="stop")], stream_chunks=[["ok"]])
+    _register(engine, adapter)
+    session = _session(engine)
+    events = await _collect(engine, session, "hi")
+    assert events[-1].type == AgentEventType.DONE
+    assert calls["n"] == 2
