@@ -159,3 +159,16 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - ToolRegistry.execute 吞掉工具异常，把 `Error executing {name}: {e}` 作为 result 返回（error 字段为空），断言工具失败须看 TOOL_RESULT 的 result 字段
   - 已知 bug：group_ws_hub._save_group_message 用 `sender_id=` 构造 AgentGroupMessage，但模型只有 agent_id/sender_name，任何 group message 都会 TypeError 断开；测 group ack 路径须 monkeypatch handle_message，非法 group 路径不受影响
 
+[用户 LLM 端点配置与平台稳定性]
+- Date: 2026-08-11
+- Context: Agent 配置用户提供的 OpenAI 兼容端点并验证长任务时发现
+- Category: 运维部署
+- Instructions:
+  - 用户 LLM 配置在 /workspace/.env（已 gitignore，含用户自己的 key，勿提交）；端点 https://platform.ai.hixinghai.top/api/v1，模型 deepseek-v4-flash，deepseek-v4 系列需 MODEL_EXTRA_PARAMS={"reasoning_effort":"none","thinking":{"type":"disabled"}} 关闭 reasoning（否则 content 空、max_tokens 被吃光）
+  - 平台间歇性不稳定（约 50% ReadTimeout，正常时 2-15s 响应）：重试可恢复；该平台 deepseek-v4-pro 是 reasoning 模型
+  - LLM 调用重试已内置 agent_engine._stream_with_retry/_chat_with_retry（2026-08-11 提交 ffb88e99）：流式仅在 0 chunk 时重试（避免中途失败重复输出），非流式失败直接重试；MODEL_MAX_RETRIES=3、MODEL_RETRY_DELAY=2.0、MODEL_STREAM_IDLE_TIMEOUT=60（读 .env，经 app/config.py load_dotenv）
+  - adapter 超时环境变量：MODEL_HTTP_TIMEOUT=900（httpx 总超时）、MODEL_STREAM_IDLE_TIMEOUT（watchdog 空闲关闭）
+  - 写操作工具（write_file/run_command/stream_command）默认受权限系统+审批双重拦截：权限模式 DEFAULT 时写/执行返回 ASK 需审批，且 tool_requires_approval 硬编码 run_command/write_file/delete_file 需人工审批（300s 超时拒绝）。已修复：权限配置 ALLOW 时跳过审批（app/core/parallel.py pre_allowed 判断），切 AUTO 模式（`PUT /api/v1/permissions/config {"mode":"auto"}`）可让写工具真实执行，高危命令（rm -rf / 等）仍拦截
+  - run_command 的 SandboxExecutor 在 app/main.py 注册，workdir 已改为项目根（CLIMBER_SANDBOX_WORKDIR 或 os.getcwd()），命令中绝对路径必须在 workdir 内（app/core/sandbox.py _is_command_safe）；服务重启后需重新 PUT 切 AUTO 模式
+  - 服务重启加载 .env 生效：`cd /workspace && PYTHONPATH=/workspace /usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000`
+

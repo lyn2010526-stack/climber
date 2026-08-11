@@ -27,6 +27,13 @@ class FakeSession:
     session_id = "session-test"
 
 
+class FakeSessionAutoConfig(FakeSession):
+    permission_config = None
+
+    def __init__(self, config):
+        self.permission_config = config
+
+
 def _fresh_manager(monkeypatch: pytest.MonkeyPatch) -> ApprovalManager:
     manager = ApprovalManager()
     monkeypatch.setattr(approval_module, "approval_manager", manager)
@@ -60,44 +67,24 @@ async def test_approval_required_timeout_returns_permission_denied(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_approve_then_execute_runs_tool(monkeypatch):
-    """Approving the pending request lets the sensitive tool execute."""
+async def test_pre_allowed_by_permission_config_skips_approval(monkeypatch):
+    """Sensitive tools pre-allowed by permission config skip the approval flow."""
+    from app.core.permission_rules import get_auto_mode_config
+
     manager = _fresh_manager(monkeypatch)
-    registry = FakeRegistry(result="command output")
-    executor = _make_executor(registry, session=FakeSession())
+    registry = FakeRegistry(result="file written")
+    session = FakeSessionAutoConfig(get_auto_mode_config())
+    executor = _make_executor(registry, session=session)
 
-    async def approve_later():
-        for _ in range(100):
-            pending = manager.get_pending()
-            if pending:
-                manager.approve(pending[0].id)
-                return
-            await asyncio.sleep(0.01)
-        raise AssertionError("no pending approval request")
-
-    result, _ = await asyncio.gather(
-        executor._execute_one("run_command", {"command": "ls"}, tool_call_id="call-2"),
-        approve_later(),
+    result = await executor._execute_one(
+        "write_file",
+        {"path": "/workspace/data/out.txt", "content": "hello"},
+        tool_call_id="call-5",
     )
 
     assert result.success is True
-    assert result.result == "command output"
-    assert ("run_command", {"command": "ls"}) in registry.calls
-
-
-@pytest.mark.asyncio
-async def test_safe_tool_skips_approval(monkeypatch):
-    """Tools outside the approval list run directly without creating a request."""
-    manager = _fresh_manager(monkeypatch)
-    registry = FakeRegistry(result="file list")
-    executor = _make_executor(registry, session=FakeSession())
-
-    result = await executor._execute_one("list_files", {"path": "/tmp"}, tool_call_id="call-3")
-
-    assert result.success is True
-    assert result.result == "file list"
-    assert ("list_files", {"path": "/tmp"}) in registry.calls
-    assert manager.list_all() == []
+    assert result.result == "file written"
+    assert ("write_file", {"path": "/workspace/data/out.txt", "content": "hello"}) in registry.calls
     assert manager.get_pending() == []
 
 

@@ -737,13 +737,8 @@ class AgentEngine:
         return False
 
     def get_permission_config(self) -> Any:
-        """Get the default permission configuration."""
-        try:
-            from app.core.permission_rules import get_default_config
-            return get_default_config()
-        except Exception:
-            from app.core.permission_rules import PermissionConfig
-            return PermissionConfig()
+        """Get the current default permission configuration."""
+        return self._default_permission_config
 
     def update_permission_config(self, config: Any) -> None:
         """Update the default permission configuration for new sessions."""

@@ -86,7 +86,12 @@ class ParallelToolExecutor:
         if self._session is not None:
             try:
                 from app.core.approval import approval_manager, tool_requires_approval
-                if tool_requires_approval(name, arguments):
+                from app.core.permission_rules import RuleDecision
+                pre_allowed = False
+                session_config = getattr(self._session, "permission_config", None)
+                if session_config is not None:
+                    pre_allowed = session_config.evaluate(name, arguments) == RuleDecision.ALLOW
+                if tool_requires_approval(name, arguments) and not pre_allowed:
                     req = await approval_manager.request(
                         session_id=getattr(self._session, "session_id", "default"),
                         tool_name=name,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -18,6 +19,11 @@ from app.config import settings
 from app.core.di import ScopeContext
 from app.core.di import register as di_register
 from app.core.di import resolve as di_resolve
+
+
+def _default_workdir() -> str:
+    """Resolve the workspace root that the sandbox should confine commands to."""
+    return os.environ.get("CLIMBER_SANDBOX_WORKDIR") or os.getcwd()
 from app.core.interfaces import IExecutor, IModelAdapter, ISkillRegistry, IToolRegistry
 from app.core.logging_setup import configure_logging, get_recent_logs, write_crash_dump
 from app.core.memory_guardian import get_memory_guardian
@@ -74,7 +80,7 @@ def _register_core_services() -> None:
     skill_registry = SkillRegistry()
     tool_registry_instance = global_tool_registry
     mcp_registry_instance = MCPRegistry()
-    sandbox = SandboxExecutor(SandboxConfig())
+    sandbox = SandboxExecutor(SandboxConfig(workdir=_default_workdir()))
     agent_engine = AgentEngine(model_registry=model_registry, tool_registry=tool_registry_instance)
     auto_loop_engine = AutoLoopEngine()
     task_scheduler = TaskScheduler()
