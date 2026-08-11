@@ -14,14 +14,35 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import shlex
+import shutil
 import subprocess
+from collections.abc import Callable
+from typing import Any
 
 import structlog
 
 from app.tools import tool
 
 logger = structlog.get_logger()
+
+
+def _pyautogui_available() -> bool:
+    """Whether to prefer pyautogui for desktop interaction.
+
+    pyautogui import can block indefinitely under some headless X setups,
+    so this stays disabled; the xdotool/scrot fallbacks are reliable.
+    """
+    return False
+
+
+async def _pyautogui_call(call: Callable[[], Any], timeout: float = 8.0) -> Any:
+    """Run a blocking pyautogui call in a worker thread with a hard timeout."""
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(call), timeout=timeout)
+    except Exception:
+        raise
 
 
 @tool(description="Run a shell command with system access. Subject to sandbox restrictions.")
@@ -43,6 +64,8 @@ async def native_run(command: str, timeout: int = 120, cwd: str | None = None) -
             "diff", "file", "which", "env", "git", "curl", "wget",
             "tar", "zip", "unzip", "chmod", "chown", "ln", "tee", "awk",
             "sed", "xargs", "jq", "make", "pytest",
+            "ffmpeg", "ffprobe", "ffplay", "convert", "magick", "identify",
+            "xdotool", "import", "scrot", "xdg-open", "google-chrome",
         }
         if base not in allowed_binaries:
             return f"Command rejected: '{base}' is not in the allowed binaries list"
@@ -133,8 +156,30 @@ async def open_browser(url: str) -> str:
     """Open URL in default browser."""
     try:
         import webbrowser
-        webbrowser.open(url)
-        return f"Opened {url} in browser"
+        if webbrowser.open(url):
+            return f"Opened {url} in browser"
+        if os.environ.get("DISPLAY"):
+            for opener in ("xdg-open",):
+                try:
+                    subprocess.run([opener, url], check=True, timeout=15)
+                    return f"Opened {url} via {opener}"
+                except (FileNotFoundError, subprocess.CalledProcessError):
+                    continue
+        for chrome in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
+            if shutil.which(chrome):
+                proc = await asyncio.create_subprocess_exec(
+                    chrome, "--headless=new", "--no-sandbox", "--disable-gpu",
+                    "--no-first-run", "--dump-dom", url,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                try:
+                    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=60)
+                except TimeoutError:
+                    proc.kill()
+                    return f"Opened {url} in headless {chrome} (dump timed out)"
+                return f"Opened {url} in headless {chrome} (DOM: {len(stdout.decode('utf-8', errors='replace'))} chars)"
+        return f"Error: no browser available to open {url}"
     except Exception as e:
         return f"Error: {e!s}"
 
@@ -143,15 +188,22 @@ async def open_browser(url: str) -> str:
 async def take_screenshot(output_path: str = "/tmp/screenshot.png") -> str:
     """Take a screenshot."""
     try:
-        try:
-            import pyautogui
-            img = pyautogui.screenshot()
-            img.save(output_path)
-            return output_path
-        except ImportError:
-            pass
-        subprocess.run(["screencapture", output_path], check=True, timeout=10)
-        return output_path
+        if _pyautogui_available():
+            try:
+                img = await _pyautogui_call(lambda: __import__("pyautogui").screenshot())
+                img.save(output_path)
+                return output_path
+            except Exception as e:
+                logger.debug("native.screenshot_pyautogui_unavailable", error=str(e))
+        if not os.environ.get("DISPLAY"):
+            return "Error taking screenshot: no DISPLAY available (run under Xvfb or a real desktop)"
+        for cmd in (["scrot", output_path], ["import", "-window", "root", output_path], ["screencapture", output_path]):
+            try:
+                subprocess.run(cmd, check=True, timeout=15)
+                return output_path
+            except (FileNotFoundError, subprocess.CalledProcessError):
+                continue
+        return "Error taking screenshot: no working screenshot tool found"
     except Exception as e:
         return f"Error taking screenshot: {e!s}"
 
@@ -160,11 +212,16 @@ async def take_screenshot(output_path: str = "/tmp/screenshot.png") -> str:
 async def click_mouse(x: int, y: int, button: str = "left") -> str:
     """Click mouse at coordinates."""
     try:
-        import pyautogui
-        pyautogui.click(x, y, button=button)
+        if _pyautogui_available():
+            try:
+                await _pyautogui_call(lambda: __import__("pyautogui").click(x, y, button=button))
+                return f"Clicked ({x}, {y})"
+            except Exception as e:
+                logger.debug("native.click_pyautogui_unavailable", error=str(e))
+        if not os.environ.get("DISPLAY"):
+            return "Error clicking: no DISPLAY available (run under Xvfb or a real desktop)"
+        subprocess.run(["xdotool", "mousemove", str(x), str(y), "click", "1" if button == "left" else "3"], check=True, timeout=10)
         return f"Clicked ({x}, {y})"
-    except ImportError:
-        return "pyautogui not installed. Install with: pip install pyautogui"
     except Exception as e:
         return f"Error: {e!s}"
 
@@ -173,11 +230,16 @@ async def click_mouse(x: int, y: int, button: str = "left") -> str:
 async def type_text(text: str, interval: float = 0.02) -> str:
     """Type text using keyboard."""
     try:
-        import pyautogui
-        pyautogui.typewrite(text, interval=interval)
+        if _pyautogui_available():
+            try:
+                await _pyautogui_call(lambda: __import__("pyautogui").typewrite(text, interval=interval))
+                return f"Typed {len(text)} chars"
+            except Exception as e:
+                logger.debug("native.type_pyautogui_unavailable", error=str(e))
+        if not os.environ.get("DISPLAY"):
+            return "Error typing: no DISPLAY available (run under Xvfb or a real desktop)"
+        subprocess.run(["xdotool", "type", "--delay", str(int(interval * 1000)), text], check=True, timeout=15)
         return f"Typed {len(text)} chars"
-    except ImportError:
-        return "pyautogui not installed. Install with: pip install pyautogui"
     except Exception as e:
         return f"Error: {e!s}"
 
@@ -194,8 +256,16 @@ async def process_video(command: str) -> str:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
-        output = stderr.decode("utf-8", errors="replace")[:5000]
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+        output = ""
+        out_text = stdout.decode("utf-8", errors="replace").strip()
+        if out_text:
+            output += out_text[:3000]
+        err_text = stderr.decode("utf-8", errors="replace").strip()
+        if err_text:
+            if output:
+                output += "\n"
+            output += err_text[:2000]
         return output if output else "Video processing completed"
     except TimeoutError:
         return "TIMEOUT: Video processing exceeded 5 minutes"
@@ -267,8 +337,6 @@ async def download_file(url: str, output_path: str) -> str:
 
 
 # ─── Security validation helpers ──────────────────────────────────────────
-
-import re
 
 # Dangerous shell patterns that indicate command injection
 _DANGEROUS_SHELL_PATTERNS = [

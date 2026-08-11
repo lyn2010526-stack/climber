@@ -81,7 +81,10 @@ async def chat(
                         api_key = decrypt_api_key(key_row.api_key_encrypted or "")
                         if key_row.base_url:
                             base_url = key_row.base_url
-                tool_ids = list(getattr(agent_row, "tool_ids", None) or [])
+                agent_tools = list(getattr(agent_row, "tool_ids", None) or [])
+                from app.tools import tool_registry as _chat_tool_registry
+                registered = {t.name for t in _chat_tool_registry.list_tools()}
+                tool_ids = sorted(set(agent_tools) | registered)
         except HTTPException:
             raise
         except Exception as e:

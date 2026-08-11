@@ -231,4 +231,7 @@ def tool(
 
 def register_builtins() -> None:
     """Import and register all built-in tools."""
-    from app.tools import builtins
+    from app.tools import (
+        builtins,
+        native_tools,
+    )

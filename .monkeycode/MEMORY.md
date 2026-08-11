@@ -172,3 +172,15 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - run_command 的 SandboxExecutor 在 app/main.py 注册，workdir 已改为项目根（CLIMBER_SANDBOX_WORKDIR 或 os.getcwd()），命令中绝对路径必须在 workdir 内（app/core/sandbox.py _is_command_safe）；服务重启后需重新 PUT 切 AUTO 模式
   - 服务重启加载 .env 生效：`cd /workspace && PYTHONPATH=/workspace /usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000`
 
+[原生桌面与媒体工具能力]
+- Date: 2026-08-11
+- Context: Agent 补齐"打开电脑/剪辑视频"能力时发现并修复
+- Category: 环境配置
+- Instructions:
+  - native_tools.py 的桌面/媒体工具（native_run/native_read_file/native_write_file/open_browser/take_screenshot/click_mouse/type_text/process_video/process_image/download_file）此前从未注册（register_builtins 只导入 builtins），现已注册（app/tools/__init__.py register_builtins 导入 native_tools）；存量 agent 的 tool_ids 是创建时固化的旧列表，chat.py 加载 session 时已改为 agent tool_ids 与当前注册工具做并集，新工具自动可用
+  - headless 环境桌面能力依赖：ffmpeg、imagemagick(convert)、xvfb、scrot、xdotool、chromium 已安装；Xvfb 需启动 `Xvfb :99 -screen 0 1280x800x24 -ac`，服务需带 `DISPLAY=:99 XAUTHORITY=/tmp/opencode/.Xauthority` 启动才能用桌面工具
+  - pyautogui 在 Xvfb 下 import/截图会阻塞，已禁用（_pyautogui_available 恒 False），截图/点击/输入走 scrot/xdotool 兜底；无 DISPLAY 时返回明确错误
+  - open_browser 无 DISPLAY 时用 chromium `--headless=new --no-sandbox --no-first-run --dump-dom`（旧 --headless + --user-data-dir 会报 "Multiple targets not supported"），首次运行可能 ~40s
+  - process_video 已修复只读 stderr 的 bug（-version 等输出在 stdout），现合并 stdout+stderr
+  - 验证过的能力：process_video 剪辑视频真实落盘（e2e: sample.mp4 5s→cut.mp4 2s）、run_command 执行 ls、write_file 写文件
+
