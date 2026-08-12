@@ -9,7 +9,7 @@ export function WorkspaceLayout() {
   const rightPanelOpen = useWorkspaceStore(s => s.rightPanelOpen);
 
   return (
-    <div className="flex-1 flex flex-col bg-[#0A0A0F]">
+    <div className="flex-1 flex flex-col" style={{ backgroundColor: 'var(--color-bg-page)' }}>
       <ControlBar />
       <div className="flex-1 flex overflow-hidden">
         <SessionSidebar />
@@ -20,7 +20,7 @@ export function WorkspaceLayout() {
             </Panel>
             {rightPanelOpen && (
               <>
-                <Separator className="w-px bg-white/[0.06] hover:bg-[#3B82F6]/30 transition-colors duration-200 cursor-col-resize" />
+                <Separator className="w-px transition-colors duration-200 cursor-col-resize" style={{ backgroundColor: 'var(--color-border-subtle)' }} />
                 <Panel defaultSize={30} minSize={20} maxSize={40}>
                   <RightPanel />
                 </Panel>

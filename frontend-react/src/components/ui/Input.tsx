@@ -3,13 +3,13 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/utils';
 
 const inputVariants = cva(
-  'flex w-full rounded-lg border bg-surface-inset px-3 py-2 text-sm transition-all duration-200 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-50',
+  'flex w-full rounded-lg border px-3 py-2 text-sm transition-all duration-200 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50',
   {
     variants: {
       variant: {
-        default: 'border-border',
-        destructive: 'border-destructive focus-visible:ring-destructive',
-        success: 'border-success focus-visible:ring-success',
+        default: '',
+        destructive: '',
+        success: '',
       },
       inputSize: {
         sm: 'h-8 px-2.5 text-xs',
@@ -24,16 +24,34 @@ const inputVariants = cva(
   }
 );
 
+const variantStyles: Record<string, React.CSSProperties> = {
+  default: {
+    backgroundColor: 'var(--color-bg-surface-2)',
+    borderColor: 'var(--color-border-subtle)',
+    color: 'var(--color-text-primary)',
+  },
+  destructive: {
+    backgroundColor: 'var(--color-error-subtle)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    color: 'var(--color-error)',
+  },
+  success: {
+    backgroundColor: 'var(--color-success-subtle)',
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+    color: 'var(--color-success)',
+  },
+};
+
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement>, VariantProps<typeof inputVariants> {
   inputSize?: 'sm' | 'md' | 'lg' | null;
 }
 
-const Input = forwardRef<HTMLInputElement, InputProps>(({ className, variant, inputSize, type, ...props }, ref) => {
+const Input = forwardRef<HTMLInputElement, InputProps>(({ className, variant, inputSize, style, ...props }, ref) => {
   return (
     <input
-      type={type}
       className={cn(inputVariants({ variant, inputSize, className }))}
       ref={ref}
+      style={{ ...variantStyles[variant || 'default'], ...style }}
       {...props}
     />
   );

@@ -11,10 +11,8 @@ import { ThinkingIndicator } from './ThinkingIndicator';
 import { FloatingPermissionDialog } from './FloatingPermissionDialog';
 import type { PermissionRequest } from './FloatingPermissionDialog';
 
-
-  /* Streaming cursor - Reference: Claude / Vercel AI streaming */
   const StreamingCursor = () => (
-    <span className="inline-block w-[2px] h-4 ml-0.5 rounded-full bg-gradient-to-b from-[#5E6AD2] to-[#8B5CF6] animate-pulse" />
+    <span className="inline-block w-[2px] h-4 ml-0.5 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-accent)' }} />
   );
 
 interface ToolCall {
@@ -93,7 +91,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [messages, isLoading]);
 
-  /* Reference: Lobe UI EditableMessage - mode switching */
   const startEditing = useCallback((messageId: string, content: string) => {
     setEditContent(content);
     setEditState({ mode: 'edit', messageId });
@@ -131,41 +128,46 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [handleSubmit]);
 
-  /* Auto-grow textarea - Reference: Linear / Raycast input */
   const autoGrow = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const el = e.target;
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 200) + 'px';
   }, []);
 
-  /* Reference: Lobe UI ChatItem - Actions hover + layout mode */
   const renderMessageContent = (msg: Message) => {
     const isEditing = editState?.messageId === msg.id;
 
     if (isEditing && (editState.mode === 'edit' || editState.mode === 'modal')) {
       return (
         <div className={cn('flex gap-3 max-w-[85%]', msg.role === 'user' ? 'flex-row-reverse ml-auto' : '')}>
-          <div className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-blue-500 text-white w-9 h-9 shrink-0">
+          <div className="flex items-center justify-center rounded-xl w-9 h-9 shrink-0" style={{
+            background: 'linear-gradient(135deg, var(--color-accent), #8b5cf6)',
+            color: '#ffffff',
+          }}>
             <Edit3 size={16} />
           </div>
           <div className={cn('flex flex-col gap-2 min-w-0 flex-1')}>
-            <div className="px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-2xl focus-within:border-[#3B82F6]/40 transition-colors duration-200">
+            <div className="px-4 py-3 rounded-xl" style={{
+              backgroundColor: 'var(--color-bg-surface-2)',
+              border: '1px solid var(--color-border-default)',
+            }}>
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="w-full bg-transparent text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none resize-none"
+                className="w-full bg-transparent text-sm resize-none focus:outline-none"
+                style={{ color: 'var(--color-text-primary)' }}
                 rows={3}
                 autoFocus
               />
             </div>
             <div className="flex items-center gap-2">
-              <Button size="sm" onClick={saveEdit} className="rounded-xl">
+              <Button size="sm" onClick={saveEdit} className="rounded-lg">
                 <Check size={12} /> 保存
               </Button>
-              <Button size="sm" variant="ghost" onClick={cancelEdit} className="rounded-xl">
+              <Button size="sm" variant="ghost" onClick={cancelEdit} className="rounded-lg">
                 <X size={12} /> 取消
               </Button>
-              <Button size="sm" variant="ghost" onClick={openModal} className="rounded-xl">
+              <Button size="sm" variant="ghost" onClick={openModal} className="rounded-lg">
                 <Maximize2 size={12} />
               </Button>
             </div>
@@ -197,7 +199,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.9 }}
           className="flex gap-3 max-w-[85%]"
         >
-          <div className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-blue-500 text-white w-9 h-9 shrink-0">
+          <div className="flex items-center justify-center rounded-xl w-9 h-9 shrink-0" style={{
+            background: 'linear-gradient(135deg, var(--color-accent), #8b5cf6)',
+            color: '#ffffff',
+          }}>
             <Bot size={16} />
           </div>
           <div className="flex flex-col gap-2 min-w-0 flex-1">
@@ -272,12 +277,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center max-w-lg">
-              <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-[#5E6AD2]/20 to-[#8B5CF6]/20 flex items-center justify-center mx-auto mb-6 p-5" style={{ boxShadow: '0 0 40px rgba(94,106,210,0.15)' }}>
-                <Bot size={36} className="text-[#8B5CF6]" />
+              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5" style={{
+                background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15))',
+                boxShadow: '0 0 30px rgba(99,102,241,0.12)',
+              }}>
+                <Bot size={28} style={{ color: 'var(--color-accent)' }} />
               </div>
-              <h3 className="text-2xl font-bold text-white mb-3 tracking-tight">{emptyStateTitle}</h3>
-              <p className="text-[var(--color-text-secondary)] text-sm mb-8 leading-relaxed max-w-sm mx-auto">{emptyStateDescription}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md mx-auto">
+              <h3 className="text-xl font-semibold mb-2 tracking-tight" style={{ color: 'var(--color-text-primary)' }}>{emptyStateTitle}</h3>
+              <p className="text-sm mb-6 leading-relaxed max-w-sm mx-auto" style={{ color: 'var(--color-text-secondary)' }}>{emptyStateDescription}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-md mx-auto">
                 {suggestions.map((suggestion, idx) => (
                   <motion.button
                     key={idx}
@@ -285,10 +293,27 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     whileTap={{ scale: 0.96 }}
                     whileHover={{ scale: 1.02 }}
                     transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                    className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl text-sm text-[var(--color-text-secondary)] hover:border-[#5E6AD2]/40 hover:text-[var(--color-text-primary)] hover:bg-white/[0.06] transition-colors duration-200 text-left flex items-center gap-3"
+                    className="px-3.5 py-2.5 rounded-lg text-sm text-left flex items-center gap-2.5 transition-all duration-200"
+                    style={{
+                      backgroundColor: 'var(--color-bg-surface-2)',
+                      border: '1px solid var(--color-border-subtle)',
+                      color: 'var(--color-text-secondary)',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--color-border-accent)';
+                      e.currentTarget.style.color = 'var(--color-text-primary)';
+                      e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-3)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--color-border-subtle)';
+                      e.currentTarget.style.color = 'var(--color-text-secondary)';
+                      e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)';
+                    }}
                   >
-                    <span className="w-6 h-6 rounded-lg bg-[#5E6AD2]/10 flex items-center justify-center shrink-0">
-                      <span className="text-[10px] text-[#5E6AD2] font-bold">{idx + 1}</span>
+                    <span className="w-5 h-5 rounded-lg flex items-center justify-center shrink-0 text-[10px] font-bold"
+                      style={{ backgroundColor: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
+                    >
+                      {idx + 1}
                     </span>
                     {suggestion}
                   </motion.button>
@@ -297,7 +322,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             </div>
           </div>
         )}
-        <div className="space-y-5">
+        <div className="space-y-4">
           <AnimatePresence initial={false}>
             {messages.map(renderMessageContent)}
           </AnimatePresence>
@@ -308,7 +333,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
               className="flex gap-3 max-w-[85%]"
             >
-              <div className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500/50 to-blue-500/50 text-white/70 w-9 h-9 shrink-0">
+              <div className="flex items-center justify-center rounded-xl w-9 h-9 shrink-0"
+                style={{ backgroundColor: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
+              >
                 <Bot size={16} />
               </div>
               <div className="flex-1">
@@ -319,61 +346,55 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         </div>
       </div>
 
-       {/* Input Area */}
-       <form onSubmit={handleSubmit} className="border-t border-white/[0.04] p-4 md:p-5 bg-[#0F0F14]/90 backdrop-blur-xl">
-         <div className="flex gap-2.5 max-w-4xl mx-auto">
-           {isLoading ? (
-             <Button type="button" variant="destructive" size="icon" onClick={onStop} className="rounded-2xl">
-               <Square size={16} />
-             </Button>
-           ) : (
-             <>
-               <Button type="button" variant="ghost" size="icon" className="rounded-2xl text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">
-                 <span className="text-base leading-none">+</span>
-               </Button>
-               <div className="flex-1 flex flex-col">
-                 <div className="flex items-center gap-2">
-                   <textarea
-                     ref={inputRef}
-                     value={input}
-                     onChange={(e) => { setInput(e.target.value); autoGrow(e); }}
-                     onKeyDown={handleKeyDown}
-                     placeholder={placeholder}
-                     disabled={isLoading}
-                     className="flex-1 px-5 py-3 bg-white/[0.04] border border-white/[0.08] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[#5E6AD2]/40 focus:bg-white/[0.06] transition-all duration-200 resize-none min-h-[44px]"
-                     rows={1}
-                   />
-                 </div>
-                 <div className="flex items-center justify-between mt-2 px-1">
-                   <div className="flex items-center gap-2">
-                     <kbd className="text-[10px] px-1.5 py-0.5 rounded-md font-mono" style={{
-                       backgroundColor: 'var(--color-bg-surface-3)',
-                       color: 'var(--color-text-muted)',
-                       border: '1px solid var(--color-border-subtle)'
-                     }}>⌘K</kbd>
-                     <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>命令面板</span>
-                   </div>
-                   {input.startsWith('/') && (
-                     <div className="flex items-center gap-2">
-                       <span className="text-[10px]" style={{ color: 'var(--color-accent)' }}>斜杠命令模式</span>
-                     </div>
-                   )}
-                 </div>
-               </div>
-               <motion.button
+      {/* Input Area */}
+      <form onSubmit={handleSubmit} className="p-3 md:p-4"
+        style={{
+          borderTop: '1px solid var(--color-border-subtle)',
+          backgroundColor: 'rgba(17, 17, 19, 0.85)',
+          backdropFilter: 'blur(20px)',
+        }}
+      >
+        <div className="flex gap-2 max-w-4xl mx-auto">
+          {isLoading ? (
+            <Button type="button" variant="destructive" size="icon" onClick={onStop} className="rounded-lg">
+              <Square size={14} />
+            </Button>
+          ) : (
+            <>
+              <div className="flex-1 flex items-end gap-2 rounded-lg px-3" style={{
+                backgroundColor: 'var(--color-bg-surface-2)',
+                border: '1px solid var(--color-border-subtle)',
+              }}>
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => { setInput(e.target.value); autoGrow(e); }}
+                  onKeyDown={handleKeyDown}
+                  placeholder={placeholder}
+                  disabled={isLoading}
+                  className="flex-1 py-2.5 bg-transparent text-sm resize-none focus:outline-none min-h-[36px] max-h-[200px]"
+                  style={{ color: 'var(--color-text-primary)' }}
+                  rows={1}
+                />
+                <motion.button
                   type="submit"
                   disabled={!input.trim()}
-                   whileTap={input.trim() ? { scale: 0.9 } : { scale: 1 }}
-                   whileHover={input.trim() ? { scale: 1.05 } : { scale: 1 }}
+                  whileTap={input.trim() ? { scale: 0.9 } : { scale: 1 }}
+                  whileHover={input.trim() ? { scale: 1.05 } : { scale: 1 }}
                   transition={{ type: 'spring', stiffness: 500, damping: 20 }}
-                  className="flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-[#5E6AD2] to-[#8B5CF6] text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-[#5E6AD2]/20 hover:shadow-[#5E6AD2]/30 transition-shadow"
+                  className="flex items-center justify-center w-8 h-8 rounded-lg mb-1.5 shrink-0 transition-all duration-200"
+                  style={{
+                    backgroundColor: input.trim() ? 'var(--color-accent)' : 'var(--color-bg-surface-3)',
+                    color: input.trim() ? '#ffffff' : 'var(--color-text-muted)',
+                  }}
                 >
-                  <Send size={16} />
+                  <Send size={14} />
                 </motion.button>
-             </>
-           )}
-         </div>
-       </form>
+              </div>
+            </>
+          )}
+        </div>
+      </form>
 
       {/* Edit Drawer */}
       <Drawer.Root
@@ -385,21 +406,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         <Drawer.Portal>
           <Drawer.Overlay className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md" />
           <Drawer.Content
-            className="fixed inset-x-0 bottom-0 z-[60] mx-auto flex max-h-[85vh] w-full max-w-xl flex-col rounded-t-3xl outline-none"
+            className="fixed inset-x-0 bottom-0 z-[60] mx-auto flex max-h-[85vh] w-full max-w-xl flex-col rounded-t-2xl outline-none"
             style={{
               backgroundColor: 'var(--color-bg-surface-1)',
               borderTop: '1px solid var(--color-border-subtle)',
               paddingBottom: 'env(safe-area-inset-bottom, 0px)',
             }}
           >
-            <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-white/[0.15]" />
-            <div className="flex items-center justify-between px-5 pt-3 pb-2 border-b border-white/[0.06]">
-              <h3 className="text-lg font-semibold text-white tracking-tight">编辑消息</h3>
+            <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full" style={{ backgroundColor: 'var(--color-bg-surface-3)' }} />
+            <div className="flex items-center justify-between px-5 pt-3 pb-2" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+              <h3 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>编辑消息</h3>
               <div className="flex items-center gap-2">
-                <Button size="sm" onClick={saveEdit} className="rounded-xl">
+                <Button size="sm" onClick={saveEdit} className="rounded-lg">
                   <Check size={14} /> 保存
                 </Button>
-                <Button size="sm" variant="ghost" onClick={cancelEdit} className="rounded-xl">
+                <Button size="sm" variant="ghost" onClick={cancelEdit} className="rounded-lg">
                   <X size={14} />
                 </Button>
               </div>
@@ -408,7 +429,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="w-full h-48 bg-white/[0.04] border border-white/[0.08] rounded-2xl p-4 text-[var(--color-text-primary)] text-sm leading-relaxed resize-none focus:outline-none focus:border-[#5E6AD2]/40"
+                className="w-full h-48 rounded-xl p-4 text-sm leading-relaxed resize-none focus:outline-none"
+                style={{
+                  backgroundColor: 'var(--color-bg-surface-2)',
+                  border: '1px solid var(--color-border-subtle)',
+                  color: 'var(--color-text-primary)',
+                }}
                 autoFocus
               />
             </div>

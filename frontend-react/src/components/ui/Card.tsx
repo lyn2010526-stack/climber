@@ -3,22 +3,22 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/utils';
 
 const cardVariants = cva(
-  'rounded-2xl border text-foreground transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]',
+  'rounded-xl border transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]',
   {
     variants: {
       variant: {
-        default: 'border-white/[0.06] bg-white/[0.02]',
-        elevated: 'border-white/[0.06] bg-white/[0.03] shadow-lg shadow-black/20 hover:shadow-xl hover:shadow-black/30 hover:border-white/[0.1]',
-        glass: 'border-white/[0.06] bg-white/[0.03] backdrop-blur-xl shadow-lg shadow-black/20',
-        outline: 'border-white/[0.08] bg-transparent hover:border-white/[0.12]',
-        bordered: 'border-white/10 bg-white/[0.02] hover:bg-white/[0.04]',
-        gradient: 'border-white/[0.06] bg-gradient-to-br from-white/[0.04] to-white/[0.01] hover:from-white/[0.06] hover:to-white/[0.02]',
+        default: '',
+        elevated: 'hover:shadow-lg',
+        glass: 'backdrop-blur-xl',
+        outline: 'bg-transparent',
+        bordered: '',
+        gradient: 'bg-gradient-to-br from-white/[0.04] to-white/[0.01]',
       },
       padding: {
         none: '',
         sm: 'p-3',
-        md: 'p-5',
-        lg: 'p-6',
+        md: 'p-4',
+        lg: 'p-5',
       },
     },
     defaultVariants: {
@@ -28,11 +28,20 @@ const cardVariants = cva(
   }
 );
 
+const variantStyles: Record<string, React.CSSProperties> = {
+  default: { backgroundColor: 'var(--color-bg-surface-1)', borderColor: 'var(--color-border-subtle)' },
+  elevated: { backgroundColor: 'var(--color-bg-surface-2)', borderColor: 'var(--color-border-subtle)' },
+  glass: { backgroundColor: 'var(--color-glass-bg)', borderColor: 'var(--color-glass-border)' },
+  outline: { backgroundColor: 'transparent', borderColor: 'var(--color-border-default)' },
+  bordered: { backgroundColor: 'var(--color-bg-surface-1)', borderColor: 'var(--color-border-strong)' },
+  gradient: { backgroundColor: 'var(--color-bg-surface-1)', borderColor: 'var(--color-border-subtle)' },
+};
+
 interface CardProps extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof cardVariants> {}
 
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, variant, padding, ...props }, ref) => {
-    return <div ref={ref} className={cn(cardVariants({ variant, padding }), className)} {...props} />;
+  ({ className, variant, padding, style, ...props }, ref) => {
+    return <div ref={ref} className={cn(cardVariants({ variant, padding }), className)} style={{ ...variantStyles[variant || 'default'], ...style }} {...props} />;
   }
 );
 Card.displayName = 'Card';
@@ -46,14 +55,14 @@ CardHeader.displayName = 'CardHeader';
 
 const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h3 ref={ref} className={cn('text-lg font-semibold leading-none tracking-tight text-white', className)} {...props} />
+    <h3 ref={ref} className={cn('text-base font-semibold leading-none tracking-tight', className)} style={{ color: 'var(--color-text-primary)' }} {...props} />
   )
 );
 CardTitle.displayName = 'CardTitle';
 
 const CardDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
   ({ className, ...props }, ref) => (
-    <p ref={ref} className={cn('text-sm text-[var(--color-text-muted)] leading-relaxed', className)} {...props} />
+    <p ref={ref} className={cn('text-sm leading-relaxed', className)} style={{ color: 'var(--color-text-muted)' }} {...props} />
   )
 );
 CardDescription.displayName = 'CardDescription';

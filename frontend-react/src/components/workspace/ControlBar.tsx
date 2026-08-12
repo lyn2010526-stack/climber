@@ -60,65 +60,96 @@ export function ControlBar() {
   };
 
   return (
-    <div className="h-12 bg-[#0F0F14]/80 backdrop-blur-2xl border-b border-white/10 flex items-center px-4 gap-2 shadow-sm shadow-white/5">
+    <div className="h-11 flex items-center px-3 gap-1.5" style={{
+      backgroundColor: 'rgba(17, 17, 19, 0.85)',
+      borderBottom: '1px solid var(--color-border-subtle)',
+      backdropFilter: 'blur(20px)',
+    }}>
       {/* Run controls */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5">
         <button
           onClick={handlePause}
           disabled={!activeSession || (!isRunning && !isPaused)}
-           className="p-2 rounded-2xl hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
-           title={isPaused ? '继续' : '暂停'}
+          className="p-1.5 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
+          style={{ color: 'var(--color-text-secondary)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
+          title={isPaused ? '继续' : '暂停'}
         >
-          {isPaused ? <Play size={14} /> : <Pause size={14} />}
+          {isPaused ? <Play size={13} /> : <Pause size={13} />}
         </button>
         <button
           onClick={handleStop}
           disabled={!activeSession}
-           className="p-2 rounded-2xl hover:bg-red-500/10 text-[var(--color-text-secondary)] hover:text-red-400 transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
+          className="p-1.5 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
+          style={{ color: 'var(--color-text-secondary)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.color = 'rgba(239, 68, 68, 0.9)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
           title="停止"
         >
-          <Square size={14} />
+          <Square size={13} />
         </button>
         <button
           onClick={handleSnapshot}
           disabled={!activeSession}
-           className="p-2 rounded-2xl hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
-           title="保存快照"
+          className="p-1.5 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
+          style={{ color: 'var(--color-text-secondary)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
+          title="保存快照"
         >
-          <Camera size={14} />
+          <Camera size={13} />
         </button>
         <button
-           className="p-2 rounded-2xl hover:bg-white/10 text-[var(--color-text-secondary)] hover:text-white transition-all duration-200 hover:scale-105 active:scale-95"
+          className="p-1.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
+          style={{ color: 'var(--color-text-secondary)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
           title="回滚到快照"
         >
-          <RotateCcw size={14} />
+          <RotateCcw size={13} />
         </button>
       </div>
 
       {/* Divider */}
-      <div className="w-px h-6 bg-white/10 mx-1" />
+      <div className="w-px h-5 mx-1" style={{ backgroundColor: 'var(--color-border-subtle)' }} />
 
       {/* Right panel tabs */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5">
         {([
           { id: 'config', icon: Settings, label: '配置' },
           { id: 'dag', icon: GitBranch, label: 'DAG' },
           { id: 'trace', icon: Activity, label: '链路' },
           { id: 'files', icon: FolderTree, label: '文件' },
-        ] as const).map(({ id, icon: Icon, label }) => (
-          <button
-            key={id}
-            onClick={() => rightPanelTab === id && rightPanelOpen ? toggleRightPanel() : setRightPanelTab(id)}
-            className={`p-2 rounded-2xl transition-all duration-200 ${
-               rightPanelTab === id && rightPanelOpen
-                 ? 'bg-white/10 text-white shadow-sm shadow-white/5 border border-white/10'
-                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-white/5 border border-transparent'
-            }`}
-            title={label}
-          >
-            <Icon size={14} />
-          </button>
-        ))}
+        ] as const).map(({ id, icon: Icon, label }) => {
+          const isActive = rightPanelTab === id && rightPanelOpen;
+          return (
+            <button
+              key={id}
+              onClick={() => isActive ? toggleRightPanel() : setRightPanelTab(id)}
+              className="p-1.5 rounded-lg transition-all duration-200"
+              style={{
+                color: isActive ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                backgroundColor: isActive ? 'var(--color-accent-subtle)' : 'transparent',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)';
+                  e.currentTarget.style.color = 'var(--color-text-secondary)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = 'var(--color-text-muted)';
+                }
+              }}
+              title={label}
+            >
+              <Icon size={13} />
+            </button>
+          );
+        })}
       </div>
 
       {/* Spacer */}
@@ -126,19 +157,20 @@ export function ControlBar() {
 
       {/* Token gauge */}
       {activeSession?.tokenUsage && (
-        <div className="flex items-center gap-2 mr-3">
-          <span className="text-[10px] text-[var(--color-text-muted)] font-medium">Token</span>
-          <div className="w-20 h-1 bg-white/10 rounded-full overflow-hidden">
+        <div className="flex items-center gap-2 mr-2">
+          <span className="text-[10px] font-medium" style={{ color: 'var(--color-text-muted)' }}>Token</span>
+          <div className="w-16 h-1 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-bg-surface-3)' }}>
             <div
-              className={`h-full rounded-full transition-all duration-300 ${
-                (activeSession.tokenUsage.used / activeSession.tokenUsage.limit) > 0.8
-                  ? 'bg-amber-500'
-                  : 'bg-blue-500'
-              }`}
-              style={{ width: `${(activeSession.tokenUsage.used / activeSession.tokenUsage.limit) * 100}%` }}
+              className="h-full rounded-full transition-all duration-300"
+              style={{
+                width: `${Math.min((activeSession.tokenUsage.used / activeSession.tokenUsage.limit) * 100, 100)}%`,
+                backgroundColor: (activeSession.tokenUsage.used / activeSession.tokenUsage.limit) > 0.8
+                  ? 'var(--color-warning)'
+                  : 'var(--color-accent)',
+              }}
             />
           </div>
-          <span className="text-[10px] text-[var(--color-text-muted)] font-mono">
+          <span className="text-[10px] font-mono" style={{ color: 'var(--color-text-muted)' }}>
             {Math.round((activeSession.tokenUsage.used / activeSession.tokenUsage.limit) * 100)}%
           </span>
         </div>
@@ -154,7 +186,7 @@ export function ControlBar() {
       )}
 
       {/* Divider */}
-      <div className="w-px h-6 bg-white/10 mx-1" />
+      <div className="w-px h-5 mx-1" style={{ backgroundColor: 'var(--color-border-subtle)' }} />
 
       {/* Permission mode */}
       <PermissionModeToggle
@@ -171,23 +203,51 @@ export function ControlBar() {
       {/* Expert mode */}
       <button
         onClick={toggleExpertMode}
-        className={`p-2 rounded-2xl transition-all duration-200 ${
-          expertMode ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20 shadow-sm shadow-purple-500/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-white/5 border border-transparent'
-        }`}
+        className="p-1.5 rounded-lg transition-all duration-200"
+        style={{
+          color: expertMode ? 'var(--color-accent)' : 'var(--color-text-muted)',
+          backgroundColor: expertMode ? 'var(--color-accent-subtle)' : 'transparent',
+        }}
+        onMouseEnter={(e) => {
+          if (!expertMode) {
+            e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)';
+            e.currentTarget.style.color = 'var(--color-text-secondary)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!expertMode) {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = 'var(--color-text-muted)';
+          }
+        }}
         title={expertMode ? '关闭专家模式' : '开启专家模式'}
       >
-        {expertMode ? <Eye size={14} /> : <EyeOff size={14} />}
+        {expertMode ? <Eye size={13} /> : <EyeOff size={13} />}
       </button>
 
       {/* Focus mode */}
       <button
         onClick={toggleFocusMode}
-        className={`p-2 rounded-2xl transition-all duration-200 ${
-          focusMode ? 'bg-white/10 text-white shadow-sm shadow-white/5 border border-white/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-white/5 border border-transparent'
-        }`}
-          title="专注模式"
+        className="p-1.5 rounded-lg transition-all duration-200"
+        style={{
+          color: focusMode ? 'var(--color-accent)' : 'var(--color-text-muted)',
+          backgroundColor: focusMode ? 'var(--color-accent-subtle)' : 'transparent',
+        }}
+        onMouseEnter={(e) => {
+          if (!focusMode) {
+            e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)';
+            e.currentTarget.style.color = 'var(--color-text-secondary)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!focusMode) {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = 'var(--color-text-muted)';
+          }
+        }}
+        title="专注模式"
       >
-        {focusMode ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+        {focusMode ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
       </button>
     </div>
   );
