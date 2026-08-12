@@ -99,8 +99,17 @@ class PermissionOverlay:
                     merged[rule.resource_pattern] = rule
         if not merged:
             return None
-        best = max(merged.items(), key=lambda x: self._priority(x[1].level))
-        return best[1]
+        # Deny must win over allow for the same resource: pick the rule with
+        # the strictest level, breaking ties by the most specific pattern.
+        return max(
+            merged.values(),
+            key=lambda r: (self._priority(r.level), self._pattern_specificity(r.resource_pattern)),
+        )
+
+    @staticmethod
+    def _pattern_specificity(pattern: str) -> int:
+        """Higher means more specific (fewer wildcard characters)."""
+        return -pattern.count("*")
 
     @staticmethod
     def _match(pattern: str, path: str) -> bool:
@@ -109,7 +118,7 @@ class PermissionOverlay:
 
     @staticmethod
     def _priority(level: PermissionLevel) -> int:
-        return {PermissionLevel.DENY: 0, PermissionLevel.ASK: 1, PermissionLevel.ALLOW: 2}.get(level, 0)
+        return {PermissionLevel.DENY: 3, PermissionLevel.ASK: 2, PermissionLevel.ALLOW: 1}.get(level, 0)
 
 
 # ─── JSON Schema Validation ──────────────────────────────────────────────────
@@ -218,7 +227,10 @@ class SecuritySandbox:
     """
 
     def __init__(self, config: SandboxConfig | None = None):
-        self.config = config or SandboxConfig(workdir="/tmp/sandbox")
+        if config is None:
+            workdir = os.environ.get("CLIMBER_SANDBOX_WORKDIR") or os.getcwd()
+            config = SandboxConfig(workdir=workdir)
+        self.config = config
         self._active = True
 
     def validate_file_access(self, path: str, mode: str = 'read') -> tuple[bool, str]:

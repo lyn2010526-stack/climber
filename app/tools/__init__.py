@@ -109,6 +109,8 @@ class ToolRegistry:
         for pname, param in sig.parameters.items():
             if pname in ("self", "cls"):
                 continue
+            if param.kind in (inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL):
+                continue
             prop: dict[str, Any] = {}
             annot = hints.get(pname, param.annotation)
             if annot is not inspect.Parameter.empty and annot is not None:
@@ -232,6 +234,17 @@ def tool(
 def register_builtins() -> None:
     """Import and register all built-in tools."""
     from app.tools import (
+        browser_tools,
         builtins,
+        calendar_tools,
+        chart_tools,
+        core_memory_tools,
+        data_analysis_tools,
+        email_tools,
+        file_conversion_tools,
+        memory_tools,
+        memory_vector_tools,
         native_tools,
+        search_tools,
+        vision_tools,
     )

@@ -107,7 +107,7 @@ async def create_session_legacy(
         row = SessionModel(
             title=payload.title or "New Session",
             status="idle",
-            agent_id=payload.agent_id or "",
+            agent_id=(payload.agent_id or None),
             user_id=user_id,
         )
         session.add(row)
@@ -156,6 +156,14 @@ async def clear_session(session_id: str, user_id: str = Depends(get_current_user
         if not row or (row.user_id and row.user_id != user_id):
             raise HTTPException(status_code=404, detail="Session not found")
         from sqlalchemy import delete
+
+        from app.storage.models_feedback import Feedback
+
+        message_ids = (await session.execute(
+            select(MessageModel.id).where(MessageModel.session_id == session_id)
+        )).scalars().all()
+        if message_ids:
+            await session.execute(delete(Feedback).where(Feedback.message_id.in_(message_ids)))
         await session.execute(delete(MessageModel).where(MessageModel.session_id == session_id))
         await session.commit()
     return {"status": "cleared"}
@@ -185,6 +193,22 @@ async def delete_session(session_id: str, user_id: str = Depends(get_current_use
         row = result.scalar_one_or_none()
         if not row or (row.user_id and row.user_id != user_id):
             raise HTTPException(status_code=404, detail="Session not found")
+        from sqlalchemy import delete
+
+        from app.storage.database import Message as MessageModel
+        from app.storage.database import Turn, UsageLog
+        from app.storage.models_cost import CostRecord
+        from app.storage.models_feedback import Feedback
+
+        message_ids = (await session.execute(
+            select(MessageModel.id).where(MessageModel.session_id == session_id)
+        )).scalars().all()
+        if message_ids:
+            await session.execute(delete(Feedback).where(Feedback.message_id.in_(message_ids)))
+        await session.execute(delete(MessageModel).where(MessageModel.session_id == session_id))
+        await session.execute(delete(Turn).where(Turn.session_id == session_id))
+        await session.execute(delete(UsageLog).where(UsageLog.session_id == session_id))
+        await session.execute(delete(CostRecord).where(CostRecord.session_id == session_id))
         await session.delete(row)
         await session.commit()
     return {"ok": True}

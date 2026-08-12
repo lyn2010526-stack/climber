@@ -224,7 +224,7 @@ async def chart_scatter(
 
         if color_column and color_column in df.columns:
             categories = df[color_column].unique()
-            cmap = plt.cm.get_cmap("tab10", len(categories))
+            cmap = plt.get_cmap("tab10").resampled(len(categories))
             for i, cat in enumerate(categories):
                 mask = df[color_column] == cat
                 ax.scatter(df.loc[mask, x_column], df.loc[mask, y_column],

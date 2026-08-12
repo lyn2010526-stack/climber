@@ -411,6 +411,28 @@ class AgentEngine:
         finally:
             self._session_locks.pop(session.session_id, None)
 
+    async def run_agent(self, session: AgentSession, message: str) -> dict[str, Any]:
+        """Convenience wrapper around run() that collects output into a dict.
+
+        Returns {"output": str} on success, or {"error": str} on failure.
+        """
+        output: list[str] = []
+        error: str | None = None
+        try:
+            async for event in self.run(session, message):
+                if event.type is AgentEventType.DONE:
+                    content = event.data.get("content")
+                    if content:
+                        output.append(content)
+                elif event.type is AgentEventType.ERROR:
+                    error = event.data.get("error") or "Unknown error"
+        except Exception as e:
+            error = str(e)
+        if error:
+            return {"error": error}
+        return {"output": "".join(output)}
+
+
     async def _run_locked(self, session: AgentSession, message: str) -> AsyncIterator[AgentEvent]:
         """Internal run method — executes under session lock."""
         # Allow restart: COMPLETED/FAILED/CANCELLED sessions must reset to PENDING first

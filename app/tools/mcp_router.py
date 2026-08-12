@@ -64,7 +64,7 @@ class MCPRouter:
             return MCPToolResult(
                 content=[{
                     "type": "text",
-                    f"Server '{server_name}' does not support tool calls": True,
+                    "text": f"Server '{server_name}' does not support tool calls",
                 }],
                 isError=True,
             )

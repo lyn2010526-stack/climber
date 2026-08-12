@@ -150,13 +150,38 @@ async def get_agent(agent_id: str) -> dict[str, Any]:
 
 @router.delete("/agents/{agent_id}")
 async def delete_agent(agent_id: str) -> dict:
-    from app.storage.database import Agent
+    from sqlalchemy import delete
+
+    from app.storage.database import Agent, Turn, UsageLog
+    from app.storage.database import Message as MessageModel
+    from app.storage.database import Session as SessionModel
+    from app.storage.models_cost import CostRecord
+    from app.storage.models_feedback import Feedback
 
     async with async_session() as db:
         agent = (await db.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
         if agent is None:
             raise HTTPException(status_code=404, detail="Agent not found")
-        await db.delete(agent)
+        session_ids = (await db.execute(
+            select(SessionModel.id).where(SessionModel.agent_id == agent_id)
+        )).scalars().all()
+        if session_ids:
+            message_ids = (await db.execute(
+                select(MessageModel.id).where(MessageModel.session_id.in_(session_ids))
+            )).scalars().all()
+            if message_ids:
+                await db.execute(delete(Feedback).where(Feedback.message_id.in_(message_ids)))
+            await db.execute(delete(MessageModel).where(MessageModel.session_id.in_(session_ids)))
+            await db.execute(delete(Turn).where(Turn.session_id.in_(session_ids)))
+            await db.execute(delete(UsageLog).where(UsageLog.session_id.in_(session_ids)))
+            await db.execute(delete(CostRecord).where(CostRecord.session_id.in_(session_ids)))
+            await db.execute(delete(SessionModel).where(SessionModel.agent_id == agent_id))
+        from app.storage.models_eval import EvalRun
+        from app.storage.models_memory import CoreMemoryBlock, EpisodicMemory
+        await db.execute(delete(EvalRun).where(EvalRun.agent_id == agent_id))
+        await db.execute(delete(EpisodicMemory).where(EpisodicMemory.agent_id == agent_id))
+        await db.execute(delete(CoreMemoryBlock).where(CoreMemoryBlock.agent_id == agent_id))
+        await db.execute(delete(Agent).where(Agent.id == agent_id))
         await db.commit()
         return {"ok": True, "deleted": agent_id}
 
@@ -1254,10 +1279,25 @@ async def create_task(request: Request) -> dict[str, Any]:
                 db.add(default_group)
                 await db.flush()
             group_id = default_group.id
+        else:
+            group_exists = (
+                await db.execute(select(AgentGroup.id).where(AgentGroup.id == group_id))
+            ).scalar_one_or_none()
+            if group_exists is None:
+                raise HTTPException(status_code=404, detail=f"Group '{group_id}' not found")
+        worker_id = data.get("worker_id") or None
+        if worker_id:
+            worker_exists = (
+                await db.execute(
+                    select(AgentGroupMember.id).where(AgentGroupMember.id == worker_id)
+                )
+            ).scalar_one_or_none()
+            if worker_exists is None:
+                worker_id = None
         task = AgentGroupTask(
             group_id=group_id,
             description=data.get("description", ""),
-            worker_id=data.get("worker_id") or None,
+            worker_id=worker_id,
             reviewer_ids=data.get("reviewer_ids", []),
             max_rounds=int(data.get("max_rounds") or 5),
             context=data.get("context", []),
