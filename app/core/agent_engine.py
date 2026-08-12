@@ -553,7 +553,7 @@ class AgentEngine:
                     xml_tool_calls = OpenAIAdapter._parse_xml_tool_calls(result.content)
                     if xml_tool_calls:
                         result.tool_calls = xml_tool_calls
-                        cleaned = re.sub(r'<function([^>]+)>.*?</\1>', '', result.content, flags=re.DOTALL | re.IGNORECASE).strip()
+                        cleaned = re.sub(r'<function=[^>]+/?>|</function>', '', result.content, flags=re.DOTALL | re.IGNORECASE).strip()
                         if not cleaned:
                             result.content = ""
 

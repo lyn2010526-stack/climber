@@ -48,9 +48,8 @@ async def _search_duckduckgo(query: str, num: int, lang: str, time_range: str) -
     """Search via DuckDuckGo HTML interface."""
     url = "https://html.duckduckgo.com/html/"
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-    resp = await httpx.AsyncClient(timeout=15, follow_redirects=True).post(
-        url, data={"q": query}, headers=headers
-    )
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        resp = await client.post(url, data={"q": query}, headers=headers)
 
     results = re.findall(
         r'<a rel="nofollow" class="result__a" href="([^"]+)">([^<]+)</a>',
@@ -150,9 +149,8 @@ async def search_news(
 
         url = "https://html.duckduckgo.com/html/"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        resp = await httpx.AsyncClient(timeout=15, follow_redirects=True).post(
-            url, data={"q": news_query}, headers=headers
-        )
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            resp = await client.post(url, data={"q": news_query}, headers=headers)
 
         results = re.findall(
             r'<a rel="nofollow" class="result__a" href="([^"]+)">([^<]+)</a>',
@@ -203,9 +201,8 @@ async def search_site(
         full_query = f"site:{site} {query}"
         url = "https://html.duckduckgo.com/html/"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        resp = await httpx.AsyncClient(timeout=15, follow_redirects=True).post(
-            url, data={"q": full_query}, headers=headers
-        )
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            resp = await client.post(url, data={"q": full_query}, headers=headers)
 
         results = re.findall(
             r'<a rel="nofollow" class="result__a" href="([^"]+)">([^<]+)</a>',
@@ -314,9 +311,8 @@ async def search_code(
 
         url = "https://html.duckduckgo.com/html/"
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        resp = await httpx.AsyncClient(timeout=15, follow_redirects=True).post(
-            url, data={"q": f"site:github.com OR site:stackoverflow.com {full_query}"}, headers=headers
-        )
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            resp = await client.post(url, data={"q": f"site:github.com OR site:stackoverflow.com {full_query}"}, headers=headers)
 
         results = re.findall(
             r'<a rel="nofollow" class="result__a" href="([^"]+)">([^<]+)</a>',
