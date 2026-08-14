@@ -32,6 +32,9 @@ export function useChat(sessionId: string | null) {
       return;
     }
 
+    // 立即清空，消除切换闪烁
+    setMessages([]);
+
     api.getSessionMessages(sessionId).then((data: any) => {
       const msgs: Message[] = (data.messages || []).map((m: any) => ({
         id: m.id,
@@ -39,7 +42,7 @@ export function useChat(sessionId: string | null) {
         content: m.content || '',
         toolCalls: Array.isArray(m.toolCalls) ? m.toolCalls : [],
         tool_name: m.tool_name,
-        timestamp: new Date(m.created_at),
+        timestamp: m.created_at ? new Date(m.created_at) : new Date(),
       }));
       setMessages(msgs);
     }).catch(() => {
@@ -49,6 +52,12 @@ export function useChat(sessionId: string | null) {
 
   const sendMessage = useCallback(async (content: string) => {
     if (!sessionId || isStreaming) return;
+
+    // 先中止上一个 stream
+    if (abortRef.current) {
+      abortRef.current();
+      abortRef.current = null;
+    }
 
     const userMsg: Message = {
       id: `user-${Date.now()}`,

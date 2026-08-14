@@ -73,8 +73,8 @@ export interface WorkspaceState {
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   sessions: [],
   activeSessionId: null,
-  rightPanelTab: 'config',
-  rightPanelOpen: true,
+  rightPanelTab: 'toolcalls',
+  rightPanelOpen: false,
   focusMode: false,
   expertMode: false,
   permissionMode: 'sandbox',

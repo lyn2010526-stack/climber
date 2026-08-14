@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Settings, GitBranch, Activity, FolderTree, ChevronDown, ChevronRight,
-  Zap, Brain, Sliders, Timer, Shield, FileDiff, Wrench,
+  Zap, Brain, Sliders, Timer, Shield, FileDiff, Wrench, MoreHorizontal,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useWorkspaceStore } from '../../store/workspace';
@@ -19,26 +19,32 @@ export function RightPanel() {
     sessions: s.sessions,
   })));
   const setRightPanelTab = useWorkspaceStore(s => s.setRightPanelTab);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
   if (!rightPanelOpen) return null;
 
   const activeSession = sessions.find(s => s.id === activeSessionId);
 
-  const tabs = [
+  const mainTabs = [
+    { id: 'toolcalls' as const, icon: Wrench, label: '工具' },
+    { id: 'reasoning' as const, icon: Brain, label: '推理' },
+  ];
+
+  const secondaryTabs = [
     { id: 'config' as const, icon: Settings, label: '配置' },
     { id: 'diff' as const, icon: FileDiff, label: 'Diff' },
-    { id: 'toolcalls' as const, icon: Wrench, label: '工具' },
     { id: 'dag' as const, icon: GitBranch, label: 'DAG' },
     { id: 'trace' as const, icon: Activity, label: '链路' },
-    { id: 'reasoning' as const, icon: Brain, label: '推理' },
     { id: 'files' as const, icon: FolderTree, label: '文件' },
   ];
+
+  const isSecondaryActive = secondaryTabs.some(t => t.id === rightPanelTab);
 
   return (
     <div className="w-80 bg-[#0F0F14]/80 backdrop-blur-2xl border-l border-white/10 flex flex-col shadow-sm shadow-white/5">
       {/* Tab bar */}
-      <div className="flex border-b border-white/10">
-        {tabs.map(({ id, icon: Icon, label }) => (
+      <div className="flex border-b border-white/10 relative">
+        {mainTabs.map(({ id, icon: Icon, label }) => (
           <button
             key={id}
             onClick={() => setRightPanelTab(id)}
@@ -55,6 +61,38 @@ export function RightPanel() {
             )}
           </button>
         ))}
+        <button
+          onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+          className={`flex items-center justify-center px-3 py-2.5 text-xs font-medium transition-all relative ${
+            isSecondaryActive
+              ? 'text-white'
+              : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
+          }`}
+        >
+          <MoreHorizontal size={14} />
+          {isSecondaryActive && (
+            <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-[#007AFF] rounded-full shadow-sm shadow-blue-500/30" />
+          )}
+          {moreMenuOpen && (
+            <div className="absolute right-0 top-full mt-1 w-32 rounded-lg border border-white/10 shadow-xl z-50 py-1" style={{ backgroundColor: 'var(--color-bg-surface-2)' }}>
+              {secondaryTabs.map(({ id, icon: Icon, label }) => (
+                <button
+                  key={id}
+                  onClick={() => { setRightPanelTab(id); setMoreMenuOpen(false); }}
+                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
+                    rightPanelTab === id
+                      ? 'text-white'
+                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
+                  }`}
+                  style={rightPanelTab === id ? { backgroundColor: 'var(--color-accent-subtle)' } : {}}
+                >
+                  <Icon size={13} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </button>
       </div>
 
       {/* Tab content */}

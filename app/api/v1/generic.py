@@ -1140,7 +1140,9 @@ async def add_group_member(group_id: str, request: Request) -> dict[str, Any]:
             role=data.get("role", "participant"),
             model_provider=data.get("model_provider"),
             model_id=data.get("model_id"),
-            api_key_encrypted=data.get("api_key_encrypted"),
+            api_key_encrypted=encrypt_api_key(
+                data.get("api_key") or data.get("api_key_encrypted") or ""
+            ) or None,
             tools=data.get("tools", []),
             is_worker=bool(data.get("is_worker", False)),
         )

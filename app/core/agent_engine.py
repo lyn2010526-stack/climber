@@ -74,8 +74,6 @@ class AgentSession:
             self.permission_config = get_default_config()
         except Exception:
             self.permission_config = None
-        self._pending_permission: dict[str, Any] | None = None
-        self._permission_event: asyncio.Event | None = None
         # Fire-and-forget task tracking
         self._pending_tasks: set[asyncio.Task] = set()
 
@@ -395,7 +393,9 @@ class AgentEngine:
                 await asyncio.sleep(delay * attempt)
 
     async def run(self, session: AgentSession, message: str) -> AsyncIterator[AgentEvent]:
-        # Acquire session-level lock to prevent concurrent requests
+        # Acquire session-level lock to prevent concurrent requests.
+        # Lock is tied to session lifetime (created on first use, never popped),
+        # ensuring mutual exclusion across all requests to the same session.
         if session.session_id not in self._session_locks:
             self._session_locks[session.session_id] = asyncio.Lock()
 
@@ -404,12 +404,9 @@ class AgentEngine:
             yield AgentEvent(type=AgentEventType.ERROR, data={"error": "Session is busy processing another request"})
             return
 
-        try:
-            async with lock:
-                async for event in self._run_locked(session, message):
-                    yield event
-        finally:
-            self._session_locks.pop(session.session_id, None)
+        async with lock:
+            async for event in self._run_locked(session, message):
+                yield event
 
     async def run_agent(self, session: AgentSession, message: str) -> dict[str, Any]:
         """Convenience wrapper around run() that collects output into a dict.
@@ -741,22 +738,25 @@ class AgentEngine:
     # === Permission Management ===
 
     def resolve_permission(self, tool_call_id: str, decision: str) -> bool:
-        """Resolve a pending permission request.
+        """Resolve a pending permission request via the approval_manager.
 
-        Args:
-            tool_call_id: The ID of the tool call awaiting permission.
-            decision: One of 'allow', 'allow_session', 'allow_always', 'deny'.
-
-        Returns:
-            True if the permission was resolved, False if no pending request found.
+        This bridges the legacy resolve_permission API to the active approval
+        system so the frontend can approve/reject tool calls in-flight.
         """
-        for session in self._sessions.values():
-            if session._pending_permission and session._pending_permission.get("tool_call_id") == tool_call_id:
-                session._pending_permission["decision"] = decision
-                if session._permission_event is not None:
-                    session._permission_event.set()
-                return True
-        return False
+        from app.core.approval import approval_manager, ApprovalStatus
+
+        if decision in ("allow", "allow_session", "allow_always"):
+            req = approval_manager.get_request(tool_call_id)
+            if req is None or req.status != ApprovalStatus.PENDING:
+                return False
+            approval_manager.approve(tool_call_id, resolved_by="human")
+            return True
+        else:
+            req = approval_manager.get_request(tool_call_id)
+            if req is None or req.status != ApprovalStatus.PENDING:
+                return False
+            approval_manager.reject(tool_call_id, resolved_by="human")
+            return True
 
     def get_permission_config(self) -> Any:
         """Get the current default permission configuration."""

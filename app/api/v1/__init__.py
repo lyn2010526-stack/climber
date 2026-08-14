@@ -14,7 +14,6 @@ from app.api.v1 import doctor as doctor_router
 from app.api.v1 import documents as documents_router
 from app.api.v1 import feedback as feedback_router
 from app.api.v1 import generic as generic_router
-from app.api.v1 import groups as groups_router
 from app.api.v1 import mcp as mcp_router
 from app.api.v1 import notifications as notifications_router
 from app.api.v1 import permissions as permissions_router
@@ -23,7 +22,6 @@ from app.api.v1 import scheduler as scheduler_router
 from app.api.v1 import sessions as sessions_router
 from app.api.v1 import settings as settings_router
 from app.api.v1 import skills_router as skills_router_module
-from app.api.v1 import tasks as tasks_router
 from app.api.v1 import terminal as terminal_router
 from app.api.v1 import workflows as workflows_router
 from app.core.reasoning import api as reasoning_router
@@ -43,9 +41,7 @@ router.include_router(doctor_router.router, prefix="/doctor", tags=["doctor"])
 router.include_router(reasoning_router.router, prefix="/reason", tags=["reasoning"])
 router.include_router(permissions_router.router, prefix="/permissions", tags=["permissions"])
 router.include_router(crews_router.router, tags=["crews"])
-router.include_router(groups_router.router, tags=["groups"])
 router.include_router(cluster_router.router, tags=["cluster"])
-router.include_router(tasks_router.router, tags=["tasks"])
 router.include_router(cost_router.router, tags=["cost"])
 router.include_router(scheduler_router.router, tags=["scheduler"])
 router.include_router(mcp_router.router, tags=["mcp"])

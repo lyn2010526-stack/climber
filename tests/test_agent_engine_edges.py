@@ -168,14 +168,16 @@ async def test_validate_tool_call_denies_and_allows(engine: AgentEngine):
 
 
 def test_resolve_permission_pending_and_missing(engine: AgentEngine):
-    session = _session(engine)
+    import asyncio
+    from app.core.approval import approval_manager
+
     assert engine.resolve_permission("call-missing", "allow") is False
 
-    session._pending_permission = {"tool_call_id": "call-1"}
-    session._permission_event = asyncio.Event()
-    assert engine.resolve_permission("call-1", "allow") is True
-    assert session._pending_permission["decision"] == "allow"
-    assert session._permission_event.is_set()
+    req = asyncio.run(approval_manager.request(
+        session_id="test-session", tool_name="write_file", arguments={"path": "/tmp/x"}
+    ))
+    assert engine.resolve_permission(req.id, "allow") is True
+    assert engine.resolve_permission(req.id, "allow") is False  # already resolved
 
 
 @pytest.mark.asyncio
