@@ -42,7 +42,7 @@ export function useChat(sessionId: string | null) {
         content: m.content || '',
         toolCalls: Array.isArray(m.toolCalls) ? m.toolCalls : [],
         tool_name: m.tool_name,
-        timestamp: m.created_at ? new Date(m.created_at) : new Date(),
+        timestamp: (() => { const d = m.created_at ? new Date(m.created_at) : new Date(); return isNaN(d.getTime()) ? new Date() : d; })(),
       }));
       setMessages(msgs);
     }).catch(() => {

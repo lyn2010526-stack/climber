@@ -74,6 +74,12 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
     }
   };
 
+  const handleRollback = () => {
+    if (activeSessionId && snapshots.length > 0) {
+      updateSession(activeSessionId, { status: 'idle' });
+    }
+  };
+
   return (
     <div className="h-11 flex items-center px-3 gap-1.5" style={{
       backgroundColor: 'rgba(17, 17, 19, 0.85)',
@@ -127,6 +133,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
           <Camera size={13} />
         </button>
         <button
+          onClick={handleRollback}
           disabled={!activeSession || snapshots.length === 0}
           className="p-1.5 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
           style={{ color: 'var(--color-text-secondary)' }}
