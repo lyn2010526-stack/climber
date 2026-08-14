@@ -34,7 +34,7 @@ export function SessionSidebar({ inDrawer = false }: { inDrawer?: boolean }) {
     api.listModels().then((data) => {
       setModels(data);
       setModelsError(false);
-      if (data.length > 0) setSelectedModel(data[0].id || data[0].model_id);
+      if (data.length > 0) setSelectedModel(data[0]?.id || data[0]?.model_id || '');
     }).catch(() => setModelsError(true));
   }, []);
 

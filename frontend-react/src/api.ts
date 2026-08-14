@@ -7,6 +7,7 @@ import type {
   DocumentSummary,
   GroupSummary,
   MessagesResponse,
+  ModelSummary,
   NotificationResult,
   NotificationsResponse,
   PlatformStats,
@@ -117,6 +118,7 @@ class ApiClient {
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
+        if (buffer.length > 1048576) buffer = '';
         const events = buffer.split('\n\n');
         buffer = events.pop() || '';
 
@@ -159,8 +161,8 @@ class ApiClient {
   }
 
   // Models
-  async listModels() {
-    return this.request<any[]>('/models');
+  async listModels(): Promise<ModelSummary[]> {
+    return this.request<ModelSummary[]>('/models');
   }
 
   // Workflows

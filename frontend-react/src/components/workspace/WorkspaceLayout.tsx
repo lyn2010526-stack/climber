@@ -18,7 +18,7 @@ export function WorkspaceLayout() {
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 flex overflow-hidden">
           <Group orientation="horizontal">
-            <Panel defaultSize={rightPanelOpen ? 70 : 100} minSize={40}>
+            <Panel defaultSize={100} minSize={40}>
               <ChatPage />
             </Panel>
             {rightPanelOpen && (

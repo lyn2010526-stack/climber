@@ -292,3 +292,10 @@ export interface ReasoningMode {
   description: string
   available: boolean
 }
+
+export interface ModelSummary {
+  id?: string
+  model_id?: string
+  name?: string
+  provider?: string
+}

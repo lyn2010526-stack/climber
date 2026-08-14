@@ -48,9 +48,7 @@ type Page = 'chat' | 'agents' | 'workflows' | 'apikeys' | 'skills' | 'notificati
 const CORE_NAV: { id: Page; icon: typeof MessageSquare; label: string }[] = [
   { id: 'chat', icon: MessageSquare, label: '工作台' },
   { id: 'factory', icon: Sparkles, label: '自主执行' },
-  { id: 'cluster', icon: Network, label: '集群协作' },
   { id: 'tasks', icon: Cpu, label: '任务监控' },
-  { id: 'agents', icon: Bot, label: '智能体' },
   { id: 'settings', icon: Settings, label: '设置' },
 ];
 
