@@ -145,7 +145,7 @@ def validate_tool_input(schema: dict[str, Any], arguments: dict[str, Any]) -> No
         expected = prop.get("type")
         if expected == "string" and not isinstance(value, str):
             raise SchemaValidationError(f"Field '{key}' must be a string")
-        if expected == "integer" and not isinstance(value, int):
+        if expected == "integer" and not isinstance(value, int) and not isinstance(value, bool):
             raise SchemaValidationError(f"Field '{key}' must be an integer")
         if expected == "number" and not isinstance(value, (int, float)):
             raise SchemaValidationError(f"Field '{key}' must be a number")

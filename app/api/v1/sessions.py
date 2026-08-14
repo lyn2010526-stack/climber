@@ -166,6 +166,9 @@ async def clear_session(session_id: str, user_id: str = Depends(get_current_user
             await session.execute(delete(Feedback).where(Feedback.message_id.in_(message_ids)))
         await session.execute(delete(MessageModel).where(MessageModel.session_id == session_id))
         await session.commit()
+    from app.core.agent_engine import get_engine
+    engine = get_engine()
+    engine._session_locks.pop(session_id, None)
     return {"status": "cleared"}
 
 
@@ -211,6 +214,9 @@ async def delete_session(session_id: str, user_id: str = Depends(get_current_use
         await session.execute(delete(CostRecord).where(CostRecord.session_id == session_id))
         await session.delete(row)
         await session.commit()
+    from app.core.agent_engine import get_engine
+    engine = get_engine()
+    engine._session_locks.pop(session_id, None)
     return {"ok": True}
 
 

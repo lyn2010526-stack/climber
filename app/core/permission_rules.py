@@ -83,6 +83,8 @@ class PermissionConfig:
         """评估工具调用的权限决策"""
         # 模式级别快速判断
         if self.mode == PermissionMode.BYPASS:
+            import logging
+            logging.getLogger(__name__).warning("permission.bypass_mode_active", tool_name=tool_name)
             return RuleDecision.ALLOW
         if self.mode == PermissionMode.AUTO:
             # auto 模式下除了高危操作外都允许

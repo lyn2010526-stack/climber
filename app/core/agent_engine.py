@@ -706,20 +706,12 @@ class AgentEngine:
 
     def _build_tools(self, tool_names: list[str], task_description: str = "") -> list[dict[str, Any]]:
         if task_description and len(tool_names) > 1:
-            available: list[dict[str, Any]] = []
-            for name in tool_names:
-                defn = self.tool_registry.get_tool(name)
-                if defn:
-                    available.append({
-                        "type": "function",
-                        "function": {
-                            "name": defn.name,
-                            "description": defn.description,
-                            "parameters": defn.parameters,
-                        },
-                    })
-            ranked = self.tool_prioritizer.rank_tools(task_description, available)
             name_to_defn = {name: self.tool_registry.get_tool(name) for name in tool_names}
+            available = [
+                {"type": "function", "function": {"name": d.name, "description": d.description, "parameters": d.parameters}}
+                for name, d in name_to_defn.items() if d
+            ]
+            ranked = self.tool_prioritizer.rank_tools(task_description, available)
             tool_names = [name for name in ranked if name in name_to_defn]
         result = []
         for name in tool_names:
