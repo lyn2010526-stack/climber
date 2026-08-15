@@ -22,35 +22,102 @@ import type {
 } from './types/api';
 
 const BASE_URL = '/api/v1';
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 300;
 
 export interface ApiError {
   detail: string;
 }
 
 class ApiClient {
+  private pendingRequests = new Map<string, Promise<any>>();
+  private requestCache = new Map<string, { data: any; timestamp: number }>();
+  private readonly CACHE_TTL = 5000;
+
   private getAuthHeaders(): Record<string, string> {
-    const token = localStorage.getItem('auth_token');
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null;
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
+  private async requestWithRetry<T>(fn: () => Promise<T>): Promise<T> {
+    for (let i = 0; i <= MAX_RETRIES; i++) {
+      try {
+        return await fn();
+      } catch (err) {
+        const status = (err as Error).message?.match(/HTTP (\d+)/)?.[1];
+        if (status && (status === '401' || status === '403' || parseInt(status) >= 500)) {
+          if (i < MAX_RETRIES) {
+            await new Promise(r => setTimeout(r, RETRY_DELAY_MS * (i + 1)));
+            continue;
+          }
+        }
+        throw err;
+      }
+    }
+    throw new Error('Unexpected retry failure');
+  }
+
+  private async deduplicatedRequest<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    if (this.pendingRequests.has(key)) {
+      return this.pendingRequests.get(key) as Promise<T>;
+    }
+    const promise = this.requestWithRetry(fn).finally(() => {
+      this.pendingRequests.delete(key);
+    });
+    this.pendingRequests.set(key, promise);
+    return promise;
+  }
+
+  private cachedGet<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const now = Date.now();
+    const cached = this.requestCache.get(key);
+    if (cached && now - cached.timestamp < this.CACHE_TTL) {
+      return Promise.resolve(cached.data);
+    }
+    const promise = this.requestWithRetry(fn).then(data => {
+      this.requestCache.set(key, { data, timestamp: now });
+      return data;
+    });
+    return promise;
+  }
+
+  resetCache() {
+    this.pendingRequests.clear();
+    this.requestCache.clear();
+  }
+
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...this.getAuthHeaders(),
-      ...options.headers as Record<string, string>,
+    const isCacheable = options.method !== 'POST' && options.method !== 'PUT' && options.method !== 'PATCH' && options.method !== 'DELETE';
+    const cacheKey = isCacheable ? `${options.method || 'GET'}:${path}` : null;
+
+    const doRequest = async (): Promise<T> => {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders(),
+        ...options.headers as Record<string, string>,
+      };
+
+      const response = await fetch(`${BASE_URL}${path}`, {
+        ...options,
+        headers,
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+        throw new Error(error.detail || `HTTP ${response.status}`);
+      }
+
+      if (!isCacheable) {
+        this.resetCache();
+      }
+
+      return response.json();
     };
 
-    const response = await fetch(`${BASE_URL}${path}`, {
-      ...options,
-      headers,
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-      throw new Error(error.detail || `HTTP ${response.status}`);
+    if (cacheKey) {
+      return this.cachedGet(cacheKey, doRequest);
     }
-
-    return response.json();
+    return this.deduplicatedRequest(path, doRequest);
   }
 
   // Agents

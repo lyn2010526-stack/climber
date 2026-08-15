@@ -25,6 +25,20 @@ export function useChat(sessionId: string | null) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<(() => void) | null>(null);
+  const isStreamingRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      if (abortRef.current) {
+        abortRef.current();
+        abortRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!sessionId) {
@@ -32,10 +46,10 @@ export function useChat(sessionId: string | null) {
       return;
     }
 
-    // 立即清空，消除切换闪烁
     setMessages([]);
 
     api.getSessionMessages(sessionId).then((data: any) => {
+      if (!mountedRef.current) return;
       const msgs: Message[] = (data.messages || []).map((m: any) => ({
         id: m.id,
         role: m.role,
@@ -46,14 +60,17 @@ export function useChat(sessionId: string | null) {
       }));
       setMessages(msgs);
     }).catch(() => {
-      setMessages([]);
+      if (mountedRef.current) {
+        setMessages([]);
+      }
     });
   }, [sessionId]);
 
   const sendMessage = useCallback(async (content: string) => {
-    if (!sessionId || isStreaming) return;
+    if (!sessionId || isStreamingRef.current) return;
+    isStreamingRef.current = true;
+    setIsStreaming(true);
 
-    // 先中止上一个 stream
     if (abortRef.current) {
       abortRef.current();
       abortRef.current = null;
@@ -66,8 +83,6 @@ export function useChat(sessionId: string | null) {
       timestamp: new Date(),
     };
     setMessages(prev => [...prev, userMsg]);
-    setIsStreaming(true);
-    setError(null);
 
     const assistantId = `assistant-${Date.now()}`;
     const assistantMsg: Message = {
@@ -143,6 +158,7 @@ export function useChat(sessionId: string | null) {
             return { ...msg, toolCalls: updatedToolCalls } as Message;
           })
         );
+        isStreamingRef.current = false;
         setIsStreaming(false);
       } else if (eventType === 'error') {
         const errMsg = typeof data === 'string' ? data : (data?.detail || data?.error || 'Unknown error');
@@ -154,20 +170,27 @@ export function useChat(sessionId: string | null) {
           )
         );
         setError(errMsg);
+        isStreamingRef.current = false;
         setIsStreaming(false);
       }
     });
-  }, [sessionId, isStreaming]);
+  }, [sessionId]);
 
   const stopStreaming = useCallback(() => {
     if (abortRef.current) {
       abortRef.current();
       abortRef.current = null;
     }
+    isStreamingRef.current = false;
     setIsStreaming(false);
   }, []);
 
   const clear = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current();
+      abortRef.current = null;
+    }
+    isStreamingRef.current = false;
     setMessages([]);
     setError(null);
   }, []);

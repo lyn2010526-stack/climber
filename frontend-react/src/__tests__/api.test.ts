@@ -1,15 +1,29 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '../api';
 
-describe('ApiClient paginated lists', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    localStorage.clear();
-  });
+// Mock localStorage for test environment
+const mockStore: Record<string, string> = {};
+const mockLocalStorage = {
+  getItem: vi.fn((key: string) => mockStore[key] || null),
+  setItem: vi.fn((key: string, value: string) => { mockStore[key] = value; }),
+  removeItem: vi.fn((key: string) => { delete mockStore[key]; }),
+  clear: vi.fn(() => { Object.keys(mockStore).forEach(k => delete mockStore[k]); }),
+};
 
+beforeEach(() => {
+  vi.stubGlobal('localStorage', mockLocalStorage);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  mockLocalStorage.clear();
+  api.resetCache();
+});
+
+describe('ApiClient paginated lists', () => {
   it('returns agent items from the paginated response', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         items: [{ id: 'agent-1', name: 'Planner' }],
@@ -17,7 +31,8 @@ describe('ApiClient paginated lists', () => {
         limit: 50,
         offset: 0,
       }),
-    }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
 
     await expect(api.listAgents()).resolves.toEqual([
       { id: 'agent-1', name: 'Planner' },
@@ -25,7 +40,7 @@ describe('ApiClient paginated lists', () => {
   });
 
   it('returns session items from the paginated response', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         items: [{ id: 'session-1', title: 'Investigation', status: 'idle' }],
@@ -33,7 +48,8 @@ describe('ApiClient paginated lists', () => {
         limit: 50,
         offset: 0,
       }),
-    }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
 
     await expect(api.listSessions()).resolves.toEqual([
       { id: 'session-1', title: 'Investigation', status: 'idle' },
@@ -41,7 +57,7 @@ describe('ApiClient paginated lists', () => {
   });
 
   it('sends the stored bearer token with API requests', async () => {
-    localStorage.setItem('auth_token', 'signed-token');
+    mockLocalStorage.setItem('auth_token', 'signed-token');
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ items: [], total: 0, limit: 50, offset: 0 }),
@@ -56,7 +72,7 @@ describe('ApiClient paginated lists', () => {
   });
 
   it('sends the stored bearer token with chat streams', () => {
-    localStorage.setItem('auth_token', 'signed-token');
+    mockLocalStorage.setItem('auth_token', 'signed-token');
     const fetchMock = vi.fn().mockReturnValue(new Promise(() => {}));
     vi.stubGlobal('fetch', fetchMock);
 

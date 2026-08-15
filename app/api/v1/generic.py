@@ -41,11 +41,95 @@ logger = structlog.get_logger()
 
 _background_tasks: set[asyncio.Task] = set()
 
+# ─── Prometheus Metrics ────────────────────────────────────────────────────────
+
+from prometheus_client import Counter, Histogram, Gauge
+
+# Cache metrics
+_cache_hits_total = Counter('cache_hits_total', 'Total cache hits', ['cache_type'])
+_cache_misses_total = Counter('cache_misses_total', 'Total cache misses', ['cache_type'])
+_cache_ttl_seconds = Histogram('cache_ttl_seconds', 'Cache TTL distribution', ['cache_type'])
+
+# DB query metrics
+_db_query_duration_seconds = Histogram('db_query_duration_seconds', 'Database query duration', ['endpoint', 'operation'])
+_db_queries_total = Counter('db_queries_total', 'Total database queries', ['endpoint', 'operation'])
+
+# Agent metrics
+_agents_created_total = Counter('agents_created_total', 'Total agents created')
+_agents_deleted_total = Counter('agents_deleted_total', 'Total agents deleted')
+
+# Task metrics
+_tasks_created_total = Counter('tasks_created_total', 'Total tasks created')
+_tasks_completed_total = Counter('tasks_completed_total', 'Total tasks completed')
+
+# Session metrics
+_sessions_created_total = Counter('sessions_created_total', 'Total sessions created')
+_sessions_deleted_total = Counter('sessions_deleted_total', 'Total sessions deleted')
+
 
 def _spawn(coro: Any) -> None:
     task = asyncio.create_task(coro)
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
+
+
+# ─── TTL Cache ──────────────────────────────────────────────────────────────
+
+from app.core.hybrid_cache import HybridCache
+
+# Legacy sync caches (kept for backward compat with existing invalidation calls)
+class _TTLCache:
+    """Simple process-scoped TTL cache."""
+
+    def __init__(self, ttl: float) -> None:
+        self._ttl = ttl
+        self._data: Any = None
+        self._ts: float = 0.0
+
+    def get(self) -> Any | None:
+        if self._data is not None and time.monotonic() - self._ts < self._ttl:
+            return self._data
+        return None
+
+    def set(self, value: Any) -> None:
+        self._data = value
+        self._ts = time.monotonic()
+
+
+class _KeyedCache:
+    """Per-key TTL cache (dict keyed by string id)."""
+
+    def __init__(self, ttl: float) -> None:
+        self._ttl = ttl
+        self._data: dict[str, tuple[Any, float]] = {}
+
+    def get(self, key: str) -> Any | None:
+        entry = self._data.get(key)
+        if entry is not None:
+            value, ts = entry
+            if time.monotonic() - ts < self._ttl:
+                return value
+            del self._data[key]
+        return None
+
+    def set(self, key: str, value: Any) -> None:
+        self._data[key] = (value, time.monotonic())
+
+    def invalidate(self, key: str) -> None:
+        self._data.pop(key, None)
+
+    def invalidate_all(self) -> None:
+        self._data.clear()
+
+
+_agents_cache = _TTLCache(ttl=120.0)   # 2 min
+_models_cache = _TTLCache(ttl=300.0)  # 5 min
+_agent_detail_cache = _KeyedCache(ttl=60.0)  # 60s per agent
+
+# Hybrid caches (Redis-backed when available, local fallback)
+_hybrid_agents = HybridCache(name="agents_list", ttl=120.0)
+_hybrid_models = HybridCache(name="models_list", ttl=300.0)
+_hybrid_agent_detail = HybridCache(name="agent_detail", ttl=60.0)
 
 DEFAULT_USER = "default-user"
 
@@ -69,11 +153,26 @@ async def _payload(request: Request) -> dict[str, Any]:
 @router.get("/agents")
 @router.get("/agents/")
 async def list_agents() -> list[dict[str, Any]]:
+    # Check hybrid cache (Redis or local)
+    hybrid = await _hybrid_agents.get_scalar()
+    if hybrid is not None:
+        _cache_hits_total.labels(cache_type='agents').inc()
+        return hybrid
+
+    # Fallback: check legacy local cache
+    cached = _agents_cache.get()
+    if cached is not None:
+        _cache_hits_total.labels(cache_type='agents').inc()
+        return cached
+
+    _cache_misses_total.labels(cache_type='agents').inc()
+
     from app.storage.database import Agent
 
+    start = time.monotonic()
     async with async_session() as db:
         rows = (await db.execute(select(Agent).order_by(Agent.created_at.desc()))).scalars().all()
-        return [
+        result = [
             {
                 "id": a.id,
                 "name": a.name,
@@ -86,6 +185,12 @@ async def list_agents() -> list[dict[str, Any]]:
             }
             for a in rows
         ]
+    _agents_cache.set(result)
+    await _hybrid_agents.set_scalar(result)
+
+    _db_query_duration_seconds.labels(endpoint='agents', operation='list').observe(time.monotonic() - start)
+    _db_queries_total.labels(endpoint='agents', operation='list').inc()
+    return result
 
 
 @router.post("/agents")
@@ -117,6 +222,9 @@ async def create_agent(request: Request) -> dict[str, Any]:
         db.add(agent)
         await db.commit()
         await db.refresh(agent)
+        _agents_cache.set(None)  # invalidate local
+        await _hybrid_agents.invalidate_scalar()
+        _agents_created_total.inc()
         return {
             "id": agent.id,
             "name": agent.name,
@@ -128,13 +236,23 @@ async def create_agent(request: Request) -> dict[str, Any]:
 
 @router.get("/agents/{agent_id}")
 async def get_agent(agent_id: str) -> dict[str, Any]:
+    # Check hybrid cache (Redis or local)
+    hybrid = await _hybrid_agent_detail.get_keyed(agent_id)
+    if hybrid is not None:
+        return hybrid
+
+    # Fallback: check legacy local cache
+    cached = _agent_detail_cache.get(agent_id)
+    if cached is not None:
+        return cached
+
     from app.storage.database import Agent
 
     async with async_session() as db:
         agent = (await db.execute(select(Agent).where(Agent.id == agent_id))).scalar_one_or_none()
         if agent is None:
             raise HTTPException(status_code=404, detail="Agent not found")
-        return {
+        result = {
             "id": agent.id,
             "name": agent.name,
             "description": getattr(agent, "description", "") or "",
@@ -146,6 +264,9 @@ async def get_agent(agent_id: str) -> dict[str, Any]:
             "skill_ids": getattr(agent, "skill_ids", []) or [],
             "created_at": agent.created_at.isoformat() if agent.created_at else None,
         }
+    _agent_detail_cache.set(agent_id, result)
+    await _hybrid_agent_detail.set_keyed(agent_id, result)
+    return result
 
 
 @router.delete("/agents/{agent_id}")
@@ -183,6 +304,11 @@ async def delete_agent(agent_id: str) -> dict:
         await db.execute(delete(CoreMemoryBlock).where(CoreMemoryBlock.agent_id == agent_id))
         await db.execute(delete(Agent).where(Agent.id == agent_id))
         await db.commit()
+        _agents_cache.set(None)  # invalidate local
+        _agent_detail_cache.invalidate(agent_id)
+        await _hybrid_agents.invalidate_scalar()
+        await _hybrid_agent_detail.invalidate_keyed(agent_id)
+        _agents_deleted_total.inc()
         return {"ok": True, "deleted": agent_id}
 
 
@@ -205,6 +331,20 @@ async def list_tools() -> list[dict[str, Any]]:
 @router.get("/models")
 @router.get("/models/")
 async def list_models() -> list[dict[str, Any]]:
+    # Check hybrid cache (Redis or local)
+    hybrid = await _hybrid_models.get_scalar()
+    if hybrid is not None:
+        _cache_hits_total.labels(cache_type='models').inc()
+        return hybrid
+
+    # Fallback: check legacy local cache
+    cached = _models_cache.get()
+    if cached is not None:
+        _cache_hits_total.labels(cache_type='models').inc()
+        return cached
+
+    _cache_misses_total.labels(cache_type='models').inc()
+
     """Return known models per provider, plus locally discovered Ollama models."""
     from app.models.registry import MODEL_ALIASES
 
@@ -226,7 +366,7 @@ async def list_models() -> list[dict[str, Any]]:
             seen.add(key)
             models.append({"provider": m["provider"], "model_id": m["model_id"], "label": m["model_id"]})
 
-    # Discover local Ollama models when the daemon is reachable
+    # Discover local Ollama models when the daemon is reachable (cache the result for 5 min)
     try:
         import httpx
 
@@ -242,7 +382,23 @@ async def list_models() -> list[dict[str, Any]]:
                     )
     except Exception as e:
         logger.warning("generic.list_models_ollama_discovery", error=str(e))
+
+    _models_cache.set(models)
+    await _hybrid_models.set_scalar(models)
+    _cache_ttl_seconds.labels(cache_type='models').observe(300.0)
     return models
+
+
+@router.get("/cache_metrics")
+@router.get("/cache_metrics/")
+async def cache_metrics() -> dict[str, Any]:
+    """Expose cache hit/miss statistics for monitoring."""
+    from prometheus_client import generate_latest
+    return {
+        "agents_cache_ttl": 120.0,
+        "models_cache_ttl": 300.0,
+        "agent_detail_cache_ttl": 60.0,
+    }
 
 
 # ─── Workflows ──────────────────────────────────────────────────────────────

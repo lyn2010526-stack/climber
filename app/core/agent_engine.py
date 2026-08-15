@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Any
@@ -13,6 +14,19 @@ import structlog
 logger = structlog.get_logger()
 
 _background_tasks: set[asyncio.Task] = set()
+# Module-level singleton for main app lifecycle management
+_main_engine: AgentEngine | None = None
+
+
+def get_main_engine() -> AgentEngine | None:
+    """Return the main AgentEngine singleton (set via set_main_engine)."""
+    return _main_engine
+
+
+def set_main_engine(engine: AgentEngine) -> None:
+    """Register the main AgentEngine singleton for lifecycle management."""
+    global _main_engine
+    _main_engine = engine
 
 
 def _spawn(coro: Any) -> None:
@@ -152,6 +166,12 @@ class AgentEngine:
         self.memory_service = PersistentMemoryService()
         # Tool prioritization with lightweight learning (reference: Suna)
         self.tool_prioritizer = ToolPrioritizer()
+        # Batch message buffer: accumulates pending writes per session for flush
+        self._msg_buffers: dict[str, list[dict]] = {}
+        self._msg_flush_interval = 2.0  # seconds between forced flushes
+        self._msg_last_flush: dict[str, float] = {}
+        # Background task for periodic flush
+        self._flush_task: asyncio.Task | None = None
         # Auto-debug loop (reference: Devika failure debugging closed loop)
         try:
             from app.core.debug_loop import DebugLoopEngine
@@ -307,21 +327,37 @@ class AgentEngine:
         tool_name: str | None = None,
         tokens: int = 0,
     ) -> None:
-        """Persist a message to the database (fire-and-forget)."""
+        """Persist a message via batch buffer (flushes every ~2s or on buffer full)."""
+        try:
+            now = time.monotonic()
+            buf = self._msg_buffers.setdefault(session_id, [])
+            if not buf:
+                self._msg_last_flush[session_id] = now
+            buf.append({
+                "session_id": session_id,
+                "role": role,
+                "content": content,
+                "tool_calls": tool_calls or [],
+                "tool_name": tool_name,
+                "tokens": tokens,
+            })
+
+            if len(buf) >= 10 or (now - self._msg_last_flush.get(session_id, now) >= self._msg_flush_interval):
+                await self._flush_buffer(session_id)
+        except Exception:
+            logger.debug("agent_engine.suppressed", exc_info=True)
+
+    async def _flush_buffer(self, session_id: str) -> None:
+        """Batch-commit all pending messages for one session."""
+        buf = self._msg_buffers.pop(session_id, [])
+        if not buf:
+            return
         try:
             from app.storage import async_session
             from app.storage.database import Message
-
             async with async_session() as db:
-                msg = Message(
-                    session_id=session_id,
-                    role=role,
-                    content=content,
-                    tool_calls=tool_calls or [],
-                    tool_name=tool_name,
-                    tokens=tokens,
-                )
-                db.add(msg)
+                for item in buf:
+                    db.add(Message(**item))
                 await db.commit()
         except Exception:
             logger.debug("agent_engine.suppressed", exc_info=True)
@@ -757,3 +793,26 @@ class AgentEngine:
     def update_permission_config(self, config: Any) -> None:
         """Update the default permission configuration for new sessions."""
         self._default_permission_config = config
+
+    async def _periodic_flush(self) -> None:
+        """Background task: flush all message buffers every 2 seconds."""
+        while True:
+            await asyncio.sleep(self._msg_flush_interval)
+            for session_id in list(self._msg_buffers.keys()):
+                if time.monotonic() - self._msg_last_flush.get(session_id, 0) >= self._msg_flush_interval:
+                    await self._flush_buffer(session_id)
+
+    def start(self) -> None:
+        """Start background flush task (call once at app startup)."""
+        if self._flush_task is not None and not self._flush_task.done():
+            return
+        self._flush_task = _spawn(self._periodic_flush())
+
+    def stop(self) -> None:
+        """Stop background flush task (call at app shutdown)."""
+        if self._flush_task is not None:
+            self._flush_task.cancel()
+            self._flush_task = None
+        # Flush remaining buffers
+        for session_id in list(self._msg_buffers.keys()):
+            self._flush_buffer(session_id)

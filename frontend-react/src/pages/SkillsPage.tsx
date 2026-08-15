@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, Package, RefreshCw, AlertCircle, Power, PowerOff } from 'lucide-react';
 import { api } from '../api';
 
@@ -33,35 +33,54 @@ export function SkillsPage() {
   const [toggling, setToggling] = useState<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchSkills = async () => {
       setLoading(true);
       setError(null);
       try {
         const res = await api.listSkills();
-          setSkills((res as any).skills || []);
+        if (controller.signal.aborted) return;
+        setSkills((res as any).skills || []);
       } catch (e: any) {
-        setError(e.message || '加载技能失败');
+        if (!controller.signal.aborted) {
+          setError(e.message || '加载技能失败');
+        }
       }
-      setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     };
     fetchSkills();
+
+    return () => {
+      controller.abort();
+    };
   }, []);
 
-  const categories = [...new Set(skills.map(s => s.category))];
-  const filtered = skills.filter(s => {
-    const matchSearch = !searchQuery || s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchCat = !selectedCategory || s.category === selectedCategory;
-    return matchSearch && matchCat;
-  });
+  const categories = useMemo(() => [...new Set(skills.map(s => s.category))], [skills]);
 
-  const grouped: Record<string, Skill[]> = {};
-  for (const skill of filtered) {
-    if (!grouped[skill.category]) grouped[skill.category] = [];
-    grouped[skill.category]!.push(skill);
-  }
+  const filtered = useMemo(() => {
+    if (!searchQuery && !selectedCategory) return skills;
+    return skills.filter(s => {
+      const matchSearch = !searchQuery || s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchCat = !selectedCategory || s.category === selectedCategory;
+      return matchSearch && matchCat;
+    });
+  }, [skills, searchQuery, selectedCategory]);
 
-  const toggleSkill = async (skill: Skill) => {
-    setToggling(`skill-${skill.id}`);
+  const grouped = useMemo(() => {
+    const result: Record<string, Skill[]> = {};
+    for (const skill of filtered) {
+      if (!result[skill.category]) result[skill.category] = [];
+      result[skill.category]!.push(skill);
+    }
+    return result;
+  }, [filtered]);
+
+  const toggleSkill = useCallback(async (skill: Skill) => {
+    const key = `skill-${skill.id}`;
+    setToggling(key);
     try {
       await api.updateSkill(String(skill.id), { enabled: !skill.is_enabled });
       setSkills(prev => prev.map(s => s.id === skill.id ? { ...s, is_enabled: !s.is_enabled } : s));
@@ -70,7 +89,7 @@ export function SkillsPage() {
     } finally {
       setToggling(null);
     }
-  };
+  }, []);
 
   return (
     <div className="h-full overflow-y-auto p-8">

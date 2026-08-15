@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from app.core import AgentEvent, AgentEventType
 from app.core.agent_engine import AgentEngine
@@ -54,22 +55,29 @@ async def chat(
         tool_ids = []
         try:
             async with async_session() as db:
-                from sqlalchemy import select
-                result = await db.execute(select(SessionModel).where(SessionModel.id == session_id))
-                row = result.scalar_one_or_none()
+                # Fetch session and agent in one transaction
+                session_result = await db.execute(
+                    select(SessionModel).where(SessionModel.id == session_id)
+                )
+                row = session_result.scalar_one_or_none()
                 if not row:
                     raise HTTPException(status_code=404, detail="Session not found")
                 if row.user_id and row.user_id != user_id:
                     raise HTTPException(status_code=403, detail="Forbidden")
+
                 agent_id = row.agent_id or ""
-                agent_result = await db.execute(select(AgentModel).where(AgentModel.id == agent_id))
-                agent_row = agent_result.scalar_one_or_none()
-                if agent_row:
-                    provider = agent_row.provider or "openai"
-                    model_id = agent_row.model_id or "gpt-4o-mini"
-                    base_url = agent_row.base_url
-                    system_prompt = agent_row.system_prompt or ""
-                    api_key = decrypt_api_key(agent_row.api_key_encrypted or "")
+                if agent_id:
+                    agent_result = await db.execute(
+                        select(AgentModel).where(AgentModel.id == agent_id)
+                    )
+                    agent_row = agent_result.scalar_one_or_none()
+                    if agent_row:
+                        provider = agent_row.provider or "openai"
+                        model_id = agent_row.model_id or "gpt-4o-mini"
+                        base_url = agent_row.base_url
+                        system_prompt = agent_row.system_prompt or ""
+                        api_key = decrypt_api_key(agent_row.api_key_encrypted or "")
+
                 if not api_key:
                     key_result = await db.execute(
                         select(ApiKeyModel)
@@ -81,7 +89,8 @@ async def chat(
                         api_key = decrypt_api_key(key_row.api_key_encrypted or "")
                         if key_row.base_url:
                             base_url = key_row.base_url
-                agent_tools = list(getattr(agent_row, "tool_ids", None) or [])
+
+                agent_tools = list(getattr(agent_row if 'agent_row' in locals() else None, "tool_ids", None) or [])
                 from app.tools import tool_registry as _chat_tool_registry
                 registered = {t.name for t in _chat_tool_registry.list_tools()}
                 tool_ids = sorted(set(agent_tools) | registered)

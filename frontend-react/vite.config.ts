@@ -24,6 +24,9 @@ export default defineConfig({
       },
     },
   },
+  resolve: {
+    alias: { '@': new URL('./src', import.meta.url).pathname },
+  },
   build: {
     chunkSizeWarningLimit: 1000,
     rollupOptions: {

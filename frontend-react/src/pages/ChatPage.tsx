@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ChatInterface } from '../components/agent/ChatInterface';
 import { useChat } from '../useChat';
@@ -8,13 +8,23 @@ export function ChatPage() {
   const { activeSessionId } = useWorkspaceStore();
   const { messages, isStreaming, error, sendMessage, stopStreaming } = useChat(activeSessionId);
   const [errorVisible, setErrorVisible] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (error) {
       setErrorVisible(true);
-      const timer = setTimeout(() => setErrorVisible(false), 5000);
-      return () => clearTimeout(timer);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        setErrorVisible(false);
+        timerRef.current = null;
+      }, 5000);
     }
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
   }, [error]);
 
   const handleSend = useCallback(async (message: string) => {

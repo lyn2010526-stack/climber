@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MessageSquare, Plus, Trash2, Sparkles, ChevronDown, Search, MoreVertical } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/workspace';
 import { useSessions } from '../../stores/useSessions';
 import { api } from '../../api';
 import { UserSwitcher } from './UserSwitcher';
 
-export function SessionSidebar({ inDrawer = false }: { inDrawer?: boolean }) {
+export const SessionSidebar = React.memo(function SessionSidebar({ inDrawer = false }: { inDrawer?: boolean }) {
   const activeSessionId = useWorkspaceStore(s => s.activeSessionId);
   const setActiveSession = useWorkspaceStore(s => s.setActiveSession);
   const { sessions, loading, createSession, deleteSession, refresh } = useSessions();
@@ -57,9 +57,25 @@ export function SessionSidebar({ inDrawer = false }: { inDrawer?: boolean }) {
     }
   }, [selectedAgent, creating, sessions.length, createSession, refresh]);
 
-  const filteredSessions = searchQuery
-    ? sessions.filter(s => s.title?.toLowerCase().includes(searchQuery.toLowerCase()))
-    : sessions;
+  const filteredSessions = useMemo(() => {
+    if (!searchQuery) return sessions;
+    const query = searchQuery.toLowerCase();
+    return sessions.filter(s => s.title?.toLowerCase().includes(query));
+  }, [sessions, searchQuery]);
+
+  const handleMouseEnter = useCallback((e: React.MouseEvent<HTMLDivElement>, sessionId: string) => {
+    if (activeSessionId !== sessionId) {
+      e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)';
+      e.currentTarget.style.color = 'var(--color-text-primary)';
+    }
+  }, [activeSessionId]);
+
+  const handleMouseLeave = useCallback((e: React.MouseEvent<HTMLDivElement>, sessionId: string) => {
+    if (activeSessionId !== sessionId) {
+      e.currentTarget.style.backgroundColor = 'transparent';
+      e.currentTarget.style.color = 'var(--color-text-secondary)';
+    }
+  }, [activeSessionId]);
 
   return (
     <div className={inDrawer ? "w-full flex flex-col" : "w-60 flex flex-col shrink-0"} style={inDrawer ? {} : {
@@ -158,18 +174,8 @@ export function SessionSidebar({ inDrawer = false }: { inDrawer?: boolean }) {
               backgroundColor: activeSessionId === s.id ? 'var(--color-bg-surface-2)' : 'transparent',
               color: activeSessionId === s.id ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
             }}
-            onMouseEnter={(e) => {
-              if (activeSessionId !== s.id) {
-                e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)';
-                e.currentTarget.style.color = 'var(--color-text-primary)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (activeSessionId !== s.id) {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = 'var(--color-text-secondary)';
-              }
-            }}
+            onMouseEnter={(e) => handleMouseEnter(e, s.id)}
+            onMouseLeave={(e) => handleMouseLeave(e, s.id)}
             onClick={() => setActiveSession(s.id)}
           >
             <MessageSquare size={13} className="shrink-0" style={{
@@ -223,4 +229,4 @@ export function SessionSidebar({ inDrawer = false }: { inDrawer?: boolean }) {
       </div>
     </div>
   );
-}
+});

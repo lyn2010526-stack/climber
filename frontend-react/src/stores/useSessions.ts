@@ -35,22 +35,40 @@ export function useSessions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const fetchVersionRef = useRef(0);
+  const lastFetchTimeRef = useRef(0);
+  const pendingFetchRef = useRef<Promise<void> | null>(null);
 
   const fetchSessions = useCallback(async () => {
-    const version = ++fetchVersionRef.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.listSessions();
-      if (version !== fetchVersionRef.current) return;
-      setSessions(data);
-      useWorkspaceStore.getState().setSessions(data.map(toWorkspaceSession));
-    } catch (err) {
-      if (version !== fetchVersionRef.current) return;
-      setError(err instanceof Error ? err.message : 'Failed to load sessions');
-    } finally {
-      if (version === fetchVersionRef.current) setLoading(false);
+    const now = Date.now();
+    if (now - lastFetchTimeRef.current < 500 && pendingFetchRef.current) {
+      return pendingFetchRef.current;
     }
+    lastFetchTimeRef.current = now;
+
+    const version = ++fetchVersionRef.current;
+    const promise = (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await api.listSessions();
+        if (version !== fetchVersionRef.current) return;
+        setSessions(data);
+        useWorkspaceStore.getState().setSessions(data.map(toWorkspaceSession));
+      } catch (err) {
+        if (version !== fetchVersionRef.current) return;
+        setError(err instanceof Error ? err.message : 'Failed to load sessions');
+      } finally {
+        if (version === fetchVersionRef.current) setLoading(false);
+      }
+    })();
+
+    pendingFetchRef.current = promise;
+    promise.finally(() => {
+      if (pendingFetchRef.current === promise) {
+        pendingFetchRef.current = null;
+      }
+    });
+    return promise;
   }, []);
 
   useEffect(() => {
@@ -65,12 +83,16 @@ export function useSessions() {
 
   const deleteSession = useCallback(async (id: string) => {
     await api.deleteSession(id);
-    setSessions(prev => {
-      const next = prev.filter(s => s.id !== id);
-      useWorkspaceStore.getState().setSessions(next.map(toWorkspaceSession));
-      return next;
-    });
-  }, []);
+    try {
+      setSessions(prev => {
+        const next = prev.filter(s => s.id !== id);
+        useWorkspaceStore.getState().setSessions(next.map(toWorkspaceSession));
+        return next;
+      });
+    } catch {
+      await fetchSessions();
+    }
+  }, [fetchSessions]);
 
   return { sessions, loading, error, createSession, deleteSession, refresh: fetchSessions };
 }

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 
 from app.core.auth import get_current_user
 from app.storage import async_session
@@ -45,8 +46,44 @@ class MessageOut(BaseModel):
     created_at: str
 
 
-@router.get("/", response_model=list[SessionOut])
-async def list_sessions_with_slash(user_id: str = Depends(get_current_user)) -> list[SessionOut]:
+# ─── TTL cache for session list (keyed by user_id) ───────────────────────────
+
+_session_cache: dict[str, tuple[list[dict], float]] = {}
+_SESSION_CACHE_TTL = 30.0
+
+
+# ─── Per-key detail cache for individual sessions ───────────────────────────
+
+_session_detail_cache: dict[str, tuple[dict, float]] = {}
+_SESSION_DETAIL_TTL = 30.0
+
+
+def _get_cached_session(session_id: str, user_id: str) -> dict | None:
+    """Return cached session detail or None."""
+    entry = _session_detail_cache.get(session_id)
+    if entry is not None:
+        data, ts = entry
+        if time.monotonic() - ts < _SESSION_DETAIL_TTL:
+            return data
+        del _session_detail_cache[session_id]
+    return None
+
+
+def _set_cached_session(session_id: str, data: dict) -> None:
+    _session_detail_cache[session_id] = (data, time.monotonic())
+
+
+def _invalidate_session(session_id: str) -> None:
+    _session_detail_cache.pop(session_id, None)
+
+
+async def _cached_list_sessions(user_id: str) -> list[SessionOut]:
+    entry = _session_cache.get(user_id)
+    if entry is not None:
+        rows_data, cached_at = entry
+        if time.monotonic() - cached_at < _SESSION_CACHE_TTL:
+            return [SessionOut(**r) for r in rows_data]
+
     async with async_session() as session:
         result = await session.execute(
             select(SessionModel)
@@ -54,7 +91,7 @@ async def list_sessions_with_slash(user_id: str = Depends(get_current_user)) -> 
             .order_by(SessionModel.created_at.desc())
         )
         rows = result.scalars().all()
-        return [
+        out = [
             SessionOut(
                 id=r.id,
                 title=r.title,
@@ -64,11 +101,18 @@ async def list_sessions_with_slash(user_id: str = Depends(get_current_user)) -> 
             )
             for r in rows
         ]
+    _session_cache[user_id] = ([r.model_dump() for r in out], time.monotonic())
+    return out
+
+
+@router.get("/", response_model=list[SessionOut])
+async def list_sessions_with_slash(user_id: str = Depends(get_current_user)) -> list[SessionOut]:
+    return await _cached_list_sessions(user_id)
 
 
 @router.get("", response_model=list[SessionOut])
 async def list_sessions_no_slash(user_id: str = Depends(get_current_user)) -> list[SessionOut]:
-    return await list_sessions_with_slash(user_id)
+    return await _cached_list_sessions(user_id)
 
 
 @router.post("/", response_model=dict)
@@ -86,6 +130,7 @@ async def create_session_with_slash(
         session.add(row)
         await session.commit()
         await session.refresh(row)
+        _session_cache.pop(user_id, None)
         return {"id": row.id, "session_id": row.id, "title": row.title, "status": row.status}
 
 
@@ -122,19 +167,20 @@ class MessagesResponse(BaseModel):
 
 @router.get("/{session_id}/messages", response_model=MessagesResponse)
 async def get_session_messages(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with async_session() as session:
-        owner = await session.scalar(
-            select(SessionModel).where(
-                SessionModel.id == session_id,
-                SessionModel.user_id == user_id,
-            )
+    async with async_session() as db:
+        # Single query: verify ownership then fetch messages in one transaction
+        result = await db.execute(
+            select(SessionModel.id)
+            .where(SessionModel.id == session_id, SessionModel.user_id == user_id)
         )
-        if owner is None:
+        if not result.scalar_one_or_none():
             raise HTTPException(status_code=404, detail="Session not found")
-        result = await session.execute(
-            select(MessageModel).where(MessageModel.session_id == session_id).order_by(MessageModel.created_at.asc())
+        msg_result = await db.execute(
+            select(MessageModel)
+            .where(MessageModel.session_id == session_id)
+            .order_by(MessageModel.created_at.asc())
         )
-        rows = result.scalars().all()
+        rows = msg_result.scalars().all()
         messages = [
             MessageOut(
                 id=r.id,
@@ -150,23 +196,24 @@ async def get_session_messages(session_id: str, user_id: str = Depends(get_curre
 
 @router.post("/{session_id}/clear")
 async def clear_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with async_session() as session:
-        result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
-        row = result.scalar_one_or_none()
-        if not row or (row.user_id and row.user_id != user_id):
-            raise HTTPException(status_code=404, detail="Session not found")
-        from sqlalchemy import delete
-
-        from app.storage.models_feedback import Feedback
-
-        message_ids = (await session.execute(
-            select(MessageModel.id).where(MessageModel.session_id == session_id)
-        )).scalars().all()
-        if message_ids:
-            await session.execute(delete(Feedback).where(Feedback.message_id.in_(message_ids)))
-        await session.execute(delete(MessageModel).where(MessageModel.session_id == session_id))
-        await session.commit()
     from app.core.agent_engine import get_engine
+    from app.storage.models_feedback import Feedback
+
+    async with async_session() as db:
+        result = await db.execute(
+            select(SessionModel).where(SessionModel.id == session_id, SessionModel.user_id == user_id)
+        )
+        row = result.scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Session not found")
+        msg_ids = (
+            await db.execute(select(MessageModel.id).where(MessageModel.session_id == session_id))
+        ).scalars().all()
+        if msg_ids:
+            await db.execute(delete(Feedback).where(Feedback.message_id.in_(msg_ids)))
+        await db.execute(delete(MessageModel).where(MessageModel.session_id == session_id))
+        await db.commit()
+        _invalidate_session(session_id)
     engine = get_engine()
     engine._session_locks.pop(session_id, None)
     return {"status": "cleared"}
@@ -174,12 +221,18 @@ async def clear_session(session_id: str, user_id: str = Depends(get_current_user
 
 @router.get("/{session_id}")
 async def get_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with async_session() as session:
-        result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
+    cached = _get_cached_session(session_id, user_id)
+    if cached is not None:
+        return cached
+
+    async with async_session() as db:
+        result = await db.execute(
+            select(SessionModel).where(SessionModel.id == session_id, SessionModel.user_id == user_id)
+        )
         row = result.scalar_one_or_none()
-        if not row or (row.user_id and row.user_id != user_id):
+        if not row:
             raise HTTPException(status_code=404, detail="Session not found")
-        return {
+        data = {
             "id": row.id,
             "title": row.title,
             "status": row.status,
@@ -187,33 +240,36 @@ async def get_session(session_id: str, user_id: str = Depends(get_current_user))
             "created_at": row.created_at.isoformat() if row.created_at else "",
             "updated_at": row.updated_at.isoformat() if row.updated_at else "",
         }
+    _set_cached_session(session_id, data)
+    return data
 
 
 @router.delete("/{session_id}")
 async def delete_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with async_session() as session:
-        result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
+    from app.storage.database import Turn, UsageLog
+    from app.storage.models_cost import CostRecord
+    from app.storage.models_feedback import Feedback
+
+    async with async_session() as db:
+        result = await db.execute(
+            select(SessionModel).where(SessionModel.id == session_id, SessionModel.user_id == user_id)
+        )
         row = result.scalar_one_or_none()
-        if not row or (row.user_id and row.user_id != user_id):
+        if not row:
             raise HTTPException(status_code=404, detail="Session not found")
-        from sqlalchemy import delete
-
-        from app.storage.database import Message as MessageModel
-        from app.storage.database import Turn, UsageLog
-        from app.storage.models_cost import CostRecord
-        from app.storage.models_feedback import Feedback
-
-        message_ids = (await session.execute(
-            select(MessageModel.id).where(MessageModel.session_id == session_id)
-        )).scalars().all()
-        if message_ids:
-            await session.execute(delete(Feedback).where(Feedback.message_id.in_(message_ids)))
-        await session.execute(delete(MessageModel).where(MessageModel.session_id == session_id))
-        await session.execute(delete(Turn).where(Turn.session_id == session_id))
-        await session.execute(delete(UsageLog).where(UsageLog.session_id == session_id))
-        await session.execute(delete(CostRecord).where(CostRecord.session_id == session_id))
-        await session.delete(row)
-        await session.commit()
+        msg_ids = (
+            await db.execute(select(MessageModel.id).where(MessageModel.session_id == session_id))
+        ).scalars().all()
+        if msg_ids:
+            await db.execute(delete(Feedback).where(Feedback.message_id.in_(msg_ids)))
+        await db.execute(delete(MessageModel).where(MessageModel.session_id == session_id))
+        await db.execute(delete(Turn).where(Turn.session_id == session_id))
+        await db.execute(delete(UsageLog).where(UsageLog.session_id == session_id))
+        await db.execute(delete(CostRecord).where(CostRecord.session_id == session_id))
+        await db.delete(row)
+        await db.commit()
+        _invalidate_session(session_id)
+        _session_cache.pop(user_id, None)
     from app.core.agent_engine import get_engine
     engine = get_engine()
     engine._session_locks.pop(session_id, None)

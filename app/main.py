@@ -37,6 +37,7 @@ from app.middleware.security import (
 from app.storage import db_health, init_db
 from app.storage.cache import close_redis, get_redis
 from app.tools import register_builtins
+from app.core.slow_query_logger import install as install_slow_query_logger
 
 logger = structlog.get_logger()
 
@@ -137,6 +138,8 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Database initialization failed", error=str(e))
 
+        install_slow_query_logger(threshold_ms=int(os.environ.get("SLOW_QUERY_THRESHOLD_MS", "100")))
+
         redis = await get_redis()
         if redis:
             logger.info("Redis cache connected")
@@ -144,6 +147,10 @@ async def lifespan(app: FastAPI):
             logger.info("Redis unavailable, using in-process cache")
 
         register_builtins()
+        main_engine = di_resolve("AgentEngine")
+        main_engine.start()
+        from app.core.agent_engine import set_main_engine
+        set_main_engine(main_engine)
 
         auto_loop_engine = di_resolve("AutoLoopEngine")
         recovered = await auto_loop_engine.recover_interrupted_sessions()
@@ -190,6 +197,13 @@ async def lifespan(app: FastAPI):
 
         await watchdog.stop()
         await guardian.stop()
+        try:
+            from app.core.agent_engine import get_main_engine
+            _eng = get_main_engine()
+            if _eng:
+                _eng.stop()
+        except Exception:
+            pass
         try:
             from app.tools.browser_pool import get_browser_pool
             await get_browser_pool().close_all()
