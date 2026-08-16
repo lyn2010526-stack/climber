@@ -49,7 +49,7 @@ def _after_cursor_execute(conn, cursor, statement, parameters, context, executem
         from app.middleware.metrics import REQUEST_LATENCY
         REQUEST_LATENCY.labels(method="DB", endpoint="query").observe(duration_ms / 1000)
     except Exception:
-        pass
+        logger.debug("slow_query_metrics_record_failed", exc_info=True)
 
 
 def install(threshold_ms: int = 100) -> None:

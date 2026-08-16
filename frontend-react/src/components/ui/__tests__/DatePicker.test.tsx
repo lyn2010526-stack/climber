@@ -30,6 +30,20 @@ describe('DatePicker', () => {
     expect(handleChange).toHaveBeenCalled();
   });
 
+  it('does not select a date before minDate', () => {
+    const handleChange = vi.fn();
+    render(
+      <DatePicker
+        value={new Date(2024, 0, 15)}
+        minDate={new Date(2024, 0, 10)}
+        onChange={handleChange}
+      />,
+    );
+    fireEvent.click(screen.getByPlaceholderText('选择日期'));
+    fireEvent.click(screen.getByText('5'));
+    expect(handleChange).not.toHaveBeenCalled();
+  });
+
   it('clears value when clear button is clicked', () => {
     const handleChange = vi.fn();
     const date = new Date(2024, 0, 15);

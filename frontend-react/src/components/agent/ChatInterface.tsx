@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Drawer } from 'vaul';
-import { Send, Square, Bot, Edit3, Check, X, Maximize2 } from 'lucide-react';
+import { ArrowDown, Bot, Edit3, Check, X, Maximize2, Sparkles } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 import { api } from '../../api';
@@ -10,6 +10,7 @@ import { ThinkingDetails } from '../chat/ThinkingDetails';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { FloatingPermissionDialog } from './FloatingPermissionDialog';
 import type { PermissionRequest } from './FloatingPermissionDialog';
+import { ChatComposer } from './ChatComposer';
 
   const StreamingCursor = () => (
     <span className="inline-block w-[2px] h-4 ml-0.5 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-accent)' }} />
@@ -35,7 +36,7 @@ interface Message {
 
 interface ChatInterfaceProps {
   messages: Message[];
-  onSend: (message: string) => void;
+  onSend: (message: string, model?: { provider?: string; modelId?: string }) => void;
   onStop?: () => void;
   isLoading?: boolean;
   className?: string;
@@ -58,12 +59,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   emptyStateDescription = '输入任何问题或任务，Climber 将为你自主执行。',
   suggestions = ['帮我分析代码', '写一个 Python 脚本', '解释这个错误'],
 }) => {
-  const [input, setInput] = useState('');
   const [editState, setEditState] = useState<EditState>(null);
   const [editContent, setEditContent] = useState('');
   const [permissionRequests, setPermissionRequests] = useState<PermissionRequest[]>([]);
+  const [isNearBottom, setIsNearBottom] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const handleApprovePermission = useCallback(async (id: string) => {
     try {
@@ -85,11 +85,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setPermissionRequests([]);
   }, [permissionRequests]);
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    const element = scrollRef.current;
+    if (!element) return;
+    if (typeof element.scrollTo === 'function') {
+      element.scrollTo({ top: element.scrollHeight, behavior });
+      return;
     }
-  }, [messages, isLoading]);
+    element.scrollTop = element.scrollHeight;
+  }, []);
+
+  useEffect(() => {
+    if (isNearBottom) scrollToBottom(messages.length < 2 ? 'auto' : 'smooth');
+  }, [messages, isLoading, isNearBottom, scrollToBottom]);
 
   const startEditing = useCallback((messageId: string, content: string) => {
     setEditContent(content);
@@ -113,29 +121,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [editState, editContent, onSend]);
 
-  const handleSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    if (input.trim() && !isLoading) {
-      onSend(input.trim());
-      setInput('');
-    }
-  }, [input, isLoading, onSend]);
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e);
-    }
-  }, [handleSubmit]);
-
-  const autoGrow = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const el = e.target;
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
-  }, []);
-
-  const renderMessageContent = (msg: Message) => {
+  const renderMessageContent = (msg: Message, index: number) => {
     const isEditing = editState?.messageId === msg.id;
+    const isLatestMessage = index === messages.length - 1;
+    const isMessageStreaming = Boolean(isLoading && isLatestMessage && msg.role === 'assistant');
 
     if (isEditing && (editState.mode === 'edit' || editState.mode === 'modal')) {
       return (
@@ -176,36 +165,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       );
     }
 
-    if (msg.role === 'tool' && msg.toolCalls) {
-      return msg.toolCalls.map(tc => (
-        <ToolCallCard
-          key={tc.id}
-          name={tc.name}
-          arguments={tc.arguments}
-          result={tc.result ?? ''}
-          error={tc.error ?? ''}
-          isRunning={tc.status === 'running'}
-        />
-      ));
-    }
-
-    if (msg.toolCalls && msg.toolCalls.length > 0) {
-      return (
-        <motion.div
-          layout
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, transition: { duration: 0.15 } }}
-          transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.9 }}
-          className="flex gap-3 max-w-[85%]"
-        >
-          <div className="flex items-center justify-center rounded-xl w-9 h-9 shrink-0" style={{
-            background: 'linear-gradient(135deg, var(--color-accent), #8b5cf6)',
-            color: '#ffffff',
-          }}>
-            <Bot size={16} />
+    return (
+      <motion.div
+        key={msg.id}
+        layout
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, transition: { duration: 0.12 } }}
+        transition={{ duration: 0.22 }}
+        className="w-full"
+      >
+        {msg.reasoning && (
+          <div className="mb-2 ml-11">
+            <ThinkingDetails defaultOpen={!msg.content} isComplete={!isMessageStreaming}>{msg.reasoning}</ThinkingDetails>
           </div>
-          <div className="flex flex-col gap-2 min-w-0 flex-1">
+        )}
+        {msg.toolCalls && msg.toolCalls.length > 0 && (
+          <div className="mb-3 ml-11 space-y-2">
+            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase" style={{ color: 'var(--color-text-muted)' }}>
+              <Sparkles size={11} /> 执行记录 · {msg.toolCalls.length} 项
+            </div>
             {msg.toolCalls.map(tc => (
               <ToolCallCard
                 key={tc.id}
@@ -214,40 +193,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 result={tc.result ?? ''}
                 error={tc.error ?? ''}
                 isRunning={tc.status === 'running'}
+                {...(tc.status ? { status: tc.status } : {})}
               />
             ))}
           </div>
-        </motion.div>
-      );
-    }
-
-    if (msg.reasoning && !msg.content) {
-      return (
-        <motion.div
-          layout
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, transition: { duration: 0.15 } }}
-          transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.9 }}
-          className="max-w-[85%]"
-        >
-          <ThinkingDetails defaultOpen={true}>
-            {msg.reasoning}
-          </ThinkingDetails>
-        </motion.div>
-      );
-    }
-
-    return (
-      <motion.div
-        layout
-        initial={{ opacity: 0, y: 12, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.15 } }}
-        transition={{ type: 'spring', stiffness: 380, damping: 32, mass: 0.9 }}
-        className={cn('group flex gap-3 max-w-[85%]', msg.role === 'user' ? 'flex-row-reverse ml-auto' : '')}
-      >
-        <div>
+        )}
+        {(msg.content || (!msg.toolCalls?.length && !msg.reasoning)) && (
           <MessageContent
             content={msg.content}
             role={msg.role}
@@ -256,24 +207,28 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               msg.role === 'assistant' ? (
                 <MessageActions
                   onCopy={() => navigator.clipboard.writeText(msg.content)}
-                  onFeedback={(type) => {
-                    api.submitFeedback(msg.id, type).catch(() => undefined);
-                  }}
+                  onFeedback={(type) => api.submitFeedback(msg.id, type).catch(() => undefined)}
                   onEdit={() => startEditing(msg.id, msg.content)}
                 />
               ) : undefined
             }
           />
-          {isLoading && msg.role === 'assistant' && !msg.toolCalls && <StreamingCursor />}
-        </div>
+        )}
+        {isMessageStreaming && <span className="ml-11"><StreamingCursor /></span>}
       </motion.div>
     );
   };
 
   return (
     <div className={cn('flex flex-col h-full', className)}>
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-8 py-6 chat-container">
+      <div
+        ref={scrollRef}
+        onScroll={(event) => {
+          const element = event.currentTarget;
+          setIsNearBottom(element.scrollHeight - element.scrollTop - element.clientHeight < 120);
+        }}
+        className="relative flex-1 overflow-y-auto px-4 py-6 md:px-8 chat-container"
+      >
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center max-w-lg">
@@ -322,16 +277,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             </div>
           </div>
         )}
-        <div className="space-y-4">
+        <div className="mx-auto max-w-4xl space-y-5">
           <AnimatePresence initial={false}>
             {messages.map(renderMessageContent)}
           </AnimatePresence>
-          {isLoading && (
+          {isLoading && !messages.some((message, index) => index === messages.length - 1 && message.role === 'assistant') && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="flex gap-3 max-w-[85%]"
+              className="flex gap-3"
             >
               <div className="flex items-center justify-center rounded-xl w-9 h-9 shrink-0"
                 style={{ backgroundColor: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
@@ -344,57 +299,28 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             </motion.div>
           )}
         </div>
+        {!isNearBottom && (
+          <button
+            type="button"
+            onClick={() => scrollToBottom()}
+            className="sticky bottom-2 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full shadow-md transition-colors hover:bg-[var(--color-bg-surface-2)]"
+            style={{ backgroundColor: 'var(--color-bg-surface-1)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}
+            aria-label="滚动到最新消息"
+            title="滚动到最新消息"
+          >
+            <ArrowDown size={15} />
+          </button>
+        )}
       </div>
 
-      {/* Input Area */}
-      <form onSubmit={handleSubmit} className="p-3 md:p-4"
-        style={{
-          borderTop: '1px solid var(--color-border-subtle)',
-          backgroundColor: 'rgba(17, 17, 19, 0.85)',
-          backdropFilter: 'blur(20px)',
-        }}
-      >
-        <div className="flex gap-2 max-w-4xl mx-auto">
-          {isLoading ? (
-            <Button type="button" variant="destructive" size="icon" onClick={onStop} className="rounded-lg">
-              <Square size={14} />
-            </Button>
-          ) : (
-            <>
-              <div className="flex-1 flex items-end gap-2 rounded-lg px-3" style={{
-                backgroundColor: 'var(--color-bg-surface-2)',
-                border: '1px solid var(--color-border-subtle)',
-              }}>
-                <textarea
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e) => { setInput(e.target.value); autoGrow(e); }}
-                  onKeyDown={handleKeyDown}
-                  placeholder={placeholder}
-                  disabled={isLoading}
-                  className="flex-1 py-2.5 bg-transparent text-sm resize-none focus:outline-none min-h-[36px] max-h-[200px]"
-                  style={{ color: 'var(--color-text-primary)' }}
-                  rows={1}
-                />
-                <motion.button
-                  type="submit"
-                  disabled={!input.trim()}
-                  whileTap={input.trim() ? { scale: 0.9 } : { scale: 1 }}
-                  whileHover={input.trim() ? { scale: 1.05 } : { scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 20 }}
-                  className="flex items-center justify-center w-8 h-8 rounded-lg mb-1.5 shrink-0 transition-all duration-200"
-                  style={{
-                    backgroundColor: input.trim() ? 'var(--color-accent)' : 'var(--color-bg-surface-3)',
-                    color: input.trim() ? '#ffffff' : 'var(--color-text-muted)',
-                  }}
-                >
-                  <Send size={14} />
-                </motion.button>
-              </div>
-            </>
-          )}
-        </div>
-      </form>
+      <div style={{ borderTop: '1px solid var(--color-border-subtle)', backgroundColor: 'var(--color-bg-canvas)' }}>
+        <ChatComposer
+          onSend={onSend}
+          placeholder={placeholder}
+          {...(onStop ? { onStop } : {})}
+          {...(isLoading !== undefined ? { isLoading } : {})}
+        />
+      </div>
 
       {/* Edit Drawer */}
       <Drawer.Root

@@ -168,7 +168,6 @@ async def test_validate_tool_call_denies_and_allows(engine: AgentEngine):
 
 
 def test_resolve_permission_pending_and_missing(engine: AgentEngine):
-    import asyncio
     from app.core.approval import approval_manager
 
     assert engine.resolve_permission("call-missing", "allow") is False
@@ -178,6 +177,24 @@ def test_resolve_permission_pending_and_missing(engine: AgentEngine):
     ))
     assert engine.resolve_permission(req.id, "allow") is True
     assert engine.resolve_permission(req.id, "allow") is False  # already resolved
+
+
+@pytest.mark.asyncio
+async def test_stop_flushes_buffered_messages(engine: AgentEngine, monkeypatch):
+    flushed = []
+    engine._msg_buffers["session-1"] = [{"role": "user", "content": "pending"}]
+
+    async def fake_flush(session_id: str):
+        flushed.append(session_id)
+
+    monkeypatch.setattr(engine, "_flush_buffer", fake_flush)
+    engine.start()
+    flush_task = engine._flush_task
+    assert flush_task is not None
+    await engine.stop()
+
+    assert flushed == ["session-1"]
+    assert flush_task.cancelled()
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { Brain, ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 /* Reference: Dify `markdown-blocks/thinking-details.tsx` */
@@ -31,31 +31,33 @@ export function ThinkingDetails({
   }, [isComplete, elapsedTime]);
 
   const timeLabel = isComplete
-    ? `Thought(${((elapsedTime || 0).toFixed(1))}s)`
-    : `Thinking(${displayTime.toFixed(1)}s)`;
+    ? `思考完成 · ${((elapsedTime || 0).toFixed(1))}s`
+    : `正在思考 · ${displayTime.toFixed(1)}s`;
 
   return (
     <div
-      className={cn('my-3 rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden transition-all duration-300', className)}
+      className={cn('my-2 rounded-lg border overflow-hidden transition-all duration-300', className)}
+      style={{ borderColor: 'var(--color-border-subtle)', backgroundColor: 'var(--color-bg-surface-2)' }}
     >
       <details
-        {...{ open: isOpen || isComplete }}
+        open={isOpen}
         onToggle={(e) => {
-          if (!isComplete) {
-            setIsOpen((e.target as HTMLDetailsElement).open);
-          }
+          setIsOpen((e.target as HTMLDetailsElement).open);
         }}
       >
-        <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-medium text-[var(--color-text-secondary)] select-none hover:bg-white/5 transition-all duration-200 group">
-          <div className="flex items-center justify-center w-5 h-5 rounded-lg bg-white/5 group-hover:bg-white/10 transition-colors duration-200">
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-xs font-medium text-[var(--color-text-secondary)] select-none hover:bg-[var(--color-bg-surface-3)] transition-all duration-200 group">
+          <div className="flex items-center justify-center w-5 h-5 rounded-md" style={{ backgroundColor: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}>
+            <Brain size={12} />
+          </div>
+          <div className="flex items-center justify-center w-5 h-5 rounded-md">
             <ChevronRight className="size-3 transition-transform duration-300 group-open:rotate-90" />
           </div>
           <span className="flex items-center gap-1.5">
-            {!isComplete && <Loader2 size={12} className="animate-spin text-blue-400" />}
+            {!isComplete && <Loader2 size={12} className="animate-spin text-[var(--color-accent)]" />}
             {timeLabel}
           </span>
         </summary>
-        <div className="border-t border-white/5 bg-white/[0.01] px-4 py-3">
+        <div className="px-4 py-3" style={{ borderTop: '1px solid var(--color-border-subtle)', backgroundColor: 'var(--color-bg-surface-1)' }}>
           <div className="text-sm text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap font-mono text-xs">
             {children}
           </div>

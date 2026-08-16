@@ -242,6 +242,33 @@ def test_delete_session(client: TestClient):
     assert resp.status_code == 404
 
 
+def test_rename_session(client: TestClient):
+    """Session titles can be renamed and are reflected by detail and list APIs."""
+    resp = client.post('/api/v1/sessions', json={'title': 'Original'})
+    assert resp.status_code == 200
+    session_id = resp.json()['session_id']
+
+    resp = client.patch(f'/api/v1/sessions/{session_id}', json={'title': '  Project Alpha  '})
+    assert resp.status_code == 200
+    assert resp.json()['title'] == 'Project Alpha'
+
+    detail = client.get(f'/api/v1/sessions/{session_id}')
+    assert detail.status_code == 200
+    assert detail.json()['title'] == 'Project Alpha'
+
+    sessions = client.get('/api/v1/sessions').json()
+    renamed = next(session for session in sessions if session['id'] == session_id)
+    assert renamed['title'] == 'Project Alpha'
+
+
+def test_rename_session_rejects_empty_title(client: TestClient):
+    resp = client.post('/api/v1/sessions', json={'title': 'Original'})
+    session_id = resp.json()['session_id']
+
+    resp = client.patch(f'/api/v1/sessions/{session_id}', json={'title': '   '})
+    assert resp.status_code == 422
+
+
 def test_unauthorized_access(client: TestClient):
     """Test that unauthorized requests work in guest mode (default user)."""
     resp = client.get('/api/v1/agents')

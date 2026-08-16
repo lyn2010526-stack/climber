@@ -154,19 +154,26 @@ class ApiClient {
     return this.request<DeleteResult>(`/sessions/${id}`, { method: 'DELETE' });
   }
 
+  async renameSession(id: string, title: string): Promise<SessionSummary> {
+    return this.request<SessionSummary>(`/sessions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title }),
+    });
+  }
+
   async getSessionMessages(sessionId: string): Promise<MessagesResponse> {
     return this.request<MessagesResponse>(`/sessions/${sessionId}/messages`);
   }
 
   // Chat (SSE)
-  chatStream(sessionId: string, message: string, onEvent: (event: { event: string; data: any }) => void): () => void {
+  chatStream(sessionId: string, message: string, onEvent: (event: { event: string; data: any }) => void, model?: { provider?: string; modelId?: string }): () => void {
     const url = `${BASE_URL}/sessions/${sessionId}/chat`;
     const abortController = new AbortController();
 
     fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, provider: model?.provider, model_id: model?.modelId }),
       signal: abortController.signal,
     }).then(async (response) => {
       if (!response.ok) {

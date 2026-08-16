@@ -82,7 +82,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
 
   return (
     <div className="h-11 flex items-center px-3 gap-1.5" style={{
-      backgroundColor: 'rgba(17, 17, 19, 0.85)',
+      backgroundColor: 'var(--color-glass-bg)',
       borderBottom: '1px solid var(--color-border-subtle)',
       backdropFilter: 'blur(20px)',
     }}>

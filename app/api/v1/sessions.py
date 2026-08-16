@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, select
 
 from app.core.auth import get_current_user
 from app.storage import async_session
@@ -21,6 +21,11 @@ class SessionCreate(BaseModel):
     title: str | None = None
     agent_id: str | None = None
     model_settings: dict[str, Any] | None = None
+
+
+class SessionUpdate(BaseModel):
+    title: str | None = None
+    status: str | None = None
 
 
 class SessionOut(BaseModel):
@@ -196,7 +201,7 @@ async def get_session_messages(session_id: str, user_id: str = Depends(get_curre
 
 @router.post("/{session_id}/clear")
 async def clear_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    from app.core.agent_engine import get_engine
+    from app.core.agent_engine import get_main_engine
     from app.storage.models_feedback import Feedback
 
     async with async_session() as db:
@@ -214,9 +219,43 @@ async def clear_session(session_id: str, user_id: str = Depends(get_current_user
         await db.execute(delete(MessageModel).where(MessageModel.session_id == session_id))
         await db.commit()
         _invalidate_session(session_id)
-    engine = get_engine()
-    engine._session_locks.pop(session_id, None)
+    engine = get_main_engine()
+    if engine is not None:
+        engine._session_locks.pop(session_id, None)
     return {"status": "cleared"}
+
+
+@router.patch("/{session_id}", response_model=SessionOut)
+async def update_session(
+    session_id: str,
+    payload: SessionUpdate,
+    user_id: str = Depends(get_current_user),
+) -> SessionOut:
+    async with async_session() as db:
+        result = await db.execute(
+            select(SessionModel).where(SessionModel.id == session_id, SessionModel.user_id == user_id)
+        )
+        row = result.scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="Session not found")
+        if payload.title is not None:
+            title = payload.title.strip()
+            if not title:
+                raise HTTPException(status_code=422, detail="Title cannot be empty")
+            row.title = title[:200]
+        if payload.status is not None:
+            row.status = payload.status
+        await db.commit()
+        await db.refresh(row)
+        _invalidate_session(session_id)
+        _session_cache.pop(user_id, None)
+        return SessionOut(
+            id=row.id,
+            title=row.title,
+            status=row.status,
+            created_at=row.created_at.isoformat() if row.created_at else "",
+            updated_at=row.updated_at.isoformat() if row.updated_at else "",
+        )
 
 
 @router.get("/{session_id}")
@@ -270,9 +309,10 @@ async def delete_session(session_id: str, user_id: str = Depends(get_current_use
         await db.commit()
         _invalidate_session(session_id)
         _session_cache.pop(user_id, None)
-    from app.core.agent_engine import get_engine
-    engine = get_engine()
-    engine._session_locks.pop(session_id, None)
+    from app.core.agent_engine import get_main_engine
+    engine = get_main_engine()
+    if engine is not None:
+        engine._session_locks.pop(session_id, None)
     return {"ok": True}
 
 

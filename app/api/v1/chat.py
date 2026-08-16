@@ -35,6 +35,22 @@ def get_engine() -> AgentEngine:
 
 class ChatRequest(BaseModel):
     message: str
+    provider: str | None = None
+    model_id: str | None = None
+
+
+async def _load_provider_credentials(provider: str, user_id: str) -> tuple[str, str | None]:
+    async with async_session() as db:
+        result = await db.execute(
+            select(ApiKeyModel)
+            .where(ApiKeyModel.provider == provider)
+            .where(ApiKeyModel.user_id == user_id)
+            .where(ApiKeyModel.is_active == True)
+        )
+        key_row = result.scalar_one_or_none()
+        if key_row is None:
+            return "", None
+        return decrypt_api_key(key_row.api_key_encrypted or ""), key_row.base_url
 
 
 @router.post("/{session_id}/chat")
@@ -72,16 +88,21 @@ async def chat(
                     )
                     agent_row = agent_result.scalar_one_or_none()
                     if agent_row:
-                        provider = agent_row.provider or "openai"
-                        model_id = agent_row.model_id or "gpt-4o-mini"
-                        base_url = agent_row.base_url
+                        agent_provider = agent_row.provider or "openai"
+                        provider = request.provider or agent_provider
+                        model_id = request.model_id or agent_row.model_id or "gpt-4o-mini"
                         system_prompt = agent_row.system_prompt or ""
-                        api_key = decrypt_api_key(agent_row.api_key_encrypted or "")
+                        if provider == agent_provider:
+                            base_url = agent_row.base_url
+                            api_key = decrypt_api_key(agent_row.api_key_encrypted or "")
 
+                provider = request.provider or provider
+                model_id = request.model_id or model_id
                 if not api_key:
                     key_result = await db.execute(
                         select(ApiKeyModel)
                         .where(ApiKeyModel.provider == provider)
+                        .where(ApiKeyModel.user_id == user_id)
                         .where(ApiKeyModel.is_active == True)
                     )
                     key_row = key_result.scalar_one_or_none()
@@ -114,6 +135,12 @@ async def chat(
 
     if session.user_id and session.user_id != user_id:
         raise HTTPException(status_code=403, detail="Forbidden")
+
+    if request.provider and request.provider != session.provider:
+        session.api_key, session.base_url = await _load_provider_credentials(request.provider, user_id)
+        session.provider = request.provider
+    if request.model_id:
+        session.model_id = request.model_id
 
     async def _stream() -> Any:
         try:

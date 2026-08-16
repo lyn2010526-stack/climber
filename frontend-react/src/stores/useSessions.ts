@@ -94,5 +94,15 @@ export function useSessions() {
     }
   }, [fetchSessions]);
 
-  return { sessions, loading, error, createSession, deleteSession, refresh: fetchSessions };
+  const renameSession = useCallback(async (id: string, title: string) => {
+    const updated = await api.renameSession(id, title);
+    setSessions(prev => {
+      const next = prev.map(session => session.id === id ? { ...session, ...updated } : session);
+      useWorkspaceStore.getState().setSessions(next.map(toWorkspaceSession));
+      return next;
+    });
+    return updated;
+  }, []);
+
+  return { sessions, loading, error, createSession, deleteSession, renameSession, refresh: fetchSessions };
 }

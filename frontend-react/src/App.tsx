@@ -45,11 +45,10 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 
 type Page = 'chat' | 'agents' | 'workflows' | 'apikeys' | 'skills' | 'notifications' | 'doctor' | 'mcp' | 'stats' | 'factory' | 'plugins' | 'scheduler' | 'cluster' | 'traces' | 'eval' | 'cost' | 'plugin-manage' | 'settings' | 'tasks' | 'task-history' | 'reasoning' | 'reasoning-history' | 'terminal';
 
-const CORE_NAV: { id: Page; icon: typeof MessageSquare; label: string }[] = [
-  { id: 'chat', icon: MessageSquare, label: '工作台' },
-  { id: 'factory', icon: Sparkles, label: '自主执行' },
-  { id: 'tasks', icon: Cpu, label: '任务监控' },
-  { id: 'settings', icon: Settings, label: '设置' },
+const CORE_NAV: { id: Page; icon: typeof MessageSquare; label: string; description: string }[] = [
+  { id: 'chat', icon: MessageSquare, label: '工作台', description: '对话与执行' },
+  { id: 'factory', icon: Sparkles, label: '自主执行', description: '长任务与计划' },
+  { id: 'tasks', icon: Cpu, label: '任务监控', description: '实时运行状态' },
 ];
 
 const ALL_NAV_ITEMS: { id: Page; icon: typeof MessageSquare; label: string; keywords?: string }[] = [
@@ -204,91 +203,85 @@ export default function App() {
             <div className="mobile-overlay md:hidden" onClick={() => setMobileMenuOpen(false)} />
           )}
 
-          {/* Icon navigation rail (w-14) */}
-          <aside className="relative z-50 hidden md:flex flex-col w-14 shrink-0"
+          {/* Desktop workspace navigation */}
+          <aside className="relative z-50 hidden md:flex flex-col w-[224px] shrink-0"
             style={{
               backgroundColor: 'var(--color-bg-surface-1)',
               borderRight: '1px solid var(--color-border-subtle)',
             }}
           >
-            {/* Logo */}
-            <div className="h-12 flex items-center justify-center" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{
-                background: 'linear-gradient(135deg, var(--color-accent), #8b5cf6)',
-                boxShadow: '0 0 12px var(--color-accent-glow)',
+            <div className="h-14 flex items-center gap-3 px-4 shrink-0" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{
+                backgroundColor: 'var(--color-accent)',
+                boxShadow: '0 5px 12px var(--color-accent-glow)',
               }}>
-                <Sparkles size={14} className="text-white" />
+                <Sparkles size={15} className="text-white" strokeWidth={2.5} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold truncate" style={{ color: 'var(--color-text-primary)' }}>Climber</div>
+                <div className="text-[10px] truncate" style={{ color: 'var(--color-text-muted)' }}>Agent workspace</div>
               </div>
             </div>
 
-            {/* Navigation items */}
-            <nav className="flex-1 py-2 px-1.5 overflow-y-auto space-y-0.5">
-              {CORE_NAV.map(({ id, icon: Icon, label }) => {
+            <nav className="flex-1 py-4 px-3 overflow-y-auto">
+              <div className="px-2 mb-2 text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-text-muted)' }}>Workspace</div>
+              <div className="space-y-1">
+              {CORE_NAV.map(({ id, icon: Icon, label, description }) => {
                 const isActive = currentPage === id;
-                const isHovered = hoveredNav === id;
                 return (
                   <button
                     key={id}
                     onClick={() => navigate(id)}
-                    onMouseEnter={() => setHoveredNav(id)}
-                    onMouseLeave={() => setHoveredNav(null)}
-                    className="relative w-full flex items-center justify-center p-2 rounded-lg transition-all duration-150 mb-0.5"
+                    className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 text-left"
                     style={{
-                      backgroundColor: isActive ? 'var(--color-accent-subtle)' : isHovered ? 'var(--color-bg-surface-2)' : 'transparent',
-                      color: isActive ? 'var(--color-accent)' : isHovered ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+                      backgroundColor: isActive ? 'var(--color-accent-subtle)' : 'transparent',
+                      color: isActive ? 'var(--color-accent)' : 'var(--color-text-secondary)',
                     }}
                   >
-                    <Icon size={18} strokeWidth={isActive ? 2.5 : 2} />
+                    <Icon size={17} strokeWidth={isActive ? 2.5 : 2} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-semibold" style={{ color: isActive ? 'var(--color-accent)' : 'var(--color-text-primary)' }}>{label}</span>
+                      <span className="block text-[10px] mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{description}</span>
+                    </span>
                     {isActive && (
-                      <div className="absolute left-0 w-[3px] h-5 rounded-r-full bg-[var(--color-accent)]" />
-                    )}
-                    {/* Tooltip */}
-                    {isHovered && !isActive && (
-                      <div
-                        className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap z-[200] pointer-events-none"
-                        style={{
-                          backgroundColor: 'var(--color-bg-surface-3)',
-                          border: '1px solid var(--color-border-default)',
-                          color: 'var(--color-text-primary)',
-                          boxShadow: 'var(--shadow-md)',
-                        }}
-                      >
-                        {label}
-                      </div>
-                    )}
-                    {isActive && (
-                      <div
-                        className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap z-[200] pointer-events-none"
-                        style={{
-                          backgroundColor: 'var(--color-bg-surface-3)',
-                          border: '1px solid var(--color-border-default)',
-                          color: 'var(--color-text-primary)',
-                          boxShadow: 'var(--shadow-md)',
-                        }}
-                      >
-                        {label}
-                      </div>
+                      <div className="absolute left-0 w-[3px] h-7 rounded-r-full bg-[var(--color-accent)]" />
                     )}
                   </button>
                 );
               })}
+              </div>
+              <div className="px-2 mt-7 mb-2 text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-text-muted)' }}>Explore</div>
+              <div className="space-y-1">
+                {ALL_NAV_ITEMS.filter(item => !CORE_NAV.some(core => core.id === item.id) && ['cluster', 'agents', 'workflows', 'scheduler', 'skills', 'notifications'].includes(item.id)).map(({ id, icon: Icon, label }) => (
+                  <button key={id} onClick={() => navigate(id)} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors" style={{ color: currentPage === id ? 'var(--color-accent)' : 'var(--color-text-secondary)', backgroundColor: currentPage === id ? 'var(--color-accent-subtle)' : 'transparent' }}>
+                    <Icon size={15} />
+                    <span className="text-xs font-medium">{label}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="px-2 mt-7 mb-2 text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-text-muted)' }}>System</div>
+              <button onClick={() => navigate('settings')} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors" style={{ color: currentPage === 'settings' ? 'var(--color-accent)' : 'var(--color-text-secondary)', backgroundColor: currentPage === 'settings' ? 'var(--color-accent-subtle)' : 'transparent' }}>
+                <Settings size={15} />
+                <span className="text-xs font-medium">系统设置</span>
+              </button>
             </nav>
 
             {/* Bottom actions */}
-            <div className="p-2 space-y-0.5" style={{ borderTop: '1px solid var(--color-border-subtle)' }}>
+            <div className="p-3 space-y-1" style={{ borderTop: '1px solid var(--color-border-subtle)' }}>
               {/* Search */}
               <button
                 onClick={() => setActiveOverlay('search')}
                 onMouseEnter={() => setHoveredNav('search')}
                 onMouseLeave={() => setHoveredNav(null)}
                 aria-label="搜索"
-                className="relative w-full flex items-center justify-center p-2 rounded-lg transition-all duration-150"
+                 className="relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-150"
                 style={{
                   color: hoveredNav === 'search' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
                   backgroundColor: hoveredNav === 'search' ? 'var(--color-bg-surface-2)' : 'transparent',
                 }}
               >
-                <Search size={16} />
+                 <Search size={16} />
+                 <span className="text-xs font-medium">全局搜索</span>
                 {hoveredNav === 'search' && (
                   <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg text-xs whitespace-nowrap z-[200] pointer-events-none"
                     style={{ backgroundColor: 'var(--color-bg-surface-3)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }}
@@ -303,13 +296,14 @@ export default function App() {
                 onMouseEnter={() => setHoveredNav('commands')}
                 onMouseLeave={() => setHoveredNav(null)}
                 aria-label="命令面板"
-                className="relative w-full flex items-center justify-center p-2 rounded-lg transition-all duration-150"
+                 className="relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-150"
                 style={{
                   color: hoveredNav === 'commands' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
                   backgroundColor: hoveredNav === 'commands' ? 'var(--color-bg-surface-2)' : 'transparent',
                 }}
               >
-                <Menu size={16} />
+                 <Menu size={16} />
+                 <span className="text-xs font-medium">命令面板</span>
                 {hoveredNav === 'commands' && (
                   <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg text-xs whitespace-nowrap z-[200] pointer-events-none"
                     style={{ backgroundColor: 'var(--color-bg-surface-3)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }}
@@ -319,7 +313,7 @@ export default function App() {
                 )}
               </button>
               {/* Theme toggle */}
-              <div className="flex items-center justify-center pt-1">
+              <div className="flex items-center justify-end pt-1">
                 <ThemeToggle />
               </div>
             </div>

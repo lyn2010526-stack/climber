@@ -86,4 +86,26 @@ describe('ApiClient paginated lists', () => {
     );
     cancel();
   });
+
+  it('sends the selected provider and model with chat streams', () => {
+    const fetchMock = vi.fn().mockReturnValue(new Promise(() => {}));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const cancel = api.chatStream('session-1', 'hello', vi.fn(), {
+      provider: 'anthropic',
+      modelId: 'claude-sonnet',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/sessions/session-1/chat',
+      expect.objectContaining({
+        body: JSON.stringify({
+          message: 'hello',
+          provider: 'anthropic',
+          model_id: 'claude-sonnet',
+        }),
+      }),
+    );
+    cancel();
+  });
 });

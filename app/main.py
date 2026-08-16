@@ -19,14 +19,10 @@ from app.config import settings
 from app.core.di import ScopeContext
 from app.core.di import register as di_register
 from app.core.di import resolve as di_resolve
-
-
-def _default_workdir() -> str:
-    """Resolve the workspace root that the sandbox should confine commands to."""
-    return os.environ.get("CLIMBER_SANDBOX_WORKDIR") or os.getcwd()
 from app.core.interfaces import IExecutor, IModelAdapter, ISkillRegistry, IToolRegistry
 from app.core.logging_setup import configure_logging, get_recent_logs, write_crash_dump
 from app.core.memory_guardian import get_memory_guardian
+from app.core.slow_query_logger import install as install_slow_query_logger
 from app.core.watchdog import get_watchdog
 from app.middleware.metrics import APP_INFO, MetricsMiddleware, metrics_endpoint
 from app.middleware.security import (
@@ -37,7 +33,11 @@ from app.middleware.security import (
 from app.storage import db_health, init_db
 from app.storage.cache import close_redis, get_redis
 from app.tools import register_builtins
-from app.core.slow_query_logger import install as install_slow_query_logger
+
+
+def _default_workdir() -> str:
+    """Resolve the workspace root that the sandbox should confine commands to."""
+    return os.environ.get("CLIMBER_SANDBOX_WORKDIR") or os.getcwd()
 
 logger = structlog.get_logger()
 
@@ -201,9 +201,9 @@ async def lifespan(app: FastAPI):
             from app.core.agent_engine import get_main_engine
             _eng = get_main_engine()
             if _eng:
-                _eng.stop()
-        except Exception:
-            pass
+                await _eng.stop()
+        except Exception as exc:
+            logger.warning("main.agent_engine_stop_failed", error=str(exc))
         try:
             from app.tools.browser_pool import get_browser_pool
             await get_browser_pool().close_all()

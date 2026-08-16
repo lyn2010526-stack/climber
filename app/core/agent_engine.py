@@ -29,10 +29,11 @@ def set_main_engine(engine: AgentEngine) -> None:
     _main_engine = engine
 
 
-def _spawn(coro: Any) -> None:
+def _spawn(coro: Any) -> asyncio.Task:
     task = asyncio.create_task(coro)
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
+    return task
 
 from app.core import (
     AgentEvent,
@@ -771,7 +772,7 @@ class AgentEngine:
         This bridges the legacy resolve_permission API to the active approval
         system so the frontend can approve/reject tool calls in-flight.
         """
-        from app.core.approval import approval_manager, ApprovalStatus
+        from app.core.approval import ApprovalStatus, approval_manager
 
         if decision in ("allow", "allow_session", "allow_always"):
             req = approval_manager.get_request(tool_call_id)
@@ -779,12 +780,11 @@ class AgentEngine:
                 return False
             approval_manager.approve(tool_call_id, resolved_by="human")
             return True
-        else:
-            req = approval_manager.get_request(tool_call_id)
-            if req is None or req.status != ApprovalStatus.PENDING:
-                return False
-            approval_manager.reject(tool_call_id, resolved_by="human")
-            return True
+        req = approval_manager.get_request(tool_call_id)
+        if req is None or req.status != ApprovalStatus.PENDING:
+            return False
+        approval_manager.reject(tool_call_id, resolved_by="human")
+        return True
 
     def get_permission_config(self) -> Any:
         """Get the current default permission configuration."""
@@ -808,11 +808,14 @@ class AgentEngine:
             return
         self._flush_task = _spawn(self._periodic_flush())
 
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """Stop background flush task (call at app shutdown)."""
         if self._flush_task is not None:
             self._flush_task.cancel()
+            try:
+                await self._flush_task
+            except asyncio.CancelledError:
+                pass
             self._flush_task = None
-        # Flush remaining buffers
         for session_id in list(self._msg_buffers.keys()):
-            self._flush_buffer(session_id)
+            await self._flush_buffer(session_id)

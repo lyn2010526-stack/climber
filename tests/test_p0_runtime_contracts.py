@@ -123,9 +123,46 @@ async def test_chat_rejects_in_memory_session_owned_by_another_user() -> None:
 
     with patch("app.api.v1.chat.get_engine", return_value=engine):
         with pytest.raises(HTTPException) as exc_info:
-            await chat(session.session_id, ChatRequest(message="hello"), user_id="other-user")
+            await chat(
+                session.session_id,
+                ChatRequest(message="hello", provider="anthropic", model_id="claude-sonnet"),
+                user_id="other-user",
+            )
 
     assert exc_info.value.status_code == 403
+    assert session.provider == "openai"
+    assert session.model_id == "gpt-4o-mini"
+
+
+@pytest.mark.asyncio
+async def test_chat_applies_model_override_to_in_memory_session() -> None:
+    session = AgentSession(
+        session_id="session-1",
+        agent_id="agent-1",
+        user_id="owner-1",
+        provider="openai",
+        model_id="gpt-4o-mini",
+        api_key="placeholder",
+    )
+    engine = type("Engine", (), {"_sessions": {session.session_id: session}})()
+
+    with (
+        patch("app.api.v1.chat.get_engine", return_value=engine),
+        patch(
+            "app.api.v1.chat._load_provider_credentials",
+            new=AsyncMock(return_value=("anthropic-key", "https://anthropic.example")),
+        ),
+    ):
+        await chat(
+            session.session_id,
+            ChatRequest(message="hello", provider="anthropic", model_id="claude-sonnet"),
+            user_id="owner-1",
+        )
+
+    assert session.provider == "anthropic"
+    assert session.model_id == "claude-sonnet"
+    assert session.api_key == "anthropic-key"
+    assert session.base_url == "https://anthropic.example"
 
 
 @pytest.mark.asyncio

@@ -121,6 +121,10 @@ async def _create_user_and_agent(user_id: str, agent_name: str = "Test Agent"):
         db.add(agent)
         await db.commit()
         await db.refresh(agent)
+        from app.api.v1.generic import _agents_cache, _hybrid_agents
+
+        _agents_cache.set(None)
+        await _hybrid_agents.invalidate_scalar()
         return agent
 
 

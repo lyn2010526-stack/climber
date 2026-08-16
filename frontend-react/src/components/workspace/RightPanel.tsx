@@ -41,23 +41,23 @@ export function RightPanel() {
   const isSecondaryActive = secondaryTabs.some(t => t.id === rightPanelTab);
 
   return (
-    <div className="w-80 bg-[#0F0F14]/80 backdrop-blur-2xl border-l border-white/10 flex flex-col shadow-sm shadow-white/5">
+    <div className="w-80 flex flex-col backdrop-blur-2xl shadow-sm" style={{ backgroundColor: 'var(--color-glass-bg)', borderLeft: '1px solid var(--color-border-subtle)' }}>
       {/* Tab bar */}
-      <div className="flex border-b border-white/10 relative">
+      <div className="flex relative" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
         {mainTabs.map(({ id, icon: Icon, label }) => (
           <button
             key={id}
             onClick={() => setRightPanelTab(id)}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-all relative ${
               rightPanelTab === id
-                ? 'text-white'
+                 ? 'text-[var(--color-text-primary)]'
                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
             }`}
           >
             <Icon size={13} />
             <span>{label}</span>
             {rightPanelTab === id && (
-              <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-[#007AFF] rounded-full shadow-sm shadow-blue-500/30" />
+              <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-[var(--color-accent)] rounded-full" />
             )}
           </button>
         ))}
@@ -65,13 +65,13 @@ export function RightPanel() {
           onClick={() => setMoreMenuOpen(!moreMenuOpen)}
           className={`flex items-center justify-center px-3 py-2.5 text-xs font-medium transition-all relative ${
             isSecondaryActive
-              ? 'text-white'
+               ? 'text-[var(--color-text-primary)]'
               : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
           }`}
         >
           <MoreHorizontal size={14} />
           {isSecondaryActive && (
-            <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-[#007AFF] rounded-full shadow-sm shadow-blue-500/30" />
+             <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-[var(--color-accent)] rounded-full" />
           )}
           {moreMenuOpen && (
             <div className="absolute right-0 top-full mt-1 w-32 rounded-lg border border-white/10 shadow-xl z-50 py-1" style={{ backgroundColor: 'var(--color-bg-surface-2)' }}>
@@ -81,7 +81,7 @@ export function RightPanel() {
                   onClick={() => { setRightPanelTab(id); setMoreMenuOpen(false); }}
                   className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
                     rightPanelTab === id
-                      ? 'text-white'
+                       ? 'text-[var(--color-text-primary)]'
                       : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
                   }`}
                   style={rightPanelTab === id ? { backgroundColor: 'var(--color-accent-subtle)' } : {}}

@@ -46,7 +46,7 @@ describe('ToolCallCard', () => {
 
   it('shows error badge', () => {
     render(<ToolCallCard name="search" arguments={{}} result={undefined} error="Something went wrong" isRunning={false} />);
-    expect(screen.getByText('error')).toBeDefined();
+    expect(screen.getByText('失败')).toBeDefined();
   });
 
   it('expands on click', () => {

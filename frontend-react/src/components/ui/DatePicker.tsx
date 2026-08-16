@@ -79,7 +79,7 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
 
     const handleSelectDate = (day: number) => {
       const newDate = new Date(viewDate.getFullYear(), viewDate.getMonth(), day);
-      if (minDate && newDate < newDate) return;
+      if (minDate && newDate < minDate) return;
       if (maxDate && newDate > maxDate) return;
       onChange?.(newDate);
       setIsOpen(false);

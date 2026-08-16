@@ -1,29 +1,29 @@
 @import "tailwindcss";
 
 @theme {
-  /* ─── Surface Layers (Linear/Vercel-inspired, deep gray canvas) ─── */
-  --color-bg-page: #0a0a0b;
-  --color-bg-surface-1: #111113;
-  --color-bg-surface-2: #18181b;
-  --color-bg-surface-3: #1f1f23;
-  --color-bg-surface-4: #27272a;
+  /* ─── Surface Layers (macOS-style light canvas) ─── */
+  --color-bg-page: #f5f5f7;
+  --color-bg-surface-1: #ffffff;
+  --color-bg-surface-2: #f0f0f3;
+  --color-bg-surface-3: #e7e7eb;
+  --color-bg-surface-4: #d9d9df;
   --color-bg-base: var(--color-bg-page);
   --color-bg-surface: var(--color-bg-surface-1);
   --color-bg-surface-hover: var(--color-bg-surface-2);
   --color-bg-surface-elevated: var(--color-bg-surface-3);
 
   /* ─── Text Hierarchy ─── */
-  --color-text-primary: #fafafa;
-  --color-text-secondary: #a1a1aa;
-  --color-text-muted: #71717a;
-  --color-text-disabled: #52525b;
-  --color-text-inverse: #0a0a0b;
+  --color-text-primary: #1d1d1f;
+  --color-text-secondary: #515154;
+  --color-text-muted: #86868b;
+  --color-text-disabled: #b2b2b7;
+  --color-text-inverse: #ffffff;
 
-  /* ─── Accent System (Linear indigo, cleaner) ─── */
-  --color-accent: #6366f1;
-  --color-accent-hover: #818cf8;
-  --color-accent-subtle: rgba(99, 102, 241, 0.10);
-  --color-accent-glow: rgba(99, 102, 241, 0.18);
+  /* ─── Accent System ─── */
+  --color-accent: #007aff;
+  --color-accent-hover: #006ee6;
+  --color-accent-subtle: rgba(0, 122, 255, 0.10);
+  --color-accent-glow: rgba(0, 122, 255, 0.18);
   --color-accent-text: #ffffff;
 
   /* Secondary accent (cyan) */
@@ -39,19 +39,19 @@
   --color-error-subtle: rgba(239, 68, 68, 0.12);
 
   /* ─── Borders (3-tier system) ─── */
-  --color-border-subtle: rgba(255, 255, 255, 0.06);
-  --color-border-default: rgba(255, 255, 255, 0.10);
-  --color-border-strong: rgba(255, 255, 255, 0.16);
-  --color-border-accent: rgba(99, 102, 241, 0.40);
+  --color-border-subtle: rgba(0, 0, 0, 0.06);
+  --color-border-default: rgba(0, 0, 0, 0.10);
+  --color-border-strong: rgba(0, 0, 0, 0.16);
+  --color-border-accent: rgba(0, 122, 255, 0.40);
 
   /* ─── Glass Surfaces ─── */
-  --color-glass-bg: rgba(17, 17, 19, 0.88);
-  --color-glass-border: rgba(255, 255, 255, 0.08);
-  --color-glass-highlight: rgba(255, 255, 255, 0.04);
+  --color-glass-bg: rgba(255, 255, 255, 0.88);
+  --color-glass-border: rgba(0, 0, 0, 0.08);
+  --color-glass-highlight: rgba(255, 255, 255, 0.72);
 
   /* ─── Code Blocks ─── */
-  --color-code-bg: #0d0d10;
-  --color-code-border: rgba(255, 255, 255, 0.06);
+  --color-code-bg: #1d1d1f;
+  --color-code-border: rgba(0, 0, 0, 0.08);
 
   /* ─── Typography ─── */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -65,9 +65,9 @@
   --radius-2xl: 20px;
 
   /* ─── Shadows ─── */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.14);
   --shadow-glow: 0 0 20px var(--color-accent-glow);
 
   /* ─── Layout ─── */
@@ -76,28 +76,33 @@
   --topbar-height: 52px;
 }
 
-[data-theme="light"] {
-  --color-bg-page: #fafafa;
-  --color-bg-surface-1: #ffffff;
-  --color-bg-surface-2: #f4f4f5;
-  --color-bg-surface-3: #e4e4e7;
-  --color-bg-surface-4: #d4d4d8;
-  --color-text-primary: #18181b;
-  --color-text-secondary: #3f3f46;
+[data-theme="dark"] {
+  --color-bg-page: #0a0a0b;
+  --color-bg-surface-1: #111113;
+  --color-bg-surface-2: #18181b;
+  --color-bg-surface-3: #1f1f23;
+  --color-bg-surface-4: #27272a;
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #a1a1aa;
   --color-text-muted: #71717a;
-  --color-text-disabled: #a1a1aa;
-  --color-border-subtle: rgba(0, 0, 0, 0.06);
-  --color-border-default: rgba(0, 0, 0, 0.10);
-  --color-border-strong: rgba(0, 0, 0, 0.16);
-  --color-border-accent: rgba(99, 102, 241, 0.40);
-  --color-glass-bg: rgba(255, 255, 255, 0.90);
-  --color-glass-border: rgba(0, 0, 0, 0.08);
-  --color-glass-highlight: rgba(255, 255, 255, 0.85);
-  --color-code-bg: #18181b;
-  --color-code-border: rgba(0, 0, 0, 0.10);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --color-text-disabled: #52525b;
+  --color-text-inverse: #0a0a0b;
+  --color-accent: #0a84ff;
+  --color-accent-hover: #409cff;
+  --color-accent-subtle: rgba(10, 132, 255, 0.14);
+  --color-accent-glow: rgba(10, 132, 255, 0.20);
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-default: rgba(255, 255, 255, 0.10);
+  --color-border-strong: rgba(255, 255, 255, 0.16);
+  --color-border-accent: rgba(10, 132, 255, 0.45);
+  --color-glass-bg: rgba(17, 17, 19, 0.88);
+  --color-glass-border: rgba(255, 255, 255, 0.08);
+  --color-glass-highlight: rgba(255, 255, 255, 0.04);
+  --color-code-bg: #0d0d10;
+  --color-code-border: rgba(255, 255, 255, 0.06);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 /* ─── Mobile Responsive ────────────────── */
@@ -142,10 +147,21 @@
   }
 }
 
+/* ─── Design System Tokens ───────────────── */
+:root {
+  --ui-radius: 16px;
+  --ui-radius-sm: 8px;
+  --ui-radius-lg: 24px;
+  --ui-spacing: 24px;
+  --ui-transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  --ui-font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --ui-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
 /* ─── Scrollbar Styling ───────────────── */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+  scrollbar-color: color-mix(in srgb, var(--color-text-muted) 28%, transparent) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -158,13 +174,13 @@
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--color-text-muted) 28%, transparent);
   border-radius: 10px;
   transition: background 200ms ease;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: color-mix(in srgb, var(--color-text-muted) 48%, transparent);
 }
 
 /* ─── Selection Styling ───────────────── */
@@ -182,7 +198,7 @@
 body {
   background-color: var(--color-bg-page);
   color: var(--color-text-primary);
-  font-family: var(--font-sans);
+  font-family: var(--ui-font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;

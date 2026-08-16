@@ -49,7 +49,7 @@ export function useChat(sessionId: string | null) {
     setMessages([]);
 
     api.getSessionMessages(sessionId).then((data: any) => {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || isStreamingRef.current) return;
       const msgs: Message[] = (data.messages || []).map((m: any) => ({
         id: m.id,
         role: m.role,
@@ -66,7 +66,7 @@ export function useChat(sessionId: string | null) {
     });
   }, [sessionId]);
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, model?: { provider?: string; modelId?: string }) => {
     if (!sessionId || isStreamingRef.current) return;
     isStreamingRef.current = true;
     setIsStreaming(true);
@@ -135,17 +135,19 @@ export function useChat(sessionId: string | null) {
         );
       } else if (eventType === 'tool_result') {
         const toolId = data.id;
+        const existing = toolCallsMap.get(toolId);
+        if (existing) {
+          toolCallsMap.set(toolId, {
+            ...existing,
+            result: data.result ?? '',
+            error: data.error ?? '',
+            status: data.error ? 'error' : 'success',
+          });
+        }
         setMessages(prev =>
           prev.map(msg => {
             if (msg.id !== assistantId) return msg;
-            const updatedToolCalls = msg.toolCalls
-              ? msg.toolCalls.map(tc =>
-                  tc.id === toolId
-                    ? { ...tc, result: data.result ?? '', error: data.error ?? '', status: data.error ? 'error' : 'success' }
-                    : tc
-                )
-              : undefined;
-            return { ...msg, toolCalls: updatedToolCalls } as Message;
+            return { ...msg, toolCalls: Array.from(toolCallsMap.values()) } as Message;
           })
         );
       } else if (eventType === 'done') {
@@ -153,7 +155,7 @@ export function useChat(sessionId: string | null) {
           prev.map(msg => {
             if (msg.id !== assistantId) return msg;
             const updatedToolCalls = msg.toolCalls
-              ? msg.toolCalls.map(tc => ({ ...tc, status: 'success' as const }))
+              ? msg.toolCalls.map(tc => tc.status === 'running' ? { ...tc, status: 'success' as const } : tc)
               : undefined;
             return { ...msg, toolCalls: updatedToolCalls } as Message;
           })
@@ -173,7 +175,7 @@ export function useChat(sessionId: string | null) {
         isStreamingRef.current = false;
         setIsStreaming(false);
       }
-    });
+    }, model);
   }, [sessionId]);
 
   const stopStreaming = useCallback(() => {

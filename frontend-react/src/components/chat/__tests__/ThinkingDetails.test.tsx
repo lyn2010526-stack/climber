@@ -18,7 +18,7 @@ describe('ThinkingDetails', () => {
         Test
       </ThinkingDetails>
     );
-    expect(screen.getByText(/Thought\(2\.3s\)/)).toBeDefined();
+    expect(screen.getByText(/思考完成 · 2\.3s/)).toBeDefined();
   });
 
   it('renders thinking label with timer', () => {
@@ -29,7 +29,7 @@ describe('ThinkingDetails', () => {
     );
     const details = document.querySelector('details');
     expect(details).not.toBeNull();
-    expect(details?.textContent).toContain('Thinking');
+    expect(details?.textContent).toContain('正在思考');
   });
 
   it('toggles on summary click', () => {
@@ -38,7 +38,7 @@ describe('ThinkingDetails', () => {
         Toggle me
       </ThinkingDetails>
     );
-    const summary = screen.getByText(/Thought\(1\.0s\)/);
+    const summary = screen.getByText(/思考完成 · 1\.0s/);
     fireEvent.click(summary);
     expect(screen.getByText('Toggle me')).toBeDefined();
   });

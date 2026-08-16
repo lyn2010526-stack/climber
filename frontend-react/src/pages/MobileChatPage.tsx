@@ -17,12 +17,12 @@ export function MobileChatPage() {
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
-  const handleSend = useCallback(async (message: string) => {
+  const handleSend = useCallback(async (message: string, model?: { provider?: string; modelId?: string }) => {
     if (!activeSessionId) {
       toast.error('请先创建或选择一个会话');
       return;
     }
-    await sendMessage(message);
+    await sendMessage(message, model);
   }, [activeSessionId, sendMessage]);
 
   const handleStop = useCallback(() => {

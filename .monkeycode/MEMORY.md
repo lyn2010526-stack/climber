@@ -192,3 +192,13 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 对抗式审查：以"找出漏洞/缺陷"为目的审查代码，假设代码存在隐性问题，主动构造反例和边界条件来检验
   - test 和 debug 时用逆向思维和系统思维：逆向思维是从输出/现象反推根因和路径；系统思维是从整体系统角度考虑组件间的关联影响，而非局部修补
 
+[前端优化共享组件库与设计令牌]
+- Date: 2026-08-16
+- Context: Agent 执行 Climber 平台全面优化任务时发现
+- Category: 环境配置
+- Instructions:
+  - 共享组件库已创建在 src/components/ui/：ErrorBanner, EmptyState, LoadingSpinner, SearchInput, PageHeader, ListCard, FilterChips, StatCard, ActionButtonGroup
+  - 设计令牌统一在 src/index.css，使用 CSS 变量如 --color-accent, --color-bg-surface-1, --color-text-primary 等
+  - 新增 UI 组件需导出对应 Props 接口（export interface XxxProps），否则 TypeScript 类型检查会失败
+  - vitest 测试失败常见原因：climber_legacy_conflict 子目录缺少依赖，不影响主项目；核心测试通过即可
+

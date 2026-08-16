@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { MessageSquare, Plus, Trash2, Sparkles, ChevronDown, Search, MoreVertical } from 'lucide-react';
+import { MessageSquare, Plus, Trash2, Sparkles, ChevronDown, Search, MoreHorizontal, Pin, Pencil, Download, X, Check } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/workspace';
 import { useSessions } from '../../stores/useSessions';
 import { api } from '../../api';
@@ -8,7 +8,7 @@ import { UserSwitcher } from './UserSwitcher';
 export const SessionSidebar = React.memo(function SessionSidebar({ inDrawer = false }: { inDrawer?: boolean }) {
   const activeSessionId = useWorkspaceStore(s => s.activeSessionId);
   const setActiveSession = useWorkspaceStore(s => s.setActiveSession);
-  const { sessions, loading, createSession, deleteSession, refresh } = useSessions();
+  const { sessions, loading, createSession, deleteSession, renameSession, refresh } = useSessions();
 
   const [selectedAgent, setSelectedAgent] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
@@ -19,6 +19,13 @@ export const SessionSidebar = React.memo(function SessionSidebar({ inDrawer = fa
   const [modelsError, setModelsError] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [menuSessionId, setMenuSessionId] = useState<string | null>(null);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('climber-pinned-sessions') || '[]'); } catch { return []; }
+  });
 
   const fetchAgents = useCallback(() => {
     setAgentsError(false);
@@ -58,10 +65,45 @@ export const SessionSidebar = React.memo(function SessionSidebar({ inDrawer = fa
   }, [selectedAgent, creating, sessions.length, createSession, refresh]);
 
   const filteredSessions = useMemo(() => {
-    if (!searchQuery) return sessions;
-    const query = searchQuery.toLowerCase();
-    return sessions.filter(s => s.title?.toLowerCase().includes(query));
-  }, [sessions, searchQuery]);
+    const matching = searchQuery
+      ? sessions.filter(s => s.title?.toLowerCase().includes(searchQuery.toLowerCase()))
+      : sessions;
+    return [...matching].sort((a, b) => Number(pinnedIds.includes(b.id)) - Number(pinnedIds.includes(a.id)));
+  }, [sessions, searchQuery, pinnedIds]);
+
+  const togglePin = useCallback((id: string) => {
+    setPinnedIds(prev => {
+      const next = prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id];
+      localStorage.setItem('climber-pinned-sessions', JSON.stringify(next));
+      return next;
+    });
+    setMenuSessionId(null);
+  }, []);
+
+  const beginRename = useCallback((id: string, title: string | null) => {
+    setEditingSessionId(id);
+    setEditingTitle(title || '未命名会话');
+    setMenuSessionId(null);
+  }, []);
+
+  const saveRename = useCallback(async () => {
+    if (!editingSessionId || !editingTitle.trim()) return;
+    await renameSession(editingSessionId, editingTitle.trim());
+    setEditingSessionId(null);
+  }, [editingSessionId, editingTitle, renameSession]);
+
+  const exportSession = useCallback(async (id: string, title: string | null) => {
+    const data = await api.getSessionMessages(id);
+    const body = data.messages.map(message => `## ${message.role}\n\n${message.content || ''}`).join('\n\n---\n\n');
+    const blob = new Blob([`# ${title || '未命名会话'}\n\n${body}`], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${(title || 'session').replace(/[\\/:*?"<>|]/g, '-')}.md`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setMenuSessionId(null);
+  }, []);
 
   const handleMouseEnter = useCallback((e: React.MouseEvent<HTMLDivElement>, sessionId: string) => {
     if (activeSessionId !== sessionId) {
@@ -176,24 +218,39 @@ export const SessionSidebar = React.memo(function SessionSidebar({ inDrawer = fa
             }}
             onMouseEnter={(e) => handleMouseEnter(e, s.id)}
             onMouseLeave={(e) => handleMouseLeave(e, s.id)}
-            onClick={() => setActiveSession(s.id)}
+            onClick={() => editingSessionId !== s.id && setActiveSession(s.id)}
           >
             <MessageSquare size={13} className="shrink-0" style={{
               color: activeSessionId === s.id ? 'var(--color-accent)' : 'var(--color-text-muted)',
             }} />
             <div className="flex-1 min-w-0">
-              <span className="text-xs truncate block font-medium">{s.title || '未命名会话'}</span>
+              {editingSessionId === s.id ? (
+                <div className="flex items-center gap-1" onClick={event => event.stopPropagation()}>
+                  <input autoFocus value={editingTitle} onChange={event => setEditingTitle(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') saveRename(); if (event.key === 'Escape') setEditingSessionId(null); }} className="w-full min-w-0 rounded-md px-1.5 py-1 text-xs outline-none" style={{ backgroundColor: 'var(--color-bg-surface-1)', border: '1px solid var(--color-accent)', color: 'var(--color-text-primary)' }} aria-label="会话标题" />
+                  <button onClick={saveRename} aria-label="保存标题" className="p-1"><Check size={11} /></button>
+                  <button onClick={() => setEditingSessionId(null)} aria-label="取消重命名" className="p-1"><X size={11} /></button>
+                </div>
+              ) : (
+                <span className="text-xs truncate flex items-center gap-1 font-medium">
+                  {pinnedIds.includes(s.id) && <Pin size={9} className="shrink-0" />}
+                  <span className="truncate">{s.title || '未命名会话'}</span>
+                </span>
+              )}
               <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>{s.status || 'idle'}</span>
             </div>
-            <button
-              onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
-              className="opacity-100 md:opacity-0 group-hover:opacity-100 p-1 rounded-md transition-all duration-150 shrink-0"
-              style={{ color: 'var(--color-text-muted)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--color-error)'; e.currentTarget.style.backgroundColor = 'var(--color-error-subtle)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.backgroundColor = 'transparent'; }}
-            >
-              <Trash2 size={10} />
-            </button>
+            {editingSessionId !== s.id && (
+              <div className="relative">
+                <button onClick={(event) => { event.stopPropagation(); setMenuSessionId(menuSessionId === s.id ? null : s.id); }} aria-label={`管理 ${s.title || '未命名会话'}`} className="opacity-100 md:opacity-0 group-hover:opacity-100 p-1 rounded-md transition-all" style={{ color: 'var(--color-text-muted)' }}><MoreHorizontal size={13} /></button>
+                {menuSessionId === s.id && (
+                  <div className="absolute right-0 top-7 z-30 w-36 rounded-lg p-1 shadow-xl" onClick={event => event.stopPropagation()} style={{ backgroundColor: 'var(--color-bg-surface-1)', border: '1px solid var(--color-border-default)' }}>
+                    <button onClick={() => togglePin(s.id)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-[var(--color-bg-surface-2)]"><Pin size={12} />{pinnedIds.includes(s.id) ? '取消置顶' : '置顶会话'}</button>
+                    <button onClick={() => beginRename(s.id, s.title)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-[var(--color-bg-surface-2)]"><Pencil size={12} />重命名</button>
+                    <button onClick={() => exportSession(s.id, s.title)} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-[var(--color-bg-surface-2)]"><Download size={12} />导出 Markdown</button>
+                    <button onClick={() => { setPendingDeleteId(s.id); setMenuSessionId(null); }} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs" style={{ color: 'var(--color-error)' }}><Trash2 size={12} />删除</button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ))}
         {!loading && filteredSessions.length === 0 && (
@@ -213,7 +270,7 @@ export const SessionSidebar = React.memo(function SessionSidebar({ inDrawer = fa
           onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--color-text-muted)'; }}
         >
-          <MoreVertical size={12} />
+          <MoreHorizontal size={12} />
           <span>更多选项</span>
           <ChevronDown size={10} className={`ml-auto transition-transform duration-200 ${showSettings ? 'rotate-180' : ''}`} />
         </button>
@@ -227,6 +284,19 @@ export const SessionSidebar = React.memo(function SessionSidebar({ inDrawer = fa
           </div>
         )}
       </div>
+
+      {pendingDeleteId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true" aria-label="确认删除会话" onClick={() => setPendingDeleteId(null)}>
+          <div className="w-full max-w-sm rounded-xl p-5 shadow-2xl" style={{ backgroundColor: 'var(--color-bg-surface-1)', border: '1px solid var(--color-border-default)' }} onClick={event => event.stopPropagation()}>
+            <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>删除这个会话？</h2>
+            <p className="mt-2 text-xs leading-5" style={{ color: 'var(--color-text-secondary)' }}>会话消息和执行记录将一并删除，这项操作无法撤销。</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setPendingDeleteId(null)} className="px-3 py-1.5 rounded-lg text-xs" style={{ border: '1px solid var(--color-border-default)' }}>取消</button>
+              <button onClick={async () => { await deleteSession(pendingDeleteId); setPendingDeleteId(null); }} className="px-3 py-1.5 rounded-lg text-xs text-white" style={{ backgroundColor: 'var(--color-error)' }}>确认删除</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 });

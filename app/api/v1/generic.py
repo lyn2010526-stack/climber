@@ -16,6 +16,7 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request
+from prometheus_client import Counter, Histogram
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
@@ -23,6 +24,7 @@ from starlette.websockets import WebSocket
 
 from app.core.api_key_crypto import decrypt_api_key, encrypt_api_key
 from app.core.di import resolve as di_resolve
+from app.core.hybrid_cache import HybridCache
 from app.storage import async_session
 from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupMessage, AgentGroupTask
 from app.storage.models_platform import (
@@ -42,8 +44,6 @@ logger = structlog.get_logger()
 _background_tasks: set[asyncio.Task] = set()
 
 # ─── Prometheus Metrics ────────────────────────────────────────────────────────
-
-from prometheus_client import Counter, Histogram, Gauge
 
 # Cache metrics
 _cache_hits_total = Counter('cache_hits_total', 'Total cache hits', ['cache_type'])
@@ -74,8 +74,6 @@ def _spawn(coro: Any) -> None:
 
 
 # ─── TTL Cache ──────────────────────────────────────────────────────────────
-
-from app.core.hybrid_cache import HybridCache
 
 # Legacy sync caches (kept for backward compat with existing invalidation calls)
 class _TTLCache:
@@ -393,7 +391,6 @@ async def list_models() -> list[dict[str, Any]]:
 @router.get("/cache_metrics/")
 async def cache_metrics() -> dict[str, Any]:
     """Expose cache hit/miss statistics for monitoring."""
-    from prometheus_client import generate_latest
     return {
         "agents_cache_ttl": 120.0,
         "models_cache_ttl": 300.0,

@@ -7,7 +7,6 @@ If Redis is unavailable, falls back to in-process TTL caches transparently.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 from typing import Any
@@ -115,7 +114,7 @@ class HybridCache:
             try:
                 await redis.delete(self._redis_key())
             except Exception:
-                pass
+                logger.debug("hybrid_cache.redis_invalidate_failed", cache=self._name, exc_info=True)
         self._local_scalar.set(None)
 
     # ── Keyed operations (for detail endpoints) ────────────────────────────
@@ -146,7 +145,12 @@ class HybridCache:
             try:
                 await redis.delete(self._redis_key(key))
             except Exception:
-                pass
+                logger.debug(
+                    "hybrid_cache.redis_invalidate_keyed_failed",
+                    cache=self._name,
+                    key=key,
+                    exc_info=True,
+                )
         self._local_keyed.invalidate(key)
 
     async def invalidate_all_keyed(self) -> None:
@@ -156,5 +160,5 @@ class HybridCache:
                 async for key in redis.scan_iter(f"{self._redis_key()}:*"):
                     await redis.delete(key)
             except Exception:
-                pass
+                logger.debug("hybrid_cache.redis_invalidate_all_failed", cache=self._name, exc_info=True)
         self._local_keyed.invalidate_all()
