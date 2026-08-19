@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, AlertTriangle, Activity } from 'lucide-react';
+import { DollarSign, TrendingUp, AlertTriangle, Activity, Wallet, ShieldCheck } from 'lucide-react';
 import { api } from '../api';
 
 interface CostData {
@@ -11,17 +11,32 @@ interface CostData {
 }
 
 interface BudgetData {
-  daily_limit: number;
-  weekly_limit: number;
-  monthly_limit: number;
-  current_daily: number;
-  current_weekly: number;
-  current_monthly: number;
+  amount: number;
+  period: string;
+  is_active: boolean;
+  per_session_limit: number | null;
+  per_request_limit: number | null;
 }
+
+interface QuotaData {
+  max_requests_per_day: number;
+  max_tokens_per_day: number;
+  max_cost_per_month: number;
+  requests_today: number;
+  tokens_today: number;
+  cost_this_month: number;
+}
+
+const PERIOD_LABELS: Record<string, string> = {
+  daily: '每日',
+  weekly: '每周',
+  monthly: '每月',
+};
 
 export default function CostPage() {
   const [costData, setCostData] = useState<CostData | null>(null);
   const [budget, setBudget] = useState<BudgetData | null>(null);
+  const [quota, setQuota] = useState<QuotaData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,14 +48,16 @@ export default function CostPage() {
     setLoading(true);
     setError(null);
     try {
-      const [usageData, budgetData] = await Promise.all([
+      const [usageData, budgetData, quotaData] = await Promise.all([
         api.getCostUsage(),
         api.getCostBudget(),
+        api.getCostQuota(),
       ]);
 
       setCostData(usageData);
       setBudget(budgetData);
-    } catch (e) {
+      setQuota(quotaData);
+    } catch {
       setError('加载成本数据失败');
     } finally {
       setLoading(false);
@@ -72,9 +89,9 @@ export default function CostPage() {
     );
   }
 
-  const dailyPercent = budget ? Math.min((budget.current_daily / budget.daily_limit) * 100, 100) : 0;
-  const weeklyPercent = budget ? Math.min((budget.current_weekly / budget.weekly_limit) * 100, 100) : 0;
-  const monthlyPercent = budget ? Math.min((budget.current_monthly / budget.monthly_limit) * 100, 100) : 0;
+  const requestPercent = quota ? Math.min((quota.requests_today / Math.max(quota.max_requests_per_day, 1)) * 100, 100) : 0;
+  const tokenPercent = quota ? Math.min((quota.tokens_today / Math.max(quota.max_tokens_per_day, 1)) * 100, 100) : 0;
+  const costPercent = quota ? Math.min((quota.cost_this_month / Math.max(quota.max_cost_per_month, 1)) * 100, 100) : 0;
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-6">
@@ -114,14 +131,47 @@ export default function CostPage() {
         </div>
       </div>
 
-      {/* Budget Progress */}
+      {/* Budget Config */}
       {budget && (
         <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-5">
-          <h3 className="text-sm font-medium text-[var(--color-text-primary)] mb-4">预算使用</h3>
+          <h3 className="text-sm font-medium text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
+            <Wallet size={14} className="text-[var(--color-accent)]" />预算配置
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <span className="text-xs text-[var(--color-text-muted)]">预算金额</span>
+              <p className="text-lg font-semibold text-[var(--color-text-primary)]">${(budget.amount ?? 0).toFixed(2)}</p>
+            </div>
+            <div>
+              <span className="text-xs text-[var(--color-text-muted)]">周期</span>
+              <p className="text-lg font-semibold text-[var(--color-text-primary)]">{PERIOD_LABELS[budget.period] || budget.period || '每月'}</p>
+            </div>
+            <div>
+              <span className="text-xs text-[var(--color-text-muted)]">状态</span>
+              <p className={`text-lg font-semibold ${budget.is_active ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)]'}`}>
+                {budget.is_active ? '已启用' : '未启用'}
+              </p>
+            </div>
+            <div>
+              <span className="text-xs text-[var(--color-text-muted)]">会话/请求限额</span>
+              <p className="text-lg font-semibold text-[var(--color-text-primary)]">
+                ${budget.per_session_limit != null ? budget.per_session_limit.toFixed(2) : '—'} / ${budget.per_request_limit != null ? budget.per_request_limit.toFixed(2) : '—'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quota Usage */}
+      {quota && (
+        <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-5">
+          <h3 className="text-sm font-medium text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
+            <ShieldCheck size={14} className="text-[var(--color-accent-secondary)]" />配额用量
+          </h3>
           <div className="space-y-4">
-            <BudgetBar label="每日" current={budget.current_daily} limit={budget.daily_limit} percent={dailyPercent} />
-            <BudgetBar label="每周" current={budget.current_weekly} limit={budget.weekly_limit} percent={weeklyPercent} />
-            <BudgetBar label="每月" current={budget.current_monthly} limit={budget.monthly_limit} percent={monthlyPercent} />
+            <BudgetBar label="每日请求" current={quota.requests_today} limit={quota.max_requests_per_day} percent={requestPercent} unit="" />
+            <BudgetBar label="每日 Token" current={quota.tokens_today} limit={quota.max_tokens_per_day} percent={tokenPercent} unit="" />
+            <BudgetBar label="本月成本" current={quota.cost_this_month} limit={quota.max_cost_per_month} percent={costPercent} unit="$" />
           </div>
         </div>
       )}
@@ -147,13 +197,14 @@ export default function CostPage() {
   );
 }
 
-function BudgetBar({ label, current, limit, percent }: { label: string; current: number; limit: number; percent: number }) {
+function BudgetBar({ label, current, limit, percent, unit }: { label: string; current: number; limit: number; percent: number; unit: string }) {
   const color = percent >= 90 ? 'bg-red-500' : percent >= 70 ? 'bg-amber-500' : 'bg-blue-500';
+  const fmt = (n: number) => (unit === '$' ? `$${n.toFixed(2)}` : n.toLocaleString());
   return (
     <div>
       <div className="flex justify-between text-xs mb-1">
         <span className="text-[var(--color-text-muted)]">{label}</span>
-        <span className="text-[var(--color-text-muted)]">${current.toFixed(2)} / ${limit.toFixed(2)}</span>
+        <span className="text-[var(--color-text-muted)]">{fmt(current)} / {fmt(limit)}</span>
       </div>
       <div className="w-full h-2 bg-[var(--color-bg-surface-3)] rounded-full overflow-hidden">
         <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${percent}%` }} />

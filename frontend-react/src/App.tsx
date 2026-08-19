@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import {
   MessageSquare, Bot, Network, Cpu, BarChart3,
   Sparkles, Search, Bell, Menu,
@@ -6,42 +6,44 @@ import {
   Puzzle, Package, Clock, History,
 } from 'lucide-react';
 import { WorkspaceLayout } from './components/workspace/WorkspaceLayout';
-import { AgentsPage } from './pages/AgentsPage';
-import { WorkflowsPage } from './pages/WorkflowsPage';
-import { ApiKeysPage } from './pages/ApiKeysPage';
-import { StatsPage } from './pages/StatsPage';
-import { SkillsPage } from './pages/SkillsPage';
-import { NotificationsPage } from './pages/NotificationsPage';
-import { DoctorPage } from './pages/DoctorPage';
-import { MCPPage } from './pages/MCPPage';
-import { FactoryModePage } from './pages/FactoryModePage';
-import { PluginsPage } from './pages/PluginsPage';
-import { SchedulerPage } from './pages/SchedulerPage';
-import { ClusterPage } from './pages/ClusterPage';
-import TracesPage from './pages/TracesPage';
-import EvalPage from './pages/EvalPage';
-import CostPage from './pages/CostPage';
-import PluginPage from './pages/PluginPage';
-import { SettingsPage } from './pages/SettingsPage';
-import TaskMonitorPage from './pages/TaskMonitorPage';
-import { TaskHistoryPage } from './pages/TaskHistoryPage';
-import { ReasoningPage } from './pages/ReasoningPage';
-import { ReasoningHistoryPage } from './pages/ReasoningHistoryPage';
 import { GlobalSearch } from './components/workspace/GlobalSearch';
 import { PageTransition } from './components/workspace/PageTransition';
 import { ThemeToggle } from './components/ui/ThemeToggle';
-import TerminalPage from './pages/TerminalPage';
 import CommandPalette from './components/workspace/CommandPalette';
 import { MobileLayout } from './components/mobile/MobileLayout';
 import { MobileChatPage } from './pages/MobileChatPage';
-import { MobileFactoryPage } from './pages/mobile/MobileFactoryPage';
-import { MobileClusterPage } from './pages/mobile/MobileClusterPage';
-import { MobileTasksPage } from './pages/mobile/MobileTasksPage';
-import { MobileAgentsPage } from './pages/mobile/MobileAgentsPage';
-import { MobileNotificationsPage } from './pages/mobile/MobileNotificationsPage';
-import { MobileWorkflowsPage } from './pages/mobile/MobileWorkflowsPage';
-import { MobileSchedulerPage } from './pages/mobile/MobileSchedulerPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
+
+const AgentsPage = lazy(() => import('./pages/AgentsPage').then(m => ({ default: m.AgentsPage })));
+const WorkflowsPage = lazy(() => import('./pages/WorkflowsPage').then(m => ({ default: m.WorkflowsPage })));
+const ApiKeysPage = lazy(() => import('./pages/ApiKeysPage').then(m => ({ default: m.ApiKeysPage })));
+const StatsPage = lazy(() => import('./pages/StatsPage').then(m => ({ default: m.StatsPage })));
+const SkillsPage = lazy(() => import('./pages/SkillsPage').then(m => ({ default: m.SkillsPage })));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then(m => ({ default: m.NotificationsPage })));
+const DoctorPage = lazy(() => import('./pages/DoctorPage').then(m => ({ default: m.DoctorPage })));
+const MCPPage = lazy(() => import('./pages/MCPPage').then(m => ({ default: m.MCPPage })));
+const FactoryModePage = lazy(() => import('./pages/FactoryModePage').then(m => ({ default: m.FactoryModePage })));
+const PluginsPage = lazy(() => import('./pages/PluginsPage').then(m => ({ default: m.PluginsPage })));
+const SchedulerPage = lazy(() => import('./pages/SchedulerPage').then(m => ({ default: m.SchedulerPage })));
+const ClusterPage = lazy(() => import('./pages/ClusterPage').then(m => ({ default: m.ClusterPage })));
+const TracesPage = lazy(() => import('./pages/TracesPage'));
+const EvalPage = lazy(() => import('./pages/EvalPage'));
+const CostPage = lazy(() => import('./pages/CostPage'));
+const PluginPage = lazy(() => import('./pages/PluginPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const TaskMonitorPage = lazy(() => import('./pages/TaskMonitorPage'));
+const TaskHistoryPage = lazy(() => import('./pages/TaskHistoryPage').then(m => ({ default: m.TaskHistoryPage })));
+const ReasoningPage = lazy(() => import('./pages/ReasoningPage').then(m => ({ default: m.ReasoningPage })));
+const ReasoningHistoryPage = lazy(() => import('./pages/ReasoningHistoryPage').then(m => ({ default: m.ReasoningHistoryPage })));
+const TerminalPage = lazy(() => import('./pages/TerminalPage'));
+
+const MobileFactoryPage = lazy(() => import('./pages/mobile/MobileFactoryPage').then(m => ({ default: m.MobileFactoryPage })));
+const MobileClusterPage = lazy(() => import('./pages/mobile/MobileClusterPage').then(m => ({ default: m.MobileClusterPage })));
+const MobileTasksPage = lazy(() => import('./pages/mobile/MobileTasksPage').then(m => ({ default: m.MobileTasksPage })));
+const MobileAgentsPage = lazy(() => import('./pages/mobile/MobileAgentsPage').then(m => ({ default: m.MobileAgentsPage })));
+const MobileNotificationsPage = lazy(() => import('./pages/mobile/MobileNotificationsPage').then(m => ({ default: m.MobileNotificationsPage })));
+const MobileWorkflowsPage = lazy(() => import('./pages/mobile/MobileWorkflowsPage').then(m => ({ default: m.MobileWorkflowsPage })));
+const MobileSchedulerPage = lazy(() => import('./pages/mobile/MobileSchedulerPage').then(m => ({ default: m.MobileSchedulerPage })));
 
 type Page = 'chat' | 'agents' | 'workflows' | 'apikeys' | 'skills' | 'notifications' | 'doctor' | 'mcp' | 'stats' | 'factory' | 'plugins' | 'scheduler' | 'cluster' | 'traces' | 'eval' | 'cost' | 'plugin-manage' | 'settings' | 'tasks' | 'task-history' | 'reasoning' | 'reasoning-history' | 'terminal';
 

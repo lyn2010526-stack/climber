@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Drawer } from 'vaul';
-import { MessageSquare, Sparkles, Network, Cpu, Bot, Settings, MoreHorizontal } from 'lucide-react';
+import { MessageSquare, Sparkles, Network, Cpu, Bot, Settings, Bell, Workflow, CalendarClock, MoreHorizontal } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/workspace';
 const MOBILE_TABS: { id: string; icon: typeof MessageSquare; label: string }[] = [
   { id: 'chat', icon: MessageSquare, label: '工作台' },
@@ -11,6 +11,9 @@ const MOBILE_TABS: { id: string; icon: typeof MessageSquare; label: string }[] =
 ];
 
 const MORE_ITEMS: { id: string; icon: typeof Settings; label: string }[] = [
+  { id: 'notifications', icon: Bell, label: '通知中心' },
+  { id: 'workflows', icon: Workflow, label: '工作流' },
+  { id: 'scheduler', icon: CalendarClock, label: '调度器' },
   { id: 'settings', icon: Settings, label: '系统设置' },
 ];
 
@@ -75,11 +78,11 @@ export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: stri
             onClick={() => setMoreOpen(true)}
             className="relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all duration-200 active:scale-[0.92]"
             style={{
-              color: currentPage === 'settings' ? 'var(--color-accent)' : 'var(--color-text-muted)',
-              backgroundColor: currentPage === 'settings' ? 'var(--color-accent-subtle)' : 'transparent',
+              color: MORE_ITEMS.some(item => item.id === currentPage) ? 'var(--color-accent)' : 'var(--color-text-muted)',
+              backgroundColor: MORE_ITEMS.some(item => item.id === currentPage) ? 'var(--color-accent-subtle)' : 'transparent',
             }}
           >
-            {currentPage === 'settings' && (
+            {MORE_ITEMS.some(item => item.id === currentPage) && (
               <div
                 className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2px] rounded-full"
                 style={{
@@ -88,7 +91,7 @@ export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: stri
                 }}
               />
             )}
-            <MoreHorizontal size={20} strokeWidth={currentPage === 'settings' ? 2.5 : 2} />
+            <MoreHorizontal size={20} strokeWidth={MORE_ITEMS.some(item => item.id === currentPage) ? 2.5 : 2} />
             <span className="text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
               更多
             </span>

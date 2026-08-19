@@ -16,7 +16,9 @@ export function WorkspaceLayout() {
     <div className="flex-1 flex flex-col" style={{ backgroundColor: 'var(--color-bg-page)' }}>
       <ControlBar onToggleSessions={() => setSessionDrawerOpen(true)} />
       <div className="flex-1 flex overflow-hidden">
-        <SessionSidebar />
+        <div className="hidden lg:flex">
+          <SessionSidebar />
+        </div>
         <div className="flex-1 flex overflow-hidden min-w-0">
           <Group orientation="horizontal">
             <Panel defaultSize={100} minSize={40}>

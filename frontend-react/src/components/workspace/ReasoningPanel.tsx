@@ -137,8 +137,9 @@ export function ReasoningPanel() {
         <textarea
           value={task}
           onChange={(e) => setTask(e.target.value)}
+          aria-label="推理任务"
           placeholder="输入一个复杂任务以进行多策略推理..."
-          className="w-full px-3 py-2 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-lg text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-purple-500/50 resize-none"
+          className="w-full px-3 py-2 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-lg text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] resize-none"
           rows={3}
         />
 
@@ -146,7 +147,8 @@ export function ReasoningPanel() {
           <select
             value={mode}
             onChange={(e) => setMode(e.target.value)}
-            className="flex-1 px-3 py-1.5 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-purple-500/50"
+            aria-label="推理模式"
+            className="flex-1 px-3 py-1.5 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
           >
             <option value="auto">自动</option>
             <option value="tree">思维树</option>
@@ -187,9 +189,10 @@ export function ReasoningPanel() {
           </label>
 
           <button
+            type="button"
             onClick={handleReason}
             disabled={isRunning || !task.trim()}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-[var(--color-bg-surface-2)] disabled:text-[var(--color-text-muted)] text-white rounded-lg text-xs font-medium transition-all"
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-[var(--color-accent)] hover:opacity-90 disabled:bg-[var(--color-bg-surface-2)] disabled:text-[var(--color-text-muted)] text-white rounded-lg text-xs font-medium transition-all"
           >
             {isRunning ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
              {isRunning ? '推理中...' : '推理'}
@@ -207,7 +210,7 @@ export function ReasoningPanel() {
         )}
 
         {!result && !isRunning && (
-          <div className="text-center py-8 text-[var(--color-text-muted)] text-xs">
+          <div className="text-center py-8 text-[var(--color-text-muted)] text-xs" role="status">
             <Brain size={32} className="mx-auto mb-3 opacity-30" />
              <p>输入任务并点击"推理"开始多策略推理。</p>
              <div className="mt-4 space-y-1 text-left px-4">
@@ -312,7 +315,7 @@ export function ReasoningPanel() {
             )}
 
             {/* Best Answer */}
-            <div className="p-3 bg-[var(--color-bg-surface-1)] rounded-lg border border-purple-700/30">
+            <div className="p-3 bg-[var(--color-bg-surface-1)] rounded-lg border border-[var(--color-accent)]/30">
               <div className="flex items-center gap-2 mb-2">
                 <Target size={13} className="text-purple-400" />
                  <span className="text-xs font-medium text-[var(--color-text-primary)]">最佳答案</span>
@@ -331,7 +334,9 @@ export function ReasoningPanel() {
                     {[1, 2, 3, 4, 5].map((star) => (
                       <button
                         key={star}
+                        type="button"
                         onClick={() => setFeedbackRating(star)}
+                        aria-label={`${star} 星`}
                         className={`p-1 rounded ${feedbackRating >= star ? 'text-yellow-400' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}`}
                       >
                         <Star size={14} fill={feedbackRating >= star ? 'currentColor' : 'none'} />
@@ -340,13 +345,17 @@ export function ReasoningPanel() {
                   </div>
                   <div className="flex gap-2">
                     <button
+                      type="button"
                       onClick={() => setFeedbackThumbs(feedbackThumbs === 'up' ? null : 'up')}
+                      aria-label="有帮助"
                       className={`p-1 rounded ${feedbackThumbs === 'up' ? 'text-green-400 bg-green-400/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}`}
                     >
                       <ThumbsUp size={14} />
                     </button>
                     <button
+                      type="button"
                       onClick={() => setFeedbackThumbs(feedbackThumbs === 'down' ? null : 'down')}
+                      aria-label="需要改进"
                       className={`p-1 rounded ${feedbackThumbs === 'down' ? 'text-red-400 bg-red-400/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}`}
                     >
                       <ThumbsDown size={14} />
@@ -357,7 +366,8 @@ export function ReasoningPanel() {
                   value={feedbackComment}
                   onChange={(e) => setFeedbackComment(e.target.value)}
                    placeholder="可选评论..."
-                  className="w-full px-2 py-1 bg-[var(--color-bg-base)] border border-[var(--color-border-subtle)] rounded text-xs text-[var(--color-text-secondary)] placeholder:text-[var(--color-text-muted)] focus:outline-none resize-none"
+                  aria-label="推理反馈"
+                  className="w-full px-2 py-1 bg-[var(--color-bg-base)] border border-[var(--color-border-subtle)] rounded text-xs text-[var(--color-text-secondary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)] resize-none"
                   rows={2}
                 />
                 <button

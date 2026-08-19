@@ -7,6 +7,7 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 import { useWorkspaceStore } from '../../store/workspace';
 import { PermissionModeToggle } from './PermissionModeToggle';
+import { EnginePermissionModeToggle } from './EnginePermissionModeToggle';
 import { AutonomySlider } from './AutonomySlider';
 import { SessionStatusBadge } from './SessionStatusBadge';
 
@@ -120,29 +121,31 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
         >
           <Square size={14} />
         </button>
-        <div className="w-px h-4 mx-0.5" style={{ backgroundColor: 'var(--color-border-subtle)' }} />
-        <button
-          onClick={handleSnapshot}
-          disabled={!activeSession}
-          className="p-2 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
-          style={{ color: 'var(--color-text-secondary)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
-          title="保存快照"
-        >
-          <Camera size={14} />
-        </button>
-        <button
-          onClick={handleRollback}
-          disabled={!activeSession || snapshots.length === 0}
-          className="p-2 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
-          style={{ color: 'var(--color-text-secondary)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
-          title="回滚到快照"
-        >
-          <RotateCcw size={14} />
-        </button>
+        <div className="hidden items-center gap-0.5 lg:flex">
+          <div className="w-px h-4 mx-0.5" style={{ backgroundColor: 'var(--color-border-subtle)' }} />
+          <button
+            onClick={handleSnapshot}
+            disabled={!activeSession}
+            className="p-2 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
+            style={{ color: 'var(--color-text-secondary)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
+            title="保存快照"
+          >
+            <Camera size={14} />
+          </button>
+          <button
+            onClick={handleRollback}
+            disabled={!activeSession || snapshots.length === 0}
+            className="p-2 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
+            style={{ color: 'var(--color-text-secondary)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
+            title="回滚到快照"
+          >
+            <RotateCcw size={14} />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 flex items-center justify-center gap-2 min-w-0">
@@ -168,7 +171,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
             ? (activeSession.tokenUsage.used / activeSession.tokenUsage.limit)
             : 0;
           return (
-            <div className="flex items-center gap-1.5 mr-1">
+            <div className="hidden xl:flex items-center gap-1.5 mr-1">
               <span className="text-[10px] font-medium" style={{ color: 'var(--color-text-muted)' }}>Token</span>
               <div className="w-12 h-1 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--color-bg-surface-3)' }}>
                 <div
@@ -188,44 +191,44 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
           );
         })()}
 
-        <div className="w-px h-4 mx-0.5" style={{ backgroundColor: 'var(--color-border-subtle)' }} />
-
-        {([
-          { id: 'config', icon: Settings, label: '配置' },
-          { id: 'dag', icon: GitBranch, label: 'DAG' },
-          { id: 'trace', icon: Activity, label: '链路' },
-          { id: 'files', icon: FolderTree, label: '文件' },
-        ] as const).map(({ id, icon: Icon, label }) => {
-          const isActive = rightPanelTab === id && rightPanelOpen;
-          return (
-            <button
-              key={id}
-              onClick={() => isActive ? toggleRightPanel() : setRightPanelTab(id)}
-              className="p-2 rounded-lg transition-all duration-200"
-              style={{
-                color: isActive ? 'var(--color-accent)' : 'var(--color-text-muted)',
-                backgroundColor: isActive ? 'var(--color-accent-subtle)' : 'transparent',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)';
-                  e.currentTarget.style.color = 'var(--color-text-secondary)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                  e.currentTarget.style.color = 'var(--color-text-muted)';
-                }
-              }}
-              title={label}
-            >
-              <Icon size={14} />
-            </button>
-          );
-        })}
-
-        <div className="w-px h-4 mx-0.5" style={{ backgroundColor: 'var(--color-border-subtle)' }} />
+        <div className="hidden items-center gap-0.5 md:flex">
+          <div className="w-px h-4 mx-0.5" style={{ backgroundColor: 'var(--color-border-subtle)' }} />
+          {([
+            { id: 'config', icon: Settings, label: '配置' },
+            { id: 'dag', icon: GitBranch, label: 'DAG' },
+            { id: 'trace', icon: Activity, label: '链路' },
+            { id: 'files', icon: FolderTree, label: '文件' },
+          ] as const).map(({ id, icon: Icon, label }) => {
+            const isActive = rightPanelTab === id && rightPanelOpen;
+            return (
+              <button
+                key={id}
+                onClick={() => isActive ? toggleRightPanel() : setRightPanelTab(id)}
+                className="p-2 rounded-lg transition-all duration-200"
+                style={{
+                  color: isActive ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                  backgroundColor: isActive ? 'var(--color-accent-subtle)' : 'transparent',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)';
+                    e.currentTarget.style.color = 'var(--color-text-secondary)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = 'var(--color-text-muted)';
+                  }
+                }}
+                title={label}
+              >
+                <Icon size={14} />
+              </button>
+            );
+          })}
+          <div className="w-px h-4 mx-0.5" style={{ backgroundColor: 'var(--color-border-subtle)' }} />
+        </div>
 
         <button
           onClick={toggleFocusMode}
@@ -288,8 +291,13 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
             >
               <div className="space-y-3">
                 <div>
-                  <div className="text-[10px] font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>权限模式</div>
+                  <div className="text-[10px] font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>执行环境</div>
                   <PermissionModeToggle value={permissionMode} onChange={setPermissionMode} />
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>执行模式</div>
+                  <EnginePermissionModeToggle />
                 </div>
 
                 <div>

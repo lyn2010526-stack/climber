@@ -69,15 +69,19 @@ class ApiClient {
   }
 
   private cachedGet<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    const now = Date.now();
     const cached = this.requestCache.get(key);
-    if (cached && now - cached.timestamp < this.CACHE_TTL) {
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
       return Promise.resolve(cached.data);
     }
-    const promise = this.requestWithRetry(fn).then(data => {
-      this.requestCache.set(key, { data, timestamp: now });
-      return data;
-    });
+    const pending = this.pendingRequests.get(key);
+    if (pending) return pending as Promise<T>;
+    const promise = this.requestWithRetry(fn)
+      .then(data => {
+        this.requestCache.set(key, { data, timestamp: Date.now() });
+        return data;
+      })
+      .finally(() => this.pendingRequests.delete(key));
+    this.pendingRequests.set(key, promise);
     return promise;
   }
 
@@ -182,14 +186,20 @@ class ApiClient {
       }
 
       const reader = response.body?.getReader();
-      if (!reader) return;
+       if (!reader) {
+         onEvent({ event: 'error', data: { detail: '响应流不可用' } });
+         return;
+       }
 
       const decoder = new TextDecoder();
       let buffer = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+       while (true) {
+         const { done, value } = await reader.read();
+         if (done) {
+           onEvent({ event: 'eof', data: null });
+           break;
+         }
 
         buffer += decoder.decode(value, { stream: true });
         if (buffer.length > 1048576) buffer = '';
@@ -574,6 +584,10 @@ class ApiClient {
     return this.request<any>('/cost/budget');
   }
 
+  async getCostQuota() {
+    return this.request<any>('/cost/quota');
+  }
+
   // Scheduler
   async listSchedulerTasks() {
     return this.request<any[]>('/scheduler/tasks');
@@ -653,6 +667,17 @@ class ApiClient {
     return this.request<any>(`/permissions/resolve`, {
       method: 'POST',
       body: JSON.stringify({ tool_call_id: toolCallId, decision }),
+    });
+  }
+
+  async getPermissionConfig() {
+    return this.request<any>('/permissions/config');
+  }
+
+  async updatePermissionConfig(data: { mode?: string; rules?: unknown[]; allowed_tools?: string[]; denied_tools?: string[] }) {
+    return this.request<any>('/permissions/config', {
+      method: 'PUT',
+      body: JSON.stringify(data),
     });
   }
 

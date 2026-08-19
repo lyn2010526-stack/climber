@@ -6,6 +6,7 @@ import asyncio
 import re
 import time
 from collections.abc import AsyncIterator
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from typing import Any
 
@@ -51,6 +52,7 @@ from app.core.parallel import ParallelToolExecutor
 from app.core.persistent_memory import PersistentMemoryService
 from app.core.task_state_machine import TaskState, TaskStateMachine
 from app.core.tool_prioritizer import ToolPrioritizer
+from app.core.tracing import Span, SpanKind, SpanStatus, TracingContext, get_current_trace, trace_store
 from app.models.openai_adapter import OpenAIAdapter
 from app.models.registry import ModelRegistry
 from app.tools import ToolRegistry
@@ -442,8 +444,15 @@ class AgentEngine:
             return
 
         async with lock:
-            async for event in self._run_locked(session, message):
-                yield event
+            async with TracingContext(
+                name=f"agent:{session.agent_id or 'agent'}",
+                kind=SpanKind.AGENT_SESSION,
+                user_id=session.user_id,
+                metadata={"session_id": session.session_id, "agent_id": session.agent_id, "model": session.model_id},
+            ) as trace_ctx:
+                trace_ctx.span.set_input(message)
+                async for event in self._run_locked(session, message):
+                    yield event
 
     async def run_agent(self, session: AgentSession, message: str) -> dict[str, Any]:
         """Convenience wrapper around run() that collects output into a dict.
@@ -534,6 +543,7 @@ class AgentEngine:
         )
         compressor = ContextCompressor(session.context_config)
         result: ChatResult | None = None
+        trace_ctx = get_current_trace()
 
         try:
             adapter = self.model_registry.get_or_create(
@@ -555,32 +565,45 @@ class AgentEngine:
                     session.messages = await compressor.compress(session.messages, adapter)
                     yield AgentEvent(type=AgentEventType.CONTEXT_COMPRESSION, data={"iteration": iteration, "tokens": ctx_tokens, "limit": ctx_limit})
 
-                try:
-                    if adapter.capabilities.streaming:
-                        events, total_tokens = await self._stream_with_retry(adapter, session.messages, tools or None)
-                        full_content = ""
-                        accumulated_tool_calls = []
-                        for delta_content, tool_calls in events:
-                            if session._stop_requested:
-                                yield AgentEvent(type=AgentEventType.STOPPED, data={"reason": "user_requested"})
-                                await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
-                                return
-                            if delta_content:
-                                full_content += delta_content
-                                yield AgentEvent(type=AgentEventType.TEXT, data={"content": delta_content})
-                            if tool_calls:
-                                accumulated_tool_calls = tool_calls
-                        result = ChatResult(content=full_content, tool_calls=accumulated_tool_calls, finish_reason="stop", tokens_used=total_tokens)
-                    else:
-                        result = await self._chat_with_retry(adapter, session.messages, tools or None)
-                except Exception as e:
-                    if session._stop_requested:
+                llm_cm = (
+                    trace_ctx.child_span(f"llm_call:{iteration}", SpanKind.LLM_CALL)
+                    if trace_ctx is not None
+                    else nullcontext()
+                )
+                async with llm_cm as llm_span:
+                    try:
+                        if adapter.capabilities.streaming:
+                            events, total_tokens = await self._stream_with_retry(adapter, session.messages, tools or None)
+                            full_content = ""
+                            accumulated_tool_calls = []
+                            for delta_content, tool_calls in events:
+                                if session._stop_requested:
+                                    yield AgentEvent(type=AgentEventType.STOPPED, data={"reason": "user_requested"})
+                                    await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
+                                    return
+                                if delta_content:
+                                    full_content += delta_content
+                                    yield AgentEvent(type=AgentEventType.TEXT, data={"content": delta_content})
+                                if tool_calls:
+                                    accumulated_tool_calls = tool_calls
+                            result = ChatResult(content=full_content, tool_calls=accumulated_tool_calls, finish_reason="stop", tokens_used=total_tokens)
+                        else:
+                            result = await self._chat_with_retry(adapter, session.messages, tools or None)
+                        if llm_span is not None:
+                            llm_span.set_tokens(getattr(result, "tokens_used", 0) or 0, model=session.model_id)
+                            llm_span.set_output(result.content if result else "")
+                    except Exception as e:
+                        if llm_span is not None:
+                            llm_span.set_error(str(e))
+                        if session._stop_requested:
+                            yield AgentEvent(type=AgentEventType.ERROR, data={"error": str(e)})
+                            await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
+                            return
                         yield AgentEvent(type=AgentEventType.ERROR, data={"error": str(e)})
-                        await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
+                        await session.state_machine.transition(TaskState.FAILED, trigger="llm_error")
+                        if trace_ctx is not None:
+                            trace_ctx.span.set_error(str(e))
                         return
-                    yield AgentEvent(type=AgentEventType.ERROR, data={"error": str(e)})
-                    await session.state_machine.transition(TaskState.FAILED, trigger="llm_error")
-                    return
 
                 # Parse XML-style tool calls for non-standard providers (e.g., StepFun)
                 if not result.tool_calls and result.content:
@@ -652,6 +675,23 @@ class AgentEngine:
                             tool_name=tr.tool_name,
                         )
 
+                        if trace_ctx is not None:
+                            tool_span = Span(
+                                name=f"tool:{tr.tool_name}",
+                                kind=SpanKind.TOOL_CALL,
+                                trace_id=trace_ctx.span.trace_id,
+                                parent_id=trace_ctx.span.id,
+                                user_id=session.user_id,
+                                metadata={"session_id": session.session_id},
+                            )
+                            tool_span.tool_name = tr.tool_name
+                            tool_span.set_input(tr.arguments or {})
+                            tool_span.set_output(tr.result)
+                            tool_span.duration_ms = tr.duration_ms or 0
+                            if tr.error:
+                                tool_span.set_error(tr.error)
+                            await trace_store.save_span(tool_span)
+
                     # Enhanced checkpoint with LangGraph-style channel values
                     cp = CheckpointData(
                         session_id=session.session_id,
@@ -691,6 +731,8 @@ class AgentEngine:
 
             if iteration >= session.max_iterations and result and result.tool_calls:
                 await session.state_machine.transition(TaskState.FAILED, trigger="max_iterations")
+                if trace_ctx is not None:
+                    trace_ctx.span.set_status(SpanStatus.ERROR)
                 yield AgentEvent(type=AgentEventType.DONE, data={"status": "max_iterations_reached", "iterations": iteration})
                 return
 
@@ -710,6 +752,8 @@ class AgentEngine:
             else:
                 await session.state_machine.transition(TaskState.FAILED, trigger="unhandled_error")
             yield AgentEvent(type=AgentEventType.ERROR, data={"error": str(e)})
+            if trace_ctx is not None:
+                trace_ctx.span.set_error(str(e))
             try:
                 from app.services.notifications import notification_service
                 _spawn(notification_service.task_failed(f"Agent {session.agent_id}", str(e)))

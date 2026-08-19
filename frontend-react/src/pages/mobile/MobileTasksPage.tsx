@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Square, CheckCircle2, XCircle, Loader2, Clock, Terminal, Globe, FileText, ChevronDown } from 'lucide-react';
 import { api } from '../../api';
+import type { TaskSummary } from '../../types/api';
 
 interface TaskStep {
   id: string;
@@ -13,18 +14,14 @@ interface TaskStep {
   tool_call: any;
 }
 
-interface Task {
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-  steps: TaskStep[];
-  current_step_idx: number;
-  result: string;
-  error: string;
-  total_tool_calls: number;
-  duration: number | null;
-}
+type Task = TaskSummary & {
+  title?: string;
+  steps?: TaskStep[];
+  current_step_idx?: number;
+  result?: string;
+  error?: string;
+  duration?: number | null;
+};
 
 const STEP_ICONS: Record<string, typeof Terminal> = {
   command: Terminal,
@@ -53,7 +50,7 @@ export function MobileTasksPage() {
   const fetchTasks = useCallback(async () => {
     try {
       const data = await api.listTasks();
-      setTasks(data as unknown as Task[]);
+      setTasks(data);
     } catch { /* skip */ }
   }, []);
 
@@ -189,7 +186,7 @@ export function MobileTasksPage() {
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs font-semibold text-[var(--color-text-primary)] truncate">
-                    {task.title}
+                    {task.title || task.description || task.id.slice(0, 8)}
                   </span>
                   <span className={`text-[10px] font-medium shrink-0 ${statusColor(task.status)}`}>
                     {STATUS_LABELS[task.status] || task.status}
@@ -199,13 +196,13 @@ export function MobileTasksPage() {
                   <div className="mt-2 w-full h-1 bg-white/[0.06] rounded-full overflow-hidden">
                     <div
                       className="h-full bg-[var(--color-accent)] rounded-full transition-all"
-                      style={{ width: `${((task.current_step_idx + 1) / Math.max(task.steps.length, 1)) * 100}%` }}
+                      style={{ width: `${task.max_rounds && task.current_round != null ? Math.min(100, (task.current_round / task.max_rounds) * 100) : 20}%` }}
                     />
                   </div>
                 )}
-                {task.status !== 'running' && task.steps.length > 0 && (
+                {task.status !== 'running' && (task.steps?.length ?? 0) > 0 && (
                   <div className="mt-1.5 text-[10px] text-[var(--color-text-muted)]">
-                    {task.steps.length} 步
+                    {task.steps?.length} 步
                     {task.duration != null && ` · ${task.duration}s`}
                   </div>
                 )}
@@ -222,7 +219,7 @@ export function MobileTasksPage() {
                     </button>
                   )}
 
-                  {expandedTask.steps.map((step, idx) => {
+                  {(expandedTask.steps ?? []).map((step, idx) => {
                     const Icon = STEP_ICONS[step.type] || Terminal;
                     return (
                       <div key={step.id} className="bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl overflow-hidden">

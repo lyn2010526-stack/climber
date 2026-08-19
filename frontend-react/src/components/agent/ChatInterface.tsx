@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Drawer } from 'vaul';
-import { ArrowDown, Bot, Edit3, Check, X, Maximize2, Sparkles } from 'lucide-react';
+import { ArrowDown, ArrowUpRight, Bot, Edit3, Check, X, Maximize2, Sparkles, TerminalSquare } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 import { api } from '../../api';
@@ -230,25 +230,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         className="relative flex-1 overflow-y-auto px-4 py-6 md:px-8 chat-container"
       >
         {messages.length === 0 && (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center max-w-lg">
-              <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5" style={{
-                background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15))',
-                boxShadow: '0 0 30px rgba(99,102,241,0.12)',
-              }}>
-                <Bot size={28} style={{ color: 'var(--color-accent)' }} />
+          <div className="flex h-full items-center justify-center py-8">
+            <div className="w-full max-w-xl text-left">
+              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg" style={{ backgroundColor: 'var(--color-accent-subtle)', border: '1px solid var(--color-border-accent)' }}>
+                <TerminalSquare size={22} style={{ color: 'var(--color-accent)' }} />
               </div>
-              <h3 className="text-xl font-semibold mb-2 tracking-tight" style={{ color: 'var(--color-text-primary)' }}>{emptyStateTitle}</h3>
-              <p className="text-sm mb-6 leading-relaxed max-w-sm mx-auto" style={{ color: 'var(--color-text-secondary)' }}>{emptyStateDescription}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-md mx-auto">
+              <p className="mb-2 text-[11px] font-semibold uppercase" style={{ color: 'var(--color-accent)' }}>Climber Agent</p>
+              <h1 className="mb-2 text-xl font-semibold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>{emptyStateTitle}</h1>
+              <p className="mb-6 max-w-md text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>{emptyStateDescription}</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {suggestions.map((suggestion, idx) => (
                   <motion.button
                     key={idx}
                     onClick={() => onSend(suggestion)}
                     whileTap={{ scale: 0.96 }}
-                    whileHover={{ scale: 1.02 }}
                     transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                    className="px-3.5 py-2.5 rounded-lg text-sm text-left flex items-center gap-2.5 transition-all duration-200"
+                    className="group flex min-h-11 items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-left text-sm transition-colors duration-200"
                     style={{
                       backgroundColor: 'var(--color-bg-surface-2)',
                       border: '1px solid var(--color-border-subtle)',
@@ -265,12 +262,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                       e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)';
                     }}
                   >
-                    <span className="w-5 h-5 rounded-lg flex items-center justify-center shrink-0 text-[10px] font-bold"
-                      style={{ backgroundColor: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
-                    >
-                      {idx + 1}
-                    </span>
-                    {suggestion}
+                    <span className="min-w-0 flex-1">{suggestion}</span>
+                    <ArrowUpRight size={14} className="shrink-0 opacity-50 transition-opacity group-hover:opacity-100" />
                   </motion.button>
                 ))}
               </div>

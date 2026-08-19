@@ -74,7 +74,10 @@ function ToolCallCard({ call, defaultExpanded }: { call: ToolCall; defaultExpand
     >
       {/* Main row */}
       <button
-        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.02] transition-colors rounded-xl"
+        type="button"
+        aria-expanded={isExpanded}
+        aria-label={`${call.displayName || call.name}，${statusConfig.label}`}
+        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.03] transition-colors rounded-lg"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className={cn('p-1.5 rounded-lg', statusConfig.bg)}>
@@ -85,6 +88,9 @@ function ToolCallCard({ call, defaultExpanded }: { call: ToolCall; defaultExpand
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-[var(--color-text-primary)] truncate">
               {call.displayName || call.name}
+            </span>
+            <span className={cn('shrink-0 text-[10px] font-medium', statusConfig.color)}>
+              {statusConfig.label}
             </span>
             <StatusIcon
               size={11}
@@ -126,7 +132,7 @@ function ToolCallCard({ call, defaultExpanded }: { call: ToolCall; defaultExpand
                 onClick={() => setShowArgs(!showArgs)}
               >
                 {showArgs ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-                参数 ({Object.keys(call.arguments).length})
+                参数 <span className="font-mono">{Object.keys(call.arguments).length}</span>
               </button>
               {showArgs && (
                 <pre className="mt-1.5 text-[11px] text-[var(--color-text-secondary)] font-mono bg-black/30 rounded-lg p-2.5 overflow-x-auto whitespace-pre-wrap max-h-[150px] overflow-y-auto">
@@ -144,7 +150,7 @@ function ToolCallCard({ call, defaultExpanded }: { call: ToolCall; defaultExpand
                 onClick={() => setShowResult(!showResult)}
               >
                 {showResult ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
-                执行结果
+                结果
               </button>
               {showResult && (
                 <pre className="mt-1.5 text-[11px] text-green-300/80 font-mono bg-black/30 rounded-lg p-2.5 overflow-x-auto whitespace-pre-wrap max-h-[200px] overflow-y-auto">
@@ -187,8 +193,8 @@ export function ToolCallVisualization({
       {/* Summary bar */}
       <div className="flex items-center justify-between px-1 mb-2">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-medium text-[var(--color-text-muted)]">
-            {calls.length} 个工具调用
+          <span className="text-[11px] font-semibold text-[var(--color-text-secondary)]">
+            工具调用 <span className="font-mono text-[var(--color-text-muted)]">{calls.length}</span>
           </span>
           {runningCount > 0 && (
             <span className="flex items-center gap-1 text-[10px] text-blue-400">

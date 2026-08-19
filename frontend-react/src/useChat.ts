@@ -27,6 +27,7 @@ export function useChat(sessionId: string | null) {
   const abortRef = useRef<(() => void) | null>(null);
   const isStreamingRef = useRef(false);
   const mountedRef = useRef(true);
+  const sessionVersionRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -41,6 +42,14 @@ export function useChat(sessionId: string | null) {
   }, []);
 
   useEffect(() => {
+    const version = ++sessionVersionRef.current;
+    if (abortRef.current) {
+      abortRef.current();
+      abortRef.current = null;
+    }
+    isStreamingRef.current = false;
+    setIsStreaming(false);
+    setError(null);
     if (!sessionId) {
       setMessages([]);
       return;
@@ -48,8 +57,8 @@ export function useChat(sessionId: string | null) {
 
     setMessages([]);
 
-    api.getSessionMessages(sessionId).then((data: any) => {
-      if (!mountedRef.current || isStreamingRef.current) return;
+    api.getSessionMessages(sessionId).then((data) => {
+      if (!mountedRef.current || version !== sessionVersionRef.current || isStreamingRef.current) return;
       const msgs: Message[] = (data.messages || []).map((m: any) => ({
         id: m.id,
         role: m.role,
@@ -60,7 +69,7 @@ export function useChat(sessionId: string | null) {
       }));
       setMessages(msgs);
     }).catch(() => {
-      if (mountedRef.current) {
+      if (mountedRef.current && version === sessionVersionRef.current) {
         setMessages([]);
       }
     });
@@ -162,16 +171,14 @@ export function useChat(sessionId: string | null) {
         );
         isStreamingRef.current = false;
         setIsStreaming(false);
-      } else if (eventType === 'error') {
+      } else if (eventType === 'error' || eventType === 'eof') {
         const errMsg = typeof data === 'string' ? data : (data?.detail || data?.error || 'Unknown error');
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === assistantId
-              ? { ...msg, content: msg.content + `\n[Error: ${errMsg}]` }
-              : msg
-          )
-        );
-        setError(errMsg);
+        if (eventType === 'error') {
+          setMessages(prev => prev.map(msg => msg.id === assistantId
+            ? { ...msg, content: msg.content + `\n[Error: ${errMsg}]` }
+            : msg));
+          setError(errMsg);
+        }
         isStreamingRef.current = false;
         setIsStreaming(false);
       }

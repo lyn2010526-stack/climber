@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   Settings, GitBranch, Activity, FolderTree, ChevronDown, ChevronRight,
-  Zap, Brain, Sliders, Timer, Shield, FileDiff, Wrench, MoreHorizontal,
+  Zap, Brain, Sliders, Timer, Shield, FileDiff, Wrench, X, ListTodo,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useWorkspaceStore } from '../../store/workspace';
@@ -10,6 +10,7 @@ import { DiffPanel } from '../code/DiffPanel';
 import { ToolCallVisualization } from '../agent/ToolCallVisualization';
 import type { ToolCall } from '../agent/ToolCallVisualization';
 import { api } from '../../api';
+import { TaskQueuePanel } from './TaskQueuePanel';
 
 export function RightPanel() {
   const { rightPanelTab, rightPanelOpen, activeSessionId, sessions } = useWorkspaceStore(useShallow(s => ({
@@ -19,84 +20,63 @@ export function RightPanel() {
     sessions: s.sessions,
   })));
   const setRightPanelTab = useWorkspaceStore(s => s.setRightPanelTab);
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const toggleRightPanel = useWorkspaceStore(s => s.toggleRightPanel);
 
   if (!rightPanelOpen) return null;
 
   const activeSession = sessions.find(s => s.id === activeSessionId);
 
-  const mainTabs = [
+  const tabs = [
     { id: 'toolcalls' as const, icon: Wrench, label: '工具' },
     { id: 'reasoning' as const, icon: Brain, label: '推理' },
-  ];
-
-  const secondaryTabs = [
     { id: 'config' as const, icon: Settings, label: '配置' },
     { id: 'diff' as const, icon: FileDiff, label: 'Diff' },
     { id: 'dag' as const, icon: GitBranch, label: 'DAG' },
     { id: 'trace' as const, icon: Activity, label: '链路' },
     { id: 'files' as const, icon: FolderTree, label: '文件' },
+    { id: 'tasks' as const, icon: ListTodo, label: '任务' },
   ];
 
-  const isSecondaryActive = secondaryTabs.some(t => t.id === rightPanelTab);
-
   return (
-    <div className="w-80 flex flex-col backdrop-blur-2xl shadow-sm" style={{ backgroundColor: 'var(--color-glass-bg)', borderLeft: '1px solid var(--color-border-subtle)' }}>
-      {/* Tab bar */}
-      <div className="flex relative" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-        {mainTabs.map(({ id, icon: Icon, label }) => (
+    <aside className="flex h-full w-full min-w-0 flex-col backdrop-blur-2xl" style={{ backgroundColor: 'var(--color-glass-bg)', borderLeft: '1px solid var(--color-border-subtle)' }} aria-label="Agent 工作区">
+      <div className="flex h-10 shrink-0 items-center justify-between px-3" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
+        <div>
+          <p className="text-xs font-semibold" style={{ color: 'var(--color-text-primary)' }}>Agent 工作区</p>
+           <p className="max-w-[170px] truncate text-[10px]" style={{ color: 'var(--color-text-muted)' }}>{activeSession ? activeSession.title : '等待会话'}</p>
+        </div>
+        <button type="button" onClick={toggleRightPanel} className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-[var(--color-bg-surface-2)]" style={{ color: 'var(--color-text-muted)' }} aria-label="关闭 Agent 工作区" title="关闭工作区">
+          <X size={14} />
+        </button>
+      </div>
+      <div className="flex shrink-0 overflow-x-auto" style={{ borderBottom: '1px solid var(--color-border-subtle)' }} role="tablist" aria-label="工作区视图">
+        {tabs.map(({ id, icon: Icon, label }) => (
           <button
             key={id}
+            id={`workspace-tab-${id}`}
+            type="button"
             onClick={() => setRightPanelTab(id)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-all relative ${
+            className={`relative flex min-w-[52px] shrink-0 flex-col items-center justify-center gap-1 py-2 text-[9px] font-medium transition-colors ${
               rightPanelTab === id
                  ? 'text-[var(--color-text-primary)]'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
+                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
             }`}
+            role="tab"
+            aria-selected={rightPanelTab === id}
+            aria-controls={`workspace-panel-${id}`}
+            tabIndex={rightPanelTab === id ? 0 : -1}
+            title={label}
           >
             <Icon size={13} />
-            <span>{label}</span>
+            <span className="max-w-full truncate">{label}</span>
             {rightPanelTab === id && (
-              <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-[var(--color-accent)] rounded-full" />
+              <div className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-[var(--color-accent)]" />
             )}
           </button>
         ))}
-        <button
-          onClick={() => setMoreMenuOpen(!moreMenuOpen)}
-          className={`flex items-center justify-center px-3 py-2.5 text-xs font-medium transition-all relative ${
-            isSecondaryActive
-               ? 'text-[var(--color-text-primary)]'
-              : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
-          }`}
-        >
-          <MoreHorizontal size={14} />
-          {isSecondaryActive && (
-             <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-[var(--color-accent)] rounded-full" />
-          )}
-          {moreMenuOpen && (
-            <div className="absolute right-0 top-full mt-1 w-32 rounded-lg border border-white/10 shadow-xl z-50 py-1" style={{ backgroundColor: 'var(--color-bg-surface-2)' }}>
-              {secondaryTabs.map(({ id, icon: Icon, label }) => (
-                <button
-                  key={id}
-                  onClick={() => { setRightPanelTab(id); setMoreMenuOpen(false); }}
-                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
-                    rightPanelTab === id
-                       ? 'text-[var(--color-text-primary)]'
-                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
-                  }`}
-                  style={rightPanelTab === id ? { backgroundColor: 'var(--color-accent-subtle)' } : {}}
-                >
-                  <Icon size={13} />
-                  <span>{label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </button>
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-y-auto p-3">
+      <div id={`workspace-panel-${rightPanelTab}`} className="flex-1 overflow-y-auto p-3" role="tabpanel" aria-labelledby={`workspace-tab-${rightPanelTab}`} tabIndex={0}>
         {rightPanelTab === 'config' && <ConfigPanel session={activeSession} />}
         {rightPanelTab === 'diff' && <DiffPanelTab sessionId={activeSessionId} />}
         {rightPanelTab === 'toolcalls' && <ToolCallsTab sessionId={activeSessionId} />}
@@ -104,8 +84,9 @@ export function RightPanel() {
         {rightPanelTab === 'trace' && <TracePanel />}
         {rightPanelTab === 'reasoning' && <ReasoningPanel />}
         {rightPanelTab === 'files' && <FilesPanel />}
+        {rightPanelTab === 'tasks' && <TaskQueuePanel />}
       </div>
-    </div>
+    </aside>
   );
 }
 
@@ -248,7 +229,7 @@ function DAGPanel() {
         <div className="text-center py-8">
           <GitBranch size={24} className="mx-auto text-[var(--color-text-muted)]" />
            <p className="text-xs text-[var(--color-text-muted)] mt-2">暂无活跃工作流</p>
-          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">Create a cluster to see the DAG</p>
+           <p className="text-[10px] text-[var(--color-text-muted)] mt-1">创建工作流后，这里会显示任务依赖</p>
         </div>
       </div>
     );
@@ -268,7 +249,7 @@ function DAGPanel() {
               }`} />
               {i < nodes.length - 1 && <div className="w-0.5 h-4 bg-white/10" />}
             </div>
-            <span className={`text-xs ${
+             <span className={`min-w-0 truncate text-xs ${
               node.status === 'completed' ? 'text-green-400' :
               node.status === 'running' ? 'text-blue-400 font-medium' :
               'text-[var(--color-text-muted)]'
@@ -293,12 +274,31 @@ function TracePanel() {
       setLoading(true);
       try {
         const data = await api.listTraces();
-          setTraces(data.traces || data || []);
+        setTraces(data || []);
       } catch { /* skip */ }
       setLoading(false);
     };
     fetchTraces();
   }, []);
+
+  const kindLabel = (kind: string) => {
+    switch (kind) {
+      case 'agent_session': return '会话';
+      case 'llm_call': return 'LLM';
+      case 'tool_call': return '工具';
+      case 'review': return '审阅';
+      case 'workflow': return '工作流';
+      case 'memory': return '记忆';
+      case 'rag': return '检索';
+      default: return kind || '自定义';
+    }
+  };
+  const kindClass = (kind: string) =>
+    kind === 'llm_call'
+      ? 'bg-blue-500/10 text-blue-400'
+      : kind === 'tool_call'
+        ? 'bg-green-500/10 text-green-400'
+        : 'bg-[var(--color-text-muted)]/10 text-[var(--color-text-secondary)]';
 
   if (loading) {
     return (
@@ -333,21 +333,21 @@ function TracePanel() {
        <p className="text-xs text-[var(--color-text-muted)]">完整执行追踪 — 包含每次 LLM 调用和工具调用</p>
       <div className="space-y-1.5">
         {traces.map(t => (
-          <div key={t.id} className="p-2 bg-white/5 rounded-xl">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className={`px-1.5 py-0.5 rounded-xl text-[10px] font-medium ${
-                  t.type === 'LLM' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'
-                }`}>
-                  {t.type}
+          <div key={t.trace_id} className="p-2 bg-white/5 rounded-xl">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`px-1.5 py-0.5 rounded-xl text-[10px] font-medium ${kindClass(t.kind)}`}>
+                  {kindLabel(t.kind)}
                 </span>
-                <span className="text-xs text-[var(--color-text-secondary)]">{t.label || t.name || 'Unknown'}</span>
+                <span className="text-xs text-[var(--color-text-secondary)] truncate">{t.name || t.trace_id || 'Unknown'}</span>
               </div>
-              <span className="text-[10px] text-[var(--color-text-muted)]">{t.time || ''}</span>
+              <span className="text-[10px] text-[var(--color-text-muted)] shrink-0">{t.started_at ? t.started_at.slice(0, 19) : ''}</span>
             </div>
             <div className="flex gap-3 mt-1 text-[10px] text-[var(--color-text-muted)]">
-              <span>{t.duration || 0}ms</span>
-               {(t.tokens || 0) > 0 && <span>{t.tokens} 令牌</span>}
+              <span>{Math.round(t.duration_ms ?? 0)}ms</span>
+              {(t.tokens_used ?? 0) > 0 && <span>{t.tokens_used} 令牌</span>}
+              <span>{t.span_count ?? 1} 跨度</span>
+              {t.status === 'error' && <span className="text-red-400">错误</span>}
             </div>
           </div>
         ))}
@@ -394,7 +394,7 @@ function FilesPanel() {
         <div className="text-center py-8">
           <FolderTree size={24} className="mx-auto text-[var(--color-text-muted)]" />
            <p className="text-xs text-[var(--color-text-muted)] mt-2">暂无上传文档</p>
-          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">Upload documents to use with RAG</p>
+           <p className="text-[10px] text-[var(--color-text-muted)] mt-1">上传文档后可用于知识检索</p>
         </div>
       </div>
     );
@@ -408,7 +408,7 @@ function FilesPanel() {
           <div key={doc.id} className="flex items-center gap-2 py-1.5 px-2 rounded-xl hover:bg-white/5 text-xs text-[var(--color-text-secondary)] transition-colors">
             <FolderTree size={12} className="text-[var(--color-text-muted)]" />
             <span className="truncate flex-1">{doc.filename || doc.name}</span>
-            {doc.chunks && <span className="text-[10px] text-[var(--color-text-muted)]">{doc.chunks} chunks</span>}
+             {doc.chunks && <span className="text-[10px] text-[var(--color-text-muted)]">{doc.chunks} 段</span>}
           </div>
         ))}
       </div>
@@ -425,14 +425,14 @@ function DiffPanelTab({ sessionId }: { sessionId: string | null }) {
   useEffect(() => {
     if (!sessionId) return;
     setLoading(true);
-    api.getSessionMessages(sessionId).then((messages) => {
-      const toolResults = (messages as any).filter((m: any) => m.type === 'tool-result');
+    api.getSessionMessages(sessionId).then(({ messages }) => {
+      const toolResults = messages.filter((m: any) => m.type === 'tool-result');
       const diffMessages = toolResults.filter((m: any) =>
         m.content && typeof m.content === 'string' && m.content.includes('diff --git')
       );
       if (diffMessages.length > 0) {
         const latestDiff = diffMessages[diffMessages.length - 1];
-        setDiffText(latestDiff.content);
+        if (latestDiff) setDiffText(latestDiff.content);
       }
     }).catch(() => {})
     .finally(() => setLoading(false));
@@ -481,8 +481,8 @@ function ToolCallsTab({ sessionId }: { sessionId: string | null }) {
   useEffect(() => {
     if (!sessionId) return;
     setLoading(true);
-    api.getSessionMessages(sessionId).then((messages) => {
-      const toolMessages = (messages as any).filter((m: any) => m.type === 'tool-call' || m.type === 'tool_call');
+    api.getSessionMessages(sessionId).then(({ messages }) => {
+      const toolMessages = messages.filter((m: any) => m.type === 'tool-call' || m.type === 'tool_call');
       const calls: ToolCall[] = toolMessages.map((m: any, idx: number) => ({
         id: m.id || `tool-${idx}`,
         name: m.metadata?.toolName || m.content?.name || 'unknown',
@@ -494,8 +494,7 @@ function ToolCallsTab({ sessionId }: { sessionId: string | null }) {
         startTime: m.timestamp,
       }));
       setToolCalls(calls);
-    }).catch(() => {});
-    setLoading(false);
+     }).catch(() => {}).finally(() => setLoading(false));
   }, [sessionId]);
 
   if (loading) {

@@ -136,7 +136,13 @@ export function ChatComposer({ onSend, onStop, isLoading, placeholder }: ChatCom
           )}
         </div>
       </div>
-      <p className="mt-1.5 text-center text-[11px]" style={{ color: 'var(--color-text-muted)' }}>Climber 可能产生不准确结果，执行关键操作前请确认。</p>
+      <div className="mt-1.5 flex min-h-4 items-center justify-center gap-1.5 text-[11px]" style={{ color: 'var(--color-text-muted)' }} aria-live="polite">
+        {isLoading ? (
+          <><span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)] animate-pulse" /><span>Agent 正在执行，可按 Esc 停止</span></>
+        ) : (
+          <span>Climber 可能产生不准确结果，执行关键操作前请确认。</span>
+        )}
+      </div>
     </div>
   );
 }

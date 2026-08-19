@@ -9,6 +9,7 @@ Provides:
 
 from __future__ import annotations
 
+import contextvars
 import json
 import time
 import uuid
@@ -22,6 +23,16 @@ from sqlalchemy import desc, select
 from app.storage import async_session
 
 logger = structlog.get_logger()
+
+# Current trace context, propagated across async tasks so that the agent
+# engine can attach child spans without threading a context object through
+# every call site. Set on TracingContext entry, cleared on exit.
+_current_trace: contextvars.ContextVar[Any] = contextvars.ContextVar("current_trace", default=None)
+
+
+def get_current_trace() -> Any:
+    """Return the active TracingContext for the current async context, if any."""
+    return _current_trace.get()
 
 
 class SpanStatus(StrEnum):
@@ -49,7 +60,13 @@ class TraceStore:
     """
 
     async def save_span(self, span: Span) -> str:
-        """Persist a completed span."""
+        """Persist a completed span (upsert by id).
+
+        Uses merge so that a span can be written in multiple phases — for
+        example the root span is persisted on context entry so child spans
+        can reference it via parent_id (children often finish first), then
+        updated with final metrics on context exit.
+        """
         try:
             async with async_session() as db:
                 from app.storage.models_traces import TraceSpanRecord
@@ -57,6 +74,7 @@ class TraceStore:
                     id=span.id,
                     trace_id=span.trace_id,
                     parent_id=span.parent_id,
+                    user_id=span.user_id,
                     kind=span.kind.value,
                     name=span.name,
                     status=span.status.value,
@@ -69,7 +87,7 @@ class TraceStore:
                     tool_name=span.tool_name,
                     metadata_json=json.dumps(span.metadata, ensure_ascii=False) if span.metadata else None,
                 )
-                db.add(record)
+                await db.merge(record)
                 await db.commit()
                 return record.id
         except Exception as e:
@@ -97,7 +115,7 @@ class TraceStore:
         """List traces with filtering."""
         async with async_session() as db:
             from app.storage.models_traces import TraceSpanRecord
-            query = select(TraceSpanRecord).where(TraceSpanRecord.parent_id is None)
+            query = select(TraceSpanRecord).where(TraceSpanRecord.parent_id.is_(None))
             if user_id:
                 query = query.where(TraceSpanRecord.user_id == user_id)
             if kind:
@@ -192,6 +210,10 @@ class Span:
         self.status = SpanStatus.ERROR
         self.error = str(error)[:1000]
 
+    def set_status(self, status: SpanStatus) -> None:
+        """Explicitly set span status without recording an error message."""
+        self.status = status
+
     def set_tokens(self, count: int, model: str | None = None) -> None:
         """Record token usage."""
         self.tokens_used = count
@@ -255,6 +277,11 @@ class TracingContext:
         self._child_trace_id = self.span.trace_id
 
     async def __aenter__(self) -> TracingContext:
+        _current_trace.set(self)
+        # Persist the root span immediately so child spans can reference it via
+        # parent_id (children typically finish before the parent context exits).
+        store = TraceStore()
+        await store.save_span(self.span)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -263,6 +290,7 @@ class TracingContext:
         self.span.finish()
         store = TraceStore()
         await store.save_span(self.span)
+        _current_trace.set(None)
 
     @asynccontextmanager
     async def child_span(

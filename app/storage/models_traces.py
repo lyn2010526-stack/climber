@@ -67,6 +67,9 @@ class TraceSpanRecord(Base):
             "model": self.model,
             "tool_name": self.tool_name,
             "error": self.error,
+            "input_summary": self.input_summary,
+            "output_summary": self.output_summary,
+            "user_id": self.user_id,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "metadata": self.metadata_json,
         }
