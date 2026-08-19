@@ -49,7 +49,7 @@ const TaskItem = React.forwardRef<HTMLDivElement, TaskItemProps>(
           {status === 'failed' && onRetry && (
             <button
               onClick={onRetry}
-              className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+              className="p-2 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Retry"
             >
               <ChevronRight className="h-4 w-4" />
@@ -58,7 +58,7 @@ const TaskItem = React.forwardRef<HTMLDivElement, TaskItemProps>(
           {onDismiss && (
             <button
               onClick={onDismiss}
-              className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+              className="p-2 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Dismiss"
             >
               <X className="h-4 w-4" />

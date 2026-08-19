@@ -62,7 +62,7 @@ export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: stri
                   )}
                 </div>
                 <span
-                  className="text-[10px] font-medium truncate"
+                  className="text-[11px] font-medium truncate"
                   style={{ color: isActive ? 'var(--color-accent)' : 'var(--color-text-muted)' }}
                 >
                   {label}
@@ -89,7 +89,7 @@ export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: stri
               />
             )}
             <MoreHorizontal size={20} strokeWidth={currentPage === 'settings' ? 2.5 : 2} />
-            <span className="text-[10px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
+            <span className="text-[11px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
               更多
             </span>
           </button>

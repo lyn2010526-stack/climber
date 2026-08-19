@@ -96,14 +96,14 @@ function CodeBlock({ children, className: codeClassName }: { children?: React.Re
       <div className="absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 group-hover/code:opacity-100 transition-all duration-200">
         <button
           onClick={() => setShowLineNumbers(!showLineNumbers)}
-          className="p-1.5 rounded-lg bg-white/5 text-[var(--color-text-muted)] hover:bg-white/10 hover:text-white backdrop-blur-sm border border-white/5 transition-all duration-150"
+          className="p-2 rounded-lg bg-white/5 text-[var(--color-text-muted)] hover:bg-white/10 hover:text-white backdrop-blur-sm border border-white/5 transition-all duration-150"
           title="行号"
         >
           <span className="text-[10px] font-mono">#</span>
         </button>
         <button
           onClick={handleCopy}
-          className="p-1.5 rounded-lg bg-white/5 text-[var(--color-text-muted)] hover:bg-white/10 hover:text-white backdrop-blur-sm border border-white/5 transition-all duration-150"
+          className="p-2 rounded-lg bg-white/5 text-[var(--color-text-muted)] hover:bg-white/10 hover:text-white backdrop-blur-sm border border-white/5 transition-all duration-150"
           title="复制代码"
         >
           {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}

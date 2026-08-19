@@ -103,7 +103,7 @@ const Dialog = forwardRef<HTMLDivElement, DialogProps>(
             <button
               type="button"
               onClick={onClose}
-              className="absolute right-4 top-4 z-10 p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
+              className="absolute right-4 top-4 z-10 p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
               aria-label="关闭"
             >
               <X className="h-4 w-4" />
@@ -128,7 +128,7 @@ const DialogHeader = forwardRef<HTMLDivElement, DialogHeaderProps>(
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-4 top-4 p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
+          className="absolute right-4 top-4 p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
         >
           <X className="h-4 w-4" />
         </button>

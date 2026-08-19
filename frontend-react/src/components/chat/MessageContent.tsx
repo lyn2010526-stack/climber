@@ -84,21 +84,21 @@ export const MessageActions: React.FC<MessageActionsProps> = ({ onCopy, onFeedba
   return (
     <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
       {onEdit && (
-        <button onClick={onEdit} className="p-1.5 rounded-md hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors" title="编辑" aria-label="编辑消息">
+        <button onClick={onEdit} className="p-2 rounded-md hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors" title="编辑" aria-label="编辑消息">
           <Edit3 size={13} />
         </button>
       )}
       {onCopy && (
-        <button onClick={copy} className="p-1.5 rounded-md hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors" title="复制" aria-label="复制消息">
+        <button onClick={copy} className="p-2 rounded-md hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors" title="复制" aria-label="复制消息">
           {copied ? <Check size={13} /> : <Copy size={13} />}
         </button>
       )}
       {onFeedback && (
         <>
-          <button onClick={() => onFeedback('up')} className="p-1.5 rounded-md hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-emerald-500 transition-colors" title="有用" aria-label="标记为有用">
+          <button onClick={() => onFeedback('up')} className="p-2 rounded-md hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-emerald-500 transition-colors" title="有用" aria-label="标记为有用">
             <ThumbsUp size={12} />
           </button>
-          <button onClick={() => onFeedback('down')} className="p-1.5 rounded-md hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-rose-500 transition-colors" title="无用" aria-label="标记为无用">
+          <button onClick={() => onFeedback('down')} className="p-2 rounded-md hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-rose-500 transition-colors" title="无用" aria-label="标记为无用">
             <ThumbsDown size={12} />
           </button>
         </>

@@ -41,7 +41,7 @@ export function WorkspaceLayout() {
             <div className="h-full flex flex-col">
               <div className="flex items-center justify-between px-4 h-12 shrink-0" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
                 <span className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>会话列表</span>
-                <button onClick={() => setSessionDrawerOpen(false)} className="p-1.5 rounded-lg transition-all duration-200" style={{ color: 'var(--color-text-muted)' }}>
+                <button onClick={() => setSessionDrawerOpen(false)} className="p-2 rounded-lg transition-all duration-200" style={{ color: 'var(--color-text-muted)' }}>
                   <MessageSquare size={14} />
                 </button>
               </div>

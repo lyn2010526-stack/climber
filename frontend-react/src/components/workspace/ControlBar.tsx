@@ -89,59 +89,59 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
       <div className="flex items-center gap-0.5">
         {onToggleSessions && (
           <button onClick={onToggleSessions}
-            className="p-1.5 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95"
+            className="p-2 rounded-lg transition-all duration-200 active:scale-95"
             style={{ color: 'var(--color-text-secondary)' }}
             onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
             title="会话列表"
           >
-            <MessageSquare size={13} />
+            <MessageSquare size={14} />
           </button>
         )}
         <button
           onClick={handlePause}
           disabled={!activeSession || (!isRunning && !isPaused)}
-          className="p-1.5 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
+          className="p-2 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
           style={{ color: 'var(--color-text-secondary)' }}
           onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
           title={isPaused ? '继续' : '暂停'}
         >
-          {isPaused ? <Play size={13} /> : <Pause size={13} />}
+          {isPaused ? <Play size={14} /> : <Pause size={14} />}
         </button>
         <button
           onClick={handleStop}
           disabled={!activeSession}
-          className="p-1.5 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
+          className="p-2 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
           style={{ color: 'var(--color-text-secondary)' }}
           onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.color = 'rgba(239, 68, 68, 0.9)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
           title="停止"
         >
-          <Square size={13} />
+          <Square size={14} />
         </button>
         <div className="w-px h-4 mx-0.5" style={{ backgroundColor: 'var(--color-border-subtle)' }} />
         <button
           onClick={handleSnapshot}
           disabled={!activeSession}
-          className="p-1.5 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
+          className="p-2 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
           style={{ color: 'var(--color-text-secondary)' }}
           onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
           title="保存快照"
         >
-          <Camera size={13} />
+          <Camera size={14} />
         </button>
         <button
           onClick={handleRollback}
           disabled={!activeSession || snapshots.length === 0}
-          className="p-1.5 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
+          className="p-2 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95"
           style={{ color: 'var(--color-text-secondary)' }}
           onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)'; e.currentTarget.style.color = 'var(--color-text-primary)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
           title="回滚到快照"
         >
-          <RotateCcw size={13} />
+          <RotateCcw size={14} />
         </button>
       </div>
 
@@ -158,7 +158,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
             />
           </>
         ) : (
-          <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>选择或创建一个会话</span>
+          <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>选择或创建一个会话</span>
         )}
       </div>
 
@@ -201,7 +201,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
             <button
               key={id}
               onClick={() => isActive ? toggleRightPanel() : setRightPanelTab(id)}
-              className="p-1.5 rounded-lg transition-all duration-200"
+              className="p-2 rounded-lg transition-all duration-200"
               style={{
                 color: isActive ? 'var(--color-accent)' : 'var(--color-text-muted)',
                 backgroundColor: isActive ? 'var(--color-accent-subtle)' : 'transparent',
@@ -220,7 +220,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
               }}
               title={label}
             >
-              <Icon size={13} />
+              <Icon size={14} />
             </button>
           );
         })}
@@ -229,7 +229,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
 
         <button
           onClick={toggleFocusMode}
-          className="p-1.5 rounded-lg transition-all duration-200"
+          className="p-2 rounded-lg transition-all duration-200"
           style={{
             color: focusMode ? 'var(--color-accent)' : 'var(--color-text-muted)',
             backgroundColor: focusMode ? 'var(--color-accent-subtle)' : 'transparent',
@@ -248,7 +248,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
           }}
           title="专注模式"
         >
-          {focusMode ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+          {focusMode ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
         </button>
 
         <div ref={settingsRef} className="relative">
@@ -273,7 +273,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
             }}
             title="更多设置"
           >
-            <Settings size={13} />
+            <Settings size={14} />
             <ChevronDown size={10} className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''}`} />
           </button>
 
@@ -301,7 +301,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
                   <span className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>专家模式</span>
                   <button
                     onClick={toggleExpertMode}
-                    className="p-1.5 rounded-lg transition-all duration-200"
+                    className="p-2 rounded-lg transition-all duration-200"
                     style={{
                       color: expertMode ? 'var(--color-accent)' : 'var(--color-text-muted)',
                       backgroundColor: expertMode ? 'var(--color-accent-subtle)' : 'transparent',
@@ -320,7 +320,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
                     }}
                     title={expertMode ? '关闭专家模式' : '开启专家模式'}
                   >
-                    {expertMode ? <Eye size={13} /> : <EyeOff size={13} />}
+                    {expertMode ? <Eye size={14} /> : <EyeOff size={14} />}
                   </button>
                 </div>
               </div>

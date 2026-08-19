@@ -158,6 +158,51 @@
   --ui-font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
+/* ─── Focus Visibility (WCAG 2.4.7) ─────────── */
+:focus-visible {
+  outline: 2px solid var(--color-accent) !important;
+  outline-offset: 2px !important;
+  border-radius: inherit;
+}
+
+button:focus:not(:focus-visible),
+a:focus:not(:focus-visible),
+input:focus:not(:focus-visible),
+textarea:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ─── Touch Targets (WCAG 2.5.8, min 24px; mobile best practice 44px) ─── */
+@media (pointer: coarse) {
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  button.compact-target,
+  .compact-target button {
+    min-height: 40px;
+    min-width: 40px;
+  }
+}
+
+/* Keep desktop controls easy to scan and target without changing text layout. */
+@media (pointer: fine) {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    min-height: 32px;
+    min-width: 32px;
+  }
+}
+
+/* ─── Minimum Legible Text ─────────── */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+}
+
 /* ─── Scrollbar Styling ───────────────── */
 * {
   scrollbar-width: thin;

@@ -90,14 +90,14 @@ export function ServerCard({ server, onStart, onStop, onRestart }: ServerCardPro
               <>
                 <button
                   onClick={() => onRestart(server.id)}
-                  className="p-1.5 rounded-lg bg-white/[0.04] text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.08] transition-all"
+                  className="p-2 rounded-lg bg-white/[0.04] text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.08] transition-all"
                   title="重启"
                 >
                   <RotateCcw size={13} />
                 </button>
                 <button
                   onClick={() => onStop(server.id)}
-                  className="p-1.5 rounded-lg bg-white/[0.04] text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  className="p-2 rounded-lg bg-white/[0.04] text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-all"
                   title="停止"
                 >
                   <Square size={13} />
@@ -106,7 +106,7 @@ export function ServerCard({ server, onStart, onStop, onRestart }: ServerCardPro
             ) : (
               <button
                 onClick={() => onStart(server.id)}
-                className="p-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/15 transition-all"
+                className="p-2 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/15 transition-all"
                 title="启动"
               >
                 <Play size={13} />
@@ -114,7 +114,7 @@ export function ServerCard({ server, onStart, onStop, onRestart }: ServerCardPro
             )}
             <button
               onClick={() => setExpanded(!expanded)}
-              className="p-1.5 rounded-lg bg-white/[0.04] text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.08] transition-all"
+              className="p-2 rounded-lg bg-white/[0.04] text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.08] transition-all"
             >
               <ChevronDown size={13} className={cn('transition-transform', expanded && 'rotate-180')} />
             </button>

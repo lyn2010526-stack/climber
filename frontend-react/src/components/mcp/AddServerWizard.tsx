@@ -108,7 +108,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
             <h3 className="text-sm font-semibold text-white">添加 MCP 服务器</h3>
              <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">配置新的模型上下文协议服务器</p>
           </div>
-          <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-white/[0.06] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors">
+          <button onClick={handleClose} className="p-2 rounded-lg hover:bg-white/[0.06] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors">
             <X size={16} />
           </button>
         </div>

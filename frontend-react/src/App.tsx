@@ -219,12 +219,12 @@ export default function App() {
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-semibold truncate" style={{ color: 'var(--color-text-primary)' }}>Climber</div>
-                <div className="text-[10px] truncate" style={{ color: 'var(--color-text-muted)' }}>Agent workspace</div>
+                <div className="text-[11px] truncate" style={{ color: 'var(--color-text-secondary)' }}>Agent workspace</div>
               </div>
             </div>
 
             <nav className="flex-1 py-4 px-3 overflow-y-auto">
-              <div className="px-2 mb-2 text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-text-muted)' }}>Workspace</div>
+              <div className="px-2 mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-text-secondary)' }}>Workspace</div>
               <div className="space-y-1">
               {CORE_NAV.map(({ id, icon: Icon, label, description }) => {
                 const isActive = currentPage === id;
@@ -232,6 +232,7 @@ export default function App() {
                   <button
                     key={id}
                     onClick={() => navigate(id)}
+                    aria-current={isActive ? 'page' : undefined}
                     className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 text-left"
                     style={{
                       backgroundColor: isActive ? 'var(--color-accent-subtle)' : 'transparent',
@@ -240,8 +241,8 @@ export default function App() {
                   >
                     <Icon size={17} strokeWidth={isActive ? 2.5 : 2} />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-xs font-semibold" style={{ color: isActive ? 'var(--color-accent)' : 'var(--color-text-primary)' }}>{label}</span>
-                      <span className="block text-[10px] mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{description}</span>
+                      <span className="block text-xs font-semibold" style={{ color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-primary)' }}>{label}</span>
+                      <span className="block text-[11px] mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>{description}</span>
                     </span>
                     {isActive && (
                       <div className="absolute left-0 w-[3px] h-7 rounded-r-full bg-[var(--color-accent)]" />
@@ -250,7 +251,7 @@ export default function App() {
                 );
               })}
               </div>
-              <div className="px-2 mt-7 mb-2 text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-text-muted)' }}>Explore</div>
+              <div className="px-2 mt-7 mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-text-secondary)' }}>Explore</div>
               <div className="space-y-1">
                 {ALL_NAV_ITEMS.filter(item => !CORE_NAV.some(core => core.id === item.id) && ['cluster', 'agents', 'workflows', 'scheduler', 'skills', 'notifications'].includes(item.id)).map(({ id, icon: Icon, label }) => (
                   <button key={id} onClick={() => navigate(id)} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors" style={{ color: currentPage === id ? 'var(--color-accent)' : 'var(--color-text-secondary)', backgroundColor: currentPage === id ? 'var(--color-accent-subtle)' : 'transparent' }}>
@@ -259,7 +260,7 @@ export default function App() {
                   </button>
                 ))}
               </div>
-              <div className="px-2 mt-7 mb-2 text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-text-muted)' }}>System</div>
+              <div className="px-2 mt-7 mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-text-secondary)' }}>System</div>
               <button onClick={() => navigate('settings')} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors" style={{ color: currentPage === 'settings' ? 'var(--color-accent)' : 'var(--color-text-secondary)', backgroundColor: currentPage === 'settings' ? 'var(--color-accent-subtle)' : 'transparent' }}>
                 <Settings size={15} />
                 <span className="text-xs font-medium">系统设置</span>
@@ -331,7 +332,7 @@ export default function App() {
                 onClick={() => setMobileMenuOpen(true)}
                 aria-label="打开导航菜单"
                 aria-expanded={mobileMenuOpen}
-                className="p-1.5 rounded-lg transition-all duration-200 active:scale-[0.95]"
+                className="p-2 rounded-lg transition-all duration-200 active:scale-[0.95]"
                 style={{ color: 'var(--color-text-muted)' }}
               >
                 <Menu size={18} />
@@ -352,7 +353,7 @@ export default function App() {
                 style={{ borderBottom: '1px solid var(--color-border-subtle)', backgroundColor: 'var(--color-bg-surface-1)' }}
               >
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg" style={{ backgroundColor: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}>
+                  <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}>
                     <activeNavItem.icon size={14} />
                   </div>
                   <span className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>{activeNavItem.label}</span>

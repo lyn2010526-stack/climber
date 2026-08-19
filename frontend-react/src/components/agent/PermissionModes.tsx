@@ -84,7 +84,7 @@ export function PermissionModes({
               onMouseLeave={() => setHoveredMode(null)}
             >
               <div className={cn(
-                'p-1.5 rounded-lg transition-colors',
+                'p-2 rounded-lg transition-colors',
                 isActive ? mode.bgColor : 'bg-white/[0.03]'
               )}>
                 <Icon

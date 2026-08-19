@@ -451,7 +451,7 @@ function PluginCard({
               {plugin.source !== 'builtin' && (
                 <button
                   onClick={onUninstall}
-                  className="p-1.5 rounded-xl text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/10 transition-all duration-200"
+                  className="p-2 rounded-xl text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/10 transition-all duration-200"
                 >
                   <Trash2 size={14} />
                 </button>
