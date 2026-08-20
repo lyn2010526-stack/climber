@@ -4,6 +4,8 @@ data/.secret_key
 
 # Runtime-generated agent debug memory
 .agent_debug_memory.json
+.monkeycode/loop/
+dump.rdb
 
 # Python cache
 __pycache__/

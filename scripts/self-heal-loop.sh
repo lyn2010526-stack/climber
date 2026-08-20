@@ -75,8 +75,8 @@ while [ "$round" -lt "$MAX_ROUNDS" ]; do
   log "===== 第 $round 轮开始 ====="
 
   # --- 后端 ---
-  # 互斥：基线脚本运行期间（存在锁文件）跳过本轮后端，避免 SQLite 锁冲突
-  if [ -f "$LOOP_DIR/baseline.lock" ]; then
+  # 互斥：基线脚本持有锁期间跳过本轮后端，避免 SQLite 锁冲突
+  if ! flock -n "$LOOP_DIR/baseline.lock" -c true 2>/dev/null; then
     log "检测到基线脚本运行中，本轮跳过后端"
     BE_TAIL="skipped (baseline running)"
     BE_FAILS=""

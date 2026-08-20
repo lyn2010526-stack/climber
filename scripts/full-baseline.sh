@@ -7,14 +7,18 @@ cd /workspace || exit 1
 export PYTHONPATH=/workspace
 mkdir -p /workspace/.monkeycode/loop
 
-RESULT_DIR="/workspace/.monkeycode/loop/baseline"
-rm -rf "$RESULT_DIR"
+RUN_ID="$(date +%Y%m%d_%H%M%S)"
+RESULT_DIR="/workspace/.monkeycode/loop/baseline/$RUN_ID"
 mkdir -p "$RESULT_DIR"
 
 # 锁文件：告知 self-heal-loop 跳过后端，避免 SQLite 锁冲突
 LOCK="/workspace/.monkeycode/loop/baseline.lock"
-trap 'rm -f "$LOCK"' EXIT
-touch "$LOCK"
+exec 9>"$LOCK"
+if ! flock -n 9; then
+  echo "已有基线任务运行中: $LOCK" >&2
+  exit 2
+fi
+trap 'flock -u 9' EXIT
 
 echo "===== 分批全量基线 $(date) ====="
 PASS=0
@@ -29,13 +33,14 @@ for f in tests/test_*.py; do
   out="$RESULT_DIR/$base.txt"
   echo "--- $f ---"
   timeout 300 python3 -m pytest "$f" -q --no-header -p no:cacheprovider --timeout=60 2>&1 | tee "$out" | grep -E "passed|failed|error|Timeout" | tail -3
+  test_status=${PIPESTATUS[0]}
   summary=$(grep -E "passed|failed|error" "$out" | tail -1 || true)
-  # 解析摘要
-  if [ -n "$summary" ] && echo "$summary" | grep -q "failed"; then
-    echo "$base: $summary" >> "$FAILED_LIST"
-  fi
-  if [ -n "$summary" ] && echo "$summary" | grep -q "error"; then
-    echo "$base: $summary" >> "$FAILED_LIST"
+  if [ "$test_status" -eq 124 ]; then
+    echo "$base: timed out after 300 seconds" >> "$FAILED_LIST"
+  elif [ "$test_status" -ne 0 ]; then
+    echo "$base: ${summary:-pytest exited with status $test_status}" >> "$FAILED_LIST"
+  elif [ -z "$summary" ]; then
+    echo "$base: pytest produced no result summary" >> "$FAILED_LIST"
   fi
 done
 
@@ -53,3 +58,7 @@ for f in tests/test_*.py; do
   fi
 done
 echo "===== 完成 $(date) ====="
+
+if [ -s "$FAILED_LIST" ]; then
+  exit 1
+fi

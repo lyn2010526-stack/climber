@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import os
-import tempfile
+from pathlib import Path
 
 import pytest
 
 # Set testing mode
 os.environ["APP_TESTING"] = "true"
-os.environ["CLIMBER_SANDBOX_WORKDIR"] = tempfile.mkdtemp(prefix="climber_test_")
 
 
 # ─── Import modules under test ──────────────────────────────────────────────
@@ -28,12 +27,11 @@ from app.tools.native_tools import (
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
 @pytest.fixture
-def workspace_root():
+def workspace_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Create a temporary workspace root for testing."""
-    tmpdir = tempfile.mkdtemp(prefix="climber_test_")
-    os.environ["CLIMBER_SANDBOX_WORKDIR"] = tmpdir
-    yield tmpdir
-    os.environ.pop("CLIMBER_SANDBOX_WORKDIR", None)
+    workspace = str(tmp_path)
+    monkeypatch.setenv("CLIMBER_SANDBOX_WORKDIR", workspace)
+    return workspace
 
 
 @pytest.fixture
