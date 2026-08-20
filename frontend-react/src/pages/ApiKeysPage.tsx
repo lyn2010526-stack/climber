@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Key } from 'lucide-react';
 import { api } from '../api';
+import { Button, Card, Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter, EmptyState, Input, Select } from '../components/ui';
 
 const PROVIDERS = ['openai', 'anthropic', 'google', 'ollama', 'stepfun'];
 
@@ -8,6 +9,7 @@ export function ApiKeysPage() {
   const [keys, setKeys] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ provider: 'openai', name: '', api_key: '', base_url: '' });
+  const [pendingDelete, setPendingDelete] = useState<any | null>(null);
 
 
   useEffect(() => { loadKeys(); }, []);
@@ -23,8 +25,10 @@ export function ApiKeysPage() {
     loadKeys();
   };
 
-  const deleteKey = async (id: string) => {
-    await api.deleteApiKey(id);
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    await api.deleteApiKey(pendingDelete.id);
+    setPendingDelete(null);
     loadKeys();
   };
 
@@ -36,61 +40,63 @@ export function ApiKeysPage() {
             <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">API 密钥</h2>
             <p className="text-[var(--color-text-secondary)] text-sm mt-1.5">管理模型提供商凭据</p>
           </div>
-          <button
+          <Button
             onClick={() => setShowForm(!showForm)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold transition-all duration-200 shadow-lg shadow-[var(--color-accent)]/20 active:scale-[0.97]"
+            size="lg"
+            className="rounded-2xl shadow-lg shadow-[var(--color-accent)]/20"
           >
              <Plus size={16} /> 添加密钥
-          </button>
+          </Button>
         </div>
 
         {showForm && (
-          <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-3xl p-6 mb-6">
+          <Card className="rounded-3xl p-6 mb-6" padding="none">
             <div className="grid grid-cols-2 gap-4">
-              <select
+              <Select
                 value={form.provider}
-                onChange={(e) => setForm({ ...form, provider: e.target.value })}
-                className="px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
-              >
-                {PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-              <input
+                onChange={(v) => setForm({ ...form, provider: v })}
+                options={PROVIDERS.map(p => ({ value: p, label: p }))}
+                className="rounded-2xl"
+              />
+              <Input
                 placeholder="名称（例如：个人 GPT-4）"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
+                className="col-span-1 rounded-2xl px-4 py-2.5 placeholder:text-[var(--color-text-muted)]"
               />
-              <input
+              <Input
                 placeholder="API 密钥"
                 type="password"
                 value={form.api_key}
                 onChange={(e) => setForm({ ...form, api_key: e.target.value })}
-                className="col-span-2 px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
+                className="col-span-2 rounded-2xl px-4 py-2.5 placeholder:text-[var(--color-text-muted)]"
               />
-              <input
+              <Input
                 placeholder="Base URL（可选，自托管时使用）"
                 value={form.base_url}
                 onChange={(e) => setForm({ ...form, base_url: e.target.value })}
-                className="col-span-2 px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
+                className="col-span-2 rounded-2xl px-4 py-2.5 placeholder:text-[var(--color-text-muted)]"
               />
             </div>
             <div className="flex justify-end mt-4">
-              <button
+              <Button
                 onClick={addKey}
                 disabled={!form.name || !form.api_key}
-                className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold disabled:opacity-40 transition-all duration-200 active:scale-[0.97] shadow-lg shadow-[var(--color-accent)]/20"
+                size="lg"
+                className="rounded-2xl shadow-lg shadow-[var(--color-accent)]/20 disabled:opacity-40"
               >
                  保存密钥
-              </button>
+              </Button>
             </div>
-          </div>
+          </Card>
         )}
 
         <div className="space-y-3">
           {keys.map(key => (
-            <div
+            <Card
               key={key.id}
-              className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-5 flex items-center gap-4 hover:border-[var(--color-accent)]/30 transition-all duration-200"
+              className="rounded-2xl p-5 flex items-center gap-4 hover:border-[var(--color-accent)]/30"
+              padding="none"
             >
               <div className="w-10 h-10 rounded-2xl bg-[var(--color-warning)]/10 flex items-center justify-center border border-[var(--color-warning)]/20">
                 <Key size={20} className="text-[var(--color-warning)]" />
@@ -99,24 +105,39 @@ export function ApiKeysPage() {
                 <h3 className="font-semibold text-[var(--color-text-primary)]">{key.name}</h3>
                 <p className="text-sm text-[var(--color-text-muted)]">{key.provider}{key.base_url ? ` | ${key.base_url}` : ''}</p>
               </div>
-              <button
-                onClick={() => deleteKey(key.id)}
-                className="p-2 hover:bg-[var(--color-error)]/10 rounded-xl text-[var(--color-text-muted)] hover:text-[var(--color-error)] transition-all duration-200"
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setPendingDelete(key)}
+                className="rounded-xl hover:bg-[var(--color-error)]/10 hover:text-[var(--color-error)]"
+                aria-label="删除密钥"
               >
                 <Trash2 size={16} />
-              </button>
-            </div>
+              </Button>
+            </Card>
           ))}
           {keys.length === 0 && (
-            <div className="text-center py-16">
-              <div className="w-16 h-16 rounded-3xl bg-white/5 border border-[var(--color-border-subtle)] flex items-center justify-center mx-auto mb-4">
-                <Key size={28} className="text-[var(--color-text-muted)]" />
-              </div>
-              <p className="text-[var(--color-text-muted)] text-sm">暂无 API 密钥。添加一个以连接到模型提供商。</p>
-            </div>
+            <EmptyState
+              icon={Key}
+              title="暂无 API 密钥"
+              description="添加一个以连接到模型提供商。"
+            />
           )}
         </div>
       </div>
+
+      <Dialog open={!!pendingDelete} onClose={() => setPendingDelete(null)} size="sm">
+        <DialogHeader>
+          <DialogTitle>删除 API 密钥</DialogTitle>
+          <DialogDescription>
+            确定要删除「{pendingDelete?.name}」吗？此操作不可撤销。
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => setPendingDelete(null)}>取消</Button>
+          <Button variant="destructive" onClick={confirmDelete}>删除</Button>
+        </DialogFooter>
+      </Dialog>
     </div>
   );
 }

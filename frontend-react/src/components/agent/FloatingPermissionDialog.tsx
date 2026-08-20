@@ -71,6 +71,8 @@ export function FloatingPermissionDialog({
             paddingBottom: 'env(safe-area-inset-bottom, 0px)',
           }}
         >
+          <Drawer.Title className="sr-only">权限请求</Drawer.Title>
+          <Drawer.Description className="sr-only">审核 Agent 请求执行的工具操作</Drawer.Description>
           <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-white/[0.15]" />
 
           {latestRequest && (
@@ -102,6 +104,7 @@ export function FloatingPermissionDialog({
                   )}
                   <button
                     onClick={() => { setVisible(false); }}
+                    aria-label="关闭权限请求"
                     className="p-1 rounded-lg hover:bg-white/[0.06] text-[var(--color-text-secondary)] transition-colors"
                   >
                     <X size={14} />
@@ -124,8 +127,11 @@ export function FloatingPermissionDialog({
                         isLatest ? 'bg-white/[0.02]' : 'bg-transparent'
                       )}
                     >
-                      <div
-                        className="flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-white/[0.02] transition-colors"
+                      <button
+                        type="button"
+                        aria-expanded={isExpanded}
+                        aria-controls={`permission-details-${req.id}`}
+                        className="flex w-full items-start gap-3 px-4 py-3 text-left cursor-pointer hover:bg-white/[0.02] transition-colors"
                         onClick={() => setExpanded(isExpanded ? null : req.id)}
                       >
                         <div className={cn('p-2 rounded-xl', config.bg)}>
@@ -135,7 +141,10 @@ export function FloatingPermissionDialog({
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-medium text-[var(--color-text-primary)]">{config.label}</span>
                             {req.severity === 'high' && (
-                              <AlertTriangle size={12} className="text-red-400" />
+                              <>
+                                <AlertTriangle size={12} className="text-red-400" />
+                                <span className="sr-only">高风险</span>
+                              </>
                             )}
                           </div>
                           <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 truncate">{req.description}</p>
@@ -145,11 +154,11 @@ export function FloatingPermissionDialog({
                             新请求
                           </span>
                         )}
-                      </div>
+                      </button>
 
                       {/* Expanded details */}
                       {isExpanded && (
-                        <div className="px-4 pb-3">
+                        <div id={`permission-details-${req.id}`} className="px-4 pb-3">
                           {req.details && (
                             <pre className="text-[11px] text-[var(--color-text-secondary)] font-mono bg-black/30 rounded-lg p-3 mb-3 overflow-x-auto whitespace-pre-wrap">
                               {req.details}

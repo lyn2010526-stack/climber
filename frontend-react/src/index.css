@@ -422,6 +422,13 @@ button:disabled,
   border: 1px solid var(--color-glass-border);
 }
 
+/* ─── Nav Tooltip ──────────────────────── */
+.nav-tooltip {
+  background-color: var(--color-bg-surface-3);
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-primary);
+}
+
 /* ─── Skeleton Shimmer ────────────────── */
 .skeleton-shimmer {
   background: linear-gradient(90deg, var(--color-bg-surface-2) 25%, var(--color-bg-surface-3) 50%, var(--color-bg-surface-2) 75%);

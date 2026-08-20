@@ -103,7 +103,7 @@ export function parseDiff(diffText: string): DiffFile[] {
 /** 行内高亮组件 */
 function HighlightedLine({ line }: { line: string }) {
   // 简单的语法高亮：关键字、字符串、注释
-  const parts = line.split(/(\s+|[{}()\[\];,.:=<>!+\-*/]|"[^"]*"|'[^']*'|`[^`]*`)/g);
+  const parts = line.split(/(\s+|[{}()[\];,.:=<>!+\-*/]|"[^"]*"|'[^']*'|`[^`]*`)/g);
   return (
     <>
       {parts.map((part, i) => {
@@ -113,7 +113,7 @@ function HighlightedLine({ line }: { line: string }) {
         if (/^["'`]/.test(part)) {
           return <span key={i} className="text-green-300">{part}</span>;
         }
-        if (/^[{}()\[\];,.:=<>!+\-*/]$/.test(part)) {
+        if (/^[{}()[\];,.:=<>!+\-*/]$/.test(part)) {
           return <span key={i} className="text-[var(--color-text-muted)]">{part}</span>;
         }
         return <span key={i}>{part}</span>;

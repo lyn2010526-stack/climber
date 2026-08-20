@@ -66,7 +66,7 @@ const Progress = forwardRef<HTMLDivElement, ProgressProps>(
             {showValue && <span className="text-xs text-white/60 font-medium">{Math.round(percentage)}%</span>}
           </div>
         )}
-        <div className={cn(progressVariants({ size }))} role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={max}>
+        <div className={cn(progressVariants({ size }))} role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={max} aria-label={label || '进度'}>
           <div
             className={cn(
               progressBarVariants({ variant, animated }),
@@ -99,16 +99,16 @@ const CircularProgress = forwardRef<SVGSVGElement, CircularProgressProps>(
     const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
     const colorMap: Record<string, string> = {
-      default: '#3B82F6',
-      success: '#10B981',
-      warning: '#F59E0B',
-      error: '#EF4444',
-      info: '#0EA5E9',
+      default: 'var(--color-accent)',
+      success: 'var(--color-success)',
+      warning: 'var(--color-warning)',
+      error: 'var(--color-error)',
+      info: 'var(--color-accent-secondary)',
     };
 
     return (
-      <div className={cn('relative inline-flex items-center justify-center', className)}>
-        <svg ref={ref} width={size} height={size} className="-rotate-90">
+      <div className={cn('relative inline-flex items-center justify-center', className)} role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={max} aria-label="进度">
+         <svg ref={ref} width={size} height={size} className="-rotate-90">
           <circle
             cx={size / 2}
             cy={size / 2}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, Package, RefreshCw, AlertCircle, Power, PowerOff } from 'lucide-react';
 import { api } from '../api';
+import { Badge, Button, Card, EmptyState, Input } from '../components/ui';
 
 interface Skill {
   id: number;
@@ -103,38 +104,34 @@ export function SkillsPage() {
 
         <div className="flex items-center gap-3 mb-6">
           <div className="relative flex-1 max-w-md">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
-            <input
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] z-10" />
+            <Input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="搜索技能..."
-              className="w-full pl-9 pr-4 py-2.5 bg-white/[0.03] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
+              className="rounded-2xl pl-9 py-2.5 bg-white/[0.03] placeholder:text-[var(--color-text-muted)]"
             />
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button
+            <Button
               onClick={() => setSelectedCategory('')}
-              className={`px-4 py-2 rounded-2xl text-xs font-semibold transition-all duration-200 border ${
-                !selectedCategory
-                  ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)] shadow-lg shadow-[var(--color-accent)]/20'
-                  : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] border-[var(--color-border-subtle)] bg-white/[0.03]'
-              }`}
+              variant={selectedCategory ? 'outline' : 'primary'}
+              size="sm"
+              className="rounded-2xl"
             >
               全部
-            </button>
+            </Button>
             {categories.map(cat => (
-              <button
+              <Button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-4 py-2 rounded-2xl text-xs font-semibold transition-all duration-200 border ${
-                  selectedCategory === cat
-                    ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)] shadow-lg shadow-[var(--color-accent)]/20'
-                    : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] border-[var(--color-border-subtle)] bg-white/[0.03]'
-                }`}
+                variant={selectedCategory === cat ? 'primary' : 'outline'}
+                size="sm"
+                className="rounded-2xl"
               >
                 {CATEGORY_LABELS[cat] || cat}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -143,12 +140,14 @@ export function SkillsPage() {
           <div className="bg-[var(--color-error)]/10 border border-[var(--color-error)]/30 rounded-2xl p-4 mb-6 flex items-center gap-3">
             <AlertCircle size={18} className="text-[var(--color-error)] shrink-0" />
             <p className="text-sm text-[var(--color-error)] flex-1">{error}</p>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => window.location.reload()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-[var(--color-error)] hover:bg-[var(--color-error)]/10 rounded-xl transition-colors"
+              className="rounded-xl text-sm text-[var(--color-error)] hover:bg-[var(--color-error)]/10"
             >
               <RefreshCw size={14} /> 重试
-            </button>
+            </Button>
           </div>
         )}
 
@@ -180,12 +179,10 @@ export function SkillsPage() {
         )}
 
         {!loading && !error && filtered.length === 0 && (
-          <div className="text-center py-16">
-            <div className="w-16 h-16 rounded-3xl bg-white/5 border border-[var(--color-border-subtle)] flex items-center justify-center mx-auto mb-4">
-              <Package size={28} className="text-[var(--color-text-muted)]" />
-            </div>
-            <p className="text-[var(--color-text-muted)] text-sm">未找到匹配的技能。</p>
-          </div>
+          <EmptyState
+            icon={Package}
+            title="未找到匹配的技能"
+          />
         )}
 
         {!loading && !error && filtered.length > 0 && (
@@ -197,17 +194,18 @@ export function SkillsPage() {
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
                   {items.map(skill => (
-                    <div
+                    <Card
                       key={skill.id}
-                      className="border border-[var(--color-border-subtle)] rounded-2xl p-5 bg-[var(--color-bg-surface-1)] hover:border-[var(--color-accent)]/30 transition-all duration-200"
+                      className="rounded-2xl p-5 hover:border-[var(--color-accent)]/30"
+                      padding="none"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <h4 className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{skill.name}</h4>
-                            <span className="text-[10px] text-[var(--color-text-muted)] px-2 py-0.5 bg-white/[0.03] border border-[var(--color-border-subtle)] rounded-full shrink-0">
+                            <Badge variant="outline" className="text-[10px] py-0.5 shrink-0">
                               {skill.category}
-                            </span>
+                            </Badge>
                           </div>
                           <p className="text-xs text-[var(--color-text-muted)] line-clamp-2 mb-3">{skill.description}</p>
                           <div className="flex items-center gap-3 text-[11px] text-[var(--color-text-muted)]">
@@ -216,20 +214,22 @@ export function SkillsPage() {
                             <span className="truncate">{skill.path.split('/').pop()}</span>
                           </div>
                         </div>
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => toggleSkill(skill)}
                           disabled={toggling === `skill-${skill.id}`}
-                          className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200 ${
+                          className={`shrink-0 w-8 h-8 rounded-xl ${
                             skill.is_enabled
-                              ? 'bg-[var(--color-success)]/10 text-[var(--color-success)] hover:bg-[var(--color-success)]/20'
-                              : 'bg-white/[0.03] text-[var(--color-text-muted)] hover:bg-white/[0.06]'
+                              ? 'text-[var(--color-success)] hover:bg-[var(--color-success)]/20'
+                              : 'text-[var(--color-text-muted)]'
                           }`}
                           title={skill.is_enabled ? '禁用' : '启用'}
                         >
                           {skill.is_enabled ? <Power size={14} /> : <PowerOff size={14} />}
-                        </button>
+                        </Button>
                       </div>
-                    </div>
+                    </Card>
                   ))}
                 </div>
               </div>

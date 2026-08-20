@@ -37,6 +37,8 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
       if (!terminalRef.current) return;
 
       const term = new Terminal({
+        // xterm 主题需要具体色值（不支持 CSS 变量），此处为终端专用配色（Slate 色系），
+        // 与设计令牌体系解耦，属有意为之的硬编码。
         theme: {
           background: '#0F172A',
           foreground: '#F8FAFC',
@@ -90,7 +92,7 @@ export const TerminalPanel = forwardRef<TerminalPanelHandle, TerminalPanelProps>
           if (data === '\r') {
             term.write('\r\n');
             const line = (term as any)._lines?.map((l: any) => l.translateToString(0)).join('') || '';
-            const match = line.match(/➜ .*~\s*([^\u0000]*)$/);
+            const match = line.match(/➜ .*~\s*(.*)$/);
             if (match) {
               onCommand(match[1].trim());
             }

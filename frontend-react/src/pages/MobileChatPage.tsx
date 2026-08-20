@@ -4,8 +4,9 @@ import { MessageSquare, PanelLeft } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { ChatInterface } from '../components/agent/ChatInterface';
 import { MobileSessionDrawer } from '../components/mobile/MobileSessionDrawer';
-import { useChat, type Message } from '../useChat';
+import { useChat } from '../hooks/useChat';
 import { useWorkspaceStore } from '../store/workspace';
+import { Alert, Button } from '../components/ui';
 
 export function MobileChatPage() {
   const { activeSessionId, sessions } = useWorkspaceStore(useShallow(s => ({
@@ -48,23 +49,22 @@ export function MobileChatPage() {
             {activeSession?.title || '新建或选择会话'}
           </span>
         </div>
-        <button
+        <Button
           onClick={() => setDrawerOpen(true)}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-semibold shrink-0 transition-all duration-200 active:scale-[0.95]"
-          style={{
-            backgroundColor: 'var(--color-accent-subtle)',
-            color: 'var(--color-accent)',
-          }}
+          variant="accent-soft"
+          size="sm"
+          className="rounded-2xl shrink-0"
         >
           <PanelLeft size={15} strokeWidth={2.5} />
           会话
-        </button>
+        </Button>
       </div>
 
       <div className="flex-1 min-h-0">
         <ChatInterface
+          sessionId={activeSessionId}
           className="h-full"
-          messages={messages as Message[]}
+          messages={messages}
           onSend={handleSend}
           onStop={handleStop}
           isLoading={isStreaming}
@@ -79,8 +79,8 @@ export function MobileChatPage() {
       )}
 
       {error && (
-        <div className="absolute bottom-20 left-4 right-4 bg-red-500/10 border border-red-500/30 rounded-2xl px-5 py-3 text-sm text-red-400 backdrop-blur-xl">
-          {error}
+        <div className="absolute bottom-20 left-4 right-4">
+          <Alert variant="destructive" className="backdrop-blur-xl">{error}</Alert>
         </div>
       )}
     </div>

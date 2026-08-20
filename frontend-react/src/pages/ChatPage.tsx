@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ChatInterface } from '../components/agent/ChatInterface';
-import { useChat } from '../useChat';
+import { useChat } from '../hooks/useChat';
 import { useWorkspaceStore } from '../store/workspace';
+import { Alert } from '../components/ui';
 
 export function ChatPage() {
   const { activeSessionId } = useWorkspaceStore();
@@ -42,6 +43,7 @@ export function ChatPage() {
   return (
     <div className="flex h-full">
       <ChatInterface
+        sessionId={activeSessionId}
         messages={messages}
         onSend={handleSend}
         onStop={handleStop}
@@ -50,10 +52,8 @@ export function ChatPage() {
         emptyStateDescription={activeSessionId ? "输入任何问题或任务，Climber 将为你自主执行。" : "点击顶部工具栏的消息图标打开会话列表，创建一个新会话。"}
       />
       {error && errorVisible && (
-        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-red-500/10 border border-red-500/30 rounded-2xl px-5 py-3 text-sm text-red-400 backdrop-blur-xl cursor-pointer"
-          onClick={() => setErrorVisible(false)}
-        >
-          {error}
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 cursor-pointer" onClick={() => setErrorVisible(false)}>
+          <Alert variant="destructive" className="backdrop-blur-xl">{error}</Alert>
         </div>
       )}
     </div>

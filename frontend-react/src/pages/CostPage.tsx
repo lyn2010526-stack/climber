@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, AlertTriangle, Activity, Wallet, ShieldCheck } from 'lucide-react';
 import { api } from '../api';
+import { Button, Card } from '../components/ui';
 
 interface CostData {
   total_cost: number;
@@ -81,9 +82,9 @@ export default function CostPage() {
         <div className="text-center">
           <AlertTriangle size={32} className="mx-auto mb-2 text-[var(--color-warning)]" />
           <p className="text-sm text-[var(--color-text-secondary)]">{error}</p>
-          <button onClick={fetchData} className="mt-3 px-4 py-1.5 bg-[var(--color-accent)] text-white rounded-xl text-sm hover:bg-[var(--color-accent-hover)] transition-colors">
+          <Button onClick={fetchData} className="mt-3">
               重试
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -102,7 +103,7 @@ export default function CostPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-4">
+        <Card className="rounded-2xl p-4" padding="none">
           <div className="flex items-center gap-2 mb-2">
             <DollarSign size={16} className="text-[var(--color-success)]" />
             <span className="text-xs text-[var(--color-text-muted)]">总成本</span>
@@ -110,8 +111,8 @@ export default function CostPage() {
           <p className="text-2xl font-bold text-[var(--color-text-primary)]">
             ${costData?.total_cost?.toFixed(4) || '0.0000'}
           </p>
-        </div>
-        <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-4">
+        </Card>
+        <Card className="rounded-2xl p-4" padding="none">
           <div className="flex items-center gap-2 mb-2">
             <Activity size={16} className="text-[var(--color-accent)]" />
             <span className="text-xs text-[var(--color-text-muted)]">总 Token</span>
@@ -119,8 +120,8 @@ export default function CostPage() {
           <p className="text-2xl font-bold text-[var(--color-text-primary)]">
             {costData?.total_tokens?.toLocaleString() || '0'}
           </p>
-        </div>
-        <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-4">
+        </Card>
+        <Card className="rounded-2xl p-4" padding="none">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp size={16} className="text-[var(--color-accent-secondary)]" />
             <span className="text-xs text-[var(--color-text-muted)]">API 调用</span>
@@ -128,12 +129,12 @@ export default function CostPage() {
           <p className="text-2xl font-bold text-[var(--color-text-primary)]">
             {costData?.total_calls?.toLocaleString() || '0'}
           </p>
-        </div>
+        </Card>
       </div>
 
       {/* Budget Config */}
       {budget && (
-        <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-5">
+        <Card className="rounded-2xl p-5" padding="none">
           <h3 className="text-sm font-medium text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
             <Wallet size={14} className="text-[var(--color-accent)]" />预算配置
           </h3>
@@ -159,12 +160,12 @@ export default function CostPage() {
               </p>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Quota Usage */}
       {quota && (
-        <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-5">
+        <Card className="rounded-2xl p-5" padding="none">
           <h3 className="text-sm font-medium text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
             <ShieldCheck size={14} className="text-[var(--color-accent-secondary)]" />配额用量
           </h3>
@@ -173,12 +174,12 @@ export default function CostPage() {
             <BudgetBar label="每日 Token" current={quota.tokens_today} limit={quota.max_tokens_per_day} percent={tokenPercent} unit="" />
             <BudgetBar label="本月成本" current={quota.cost_this_month} limit={quota.max_cost_per_month} percent={costPercent} unit="$" />
           </div>
-        </div>
+        </Card>
       )}
 
       {/* By Model */}
       {costData?.by_model && costData.by_model.length > 0 && (
-        <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-5">
+        <Card className="rounded-2xl p-5" padding="none">
           <h3 className="text-sm font-medium text-[var(--color-text-primary)] mb-4">模型成本</h3>
           <div className="space-y-2">
             {costData.by_model.map((m) => (
@@ -191,7 +192,7 @@ export default function CostPage() {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

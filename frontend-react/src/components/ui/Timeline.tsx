@@ -29,7 +29,7 @@ const timelineItemVariants = cva('relative flex gap-4 pb-6 last:pb-0', {
 });
 
 const dotVariants = cva(
-  'relative z-10 flex h-3 w-3 shrink-0 items-center justify-center rounded-full ring-4 ring-[#0A0A0F] mt-1',
+  'relative z-10 flex h-3 w-3 shrink-0 items-center justify-center rounded-full ring-4 ring-[var(--color-bg-page)] mt-1',
   {
     variants: {
       status: {

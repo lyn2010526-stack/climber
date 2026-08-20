@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Activity, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
 import { api } from '../api';
+import { Alert, Badge, Button, Card, LoadingSpinner } from '../components/ui';
 
 interface CheckItem {
   name: string;
@@ -56,34 +57,26 @@ export function DoctorPage() {
               运行环境健康检查，快速定位配置和依赖问题。
             </p>
           </div>
-          <button
+          <Button
             onClick={fetchDoctor}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white/[0.03] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-secondary)] hover:bg-white/[0.06] disabled:opacity-50 transition-all duration-200 active:scale-[0.97]"
+            variant="secondary"
+            className="rounded-2xl px-4 py-2.5 h-auto"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             重新诊断
-          </button>
+          </Button>
         </div>
 
         {error && (
-          <div className="bg-[var(--color-error)]/10 border border-[var(--color-error)]/30 rounded-2xl p-4 mb-6 flex items-center gap-3">
-            <AlertCircle size={18} className="text-[var(--color-error)] shrink-0" />
-            <p className="text-sm text-[var(--color-error)] flex-1">{error}</p>
+          <div className="mb-6">
+            <Alert variant="destructive">{error}</Alert>
           </div>
         )}
 
         {loading && (
-          <div className="space-y-4">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-5 animate-pulse">
-                <div className="h-4 w-32 bg-white/[0.03] rounded-xl mb-3" />
-                <div className="space-y-2">
-                  <div className="h-3 w-full bg-white/[0.03] rounded-xl" />
-                  <div className="h-3 w-3/4 bg-white/[0.03] rounded-xl" />
-                </div>
-              </div>
-            ))}
+          <div className="flex items-center justify-center py-16">
+            <LoadingSpinner message="正在诊断..." />
           </div>
         )}
 
@@ -104,7 +97,7 @@ export function DoctorPage() {
               {sections.map(section => {
                 const sectionChecks = checks.filter(c => c.section === section);
                 return (
-                  <div key={section} className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-3xl p-6">
+                  <Card key={section} className="rounded-3xl p-6">
                     <h3 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-4">
                       {section}
                     </h3>
@@ -122,13 +115,13 @@ export function DoctorPage() {
                               <p className="text-xs text-[var(--color-text-muted)] truncate">{check.detail}</p>
                             </div>
                           </div>
-                          <span className={`text-[10px] font-semibold px-2 py-1 rounded-full shrink-0 border ${check.ok ? 'bg-[var(--color-success)]/10 text-[var(--color-success)] border-[var(--color-success)]/20' : 'bg-[var(--color-error)]/10 text-[var(--color-error)] border-[var(--color-error)]/20'}`}>
+                          <Badge variant={check.ok ? 'success' : 'destructive'} className="shrink-0 text-[10px]">
                             {check.ok ? 'OK' : 'FAIL'}
-                          </span>
+                          </Badge>
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </Card>
                 );
               })}
             </div>

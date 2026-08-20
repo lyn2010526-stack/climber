@@ -44,7 +44,7 @@ export function SchedulerPage() {
     try {
       const data = await api.listSchedulerTasks();
       setTasks(data);
-    } catch (e) {
+    } catch {
       setError('加载定时任务失败');
     } finally {
       setLoading(false);

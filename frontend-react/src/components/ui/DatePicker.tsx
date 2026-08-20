@@ -128,6 +128,7 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
                 type="button"
                 onClick={handleClear}
                 className="p-0.5 rounded hover:bg-white/10 text-white/40 hover:text-white/70 transition-colors"
+                aria-label="清除日期"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -143,6 +144,7 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
                 type="button"
                 onClick={prevMonth}
                 className="p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                aria-label="上个月"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -153,6 +155,7 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
                 type="button"
                 onClick={nextMonth}
                 className="p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                aria-label="下个月"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -183,6 +186,8 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
                     type="button"
                     disabled={disabled}
                     onClick={() => handleSelectDate(day)}
+                    aria-label={`${viewDate.getFullYear()}年${viewDate.getMonth() + 1}月${day}日`}
+                    aria-pressed={Boolean(selected)}
                     className={cn(
                       'h-8 w-full rounded-lg text-sm transition-all duration-150',
                       'flex items-center justify-center',

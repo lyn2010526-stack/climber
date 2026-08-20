@@ -15,6 +15,7 @@ export const ThemeToggle: React.FC<{ className?: string }> = ({ className }) => 
         className
       )}
       title={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+      aria-label={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
     >
       {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
     </button>

@@ -26,10 +26,10 @@ const alignStyles: Record<string, Record<string, string>> = {
 };
 
 const arrowStyles: Record<string, string> = {
-  top: 'bottom-0 left-1/2 -translate-x-1/2 translate-y-full border-t-[#1a1a2e] border-x-transparent border-b-transparent',
-  bottom: 'top-0 left-1/2 -translate-x-1/2 -translate-y-full border-b-[#1a1a2e] border-x-transparent border-t-transparent',
-  left: 'right-0 top-1/2 -translate-y-1/2 translate-x-full border-l-[#1a1a2e] border-y-transparent border-r-transparent',
-  right: 'left-0 top-1/2 -translate-y-1/2 -translate-x-full border-r-[#1a1a2e] border-y-transparent border-l-transparent',
+  top: 'bottom-0 left-1/2 -translate-x-1/2 translate-y-full border-t-[var(--color-code-bg)] border-x-transparent border-b-transparent',
+  bottom: 'top-0 left-1/2 -translate-x-1/2 -translate-y-full border-b-[var(--color-code-bg)] border-x-transparent border-t-transparent',
+  left: 'right-0 top-1/2 -translate-y-1/2 translate-x-full border-l-[var(--color-code-bg)] border-y-transparent border-r-transparent',
+  right: 'left-0 top-1/2 -translate-y-1/2 -translate-x-full border-r-[var(--color-code-bg)] border-y-transparent border-l-transparent',
 };
 
 const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(
@@ -61,7 +61,7 @@ const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(
           <div
             role="tooltip"
             className={cn(
-              'absolute z-50 whitespace-nowrap rounded-lg border border-white/[0.08] bg-[#1a1a2e] px-2.5 py-1.5 text-xs text-white shadow-lg shadow-black/30 animate-in fade-in zoom-in-95 duration-150',
+              'absolute z-50 whitespace-nowrap rounded-lg border border-white/[0.08] bg-[var(--color-code-bg)] px-2.5 py-1.5 text-xs text-[var(--color-text-inverse)] shadow-lg shadow-black/30 animate-in fade-in zoom-in-95 duration-150',
               sideStyles[side],
               alignStyles[side]?.[align] || '',
             )}

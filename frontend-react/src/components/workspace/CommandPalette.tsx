@@ -128,39 +128,29 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
 
   return (
     <div className="fixed inset-0 z-[100]" onClick={onClose} role="dialog" aria-modal="true" aria-label="命令面板">
-      <div className="absolute inset-0" style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
+      <div className="absolute inset-0 bg-[rgba(0,0,0,0.6)] backdrop-blur-[4px]" />
       <div
-        className="relative mx-auto mt-[20vh] w-full max-w-[640px] max-h-[480px] flex flex-col rounded-2xl overflow-hidden"
-        style={{
-          backgroundColor: 'var(--color-bg-surface-1)',
-          border: '1px solid var(--color-border-default)',
-          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
-        }}
+        className="relative mx-auto mt-[20vh] w-full max-w-[640px] max-h-[480px] flex flex-col rounded-2xl overflow-hidden bg-[var(--color-bg-surface-1)] border border-[var(--color-border-default)] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Input */}
-        <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-          <Search size={18} style={{ color: 'var(--color-text-muted)', flexShrink: 0 }} />
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-border-subtle)]">
+          <Search size={18} className="shrink-0 text-[var(--color-text-muted)]" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="搜索页面、功能..."
-            className="flex-1 bg-transparent text-sm outline-none"
-            style={{ color: 'var(--color-text-primary)' }}
+            className="flex-1 bg-transparent text-sm outline-none text-[var(--color-text-primary)]"
           />
-          <kbd className="text-[10px] px-1.5 py-0.5 rounded-md font-mono" style={{
-            backgroundColor: 'var(--color-bg-surface-3)',
-            color: 'var(--color-text-muted)',
-            border: '1px solid var(--color-border-subtle)'
-          }}>ESC</kbd>
+          <kbd className="text-[10px] px-1.5 py-0.5 rounded-md font-mono bg-[var(--color-bg-surface-3)] text-[var(--color-text-muted)] border border-[var(--color-border-subtle)]">ESC</kbd>
         </div>
 
         {/* Results */}
         <div ref={listRef} className="flex-1 overflow-y-auto p-2">
           {filtered.length === 0 ? (
-            <div className="py-12 text-center" style={{ color: 'var(--color-text-muted)' }}>
+            <div className="py-12 text-center text-[var(--color-text-muted)]">
               <Search size={32} className="mx-auto mb-3 opacity-50" />
               <p className="text-sm">未找到 "{query}"</p>
             </div>
@@ -168,9 +158,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
             Object.entries(grouped).map(([group, items]) => (
               <div key={group} className="mb-2">
                 {filtered.length > 3 && (
-                  <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider" style={{
-                    color: 'var(--color-text-muted)'
-                  }}>
+                  <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
                     {group}
                   </div>
                 )}
@@ -182,23 +170,17 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
                       <button
                         key={item.id}
                         onClick={() => { onNavigate(item.id); onClose(); }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm text-left transition-all duration-150"
-                        style={{
-                          backgroundColor: globalIndex === selectedIndex ? 'var(--color-bg-surface-2)' : 'transparent',
-                          color: globalIndex === selectedIndex ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm text-left transition-all duration-150 text-[var(--color-text-secondary)] data-[selected=true]:text-[var(--color-text-primary)] data-[selected=true]:bg-[var(--color-bg-surface-2)]"
+                        data-selected={globalIndex === selectedIndex}
                         onMouseEnter={() => setSelectedIndex(globalIndex)}
                         onMouseLeave={() => setSelectedIndex(keyboardIndexRef.current)}
                       >
-                        <div className="p-1.5 rounded-lg" style={{
-                          backgroundColor: globalIndex === selectedIndex ? 'var(--color-accent-subtle)' : 'var(--color-bg-surface-3)',
-                          color: globalIndex === selectedIndex ? 'var(--color-accent)' : 'var(--color-text-muted)',
-                        }}>
+                        <div className="p-1.5 rounded-lg bg-[var(--color-bg-surface-3)] text-[var(--color-text-muted)] data-[selected=true]:bg-[var(--color-accent-subtle)] data-[selected=true]:text-[var(--color-accent)]" data-selected={globalIndex === selectedIndex}>
                           <IconComponent size={14} />
                         </div>
                         <span className="flex-1">{item.label}</span>
                         {globalIndex === selectedIndex && (
-                          <ArrowRight size={14} style={{ color: 'var(--color-accent)' }} />
+                          <ArrowRight size={14} className="text-[var(--color-accent)]" />
                         )}
                       </button>
                     );
@@ -210,19 +192,15 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
         </div>
 
         {/* Footer hint */}
-        <div className="px-4 py-2 flex items-center gap-4 text-[10px]" style={{
-          borderTop: '1px solid var(--color-border-subtle)',
-          color: 'var(--color-text-muted)',
-          backgroundColor: 'var(--color-bg-surface-2)',
-        }}>
+        <div className="px-4 py-2 flex items-center gap-4 text-[10px] border-t border-[var(--color-border-subtle)] text-[var(--color-text-muted)] bg-[var(--color-bg-surface-2)]">
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 rounded font-mono" style={{ border: '1px solid var(--color-border-subtle)' }}>↑↓</kbd> 导航
+            <kbd className="px-1 py-0.5 rounded font-mono border border-[var(--color-border-subtle)]">↑↓</kbd> 导航
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 rounded font-mono" style={{ border: '1px solid var(--color-border-subtle)' }}>↵</kbd> 打开
+            <kbd className="px-1 py-0.5 rounded font-mono border border-[var(--color-border-subtle)]">↵</kbd> 打开
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.5 rounded font-mono" style={{ border: '1px solid var(--color-border-subtle)' }}>esc</kbd> 关闭
+            <kbd className="px-1 py-0.5 rounded font-mono border border-[var(--color-border-subtle)]">esc</kbd> 关闭
           </span>
         </div>
       </div>

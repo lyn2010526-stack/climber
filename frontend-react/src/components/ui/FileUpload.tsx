@@ -165,6 +165,15 @@ const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => !disabled && document.getElementById('file-upload-input')?.click()}
+          tabIndex={disabled ? -1 : 0}
+          aria-label="拖拽文件到此处或点击上传"
+          aria-disabled={disabled}
+          onKeyDown={(e) => {
+            if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
+              e.preventDefault();
+              document.getElementById('file-upload-input')?.click();
+            }
+          }}
           className={cn(uploadZoneVariants({ variant: currentVariant, size }), disabled && 'opacity-50 cursor-not-allowed')}
         >
           <input
@@ -226,6 +235,7 @@ const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
                     type="button"
                     onClick={(e) => { e.stopPropagation(); handleRemove(file.id); }}
                     className="p-0.5 rounded hover:bg-white/10 text-white/30 hover:text-white/60 transition-colors"
+                    aria-label={`移除 ${file.file.name}`}
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>

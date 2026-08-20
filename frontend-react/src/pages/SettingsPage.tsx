@@ -3,6 +3,7 @@ import { Settings, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { ToggleSwitch } from '../components/settings/ToggleSwitch';
 import { useAgentMode } from '../hooks/useAgentMode';
 import { cn } from '../lib/utils';
+import { Alert, Card } from '../components/ui';
 
 const MODE_DESCRIPTIONS: Record<string, { title: string; description: string }> = {
   'off-off': {
@@ -88,9 +89,7 @@ export function SettingsPage() {
       </div>
 
       {error && (
-        <div className="p-4 rounded-xl bg-[var(--color-error)]/10 border border-[var(--color-error)]/20 text-[var(--color-error)] text-sm">
-          {error}
-        </div>
+        <Alert variant="error">{error}</Alert>
       )}
 
       <div className="space-y-4">
@@ -120,28 +119,12 @@ export function SettingsPage() {
       </div>
 
       {mcpError && (
-        <div className="p-4 rounded-xl bg-[var(--color-error)]/10 border border-[var(--color-error)]/20">
-          <div className="flex items-start gap-3">
-            <AlertCircle size={20} className="text-[var(--color-error)] shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-[var(--color-error)] mb-1">
-                代码检索服务启动失败
-              </h3>
-              <p className="text-xs text-red-300/80 leading-relaxed">
-                {mcpError}
-              </p>
-              <button
-                onClick={() => setMcpError(null)}
-                className="mt-3 px-3 py-1.5 rounded-lg bg-[var(--color-error)]/20 hover:bg-[var(--color-error)]/30 text-red-300 text-xs transition-colors"
-              >
-                确定
-              </button>
-            </div>
-          </div>
-        </div>
+        <Alert key={mcpError} variant="error" title="代码检索服务启动失败" dismissible onDismiss={() => setMcpError(null)}>
+          {mcpError}
+        </Alert>
       )}
 
-      <div className="p-5 rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)]">
+      <Card className="rounded-2xl p-5" padding="none">
         <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">当前运行模式</h3>
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -154,7 +137,7 @@ export function SettingsPage() {
             {currentMode?.description}
           </p>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

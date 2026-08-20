@@ -89,8 +89,8 @@ function getPageFromHash(): Page {
 function PageFallback() {
   return (
     <div className="flex-1 flex items-center justify-center">
-      <div className="flex items-center gap-2" style={{ color: 'var(--color-text-muted)' }}>
-        <div className="w-5 h-5 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--color-accent)', borderTopColor: 'transparent' }} />
+      <div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+        <div className="w-5 h-5 border-2 rounded-full animate-spin border-[var(--color-accent)] border-t-transparent" />
         <span className="text-xs">加载中...</span>
       </div>
     </div>
@@ -187,7 +187,7 @@ export default function App() {
   const hoverNavItem = hoveredNav ? ALL_NAV_ITEMS.find(n => n.id === hoveredNav) : null;
 
   return (
-    <div className="app-shell flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--color-bg-page)' }}>
+    <div className="app-shell flex h-screen overflow-hidden bg-[var(--color-bg-page)]">
       {isMobile ? (
         <MobileLayout currentPage={currentPage} onNavigate={(page) => navigate(page as any)}>
           <Suspense fallback={<PageFallback />}>
@@ -206,27 +206,19 @@ export default function App() {
           )}
 
           {/* Desktop workspace navigation */}
-          <aside className="relative z-50 hidden md:flex flex-col w-[224px] shrink-0"
-            style={{
-              backgroundColor: 'var(--color-bg-surface-1)',
-              borderRight: '1px solid var(--color-border-subtle)',
-            }}
-          >
-            <div className="h-14 flex items-center gap-3 px-4 shrink-0" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{
-                backgroundColor: 'var(--color-accent)',
-                boxShadow: '0 5px 12px var(--color-accent-glow)',
-              }}>
+          <aside className="relative z-50 hidden md:flex flex-col w-[224px] shrink-0 bg-[var(--color-bg-surface-1)] border-r border-[var(--color-border-subtle)]">
+            <div className="h-14 flex items-center gap-3 px-4 shrink-0 border-b border-[var(--color-border-subtle)]">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-[var(--color-accent)] shadow-[0_5px_12px_var(--color-accent-glow)]">
                 <Sparkles size={15} className="text-white" strokeWidth={2.5} />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-semibold truncate" style={{ color: 'var(--color-text-primary)' }}>Climber</div>
-                <div className="text-[11px] truncate" style={{ color: 'var(--color-text-secondary)' }}>Agent workspace</div>
+                <div className="text-sm font-semibold truncate text-[var(--color-text-primary)]">Climber</div>
+                <div className="text-[11px] truncate text-[var(--color-text-secondary)]">Agent workspace</div>
               </div>
             </div>
 
             <nav className="flex-1 py-4 px-3 overflow-y-auto">
-              <div className="px-2 mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-text-secondary)' }}>Workspace</div>
+              <div className="px-2 mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">Workspace</div>
               <div className="space-y-1">
               {CORE_NAV.map(({ id, icon: Icon, label, description }) => {
                 const isActive = currentPage === id;
@@ -235,16 +227,13 @@ export default function App() {
                     key={id}
                     onClick={() => navigate(id)}
                     aria-current={isActive ? 'page' : undefined}
-                    className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 text-left"
-                    style={{
-                      backgroundColor: isActive ? 'var(--color-accent-subtle)' : 'transparent',
-                      color: isActive ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-                    }}
+                    className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 text-left bg-[var(--color-accent-subtle)] data-[active=false]:bg-transparent text-[var(--color-accent)] data-[active=false]:text-[var(--color-text-secondary)]"
+                    data-active={isActive}
                   >
                     <Icon size={17} strokeWidth={isActive ? 2.5 : 2} />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-xs font-semibold" style={{ color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-primary)' }}>{label}</span>
-                      <span className="block text-[11px] mt-0.5" style={{ color: 'var(--color-text-secondary)' }}>{description}</span>
+                      <span className="block text-xs font-semibold text-[var(--color-text-primary)]">{label}</span>
+                      <span className="block text-[11px] mt-0.5 text-[var(--color-text-secondary)]">{description}</span>
                     </span>
                     {isActive && (
                       <div className="absolute left-0 w-[3px] h-7 rounded-r-full bg-[var(--color-accent)]" />
@@ -253,42 +242,38 @@ export default function App() {
                 );
               })}
               </div>
-              <div className="px-2 mt-7 mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-text-secondary)' }}>Explore</div>
+              <div className="px-2 mt-7 mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">Explore</div>
               <div className="space-y-1">
                 {ALL_NAV_ITEMS.filter(item => !CORE_NAV.some(core => core.id === item.id) && ['cluster', 'agents', 'workflows', 'scheduler', 'skills', 'notifications'].includes(item.id)).map(({ id, icon: Icon, label }) => (
-                  <button key={id} onClick={() => navigate(id)} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors" style={{ color: currentPage === id ? 'var(--color-accent)' : 'var(--color-text-secondary)', backgroundColor: currentPage === id ? 'var(--color-accent-subtle)' : 'transparent' }}>
+                  <button key={id} onClick={() => navigate(id)} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors bg-[var(--color-accent-subtle)] data-[active=false]:bg-transparent text-[var(--color-accent)] data-[active=false]:text-[var(--color-text-secondary)]" data-active={currentPage === id}>
                     <Icon size={15} />
                     <span className="text-xs font-medium">{label}</span>
                   </button>
                 ))}
               </div>
-              <div className="px-2 mt-7 mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'var(--color-text-secondary)' }}>System</div>
-              <button onClick={() => navigate('settings')} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors" style={{ color: currentPage === 'settings' ? 'var(--color-accent)' : 'var(--color-text-secondary)', backgroundColor: currentPage === 'settings' ? 'var(--color-accent-subtle)' : 'transparent' }}>
+              <div className="px-2 mt-7 mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">System</div>
+              <button onClick={() => navigate('settings')} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors bg-[var(--color-accent-subtle)] data-[active=false]:bg-transparent text-[var(--color-accent)] data-[active=false]:text-[var(--color-text-secondary)]" data-active={currentPage === 'settings'}>
                 <Settings size={15} />
                 <span className="text-xs font-medium">系统设置</span>
               </button>
             </nav>
 
             {/* Bottom actions */}
-            <div className="p-3 space-y-1" style={{ borderTop: '1px solid var(--color-border-subtle)' }}>
+            <div className="p-3 space-y-1 border-t border-[var(--color-border-subtle)]">
               {/* Search */}
               <button
                 onClick={() => setActiveOverlay('search')}
                 onMouseEnter={() => setHoveredNav('search')}
                 onMouseLeave={() => setHoveredNav(null)}
-                aria-label="搜索"
-                 className="relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-150"
-                style={{
-                  color: hoveredNav === 'search' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                  backgroundColor: hoveredNav === 'search' ? 'var(--color-bg-surface-2)' : 'transparent',
-                }}
-              >
-                 <Search size={16} />
-                 <span className="text-xs font-medium">全局搜索</span>
-                {hoveredNav === 'search' && (
-                  <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg text-xs whitespace-nowrap z-[200] pointer-events-none"
-                    style={{ backgroundColor: 'var(--color-bg-surface-3)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }}
-                  >
+                 aria-label="搜索"
+                  className="relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-150 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] data-[hovered=true]:text-[var(--color-text-primary)] data-[hovered=true]:bg-[var(--color-bg-surface-2)]"
+                  data-hovered={hoveredNav === 'search'}
+               >
+                  <Search size={16} />
+                  <span className="text-xs font-medium">全局搜索</span>
+                 {hoveredNav === 'search' && (
+                   <div className="nav-tooltip absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg text-xs whitespace-nowrap z-[200] pointer-events-none"
+                   >
                     全局搜索
                   </div>
                 )}
@@ -298,19 +283,15 @@ export default function App() {
                 onClick={() => setActiveOverlay('commands')}
                 onMouseEnter={() => setHoveredNav('commands')}
                 onMouseLeave={() => setHoveredNav(null)}
-                aria-label="命令面板"
-                 className="relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-150"
-                style={{
-                  color: hoveredNav === 'commands' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                  backgroundColor: hoveredNav === 'commands' ? 'var(--color-bg-surface-2)' : 'transparent',
-                }}
-              >
-                 <Menu size={16} />
-                 <span className="text-xs font-medium">命令面板</span>
-                {hoveredNav === 'commands' && (
-                  <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg text-xs whitespace-nowrap z-[200] pointer-events-none"
-                    style={{ backgroundColor: 'var(--color-bg-surface-3)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }}
-                  >
+                 aria-label="命令面板"
+                  className="relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-150 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] data-[hovered=true]:text-[var(--color-text-primary)] data-[hovered=true]:bg-[var(--color-bg-surface-2)]"
+                  data-hovered={hoveredNav === 'commands'}
+               >
+                  <Menu size={16} />
+                  <span className="text-xs font-medium">命令面板</span>
+                 {hoveredNav === 'commands' && (
+                   <div className="nav-tooltip absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg text-xs whitespace-nowrap z-[200] pointer-events-none"
+                   >
                     命令面板 <kbd className="ml-1 font-mono text-[10px]">⌘K</kbd>
                   </div>
                 )}
@@ -323,45 +304,38 @@ export default function App() {
           </aside>
 
           {/* Main Content */}
-          <main className="flex-1 overflow-hidden flex flex-col relative" style={{ backgroundColor: 'var(--color-bg-page)' }}>
+          <main className="flex-1 overflow-hidden flex flex-col relative bg-[var(--color-bg-page)]">
             {/* Mobile header */}
-            <div className="md:hidden h-12 flex items-center px-3" style={{
-              borderBottom: '1px solid var(--color-border-subtle)',
-              backgroundColor: 'rgba(17,17,19,0.9)',
-              backdropFilter: 'blur(24px)',
-            }}>
+            <div className="md:hidden h-12 flex items-center px-3 border-b border-[var(--color-border-subtle)] bg-[rgba(17,17,19,0.9)] backdrop-blur-[24px]">
               <button
                 onClick={() => setMobileMenuOpen(true)}
                 aria-label="打开导航菜单"
                 aria-expanded={mobileMenuOpen}
-                className="p-2 rounded-lg transition-all duration-200 active:scale-[0.95]"
-                style={{ color: 'var(--color-text-muted)' }}
+                className="p-2 rounded-lg transition-all duration-200 active:scale-[0.95] text-[var(--color-text-muted)]"
               >
                 <Menu size={18} />
               </button>
               <div className="ml-2.5 flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg flex items-center justify-center"
-                  style={{ background: 'linear-gradient(135deg, var(--color-accent), #8b5cf6)' }}
+                <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-[linear-gradient(135deg,var(--color-accent),#8b5cf6)]"
                 >
                   <Sparkles size={12} className="text-white" />
                 </div>
-                <span className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>Climber</span>
+                <span className="text-sm font-semibold text-[var(--color-text-primary)]">Climber</span>
               </div>
             </div>
 
             {/* Page title bar (non-chat pages only) */}
             {!['chat'].includes(currentPage) && activeNavItem && (
-              <div className="hidden md:flex items-center gap-3 px-6 h-12 border-b shrink-0"
-                style={{ borderBottom: '1px solid var(--color-border-subtle)', backgroundColor: 'var(--color-bg-surface-1)' }}
+              <div className="hidden md:flex items-center gap-3 px-6 h-12 border-b shrink-0 border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)]"
               >
                 <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}>
+                  <div className="p-2 rounded-lg bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
                     <activeNavItem.icon size={14} />
                   </div>
-                  <span className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>{activeNavItem.label}</span>
+                  <span className="text-sm font-semibold text-[var(--color-text-primary)]">{activeNavItem.label}</span>
                 </div>
                 {hoverNavItem && hoverNavItem.id !== activeNavItem.id && (
-                  <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{hoverNavItem.label}</span>
+                  <span className="text-xs text-[var(--color-text-muted)]">{hoverNavItem.label}</span>
                 )}
               </div>
             )}

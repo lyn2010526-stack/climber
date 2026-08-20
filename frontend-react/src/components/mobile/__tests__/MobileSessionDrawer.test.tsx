@@ -27,7 +27,7 @@ vi.mock('../../../store/workspace', () => ({
   }),
 }));
 
-vi.mock('../../../stores/useSessions', () => ({
+vi.mock('../../../hooks/useSessions', () => ({
   useSessions: () => ({
     sessions: sessionState.sessions,
     loading: sessionState.loading,

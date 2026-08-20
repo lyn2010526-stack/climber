@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { MessageSquare, Plus } from 'lucide-react';
 import { api } from '../../api';
 import { useWorkspaceStore } from '../../store/workspace';
-import { useSessions } from '../../stores/useSessions';
+import { useSessions } from '../../hooks/useSessions';
 
 interface MobileSessionDrawerProps {
   open: boolean;

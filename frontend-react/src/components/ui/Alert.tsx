@@ -12,6 +12,7 @@ const alertVariants = cva(
         success: 'border-emerald-500/20 bg-emerald-500/[0.05] text-emerald-300',
         warning: 'border-amber-500/20 bg-amber-500/[0.05] text-amber-300',
         error: 'border-red-500/20 bg-red-500/[0.05] text-red-300',
+        destructive: 'border-red-600/30 bg-red-600/[0.07] text-red-300',
       },
     },
     defaultVariants: {

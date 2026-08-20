@@ -78,6 +78,11 @@ export function AutonomySlider({ value, onChange }: AutonomySliderProps) {
           step={1}
           value={value}
           onChange={handleChange}
+          aria-label="自主级别"
+          aria-valuemin={1}
+          aria-valuemax={5}
+          aria-valuenow={value}
+          aria-valuetext={`${currentLevel.label}（${currentLevel.description}）`}
           className="absolute inset-0 w-full h-2 opacity-0 cursor-pointer"
           style={{ top: '0px' }}
         />

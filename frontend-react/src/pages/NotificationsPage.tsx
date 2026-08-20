@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Bell, Send, CheckCircle, AlertCircle, Trash2, Inbox } from 'lucide-react';
 import { api } from '../api';
+import { Button, Card, Input } from '../components/ui';
 
 interface NotificationItem {
   id?: string;
@@ -85,16 +86,16 @@ export function NotificationsPage() {
         </div>
 
         <div className="space-y-6">
-          <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-3xl p-6">
+          <Card className="rounded-3xl p-6" padding="none">
             <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">发送自定义通知</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-xs text-[var(--color-text-muted)] mb-1.5">标题</label>
-                <input
+                <Input
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
+                  className="rounded-2xl px-4 py-2.5"
                 />
               </div>
               <div>
@@ -107,25 +108,28 @@ export function NotificationsPage() {
                 />
               </div>
               <div className="flex gap-3">
-                <button
+                <Button
                   onClick={send}
                   disabled={sending || !title.trim() || !message.trim()}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-[var(--color-accent)] text-white rounded-2xl text-sm font-semibold hover:bg-[var(--color-accent-hover)] disabled:opacity-50 transition-all duration-200 active:scale-[0.97]"
+                  size="lg"
+                  className="rounded-2xl"
                 >
                   <Send size={14} />
                   发送通知
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={test}
                   disabled={sending}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-white/[0.03] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] rounded-2xl text-sm font-semibold hover:bg-white/[0.06] disabled:opacity-50 transition-all duration-200"
+                  variant="secondary"
+                  size="lg"
+                  className="rounded-2xl bg-white/[0.03] text-[var(--color-text-secondary)]"
                 >
                   <Bell size={14} />
                   系统测试
-                </button>
+                </Button>
               </div>
             </div>
-          </div>
+          </Card>
 
           {result && (
             <div className={`rounded-2xl p-4 flex items-center gap-3 border ${result.ok ? 'bg-[var(--color-success)]/10 border-[var(--color-success)]/30' : 'bg-[var(--color-error)]/10 border-[var(--color-error)]/30'}`}>
@@ -140,17 +144,19 @@ export function NotificationsPage() {
             </div>
           )}
 
-          <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-3xl p-6">
+          <Card className="rounded-3xl p-6" padding="none">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">通知历史</h3>
               {items.length > 0 && (
-                <button
+                <Button
                   onClick={clearAll}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-error)] border border-[var(--color-border-subtle)] rounded-xl transition-colors"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl text-xs text-[var(--color-text-muted)] hover:text-[var(--color-error)]"
                 >
                   <Trash2 size={12} />
                   清空
-                </button>
+                </Button>
               )}
             </div>
             {items.length === 0 ? (
@@ -171,9 +177,9 @@ export function NotificationsPage() {
                 ))}
               </ul>
             )}
-          </div>
+          </Card>
 
-          <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-3xl p-6">
+          <Card className="rounded-3xl p-6" padding="none">
             <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">通知说明</h3>
             <ul className="text-xs text-[var(--color-text-muted)] space-y-2 list-disc list-inside">
               <li>通知通过系统原生机制发送（Linux notify-send / macOS osascript / Windows PowerShell）</li>
@@ -181,7 +187,7 @@ export function NotificationsPage() {
               <li>任务完成、失败或需要审批时，系统会自动触发通知</li>
               <li>通知服务在后台运行，不占用前端资源</li>
             </ul>
-          </div>
+          </Card>
         </div>
       </div>
     </div>

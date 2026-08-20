@@ -5,37 +5,22 @@ import { ArrowDown, ArrowUpRight, Bot, Edit3, Check, X, Maximize2, Sparkles, Ter
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 import { api } from '../../api';
+import type { ApprovalRequest } from '../../api';
 import { MessageContent, MessageActions, ToolCallCard } from '../chat/MessageContent';
 import { ThinkingDetails } from '../chat/ThinkingDetails';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { FloatingPermissionDialog } from './FloatingPermissionDialog';
 import type { PermissionRequest } from './FloatingPermissionDialog';
 import { ChatComposer } from './ChatComposer';
+import type { ChatMessage } from '../../types/message';
 
   const StreamingCursor = () => (
-    <span className="inline-block w-[2px] h-4 ml-0.5 rounded-full animate-pulse" style={{ backgroundColor: 'var(--color-accent)' }} />
+    <span className="inline-block w-[2px] h-4 ml-0.5 rounded-full animate-pulse bg-[var(--color-accent)]" />
   );
 
-interface ToolCall {
-  id: string;
-  name: string;
-  arguments: Record<string, unknown>;
-  result?: string;
-  error?: string;
-  status?: 'running' | 'success' | 'error';
-}
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string;
-  toolCalls?: ToolCall[];
-  reasoning?: string;
-  timestamp?: Date;
-}
-
 interface ChatInterfaceProps {
-  messages: Message[];
+  sessionId?: string | null;
+  messages: ChatMessage[];
   onSend: (message: string, model?: { provider?: string; modelId?: string }) => void;
   onStop?: () => void;
   isLoading?: boolean;
@@ -48,7 +33,35 @@ interface ChatInterfaceProps {
 
 type EditState = { mode: 'view'; messageId: string } | { mode: 'edit'; messageId: string } | { mode: 'modal'; messageId: string } | null;
 
+function toPermissionRequest(request: ApprovalRequest): PermissionRequest {
+  const actions: Record<string, PermissionRequest['action']> = {
+    read_file: 'file_read',
+    write_file: 'file_write',
+    edit_file: 'file_write',
+    delete_file: 'file_delete',
+    run_command: 'command',
+    execute_code: 'command',
+    network_request: 'network',
+  };
+  const action = actions[request.tool_name] ?? 'mcp_tool';
+  const severity: PermissionRequest['severity'] = action === 'file_delete'
+    ? 'high'
+    : action === 'file_read'
+      ? 'low'
+      : 'medium';
+
+  return {
+    id: request.id,
+    action,
+    description: `工具 ${request.tool_name} 请求执行`,
+    details: JSON.stringify(request.arguments, null, 2),
+    severity,
+    timestamp: Date.parse(request.created_at),
+  };
+}
+
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
+  sessionId,
   messages,
   onSend,
   onStop,
@@ -64,25 +77,64 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [permissionRequests, setPermissionRequests] = useState<PermissionRequest[]>([]);
   const [isNearBottom, setIsNearBottom] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const permissionVersionRef = useRef(0);
+
+  useEffect(() => {
+    const version = ++permissionVersionRef.current;
+    if (!sessionId) {
+      setPermissionRequests([]);
+      return;
+    }
+    let active = true;
+    let timeoutId: number | undefined;
+    let controller: AbortController | undefined;
+
+    const poll = async () => {
+      controller = new AbortController();
+      const requestVersion = permissionVersionRef.current;
+      try {
+        const response = await api.listPendingApprovals(sessionId, controller.signal);
+        if (active && requestVersion === permissionVersionRef.current) {
+          setPermissionRequests(response.requests.map(toPermissionRequest));
+        }
+      } catch { /* retain the last successful approval state */ }
+      if (active) timeoutId = window.setTimeout(poll, 1500);
+    };
+
+    void poll();
+    return () => {
+      active = false;
+      permissionVersionRef.current = Math.max(permissionVersionRef.current, version + 1);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+      controller?.abort();
+    };
+  }, [sessionId]);
 
   const handleApprovePermission = useCallback(async (id: string) => {
+    permissionVersionRef.current += 1;
     try {
       await api.resolvePermission(id, 'allow');
-    } catch { /* skip */ }
-    setPermissionRequests(prev => prev.filter(r => r.id !== id));
+      permissionVersionRef.current += 1;
+      setPermissionRequests(prev => prev.filter(r => r.id !== id));
+    } catch { /* keep the request visible for retry */ }
   }, []);
 
   const handleDenyPermission = useCallback(async (id: string) => {
+    permissionVersionRef.current += 1;
     try {
       await api.resolvePermission(id, 'deny');
-    } catch { /* skip */ }
-    setPermissionRequests(prev => prev.filter(r => r.id !== id));
+      permissionVersionRef.current += 1;
+      setPermissionRequests(prev => prev.filter(r => r.id !== id));
+    } catch { /* keep the request visible for retry */ }
   }, []);
 
   const handleApproveAllPermissions = useCallback(async () => {
+    permissionVersionRef.current += 1;
     const ids = permissionRequests.map(r => r.id);
-    await Promise.all(ids.map(id => api.resolvePermission(id, 'allow').catch(() => undefined)));
-    setPermissionRequests([]);
+    const results = await Promise.allSettled(ids.map(id => api.resolvePermission(id, 'allow')));
+    permissionVersionRef.current += 1;
+    const resolvedIds = new Set(ids.filter((_, index) => results[index]?.status === 'fulfilled'));
+    setPermissionRequests(prev => prev.filter(request => !resolvedIds.has(request.id)));
   }, [permissionRequests]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
@@ -121,7 +173,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [editState, editContent, onSend]);
 
-  const renderMessageContent = (msg: Message, index: number) => {
+  const renderMessageContent = (msg: ChatMessage, index: number) => {
     const isEditing = editState?.messageId === msg.id;
     const isLatestMessage = index === messages.length - 1;
     const isMessageStreaming = Boolean(isLoading && isLatestMessage && msg.role === 'assistant');
@@ -129,22 +181,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     if (isEditing && (editState.mode === 'edit' || editState.mode === 'modal')) {
       return (
         <div className={cn('flex gap-3 max-w-[85%]', msg.role === 'user' ? 'flex-row-reverse ml-auto' : '')}>
-          <div className="flex items-center justify-center rounded-xl w-9 h-9 shrink-0" style={{
-            background: 'linear-gradient(135deg, var(--color-accent), #8b5cf6)',
-            color: '#ffffff',
-          }}>
+          <div className="flex items-center justify-center rounded-xl w-9 h-9 shrink-0 bg-[linear-gradient(135deg,var(--color-accent),#8b5cf6)] text-white">
             <Edit3 size={16} />
           </div>
           <div className={cn('flex flex-col gap-2 min-w-0 flex-1')}>
-            <div className="px-4 py-3 rounded-xl" style={{
-              backgroundColor: 'var(--color-bg-surface-2)',
-              border: '1px solid var(--color-border-default)',
-            }}>
+            <div className="px-4 py-3 rounded-xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)]">
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="w-full bg-transparent text-sm resize-none focus:outline-none"
-                style={{ color: 'var(--color-text-primary)' }}
+                className="w-full bg-transparent text-sm resize-none focus:outline-none text-[var(--color-text-primary)]"
                 rows={3}
                 autoFocus
               />
@@ -182,7 +227,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         )}
         {msg.toolCalls && msg.toolCalls.length > 0 && (
           <div className="mb-3 ml-11 space-y-2">
-            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase" style={{ color: 'var(--color-text-muted)' }}>
+            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase text-[var(--color-text-muted)]">
               <Sparkles size={11} /> 执行记录 · {msg.toolCalls.length} 项
             </div>
             {msg.toolCalls.map(tc => (
@@ -232,12 +277,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         {messages.length === 0 && (
           <div className="flex h-full items-center justify-center py-8">
             <div className="w-full max-w-xl text-left">
-              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg" style={{ backgroundColor: 'var(--color-accent-subtle)', border: '1px solid var(--color-border-accent)' }}>
-                <TerminalSquare size={22} style={{ color: 'var(--color-accent)' }} />
+              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--color-accent-subtle)] border border-[var(--color-border-accent)]">
+                <TerminalSquare size={22} className="text-[var(--color-accent)]" />
               </div>
-              <p className="mb-2 text-[11px] font-semibold uppercase" style={{ color: 'var(--color-accent)' }}>Climber Agent</p>
-              <h1 className="mb-2 text-xl font-semibold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>{emptyStateTitle}</h1>
-              <p className="mb-6 max-w-md text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>{emptyStateDescription}</p>
+              <p className="mb-2 text-[11px] font-semibold uppercase text-[var(--color-accent)]">Climber Agent</p>
+              <h1 className="mb-2 text-xl font-semibold tracking-tight text-[var(--color-text-primary)]">{emptyStateTitle}</h1>
+              <p className="mb-6 max-w-md text-sm leading-relaxed text-[var(--color-text-secondary)]">{emptyStateDescription}</p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {suggestions.map((suggestion, idx) => (
                   <motion.button
@@ -245,22 +290,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     onClick={() => onSend(suggestion)}
                     whileTap={{ scale: 0.96 }}
                     transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-                    className="group flex min-h-11 items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-left text-sm transition-colors duration-200"
-                    style={{
-                      backgroundColor: 'var(--color-bg-surface-2)',
-                      border: '1px solid var(--color-border-subtle)',
-                      color: 'var(--color-text-secondary)',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = 'var(--color-border-accent)';
-                      e.currentTarget.style.color = 'var(--color-text-primary)';
-                      e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-3)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = 'var(--color-border-subtle)';
-                      e.currentTarget.style.color = 'var(--color-text-secondary)';
-                      e.currentTarget.style.backgroundColor = 'var(--color-bg-surface-2)';
-                    }}
+                    className="group flex min-h-11 items-center gap-2.5 rounded-lg px-3.5 py-2.5 text-left text-sm transition-colors duration-200 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:border-[var(--color-border-accent)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-3)]"
                   >
                     <span className="min-w-0 flex-1">{suggestion}</span>
                     <ArrowUpRight size={14} className="shrink-0 opacity-50 transition-opacity group-hover:opacity-100" />
@@ -281,9 +311,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               transition={{ type: 'spring', stiffness: 300, damping: 30 }}
               className="flex gap-3"
             >
-              <div className="flex items-center justify-center rounded-xl w-9 h-9 shrink-0"
-                style={{ backgroundColor: 'var(--color-accent-subtle)', color: 'var(--color-accent)' }}
-              >
+              <div className="flex items-center justify-center rounded-xl w-9 h-9 shrink-0 bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
                 <Bot size={16} />
               </div>
               <div className="flex-1">
@@ -296,8 +324,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           <button
             type="button"
             onClick={() => scrollToBottom()}
-            className="sticky bottom-2 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full shadow-md transition-colors hover:bg-[var(--color-bg-surface-2)]"
-            style={{ backgroundColor: 'var(--color-bg-surface-1)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}
+            className="sticky bottom-2 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full shadow-md transition-colors bg-[var(--color-bg-surface-1)] border border-[var(--color-border-default)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)]"
             aria-label="滚动到最新消息"
             title="滚动到最新消息"
           >
@@ -306,7 +333,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         )}
       </div>
 
-      <div style={{ borderTop: '1px solid var(--color-border-subtle)', backgroundColor: 'var(--color-bg-canvas)' }}>
+      <div className="border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-canvas)]">
         <ChatComposer
           onSend={onSend}
           placeholder={placeholder}
@@ -325,16 +352,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         <Drawer.Portal>
           <Drawer.Overlay className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md" />
           <Drawer.Content
-            className="fixed inset-x-0 bottom-0 z-[60] mx-auto flex max-h-[85vh] w-full max-w-xl flex-col rounded-t-2xl outline-none"
-            style={{
-              backgroundColor: 'var(--color-bg-surface-1)',
-              borderTop: '1px solid var(--color-border-subtle)',
-              paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-            }}
+            className="fixed inset-x-0 bottom-0 z-[60] mx-auto flex max-h-[85vh] w-full max-w-xl flex-col rounded-t-2xl outline-none bg-[var(--color-bg-surface-1)] border-t border-[var(--color-border-subtle)] pb-[env(safe-area-inset-bottom,0px)]"
           >
-            <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full" style={{ backgroundColor: 'var(--color-bg-surface-3)' }} />
-            <div className="flex items-center justify-between px-5 pt-3 pb-2" style={{ borderBottom: '1px solid var(--color-border-subtle)' }}>
-              <h3 className="text-lg font-semibold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>编辑消息</h3>
+            <div className="mx-auto mt-3 h-1.5 w-12 shrink-0 rounded-full bg-[var(--color-bg-surface-3)]" />
+            <div className="flex items-center justify-between px-5 pt-3 pb-2 border-b border-[var(--color-border-subtle)]">
+              <h3 className="text-lg font-semibold tracking-tight text-[var(--color-text-primary)]">编辑消息</h3>
               <div className="flex items-center gap-2">
                 <Button size="sm" onClick={saveEdit} className="rounded-lg">
                   <Check size={14} /> 保存
@@ -348,12 +370,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="w-full h-48 rounded-xl p-4 text-sm leading-relaxed resize-none focus:outline-none"
-                style={{
-                  backgroundColor: 'var(--color-bg-surface-2)',
-                  border: '1px solid var(--color-border-subtle)',
-                  color: 'var(--color-text-primary)',
-                }}
+                className="w-full h-48 rounded-xl p-4 text-sm leading-relaxed resize-none focus:outline-none bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] text-[var(--color-text-primary)]"
                 autoFocus
               />
             </div>

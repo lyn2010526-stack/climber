@@ -38,7 +38,7 @@ interface StatCardProps extends React.HTMLAttributes<HTMLDivElement>, VariantPro
 }
 
 const StatCard = forwardRef<HTMLDivElement, StatCardProps>(
-  ({ className, title, value, change, changeLabel, icon, chartData, chartType = 'sparkline', chartHeight = 48, chartColor = '#3B82F6', variant, ...props }, ref) => {
+  ({ className, title, value, change, changeLabel, icon, chartData, chartType = 'sparkline', chartHeight = 48, chartColor = 'var(--color-accent)', variant, ...props }, ref) => {
     const trend = change === undefined ? null : change > 0 ? 'up' : change < 0 ? 'down' : 'flat';
 
     const chartPath = useMemo(() => {
@@ -171,7 +171,7 @@ interface BarChartProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const BarChart = forwardRef<HTMLDivElement, BarChartProps>(
-  ({ className, data, height = 200, showGrid = true, showLabels = true, color = '#3B82F6', ...props }, ref) => {
+  ({ className, data, height = 200, showGrid = true, showLabels = true, color = 'var(--color-accent)', ...props }, ref) => {
     const maxValue = Math.max(...data.map(d => d.value));
     const chartPadding = { top: 10, right: 10, bottom: showLabels ? 24 : 10, left: 10 };
     const chartWidth = 300;

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MobileChatPage } from '../../MobileChatPage';
 
-vi.mock('../../useChat', () => ({
+vi.mock('../../hooks/useChat', () => ({
   useChat: () => ({
     messages: [],
     isStreaming: false,

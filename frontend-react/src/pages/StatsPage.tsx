@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BarChart3, Bot, MessageSquare, Users, TrendingUp, Activity, Zap, Clock, RefreshCw, AlertCircle } from 'lucide-react';
 import { api } from '../api';
+import { Button, Badge, Card, CardHeader, CardTitle } from '../components/ui';
 
 export function StatsPage() {
   const [stats, setStats] = useState<any>(null);
@@ -35,17 +36,17 @@ export function StatsPage() {
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {[1, 2, 3, 4].map(i => (
-              <div key={i} className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-5 animate-pulse">
+              <Card key={i} className="rounded-2xl p-5 animate-pulse" padding="none">
                 <div className="flex items-center justify-between mb-3">
                   <div className="w-10 h-10 rounded-2xl bg-white/[0.03]" />
                   <div className="h-3 w-10 bg-white/[0.03] rounded-xl" />
                 </div>
                 <div className="h-8 w-16 bg-white/[0.03] rounded-xl" />
                 <div className="h-3 w-20 bg-white/[0.03] rounded-xl mt-1" />
-              </div>
+              </Card>
             ))}
           </div>
-          <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-6 animate-pulse">
+          <Card className="rounded-2xl p-6 animate-pulse" padding="none">
             <div className="h-4 w-28 bg-white/[0.03] rounded-xl mb-4" />
             <div className="space-y-3">
               {[1, 2, 3, 4, 5].map(i => (
@@ -58,7 +59,7 @@ export function StatsPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
         </div>
       </div>
     );
@@ -72,12 +73,9 @@ export function StatsPage() {
             <AlertCircle size={28} className="text-[var(--color-error)]" />
           </div>
           <p className="text-[var(--color-text-secondary)] mb-4">{error}</p>
-          <button
-            onClick={loadStats}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold transition-all duration-200 active:scale-[0.97]"
-          >
+          <Button onClick={loadStats} size="lg" className="rounded-2xl">
             <RefreshCw size={16} /> Retry
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -98,16 +96,15 @@ export function StatsPage() {
             <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">平台统计</h2>
             <p className="text-[var(--color-text-secondary)] text-sm mt-1.5">智能体平台的实时概览</p>
           </div>
-          <div className="flex items-center gap-2 px-4 py-2 bg-[var(--color-success)]/10 text-[var(--color-success)] border border-[var(--color-success)]/20 rounded-2xl text-xs font-semibold">
-            <Activity size={12} />
-             实时
-          </div>
+          <Badge variant="success" icon={<Activity size={12} />}>
+            实时
+          </Badge>
         </div>
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {cards.map(({ label, value, icon: Icon, color, bg, trend }) => (
-            <div key={label} className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-5 hover:border-[var(--color-accent)]/30 transition-all duration-200">
+            <Card key={label} className="rounded-2xl p-5 hover:border-[var(--color-accent)]/30" padding="none">
               <div className="flex items-center justify-between mb-3">
                 <div className={`w-10 h-10 rounded-2xl ${bg} flex items-center justify-center border border-[var(--color-border-subtle)]`}>
                   <Icon size={20} className={color} />
@@ -118,16 +115,18 @@ export function StatsPage() {
               </div>
               <div className="text-3xl font-bold tracking-tight text-[var(--color-text-primary)]">{value}</div>
               <div className="text-sm text-[var(--color-text-muted)] mt-1">{label}</div>
-            </div>
+            </Card>
           ))}
         </div>
 
         {/* Activity placeholder */}
-        <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-6">
-          <div className="flex items-center gap-2.5 mb-4">
-            <Zap size={16} className="text-[var(--color-accent)]" />
-            <h3 className="font-semibold text-sm text-[var(--color-text-primary)]">最近活动</h3>
-          </div>
+        <Card className="rounded-2xl p-6" padding="none">
+          <CardHeader className="pb-0">
+            <CardTitle className="text-sm flex items-center gap-2.5">
+              <Zap size={16} className="text-[var(--color-accent)]" />
+              最近活动
+            </CardTitle>
+          </CardHeader>
           <div className="text-center py-8">
             <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-[var(--color-border-subtle)] flex items-center justify-center mx-auto mb-3">
               <Clock size={24} className="text-[var(--color-text-muted)]" />
@@ -135,7 +134,7 @@ export function StatsPage() {
              <p className="text-sm text-[var(--color-text-muted)]">暂无最近活动</p>
              <p className="text-xs text-[var(--color-text-muted)] mt-1">使用平台时活动将显示在此处</p>
           </div>
-        </div>
+        </Card>
       </div>
     </div>
   );
