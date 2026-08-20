@@ -71,8 +71,33 @@ class ParallelToolExecutor:
             results.append(await self._execute_one(name, args, tool_call_id))
         return results
 
+    async def _increment_pending_approval(self) -> int:
+        """Increment the session-wide pending approval count atomically, return the new value."""
+        session = self._session
+        lock = getattr(session, "_approval_count_lock", None)
+        if lock is None:
+            lock = asyncio.Lock()
+            session._approval_count_lock = lock
+        async with lock:
+            count = getattr(session, "_pending_approval_count", 0) + 1
+            session._pending_approval_count = count
+            return count
+
+    async def _decrement_pending_approval(self) -> int:
+        """Decrement the session-wide pending approval count atomically, return the new value."""
+        session = self._session
+        lock = getattr(session, "_approval_count_lock", None)
+        if lock is None:
+            lock = asyncio.Lock()
+            session._approval_count_lock = lock
+        async with lock:
+            count = max(0, getattr(session, "_pending_approval_count", 1) - 1)
+            session._pending_approval_count = count
+            return count
+
     async def _execute_one(self, name: str, arguments: dict[str, Any], tool_call_id: str = "") -> ToolExecutionResult:
         start = asyncio.get_event_loop().time()
+        validator_requires_approval = False
         # Pre-execution safety check
         if self._validator is not None:
             try:
@@ -82,22 +107,59 @@ class ParallelToolExecutor:
             if not allowed:
                 duration = (asyncio.get_event_loop().time() - start) * 1000
                 return ToolExecutionResult(tool_name=name, error=f"blocked by sandbox: {reason}", success=False, duration_ms=duration, tool_call_id=tool_call_id)
+            validator_requires_approval = reason.startswith("Approval required")
         # Human-in-the-loop approval for sensitive tools
         if self._session is not None:
             try:
                 from app.core.approval import approval_manager, tool_requires_approval
                 from app.core.permission_rules import RuleDecision
-                pre_allowed = False
+                permission_decision = None
                 session_config = getattr(self._session, "permission_config", None)
                 if session_config is not None:
-                    pre_allowed = session_config.evaluate(name, arguments) == RuleDecision.ALLOW
-                if tool_requires_approval(name, arguments) and not pre_allowed:
+                    permission_decision = session_config.evaluate(name, arguments)
+                if permission_decision == RuleDecision.DENY:
+                    duration = (asyncio.get_event_loop().time() - start) * 1000
+                    return ToolExecutionResult(
+                        tool_name=name,
+                        error=f"permission denied: {name}",
+                        success=False,
+                        duration_ms=duration,
+                        arguments=arguments,
+                        tool_call_id=tool_call_id,
+                    )
+                requires_approval = validator_requires_approval or permission_decision == RuleDecision.ASK or (
+                    tool_requires_approval(name, arguments)
+                    and permission_decision != RuleDecision.ALLOW
+                )
+                if requires_approval:
                     req = await approval_manager.request(
+                        user_id=getattr(self._session, "user_id", "default-user"),
                         session_id=getattr(self._session, "session_id", "default"),
                         tool_name=name,
                         arguments=arguments,
                     )
-                    decision = await approval_manager.wait_for_decision(req.id, timeout=300)
+                    state_machine = getattr(self._session, "state_machine", None)
+                    await self._increment_pending_approval()
+                    if state_machine is not None:
+                        from app.core.task_state_machine import TaskState
+                        if state_machine.can_transition_to(TaskState.PAUSED):
+                            await state_machine.transition(TaskState.PAUSED, trigger="awaiting_approval")
+                    try:
+                        decision = await approval_manager.wait_for_decision(
+                            req.id,
+                            timeout=300,
+                            cancelled=lambda: bool(getattr(self._session, "_stop_requested", False)),
+                        )
+                    finally:
+                        pending_count = await self._decrement_pending_approval()
+                        if state_machine is not None:
+                            from app.core.task_state_machine import TaskState
+                            if (
+                                pending_count == 0
+                                and not getattr(self._session, "_stop_requested", False)
+                                and state_machine.can_transition_to(TaskState.PROCESSING)
+                            ):
+                                await state_machine.transition(TaskState.PROCESSING, trigger="approval_resolved")
                     if decision is None or decision.status.value != "approved":
                         duration = (asyncio.get_event_loop().time() - start) * 1000
                         return ToolExecutionResult(
@@ -110,12 +172,38 @@ class ParallelToolExecutor:
                         )
             except Exception as e:
                 logger.warning("parallel.approval_check_failed", tool=name, error=str(e))
+                duration = (asyncio.get_event_loop().time() - start) * 1000
+                return ToolExecutionResult(
+                    tool_name=name,
+                    error=f"permission check failed: {e}",
+                    success=False,
+                    duration_ms=duration,
+                    arguments=arguments,
+                    tool_call_id=tool_call_id,
+                )
+        if self._session is not None and getattr(self._session, "_stop_requested", False):
+            return ToolExecutionResult(
+                tool_name=name,
+                error="cancelled",
+                success=False,
+                arguments=arguments,
+                tool_call_id=tool_call_id,
+            )
         try:
             result = await asyncio.wait_for(
                 self._registry.execute(name, arguments),
                 timeout=self._timeout,
             )
             duration = (asyncio.get_event_loop().time() - start) * 1000
+            if result.startswith(f"Error executing {name}:"):
+                return ToolExecutionResult(
+                    tool_name=name,
+                    error=result,
+                    success=False,
+                    duration_ms=duration,
+                    arguments=arguments,
+                    tool_call_id=tool_call_id,
+                )
             return ToolExecutionResult(tool_name=name, result=result, duration_ms=duration, arguments=arguments, tool_call_id=tool_call_id)
         except TimeoutError:
             return ToolExecutionResult(tool_name=name, error="timeout", success=False, arguments=arguments, tool_call_id=tool_call_id)

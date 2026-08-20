@@ -235,6 +235,7 @@ class AgentEngine:
 
     def _validate_tool_call(self, session: AgentSession, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
         """Pre-execution safety check. Returns (allowed, reason)."""
+        approval_reason: str | None = None
         # PLAN mode: deny write/execute operations, but allow edit_file (preview-only)
         if hasattr(self, 'agent_mode') and self.agent_mode is not None:
             from app.core.security_sandbox import AgentMode
@@ -252,7 +253,7 @@ class AgentEngine:
             if decision == RuleDecision.DENY:
                 return False, f"Permission denied by rules: {tool_name}"
             if decision == RuleDecision.ASK:
-                return False, f"Permission required: {tool_name}"
+                approval_reason = f"Approval required: {tool_name}"
 
         # Permission overlay check (legacy)
         if self.permission_overlay is not None:
@@ -266,7 +267,7 @@ class AgentEngine:
             if level == PermissionLevel.DENY:
                 return False, f"Permission denied by overlay: {action} on {resource}"
             if level == PermissionLevel.ASK:
-                return False, f"Permission required: {action} on {resource}"
+                approval_reason = f"Approval required: {action} on {resource}"
 
         # JSON Schema validation
         try:
@@ -279,7 +280,7 @@ class AgentEngine:
 
         # Existing sandbox checks
         if self.sandbox is None:
-            return True, "OK"
+            return True, approval_reason or "OK"
         try:
             if tool_name in self._COMMAND_TOOLS:
                 cmd = arguments.get("command") or ""
@@ -296,7 +297,7 @@ class AgentEngine:
                         return False, reason
         except Exception as e:
             return False, f"sandbox validation error: {e}"
-        return True, "OK"
+        return True, approval_reason or "OK"
 
     def create_session(self, agent_id: str, user_id: str, provider: str, model_id: str, api_key: str, base_url: str | None = None, system_prompt: str = "", tools: list[str] | None = None, context_config: ContextConfig | None = None, session_id: str | None = None) -> AgentSession:
         from uuid import uuid4
@@ -538,7 +539,7 @@ class AgentEngine:
         iteration = 0
         executor = ParallelToolExecutor(
             self.tool_registry,
-            validator=(lambda name, args: self._validate_tool_call(session, name, args)) if self.sandbox else None,
+            validator=lambda name, args: self._validate_tool_call(session, name, args),
             session=session,
         )
         compressor = ContextCompressor(session.context_config)
@@ -667,11 +668,12 @@ class AgentEngine:
                                     tr.error = ""
                                     tr.result = fixed.output
 
-                        session.messages.append({"role": MessageRole.TOOL, "content": tr.result, "tool_call_id": tr.tool_call_id or tr.tool_name})
+                        tool_content = tr.error or tr.result
+                        session.messages.append({"role": MessageRole.TOOL, "content": tool_content, "tool_call_id": tr.tool_call_id or tr.tool_name})
                         await self._persist_message(
                             session.session_id,
                             MessageRole.TOOL,
-                            content=tr.result,
+                            content=tool_content,
                             tool_name=tr.tool_name,
                         )
 
@@ -816,19 +818,27 @@ class AgentEngine:
         This bridges the legacy resolve_permission API to the active approval
         system so the frontend can approve/reject tool calls in-flight.
         """
-        from app.core.approval import ApprovalStatus, approval_manager
+        from app.core.approval import approval_manager
 
-        if decision in ("allow", "allow_session", "allow_always"):
-            req = approval_manager.get_request(tool_call_id)
-            if req is None or req.status != ApprovalStatus.PENDING:
-                return False
-            approval_manager.approve(tool_call_id, resolved_by="human")
-            return True
-        req = approval_manager.get_request(tool_call_id)
-        if req is None or req.status != ApprovalStatus.PENDING:
-            return False
-        approval_manager.reject(tool_call_id, resolved_by="human")
-        return True
+        request = approval_manager.resolve(tool_call_id, decision, resolved_by="human")
+        return request is not None
+
+    async def resolve_permission_async(
+        self,
+        tool_call_id: str,
+        decision: str,
+        user_id: str | None = None,
+    ) -> bool:
+        """Resolve a permission request through the durable atomic API."""
+        from app.core.approval import approval_manager
+
+        request = await approval_manager.resolve_async(
+            tool_call_id,
+            decision,
+            resolved_by="human",
+            user_id=user_id,
+        )
+        return request is not None
 
     def get_permission_config(self) -> Any:
         """Get the current default permission configuration."""

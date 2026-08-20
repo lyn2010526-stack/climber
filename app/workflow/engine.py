@@ -15,13 +15,13 @@ import ast
 import asyncio
 import json
 import time
+from types import SimpleNamespace
 from typing import Any
 
 import structlog
 
 from app.core.agent_engine import AgentEngine
 from app.models.registry import ModelRegistry
-from app.tools import ToolRegistry
 from app.workflow import (
     NodeStatus,
     NodeType,
@@ -196,7 +196,12 @@ class WorkflowEngine:
             if node.type == NodeType.LLM:
                 output = await self._execute_llm_node(node, resolved_inputs, user_id)
             elif node.type == NodeType.TOOL:
-                output = await self._execute_tool_node(node, resolved_inputs)
+                output = await self._execute_tool_node(
+                    node,
+                    resolved_inputs,
+                    workflow_id=workflow.id,
+                    user_id=user_id,
+                )
             elif node.type == NodeType.CONDITION:
                 output, skip_targets = self._execute_condition_node(
                     node, resolved_inputs, workflow,
@@ -308,6 +313,8 @@ class WorkflowEngine:
         self,
         node: WorkflowNode,
         inputs: dict[str, Any],
+        workflow_id: str = "workflow",
+        user_id: str = "system",
     ) -> dict[str, Any]:
         """Execute a tool node."""
         tool_name = node.config.get("tool_name", "")
@@ -322,8 +329,14 @@ class WorkflowEngine:
                 resolved_tool_inputs[k] = v
 
         from app.core.parallel import ParallelToolExecutor
-        registry = ToolRegistry()
-        executor = ParallelToolExecutor(registry)
+        approval_session = SimpleNamespace(
+            session_id=workflow_id,
+            user_id=user_id,
+            permission_config=self.agent_engine.get_permission_config(),
+            _stop_requested=False,
+            _pending_approval_count=0,
+        )
+        executor = ParallelToolExecutor(self.agent_engine.tool_registry, session=approval_session)
         tool_result = await executor.execute_all([{
             "id": f"wf-{node.id}",
             "function": {
@@ -332,6 +345,8 @@ class WorkflowEngine:
             },
         }])
         tool_result = tool_result[0]
+        if not tool_result.success:
+            raise RuntimeError(tool_result.error or f"Tool execution failed: {tool_name}")
 
         return {
             "result": tool_result.result,
@@ -614,6 +629,3 @@ class WorkflowEngine:
             if node.output is not None:
                 outputs[node.name] = node.output
         return outputs
-
-
-

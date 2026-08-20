@@ -16,6 +16,7 @@ import pytest_asyncio
 
 from app.core import AgentEventType, ChatResult, ContextConfig, SessionStatus
 from app.core.agent_engine import AgentEngine
+from app.core.task_state_machine import TaskState
 from app.models.registry import ModelRegistry
 from app.tools import ToolRegistry
 from tests.test_agent_engine import FakeModelAdapter, StreamingFakeModelAdapter
@@ -59,6 +60,10 @@ async def engine():
     async def boom(text: str) -> str:
         raise RuntimeError("tool crashed")
 
+    @tool_registry.tool(name="write_file", description="Write a file")
+    async def write_file(path: str, content: str) -> str:
+        return f"wrote {path}: {content}"
+
     engine = AgentEngine(model_registry=model_registry, tool_registry=tool_registry)
     engine._default_permission_config = PermissionConfig(mode=PermissionMode.BYPASS)
     engine.debug_loop = None
@@ -98,7 +103,8 @@ async def test_empty_message_completes(engine: AgentEngine):
 
 
 @pytest.mark.asyncio
-async def test_model_chat_failure_yields_error_and_fails(engine: AgentEngine):
+async def test_model_chat_failure_yields_error_and_fails(engine: AgentEngine, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("MODEL_RETRY_DELAY", "0")
     _register(engine, _FailingModel())
     session = _session(engine)
     events = await _collect(engine, session, "hi")
@@ -108,7 +114,8 @@ async def test_model_chat_failure_yields_error_and_fails(engine: AgentEngine):
 
 
 @pytest.mark.asyncio
-async def test_stream_failure_yields_error_and_fails(engine: AgentEngine):
+async def test_stream_failure_yields_error_and_fails(engine: AgentEngine, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("MODEL_RETRY_DELAY", "0")
     _register(engine, _FailingStream())
     session = _session(engine)
     events = await _collect(engine, session, "hi")
@@ -131,7 +138,7 @@ async def test_tool_execution_failure_is_graceful(engine: AgentEngine):
     session = _session(engine, tools=["boom"])
     events = await _collect(engine, session, "do it")
     results = [e for e in events if e.type == AgentEventType.TOOL_RESULT]
-    assert results and "tool crashed" in results[0].data["result"]
+    assert results and "tool crashed" in results[0].data["error"]
     done = next(e for e in events if e.type == AgentEventType.DONE)
     assert "recovered" in done.data["content"]
     assert session.status == SessionStatus.COMPLETED
@@ -154,7 +161,7 @@ async def test_tool_loop_hits_max_iterations(engine: AgentEngine):
 
 @pytest.mark.asyncio
 async def test_validate_tool_call_denies_and_allows(engine: AgentEngine):
-    from app.core.permission_rules import PermissionConfig, PermissionMode
+    from app.core.permission_rules import PermissionConfig, PermissionMode, get_default_config
 
     session = _session(engine)
     allowed, reason = engine._validate_tool_call(session, "echo", {"text": "x"})
@@ -166,17 +173,146 @@ async def test_validate_tool_call_denies_and_allows(engine: AgentEngine):
     assert denied is False
     assert "denied" in reason.lower()
 
+    session.permission_config = get_default_config()
+    pending, reason = engine._validate_tool_call(
+        session,
+        "write_file",
+        {"path": "/workspace/data/out.txt", "content": "hello"},
+    )
+    assert pending is True
+    assert "approval" in reason.lower()
 
-def test_resolve_permission_pending_and_missing(engine: AgentEngine):
+    invalid, reason = engine._validate_tool_call(
+        session,
+        "write_file",
+        {"path": "/workspace/data/out.txt"},
+    )
+    assert invalid is False
+    assert "content" in reason.lower()
+
+
+def test_legacy_approval_survives_without_sandbox(engine: AgentEngine):
+    from app.core.security_sandbox import PermissionLevel, PermissionOverlay, PermissionRule
+
+    overlay = PermissionOverlay()
+    overlay.set_defaults([
+        PermissionRule(
+            action="write",
+            resource_pattern="*",
+            level=PermissionLevel.ASK,
+        ),
+    ])
+    engine.permission_overlay = overlay
+    engine.sandbox = None
+    session = _session(engine)
+
+    allowed, reason = engine._validate_tool_call(
+        session,
+        "write_file",
+        {"path": "/workspace/data/out.txt", "content": "hello"},
+    )
+
+    assert allowed is True
+    assert "approval" in reason.lower()
+
+
+@pytest.mark.asyncio
+async def test_permission_approval_pauses_then_resumes_tool_execution(
+    engine: AgentEngine,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import app.core.approval as approval_module
+    from app.core.approval import ApprovalManager
+    from app.core.permission_rules import get_default_config
+
+    manager = ApprovalManager()
+    monkeypatch.setattr(approval_module, "approval_manager", manager)
+
+    tool_call = [{
+        "id": "call-write",
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "arguments": {"path": "/workspace/data/out.txt", "content": "hello"},
+        },
+    }]
+    _register(engine, FakeModelAdapter(responses=[
+        ChatResult(content="", tool_calls=tool_call),
+        ChatResult(content="finished", finish_reason="stop"),
+    ]))
+    session = _session(engine, tools=["write_file"])
+    session.permission_config = get_default_config()
+
+    run_task = asyncio.create_task(_collect(engine, session, "write it"))
+    for _ in range(100):
+        pending = manager.get_pending(session_id=session.session_id)
+        if pending:
+            break
+        await asyncio.sleep(0.01)
+    else:
+        raise AssertionError("approval request was not created")
+
+    assert run_task.done() is False
+    assert pending[0].tool_name == "write_file"
+    assert session.state_machine.state == TaskState.PAUSED
+    await manager.approve_async(pending[0].id)
+
+    events = await asyncio.wait_for(run_task, timeout=2)
+    tool_result = next(e for e in events if e.type == AgentEventType.TOOL_RESULT)
+    assert tool_result.data["result"] == "wrote /workspace/data/out.txt: hello"
+    assert events[-1].type == AgentEventType.DONE
+    assert session.status == SessionStatus.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_resolve_permission_pending_and_missing(engine: AgentEngine):
     from app.core.approval import approval_manager
 
-    assert engine.resolve_permission("call-missing", "allow") is False
+    assert await engine.resolve_permission_async("call-missing", "allow") is False
 
-    req = asyncio.run(approval_manager.request(
+    req = await approval_manager.request(
         session_id="test-session", tool_name="write_file", arguments={"path": "/tmp/x"}
-    ))
-    assert engine.resolve_permission(req.id, "allow") is True
-    assert engine.resolve_permission(req.id, "allow") is False  # already resolved
+    )
+    assert await engine.resolve_permission_async(req.id, "allow") is True
+    assert await engine.resolve_permission_async(req.id, "allow") is False  # already resolved
+
+
+@pytest.mark.asyncio
+async def test_resolve_permission_rejects_request_owned_by_another_user(engine: AgentEngine):
+    from app.core.approval import approval_manager
+
+    req = await approval_manager.request(
+        session_id="other-session",
+        tool_name="write_file",
+        arguments={"path": "/tmp/x"},
+        user_id="other-user",
+    )
+
+    assert await engine.resolve_permission_async(req.id, "allow", user_id="current-user") is False
+    stored = await approval_manager.get_request_async(req.id)
+    assert stored is not None
+    assert stored.status == "pending"
+
+
+@pytest.mark.asyncio
+async def test_resolve_permission_async_uses_durable_store_across_instances(
+    engine: AgentEngine,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    import app.core.approval as approval_module
+    from app.core.approval import ApprovalManager
+
+    creator = ApprovalManager()
+    resolver = ApprovalManager()
+    monkeypatch.setattr(approval_module, "approval_manager", resolver)
+    request = await creator.request("shared-session", "write_file", {"path": "/tmp/x"})
+
+    resolved = await engine.resolve_permission_async(request.id, "allow")
+    stored = await creator.get_request_async(request.id)
+
+    assert resolved is True
+    assert stored is not None
+    assert stored.status == "approved"
 
 
 @pytest.mark.asyncio

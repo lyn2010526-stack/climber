@@ -2,31 +2,44 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+from alembic import context
 
 # Add project root to path so ``app`` imports resolve
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.storage import Base  # noqa: E402
-from app.storage import database  # noqa: F401
-from app.storage import models_memory  # noqa: F401
-from app.storage import models_traces  # noqa: F401
-from app.storage import models_eval  # noqa: F401
-from app.storage import models_cost  # noqa: F401
-from app.storage import models_skills  # noqa: F401
-from app.storage import models_groups  # noqa: F401
-from app.storage import models_feedback  # noqa: F401
-from app.storage import models_files  # noqa: F401
-from app.storage import models_plugins  # noqa: F401
-from app.storage import models_reasoning  # noqa: F401
-from app.storage import models_platform  # noqa: F401
+from app.storage import (
+    Base,
+    database,  # noqa: F401
+    models_cost,  # noqa: F401
+    models_eval,  # noqa: F401
+    models_feedback,  # noqa: F401
+    models_files,  # noqa: F401
+    models_groups,  # noqa: F401
+    models_memory,  # noqa: F401
+    models_platform,  # noqa: F401
+    models_plugins,  # noqa: F401
+    models_reasoning,  # noqa: F401
+    models_skills,  # noqa: F401
+    models_traces,  # noqa: F401
+)
 
 config = context.config
+
+
+def _sync_database_url(url: str) -> str:
+    """Use synchronous drivers with Alembic's synchronous engine."""
+    return url.replace("sqlite+aiosqlite://", "sqlite://", 1)
+
+
+if database_url := os.getenv("ALEMBIC_DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", _sync_database_url(database_url).replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

@@ -43,6 +43,16 @@ class _RaisingEngine:
         raise RuntimeError("boom")
 
 
+class _RecordingEngine(_Stub):
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.kwargs: dict[str, Any] = {}
+
+    async def execute(self, *args: Any, **kwargs: Any) -> _Stub:
+        self.kwargs = kwargs
+        return self
+
+
 @pytest.mark.asyncio
 async def test_unified_executor_unknown_type_fails():
     executor = UnifiedExecutor()
@@ -75,6 +85,16 @@ async def test_workflow_adapter_success():
     result = await adapter.execute(_ctx(), workflow={"id": "wf1"})
     assert result.status is ExecutionStatus.COMPLETED
     assert result.output == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_workflow_adapter_forwards_user_identity():
+    engine = _RecordingEngine()
+    adapter = WorkflowExecutorAdapter(engine)
+
+    await adapter.execute(_ctx(user_id="owner-1"), workflow={"id": "wf1"})
+
+    assert engine.kwargs["user_id"] == "owner-1"
 
 
 @pytest.mark.asyncio

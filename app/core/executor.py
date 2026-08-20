@@ -36,7 +36,11 @@ class WorkflowExecutorAdapter:
         if workflow is None:
             return ExecutionResult(status=ExecutionStatus.FAILED, error="workflow is required")
         try:
-            result = await self._engine.execute(workflow, context=context.variables)
+            result = await self._engine.execute(
+                workflow,
+                user_inputs=context.variables,
+                user_id=context.user_id,
+            )
             return ExecutionResult(
                 status=ExecutionStatus.COMPLETED if result.success else ExecutionStatus.FAILED,
                 output=result.data,

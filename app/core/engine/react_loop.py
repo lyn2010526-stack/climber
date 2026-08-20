@@ -50,6 +50,7 @@ class ReActLoopExecutor:
         executor = ParallelToolExecutor(
             self.tool_registry,
             validator=self._validate_tool_call_fn,
+            session=session,
         )
         compressor = ContextCompressor(session.context_config)
         result: ChatResult | None = None
@@ -140,7 +141,7 @@ class ReActLoopExecutor:
                             tr.duration_ms,
                         )
                         yield AgentEvent(type=AgentEventType.TOOL_RESULT, data={"tool_name": tr.tool_name, "result": tr.result, "error": tr.error})
-                        session.messages.append({"role": "tool", "content": tr.result, "tool_name": tr.tool_name})
+                        session.messages.append({"role": "tool", "content": tr.error or tr.result, "tool_name": tr.tool_name})
 
                     cp = CheckpointData(
                         session_id=session.session_id,
@@ -149,7 +150,7 @@ class ReActLoopExecutor:
                         status=session.state_machine.state.value,
                         channel_values={
                             "last_tool_calls": result.tool_calls,
-                            "last_tool_results": [tr.result for tr in tool_results],
+                            "last_tool_results": [tr.error or tr.result for tr in tool_results],
                             "context_tokens": ctx_tokens,
                         },
                         channel_versions={"messages": iteration, "tools": len(result.tool_calls)},

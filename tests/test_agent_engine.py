@@ -16,6 +16,18 @@ from app.models.registry import ModelRegistry
 from app.tools import ToolRegistry
 
 
+class _FakeMemory:
+    async def format_memories_for_prompt(self, user_id: str, query: str, max_memories: int = 5) -> str:
+        return ""
+
+    async def create_episodic_memory(self, **kwargs: Any) -> None:
+        return None
+
+
+async def _noop_persist(*args: Any, **kwargs: Any) -> None:
+    return None
+
+
 class FakeModelAdapter:
     """A mock model adapter for testing."""
 
@@ -107,6 +119,9 @@ async def engine():
     )
     # Use BYPASS permission mode for tests to avoid ASK blocking
     engine._default_permission_config = PermissionConfig(mode=PermissionMode.BYPASS)
+    engine.debug_loop = None
+    engine.memory_service = _FakeMemory()
+    engine._persist_message = _noop_persist
     return engine
 
 
@@ -307,3 +322,10 @@ def test_tool_registry_get_openai_tools_format():
     assert "parameters" in tool["function"]
     assert "a" in tool["function"]["parameters"]["properties"]
     assert "b" in tool["function"]["parameters"]["properties"]
+
+
+def test_sync_resolve_permission_rejects_unsupported_decision():
+    engine = AgentEngine(model_registry=ModelRegistry(), tool_registry=ToolRegistry())
+
+    with pytest.raises(ValueError, match="Unsupported approval decision"):
+        engine.resolve_permission("request-id", "allow_session")

@@ -309,3 +309,53 @@ class TestWorkflowEngine:
         import asyncio
         result = asyncio.run(wf_engine.execute(w, user_inputs={"query": "hello"}))
         assert result.status == "completed"
+
+    @pytest.mark.asyncio
+    async def test_tool_node_raises_when_tool_execution_fails(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from app.core.parallel import ParallelToolExecutor, ToolExecutionResult
+
+        engine = MagicMock(spec=AgentEngine)
+        engine.tool_registry = MagicMock()
+        wf_engine = WorkflowEngine(engine)
+        node = WorkflowNode(
+            id="tool",
+            type=NodeType.TOOL,
+            name="dangerous tool",
+            config={"tool_name": "run_command", "tool_inputs": {"command": "ls"}},
+        )
+
+        async def fail_execution(self, tool_calls):
+            return [ToolExecutionResult(tool_name="run_command", success=False, error="permission denied")]
+
+        monkeypatch.setattr(ParallelToolExecutor, "execute_all", fail_execution)
+
+        with pytest.raises(RuntimeError, match="permission denied"):
+            await wf_engine._execute_tool_node(node, {}, workflow_id="wf-1", user_id="user-1")
+
+    @pytest.mark.asyncio
+    async def test_tool_node_uses_engine_registry_and_propagates_tool_error(self):
+        from unittest.mock import MagicMock
+
+        from app.tools import ToolRegistry
+
+        registry = ToolRegistry()
+
+        @registry.tool(name="explode", description="Always fails")
+        async def explode() -> str:
+            raise RuntimeError("tool exploded")
+
+        engine = MagicMock(spec=AgentEngine)
+        engine.tool_registry = registry
+        engine.get_permission_config.return_value = None
+        wf_engine = WorkflowEngine(engine)
+        node = WorkflowNode(
+            id="tool",
+            type=NodeType.TOOL,
+            name="exploding tool",
+            config={"tool_name": "explode", "tool_inputs": {}},
+        )
+
+        with pytest.raises(RuntimeError, match="tool exploded"):
+            await wf_engine._execute_tool_node(node, {}, workflow_id="workflow-id", user_id="user-1")

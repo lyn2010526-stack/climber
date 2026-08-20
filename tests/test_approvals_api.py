@@ -6,6 +6,8 @@ import pytest
 
 import app.core.approval as approval_module
 from app.core.approval import ApprovalManager
+from app.core.auth import get_current_user
+from app.main import app
 
 
 @pytest.fixture(autouse=True)
@@ -21,8 +23,13 @@ def _fresh_manager(monkeypatch: pytest.MonkeyPatch):
     return manager
 
 
-async def _create_request(manager: ApprovalManager) -> str:
-    req = await manager.request(session_id="session-test", tool_name="run_command", arguments={"command": "ls"})
+async def _create_request(manager: ApprovalManager, user_id: str = "default-user") -> str:
+    req = await manager.request(
+        session_id="session-test",
+        tool_name="run_command",
+        arguments={"command": "ls"},
+        user_id=user_id,
+    )
     return req.id
 
 
@@ -100,3 +107,47 @@ async def test_list_all_requests(client, _fresh_manager):
     data = resp.json()
     assert data["total"] == 1
     assert data["requests"][0]["status"] == "approved"
+
+
+@pytest.mark.asyncio
+async def test_list_all_requests_total_is_independent_of_limit(client, _fresh_manager):
+    first_id = await _create_request(_fresh_manager)
+    await _create_request(_fresh_manager)
+    await client.post("/api/v1/approvals/approve", json={"request_id": first_id})
+
+    resp = await client.get("/api/v1/approvals/requests?limit=1")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["requests"]) == 1
+    assert data["total"] == 2
+
+
+@pytest.mark.asyncio
+async def test_list_all_requests_rejects_unbounded_limit(client):
+    resp = await client.get("/api/v1/approvals/requests?limit=0")
+
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_approval_endpoints_are_isolated_by_current_user(client, _fresh_manager):
+    own_id = await _create_request(_fresh_manager, user_id="user-a")
+    other_id = await _create_request(_fresh_manager, user_id="user-b")
+    app.dependency_overrides[get_current_user] = lambda: "user-a"
+    try:
+        pending = await client.get("/api/v1/approvals/")
+        history = await client.get("/api/v1/approvals/requests")
+        forbidden = await client.post(
+            "/api/v1/approvals/approve",
+            json={"request_id": other_id},
+        )
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert pending.status_code == 200
+    assert [request["id"] for request in pending.json()["requests"]] == [own_id]
+    assert history.status_code == 200
+    assert history.json()["total"] == 1
+    assert [request["id"] for request in history.json()["requests"]] == [own_id]
+    assert forbidden.status_code == 404
