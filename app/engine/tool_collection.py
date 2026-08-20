@@ -85,6 +85,11 @@ class ToolCollection:
         try:
             import asyncio
 
+            # Safe by design: when a loop is already running in this thread we
+            # drive mcp_client.list_tools() on a brand-new loop inside a worker
+            # thread (never the blocked caller loop); asyncio.run is only used
+            # when no loop exists at all. The run_until_complete branch below
+            # is effectively dead but kept as a defensive fallback.
             try:
                 loop = asyncio.get_running_loop()
                 tools = []

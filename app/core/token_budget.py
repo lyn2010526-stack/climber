@@ -64,7 +64,17 @@ class Trimmer:
             )
             compressor = ContextCompressor(config)
             import asyncio
-            return asyncio.run(compressor.compress(messages, model=None))
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                # No running loop: safe to drive the coroutine here. The
+                # compressor is created locally per call and holds no
+                # loop-bound global session/engine.
+                return asyncio.run(compressor.compress(messages, model=None))
+            raise RuntimeError(
+                "TokenBudget.trim_messages is sync and cannot be called from a "
+                "running event loop; await an async compression path instead"
+            )
         return messages
 
 

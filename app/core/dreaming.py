@@ -329,12 +329,21 @@ class DreamingEngine:
         self._dream_task = asyncio.create_task(
             self._dreaming_loop(agent_id, interval_minutes)
         )
+        self._dream_task.add_done_callback(self._log_dream_task_exception)
 
         logger.info(
             "dreaming_scheduled",
             agent_id=agent_id,
             interval_minutes=interval_minutes,
         )
+
+    @staticmethod
+    def _log_dream_task_exception(task: asyncio.Task) -> None:
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error("dreaming_loop_crashed", error=str(exc))
 
     async def stop_dreaming(self) -> None:
         """Stop the scheduled dreaming loop."""

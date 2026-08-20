@@ -153,6 +153,9 @@ class ToolSelfExtender:
     async def _run_smoke_test(self, request: ToolCreationRequest) -> ToolCreationResult:
         """Execute the tool code in sandbox to verify it works."""
 
+        # Note: the asyncio.run below runs inside a throwaway temp-file script
+        # executed as a separate `python3` subprocess in the sandbox; it never
+        # executes at module level of this process.
         test_code = textwrap.dedent(f"""
 import asyncio
 import json

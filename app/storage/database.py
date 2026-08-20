@@ -12,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -207,8 +208,26 @@ class CheckpointRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
 
+class ApprovalRecord(Base):
+    """Durable human approval request shared by all application workers."""
+
+    __tablename__ = "approval_requests"
+    __table_args__ = (
+        Index("ix_approval_requests_status_session", "status", "session_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    session_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    tool_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    arguments: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    resolved_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 # Import memory models to register them with SQLAlchemy
 # This must be done after the base models are defined to avoid circular imports
-
-
 

@@ -196,6 +196,7 @@ class SubagentManager:
             name=f"subagent-{agent_type.value}-{task_spec.task_id}",
         )
         self._running[task_spec.task_id] = async_task
+        async_task.add_done_callback(self._log_task_exception)
 
         logger.info(
             "subagent_spawned",
@@ -205,6 +206,15 @@ class SubagentManager:
         )
 
         return task_spec.task_id
+
+    @staticmethod
+    def _log_task_exception(task: asyncio.Task) -> None:
+        """Consume and log exceptions from finished subagent tasks."""
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error("subagent_task_failed_unexpectedly", error=str(exc))
 
     async def get_result(self, subagent_id: str, timeout: float = 30.0) -> SubagentResult | None:
         """Get the result of a subagent, waiting if necessary.
