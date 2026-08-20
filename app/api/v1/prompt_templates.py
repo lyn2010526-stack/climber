@@ -5,13 +5,14 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from app.core.auth import get_current_user
 from app.core.prompt_engine.template_repository import PromptTemplateRepository
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["prompt-templates"])
+router = APIRouter(tags=["prompt-templates"], dependencies=[Depends(get_current_user)])
 
 _repository: PromptTemplateRepository | None = None
 

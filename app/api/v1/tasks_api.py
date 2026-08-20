@@ -1,97 +1,39 @@
-"""Task API endpoints."""
+"""Group collaboration task endpoints.
+
+Split out of the former monolithic generic API module (pure move refactor).
+Routes are registered with and without a trailing slash because the app runs
+with redirect_slashes=False.
+"""
 
 from __future__ import annotations
 
-import asyncio
-import logging
-import time
 from datetime import UTC, datetime
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 
-from app.api.v1.helpers import payload as _payload
+from app.api.v1._shared import _payload, _spawn
+from app.api.v1.ws import _broadcast_task_update, _task_to_ws_payload
 from app.core.auth import get_current_user
 from app.storage import async_session
-from app.storage.models_groups import AgentGroupTask
+from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupTask
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
-_background_tasks: set[asyncio.Task] = set()
-
-
-def _spawn(coro: Any) -> None:
-    task = asyncio.create_task(coro)
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-
-
-# ─── TTL cache for tasks list (keyed by group_id) ─────────────────────────────
-
-class _TasksCache:
-    """Process-scoped TTL cache keyed by query params."""
-
-    def __init__(self, ttl: float) -> None:
-        self._ttl = ttl
-        self._data: dict[str, tuple[list[dict] | None, float]] = {}
-
-    def get(self, key: str) -> list[dict] | None:
-        entry = self._data.get(key)
-        if entry is not None:
-            data, ts = entry
-            if time.monotonic() - ts < self._ttl:
-                return data
-            del self._data[key]
-        return None
-
-    def set(self, key: str, value: list[dict] | None) -> None:
-        self._data[key] = (value, time.monotonic())
-
-    def invalidate_all(self) -> None:
-        self._data.clear()
-
-
-_tasks_cache = _TasksCache(ttl=60.0)  # 1 min
-
-# Per-key detail cache for individual tasks
-_task_detail_cache: dict[str, tuple[dict, float]] = {}
-_TASK_DETAIL_TTL = 30.0
-
-
-def _get_cached_task(task_id: str) -> dict | None:
-    entry = _task_detail_cache.get(task_id)
-    if entry is not None:
-        data, ts = entry
-        if time.monotonic() - ts < _TASK_DETAIL_TTL:
-            return data
-        del _task_detail_cache[task_id]
-    return None
-
-
-def _set_cached_task(task_id: str, data: dict) -> None:
-    _task_detail_cache[task_id] = (data, time.monotonic())
-
-
-def _invalidate_task(task_id: str) -> None:
-    _task_detail_cache.pop(task_id, None)
-
+# ─── Tasks ──────────────────────────────────────────────────────────────────
 
 @router.get("/tasks")
 @router.get("/tasks/")
 async def list_tasks(group_id: str = "") -> list[dict[str, Any]]:
-    cache_key = f"g:{group_id}"
-    cached = _tasks_cache.get(cache_key)
-    if cached is not None:
-        return cached
-
     async with async_session() as db:
         stmt = select(AgentGroupTask).order_by(AgentGroupTask.created_at.desc())
         if group_id:
             stmt = stmt.where(AgentGroupTask.group_id == group_id)
         rows = (await db.execute(stmt)).scalars().all()
-        result = [
+        return [
             {
                 "id": t.id,
                 "group_id": t.group_id,
@@ -105,29 +47,59 @@ async def list_tasks(group_id: str = "") -> list[dict[str, Any]]:
             }
             for t in rows
         ]
-    _tasks_cache.set(cache_key, result)
-    return result
 
 
 @router.post("/tasks")
 @router.post("/tasks/")
 async def create_task(request: Request) -> dict[str, Any]:
     data = await _payload(request)
+    group_id = data.get("group_id") or data.get("groupId") or ""
     async with async_session() as db:
+        if not group_id:
+            default_group = (
+                await db.execute(
+                    select(AgentGroup)
+                    .where(AgentGroup.name == "Default")
+                    .order_by(AgentGroup.created_at.asc())
+                )
+            ).scalar_one_or_none()
+            if default_group is None:
+                default_group = AgentGroup(name="Default", description="Auto-created default group")
+                db.add(default_group)
+                await db.flush()
+            group_id = default_group.id
+        else:
+            group_exists = (
+                await db.execute(select(AgentGroup.id).where(AgentGroup.id == group_id))
+            ).scalar_one_or_none()
+            if group_exists is None:
+                raise HTTPException(status_code=404, detail=f"Group '{group_id}' not found")
+        worker_id = data.get("worker_id") or None
+        if worker_id:
+            worker_exists = (
+                await db.execute(
+                    select(AgentGroupMember.id).where(AgentGroupMember.id == worker_id)
+                )
+            ).scalar_one_or_none()
+            if worker_exists is None:
+                worker_id = None
         task = AgentGroupTask(
-            group_id=data.get("group_id", ""), description=data.get("description", ""),
-            worker_id=data.get("worker_id") or None, reviewer_ids=data.get("reviewer_ids", []),
-            max_rounds=int(data.get("max_rounds") or 5), context=data.get("context", []),
-            guardrails=data.get("guardrails", []), human_review_required=bool(data.get("human_review_required", False)),
+            group_id=group_id,
+            description=data.get("description", ""),
+            worker_id=worker_id,
+            reviewer_ids=data.get("reviewer_ids", []),
+            max_rounds=int(data.get("max_rounds") or 5),
+            context=data.get("context", []),
+            guardrails=data.get("guardrails", []),
+            human_review_required=bool(data.get("human_review_required", False)),
             output_schema=data.get("output_schema", {}),
         )
         db.add(task)
         await db.commit()
         await db.refresh(task)
-        _tasks_cache.invalidate_all()  # invalidate
-        _invalidate_task(task.id)
         return {
             "id": task.id,
+            "task_id": task.id,
             "group_id": task.group_id,
             "description": task.description,
             "status": task.status,
@@ -137,15 +109,16 @@ async def create_task(request: Request) -> dict[str, Any]:
             "context": task.context,
             "guardrails": task.guardrails,
             "human_review_required": task.human_review_required,
-            "output_schema": task.output_schema
+            "output_schema": task.output_schema,
         }
 
 
 @router.post("/tasks/{task_id}/run")
 async def run_task(task_id: str) -> dict[str, Any]:
+    """Start group collaboration task in background."""
     try:
-        from app.core.group_collaboration import get_group_collaboration_engine
-        _spawn(get_group_collaboration_engine().run_task(task_id))
+        from app.core.group_collaboration import group_collaboration_engine
+        _spawn(group_collaboration_engine.run_task(task_id))
     except Exception as e:
         logger.error("failed_to_start_task", task_id=task_id, error=str(e))
         raise HTTPException(status_code=500, detail=f"Failed to start task: {e}") from None
@@ -154,15 +127,11 @@ async def run_task(task_id: str) -> dict[str, Any]:
 
 @router.get("/tasks/{task_id}")
 async def get_task(task_id: str) -> dict[str, Any]:
-    cached = _get_cached_task(task_id)
-    if cached is not None:
-        return cached
-
     async with async_session() as db:
         task = (await db.execute(select(AgentGroupTask).where(AgentGroupTask.id == task_id))).scalar_one_or_none()
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
-        result = {
+        return {
             "id": task.id,
             "group_id": task.group_id,
             "description": task.description,
@@ -180,14 +149,12 @@ async def get_task(task_id: str) -> dict[str, Any]:
             "structured_output": getattr(task, "structured_output", {}),
             "total_tokens": task.total_tokens or 0,
             "started_at": task.started_at.isoformat() if task.started_at else "",
-            "paused_at": getattr(task, 'paused_at', None).isoformat() if getattr(task, 'paused_at', None) else "",
+            "paused_at": task.paused_at.isoformat() if getattr(task, 'paused_at', None) else "",
             "completed_at": task.completed_at.isoformat() if task.completed_at else "",
             "created_at": task.created_at.isoformat() if task.created_at else "",
             "step_callback": getattr(task, "step_callback", None),
             "task_callback": getattr(task, "task_callback", None),
         }
-    _set_cached_task(task_id, result)
-    return result
 
 
 @router.post("/tasks/{task_id}/pause")
@@ -201,7 +168,7 @@ async def pause_task(task_id: str) -> dict[str, Any]:
         task.status = "paused"
         task.paused_at = datetime.now(UTC)
         await db.commit()
-        _invalidate_task(task_id)
+        await _broadcast_task_update(task.id, await _task_to_ws_payload(task))
         return {"ok": True, "task_id": task_id, "status": "paused"}
 
 
@@ -216,7 +183,7 @@ async def resume_task(task_id: str) -> dict[str, Any]:
         task.status = "running"
         task.paused_at = None
         await db.commit()
-        _invalidate_task(task_id)
+        await _broadcast_task_update(task.id, await _task_to_ws_payload(task))
         return {"ok": True, "task_id": task_id, "status": "running"}
 
 
@@ -231,5 +198,21 @@ async def stop_task(task_id: str) -> dict[str, Any]:
         task.status = "stopped"
         task.completed_at = datetime.now(UTC)
         await db.commit()
-        _invalidate_task(task_id)
+        await _broadcast_task_update(task.id, await _task_to_ws_payload(task))
         return {"ok": True, "task_id": task_id, "status": "stopped"}
+
+
+@router.post("/tasks/{task_id}/cancel")
+async def cancel_task(task_id: str) -> dict[str, Any]:
+    """Cancel a running task, marking it as cancelled (reuses stop semantics)."""
+    async with async_session() as db:
+        task = (await db.execute(select(AgentGroupTask).where(AgentGroupTask.id == task_id))).scalar_one_or_none()
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task.status in ("completed", "failed", "stopped", "cancelled"):
+            raise HTTPException(status_code=400, detail=f"Cannot cancel task in status: {task.status}")
+        task.status = "cancelled"
+        task.completed_at = datetime.now(UTC)
+        await db.commit()
+        await _broadcast_task_update(task.id, await _task_to_ws_payload(task))
+        return {"ok": True, "task_id": task_id, "status": "cancelled"}

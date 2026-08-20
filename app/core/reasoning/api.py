@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
+from app.core.auth import get_current_user
 from app.core.reasoning import (
     ReasoningRequest,
     ReasoningResult,
@@ -22,7 +23,7 @@ from app.storage.repository_reasoning import (
 
 DEFAULT_USER = "default-user"
 
-router = APIRouter(tags=["reasoning"], redirect_slashes=False)
+router = APIRouter(tags=["reasoning"], redirect_slashes=False, dependencies=[Depends(get_current_user)])
 
 
 @router.post("/")

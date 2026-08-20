@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.core.api_key_crypto import encrypt_api_key
+from app.core.auth import get_current_user
 from app.storage import async_session
 from app.storage.database import ApiKey as ApiKeyModel
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 class ApiKeyCreate(BaseModel):
     provider: str

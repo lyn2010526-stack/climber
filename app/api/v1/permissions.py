@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.api.v1.chat import get_engine
+from app.core.auth import get_current_user
 from app.core.permission_rules import (
     PermissionConfig,
     PermissionMode,
@@ -13,7 +14,7 @@ from app.core.permission_rules import (
     RuleDecision,
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 class PermissionResolveRequest(BaseModel):
@@ -36,15 +37,18 @@ class PermissionConfigUpdate(BaseModel):
 
 
 @router.post("/resolve")
-async def resolve_permission(request: PermissionResolveRequest):
+async def resolve_permission(
+    request: PermissionResolveRequest,
+    user_id: str = Depends(get_current_user),
+):
     engine = get_engine()
     tool_call_id = request.tool_call_id
     decision = request.decision
 
-    if decision not in ("allow", "allow_session", "allow_always", "deny"):
+    if decision not in ("allow", "deny"):
         raise HTTPException(status_code=400, detail=f"Invalid decision: {decision}")
 
-    success = engine.resolve_permission(tool_call_id, decision)
+    success = await engine.resolve_permission_async(tool_call_id, decision, user_id=user_id)
     if not success:
         raise HTTPException(status_code=404, detail=f"No pending permission request for tool_call_id: {tool_call_id}")
 

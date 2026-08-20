@@ -4,15 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 
 from app.api.v1.helpers import DEFAULT_USER
 from app.api.v1.helpers import payload as _payload
+from app.core.auth import get_current_user
 from app.storage import async_session
 from app.storage.models_platform import Skill
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _skill_dict(s: Skill) -> dict[str, Any]:

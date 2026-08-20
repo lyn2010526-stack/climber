@@ -5,10 +5,12 @@ from __future__ import annotations
 import platform
 import sys
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
-router = APIRouter()
+from app.core.auth import get_current_user
+
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _check_python_runtime() -> dict:

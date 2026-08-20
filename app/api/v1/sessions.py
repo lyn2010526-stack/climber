@@ -14,7 +14,7 @@ from app.storage import async_session
 from app.storage.database import Message as MessageModel
 from app.storage.database import Session as SessionModel
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 class SessionCreate(BaseModel):

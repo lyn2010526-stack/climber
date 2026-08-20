@@ -87,6 +87,6 @@ def test_search_roundtrip(client):
 
 
 def test_ws_endpoint_exists():
-    import app.api.v1.generic as g
+    import app.api.v1.ws as g
     paths = [r.path for r in g.router.routes if type(r).__name__ == "APIWebSocketRoute"]
     assert any("/ws/" in p for p in paths), f"websocket route must be registered, got {paths}"

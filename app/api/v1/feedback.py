@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from app.core.auth import get_current_user
 from app.storage import async_session
 
 DEFAULT_USER_ID = "default-user"
 from app.storage.models_feedback import Feedback
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 class FeedbackRequest(BaseModel):

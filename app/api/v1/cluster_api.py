@@ -1,19 +1,27 @@
-"""Cluster API endpoints."""
+"""Cluster node endpoints.
+
+Split out of the former monolithic generic API module (pure move refactor).
+Routes are registered with and without a trailing slash because the app runs
+with redirect_slashes=False.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 
-from app.api.v1.helpers import payload as _payload
+from app.api.v1._shared import _payload
 from app.core.auth import get_current_user
 from app.storage import async_session
 from app.storage.models_platform import Cluster
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+logger = structlog.get_logger()
 
+# ─── Cluster ────────────────────────────────────────────────────────────────
 
 @router.get("/cluster")
 @router.get("/cluster/")
@@ -79,7 +87,12 @@ async def get_cluster_stats() -> dict[str, Any]:
         roles: dict[str, int] = {}
         for n in rows:
             roles[n.role] = roles.get(n.role, 0) + 1
-        return {"total": total, "online": online, "offline": offline, "roles": roles}
+        return {
+            "total": total,
+            "online": online,
+            "offline": offline,
+            "roles": roles,
+        }
 
 
 @router.delete("/cluster/{node_id}")

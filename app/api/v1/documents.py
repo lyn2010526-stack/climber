@@ -6,7 +6,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Form, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException
+
+from app.core.auth import get_current_user
 
 logger = structlog.get_logger()
 from pydantic import BaseModel
@@ -16,7 +18,7 @@ from app.storage import async_session
 from app.storage.database import Document
 from app.tools.rag import chunk_text
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 class IndexTextResponse(BaseModel):

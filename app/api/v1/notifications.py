@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-router = APIRouter()
+from app.core.auth import get_current_user
+
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 class NotifyRequest(BaseModel):

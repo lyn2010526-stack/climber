@@ -8,12 +8,13 @@ blocked patterns, resource limits and a hard timeout. No shell is involved
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.core.auth import get_current_user
 from app.core.sandbox import SandboxConfig, SandboxExecutor
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 _executor: SandboxExecutor | None = None
 

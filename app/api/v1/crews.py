@@ -4,18 +4,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 
 from app.api.v1.helpers import DEFAULT_USER
 from app.api.v1.helpers import payload as _payload
 from app.core.api_key_crypto import decrypt_api_key
+from app.core.auth import get_current_user
 from app.core.di import resolve as di_resolve
 from app.storage import async_session
 from app.storage.models_platform import Crew, CrewRun
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _crew_dict(c: Crew) -> dict[str, Any]:

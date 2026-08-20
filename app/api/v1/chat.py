@@ -19,7 +19,7 @@ from app.storage.database import Agent as AgentModel
 from app.storage.database import ApiKey as ApiKeyModel
 from app.storage.database import Session as SessionModel
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 _engine: AgentEngine | None = None
 

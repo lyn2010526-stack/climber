@@ -6,17 +6,18 @@ import json
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import select
 
-from app.api.v1.generic import _payload
+from app.api.v1._shared import _payload
+from app.core.auth import get_current_user
 from app.storage import async_session
 from app.storage.models_platform import Workflow as WorkflowModel
 from app.workflow.io import WorkflowIO
 from app.workflow.templates import WorkflowTemplates
 
 logger = structlog.get_logger()
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def _workflow_dict(w: WorkflowModel) -> dict[str, Any]:
