@@ -1,26 +1,13 @@
 import { create } from 'zustand';
+import type { DisplayMessage } from '../types/message';
 
-export interface Message {
-  id: string;
-  type: 'user' | 'thinking' | 'tool-call' | 'tool-result' | 'reflection' | 'system';
-  content: any;
-  timestamp: number;
-  metadata?: {
-    tokens?: number;
-    durationMs?: number;
-    status?: 'pending' | 'running' | 'success' | 'error' | 'cancelled';
-    retryCount?: number;
-    blockReason?: string;
-    toolName?: string;
-    toolArgs?: any;
-  };
-}
+export type { DisplayMessage } from '../types/message';
 
 export interface Session {
   id: string;
   title: string;
   status: 'idle' | 'running' | 'paused' | 'completed' | 'error';
-  messages: Message[];
+  messages: DisplayMessage[];
   activeSkills: string[];
   activeTools: string[];
   modelConfig: {
@@ -63,7 +50,7 @@ export interface WorkspaceState {
   setPermissionMode: (mode: 'sandbox' | 'native') => void;
   setAutonomyLevel: (level: number) => void;
   setTasks: (tasks: TaskItem[]) => void;
-  addMessage: (sessionId: string, message: Message) => void;
+  addMessage: (sessionId: string, message: DisplayMessage) => void;
   updateSession: (sessionId: string, updates: Partial<Session>) => void;
   addSnapshot: (snapshot: { id: string; sessionId: string; timestamp: number; label: string }) => void;
   createSession: (session: Session) => void;

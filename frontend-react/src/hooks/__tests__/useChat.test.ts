@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useChat } from '../../useChat';
+import { useChat } from '../../hooks/useChat';
 
 const mocks = vi.hoisted(() => ({
   onEvent: null as ((event: { event: string; data: any }) => void) | null,

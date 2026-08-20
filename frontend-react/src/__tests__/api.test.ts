@@ -108,4 +108,23 @@ describe('ApiClient paginated lists', () => {
     );
     cancel();
   });
+
+  it('sends concurrent permission mutations independently', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'resolved' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await Promise.all([
+      api.resolvePermission('approval-1', 'allow'),
+      api.resolvePermission('approval-2', 'deny'),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.map(([, options]) => options.body)).toEqual([
+      JSON.stringify({ tool_call_id: 'approval-1', decision: 'allow' }),
+      JSON.stringify({ tool_call_id: 'approval-2', decision: 'deny' }),
+    ]);
+  });
 });
