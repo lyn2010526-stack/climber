@@ -7,6 +7,7 @@ import importlib.util
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 import structlog
 from fastapi import FastAPI, HTTPException, Request
@@ -51,8 +52,11 @@ del importlib, _missing
 _APP_VERSION = "0.2.0"
 
 FRONTEND_DIR = None
-for _candidate in (Path(__file__).parent.parent / "frontend", Path(__file__).parent.parent / "frontend-react"):
-    if _candidate.exists():
+for _candidate in (
+    Path(__file__).parent.parent / "frontend" / "dist",
+    Path(__file__).parent.parent / "frontend-react" / "dist",
+):
+    if (_candidate / "index.html").is_file():
         FRONTEND_DIR = _candidate
         break
 del _candidate
@@ -109,6 +113,48 @@ def _register_core_services() -> None:
     di_register("SkillComposer", skill_composer)
 
 
+def _read_positive_int_env(name: str, default: int) -> int:
+    """Read a positive integer env var, falling back to ``default`` on error."""
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("env.invalid_int", name=name, raw=raw)
+        return default
+    return value if value > 0 else default
+
+
+async def _run_cleanup_loop() -> None:
+    """Periodically sweep stale Runs and expired raw payloads.
+
+    Kept alive by the watchdog; the outer loop never returns so the sweeper
+    survives individual pass failures (each pass is internally isolated).
+    """
+    import asyncio
+    from datetime import UTC, datetime, timedelta
+
+    from app.core.run_cleanup import (
+        cleanup_expired_raw_payloads,
+        cleanup_stale_runs,
+    )
+    from app.storage import async_session
+    from app.storage.run_store import SQLAlchemyRunStore
+
+    stale_max_age = timedelta(minutes=_read_positive_int_env("RUN_STALE_MAX_AGE_MINUTES", 120))
+    interval = timedelta(minutes=_read_positive_int_env("RUN_CLEANUP_INTERVAL_MINUTES", 30))
+
+    while True:
+        try:
+            store = SQLAlchemyRunStore(session_factory=async_session)
+            await cleanup_stale_runs(store, max_age=stale_max_age, now=datetime.now(UTC))
+            await cleanup_expired_raw_payloads(store, now=datetime.now(UTC))
+        except Exception as exc:
+            logger.warning("run_cleanup.pass_failed", error=str(exc), exc_info=True)
+        await asyncio.sleep(interval.total_seconds())
+
+
 def _local_ip() -> str:
     import socket
     try:
@@ -117,9 +163,11 @@ def _local_ip() -> str:
             s.connect(("8.8.8.8", 80))
             return s.getsockname()[0]
     except Exception:
+        logger.warning("local_ip.udp_lookup_failed", lookup="udp_route", exc_info=True)
         try:
             return socket.gethostbyname(socket.gethostname())
         except Exception:
+            logger.debug("local_ip.hostname_lookup_failed", lookup="hostname", fallback="127.0.0.1", exc_info=True)
             return "127.0.0.1"
 
 
@@ -157,10 +205,20 @@ async def lifespan(app: FastAPI):
         if recovered:
             logger.info("Recovered interrupted sessions", count=recovered)
 
+        try:
+            from app.core.group_collaboration import group_collaboration_engine
+
+            recovered_group_tasks = await group_collaboration_engine.recover_stale_running_tasks()
+            if recovered_group_tasks:
+                logger.info("Recovered stale group tasks", count=recovered_group_tasks)
+        except Exception as e:
+            logger.warning("Group task recovery skipped", error=str(e))
+
         task_scheduler = di_resolve("TaskScheduler")
         watchdog = get_watchdog()
         watchdog.register("scheduler", lambda: _run_scheduler(task_scheduler))
         watchdog.register("auto_loop", auto_loop_engine.run)
+        watchdog.register("run_cleanup", _run_cleanup_loop)
         await watchdog.start()
         logger.info("Task scheduler started under watchdog")
 
@@ -188,12 +246,21 @@ async def lifespan(app: FastAPI):
         from app.services.notifications import notification_service
         app.state.notification_service = notification_service
 
+        fourth_gen = _init_fourth_gen()
+        if fourth_gen:
+            app.state.fourth_gen = fourth_gen
+            logger.info("fourth_gen.enabled", modules=[k for k in fourth_gen if k not in ("bus", "registry", "guard")])
+
         APP_INFO.info({"version": _APP_VERSION, "debug": str(settings.app_debug)})
 
         if settings.enable_lan_access:
             logger.info("LAN access enabled", url=f"http://{_local_ip()}:{settings.port}")
 
         yield
+
+        fourth_gen = getattr(app.state, "fourth_gen", None)
+        if fourth_gen:
+            await _stop_fourth_gen(fourth_gen)
 
         await watchdog.stop()
         await guardian.stop()
@@ -228,6 +295,91 @@ async def _run_scheduler(scheduler):
         await asyncio.sleep(30)
 
 
+def _init_fourth_gen() -> dict[str, Any] | None:
+    """Wire up the fourth-generation emergent modules (master-gated).
+
+    Returns a dict of started module handles (empty/None when the master
+    switch is OFF — the system then runs purely in third-gen mode).
+    """
+    if not settings.enable_fourth_gen:
+        # Master switch off → pure third-gen mode, nothing wired.
+        return None
+    from app.core.emergent.autodiscovery import AutodiscoveryEngine
+    from app.core.emergent.goal_centered import GoalCenteredPlanner
+    from app.core.emergent.meta_agent import MetaAgent
+    from app.core.emergent.snapshot import get_structural_snapshot_manager
+    from app.core.emergent.swarm import DEFAULT_BEES, SwarmCoordinator
+    from app.core.event_bus import get_event_bus
+    from app.core.metacognition.capability_discovery import CapabilityDiscovery
+    from app.core.sandbox import default_sandbox
+    from app.core.security import get_hard_guard
+    from app.core.session_snapshot import session_snapshot_manager
+
+    bus = get_event_bus()
+    registry = CapabilityDiscovery()
+    guard = get_hard_guard()
+
+    # Register protected components so no module can replace them.
+    guard.register_protected("event_bus", bus)
+    guard.register_protected("sandbox_executor", default_sandbox)
+    guard.register_protected("session_snapshot_manager", session_snapshot_manager)
+    guard.register_protected("hard_guard", guard)
+
+    # Wire the structural snapshot manager to dump/restore real state.
+    snap_mgr = get_structural_snapshot_manager()
+    snap_mgr.registry_dump = lambda: registry.list_capabilities()
+    snap_mgr.graph_dump = lambda: {"note": "pregel graph dumps wired in main"}
+    snap_mgr.switches_dump = lambda: {
+        "enable_fourth_gen": settings.enable_fourth_gen,
+        "enable_autodiscovery": settings.enable_autodiscovery,
+        "enable_meta_agent": settings.enable_meta_agent,
+        "enable_goal_centered": settings.enable_goal_centered,
+        "enable_swarm": settings.enable_swarm,
+    }
+
+    async def _snap() -> str:
+        return await snap_mgr.capture("emergent-change")
+
+    handles: dict[str, Any] = {"bus": bus, "registry": registry, "guard": guard}
+
+    if settings.is_fourth_gen_mod_active("autodiscovery"):
+        engine = AutodiscoveryEngine(registry=registry, sandbox=default_sandbox)
+        engine.set_event_bus(bus)
+        engine.set_snapshot_fn(_snap)
+        handles["autodiscovery"] = engine
+        logger.info("fourth_gen.autodiscovery_enabled")
+
+    if settings.is_fourth_gen_mod_active("meta_agent"):
+        meta = MetaAgent(event_bus=bus, snapshot_fn=_snap)
+        handles["meta_agent"] = meta
+        logger.info("fourth_gen.meta_agent_enabled")
+
+    if settings.is_fourth_gen_mod_active("goal_centered"):
+        planner = GoalCenteredPlanner(registry=registry, snapshot_fn=_snap)
+        handles["goal_centered"] = planner
+        logger.info("fourth_gen.goal_centered_enabled")
+
+    if settings.is_fourth_gen_mod_active("swarm"):
+        swarm = SwarmCoordinator(event_bus=bus, bees=list(DEFAULT_BEES))
+        handles["swarm"] = swarm
+        logger.info("fourth_gen.swarm_enabled")
+
+    return handles
+
+
+async def _stop_fourth_gen(handles: dict[str, Any] | None) -> None:
+    """Gracefully stop started fourth-gen modules."""
+    if not handles:
+        return
+    meta = handles.get("meta_agent")
+    if meta is not None:
+        try:
+            await meta.stop_monitoring()
+        except Exception as exc:
+            logger.warning("fourth_gen.meta_agent_stop_failed", error=str(exc))
+    logger.info("fourth_gen.shutdown_complete")
+
+
 app = FastAPI(
     title="Agent Engine",
     description="Production-grade AI Agent Platform",
@@ -239,7 +391,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
+    allow_credentials=settings.cors_allow_credentials,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
 )
@@ -278,6 +430,7 @@ async def health() -> dict:
         else:
             checks["redis"] = "disabled"
     except Exception:
+        logger.debug("health.dependency_check_failed", dependency="redis", exc_info=True)
         checks["redis"] = "unavailable"
     try:
         import chromadb
@@ -285,19 +438,23 @@ async def health() -> dict:
         client.heartbeat()
         checks["chroma"] = "ok"
     except Exception:
+        logger.debug("health.dependency_check_failed", dependency="chroma", exc_info=True)
         checks["chroma"] = "unavailable"
     try:
         checks["watchdog"] = get_watchdog().health()
     except Exception as e:
+        logger.debug("health.dependency_check_failed", dependency="watchdog", exc_info=True)
         checks["watchdog"] = {"error": str(e)}
     try:
         checks["memory"] = get_memory_guardian().stats()
     except Exception as e:
+        logger.debug("health.dependency_check_failed", dependency="memory", exc_info=True)
         checks["memory"] = {"error": str(e)}
     try:
         from app.tools.browser_pool import get_browser_pool
         checks["browser_pool"] = get_browser_pool().stats()
     except Exception as e:
+        logger.debug("health.browser_pool_check_failed", exc_info=True)
         checks["browser_pool"] = {"error": str(e)}
 
     degraded = (
@@ -319,8 +476,10 @@ async def metrics():
 
 
 if FRONTEND_DIR:
-    app.mount("/css", StaticFiles(directory=FRONTEND_DIR / "css"), name="css")
-    app.mount("/js", StaticFiles(directory=FRONTEND_DIR / "js"), name="js")
+    for _static_dir in ("css", "js", "assets"):
+        _static_path = FRONTEND_DIR / _static_dir
+        if _static_path.is_dir():
+            app.mount(f"/{_static_dir}", StaticFiles(directory=_static_path), name=_static_dir)
 
     @app.get("/")
     async def serve_frontend():

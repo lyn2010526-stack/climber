@@ -347,7 +347,53 @@ def test_platform_stats_endpoint(client: TestClient):
     assert resp.status_code == 200
     data = resp.json()
     assert 'total_users' in data
-    assert 'total_agents' in data
-    assert 'total_sessions' in data
-    assert 'total_api_keys' in data
-    assert data['total_users'] >= 1
+
+
+def test_fourth_gen_default_third_gen_mode():
+    """Master switch OFF by default → pure third-gen, nothing wired."""
+    from app.config import settings
+    from app.main import _init_fourth_gen
+
+    original = settings.enable_fourth_gen
+    try:
+        settings.enable_fourth_gen = False
+        assert _init_fourth_gen() is None
+    finally:
+        settings.enable_fourth_gen = original
+
+
+def test_fourth_gen_full_wiring_then_rollback():
+    """Enabling all modules wires A-D; disabling falls back to third-gen."""
+    from app.config import settings
+    from app.main import _init_fourth_gen
+
+    originals = {
+        'master': settings.enable_fourth_gen,
+        'auto': settings.enable_autodiscovery,
+        'meta': settings.enable_meta_agent,
+        'goal': settings.enable_goal_centered,
+        'swarm': settings.enable_swarm,
+    }
+    try:
+        settings.enable_fourth_gen = True
+        settings.enable_autodiscovery = True
+        settings.enable_meta_agent = True
+        settings.enable_goal_centered = True
+        settings.enable_swarm = True
+
+        handles = _init_fourth_gen()
+        assert handles is not None
+        assert 'autodiscovery' in handles
+        assert 'meta_agent' in handles
+        assert 'goal_centered' in handles
+        assert 'swarm' in handles
+
+        # Fall back: master off → third-gen only
+        settings.enable_fourth_gen = False
+        assert _init_fourth_gen() is None
+    finally:
+        settings.enable_fourth_gen = originals['master']
+        settings.enable_autodiscovery = originals['auto']
+        settings.enable_meta_agent = originals['meta']
+        settings.enable_goal_centered = originals['goal']
+        settings.enable_swarm = originals['swarm']

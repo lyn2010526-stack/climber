@@ -6,10 +6,12 @@ import os
 import secrets
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import quote
 
 from dotenv import load_dotenv
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode
+from sqlalchemy.engine import URL
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
@@ -50,6 +52,15 @@ class Settings(BaseSettings):
     database_url: str = Field(default="sqlite+aiosqlite:///./data/climber.db")
     test_database_url: str = Field(default="sqlite+aiosqlite:///./data/test.db")
     redis_url: str = Field(default="redis://localhost:6379/0")
+    database_host: str | None = Field(default=None)
+    database_port: int = Field(default=5432)
+    database_user: str = Field(default="climber")
+    database_password: str = Field(default="")
+    database_name: str = Field(default="climber")
+    redis_host: str | None = Field(default=None)
+    redis_port: int = Field(default=6379)
+    redis_password: str = Field(default="")
+    redis_db: int = Field(default=0)
     vector_store_path: str = Field(default="./data/chroma")
 
     @field_validator("database_url", "test_database_url", mode="before")
@@ -78,10 +89,24 @@ class Settings(BaseSettings):
     port: int = Field(default=8000)
     enable_lan_access: bool = Field(default=False)
 
+    # Fourth-generation emergent modules (all disabled by default; master switch gates all)
+    enable_fourth_gen: bool = Field(default=False)
+    enable_autodiscovery: bool = Field(default=False)
+    enable_meta_agent: bool = Field(default=False)
+    enable_goal_centered: bool = Field(default=False)
+    enable_swarm: bool = Field(default=False)
+
+    def is_fourth_gen_mod_active(self, name: str) -> bool:
+        """True when the master switch is ON and the per-module switch is ON."""
+        if not self.enable_fourth_gen:
+            return False
+        return bool(getattr(self, f"enable_{name}", False))
+
     cors_origins_list: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"],
         validation_alias="CORS_ORIGINS",
     )
+    cors_allow_credentials: bool = Field(default=True)
 
     @field_validator("cors_origins_list", mode="before")
     @classmethod
@@ -89,6 +114,28 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [x.strip() for x in value.split(",") if x.strip()]
         return value
+
+    @model_validator(mode="after")
+    def _check_cors_origins_no_wildcard_with_credentials(self):
+        if self.cors_allow_credentials and "*" in self.cors_origins_list:
+            raise ValueError("CORS origins must not contain \"*\" when allow_credentials is enabled")
+        return self
+
+    @model_validator(mode="after")
+    def _build_connection_urls_from_components(self):
+        if self.database_host:
+            self.database_url = URL.create(
+                drivername="postgresql+asyncpg",
+                username=self.database_user,
+                password=self.database_password,
+                host=self.database_host,
+                port=self.database_port,
+                database=self.database_name,
+            ).render_as_string(hide_password=False)
+        if self.redis_host:
+            password = f":{quote(self.redis_password, safe='')}@" if self.redis_password else ""
+            self.redis_url = f"redis://{password}{self.redis_host}:{self.redis_port}/{self.redis_db}"
+        return self
 
     mcp_timeout: int = Field(default=30)
     tool_timeout: int = Field(default=60)

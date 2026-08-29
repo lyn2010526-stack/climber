@@ -140,8 +140,12 @@ class CapabilityDiscovery:
 
         return None
 
-    def list_capabilities(self) -> list[dict[str, Any]]:
-        return [
+    def register(self, capability: ComposedCapability) -> None:
+        """Register an already-composed capability (external commit path)."""
+        self._capabilities[capability.name] = capability
+        self._save()
+
+    def list_capabilities(self) -> list[dict[str, Any]]:        return [
             {
                 "name": c.name,
                 "description": c.description,
@@ -153,6 +157,9 @@ class CapabilityDiscovery:
 
     def get_capability(self, name: str) -> ComposedCapability | None:
         return self._capabilities.get(name)
+
+    def get_all_capabilities(self) -> list[ComposedCapability]:
+        return list(self._capabilities.values())
 
     def record_usage(self, name: str, success: bool) -> None:
         cap = self._capabilities.get(name)
