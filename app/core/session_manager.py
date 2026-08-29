@@ -22,8 +22,19 @@ class SessionManager:
     """Manages session persistence with checkpoint/resume/fork capabilities."""
 
     def __init__(self, storage_dir: str = "./sessions"):
-        self._storage = Path(storage_dir)
+        self._storage = Path(storage_dir).resolve()
         self._storage.mkdir(parents=True, exist_ok=True)
+
+    def _session_dir(self, session_id: str) -> Path:
+        """Return a session directory constrained to the storage root."""
+        if not session_id or session_id in {".", ".."} or Path(session_id).name != session_id:
+            raise ValueError("Invalid session id")
+        session_dir = (self._storage / session_id).resolve()
+        try:
+            session_dir.relative_to(self._storage)
+        except ValueError:
+            raise ValueError("Invalid session id") from None
+        return session_dir
 
     def save_checkpoint(
         self,
@@ -43,7 +54,7 @@ class SessionManager:
             "metadata": metadata or {},
             "timestamp": time.time(),
         }
-        session_dir = self._storage / session_id
+        session_dir = self._session_dir(session_id)
         session_dir.mkdir(parents=True, exist_ok=True)
         checkpoint_file = session_dir / f"checkpoint_{iteration:04d}.json"
         checkpoint_file.write_text(json.dumps(checkpoint, ensure_ascii=False, indent=2))
@@ -54,14 +65,14 @@ class SessionManager:
 
     def get_latest_checkpoint(self, session_id: str) -> dict | None:
         """Get the most recent checkpoint for a session."""
-        latest_file = self._storage / session_id / "latest.json"
+        latest_file = self._session_dir(session_id) / "latest.json"
         if latest_file.exists():
             return json.loads(latest_file.read_text())
         return None
 
     def get_checkpoint_history(self, session_id: str) -> list[dict]:
         """Get all checkpoints for a session, ordered by iteration."""
-        session_dir = self._storage / session_id
+        session_dir = self._session_dir(session_id)
         if not session_dir.exists():
             return []
         checkpoints = []
@@ -90,7 +101,7 @@ class SessionManager:
         forked["id"] = str(uuid.uuid4())
         forked["timestamp"] = time.time()
 
-        session_dir = self._storage / new_id
+        session_dir = self._session_dir(new_id)
         session_dir.mkdir(parents=True, exist_ok=True)
         checkpoint_file = session_dir / "checkpoint_0000.json"
         checkpoint_file.write_text(json.dumps(forked, ensure_ascii=False, indent=2))
@@ -118,7 +129,7 @@ class SessionManager:
     def delete_session(self, session_id: str) -> bool:
         """Delete all checkpoints for a session."""
         import shutil
-        session_dir = self._storage / session_id
+        session_dir = self._session_dir(session_id)
         if session_dir.exists():
             shutil.rmtree(session_dir)
             return True

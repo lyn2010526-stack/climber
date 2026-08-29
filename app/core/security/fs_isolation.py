@@ -139,11 +139,13 @@ class FSIsolationManager:
         import fnmatch
         for blocked in self.config.blocked_paths:
             if "*" in blocked:
-                if fnmatch.fnmatch(str(abs_path), blocked):
-                    return True
-                prefix = blocked.split("*")[0]
-                if str(abs_path).startswith(prefix):
-                    return True
+                current = abs_path
+                while True:
+                    if fnmatch.fnmatch(str(current), blocked):
+                        return True
+                    if current.parent == current:
+                        break
+                    current = current.parent
             elif str(abs_path) == blocked or str(abs_path).startswith(blocked + "/"):
                 return True
         return False
