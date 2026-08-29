@@ -175,3 +175,34 @@ def test_trace_sink_receives_events():
     asyncio.run(bus.publish("x", {"n": 1}))
     assert len(received) == 1
     assert received[0]["type"] == "x"
+
+
+def test_kernel_uses_injected_event_bus():
+    bus = TypedEventBus()
+
+    assert PluginKernel(event_bus=bus).event_bus is bus
+
+
+@pytest.mark.asyncio
+async def test_arch_v2_uses_one_traced_plugin_event_bus(monkeypatch, tmp_path):
+    from app import main
+    from app.core.plugin_kernel import event_bus as event_bus_module
+
+    monkeypatch.setattr(main.settings, "enable_arch_v2", True)
+    monkeypatch.setattr(main.settings, "enable_plugin_kernel", True)
+    monkeypatch.setattr(main.settings, "enable_trace_log", True)
+    monkeypatch.setattr(main.settings, "log_dir", str(tmp_path))
+    monkeypatch.setattr(event_bus_module, "_default_bus", None)
+
+    handles = await main._init_arch_v2()
+    assert handles is not None
+    assert handles["plugin_kernel"].event_bus is handles["event_bus"]
+
+    await handles["event_bus"].publish(
+        "plugin.test", {"session_id": "session-1", "value": 1}
+    )
+
+    events = await handles["trace_log"].read("session-1")
+    assert [(event.event_type, event.data) for event in events] == [
+        ("plugin.test", {"session_id": "session-1", "value": 1})
+    ]

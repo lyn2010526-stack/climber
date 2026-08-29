@@ -431,16 +431,17 @@ async def _init_arch_v2() -> dict[str, Any] | None:
         from app.core.plugin_kernel import get_default_event_bus
         from app.core.plugin_kernel.profiles import ALL_PROFILES, ProfileConfig
 
-        bus = get_default_event_bus()
         trace = handles.get("trace_log")
 
         async def _trace_sink(event: dict[str, Any]) -> None:
             await trace.append(
                 event.get("type", "event"),
                 {k: v for k, v in event.items() if k not in ("id", "type", "ts")},
+                event.get("session_id", "default"),
             )
 
-        kernel = PluginKernel(trace_sink=_trace_sink if trace else None)
+        bus = get_default_event_bus(trace_sink=_trace_sink if trace else None)
+        kernel = PluginKernel(event_bus=bus)
         profile_mode = os.environ.get("ARCH_V2_PROFILE", "developer")
         if profile_mode not in ALL_PROFILES:
             profile_mode = "developer"

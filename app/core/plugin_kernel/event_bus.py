@@ -160,9 +160,11 @@ class TypedEventBus:
 _default_bus: TypedEventBus | None = None
 
 
-def get_default_event_bus() -> TypedEventBus:
+def get_default_event_bus(
+    trace_sink: Callable[[dict[str, Any]], Coroutine[Any, Any, None]] | None = None,
+) -> TypedEventBus:
     """Return the process-wide default plugin event bus."""
     global _default_bus
     if _default_bus is None:
-        _default_bus = TypedEventBus()
+        _default_bus = TypedEventBus(trace_sink=trace_sink)
     return _default_bus
