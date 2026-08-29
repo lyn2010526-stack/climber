@@ -17,11 +17,12 @@ router = APIRouter(tags=["settings"], dependencies=[Depends(get_current_user)])
 @router.get("")
 @router.get("/")
 async def get_settings(
+    user_id: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Get current user settings."""
     service = SettingsService(db)
-    settings = await service.get_settings("default-user")
+    settings = await service.get_settings(user_id)
     mode = service.get_effective_mode(settings)
 
     return {
@@ -36,6 +37,7 @@ async def get_settings(
 @router.patch("/")
 async def update_settings(
     data: dict[str, Any],
+    user_id: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Update user settings."""
@@ -51,7 +53,7 @@ async def update_settings(
         )
 
     settings = await service.update_settings(
-        user_id="default-user",
+        user_id=user_id,
         autonomous_agent_mode=autonomous_agent_mode,
         token_throttle_mcp_enabled=token_throttle_mcp_enabled,
     )

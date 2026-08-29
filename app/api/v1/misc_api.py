@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 
 from app.api.v1._shared import DEFAULT_USER, _payload
@@ -69,9 +69,16 @@ def _skill_dict(s: Skill) -> dict[str, Any]:
 
 @router.get("/skills")
 @router.get("/skills/")
-async def list_skills() -> list[dict[str, Any]]:
+async def list_skills(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
-        rows = (await db.execute(select(Skill).order_by(Skill.created_at.desc()))).scalars().all()
+        rows = (
+            await db.execute(
+                select(Skill).order_by(Skill.created_at.desc()).offset(offset).limit(limit)
+            )
+        ).scalars().all()
         return [_skill_dict(s) for s in rows]
 
 
@@ -137,9 +144,19 @@ _SCHEDULER_MARKET = [
 
 @router.get("/scheduler")
 @router.get("/scheduler/")
-async def list_scheduled() -> list[dict[str, Any]]:
+async def list_scheduled(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
-        rows = (await db.execute(select(Workflow).where(Workflow.schedule is not None))).scalars().all()
+        rows = (
+            await db.execute(
+                select(Workflow)
+                .where(Workflow.schedule is not None)
+                .offset(offset)
+                .limit(limit)
+            )
+        ).scalars().all()
         return [
             {
                 "id": w.id,
@@ -177,7 +194,11 @@ from app.storage.models_platform import DocumentChunk
 
 @router.get("/search")
 @router.get("/search/")
-async def search_documents(q: str = "", limit: int = 20) -> list[dict[str, Any]]:
+async def search_documents(
+    q: str = "",
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     if not q:
         return []
     async with async_session() as db:
@@ -187,6 +208,7 @@ async def search_documents(q: str = "", limit: int = 20) -> list[dict[str, Any]]
                 select(DocumentChunk)
                 .where(DocumentChunk.content.ilike(pattern))
                 .order_by(DocumentChunk.created_at.desc())
+                .offset(offset)
                 .limit(limit)
             )
         ).scalars().all()

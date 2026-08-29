@@ -22,8 +22,19 @@ logger = structlog.get_logger()
 class _DefaultEmbeddingWrapper(EmbeddingFunction):
     """Wrap ChromaDB's default embedding function for stability across versions."""
 
-    def name(self) -> str:
+    def __init__(self) -> None:
+        pass
+
+    @staticmethod
+    def name() -> str:
         return "default"
+
+    @staticmethod
+    def build_from_config(config: dict[str, Any]) -> _DefaultEmbeddingWrapper:
+        return _DefaultEmbeddingWrapper()
+
+    def get_config(self) -> dict[str, Any]:
+        return {}
 
     def __call__(self, input: list[str]) -> list[list[float]]:
         return self.embed(input)

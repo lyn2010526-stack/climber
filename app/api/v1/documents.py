@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, Form, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException, Query
 
 from app.core.auth import get_current_user
 
@@ -97,10 +97,13 @@ async def index_text(text: str = Form(""), name: str = Form("untitled"), request
 
 
 @router.get("/")
-async def list_documents():
+async def list_documents(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
     async with async_session() as session:
         from sqlalchemy import select
-        result = await session.execute(select(Document))
+        result = await session.execute(select(Document).offset(offset).limit(limit))
         docs = result.scalars().all()
         return [{"id": d.id, "name": d.filename, "status": d.status, "chunks": d.chunk_count, "size": d.size_bytes} for d in docs]
 

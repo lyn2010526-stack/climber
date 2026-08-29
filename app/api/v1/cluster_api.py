@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 
 from app.api.v1._shared import _payload
@@ -25,9 +25,19 @@ logger = structlog.get_logger()
 
 @router.get("/cluster")
 @router.get("/cluster/")
-async def list_cluster_nodes() -> list[dict[str, Any]]:
+async def list_cluster_nodes(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
-        rows = (await db.execute(select(Cluster).order_by(Cluster.created_at.desc()))).scalars().all()
+        rows = (
+            await db.execute(
+                select(Cluster)
+                .order_by(Cluster.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+        ).scalars().all()
         return [
             {
                 "id": n.id,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 
 from app.api.v1.helpers import DEFAULT_USER
@@ -23,9 +23,19 @@ _SCHEDULER_MARKET = [
 
 @router.get("/scheduler")
 @router.get("/scheduler/")
-async def list_scheduled() -> list[dict[str, Any]]:
+async def list_scheduled(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
-        rows = (await db.execute(select(Workflow).where(Workflow.schedule is not None))).scalars().all()
+        rows = (
+            await db.execute(
+                select(Workflow)
+                .where(Workflow.schedule is not None)
+                .offset(offset)
+                .limit(limit)
+            )
+        ).scalars().all()
         return [{"id": w.id, "name": w.name, "schedule": w.schedule, "last_status": w.last_status, "run_count": w.run_count} for w in rows]
 
 
@@ -51,9 +61,20 @@ async def create_scheduled(request: Request) -> dict[str, Any]:
 
 @router.get("/scheduler/tasks")
 @router.get("/scheduler/tasks/")
-async def list_scheduler_tasks() -> list[dict[str, Any]]:
+async def list_scheduler_tasks(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
-        rows = (await db.execute(select(Workflow).where(Workflow.schedule is not None).order_by(Workflow.created_at.desc()))).scalars().all()
+        rows = (
+            await db.execute(
+                select(Workflow)
+                .where(Workflow.schedule is not None)
+                .order_by(Workflow.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+        ).scalars().all()
         return [{"id": w.id, "name": w.name, "cron": w.schedule, "description": getattr(w, "description", ""), "enabled": True, "last_run": None, "next_run": None, "run_count": w.run_count or 0} for w in rows]
 
 

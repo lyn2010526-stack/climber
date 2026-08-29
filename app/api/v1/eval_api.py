@@ -11,7 +11,7 @@ import json
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 
 from app.api.v1._shared import DEFAULT_USER, _payload
@@ -52,9 +52,19 @@ def _eval_run_dict(r: EvalRun) -> dict[str, Any]:
 
 @router.get("/eval/datasets")
 @router.get("/eval/datasets/")
-async def list_eval_datasets() -> list[dict[str, Any]]:
+async def list_eval_datasets(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
-        rows = (await db.execute(select(EvalDataset).order_by(EvalDataset.created_at.desc()))).scalars().all()
+        rows = (
+            await db.execute(
+                select(EvalDataset)
+                .order_by(EvalDataset.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+        ).scalars().all()
         return [_eval_dataset_dict(e) for e in rows]
 
 

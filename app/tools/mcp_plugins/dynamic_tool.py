@@ -6,11 +6,46 @@ at runtime, breaking free from fixed tool sets.
 
 from __future__ import annotations
 
+import ast as _ast
 import json
 import os
 import re
 from dataclasses import dataclass
 from typing import Any
+
+_DANGEROUS_IMPORTS = frozenset({
+    "os", "subprocess", "shutil", "socket", "ctypes",
+    "multiprocessing", "threading", "importlib", "pickle",
+    "signal", "pty", "fcntl", "webbrowser",
+})
+_DANGEROUS_CALLS = frozenset({
+    "eval", "exec", "compile", "__import__",
+    "open", "getattr", "setattr", "delattr",
+    "globals", "locals", "breakpoint",
+})
+
+
+def _validate_code_safety(code: str) -> None:
+    """Reject code with dangerous imports, calls, or patterns via AST."""
+    tree = _ast.parse(code, mode="exec")
+    flagged: list[str] = []
+    for node in _ast.walk(tree):
+        if isinstance(node, _ast.Import):
+            for alias in node.names:
+                root = alias.name.split(".")[0]
+                if root in _DANGEROUS_IMPORTS:
+                    flagged.append(f"import {root}")
+        elif isinstance(node, _ast.ImportFrom):
+            if node.module:
+                root = node.module.split(".")[0]
+                if root in _DANGEROUS_IMPORTS:
+                    flagged.append(f"from {root}")
+        elif isinstance(node, _ast.Call):
+            if isinstance(node.func, _ast.Name):
+                if node.func.id in _DANGEROUS_CALLS:
+                    flagged.append(f"call {node.func.id}()")
+    if flagged:
+        raise ValueError(f"Unsafe operations detected: {', '.join(flagged)}")
 
 
 @dataclass
@@ -123,8 +158,11 @@ class DynamicToolGenerator:
             }
             namespace.update({k: v for k, v in arguments.items() if k not in _RESERVED})
 
+            # AST-level safety validation before execution
+            _validate_code_safety(tool.code)
+
             # Execute
-            exec(tool.code, namespace)  # noqa: S102 - sandboxed with restricted builtins
+            exec(tool.code, namespace)  # noqa: S102 - AST-validated above
 
             # Find and call the main function
             main_func = namespace.get("run") or namespace.get(name)
@@ -232,6 +270,10 @@ class DynamicToolGenerator:
             with open(self._storage_path) as f:
                 data = json.load(f)
             for name, t in data.items():
+                try:
+                    _validate_code_safety(t["code"])
+                except ValueError:
+                    continue
                 self._tools[name] = GeneratedTool(
                     name=t["name"],
                     description=t["description"],

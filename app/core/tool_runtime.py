@@ -119,7 +119,13 @@ class ToolRuntime:
             )
 
     async def execute_many(self, calls: list[tuple[str, dict]]) -> list[ToolResult]:
-        return await asyncio.gather(*[self.execute(name, args) for name, args in calls])
+        semaphore = asyncio.Semaphore(10)
+
+        async def _sem(name, args):
+            async with semaphore:
+                return await self.execute(name, args)
+
+        return await asyncio.gather(*[_sem(name, args) for name, args in calls])
 
     def get_openai_tools(self) -> list[dict]:
         return [

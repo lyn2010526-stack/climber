@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 
 from app.core.auth import get_current_user
@@ -24,13 +24,17 @@ logger = structlog.get_logger()
 
 @router.get("/traces")
 @router.get("/traces/")
-async def list_traces(limit: int = 100) -> list[dict[str, Any]]:
+async def list_traces(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
         roots = (
             await db.execute(
                 select(TraceSpanRecord)
                 .where(TraceSpanRecord.parent_id.is_(None))
                 .order_by(TraceSpanRecord.started_at.desc())
+                .offset(offset)
                 .limit(limit)
             )
         ).scalars().all()

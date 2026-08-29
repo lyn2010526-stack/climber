@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 
 from app.api.v1.helpers import payload as _payload
@@ -42,9 +42,19 @@ def _mcp_dict(m: MCPServerRecord) -> dict[str, Any]:
 # Primary routes: /mcp
 @router.get("/mcp")
 @router.get("/mcp/")
-async def list_mcp_servers() -> list[dict[str, Any]]:
+async def list_mcp_servers(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
-        rows = (await db.execute(select(MCPServerRecord).order_by(MCPServerRecord.created_at.desc()))).scalars().all()
+        rows = (
+            await db.execute(
+                select(MCPServerRecord)
+                .order_by(MCPServerRecord.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+        ).scalars().all()
         return [_mcp_dict(m) for m in rows]
 
 

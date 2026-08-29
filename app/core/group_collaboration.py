@@ -15,13 +15,15 @@ from __future__ import annotations
 import asyncio
 import importlib
 import os
+import uuid
 from collections.abc import AsyncIterator, Callable
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.core import AgentEvent, AgentEventType
 from app.core.agent_engine import AgentEngine
@@ -84,10 +86,37 @@ FALLBACK_MODELS: dict[str, tuple[str, str]] = {
 # Maps a string reference to a callable. Populated by the application.
 CALLBACK_REGISTRY: dict[str, Callable[..., Any]] = {}
 
+# Lease TTL and heartbeat cadence for cross-instance crash recovery.
+LEASE_TTL_SECONDS = 60.0
+LEASE_HEARTBEAT_SECONDS = 15.0
+
+
+@dataclass(frozen=True)
+class TaskLease:
+    """Immutable handle for the current execution generation of a task."""
+
+    task_id: str
+    owner: str
+    token: int
+    expires_at: datetime
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+def _db_now() -> datetime:
+    """Return naive UTC matching the database DateTime representation."""
+    return _utcnow().replace(tzinfo=None)
+
 
 def register_callback(name: str, fn: Callable[..., Any]) -> None:
     """Register a named callback for use as step_callback or task_callback."""
     CALLBACK_REGISTRY[name] = fn
+
+
+# Background recovery tasks, kept referenced to avoid GC.
+_BACKGROUND_RECOVERY_TASKS: set[asyncio.Task] = set()
 
 
 class GroupCollaborationEngine:
@@ -100,6 +129,150 @@ class GroupCollaborationEngine:
         self._task_semaphore = asyncio.Semaphore(max_concurrent_tasks)
         self._review_states: dict[str, dict[str, str]] = {}
         self._running_tasks: dict[str, asyncio.Task] = {}
+        self.instance_id: str = f"{uuid.uuid4()}"
+
+    async def _claim_lease(
+        self,
+        task_id: str,
+        *,
+        status: str = "pending",
+        takeover: bool = False,
+    ) -> TaskLease | None:
+        """Atomically claim execution rights for a task.
+
+        Normal claim transitions ``pending -> running``. With ``takeover=True``
+        an expired lease on a ``running`` task may be reclaimed by a new owner
+        with a strictly higher fencing token.
+        """
+        now = _db_now()
+        expires_at = now + timedelta(seconds=LEASE_TTL_SECONDS)
+        stmt = (
+            update(AgentGroupTask)
+            .where(AgentGroupTask.id == task_id)
+            .values(
+                lease_token=AgentGroupTask.lease_token + 1,
+                lease_owner=self.instance_id,
+                lease_expires_at=expires_at,
+            )
+        )
+        if takeover and status == "running":
+            stmt = stmt.where(
+                AgentGroupTask.status.in_(("running", "awaiting_human_review")),
+                AgentGroupTask.lease_expires_at.is_(None)
+                | (AgentGroupTask.lease_expires_at < now),
+            ).values(status="running")
+        else:
+            stmt = stmt.where(AgentGroupTask.status == status)
+            if status == "pending":
+                stmt = stmt.values(status="running", started_at=now)
+        async with async_session() as db:
+            token = (await db.execute(stmt.returning(AgentGroupTask.lease_token))).scalar_one_or_none()
+            if token is None:
+                await db.rollback()
+                return None
+            await db.commit()
+        return TaskLease(
+            task_id=task_id,
+            owner=self.instance_id,
+            token=int(token),
+            expires_at=expires_at,
+        )
+
+    async def _renew_lease(self, task_id: str, token: int) -> bool:
+        """Heartbeat: extend the lease only if this generation still owns it."""
+        async with async_session() as db:
+            renew = await db.execute(
+                update(AgentGroupTask)
+                .where(AgentGroupTask.id == task_id)
+                .where(AgentGroupTask.status.in_(("running", "awaiting_human_review")))
+                .where(AgentGroupTask.lease_owner == self.instance_id)
+                .where(AgentGroupTask.lease_token == token)
+                .where(AgentGroupTask.lease_expires_at >= _db_now())
+                .values(lease_expires_at=_db_now() + timedelta(seconds=LEASE_TTL_SECONDS))
+            )
+            if renew.rowcount != 1:
+                await db.rollback()
+                return False
+            await db.commit()
+        return True
+
+    async def _update_progress(self, task_id: str, token: int, **values: Any) -> bool:
+        """Write progress fields (e.g. current_round) guarded by lease token."""
+        async with async_session() as db:
+            progress = await db.execute(
+                update(AgentGroupTask)
+                .where(AgentGroupTask.id == task_id)
+                .where(AgentGroupTask.status == "running")
+                .where(AgentGroupTask.lease_owner == self.instance_id)
+                .where(AgentGroupTask.lease_token == token)
+                .where(AgentGroupTask.lease_expires_at >= _db_now())
+                .values(**values)
+            )
+            if progress.rowcount != 1:
+                await db.rollback()
+                return False
+            await db.commit()
+        return True
+
+    async def _complete_running_task(self, task_id: str, token: int, *, status: str, **values: Any) -> bool:
+        """Terminal state transition guarded by lease token fencing."""
+        async with async_session() as db:
+            completion = await db.execute(
+                update(AgentGroupTask)
+                .where(AgentGroupTask.id == task_id)
+                .where(AgentGroupTask.status == "running")
+                .where(AgentGroupTask.lease_owner == self.instance_id)
+                .where(AgentGroupTask.lease_token == token)
+                .where(AgentGroupTask.lease_expires_at >= _db_now())
+                .values(status=status, lease_owner=None, lease_expires_at=None, completed_at=_utcnow(), **values)
+            )
+            if completion.rowcount != 1:
+                await db.rollback()
+                return False
+            await db.commit()
+        return True
+
+    async def _task_is_running(self, task_id: str, token: int | None = None) -> bool:
+        async with async_session() as db:
+            stmt = select(AgentGroupTask.id).where(
+                AgentGroupTask.id == task_id,
+                AgentGroupTask.status == "running",
+            )
+            if token is not None:
+                stmt = stmt.where(
+                    AgentGroupTask.lease_owner == self.instance_id,
+                    AgentGroupTask.lease_token == token,
+                    AgentGroupTask.lease_expires_at >= _db_now(),
+                )
+            return (await db.execute(stmt)).scalar_one_or_none() is not None
+
+    async def _fail_running_task(self, task_id: str, token: int | None = None) -> bool:
+        async with async_session() as db:
+            stmt = (
+                update(AgentGroupTask)
+                .where(AgentGroupTask.id == task_id)
+                .where(AgentGroupTask.status == "running")
+                .values(status="failed", lease_owner=None, lease_expires_at=None, completed_at=datetime.now(UTC))
+            )
+            if token is not None:
+                stmt = stmt.where(
+                    AgentGroupTask.lease_owner == self.instance_id,
+                    AgentGroupTask.lease_token == token,
+                    AgentGroupTask.lease_expires_at >= _db_now(),
+                )
+            failure = await db.execute(stmt)
+            if failure.rowcount != 1:
+                await db.rollback()
+                return False
+            await db.commit()
+        return True
+
+    async def _claim_or_takeover(self, task_id: str) -> TaskLease | None:
+        """Claim a pending task, or take over a running task whose lease expired."""
+        lease = await self._claim_lease(task_id)
+        if lease is None:
+            lease = await self._claim_lease(task_id, status="running", takeover=True)
+        return lease
 
     async def run_task(self, task_id: str) -> None:
         """Execute a group task using the group's configured process type."""
@@ -110,6 +283,13 @@ class GroupCollaborationEngine:
 
         # Register the running task for cancellation support
         current_task = asyncio.current_task()
+        running_task = self._running_tasks.get(task_id)
+        if running_task is not None and not running_task.done():
+            logger.info("task_already_running", task_id=task_id)
+            return
+        if current_task is None:
+            logger.error("task_missing_asyncio_context", task_id=task_id)
+            return
         self._running_tasks[task_id] = current_task
         try:
             try:
@@ -122,7 +302,44 @@ class GroupCollaborationEngine:
                     if task is None:
                         logger.error("task_not_found", task_id=task_id)
                         return
-                    db_task = task
+
+                    claim_now = _db_now()
+                    claim = await db.execute(
+                        update(AgentGroupTask)
+                        .where(AgentGroupTask.id == task_id)
+                        .where(
+                            (AgentGroupTask.status == "pending")
+                            | (
+                                AgentGroupTask.status.in_(("running", "awaiting_human_review"))
+                                & (
+                                    AgentGroupTask.lease_expires_at.is_(None)
+                                    | (AgentGroupTask.lease_expires_at < claim_now)
+                                )
+                            )
+                        )
+                        .values(
+                            status="running",
+                            started_at=claim_now,
+                            lease_token=AgentGroupTask.lease_token + 1,
+                            lease_owner=self.instance_id,
+                            lease_expires_at=claim_now + timedelta(seconds=LEASE_TTL_SECONDS),
+                        )
+                        .returning(AgentGroupTask.lease_token)
+                    )
+                    claimed_token = claim.scalar_one_or_none()
+                    if claimed_token is None:
+                        current_status = task.status
+                        await db.rollback()
+                        logger.info("task_not_claimed", task_id=task_id, status=current_status)
+                        return
+                    await db.commit()
+                    await db.refresh(task)
+                    lease = TaskLease(
+                        task_id=task_id,
+                        owner=self.instance_id,
+                        token=int(claimed_token),
+                        expires_at=claim_now + timedelta(seconds=LEASE_TTL_SECONDS),
+                    )
 
                     group = (
                         await db.execute(
@@ -131,6 +348,19 @@ class GroupCollaborationEngine:
                     ).scalar_one_or_none()
                     if group is None:
                         logger.error("group_not_found", group_id=task.group_id)
+                        await db.execute(
+                            update(AgentGroupTask)
+                            .where(AgentGroupTask.id == task_id)
+                            .where(AgentGroupTask.status == "running")
+                            .where(AgentGroupTask.lease_token == lease.token)
+                            .values(
+                                status="failed",
+                                lease_owner=None,
+                                lease_expires_at=None,
+                                completed_at=_db_now(),
+                            )
+                        )
+                        await db.commit()
                         return
                     db_group = group
 
@@ -150,7 +380,18 @@ class GroupCollaborationEngine:
                         ).scalars().first()
                     if worker is None:
                         logger.error("worker_not_found", task_id=task_id, worker_id=task.worker_id)
-                        task.status = "failed"
+                        await db.execute(
+                            update(AgentGroupTask)
+                            .where(AgentGroupTask.id == task_id)
+                            .where(AgentGroupTask.status == "running")
+                            .where(AgentGroupTask.lease_token == lease.token)
+                            .values(
+                                status="failed",
+                                lease_owner=None,
+                                lease_expires_at=None,
+                                completed_at=_db_now(),
+                            )
+                        )
                         await db.commit()
                         return
                     db_worker = worker
@@ -164,9 +405,7 @@ class GroupCollaborationEngine:
                     ).scalars().all()
                     db_reviewers = list(reviewers)
 
-                    task.started_at = datetime.now(UTC)
-                    task.status = "running"
-                    await db.commit()
+                    db_task = task
 
             except Exception as e:
                 logger.error("db_error_loading_task", task_id=task_id, error=str(e))
@@ -184,50 +423,101 @@ class GroupCollaborationEngine:
             checkpoint = await self._load_latest_checkpoint(task_id)
             if checkpoint and checkpoint.status in ("running", "paused"):
                 logger.info("resuming_from_checkpoint", task_id=task_id, checkpoint_id=checkpoint.id)
-                await self._resume_from_checkpoint(task, checkpoint)
-                return
+                resumed_task = await self._resume_from_checkpoint(task, checkpoint, token=lease.token)
+                if resumed_task is None:
+                    return
+                task = resumed_task
 
             # Dispatch based on process type
             process_type = group.process_type or "sequential"
+            heartbeat = asyncio.create_task(self._heartbeat_loop(lease))
             try:
-                if process_type == "sequential":
-                    await self._run_sequential_process(task, worker, reviewers, group)
-                elif process_type == "hierarchical":
-                    await self._run_hierarchical_process(task, group)
-                elif process_type == "group_chat":
-                    await self._run_group_chat_process(task, group)
-                else:
-                    logger.error("unknown_process_type", process_type=process_type, task_id=task_id)
-                    task.status = "failed"
-                    async with async_session() as db:
-                        await db.commit()
+                async with self._task_semaphore:
+                    if process_type == "sequential":
+                        await self._run_sequential_process(task, worker, reviewers, group, lease=lease)
+                    elif process_type == "hierarchical":
+                        await self._run_hierarchical_process(task, group, lease=lease)
+                    elif process_type == "group_chat":
+                        await self._run_group_chat_process(task, group, lease=lease)
+                    else:
+                        logger.error("unknown_process_type", process_type=process_type, task_id=task_id)
+                        await self._complete_running_task(task_id, lease.token, status="failed")
             except asyncio.CancelledError:
                 logger.info("task_cancelled", task_id=task_id)
                 try:
-                    async with async_session() as db:
-                        t = await db.get(AgentGroupTask, task_id)
-                        if t:
-                            t.status = "stopped"
-                            await db.commit()
+                    await self._complete_running_task(task_id, lease.token, status="stopped")
                 except Exception:
                     logger.debug("core.group_collaboration.suppressed", exc_info=True)
                 raise
             except Exception as e:
                 logger.exception("group_task_failed", task_id=task_id)
                 try:
-                    async with async_session() as db:
-                        t = await db.get(AgentGroupTask, task_id)
-                        if t:
-                            t.status = "failed"
-                            await db.commit()
+                    if not await self._complete_running_task(task_id, lease.token, status="failed"):
+                        return
                 except Exception:
                     logger.debug("core.group_collaboration.suppressed", exc_info=True)
                 await group_ws_hub.broadcast(task.group_id, {
                     "type": "task_failed",
                     "data": {"task_id": task_id, "error": str(e)},
                 })
+            finally:
+                heartbeat.cancel()
+                try:
+                    await heartbeat
+                except asyncio.CancelledError:
+                    pass
         finally:
-            self._running_tasks.pop(task_id, None)
+            if self._running_tasks.get(task_id) is current_task:
+                self._running_tasks.pop(task_id, None)
+
+    async def _heartbeat_loop(self, lease: TaskLease) -> None:
+        """Renew the execution lease until cancelled or ownership is lost."""
+        while True:
+            await asyncio.sleep(LEASE_HEARTBEAT_SECONDS)
+            if not await self._renew_lease(lease.task_id, lease.token):
+                logger.warning("task_lease_lost", task_id=lease.task_id, token=lease.token)
+                self.cancel_task(lease.task_id)
+                return
+
+    async def recover_stale_running_tasks(self) -> int:
+        """Re-claim running tasks whose lease expired (e.g. after a crash).
+
+        Only tasks with an expired (or absent) lease are taken over; active
+        leases held by live instances are left alone. Paused tasks stay paused
+        but get their stale ownership cleared.
+        """
+        now = _db_now()
+        recovered = 0
+        async with async_session() as db:
+            stale_running = (
+                await db.execute(
+                    select(AgentGroupTask.id).where(
+                        AgentGroupTask.status.in_(("running", "awaiting_human_review")),
+                        AgentGroupTask.lease_expires_at.is_(None)
+                        | (AgentGroupTask.lease_expires_at < now),
+                    )
+                )
+            ).scalars().all()
+            stale_paused = (
+                await db.execute(
+                    select(AgentGroupTask).where(
+                        AgentGroupTask.status == "paused",
+                        AgentGroupTask.lease_expires_at.is_(None)
+                        | (AgentGroupTask.lease_expires_at < now),
+                    )
+                )
+            ).scalars().all()
+            for paused_task in stale_paused:
+                paused_task.lease_owner = None
+                paused_task.lease_expires_at = None
+            await db.commit()
+        for task_id in stale_running:
+            logger.info("recovering_stale_task", task_id=task_id)
+            _task = asyncio.create_task(self.run_task(task_id))
+            _BACKGROUND_RECOVERY_TASKS.add(_task)
+            _task.add_done_callback(_BACKGROUND_RECOVERY_TASKS.discard)
+            recovered += 1
+        return recovered
 
     async def run_group_tasks(self, group_id: str) -> dict[str, Any]:
         """Execute all pending tasks in a group using DAG-based dependency resolution.
@@ -299,28 +589,59 @@ class GroupCollaborationEngine:
                     "data": {"task_id": task_id, "level": len(results["levels"]) + 1},
                 })
 
+                lease = None
                 try:
-                    await self._run_single_task_in_dag(task, group, context_data)
-                    completed_tasks.add(task_id)
-                    level_results.append({"task_id": task_id, "status": "completed"})
+                    lease = await self._claim_or_takeover(task.id)
+                    if lease is None:
+                        level_results.append({"task_id": task_id, "status": "skipped"})
+                        continue
+                    dag_runner = asyncio.current_task()
+                    if dag_runner is not None:
+                        self._running_tasks[task_id] = dag_runner
+                    heartbeat = asyncio.create_task(self._heartbeat_loop(lease))
+                    try:
+                        completed = await self._run_single_task_in_dag(task, group, context_data, lease=lease)
+                    finally:
+                        heartbeat.cancel()
+                        try:
+                            await heartbeat
+                        except asyncio.CancelledError:
+                            pass
+                        if self._running_tasks.get(task_id) is dag_runner:
+                            self._running_tasks.pop(task_id, None)
+                    if completed:
+                        completed_tasks.add(task_id)
+                        level_results.append({"task_id": task_id, "status": "completed"})
+                    else:
+                        level_results.append({"task_id": task_id, "status": "skipped"})
                 except Exception as e:
                     logger.error("dag_task_failed", task_id=task_id, error=str(e))
+                    if lease is not None:
+                        await self._fail_running_task(task_id, lease.token)
                     level_results.append({"task_id": task_id, "status": "failed", "error": str(e)})
 
             results["levels"].append(level_results)
 
         return results
 
-    async def _run_single_task_in_dag(self, task: AgentGroupTask, group: AgentGroup, context_data: dict[str, str]) -> None:
+    async def _run_single_task_in_dag(
+        self,
+        task: AgentGroupTask,
+        group: AgentGroup,
+        context_data: dict[str, str],
+        lease: TaskLease | None = None,
+    ) -> bool:
         """Execute a single task within a DAG context."""
+        if lease is None:
+            lease = await self._claim_or_takeover(task.id)
+            if lease is None:
+                logger.info("dag_task_not_claimed", task_id=task.id)
+                return False
         async with async_session() as db:
-            t = await db.get(AgentGroupTask, task.id)
-            if not t:
-                return
-            t.status = "running"
-            t.started_at = datetime.now(UTC)
-            await db.commit()
-            task = t
+            claimed_task = await db.get(AgentGroupTask, task.id)
+            if claimed_task is None or claimed_task.status != "running":
+                return False
+            task = claimed_task
 
         # Select worker
         worker = None
@@ -391,20 +712,22 @@ class GroupCollaborationEngine:
             final_output = review_output if passed else worker_output
 
         # Persist result
-        async with async_session() as db:
-            t = await db.get(AgentGroupTask, task.id)
-            if t:
-                t.status = "completed"
-                t.final_output = final_output
-                t.total_tokens = (t.total_tokens or 0) + worker_tokens
-                t.completed_at = datetime.now(UTC)
-                await db.commit()
+        if not await self._complete_running_task(
+            task.id,
+            lease.token,
+            status="completed",
+            final_output=final_output,
+            total_tokens=AgentGroupTask.total_tokens + worker_tokens,
+        ):
+            logger.info("task_completion_skipped", task_id=task.id)
+            return False
 
         await self._store_memory(task.group_id, task.id, worker.agent_id, final_output, "task_result")
         await group_ws_hub.broadcast(task.group_id, {
             "type": "task_completed",
             "data": {"task_id": task.id, "output": final_output},
         })
+        return True
 
     async def handoff_task(self, task_id: str, target_agent_id: str, reason: str = "") -> dict[str, Any]:
         """Hand off a task from one agent to another.
@@ -447,8 +770,20 @@ class GroupCollaborationEngine:
 
             return {"ok": True, "task_id": task_id, "handoff_to": target.id}
 
-    async def _run_sequential_process(self, task: AgentGroupTask, worker: AgentGroupMember, reviewers: list[AgentGroupMember], group: AgentGroup) -> None:
+    async def _run_sequential_process(
+        self,
+        task: AgentGroupTask,
+        worker: AgentGroupMember,
+        reviewers: list[AgentGroupMember],
+        group: AgentGroup,
+        lease: TaskLease | None = None,
+    ) -> None:
         """Sequential execution: each task gets context from previous tasks in the chain."""
+        effective_lease = lease or await self._claim_or_takeover(task.id)
+        if effective_lease is None:
+            logger.info("sequential_task_not_claimed", task_id=task.id)
+            return
+        lease = effective_lease
         # Build context from dependent tasks
         context_data = await self._build_context_from_dependencies(task)
 
@@ -457,8 +792,8 @@ class GroupCollaborationEngine:
         full_context = self._merge_context(context_data, memory_context)
 
         max_rounds = task.max_rounds or 5
-        current_round = 0
-        worker_output = ""
+        current_round = task.current_round or 0
+        worker_output = task.final_output or ""
         all_issues: list[dict[str, Any]] = []
 
         async def _wait_while_paused(t: AgentGroupTask) -> bool:
@@ -470,12 +805,14 @@ class GroupCollaborationEngine:
                 await asyncio.sleep(1)
                 async with async_session() as db:
                     t = await db.get(AgentGroupTask, task.id)
-                    if t is None or t.status in ("stopped", "failed", "completed"):
+                    if t is None or t.status in ("stopped", "cancelled", "failed", "completed", "partial"):
                         return False
             return True
 
         async def _checkpoint_and_broadcast(t: AgentGroupTask, round_num: int, output: str, issues: list[dict[str, Any]]) -> None:
-            await self._save_checkpoint(task.id, task.group_id, round_num, max_rounds, output, issues)
+            saved = await self._save_checkpoint(task.id, task.group_id, round_num, max_rounds, output, issues, token=lease.token)
+            if not saved:
+                return
             await group_ws_hub.broadcast(task.group_id, {
                 "type": "task_checkpoint",
                 "data": {"task_id": task.id, "round": round_num},
@@ -488,7 +825,7 @@ class GroupCollaborationEngine:
                     if t is None:
                         logger.error("task_disappeared", task_id=task.id)
                         return
-                    if t.status == "stopped":
+                    if t.status in ("stopped", "cancelled", "failed", "completed", "partial"):
                         return
                     if t.status == "paused":
                         if not await _wait_while_paused(t):
@@ -497,13 +834,14 @@ class GroupCollaborationEngine:
 
                 current_round += 1
 
+                if not await self._update_progress(task.id, lease.token, current_round=current_round):
+                    logger.info("task_progress_skipped", task_id=task.id)
+                    return
                 async with async_session() as db:
-                    t = await db.get(AgentGroupTask, task.id)
-                    if t:
-                        t.current_round = current_round
-                        t.status = "running"
-                        await db.commit()
-                        task = t
+                    current_task = await db.get(AgentGroupTask, task.id)
+                    if current_task is None:
+                        return
+                    task = current_task
 
                 await group_ws_hub.broadcast(task.group_id, {
                     "type": "progress_update",
@@ -545,10 +883,17 @@ class GroupCollaborationEngine:
                         raise Exception("worker returned empty output after retry")
                 except Exception as e:
                     logger.error("worker_failed", task_id=task.id, round=current_round, error=str(e))
+                    if not await self._complete_running_task(task.id, lease.token, status="failed"):
+                        logger.info("task_failure_skipped", task_id=task.id)
+                        return
                     await group_ws_hub.broadcast(task.group_id, {
                         "type": "task_failed",
                         "data": {"task_id": task.id, "error": f"Worker failed after retry: {e}"},
                     })
+                    return
+
+                if not await self._task_is_running(task.id, lease.token):
+                    logger.info("task_post_worker_skipped", task_id=task.id)
                     return
 
                 await group_ws_hub.broadcast(task.group_id, {
@@ -576,7 +921,7 @@ class GroupCollaborationEngine:
 
                 # Human-in-the-loop review
                 if task.human_review_required:
-                    approved = await self._wait_for_human_review(task, worker_output)
+                    approved = await self._wait_for_human_review(task, worker_output, lease.token)
                     if not approved:
                         all_issues = [{"description": "Human review rejected or timed out", "severity": "high"}]
                         await group_ws_hub.broadcast(task.group_id, {
@@ -584,6 +929,8 @@ class GroupCollaborationEngine:
                             "data": {"round": current_round},
                         })
                         continue
+                    if not await self._task_is_running(task.id, lease.token):
+                        return
 
                 # Reviewer turn
                 all_issues = []
@@ -651,21 +998,27 @@ class GroupCollaborationEngine:
                             })
                             continue
 
+                    completion_values: dict[str, Any] = {
+                        "final_output": worker_output,
+                    }
+                    if task.output_schema:
+                        completion_values["structured_output"] = parsed if 'parsed' in dir() else {}
+                    await _checkpoint_and_broadcast(task, current_round, worker_output, [])
+                    if not await self._complete_running_task(
+                        task.id,
+                        lease.token,
+                        status="completed",
+                        **completion_values,
+                    ):
+                        logger.info("task_completion_skipped", task_id=task.id)
+                        return
                     async with async_session() as db:
-                        t = await db.get(AgentGroupTask, task.id)
-                        if t:
-                            t.status = "completed"
-                            t.final_output = worker_output
-                            if task.output_schema:
-                                t.structured_output = parsed if 'parsed' in dir() else {}
-                            t.completed_at = datetime.now(UTC)
-                            await db.commit()
-                            task = t
+                        task = await db.get(AgentGroupTask, task.id)
+                        if task is None:
+                            return
 
                     await self._store_memory(task.group_id, task.id, worker.agent_id, worker_output, "task_result")
                     await self._invoke_task_callback(task, worker_output)
-                    await _checkpoint_and_broadcast(task, current_round, worker_output, [])
-
                     await group_ws_hub.broadcast(task.group_id, {
                         "type": "task_completed",
                         "data": {"task_id": task.id, "final_output": worker_output, "rounds": current_round},
@@ -675,13 +1028,14 @@ class GroupCollaborationEngine:
                 # Continue to next round for revision
                 await _checkpoint_and_broadcast(task, current_round, worker_output, all_issues)
 
-            async with async_session() as db:
-                t = await db.get(AgentGroupTask, task.id)
-                if t:
-                    t.status = "partial"
-                    t.final_output = worker_output
-                    t.completed_at = datetime.now(UTC)
-                    await db.commit()
+            if not await self._complete_running_task(
+                task.id,
+                lease.token,
+                status="partial",
+                final_output=worker_output,
+            ):
+                logger.info("task_partial_skipped", task_id=task.id)
+                return
             await group_ws_hub.broadcast(task.group_id, {
                 "type": "task_partial",
                 "data": {"task_id": task.id, "final_output": worker_output, "rounds": current_round},
@@ -690,11 +1044,8 @@ class GroupCollaborationEngine:
         except Exception as e:
             logger.exception("group_task_failed", task_id=task.id)
             try:
-                async with async_session() as db:
-                    t = await db.get(AgentGroupTask, task.id)
-                    if t:
-                        t.status = "failed"
-                        await db.commit()
+                if not await self._complete_running_task(task.id, lease.token, status="failed"):
+                    return
             except Exception:
                 logger.debug("core.group_collaboration.suppressed", exc_info=True)
             await group_ws_hub.broadcast(task.group_id, {
@@ -702,8 +1053,13 @@ class GroupCollaborationEngine:
                 "data": {"task_id": task.id, "error": str(e)},
             })
 
-    async def _run_hierarchical_process(self, task: AgentGroupTask, group: AgentGroup) -> None:
+    async def _run_hierarchical_process(self, task: AgentGroupTask, group: AgentGroup, lease: TaskLease | None = None) -> None:
         """Hierarchical execution: manager agent delegates and validates."""
+        effective_lease = lease or await self._claim_or_takeover(task.id)
+        if effective_lease is None:
+            logger.info("hierarchical_task_not_claimed", task_id=task.id)
+            return
+        lease = effective_lease
         # Find manager member
         manager_member = None
         if group.manager_agent_id:
@@ -733,6 +1089,7 @@ class GroupCollaborationEngine:
 
         if not manager_member:
             logger.error("no_manager_found", group_id=group.id)
+            await self._fail_running_task(task.id, lease.token)
             return
 
         workers = [
@@ -741,6 +1098,7 @@ class GroupCollaborationEngine:
         ]
         if not workers:
             logger.error("no_workers_found", group_id=group.id)
+            await self._fail_running_task(task.id, lease.token)
             return
 
         await group_ws_hub.broadcast(task.group_id, {
@@ -766,10 +1124,14 @@ class GroupCollaborationEngine:
                 )
         except Exception as e:
             logger.error("manager_failed", task_id=task.id, error=str(e))
-            await group_ws_hub.broadcast(task.group_id, {
-                "type": "task_failed",
-                "data": {"task_id": task.id, "error": f"Manager planning failed: {e}"},
-            })
+            if await self._fail_running_task(task.id, lease.token):
+                await group_ws_hub.broadcast(task.group_id, {
+                    "type": "task_failed",
+                    "data": {"task_id": task.id, "error": f"Manager planning failed: {e}"},
+                })
+            return
+
+        if not await self._task_is_running(task.id, lease.token):
             return
 
         await group_ws_hub.broadcast(task.group_id, {
@@ -780,6 +1142,8 @@ class GroupCollaborationEngine:
         # Delegate subtasks to workers (simple round-robin for now)
         subtask_outputs: dict[str, str] = {}
         for i, worker in enumerate(workers):
+            if not await self._task_is_running(task.id, lease.token):
+                return
             subtask_desc = f"{task.description}\n\nContext from manager: {manager_plan}\n"
             if i > 0 and subtask_outputs:
                 previous = list(subtask_outputs.values())[-1]
@@ -801,6 +1165,8 @@ class GroupCollaborationEngine:
                 group_id=task.group_id,
                 role="worker",
             )
+            if not await self._task_is_running(task.id, lease.token):
+                return
             subtask_outputs[worker.id] = worker_output
 
             await self._invoke_step_callback(task, "worker", worker.agent_id, worker_output)
@@ -830,6 +1196,9 @@ class GroupCollaborationEngine:
             logger.error("manager_validation_failed", task_id=task.id, error=str(e))
             manager_validation = f"Validation error: {e}"
 
+        if not await self._task_is_running(task.id, lease.token):
+            return
+
         await group_ws_hub.broadcast(task.group_id, {
             "type": "hierarchical_validate",
             "data": {"content": manager_validation, "tokens_used": manager_validation_tokens},
@@ -842,12 +1211,24 @@ class GroupCollaborationEngine:
         final_output = manager_validation if passed else "\n\n".join(subtask_outputs.values())
 
         async with async_session() as db:
-            t = await db.get(AgentGroupTask, task.id)
-            if t:
-                t.status = "completed" if passed else "partial"
-                t.final_output = final_output
-                t.completed_at = datetime.now(UTC)
-                await db.commit()
+            completion = await db.execute(
+                update(AgentGroupTask)
+                .where(AgentGroupTask.id == task.id)
+                .where(AgentGroupTask.status == "running")
+                .where(AgentGroupTask.lease_token == lease.token)
+                .values(
+                    status="completed" if passed else "partial",
+                    final_output=final_output,
+                    lease_owner=None,
+                    lease_expires_at=None,
+                    completed_at=datetime.now(UTC),
+                )
+            )
+            if completion.rowcount != 1:
+                await db.rollback()
+                logger.info("task_completion_skipped", task_id=task.id)
+                return
+            await db.commit()
 
         await self._store_memory(task.group_id, task.id, manager_member.agent_id, final_output, "task_result")
         await self._invoke_task_callback(task, final_output)
@@ -857,8 +1238,13 @@ class GroupCollaborationEngine:
             "data": {"task_id": task.id, "final_output": final_output, "manager_validation": manager_validation},
         })
 
-    async def _run_group_chat_process(self, task: AgentGroupTask, group: AgentGroup) -> None:
+    async def _run_group_chat_process(self, task: AgentGroupTask, group: AgentGroup, lease: TaskLease | None = None) -> None:
         """Group chat process: agents discuss in rounds until consensus."""
+        effective_lease = lease or await self._claim_or_takeover(task.id)
+        if effective_lease is None:
+            logger.info("group_chat_task_not_claimed", task_id=task.id)
+            return
+        lease = effective_lease
         participants = [m for m in group.members if m.role in ("worker", "participant", "reviewer")]
         if not participants:
             participants = group.members[:]
@@ -870,13 +1256,13 @@ class GroupCollaborationEngine:
         for round_num in range(1, max_rounds + 1):
             async with async_session() as db:
                 t = await db.get(AgentGroupTask, task.id)
-                if t and t.status == "stopped":
+                if t is None or t.status in ("stopped", "cancelled", "failed", "completed", "partial"):
                     return
                 if t and t.status == "paused":
                     while t.status == "paused":
                         await asyncio.sleep(1)
                         t = await db.get(AgentGroupTask, task.id)
-                        if not t or t.status in ("stopped", "failed"):
+                        if not t or t.status in ("stopped", "cancelled", "failed", "completed", "partial"):
                             return
 
             await group_ws_hub.broadcast(task.group_id, {
@@ -885,6 +1271,8 @@ class GroupCollaborationEngine:
             })
 
             for participant in participants:
+                if not await self._task_is_running(task.id, lease.token):
+                    return
                 await group_ws_hub.broadcast(task.group_id, {
                     "type": "group_chat_turn",
                     "data": {"member_id": participant.id, "member_name": participant.agent_id, "round": round_num},
@@ -910,6 +1298,9 @@ class GroupCollaborationEngine:
                 except Exception as e:
                     logger.error("group_chat_agent_failed", agent_id=participant.agent_id, error=str(e))
                     output = f"[Error: {e}]"
+
+                if not await self._task_is_running(task.id, lease.token):
+                    return
 
                 conversation.append({
                     "round": round_num,
@@ -946,13 +1337,14 @@ class GroupCollaborationEngine:
 
         # Summarize
         final_output = self._summarize_group_chat(task.description, conversation)
-        async with async_session() as db:
-            t = await db.get(AgentGroupTask, task.id)
-            if t:
-                t.status = "completed" if consensus_reached else "partial"
-                t.final_output = final_output
-                t.completed_at = datetime.now(UTC)
-                await db.commit()
+        if not await self._complete_running_task(
+            task.id,
+            lease.token,
+            status="completed" if consensus_reached else "partial",
+            final_output=final_output,
+        ):
+            logger.info("task_completion_skipped", task_id=task.id)
+            return
 
         await self._store_memory(task.group_id, task.id, "group_chat", final_output, "task_result")
         await self._invoke_task_callback(task, final_output)
@@ -1130,10 +1522,33 @@ Respond with:
             return False, {"errors": errors[:10], "raw": output[:500]}
         return True, parsed
 
-    async def _save_checkpoint(self, task_id: str, group_id: str, current_round: int, max_rounds: int, current_artifact: str, all_issues: list[dict[str, Any]]) -> None:
-        """Save execution checkpoint for resume capability."""
+    async def _save_checkpoint(self, task_id: str, group_id: str, current_round: int, max_rounds: int, current_artifact: str, all_issues: list[dict[str, Any]], token: int | None = None) -> bool:
+        """Save execution checkpoint for resume capability, fenced by lease token."""
         async with async_session() as db:
-            task = await db.get(AgentGroupTask, task_id)
+            if token is not None:
+                guard = await db.execute(
+                    update(AgentGroupTask)
+                    .where(AgentGroupTask.id == task_id)
+                    .where(AgentGroupTask.status == "running")
+                    .where(AgentGroupTask.lease_owner == self.instance_id)
+                    .where(AgentGroupTask.lease_token == token)
+                    .where(AgentGroupTask.lease_expires_at >= _db_now())
+                    .values(lease_token=AgentGroupTask.lease_token)
+                )
+                if guard.rowcount != 1:
+                    await db.rollback()
+                    logger.info("checkpoint_save_skipped", task_id=task_id)
+                    return False
+            stmt = select(AgentGroupTask.description, AgentGroupTask.output_schema).where(
+                AgentGroupTask.id == task_id,
+                AgentGroupTask.status == "running",
+            )
+            if token is not None:
+                stmt = stmt.where(AgentGroupTask.lease_token == token)
+            row = (await db.execute(stmt)).one_or_none()
+            if row is None:
+                logger.info("checkpoint_save_skipped", task_id=task_id)
+                return False
             checkpoint = AgentGroupTaskCheckpoint(
                 group_id=group_id,
                 task_id=task_id,
@@ -1142,11 +1557,12 @@ Respond with:
                 max_rounds=max_rounds,
                 current_artifact=current_artifact,
                 all_issues=all_issues,
-                task_description=task.description if task else "",
-                output_schema=task.output_schema if task else {},
+                task_description=row.description,
+                output_schema=row.output_schema,
             )
             db.add(checkpoint)
             await db.commit()
+        return True
 
     async def _load_latest_checkpoint(self, task_id: str) -> AgentGroupTaskCheckpoint | None:
         """Load the latest checkpoint for a task."""
@@ -1159,15 +1575,35 @@ Respond with:
                 )
             ).scalar_one_or_none()
 
-    async def _resume_from_checkpoint(self, task: AgentGroupTask, checkpoint: AgentGroupTaskCheckpoint) -> None:
+    async def _resume_from_checkpoint(
+        self,
+        task: AgentGroupTask,
+        checkpoint: AgentGroupTaskCheckpoint,
+        token: int | None = None,
+    ) -> AgentGroupTask | None:
         """Resume task execution from a checkpoint."""
+        restored_task = None
         async with async_session() as db:
-            t = await db.get(AgentGroupTask, task.id)
-            if t:
-                t.status = "running"
-                t.final_output = checkpoint.current_artifact
-                t.current_round = checkpoint.current_round
-                await db.commit()
+            stmt = (
+                update(AgentGroupTask)
+                .where(AgentGroupTask.id == task.id)
+                .where(AgentGroupTask.status.in_(("running", "paused")))
+                .values(
+                    status="running",
+                    final_output=checkpoint.current_artifact,
+                    current_round=checkpoint.current_round,
+                )
+            )
+            if token is not None:
+                stmt = stmt.where(AgentGroupTask.lease_token == token)
+            restore = await db.execute(stmt)
+            if restore.rowcount != 1:
+                await db.rollback()
+                return None
+            await db.commit()
+            restored_task = await db.get(AgentGroupTask, task.id)
+        if restored_task is None:
+            return None
         await group_ws_hub.broadcast(task.group_id, {
             "type": "checkpoint_restored",
             "data": {"task_id": task.id, "checkpoint_id": checkpoint.id, "round": checkpoint.current_round},
@@ -1176,6 +1612,7 @@ Respond with:
             "type": "task_partial",
             "data": {"task_id": task.id, "final_output": checkpoint.current_artifact, "rounds": checkpoint.current_round},
         })
+        return restored_task
 
     # ─── Task Cancellation ────────────────────────────────────────────────
 
@@ -1185,6 +1622,18 @@ Respond with:
         if task is None:
             return False
         task.cancel()
+        return True
+
+    async def cancel_and_wait(self, task_id: str) -> bool:
+        """Cancel a local executor and wait until it releases its task slot."""
+        task = self._running_tasks.get(task_id)
+        if task is None:
+            return False
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
         return True
 
     # ─── Review State Machine ────────────────────────────────────────────
@@ -1245,16 +1694,23 @@ Respond with:
         except Exception as e:
             logger.error("task_callback_failed", task_id=task.id, error=str(e))
 
-    async def _wait_for_human_review(self, task: AgentGroupTask, output: str) -> bool:
+    async def _wait_for_human_review(self, task: AgentGroupTask, output: str, token: int) -> bool:
         """Wait for human review if required. Returns True if approved, False otherwise."""
         if not task.human_review_required:
             return True
 
         async with async_session() as db:
-            t = await db.get(AgentGroupTask, task.id)
-            if t:
-                t.status = "awaiting_human_review"
-                await db.commit()
+            transition = await db.execute(
+                update(AgentGroupTask)
+                .where(AgentGroupTask.id == task.id)
+                .where(AgentGroupTask.status == "running")
+                .where(AgentGroupTask.lease_token == token)
+                .values(status="awaiting_human_review", human_review_status="pending")
+            )
+            if transition.rowcount != 1:
+                await db.rollback()
+                return False
+            await db.commit()
 
         await group_ws_hub.broadcast(task.group_id, {
             "type": "human_review_needed",
@@ -1274,8 +1730,22 @@ Respond with:
                     return True
                 if t.human_review_status == "rejected":
                     return False
-                if t.status in ("stopped", "failed"):
+                if t.status in ("stopped", "cancelled", "failed"):
                     return False
+
+        async with async_session() as db:
+            timeout_transition = await db.execute(
+                update(AgentGroupTask)
+                .where(AgentGroupTask.id == task.id)
+                .where(AgentGroupTask.status == "awaiting_human_review")
+                .where(AgentGroupTask.lease_token == token)
+                .values(status="running")
+            )
+            if timeout_transition.rowcount != 1:
+                await db.rollback()
+                return False
+            await db.commit()
+        return False
 
         logger.warning("human_review_timeout", task_id=task.id, waited_seconds=waited)
         return False
@@ -1567,4 +2037,3 @@ def _get_engine_synchronously() -> GroupCollaborationEngine:
 
 # Initialize at module import time
 group_collaboration_engine = _get_engine_synchronously()
-

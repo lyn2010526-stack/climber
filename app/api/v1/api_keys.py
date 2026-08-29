@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -31,10 +31,17 @@ class ApiKeyOut(BaseModel):
 
 @router.get("", response_model=list[ApiKeyOut])
 @router.get("/", response_model=list[ApiKeyOut])
-async def list_api_keys() -> list[ApiKeyOut]:
+async def list_api_keys(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[ApiKeyOut]:
     async with async_session() as session:
         result = await session.execute(
-            select(ApiKeyModel).where(ApiKeyModel.user_id == "default-user").order_by(ApiKeyModel.created_at.desc())
+            select(ApiKeyModel)
+            .where(ApiKeyModel.user_id == "default-user")
+            .order_by(ApiKeyModel.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
         rows = result.scalars().all()
         return [

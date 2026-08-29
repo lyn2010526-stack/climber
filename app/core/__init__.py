@@ -46,6 +46,7 @@ class AgentEventType(StrEnum):
     SUB_AGENT_END = "sub_agent_end"
     PROGRESS = "progress"
     PIPELINE_COMPLETE = "pipeline_complete"
+    STOPPED = "stopped"
 
 
 class FallbackStrategy(StrEnum):

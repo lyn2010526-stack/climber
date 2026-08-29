@@ -18,7 +18,9 @@ import re
 import shlex
 import shutil
 import subprocess
+import urllib.parse
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -103,7 +105,10 @@ async def native_run(command: str, timeout: int = 120, cwd: str | None = None) -
         return f"Error: {e!s}"
 
 
-@tool(description="Read any file from the system. Returns file content as text.")
+@tool(
+    description="Read any file from the system. Returns file content as text.",
+    sandbox_safe_when_unavailable=True,
+)
 async def native_read_file(path: str) -> str:
     """Read any file from the filesystem."""
     valid, reason = _validate_file_path(path, writable=False)
@@ -134,9 +139,15 @@ async def native_write_file(path: str, content: str) -> str:
         return f"Error writing {path}: {e!s}"
 
 
-@tool(description="List files and directories at a given path.")
+@tool(
+    description="List files and directories at a given path.",
+    sandbox_safe_when_unavailable=True,
+)
 async def native_list_dir(path: str = ".") -> str:
     """List directory contents."""
+    valid, reason = _validate_path_within_workspace(path)
+    if not valid:
+        return f"Error: {reason}"
     try:
         entries = []
         for item in sorted(os.listdir(path)):
@@ -154,6 +165,9 @@ async def native_list_dir(path: str = ".") -> str:
 @tool(description="Open a URL in the default web browser.")
 async def open_browser(url: str) -> str:
     """Open URL in default browser."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return "Error: URL must include an http or https scheme and host"
     try:
         import webbrowser
         if webbrowser.open(url):
@@ -365,52 +379,67 @@ def _get_workspace_root() -> str:
     return os.environ.get("CLIMBER_SANDBOX_WORKDIR", "/workspace")
 
 
+def _resolve_within_workspace(path: str) -> tuple[bool, str]:
+    """Resolve path (including symlinks) and check ancestry within workspace roots.
+
+    Uses Path.resolve() to follow symlinks, then relative_to() for exact
+    ancestry instead of string prefix matching.
+
+    Returns (is_within, resolved_or_reason).
+    """
+    workspace_root = _get_workspace_root()
+    abs_workspace = os.path.abspath(workspace_root)
+
+    try:
+        resolved = Path(path).expanduser().resolve(strict=False)
+    except (OSError, RuntimeError, ValueError) as exc:
+        return False, f"Access denied: cannot resolve path '{path}': {exc}"
+
+    for root in (abs_workspace, "/tmp"):
+        try:
+            resolved.relative_to(root)
+            return True, str(resolved)
+        except ValueError:
+            continue
+
+    return False, f"Access denied: resolved path '{resolved}' is outside workspace"
+
+
 def _validate_path_within_workspace(path: str) -> tuple[bool, str]:
     """Validate that a path is within the workspace directory.
 
+    Uses Path.resolve() for symlink-safe ancestry check.
     Returns (is_valid, message) where message explains the result.
     """
-    workspace_root = _get_workspace_root()
-
-    # Check for traversal attempts
-    if ".." in path:
-        return False, "Path traversal detected"
-
-    # Resolve to absolute path
-    abs_path = os.path.abspath(path)
-    abs_workspace = os.path.abspath(workspace_root)
-
-    # Check if path is within workspace
-    if not abs_path.startswith(abs_workspace):
-        return False, "Path is outside workspace"
-
+    ok, result = _resolve_within_workspace(path)
+    if not ok:
+        return False, result
     return True, "OK"
 
 
-_BLOCKED_PREFIXES = ("/etc/", "/etc", "/root/", "/root", "/home/", "/home",
-                     "/proc", "/sys", "/dev")
-_ALLOWED_FILE_ROOTS = ("/workspace", "/tmp")
+_BLOCKED_PREFIXES = (
+    "/etc", "/root", "/home",
+    "/proc/", "/sys/", "/dev/",
+)
 
 
 def _validate_file_path(path: str, writable: bool = False) -> tuple[bool, str]:
     """Validate file path is within allowed directories and not in blocked system paths.
 
+    Uses Path.resolve() for symlink-safe ancestry check.
     Returns (is_valid, message).
     """
+
     abs_path = os.path.abspath(path)
 
     for blocked in _BLOCKED_PREFIXES:
-        if abs_path == blocked or abs_path.startswith(blocked + "/") or abs_path.startswith(blocked + os.sep):
+        normalized = blocked.rstrip("/")
+        if abs_path == normalized or abs_path.startswith(normalized + "/"):
             return False, f"Access denied: path '{abs_path}' is in a blocked system directory"
 
-    allowed = False
-    for root in _ALLOWED_FILE_ROOTS:
-        if abs_path == root or abs_path.startswith(root + "/") or abs_path.startswith(root + os.sep):
-            allowed = True
-            break
-
-    if not allowed:
-        return False, f"Access denied: path '{abs_path}' is outside allowed directories ({', '.join(_ALLOWED_FILE_ROOTS)})"
+    ok, result = _resolve_within_workspace(path)
+    if not ok:
+        return False, result
 
     if writable and os.path.exists(abs_path) and not os.path.isfile(abs_path):
         return False, f"Path '{abs_path}' is not a regular file"

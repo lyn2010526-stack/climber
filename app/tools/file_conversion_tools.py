@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from typing import Any
 
 import defusedxml.ElementTree as DefusedET
@@ -17,6 +18,33 @@ import structlog
 from app.tools import tool
 
 logger = structlog.get_logger()
+
+_ALLOWED_FILE_ROOTS = ("/workspace", "/tmp")
+
+
+def _validate_conversion_path(path: str, writable: bool = False) -> tuple[bool, str]:
+    """Validate that a file path is within allowed roots and resolve symlinks."""
+    try:
+        resolved = Path(path).expanduser().resolve(strict=False)
+    except (OSError, RuntimeError, ValueError) as exc:
+        return False, f"Access denied: cannot resolve path '{path}': {exc}"
+
+    allowed = False
+    for root in _ALLOWED_FILE_ROOTS:
+        try:
+            resolved.relative_to(root)
+            allowed = True
+            break
+        except ValueError:
+            continue
+
+    if not allowed:
+        return False, f"Access denied: path '{resolved}' is outside allowed directories"
+
+    if writable and resolved.exists() and not resolved.is_file():
+        return False, f"Path '{resolved}' is not a regular file"
+
+    return True, "OK"
 
 
 def _load_pandas():
@@ -46,6 +74,13 @@ async def convert_file(
         **kwargs: Additional options (sheet_name, delimiter, encoding, etc.).
     """
     try:
+        ok, reason = _validate_conversion_path(input_path, writable=False)
+        if not ok:
+            return f"Error: {reason}"
+        ok, reason = _validate_conversion_path(output_path, writable=True)
+        if not ok:
+            return f"Error: {reason}"
+
         if not os.path.exists(input_path):
             return f"Error: Input file not found: {input_path}"
 
@@ -131,6 +166,13 @@ async def csv_to_json(
         encoding: File encoding.
         orient: JSON structure - records, index, columns, values.
     """
+    ok, reason = _validate_conversion_path(input_path, writable=False)
+    if not ok:
+        return f"Error: {reason}"
+    ok, reason = _validate_conversion_path(output_path, writable=True)
+    if not ok:
+        return f"Error: {reason}"
+
     pd = _load_pandas()
     if pd is None:
         return "Error: pandas not installed."
@@ -166,6 +208,13 @@ async def json_to_csv(
         encoding: File encoding.
         flatten: Flatten nested JSON structures.
     """
+    ok, reason = _validate_conversion_path(input_path, writable=False)
+    if not ok:
+        return f"Error: {reason}"
+    ok, reason = _validate_conversion_path(output_path, writable=True)
+    if not ok:
+        return f"Error: {reason}"
+
     pd = _load_pandas()
     if pd is None:
         return "Error: pandas not installed."
@@ -212,6 +261,13 @@ async def markdown_to_html(
         output_path: Path to save HTML.
         css_style: Optional CSS to embed.
     """
+    ok, reason = _validate_conversion_path(input_path, writable=False)
+    if not ok:
+        return f"Error: {reason}"
+    ok, reason = _validate_conversion_path(output_path, writable=True)
+    if not ok:
+        return f"Error: {reason}"
+
     try:
         if not os.path.exists(input_path):
             return f"Error: File not found: {input_path}"
@@ -264,6 +320,13 @@ async def html_to_markdown(
         output_path: Path to save output.
         output_format: markdown or text.
     """
+    ok, reason = _validate_conversion_path(input_path, writable=False)
+    if not ok:
+        return f"Error: {reason}"
+    ok, reason = _validate_conversion_path(output_path, writable=True)
+    if not ok:
+        return f"Error: {reason}"
+
     try:
         if not os.path.exists(input_path):
             return f"Error: File not found: {input_path}"
@@ -307,6 +370,13 @@ async def xml_to_json(
         input_path: Path to XML file.
         output_path: Path to save JSON.
     """
+    ok, reason = _validate_conversion_path(input_path, writable=False)
+    if not ok:
+        return f"Error: {reason}"
+    ok, reason = _validate_conversion_path(output_path, writable=True)
+    if not ok:
+        return f"Error: {reason}"
+
     try:
         if not os.path.exists(input_path):
             return f"Error: File not found: {input_path}"
@@ -362,6 +432,13 @@ async def json_to_xml(
         output_path: Path to save XML.
         root_element: Root element name.
     """
+    ok, reason = _validate_conversion_path(input_path, writable=False)
+    if not ok:
+        return f"Error: {reason}"
+    ok, reason = _validate_conversion_path(output_path, writable=True)
+    if not ok:
+        return f"Error: {reason}"
+
     try:
         if not os.path.exists(input_path):
             return f"Error: File not found: {input_path}"
@@ -412,6 +489,13 @@ async def convert_yaml_json(
         input_path: Source file path.
         output_path: Target file path.
     """
+    ok, reason = _validate_conversion_path(input_path, writable=False)
+    if not ok:
+        return f"Error: {reason}"
+    ok, reason = _validate_conversion_path(output_path, writable=True)
+    if not ok:
+        return f"Error: {reason}"
+
     try:
         import yaml
 
@@ -458,6 +542,13 @@ async def convert_excel(
         output_path: Target file path.
         sheet_name: Specific sheet name (for Excel input).
     """
+    ok, reason = _validate_conversion_path(input_path, writable=False)
+    if not ok:
+        return f"Error: {reason}"
+    ok, reason = _validate_conversion_path(output_path, writable=True)
+    if not ok:
+        return f"Error: {reason}"
+
     pd = _load_pandas()
     if pd is None:
         return "Error: pandas not installed."
@@ -511,6 +602,13 @@ async def to_markdown_table(
         max_rows: Maximum rows to include.
         max_col_width: Maximum column width.
     """
+    ok, reason = _validate_conversion_path(input_path, writable=False)
+    if not ok:
+        return f"Error: {reason}"
+    if output_path:
+        ok, reason = _validate_conversion_path(output_path, writable=True)
+        if not ok:
+            return f"Error: {reason}"
     pd = _load_pandas()
     if pd is None:
         return "Error: pandas not installed."
@@ -562,9 +660,15 @@ async def to_html_table(
         output_path: Path to save HTML.
         file_type: csv, json, xlsx, auto.
         max_rows: Maximum rows.
-        striped: Add alternating row colors.
-        bordered: Add borders.
+        striped: Striped rows.
+        bordered: Bordered table.
     """
+    ok, reason = _validate_conversion_path(input_path, writable=False)
+    if not ok:
+        return f"Error: {reason}"
+    ok, reason = _validate_conversion_path(output_path, writable=True)
+    if not ok:
+        return f"Error: {reason}"
     pd = _load_pandas()
     if pd is None:
         return "Error: pandas not installed."

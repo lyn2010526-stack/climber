@@ -98,30 +98,32 @@ class OllamaAdapter(ModelAdapter):
             return
 
         try:
-            resp = await self._make_request(payload, stream=True)
-            async for line in resp.aiter_lines():
-                if not line.strip():
-                    continue
-                try:
-                    chunk = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if chunk.get("done"):
-                    yield ChatResult(
-                        content="",
-                        tool_calls=[],
-                        finish_reason="stop",
-                        tokens_used=0,
-                    )
-                    break
-                msg = chunk.get("message", {})
-                if msg.get("content"):
-                    yield ChatResult(
-                        content=msg["content"],
-                        tool_calls=[],
-                        finish_reason=None,
-                        tokens_used=0,
-                    )
+            async with httpx.AsyncClient(timeout=120) as client:
+                async with client.stream("POST", f"{self._base_url}/api/chat", json=payload) as resp:
+                    resp.raise_for_status()
+                    async for line in resp.aiter_lines():
+                        if not line.strip():
+                            continue
+                        try:
+                            chunk = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        if chunk.get("done"):
+                            yield ChatResult(
+                                content="",
+                                tool_calls=[],
+                                finish_reason="stop",
+                                tokens_used=0,
+                            )
+                            break
+                        msg = chunk.get("message", {})
+                        if msg.get("content"):
+                            yield ChatResult(
+                                content=msg["content"],
+                                tool_calls=[],
+                                finish_reason=None,
+                                tokens_used=0,
+                            )
         except Exception as e:
             yield ChatResult(
                 content=f"\n[Error: {e!s}]",

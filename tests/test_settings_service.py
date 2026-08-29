@@ -3,8 +3,12 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy import select
 
+from app.core.auth import get_current_user
+from app.main import app
 from app.services.settings_service import SettingsService
+from app.storage import async_session
 from app.storage.models_settings import McpStatus, UserSettings
 
 
@@ -17,7 +21,11 @@ def _create_mock_result(value):
 
 @pytest.fixture
 def mock_db():
-    return AsyncMock()
+    db = MagicMock()
+    db.execute = AsyncMock()
+    db.commit = AsyncMock()
+    db.refresh = AsyncMock()
+    return db
 
 
 class TestSettingsService:
@@ -114,3 +122,21 @@ class TestSettingsService:
         assert mode["token_throttle_mcp_enabled"] is True
         assert mode["mcp_status"] == "ready"
         assert mode["mcp_ready"] is True
+
+
+@pytest.mark.asyncio
+async def test_settings_api_uses_current_user_identity(client):
+    app.dependency_overrides[get_current_user] = lambda: "user-from-auth"
+    try:
+        response = await client.get("/api/v1/settings")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == 200
+    async with async_session() as db:
+        settings = (
+            await db.execute(
+                select(UserSettings).where(UserSettings.user_id == "user-from-auth")
+            )
+        ).scalar_one_or_none()
+    assert settings is not None

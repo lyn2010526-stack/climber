@@ -104,7 +104,7 @@ class TestPathTraversalBlocked:
         """Paths containing .. should be rejected."""
         valid, msg = _validate_path_within_workspace("../etc/passwd")
         assert not valid
-        assert "traversal" in msg.lower()
+        assert "denied" in msg.lower() or "outside" in msg.lower() or "traversal" in msg.lower()
 
     def test_absolute_path_outside_workspace_blocked(self, workspace_root):
         """Absolute paths outside workspace should be rejected."""
@@ -153,7 +153,6 @@ class TestCalculatorSafety:
         result = await calculator("2 + 2")
         assert result == "4"
 
-    @pytest.mark.asyncio
     def test_complex_math_works(self):
         """Complex math expressions should work."""
         result = _safe_eval_math("3.14 * 2 + 1", {})

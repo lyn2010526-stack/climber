@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 import app.core.group_ws_hub as hub_module
 from app.core.group_ws_hub import SUPPORTED_EVENT_TYPES, GroupWebSocketHub
+from app.storage import async_session
+from app.storage.models_groups import AgentGroup, AgentGroupTask
 
 
 @pytest.fixture(autouse=True)
@@ -95,6 +99,73 @@ async def test_handle_message_unknown_type():
     hub = GroupWebSocketHub()
     result = await hub.handle_message("g1", {"type": "nope"})
     assert result == {"ok": False, "error": "unknown_type"}
+
+
+@pytest.mark.asyncio
+async def test_websocket_cannot_write_execution_progress():
+    hub = GroupWebSocketHub()
+
+    result = await hub._update_task_status("g1", {"task_id": "t1", "current_round": 99})
+
+    assert result == {"ok": False, "error": "current_round is managed by the task executor"}
+
+
+@pytest.mark.asyncio
+async def test_human_review_cannot_revive_terminal_task():
+    async with async_session() as db:
+        group = AgentGroup(name="terminal review group")
+        db.add(group)
+        await db.flush()
+        task = AgentGroupTask(group_id=group.id, description="done", status="cancelled")
+        db.add(task)
+        await db.commit()
+        group_id, task_id = group.id, task.id
+
+    result = await GroupWebSocketHub()._handle_human_review(
+        group_id,
+        {"task_id": task_id, "decision": "approved"},
+    )
+
+    assert result == {"ok": False, "error": "task is not awaiting human review: cancelled"}
+    async with async_session() as db:
+        current = await db.get(AgentGroupTask, task_id)
+        assert current is not None
+        assert current.status == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_human_review_rejects_unknown_decision():
+    result = await GroupWebSocketHub()._handle_human_review(
+        "g1",
+        {"task_id": "t1", "decision": "later"},
+    )
+
+    assert result == {"ok": False, "error": "decision must be approved or rejected"}
+
+
+@pytest.mark.asyncio
+async def test_websocket_status_change_waits_for_local_executor():
+    async with async_session() as db:
+        group = AgentGroup(name="websocket stop group")
+        db.add(group)
+        await db.flush()
+        task = AgentGroupTask(group_id=group.id, description="stop", status="running")
+        db.add(task)
+        await db.commit()
+        group_id, task_id = group.id, task.id
+
+    with patch(
+        "app.core.group_collaboration.group_collaboration_engine.cancel_and_wait",
+        new_callable=AsyncMock,
+        return_value=True,
+    ) as cancel_running_task:
+        result = await GroupWebSocketHub()._update_task_status(
+            group_id,
+            {"task_id": task_id, "status": "stopped"},
+        )
+
+    assert result == {"ok": True, "id": task_id}
+    cancel_running_task.assert_awaited_once_with(task_id)
 
 
 @pytest.mark.asyncio

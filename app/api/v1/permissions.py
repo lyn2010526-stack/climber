@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -30,7 +32,12 @@ class PermissionRuleSchema(BaseModel):
 
 
 class PermissionConfigUpdate(BaseModel):
-    mode: str | None = None
+    mode: Literal[
+        PermissionMode.DEFAULT,
+        PermissionMode.ACCEPT_EDITS,
+        PermissionMode.PLAN,
+        PermissionMode.AUTO,
+    ] | None = None
     rules: list[PermissionRuleSchema] | None = None
     allowed_tools: list[str] | None = None
     denied_tools: list[str] | None = None

@@ -149,6 +149,11 @@ class AgentGroupTask(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
+    # Execution lease (crash recovery + fencing)
+    lease_owner: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    lease_token: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     # Callbacks
     step_callback: Mapped[str | None] = mapped_column(String(255), nullable=True)  # reference to callback function
     task_callback: Mapped[str | None] = mapped_column(String(255), nullable=True)  # reference to callback function

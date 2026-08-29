@@ -34,6 +34,7 @@ def _create_tables_sync():
     asyncio.set_event_loop(loop)
     try:
         loop.run_until_complete(init_db())
+        loop.run_until_complete(engine.dispose())
     finally:
         loop.close()
 
@@ -45,21 +46,16 @@ def setup_test_db():
     yield
 
 
-@pytest.fixture(autouse=True)
-def cleanup_db():
+@pytest_asyncio.fixture(autouse=True)
+async def cleanup_db(request):
     """Clean up database after each test."""
     yield
-    import asyncio
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        async def _cleanup():
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.drop_all)
-            await init_db()
-        loop.run_until_complete(_cleanup())
-    finally:
-        loop.close()
+    if request.node.get_closest_marker("deployment_config"):
+        return
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await init_db()
+    await engine.dispose()
 
 
 @pytest_asyncio.fixture

@@ -10,8 +10,8 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import func, select
 
 from app.api.v1._shared import DEFAULT_USER
 from app.core.auth import get_current_user
@@ -42,11 +42,16 @@ def _cost_dict(c: CostRecord) -> dict[str, Any]:
 
 @router.get("/cost/records")
 @router.get("/cost/records/")
-async def list_cost_records(session_id: str = "") -> list[dict[str, Any]]:
+async def list_cost_records(
+    session_id: str = "",
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
         stmt = select(CostRecord).order_by(CostRecord.created_at.desc())
         if session_id:
             stmt = stmt.where(CostRecord.session_id == session_id)
+        stmt = stmt.offset(offset).limit(limit)
         rows = (await db.execute(stmt)).scalars().all()
         return [_cost_dict(c) for c in rows]
 
@@ -87,4 +92,22 @@ async def get_quota() -> dict[str, Any]:
             "requests_today": q.requests_today,
             "tokens_today": q.tokens_today,
             "cost_this_month": q.cost_this_month,
+        }
+
+
+@router.get("/cost/usage")
+@router.get("/cost/usage/")
+async def get_cost_usage() -> dict[str, Any]:
+    async with async_session() as db:
+        stmt = select(func.sum(CostRecord.total_cost), func.sum(CostRecord.total_tokens), func.count(CostRecord.id)).where(CostRecord.user_id == DEFAULT_USER)
+        row = (await db.execute(stmt)).one()
+        total_cost = row[0] or 0
+        total_tokens = row[1] or 0
+        total_calls = row[2] or 0
+        return {
+            "total_cost": round(float(total_cost), 6),
+            "total_tokens": int(total_tokens),
+            "total_calls": int(total_calls),
+            "by_model": [],
+            "by_day": [],
         }

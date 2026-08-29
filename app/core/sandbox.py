@@ -41,22 +41,48 @@ class SandboxConfig:
         "echo", "pwd", "mkdir", "touch", "cp", "mv",
     ])
     blocked_patterns: list[str] = field(default_factory=lambda: [
+        # Destructive file operations
         r"rm\s+-rf\s+/",
         r"rm\s+-rf\s+~",
+        r"rm\s+(-[rfRF]+\s+)?/?(\s|$)",
+        r"\bshred\b",
+        r"\bwipe\b",
+        # Disk operations
+        r"mkfs",
+        r"fdisk",
+        r"dd\s+if=",
+        r"dd\b.*\bof=/dev/",
+        r">\s*/dev/sd[a-z]",
+        r">\s*/dev/sd",
+        # Fork bomb / DoS
+        r":\(\)\{.*\|.*&};",
+        r":\(\)\s*{\s*:\s*\|\s*:\s*&\s*}\s*;",
+        # Privilege escalation
         r"chmod\s+777",
         r"chown\s+root",
-        r"sudo\s+",
+        r"\bsudo\b",
+        # Network threats
+        r"\bnc\b.*-e\s+/bin/",
+        r"\bbash\b.*-i\b.*>&\b",
+        r"\bnohup\b",
         r"curl\s+.*\|\s*sh",
         r"wget\s+.*\|\s*sh",
-        r"dd\s+if=",
-        r"mkfs\.",
-        r"fdisk",
-        r":\(\)\{.*\|.*&};",
-        r">\s*/dev/sd",
+        r"\bcurl\b.*\|\s*(sh|bash)\b",
+        r"\bwget\b.*\|\s*(sh|bash)\b",
+        # System control
         r"shutdown",
         r"reboot",
+        r"\bpoweroff\b",
         r"init\s+[06]",
+        r"\bsystemctl\s+(stop|disable)\b",
         r"kill\s+-9\s+1",
+        # Mount abuse
+        r"\bmount\b.*-o\s+loop",
+        # Command injection patterns
+        r"\$\(.*\)",
+        r"`[^`]*`",
+        r";\s*(rm|shred|mkfs|fdisk|dd|chmod|chown|sudo|shutdown|reboot|poweroff)\b",
+        r"\|\s*(rm|shred|mkfs|sudo|shutdown|reboot|poweroff)\b",
     ])
 
 
@@ -70,7 +96,9 @@ class SandboxExecutor:
     # Sensitive paths that should never be accessed
     SENSITIVE_PATHS: ClassVar[tuple[str, ...]] = (
         "/etc/shadow", "/etc/passwd", "/etc/sudoers",
-        "/etc/ssh/", "/root/.ssh/", "/etc/ssl/private/",
+        "/etc/ssh/", "/root/.ssh/", "/home/*/.ssh/",
+        "/etc/ssl/private/",
+        "/proc", "/sys", "/dev",
     )
 
     def _is_command_safe(self, command: str, workdir: str) -> tuple[bool, str]:

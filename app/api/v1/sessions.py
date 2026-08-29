@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import delete, select
 
@@ -82,18 +82,22 @@ def _invalidate_session(session_id: str) -> None:
     _session_detail_cache.pop(session_id, None)
 
 
-async def _cached_list_sessions(user_id: str) -> list[SessionOut]:
-    entry = _session_cache.get(user_id)
-    if entry is not None:
-        rows_data, cached_at = entry
-        if time.monotonic() - cached_at < _SESSION_CACHE_TTL:
-            return [SessionOut(**r) for r in rows_data]
+async def _cached_list_sessions(user_id: str, limit: int, offset: int) -> list[SessionOut]:
+    use_cache = limit == 100 and offset == 0
+    if use_cache:
+        entry = _session_cache.get(user_id)
+        if entry is not None:
+            rows_data, cached_at = entry
+            if time.monotonic() - cached_at < _SESSION_CACHE_TTL:
+                return [SessionOut(**r) for r in rows_data]
 
     async with async_session() as session:
         result = await session.execute(
             select(SessionModel)
             .where(SessionModel.user_id == user_id)
             .order_by(SessionModel.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
         rows = result.scalars().all()
         out = [
@@ -106,18 +110,27 @@ async def _cached_list_sessions(user_id: str) -> list[SessionOut]:
             )
             for r in rows
         ]
-    _session_cache[user_id] = ([r.model_dump() for r in out], time.monotonic())
+    if use_cache:
+        _session_cache[user_id] = ([r.model_dump() for r in out], time.monotonic())
     return out
 
 
 @router.get("/", response_model=list[SessionOut])
-async def list_sessions_with_slash(user_id: str = Depends(get_current_user)) -> list[SessionOut]:
-    return await _cached_list_sessions(user_id)
+async def list_sessions_with_slash(
+    user_id: str = Depends(get_current_user),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[SessionOut]:
+    return await _cached_list_sessions(user_id, limit, offset)
 
 
 @router.get("", response_model=list[SessionOut])
-async def list_sessions_no_slash(user_id: str = Depends(get_current_user)) -> list[SessionOut]:
-    return await _cached_list_sessions(user_id)
+async def list_sessions_no_slash(
+    user_id: str = Depends(get_current_user),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[SessionOut]:
+    return await _cached_list_sessions(user_id, limit, offset)
 
 
 @router.post("/", response_model=dict)
@@ -153,17 +166,8 @@ async def create_session_legacy(
     payload: SessionCreate,
     user_id: str = Depends(get_current_user),
 ) -> dict:
-    async with async_session() as session:
-        row = SessionModel(
-            title=payload.title or "New Session",
-            status="idle",
-            agent_id=(payload.agent_id or None),
-            user_id=user_id,
-        )
-        session.add(row)
-        await session.commit()
-        await session.refresh(row)
-        return {"id": row.id, "session_id": row.id}
+    created = await create_session_with_slash(payload, user_id)
+    return {"id": created["id"], "session_id": created["session_id"]}
 
 
 class MessagesResponse(BaseModel):
@@ -171,7 +175,12 @@ class MessagesResponse(BaseModel):
 
 
 @router.get("/{session_id}/messages", response_model=MessagesResponse)
-async def get_session_messages(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+async def get_session_messages(
+    session_id: str,
+    user_id: str = Depends(get_current_user),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> dict:
     async with async_session() as db:
         # Single query: verify ownership then fetch messages in one transaction
         result = await db.execute(
@@ -184,6 +193,8 @@ async def get_session_messages(session_id: str, user_id: str = Depends(get_curre
             select(MessageModel)
             .where(MessageModel.session_id == session_id)
             .order_by(MessageModel.created_at.asc())
+            .offset(offset)
+            .limit(limit)
         )
         rows = msg_result.scalars().all()
         messages = [
@@ -221,7 +232,7 @@ async def clear_session(session_id: str, user_id: str = Depends(get_current_user
         _invalidate_session(session_id)
     engine = get_main_engine()
     if engine is not None:
-        engine._session_locks.pop(session_id, None)
+        engine.drop_session_lock(session_id)
     return {"status": "cleared"}
 
 
@@ -312,7 +323,7 @@ async def delete_session(session_id: str, user_id: str = Depends(get_current_use
     from app.core.agent_engine import get_main_engine
     engine = get_main_engine()
     if engine is not None:
-        engine._session_locks.pop(session_id, None)
+        engine.drop_session_lock(session_id)
     return {"ok": True}
 
 

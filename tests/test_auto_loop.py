@@ -36,7 +36,9 @@ async def test_start_task(engine):
 async def test_task_completes(engine):
     await engine.start()
     task_id = engine.start_task("test", max_steps=2)
-    await asyncio.sleep(0.5)
+    task = engine._tasks[task_id].asyncio_task
+    assert task is not None
+    await asyncio.wait_for(task, timeout=5)
     status = await engine.get_status(task_id)
     assert status["status"] == AutoLoopTaskStatus.COMPLETED.value
     await engine.stop()
@@ -94,10 +96,13 @@ async def test_recover_interrupted_sessions():
         # Patch async_session to use our test session
         with patch("app.core.auto_loop.async_session", test_session):
             count = await engine.recover_interrupted_sessions()
+            assert count == 1
+            assert "recover-1" in engine._tasks
+            recovered_task = engine._tasks["recover-1"].asyncio_task
+            assert recovered_task is not None
+            await asyncio.wait_for(recovered_task, timeout=5)
 
-        assert count == 1
-        assert "recover-1" in engine._tasks
-        # Recovered tasks are launched immediately, so they transition to RUNNING
-        await asyncio.sleep(0.1)
-        assert engine._tasks["recover-1"].status == AutoLoopTaskStatus.RUNNING
-        assert engine._tasks["recover-1"].current_step == 2
+        assert engine._tasks["recover-1"].status == AutoLoopTaskStatus.COMPLETED
+        assert engine._tasks["recover-1"].current_step == 4
+
+    await test_engine.dispose()

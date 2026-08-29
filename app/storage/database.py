@@ -16,6 +16,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -93,8 +94,15 @@ class Turn(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     session_id: Mapped[str] = mapped_column(String(36), ForeignKey("sessions.id"), nullable=False, index=True)
+    user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    agent_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    kind: Mapped[str] = mapped_column(String(30), default="agent_chat", server_default="agent_chat", index=True)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     checkpoint_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    trace_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    last_sequence: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    execution_token: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    parent_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -106,6 +114,52 @@ class Turn(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     session: Mapped[Session] = relationship(back_populates="turns")
+    events: Mapped[list[RunEventRecord]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="RunEventRecord.sequence",
+    )
+
+
+class RunEventRecord(Base):
+    """Durable, ordered event facts emitted by a Run."""
+
+    __tablename__ = "run_events"
+    __table_args__ = (
+        UniqueConstraint("run_id", "event_id", name="uq_run_events_run_event"),
+        UniqueConstraint("run_id", "sequence", name="uq_run_events_run_sequence"),
+        Index("ix_run_events_run_id_sequence", "run_id", "sequence"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    run_id: Mapped[str] = mapped_column(String(36), ForeignKey("turns.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    trace_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    checkpoint_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    execution_token: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+
+    run: Mapped[Turn] = relationship(back_populates="events")
+
+
+class RawPayloadRecord(Base):
+    """Durable provider payload record governed by the raw payload policy."""
+
+    __tablename__ = "raw_payloads"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    run_id: Mapped[str] = mapped_column(String(36), ForeignKey("turns.id", ondelete="CASCADE"), nullable=False, index=True)
+    message_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    standard_fields: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+    payload_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    redaction_version: Mapped[str] = mapped_column(String(10), nullable=False, default="1")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
 
 class Message(Base):
@@ -113,6 +167,7 @@ class Message(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     session_id: Mapped[str] = mapped_column(String(36), ForeignKey("sessions.id"), nullable=False, index=True)
+    run_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=True)
     tool_call_id: Mapped[str] = mapped_column(String(100), nullable=True)
@@ -230,4 +285,3 @@ class ApprovalRecord(Base):
 
 # Import memory models to register them with SQLAlchemy
 # This must be done after the base models are defined to avoid circular imports
-

@@ -1,6 +1,7 @@
 """Smoke tests for the routes that were previously missing."""
 
 import os
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -42,9 +43,45 @@ def test_tasks_roundtrip(client):
     assert created.status_code == 200, created.text
     tid = created.json()["id"]
 
-    assert client.post(f"/api/v1/tasks/{tid}/run").status_code == 200
+    def _close_spawned(coro):
+        coro.close()
+
+    with (
+        patch(
+            "app.core.group_collaboration.group_collaboration_engine.run_task",
+            new_callable=AsyncMock,
+        ) as run_task,
+        patch("app.api.v1.tasks_api._spawn", side_effect=_close_spawned),
+    ):
+        assert client.post(f"/api/v1/tasks/{tid}/run").status_code == 200
+    run_task.assert_called_once_with(tid)
     assert any(t["id"] == tid for t in client.get("/api/v1/tasks").json())
     assert client.get("/api/v1/tasks").status_code == 200
+
+
+def test_run_missing_task_returns_not_found(client):
+    response = client.post("/api/v1/tasks/missing-task/run")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Task not found"
+
+
+def test_health_probes_use_http_status_for_orchestrators(client):
+    class _ReadyChecker:
+        async def readiness(self):
+            return False
+
+        async def liveness(self):
+            return True
+
+    with patch("app.core.health_check.get_health_checker", return_value=_ReadyChecker()):
+        ready = client.get("/api/v1/health/ready")
+        live = client.get("/api/v1/health/live")
+
+    assert ready.status_code == 503
+    assert ready.json() == {"ready": False}
+    assert live.status_code == 200
+    assert live.json() == {"alive": True}
 
 
 def test_scheduler_roundtrip(client):

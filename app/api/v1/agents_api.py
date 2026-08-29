@@ -11,7 +11,7 @@ import time
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 
 from app.api.v1._shared import (
@@ -43,18 +43,24 @@ logger = structlog.get_logger()
 
 @router.get("/agents")
 @router.get("/agents/")
-async def list_agents() -> list[dict[str, Any]]:
+async def list_agents(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
+    use_cache = limit == 100 and offset == 0
     # Check hybrid cache (Redis or local)
-    hybrid = await _hybrid_agents.get_scalar()
-    if hybrid is not None:
-        _cache_hits_total.labels(cache_type='agents').inc()
-        return hybrid
+    if use_cache:
+        hybrid = await _hybrid_agents.get_scalar()
+        if hybrid is not None:
+            _cache_hits_total.labels(cache_type='agents').inc()
+            return hybrid[:limit]
 
     # Fallback: check legacy local cache
-    cached = _agents_cache.get()
-    if cached is not None:
-        _cache_hits_total.labels(cache_type='agents').inc()
-        return cached
+    if use_cache:
+        cached = _agents_cache.get()
+        if cached is not None:
+            _cache_hits_total.labels(cache_type='agents').inc()
+            return cached[:limit]
 
     _cache_misses_total.labels(cache_type='agents').inc()
 
@@ -62,7 +68,14 @@ async def list_agents() -> list[dict[str, Any]]:
 
     start = time.monotonic()
     async with async_session() as db:
-        rows = (await db.execute(select(Agent).order_by(Agent.created_at.desc()))).scalars().all()
+        rows = (
+            await db.execute(
+                select(Agent)
+                .order_by(Agent.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+        ).scalars().all()
         result = [
             {
                 "id": a.id,
@@ -76,8 +89,9 @@ async def list_agents() -> list[dict[str, Any]]:
             }
             for a in rows
         ]
-    _agents_cache.set(result)
-    await _hybrid_agents.set_scalar(result)
+    if use_cache:
+        _agents_cache.set(result)
+        await _hybrid_agents.set_scalar(result)
 
     _db_query_duration_seconds.labels(endpoint='agents', operation='list').observe(time.monotonic() - start)
     _db_queries_total.labels(endpoint='agents', operation='list').inc()

@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import shlex
 import tempfile
 from dataclasses import dataclass
 from typing import Any
@@ -28,16 +29,41 @@ class SandboxRuntime:
     """Isolated execution environment with safety constraints."""
 
     BLOCKED_PATTERNS = [
-        r"\brm\s+-rf\s+/",
-        r"\bchmod\s+777",
-        r"\bmkfs\b",
-        r"\bdd\s+if=",
+        # Destructive file operations
+        r"\brm\s+(-[rfRF]+\s+)?/?(\s|$)",
+        r"\brm\s+-[rfRF]+\s+/",
         r"\bshred\b",
-        r"\bgit\s+push\s+--force",
-        r"\bgit\s+push\s+-f\b",
-        r":\(\)\s*{\s*:\|:&\s*};\s*:",
-        r"\bcurl\b.*\|\s*sh",
-        r"\bwget\b.*\|\s*sh",
+        r"\bwipe\b",
+        # Disk operations
+        r"\bmkfs\b",
+        r"\bfdisk\b",
+        r"\bdd\b.*\bof=/dev/",
+        r">\s*/dev/sd[a-z]",
+        # Fork bomb / DoS
+        r":\(\)\s*{\s*:\s*\|\s*:\s*&\s*}\s*;",
+        # Privilege escalation
+        r"\bchmod\s+777\b",
+        r"\bchown\s+-R\s+root\b",
+        r"\bsudo\b",
+        # Network threats
+        r"\bnc\b.*-e\s+/bin/",
+        r"\bbash\b.*-i\b.*>&\b",
+        r"\bnohup\b",
+        r"\bcurl\b.*\|\s*(sh|bash)\b",
+        r"\bwget\b.*\|\s*(sh|bash)\b",
+        # System control
+        r"\bshutdown\b",
+        r"\breboot\b",
+        r"\bpoweroff\b",
+        r"\binit\s+[06]\b",
+        r"\bsystemctl\s+(stop|disable)\b",
+        # Mount abuse
+        r"\bmount\b.*-o\s+loop",
+        # Command injection patterns
+        r"\$\(.*\)",
+        r"`[^`]*`",
+        r";\s*(rm|shred|mkfs|fdisk|dd|chmod|chown|sudo|shutdown|reboot|poweroff)\b",
+        r"\|\s*(rm|shred|mkfs|sudo|shutdown|reboot|poweroff)\b",
     ]
 
     def __init__(
@@ -77,8 +103,14 @@ class SandboxRuntime:
             )
 
         try:
-            proc = await asyncio.create_subprocess_shell(
-                command,
+            args = shlex.split(command)
+            if not args:
+                return SandboxResult(
+                    stdout="", stderr="BLOCKED: empty command after parsing",
+                    exit_code=-1, blocked=True, block_reason="Empty command",
+                )
+            proc = await asyncio.create_subprocess_exec(
+                *args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=workdir,

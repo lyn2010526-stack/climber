@@ -13,7 +13,7 @@ from datetime import UTC
 
 from app.core.memory_reflection import memory_reflection
 from app.core.persistent_memory import persistent_memory
-from app.core.vector_memory import vector_memory
+from app.core.vector_memory import _DefaultEmbeddingWrapper, vector_memory
 from app.tools.memory_vector_tools import (
     recall_memories,
     reflect_on_task,
@@ -43,6 +43,12 @@ def cleanup_vector_memory():
 
 
 class TestVectorMemoryService:
+    def test_default_embedding_wrapper_config_round_trip(self):
+        wrapper = _DefaultEmbeddingWrapper()
+
+        assert wrapper.get_config() == {}
+        assert isinstance(wrapper.build_from_config(wrapper.get_config()), _DefaultEmbeddingWrapper)
+
     @pytest.mark.asyncio
     async def test_add_and_search(self):
         doc_id = f"test-doc-1-{int(time.time())}"

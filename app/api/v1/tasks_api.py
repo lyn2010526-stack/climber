@@ -7,11 +7,12 @@ with redirect_slashes=False.
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 
 from app.api.v1._shared import _payload, _spawn
@@ -23,15 +24,71 @@ from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupTa
 router = APIRouter(dependencies=[Depends(get_current_user)])
 logger = structlog.get_logger()
 
+# ─── TTL cache for tasks list (keyed by group_id) ─────────────────────────────
+
+class _TasksCache:
+    """Process-scoped TTL cache keyed by query params."""
+
+    def __init__(self, ttl: float) -> None:
+        self._ttl = ttl
+        self._data: dict[str, tuple[list[dict] | None, float]] = {}
+
+    def get(self, key: str) -> list[dict] | None:
+        entry = self._data.get(key)
+        if entry is not None:
+            data, ts = entry
+            if time.monotonic() - ts < self._ttl:
+                return data
+            del self._data[key]
+        return None
+
+    def set(self, key: str, value: list[dict] | None) -> None:
+        self._data[key] = (value, time.monotonic())
+
+    def invalidate_all(self) -> None:
+        self._data.clear()
+
+
+_tasks_cache = _TasksCache(ttl=60.0)
+
+_task_detail_cache: dict[str, tuple[dict, float]] = {}
+_TASK_DETAIL_TTL = 30.0
+
+
+def _get_cached_task(task_id: str) -> dict | None:
+    entry = _task_detail_cache.get(task_id)
+    if entry is not None:
+        data, ts = entry
+        if time.monotonic() - ts < _TASK_DETAIL_TTL:
+            return data
+        del _task_detail_cache[task_id]
+    return None
+
+
+def _set_cached_task(task_id: str, data: dict) -> None:
+    _task_detail_cache[task_id] = (data, time.monotonic())
+
+
+def _invalidate_task(task_id: str) -> None:
+    _task_detail_cache.pop(task_id, None)
+
 # ─── Tasks ──────────────────────────────────────────────────────────────────
 
 @router.get("/tasks")
 @router.get("/tasks/")
-async def list_tasks(group_id: str = "") -> list[dict[str, Any]]:
+async def list_tasks(
+    group_id: str = "",
+    status: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
         stmt = select(AgentGroupTask).order_by(AgentGroupTask.created_at.desc())
         if group_id:
             stmt = stmt.where(AgentGroupTask.group_id == group_id)
+        if status:
+            stmt = stmt.where(AgentGroupTask.status == status)
+        stmt = stmt.offset(offset).limit(limit)
         rows = (await db.execute(stmt)).scalars().all()
         return [
             {
@@ -97,6 +154,8 @@ async def create_task(request: Request) -> dict[str, Any]:
         db.add(task)
         await db.commit()
         await db.refresh(task)
+        _tasks_cache.invalidate_all()
+        _invalidate_task(task.id)
         return {
             "id": task.id,
             "task_id": task.id,
@@ -116,6 +175,17 @@ async def create_task(request: Request) -> dict[str, Any]:
 @router.post("/tasks/{task_id}/run")
 async def run_task(task_id: str) -> dict[str, Any]:
     """Start group collaboration task in background."""
+    async with async_session() as db:
+        status = (
+            await db.execute(
+                select(AgentGroupTask.status).where(AgentGroupTask.id == task_id)
+            )
+        ).scalar_one_or_none()
+        if status is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if status != "pending":
+            raise HTTPException(status_code=409, detail=f"Cannot run task in status: {status}")
+
     try:
         from app.core.group_collaboration import group_collaboration_engine
         _spawn(group_collaboration_engine.run_task(task_id))
@@ -127,11 +197,15 @@ async def run_task(task_id: str) -> dict[str, Any]:
 
 @router.get("/tasks/{task_id}")
 async def get_task(task_id: str) -> dict[str, Any]:
+    cached = _get_cached_task(task_id)
+    if cached is not None:
+        return cached
+
     async with async_session() as db:
         task = (await db.execute(select(AgentGroupTask).where(AgentGroupTask.id == task_id))).scalar_one_or_none()
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
-        return {
+        result = {
             "id": task.id,
             "group_id": task.group_id,
             "description": task.description,
@@ -155,6 +229,16 @@ async def get_task(task_id: str) -> dict[str, Any]:
             "step_callback": getattr(task, "step_callback", None),
             "task_callback": getattr(task, "task_callback", None),
         }
+    if task.status in {"completed", "failed", "partial", "stopped", "cancelled"}:
+        _set_cached_task(task_id, result)
+    return result
+
+
+def _revoke_lease(task: AgentGroupTask) -> None:
+    """Revoke the execution lease so the previous owner can no longer write."""
+    task.lease_owner = None
+    task.lease_expires_at = None
+    task.lease_token = (task.lease_token or 0) + 1
 
 
 @router.post("/tasks/{task_id}/pause")
@@ -167,9 +251,15 @@ async def pause_task(task_id: str) -> dict[str, Any]:
             raise HTTPException(status_code=400, detail=f"Cannot pause task in status: {task.status}")
         task.status = "paused"
         task.paused_at = datetime.now(UTC)
+        _revoke_lease(task)
         await db.commit()
+        _tasks_cache.invalidate_all()
+        _invalidate_task(task_id)
         await _broadcast_task_update(task.id, await _task_to_ws_payload(task))
-        return {"ok": True, "task_id": task_id, "status": "paused"}
+    from app.core.group_collaboration import group_collaboration_engine
+
+    await group_collaboration_engine.cancel_and_wait(task_id)
+    return {"ok": True, "task_id": task_id, "status": "paused"}
 
 
 @router.post("/tasks/{task_id}/resume")
@@ -180,11 +270,18 @@ async def resume_task(task_id: str) -> dict[str, Any]:
             raise HTTPException(status_code=404, detail="Task not found")
         if task.status != "paused":
             raise HTTPException(status_code=400, detail=f"Cannot resume task in status: {task.status}")
-        task.status = "running"
+        task.status = "pending"
         task.paused_at = None
+        _revoke_lease(task)
         await db.commit()
+        _tasks_cache.invalidate_all()
+        _invalidate_task(task_id)
         await _broadcast_task_update(task.id, await _task_to_ws_payload(task))
-        return {"ok": True, "task_id": task_id, "status": "running"}
+
+    from app.core.group_collaboration import group_collaboration_engine
+
+    _spawn(group_collaboration_engine.run_task(task_id))
+    return {"ok": True, "task_id": task_id, "status": "running"}
 
 
 @router.post("/tasks/{task_id}/stop")
@@ -197,9 +294,15 @@ async def stop_task(task_id: str) -> dict[str, Any]:
             raise HTTPException(status_code=400, detail=f"Cannot stop task in status: {task.status}")
         task.status = "stopped"
         task.completed_at = datetime.now(UTC)
+        _revoke_lease(task)
         await db.commit()
+        _tasks_cache.invalidate_all()
+        _invalidate_task(task_id)
         await _broadcast_task_update(task.id, await _task_to_ws_payload(task))
-        return {"ok": True, "task_id": task_id, "status": "stopped"}
+    from app.core.group_collaboration import group_collaboration_engine
+
+    await group_collaboration_engine.cancel_and_wait(task_id)
+    return {"ok": True, "task_id": task_id, "status": "stopped"}
 
 
 @router.post("/tasks/{task_id}/cancel")
@@ -213,6 +316,12 @@ async def cancel_task(task_id: str) -> dict[str, Any]:
             raise HTTPException(status_code=400, detail=f"Cannot cancel task in status: {task.status}")
         task.status = "cancelled"
         task.completed_at = datetime.now(UTC)
+        _revoke_lease(task)
         await db.commit()
+        _tasks_cache.invalidate_all()
+        _invalidate_task(task_id)
         await _broadcast_task_update(task.id, await _task_to_ws_payload(task))
-        return {"ok": True, "task_id": task_id, "status": "cancelled"}
+    from app.core.group_collaboration import group_collaboration_engine
+
+    await group_collaboration_engine.cancel_and_wait(task_id)
+    return {"ok": True, "task_id": task_id, "status": "cancelled"}

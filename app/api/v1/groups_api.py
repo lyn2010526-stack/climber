@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -45,10 +45,17 @@ def _group_dict(g: AgentGroup, member_count: int = 0, members: list[dict[str, An
 
 @router.get("/groups")
 @router.get("/groups/")
-async def list_groups() -> list[dict[str, Any]]:
+async def list_groups(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
         rows = (await db.execute(
-            select(AgentGroup).options(selectinload(AgentGroup.members)).order_by(AgentGroup.created_at.desc())
+            select(AgentGroup)
+            .options(selectinload(AgentGroup.members))
+            .order_by(AgentGroup.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )).scalars().all()
         result = []
         for g in rows:
@@ -201,13 +208,18 @@ async def add_group_member(group_id: str, request: Request) -> dict[str, Any]:
 
 
 @router.get("/groups/{group_id}/messages")
-async def list_group_messages(group_id: str, limit: int = 50) -> dict[str, Any]:
+async def list_group_messages(
+    group_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
     async with async_session() as db:
         rows = (
             await db.execute(
                 select(AgentGroupMessage)
                 .where(AgentGroupMessage.group_id == group_id)
                 .order_by(AgentGroupMessage.created_at.desc())
+                .offset(offset)
                 .limit(limit)
             )
         ).scalars().all()

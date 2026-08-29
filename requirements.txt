@@ -22,3 +22,4 @@ sse-starlette>=1.8
 mcp>=1.0
 prometheus-client>=0.20
 pyyaml>=6.0
+defusedxml>=0.7.1

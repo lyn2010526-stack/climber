@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -53,7 +54,16 @@ class ParallelToolExecutor:
             elif not isinstance(args, dict):
                 args = {}
             tasks.append(self._execute_one(name, args, tool_call_id))
-        return await asyncio.gather(*tasks)
+        return await self._gather_semaphore(*tasks)
+
+    async def _gather_semaphore(self, *tasks: asyncio.Task) -> list[ToolExecutionResult]:
+        semaphore = asyncio.Semaphore(10)
+
+        async def _sem(task):
+            async with semaphore:
+                return await task
+
+        return await asyncio.gather(*[_sem(t) for t in tasks])
 
     async def execute_sequential(self, tool_calls: list[dict[str, Any]]) -> list[ToolExecutionResult]:
         results = []
@@ -96,7 +106,7 @@ class ParallelToolExecutor:
             return count
 
     async def _execute_one(self, name: str, arguments: dict[str, Any], tool_call_id: str = "") -> ToolExecutionResult:
-        start = asyncio.get_event_loop().time()
+        start = time.monotonic()
         validator_requires_approval = False
         # Pre-execution safety check
         if self._validator is not None:
@@ -105,7 +115,7 @@ class ParallelToolExecutor:
             except Exception as e:
                 return ToolExecutionResult(tool_name=name, error=f"validator error: {e}", success=False, duration_ms=0, tool_call_id=tool_call_id)
             if not allowed:
-                duration = (asyncio.get_event_loop().time() - start) * 1000
+                duration = (time.monotonic() - start) * 1000
                 return ToolExecutionResult(tool_name=name, error=f"blocked by sandbox: {reason}", success=False, duration_ms=duration, tool_call_id=tool_call_id)
             validator_requires_approval = reason.startswith("Approval required")
         # Human-in-the-loop approval for sensitive tools
@@ -118,7 +128,7 @@ class ParallelToolExecutor:
                 if session_config is not None:
                     permission_decision = session_config.evaluate(name, arguments)
                 if permission_decision == RuleDecision.DENY:
-                    duration = (asyncio.get_event_loop().time() - start) * 1000
+                    duration = (time.monotonic() - start) * 1000
                     return ToolExecutionResult(
                         tool_name=name,
                         error=f"permission denied: {name}",
@@ -161,7 +171,7 @@ class ParallelToolExecutor:
                             ):
                                 await state_machine.transition(TaskState.PROCESSING, trigger="approval_resolved")
                     if decision is None or decision.status.value != "approved":
-                        duration = (asyncio.get_event_loop().time() - start) * 1000
+                        duration = (time.monotonic() - start) * 1000
                         return ToolExecutionResult(
                             tool_name=name,
                             error=f"permission denied: {getattr(decision, 'reason', None) or 'rejected by user'}",
@@ -172,7 +182,7 @@ class ParallelToolExecutor:
                         )
             except Exception as e:
                 logger.warning("parallel.approval_check_failed", tool=name, error=str(e))
-                duration = (asyncio.get_event_loop().time() - start) * 1000
+                duration = (time.monotonic() - start) * 1000
                 return ToolExecutionResult(
                     tool_name=name,
                     error=f"permission check failed: {e}",
@@ -194,7 +204,7 @@ class ParallelToolExecutor:
                 self._registry.execute(name, arguments),
                 timeout=self._timeout,
             )
-            duration = (asyncio.get_event_loop().time() - start) * 1000
+            duration = (time.monotonic() - start) * 1000
             if result.startswith(f"Error executing {name}:"):
                 return ToolExecutionResult(
                     tool_name=name,

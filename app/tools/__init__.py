@@ -23,6 +23,7 @@ class ToolDefinition(BaseModel):
     description: str
     parameters: dict[str, Any]  # JSON Schema
     type: str = "function"  # function / mcp / http
+    sandbox_safe_when_unavailable: bool = False
 
 
 class ToolRegistry:
@@ -39,6 +40,7 @@ class ToolRegistry:
         description: str,
         parameters: dict[str, Any],
         func: Callable,
+        sandbox_safe_when_unavailable: bool = False,
     ) -> None:
         """Register a callable tool."""
         self._tools[name] = func
@@ -46,6 +48,7 @@ class ToolRegistry:
             name=name,
             description=description,
             parameters=parameters,
+            sandbox_safe_when_unavailable=sandbox_safe_when_unavailable,
         )
         logger.info("Tool registered", name=name)
 
@@ -84,6 +87,7 @@ class ToolRegistry:
         name: str | None = None,
         description: str = "",
         parameters: dict[str, Any] | None = None,
+        sandbox_safe_when_unavailable: bool = False,
     ) -> Callable:
         """Decorator to register a function as a tool."""
 
@@ -91,7 +95,13 @@ class ToolRegistry:
             tool_name = name or func.__name__
             tool_desc = description or func.__doc__ or ""
             tool_params = parameters or self._infer_schema(func)
-            self.register(tool_name, tool_desc, tool_params, func)
+            self.register(
+                tool_name,
+                tool_desc,
+                tool_params,
+                func,
+                sandbox_safe_when_unavailable=sandbox_safe_when_unavailable,
+            )
             return func
 
         return decorator
@@ -226,9 +236,15 @@ def tool(
     name: str | None = None,
     description: str = "",
     parameters: dict[str, Any] | None = None,
+    sandbox_safe_when_unavailable: bool = False,
 ) -> Callable:
     """Convenience decorator using global registry."""
-    return tool_registry.tool(name, description, parameters)
+    return tool_registry.tool(
+        name,
+        description,
+        parameters,
+        sandbox_safe_when_unavailable=sandbox_safe_when_unavailable,
+    )
 
 
 def register_builtins() -> None:

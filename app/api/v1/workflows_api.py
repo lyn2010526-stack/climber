@@ -11,7 +11,7 @@ import time
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 
@@ -43,11 +43,18 @@ def _workflow_dict(w: Workflow) -> dict[str, Any]:
 
 @router.get("/workflows")
 @router.get("/workflows/")
-async def list_workflows() -> list[dict[str, Any]]:
+async def list_workflows(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
         rows = (
             await db.execute(
-                select(Workflow).where(Workflow.is_template == False).order_by(Workflow.created_at.desc())
+                select(Workflow)
+                .where(Workflow.is_template == False)
+                .order_by(Workflow.created_at.desc())
+                .offset(offset)
+                .limit(limit)
             )
         ).scalars().all()
         return [_workflow_dict(w) for w in rows]
@@ -203,14 +210,19 @@ async def run_workflow(
 
 
 @router.get("/workflows/{workflow_id}/runs")
-async def list_workflow_runs(workflow_id: str) -> list[dict[str, Any]]:
+async def list_workflow_runs(
+    workflow_id: str,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
         rows = (
             await db.execute(
                 select(WorkflowRun)
                 .where(WorkflowRun.workflow_id == workflow_id)
                 .order_by(WorkflowRun.created_at.desc())
-                .limit(50)
+                .offset(offset)
+                .limit(limit)
             )
         ).scalars().all()
         return [
@@ -243,9 +255,16 @@ def _crew_dict(c: Crew) -> dict[str, Any]:
 
 @router.get("/crews")
 @router.get("/crews/")
-async def list_crews() -> list[dict[str, Any]]:
+async def list_crews(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
-        rows = (await db.execute(select(Crew).order_by(Crew.created_at.desc()))).scalars().all()
+        rows = (
+            await db.execute(
+                select(Crew).order_by(Crew.created_at.desc()).offset(offset).limit(limit)
+            )
+        ).scalars().all()
         return [_crew_dict(c) for c in rows]
 
 

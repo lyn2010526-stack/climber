@@ -2,26 +2,38 @@
 
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from app.core import AgentEvent, AgentEventType
+from app.core import AgentEvent, AgentEventType, MessageRole
 from app.core.agent_engine import AgentEngine
+from app.core.agent_run_adapter import AgentEngineRunAdapter
 from app.core.api_key_crypto import decrypt_api_key
 from app.core.auth import get_current_user
 from app.core.di import resolve as di_resolve
+from app.core.run_protocol import (
+    MessageEnvelope,
+    RunNotFoundError,
+    RunProtocolError,
+    StartRun,
+)
 from app.storage import async_session
 from app.storage.database import Agent as AgentModel
 from app.storage.database import ApiKey as ApiKeyModel
 from app.storage.database import Session as SessionModel
+from app.storage.run_store import SQLAlchemyRunStore
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
 _engine: AgentEngine | None = None
+_run_adapter: AgentEngineRunAdapter | None = None
 
 
 def get_engine() -> AgentEngine:
@@ -31,6 +43,13 @@ def get_engine() -> AgentEngine:
         tool_registry = di_resolve("ToolRegistry")
         _engine = AgentEngine(model_registry=model_registry, tool_registry=tool_registry)
     return _engine
+
+
+def get_run_adapter(engine: AgentEngine) -> AgentEngineRunAdapter:
+    global _run_adapter
+    if _run_adapter is None or _run_adapter.engine is not engine:
+        _run_adapter = AgentEngineRunAdapter(engine, store=SQLAlchemyRunStore())
+    return _run_adapter
 
 
 class ChatRequest(BaseModel):
@@ -60,7 +79,7 @@ async def chat(
     user_id: str = Depends(get_current_user),
 ):
     engine = get_engine()
-    session = engine._sessions.get(session_id)
+    session = engine.get_session(session_id)
     if session is None:
         provider = "openai"
         model_id = "gpt-4o-mini"
@@ -131,7 +150,7 @@ async def chat(
             tools=tool_ids,
             session_id=session_id,
         )
-        engine._sessions[session_id] = session
+        engine.register_session(session)
 
     if session.user_id and session.user_id != user_id:
         raise HTTPException(status_code=403, detail="Forbidden")
@@ -144,10 +163,41 @@ async def chat(
 
     async def _stream() -> Any:
         try:
-            async for event in engine.run(session, request.message):
-                yield event.to_sse()
+            lock = engine.get_session_lock(session_id)
+            if lock is not None and lock.locked():
+                yield AgentEvent(
+                    type=AgentEventType.ERROR,
+                    data={"error": "Session is busy processing another request"},
+                ).to_sse()
+                return
+            adapter = get_run_adapter(engine)
+            handle = await adapter.start(
+                StartRun(
+                    session_id=session_id,
+                    user_id=user_id,
+                    agent_id=session.agent_id or None,
+                    kind="agent_chat",
+                    trace_id=str(uuid4()),
+                    message=MessageEnvelope(
+                        message_id=str(uuid4()),
+                        run_id="",
+                        session_id=session_id,
+                        role=MessageRole.USER,
+                        content=request.message,
+                        created_at=datetime.now(UTC),
+                    ),
+                )
+            )
+            async for event in adapter.stream(handle):
+                yield f"event: {event.event_type}\ndata: {json.dumps(event.data)}\n\n"
+        except RunProtocolError as e:
+            import structlog
+
+            structlog.get_logger().info("chat_run_protocol_error", session_id=session_id, error=e.to_dict())
+            yield AgentEvent(type=AgentEventType.ERROR, data={**e.to_dict(), "error": e.message}).to_sse()
         except Exception as e:
             import structlog
+
             structlog.get_logger().error("chat_stream_error", session_id=session_id, error=str(e), exc_info=True)
             error_event = AgentEvent(
                 type=AgentEventType.ERROR,
@@ -156,3 +206,64 @@ async def chat(
             yield error_event.to_sse()
 
     return StreamingResponse(_stream(), media_type="text/event-stream")
+
+
+@router.get("/{session_id}/chat/replay")
+async def replay_chat_events(
+    session_id: str,
+    after: int = Query(default=0, ge=0),
+    turn_id: str | None = Query(default=None, max_length=128),
+    limit: int = Query(default=256, ge=1, le=256),
+    user_id: str = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Return retained events for an authenticated session reconnect."""
+    engine = get_engine()
+    session = engine.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.user_id and session.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    adapter = get_run_adapter(engine)
+    run = None
+    if turn_id:
+        try:
+            candidate = await adapter.store.require(turn_id)
+        except RunNotFoundError:
+            candidate = None
+        if candidate is not None and candidate.session_id == session_id:
+            run = candidate
+    if run is None and not turn_id:
+        run = await adapter.store.latest_run_for_session(session_id)
+
+    if run is not None:
+        page = await adapter.replay(run.run_id, after=after, limit=limit)
+        return {
+            "session_id": session_id,
+            "after": after,
+            "oldest_sequence": page.oldest_sequence,
+            "latest_sequence": page.latest_sequence,
+            "run_id": run.run_id,
+            "events": [
+                {
+                    "sequence": event.sequence,
+                    "event_id": event.event_id,
+                    "turn_id": run.run_id,
+                    "event": event.event_type,
+                    "data": event.data,
+                }
+                for event in page.events
+            ]
+        }
+
+    # No persisted Run for this session/turn: the unified persisted replay is
+    # the authoritative source, so return an empty replay page instead of
+    # falling back to the legacy in-memory EventReplayBuffer.
+    return {
+        "session_id": session_id,
+        "after": after,
+        "oldest_sequence": None,
+        "latest_sequence": after,
+        "run_id": None,
+        "events": [],
+    }

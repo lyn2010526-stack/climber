@@ -34,9 +34,20 @@ async def get_redis():
 async def close_redis():
     """Close Redis connection."""
     global _redis_client
-    if _redis_client:
-        await _redis_client.close()
-        _redis_client = None
+    redis_client = _redis_client
+    _redis_client = None
+    if not redis_client:
+        return
+
+    try:
+        if hasattr(redis_client, "aclose"):
+            await redis_client.aclose()
+        else:
+            await redis_client.close()
+    except RuntimeError as exc:
+        if str(exc) != "Event loop is closed":
+            raise
+        logger.debug("Redis client loop already closed")
 
 
 class Cache:
@@ -63,35 +74,43 @@ class Cache:
     async def set(self, key: str, value: Any, ttl: int = 300) -> bool:
         if not self._redis:
             return False
+        cache_key = self._key(key)
         try:
-            await self._redis.set(self._key(key), json.dumps(value, default=str), ex=ttl)
+            await self._redis.set(cache_key, json.dumps(value, default=str), ex=ttl)
             return True
         except Exception:
+            logger.warning("storage.cache.set_failed", cache_key=cache_key, ttl=ttl, exc_info=True)
             return False
 
     async def delete(self, key: str) -> bool:
         if not self._redis:
             return False
+        cache_key = self._key(key)
         try:
-            await self._redis.delete(self._key(key))
+            await self._redis.delete(cache_key)
             return True
         except Exception:
+            logger.warning("storage.cache.delete_failed", cache_key=cache_key, exc_info=True)
             return False
 
     async def increment(self, key: str, amount: int = 1) -> int:
         if not self._redis:
             return 0
+        cache_key = self._key(key)
         try:
-            return await self._redis.incrby(self._key(key), amount)
+            return await self._redis.incrby(cache_key, amount)
         except Exception:
+            logger.warning("storage.cache.increment_failed", cache_key=cache_key, amount=amount, exc_info=True)
             return 0
 
     async def expire(self, key: str, seconds: int) -> bool:
         if not self._redis:
             return False
+        cache_key = self._key(key)
         try:
-            return await self._redis.expire(self._key(key), seconds)
+            return await self._redis.expire(cache_key, seconds)
         except Exception:
+            logger.warning("storage.cache.expire_failed", cache_key=cache_key, seconds=seconds, exc_info=True)
             return False
 
 

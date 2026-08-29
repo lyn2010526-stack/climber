@@ -275,7 +275,7 @@ async def test_concurrent_approval_count_returns_to_zero_and_resumes(monkeypatch
         await asyncio.sleep(0)
 
     results = await asyncio.wait_for(run_task, timeout=5)
-    assert getattr(session, "_pending_approval_count") == 0
+    assert session._pending_approval_count == 0
     assert session.state_machine.state == TaskState.PROCESSING
     assert all(result.success for result in results)
     assert len(registry.calls) == n

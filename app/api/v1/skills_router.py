@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 
 from app.api.v1.helpers import DEFAULT_USER
@@ -31,9 +31,16 @@ def _skill_dict(s: Skill) -> dict[str, Any]:
 
 @router.get("/skills")
 @router.get("/skills/")
-async def list_skills() -> list[dict[str, Any]]:
+async def list_skills(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
-        rows = (await db.execute(select(Skill).order_by(Skill.created_at.desc()))).scalars().all()
+        rows = (
+            await db.execute(
+                select(Skill).order_by(Skill.created_at.desc()).offset(offset).limit(limit)
+            )
+        ).scalars().all()
         return [_skill_dict(s) for s in rows]
 
 

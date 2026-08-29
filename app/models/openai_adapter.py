@@ -415,7 +415,10 @@ class OpenAIAdapter(ModelAdapter):
             chunks.append(chunk)
         if not chunks:
             return ChatResult(content="", tool_calls=[], finish_reason="stop", tokens_used=0)
-        full_content = "".join(c.content or "" for c in chunks)
+        full_content = next(
+            (chunk.accumulated_content for chunk in reversed(chunks) if chunk.accumulated_content),
+            "".join(c.content or "" for c in chunks),
+        )
         all_tool_calls: list[dict] = []
         for c in chunks:
             if c.tool_calls:

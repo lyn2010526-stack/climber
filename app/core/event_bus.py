@@ -1,122 +1,147 @@
-"""EventBus - decoupled pub/sub event system for inter-component communication.
+"""Event Bus — unified pub/sub event system for middleware and components.
 
+Provides:
+- Pub/sub pattern for decoupled event handling
+- Event filtering by type
+- Event history for debugging
+- Middleware event hooks
 """
 
 from __future__ import annotations
 
-import asyncio
-import logging
 from collections import defaultdict
-from collections.abc import Callable
-from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from collections.abc import Callable, Coroutine
+from dataclasses import dataclass
 from typing import Any
 
-logger = logging.getLogger(__name__)
+import structlog
 
-_background_tasks: set[asyncio.Task] = set()
-
-
-def _spawn(coro: Any) -> None:
-    task = asyncio.create_task(coro)
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
-
+logger = structlog.get_logger()
 
 
 @dataclass
-class Event:
-    event_type: str
-    data: dict[str, Any]
-    source: str = ""
-    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-    event_id: str = ""
+class EventSubscription:
+    """A subscription to an event type."""
+    callback: Callable[[dict[str, Any]], Coroutine[Any, Any, None]]
+    event_type: str | None = None  # None = all events
+    filter_fn: Callable[[dict[str, Any]], bool] | None = None
 
 
 class EventBus:
-    """Async pub/sub event bus for decoupled component communication.
+    """Unified event bus for pub/sub event handling.
 
-    Features:
-    - Multiple subscribers per event type
-    - Wildcard subscribers (* for all events)
-    - Async and sync handlers
-    - Event history with configurable limit
+    Usage:
+        bus = EventBus()
+        bus.subscribe("tool_result", my_handler)
+        await bus.publish("tool_result", {"tool": "ls", "output": "..."})
     """
 
-    def __init__(self, max_history: int = 1000):
-        self._subscribers: dict[str, list[Callable]] = defaultdict(list)
-        self._wildcards: list[Callable] = []
-        self._history: list[Event] = []
-        self._max_history = max_history
-        self._lock = asyncio.Lock()
+    def __init__(self, history_size: int = 100):
+        self._subscribers: dict[str, list[EventSubscription]] = defaultdict(list)
+        self._global_subscribers: list[EventSubscription] = []
+        self._history: list[dict[str, Any]] = []
+        self._history_size = history_size
 
-    def subscribe(self, event_type: str, handler: Callable) -> None:
-        """Subscribe to a specific event type."""
-        self._subscribers[event_type].append(handler)
-        logger.debug("subscribed", event_type=event_type, handler=handler.__name__)
+    def subscribe(
+        self,
+        event_type: str | None,
+        callback: Callable[[dict[str, Any]], Coroutine[Any, Any, None]],
+        filter_fn: Callable[[dict[str, Any]], bool] | None = None,
+    ) -> None:
+        """Subscribe to an event type.
 
-    def subscribe_all(self, handler: Callable) -> None:
-        """Subscribe to all events (wildcard)."""
-        self._wildcards.append(handler)
-        logger.debug("subscribed_all", handler=handler.__name__)
+        Args:
+            event_type: Event type to subscribe to (None for all events)
+            callback: Async callback function
+            filter_fn: Optional filter function
+        """
+        sub = EventSubscription(callback=callback, event_type=event_type, filter_fn=filter_fn)
+        if event_type is None:
+            self._global_subscribers.append(sub)
+        else:
+            self._subscribers[event_type].append(sub)
 
-    def unsubscribe(self, event_type: str, handler: Callable) -> bool:
-        """Unsubscribe from an event type."""
-        if handler in self._subscribers[event_type]:
-            self._subscribers[event_type].remove(handler)
-            return True
-        if handler in self._wildcards:
-            self._wildcards.remove(handler)
-            return True
-        return False
+    def unsubscribe(
+        self,
+        event_type: str | None,
+        callback: Callable,
+    ) -> None:
+        """Remove a subscription."""
+        if event_type is None:
+            self._global_subscribers = [
+                s for s in self._global_subscribers if s.callback != callback
+            ]
+        else:
+            self._subscribers[event_type] = [
+                s for s in self._subscribers[event_type] if s.callback != callback
+            ]
 
-    async def publish(self, event_type: str, data: dict[str, Any], source: str = "") -> None:
-        """Publish an event to all subscribers."""
-        event = Event(event_type=event_type, data=data, source=source)
-        async with self._lock:
-            self._history.append(event)
-            if len(self._history) > self._max_history:
-                self._history = self._history[-self._max_history:]
+    async def publish(self, event_type: str, data: dict[str, Any]) -> None:
+        """Publish an event to all subscribers.
 
-        handlers = list(self._subscribers.get(event_type, []))
-        for handler in self._wildcards:
-            handlers.append(handler)
+        Args:
+            event_type: Type of event
+            data: Event data
+        """
+        event = {"type": event_type, **data}
 
-        if not handlers:
-            return
+        # Record in history
+        self._history.append(event)
+        if len(self._history) > self._history_size:
+            self._history = self._history[-self._history_size:]
 
-        coros = []
-        for handler in handlers:
+        # Notify type-specific subscribers
+        for sub in self._subscribers.get(event_type, []):
+            if sub.filter_fn and not sub.filter_fn(event):
+                continue
             try:
-                result = handler(event)
-                if asyncio.iscoroutine(result) or asyncio.isfuture(result):
-                    coros.append(result)
-                else:
-                    _spawn(self._run_sync(handler, event))
+                await sub.callback(event)
             except Exception as e:
-                logger.error("event_handler_error", event_type=event_type, error=str(e))
+                logger.warning(
+                    "event_bus.subscriber_error",
+                    event_type=event_type,
+                    error=str(e),
+                )
 
-        if coros:
-            await asyncio.gather(*coros, return_exceptions=True)
+        # Notify global subscribers
+        for sub in self._global_subscribers:
+            if sub.event_type and sub.event_type != event_type:
+                continue
+            if sub.filter_fn and not sub.filter_fn(event):
+                continue
+            try:
+                await sub.callback(event)
+            except Exception as e:
+                logger.warning(
+                    "event_bus.subscriber_error",
+                    event_type=event_type,
+                    error=str(e),
+                )
 
-        logger.debug("published", event_type=event_type, handlers=len(handlers))
-
-    async def _run_sync(self, handler: Callable, event: Event) -> None:
-        try:
-            handler(event)
-        except Exception as e:
-            logger.error("sync_event_handler_error", error=str(e))
-
-    def get_history(self, event_type: str | None = None, limit: int = 100) -> list[Event]:
-        """Get recent events, optionally filtered by type."""
-        events = self._history
+    def get_history(
+        self,
+        event_type: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Get event history, optionally filtered by type."""
         if event_type:
-            events = [e for e in events if e.event_type == event_type]
+            events = [e for e in self._history if e.get("type") == event_type]
+        else:
+            events = self._history
         return events[-limit:]
 
     def clear_history(self) -> None:
+        """Clear event history."""
         self._history.clear()
 
 
-# Global singleton
-event_bus = EventBus()
+# Global event bus instance
+_event_bus: EventBus | None = None
+
+
+def get_event_bus() -> EventBus:
+    """Get the global event bus instance."""
+    global _event_bus
+    if _event_bus is None:
+        _event_bus = EventBus()
+    return _event_bus

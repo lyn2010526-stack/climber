@@ -86,6 +86,17 @@ class PermissionConfig:
             import logging
             logging.getLogger(__name__).warning(f"permission.bypass_mode_active tool={tool_name}")
             return RuleDecision.ALLOW
+
+        for denied in self.denied_tools:
+            if fnmatch.fnmatch(tool_name.lower(), denied.lower()):
+                return RuleDecision.DENY
+
+        if any(
+            rule.decision is RuleDecision.DENY and rule.matches(tool_name, arguments)
+            for rule in self.rules
+        ):
+            return RuleDecision.DENY
+
         if self.mode == PermissionMode.AUTO:
             # auto 模式下除了高危操作外都允许
             if self._is_high_risk(tool_name, arguments):
@@ -100,11 +111,6 @@ class PermissionConfig:
             if tool_name in ("read_file", "file_read", "list_dir", "search"):
                 return RuleDecision.ALLOW
             return RuleDecision.DENY
-
-        # 检查 Crush 风格的黑名单
-        for denied in self.denied_tools:
-            if fnmatch.fnmatch(tool_name.lower(), denied.lower()):
-                return RuleDecision.DENY
 
         # 检查 Crush 风格的白名单
         if self.allowed_tools:

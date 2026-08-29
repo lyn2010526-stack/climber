@@ -10,11 +10,13 @@ Implements:
 from __future__ import annotations
 
 import asyncio
+import fnmatch
 import os
 import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -233,25 +235,50 @@ class SecuritySandbox:
         self.config = config
         self._active = True
 
+    @staticmethod
+    def _is_within(path: Path, root: Path) -> bool:
+        try:
+            path.relative_to(root)
+            return True
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _matches_blocked_path(path: Path, pattern: str) -> bool:
+        if any(character in pattern for character in "*?["):
+            return any(fnmatch.fnmatchcase(str(candidate), pattern) for candidate in (path, *path.parents))
+        blocked = Path(pattern).expanduser().resolve(strict=False)
+        return path == blocked or blocked in path.parents
+
     def validate_file_access(self, path: str, mode: str = 'read') -> tuple[bool, str]:
         """Validate if a file can be accessed."""
-        abs_path = os.path.abspath(path)
+        workdir = Path(self.config.workdir).expanduser().resolve(strict=False)
+        requested = Path(path).expanduser()
+        if not requested.is_absolute():
+            requested = workdir / requested
+        try:
+            resolved = requested.resolve(strict=False)
+        except (OSError, RuntimeError, ValueError) as exc:
+            return False, f"Access denied: invalid path '{path}': {exc}"
 
         # Check blocked paths
         for blocked in self.config.blocked_paths:
-            if abs_path.startswith(blocked) or abs_path == blocked:
-                return False, f"Access denied: path '{abs_path}' is in blocked list"
+            if self._matches_blocked_path(resolved, blocked):
+                return False, f"Access denied: path '{resolved}' is in blocked list"
 
         # Check allowed paths
-        allowed = [self.config.workdir, *self.config.allowed_paths]
-        is_allowed = any(abs_path.startswith(p) for p in allowed)
+        allowed = [
+            workdir,
+            *(Path(root).expanduser().resolve(strict=False) for root in self.config.allowed_paths),
+        ]
+        is_allowed = any(self._is_within(resolved, root) for root in allowed)
 
         if not is_allowed:
-            return False, f"Access denied: path '{abs_path}' is outside allowed directories"
+            return False, f"Access denied: path '{resolved}' is outside allowed directories"
 
         # Check file size for reads
-        if mode == 'read' and os.path.exists(abs_path):
-            size_mb = os.path.getsize(abs_path) / (1024 * 1024)
+        if mode == 'read' and resolved.exists():
+            size_mb = resolved.stat().st_size / (1024 * 1024)
             if size_mb > self.config.max_file_size_mb:
                 return False, f"File too large: {size_mb:.1f}MB (max {self.config.max_file_size_mb}MB)"
 

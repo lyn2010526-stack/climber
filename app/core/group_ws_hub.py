@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -162,6 +163,8 @@ class GroupWebSocketHub:
         task_id = payload.get("task_id")
         if not task_id:
             return {"ok": False, "error": "task_id required"}
+        if "current_round" in payload:
+            return {"ok": False, "error": "current_round is managed by the task executor"}
         async with async_session() as db:
             task = (
                 await db.execute(
@@ -174,14 +177,27 @@ class GroupWebSocketHub:
             if task is None:
                 return {"ok": False, "error": "task not found"}
             if "status" in payload:
-                task.status = payload["status"]
+                new_status = payload["status"]
+                allowed = ("paused", "stopped", "cancelled")
+                if new_status not in allowed:
+                    return {"ok": False, "error": f"status must be one of {allowed} via websocket"}
+                if task.status in ("completed", "failed", "partial", "stopped", "cancelled"):
+                    return {"ok": False, "error": f"cannot update terminal task in status: {task.status}"}
+                task.status = new_status
+                if new_status != "paused":
+                    task.completed_at = datetime.now(UTC)
+                task.lease_owner = None
+                task.lease_expires_at = None
+                task.lease_token = (task.lease_token or 0) + 1
             if "worker_id" in payload:
                 task.worker_id = payload["worker_id"]
-            if "current_round" in payload:
-                task.current_round = int(payload["current_round"])
             await db.commit()
             await self.broadcast(group_id, {"type": "task_update", "data": {"id": task.id, "status": task.status}})
-            return {"ok": True, "id": task_id}
+        if "status" in payload:
+            from app.core.group_collaboration import group_collaboration_engine
+
+            await group_collaboration_engine.cancel_and_wait(task_id)
+        return {"ok": True, "id": task_id}
 
     async def _handle_human_review(self, group_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         """Handle human review response (approve/reject)."""
@@ -190,6 +206,8 @@ class GroupWebSocketHub:
         comment = payload.get("comment", "")
         if not task_id or not decision:
             return {"ok": False, "error": "task_id and decision required"}
+        if decision not in ("approved", "rejected"):
+            return {"ok": False, "error": "decision must be approved or rejected"}
         async with async_session() as db:
             task = (
                 await db.execute(
@@ -201,12 +219,18 @@ class GroupWebSocketHub:
             ).scalar_one_or_none()
             if task is None:
                 return {"ok": False, "error": "task not found"}
+            if task.status != "awaiting_human_review":
+                return {"ok": False, "error": f"task is not awaiting human review: {task.status}"}
             task.human_review_status = decision
             task.human_review_comment = comment
             if decision == "approved":
                 task.status = "running"
             elif decision == "rejected":
                 task.status = "failed"
+                task.completed_at = datetime.now(UTC)
+                task.lease_owner = None
+                task.lease_expires_at = None
+                task.lease_token = (task.lease_token or 0) + 1
             await db.commit()
         event_type = "human_review_approved" if decision == "approved" else "human_review_rejected"
         await self.broadcast(group_id, {

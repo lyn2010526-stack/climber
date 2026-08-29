@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 
 from app.api.v1._shared import _payload
@@ -48,11 +48,16 @@ def _plugin_dict(p: PluginRecord) -> dict[str, Any]:
 
 @router.get("/plugins")
 @router.get("/plugins/")
-async def list_plugins(type: str = "") -> list[dict[str, Any]]:
+async def list_plugins(
+    type: str = "",
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
         stmt = select(PluginRecord).order_by(PluginRecord.installed_at.desc())
         if type:
             stmt = stmt.where(PluginRecord.category == type)
+        stmt = stmt.offset(offset).limit(limit)
         rows = (await db.execute(stmt)).scalars().all()
         return [_plugin_dict(p) for p in rows]
 
@@ -211,9 +216,19 @@ def _mcp_dict(m: MCPServerRecord) -> dict[str, Any]:
 
 @router.get("/mcp")
 @router.get("/mcp/")
-async def list_mcp_servers() -> list[dict[str, Any]]:
+async def list_mcp_servers(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict[str, Any]]:
     async with async_session() as db:
-        rows = (await db.execute(select(MCPServerRecord).order_by(MCPServerRecord.created_at.desc()))).scalars().all()
+        rows = (
+            await db.execute(
+                select(MCPServerRecord)
+                .order_by(MCPServerRecord.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            )
+        ).scalars().all()
         return [_mcp_dict(m) for m in rows]
 
 

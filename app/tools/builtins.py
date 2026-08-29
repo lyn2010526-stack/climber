@@ -73,7 +73,7 @@ from app.tools import (
 )
 
 
-@tool(description="Get the current date and time")
+@tool(description="Get the current date and time", sandbox_safe_when_unavailable=True)
 async def get_datetime() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -111,7 +111,10 @@ async def web_search(query: str) -> str:
         return f"Search error: {e!s}"
 
 
-@tool(description="Evaluate mathematical expressions and calculations. Supports +, -, *, /, ^ (power), %, sqrt(), sin(), cos(), tan(), log(), pow(), pi, e, and comparison operators.")
+@tool(
+    description="Evaluate mathematical expressions and calculations. Supports +, -, *, /, ^ (power), %, sqrt(), sin(), cos(), tan(), log(), pow(), pi, e, and comparison operators.",
+    sandbox_safe_when_unavailable=True,
+)
 async def calculator(expression: str) -> str:
     try:
         expression = expression.replace("^", "**")
@@ -145,7 +148,10 @@ async def get_weather(city: str) -> str:
         return f"Weather error: {e!s}"
 
 
-@tool(description="Read content from a file on the local filesystem. Use when the user wants to view, analyze, or reference an existing file. Returns up to 10,000 characters.")
+@tool(
+    description="Read content from a file on the local filesystem. Use when the user wants to view, analyze, or reference an existing file. Returns up to 10,000 characters.",
+    sandbox_safe_when_unavailable=True,
+)
 async def read_file(path: str) -> str:
     try:
         with open(path, encoding="utf-8") as f:
@@ -165,7 +171,7 @@ async def write_file(path: str, content: str) -> str:
         return f"Error writing file: {e!s}"
 
 
-@tool(description="List files in a directory")
+@tool(description="List files in a directory", sandbox_safe_when_unavailable=True)
 async def list_files(directory: str = ".") -> str:
     import os
     try:
@@ -237,7 +243,7 @@ async def wikipedia_summary(topic: str) -> str:
         return f"Wikipedia error: {e!s}"
 
 
-@tool(description="Shorten a long text to a summary")
+@tool(description="Shorten a long text to a summary", sandbox_safe_when_unavailable=True)
 async def summarize(text: str, max_sentences: int = 3) -> str:
     """Simple extractive summarization."""
     try:
@@ -249,7 +255,7 @@ async def summarize(text: str, max_sentences: int = 3) -> str:
         return f"Summary error: {e!s}"
 
 
-@tool(description="Encode/decode base64")
+@tool(description="Encode/decode base64", sandbox_safe_when_unavailable=True)
 async def base64_encode(text: str, decode: bool = False) -> str:
     import base64
     try:
@@ -260,7 +266,7 @@ async def base64_encode(text: str, decode: bool = False) -> str:
         return f"Base64 error: {e!s}"
 
 
-@tool(description="Parse JSON and extract a value by key path")
+@tool(description="Parse JSON and extract a value by key path", sandbox_safe_when_unavailable=True)
 async def json_get(json_string: str, key_path: str) -> str:
     """Get a value from JSON using dot notation (e.g., 'user.name')."""
     try:
@@ -316,7 +322,7 @@ async def edit_file(path: str, old_string: str, new_string: str) -> str:
         return f"Error editing file: {e!s}"
 
 
-@tool(description="Show diff between two strings or files.")
+@tool(description="Show diff between two strings or files.", sandbox_safe_when_unavailable=True)
 async def file_diff(path: str, new_content: str) -> str:
     """Show unified diff for a file."""
     try:
@@ -341,7 +347,7 @@ async def append_file(path: str, content: str) -> str:
         return f"Error appending to file: {e!s}"
 
 
-@tool(description="Check if a file or directory exists.")
+@tool(description="Check if a file or directory exists.", sandbox_safe_when_unavailable=True)
 async def file_exists(path: str) -> str:
     """Check file/directory existence."""
     try:
@@ -354,7 +360,7 @@ async def file_exists(path: str) -> str:
         return f"Error checking path: {e!s}"
 
 
-@tool(description="Get file size and metadata.")
+@tool(description="Get file size and metadata.", sandbox_safe_when_unavailable=True)
 async def file_info(path: str) -> str:
     """Get file metadata."""
     try:
@@ -509,19 +515,29 @@ async def stream_command(command: str, timeout: int = 120, workdir: str = "") ->
 )
 async def container_exec(container: str, command: str, workdir: str = "") -> str:
     """Execute a command inside a Docker container."""
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", container):
+        return "Error: invalid container name"
+    if not command.strip():
+        return "Error: command must not be empty"
+    # Validate command against hazard patterns before passing to container shell
+    from app.core.security_sandbox import HAZARD_COMMANDS
+    for pattern in HAZARD_COMMANDS:
+        if re.search(pattern, command, re.IGNORECASE):
+            return "Error: command blocked by safety policy: matches hazard pattern"
     try:
         import subprocess
 
         full_cmd = ["docker", "exec"]
         if workdir:
             full_cmd.extend(["-w", workdir])
-        full_cmd.extend([container, "sh", "-c", command])
+        full_cmd.extend(["--", container, "sh", "-c", command])
 
         result = subprocess.run(
             full_cmd,
             capture_output=True,
             text=True,
             timeout=120,
+            shell=False,
         )
         if result.returncode == 0:
             return result.stdout or "(no output)"
@@ -744,7 +760,3 @@ async def suggest_fix(error_analysis: str, file_content: str = "") -> str:
         return json.dumps(result, ensure_ascii=False, indent=2)
     except Exception as e:
         return f"Error suggesting fix: {e!s}"
-
-
-
-
