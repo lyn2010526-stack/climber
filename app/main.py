@@ -251,6 +251,11 @@ async def lifespan(app: FastAPI):
             app.state.fourth_gen = fourth_gen
             logger.info("fourth_gen.enabled", modules=[k for k in fourth_gen if k not in ("bus", "registry", "guard")])
 
+        arch_v2 = await _init_arch_v2()
+        if arch_v2:
+            app.state.arch_v2 = arch_v2
+            logger.info("arch_v2.enabled", modules=list(arch_v2.keys()))
+
         APP_INFO.info({"version": _APP_VERSION, "debug": str(settings.app_debug)})
 
         if settings.enable_lan_access:
@@ -261,6 +266,10 @@ async def lifespan(app: FastAPI):
         fourth_gen = getattr(app.state, "fourth_gen", None)
         if fourth_gen:
             await _stop_fourth_gen(fourth_gen)
+
+        arch_v2 = getattr(app.state, "arch_v2", None)
+        if arch_v2:
+            await _stop_arch_v2(arch_v2)
 
         await watchdog.stop()
         await guardian.stop()
@@ -379,6 +388,127 @@ async def _stop_fourth_gen(handles: dict[str, Any] | None) -> None:
         except Exception as exc:
             logger.warning("fourth_gen.meta_agent_stop_failed", error=str(exc))
     logger.info("fourth_gen.shutdown_complete")
+
+
+async def _init_arch_v2() -> dict[str, Any] | None:
+    """Wire up the architecture-v2 modules (plugin kernel, 4-layer memory,
+    capability routing, long-context management, self-learning, trace log,
+    skill store, integration). Master-gated by ENABLE_ARCH_V2.
+
+    Returns a dict of started module handles (empty/None when the master
+    switch is OFF — the system then runs purely in legacy mode).
+    """
+    if not settings.enable_arch_v2:
+        return None
+    from app.core.capability.registry import CapabilityRegistry
+    from app.core.four_layer_memory.long_term import LongTermMemory
+    from app.core.four_layer_memory.medium_term import MediumTermMemory
+    from app.core.four_layer_memory.short_term import ShortTermMemory
+    from app.core.long_context.budget import ContextBudgetManager
+    from app.core.long_context.prefix_cache import PrefixCache
+    from app.core.plugin_kernel import PluginKernel
+    from app.core.self_learning.l1_realtime_fix import RealtimeFixer
+    from app.core.self_learning.l2_distill import BackgroundDistiller
+    from app.core.self_learning.l3_steward import SkillSteward
+    from app.core.skill_store.skill_store import SkillStore
+    from app.core.trace_log.trace_log import TraceLog
+
+    handles: dict[str, Any] = {}
+
+    trace_dir = str(Path(settings.log_dir) / "trace_log")
+    if settings.is_arch_v2_active("trace_log"):
+        trace = TraceLog(base_dir=trace_dir)
+        handles["trace_log"] = trace
+        logger.info("arch_v2.trace_log_enabled", dir=trace_dir)
+
+    skill_store: SkillStore | None = None
+    if settings.is_arch_v2_active("skill_store"):
+        skill_store = SkillStore(base_dir=str(Path(settings.workspace_dir) / "skills"))
+        handles["skill_store"] = skill_store
+        logger.info("arch_v2.skill_store_enabled")
+
+    if settings.is_arch_v2_active("plugin_kernel"):
+        from app.core.plugin_kernel import get_default_event_bus
+        from app.core.plugin_kernel.profiles import ALL_PROFILES, ProfileConfig
+
+        bus = get_default_event_bus()
+        trace = handles.get("trace_log")
+
+        async def _trace_sink(event: dict[str, Any]) -> None:
+            await trace.append(
+                event.get("type", "event"),
+                {k: v for k, v in event.items() if k not in ("id", "type", "ts")},
+            )
+
+        kernel = PluginKernel(trace_sink=_trace_sink if trace else None)
+        profile_mode = os.environ.get("ARCH_V2_PROFILE", "developer")
+        if profile_mode not in ALL_PROFILES:
+            profile_mode = "developer"
+        profile = ProfileConfig(mode=profile_mode)
+        kernel.set_profile(profile)
+        handles["plugin_kernel"] = kernel
+        handles["event_bus"] = bus
+        logger.info(
+            "arch_v2.plugin_kernel_enabled",
+            profile=profile.mode,
+            plugins=profile.all_plugin_ids(),
+        )
+
+    if settings.is_arch_v2_active("four_layer_memory"):
+        mem_base = str(Path(settings.log_dir) / "memory")
+        short_term = ShortTermMemory()
+        medium_term = MediumTermMemory()
+        long_term = LongTermMemory(base_dir=mem_base)
+        handles["memory_short_term"] = short_term
+        handles["memory_medium_term"] = medium_term
+        handles["memory_long_term"] = long_term
+        logger.info("arch_v2.four_layer_memory_enabled")
+
+    if settings.is_arch_v2_active("capability"):
+        registry = CapabilityRegistry()
+        handles["capability_registry"] = registry
+        logger.info("arch_v2.capability_enabled")
+
+    if settings.is_arch_v2_active("self_learning") and skill_store is not None:
+        l1 = RealtimeFixer(store=skill_store)
+        l2 = BackgroundDistiller(store=skill_store)
+        l3 = SkillSteward(store=skill_store)
+        handles["self_learning_l1"] = l1
+        handles["self_learning_l2"] = l2
+        handles["self_learning_l3"] = l3
+        logger.info("arch_v2.self_learning_enabled")
+
+    if settings.is_arch_v2_active("long_context"):
+        budget = ContextBudgetManager()
+        prefix_cache = PrefixCache()
+        handles["context_budget"] = budget
+        handles["prefix_cache"] = prefix_cache
+        logger.info("arch_v2.long_context_enabled")
+
+    if settings.is_arch_v2_active("integration"):
+        from app.core.integration.event_sourcing import EventSourcingManager
+        from app.core.integration.protocol_router import ProtocolRouter
+
+        es_manager = EventSourcingManager()
+        proto_router = ProtocolRouter()
+        handles["event_sourcing_manager"] = es_manager
+        handles["protocol_router"] = proto_router
+        logger.info("arch_v2.integration_enabled")
+
+    return handles
+
+
+async def _stop_arch_v2(handles: dict[str, Any] | None) -> None:
+    """Gracefully shut down started arch-v2 modules."""
+    if not handles:
+        return
+    kernel = handles.get("plugin_kernel")
+    if kernel is not None:
+        try:
+            await kernel.shutdown()
+        except Exception as exc:
+            logger.warning("arch_v2.plugin_kernel_shutdown_failed", error=str(exc))
+    logger.info("arch_v2.shutdown_complete")
 
 
 app = FastAPI(

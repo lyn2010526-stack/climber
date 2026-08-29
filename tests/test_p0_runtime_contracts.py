@@ -119,7 +119,15 @@ async def test_chat_rejects_in_memory_session_owned_by_another_user() -> None:
         model_id="gpt-4o-mini",
         api_key="placeholder",
     )
-    engine = type("Engine", (), {"_sessions": {session.session_id: session}})()
+    engine = type(
+        "Engine",
+        (),
+        {
+            "_sessions": {session.session_id: session},
+            "get_session": lambda self, sid: self._sessions.get(sid),
+            "register_session": lambda self, s: self._sessions.__setitem__(s.session_id, s),
+        },
+    )()
 
     with patch("app.api.v1.chat.get_engine", return_value=engine):
         with pytest.raises(HTTPException) as exc_info:
@@ -144,7 +152,15 @@ async def test_chat_applies_model_override_to_in_memory_session() -> None:
         model_id="gpt-4o-mini",
         api_key="placeholder",
     )
-    engine = type("Engine", (), {"_sessions": {session.session_id: session}})()
+    engine = type(
+        "Engine",
+        (),
+        {
+            "_sessions": {session.session_id: session},
+            "get_session": lambda self, sid: self._sessions.get(sid),
+            "register_session": lambda self, s: self._sessions.__setitem__(s.session_id, s),
+        },
+    )()
 
     with (
         patch("app.api.v1.chat.get_engine", return_value=engine),

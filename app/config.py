@@ -96,6 +96,25 @@ class Settings(BaseSettings):
     enable_goal_centered: bool = Field(default=False)
     enable_swarm: bool = Field(default=False)
 
+    # Architecture-v2 modules (plugin kernel / 4-layer memory / capability /
+    # long-context / self-learning / trace log / skill store / integration).
+    # Master switch gates every sub-module.
+    enable_arch_v2: bool = Field(default=False)
+    enable_plugin_kernel: bool = Field(default=False)
+    enable_trace_log: bool = Field(default=False)
+    enable_four_layer_memory: bool = Field(default=False)
+    enable_skill_store: bool = Field(default=False)
+    enable_self_learning: bool = Field(default=False)
+    enable_capability: bool = Field(default=False)
+    enable_long_context: bool = Field(default=False)
+    enable_integration: bool = Field(default=False)
+
+    def is_arch_v2_active(self, name: str) -> bool:
+        """True when the arch-v2 master switch and the module switch are ON."""
+        if not self.enable_arch_v2:
+            return False
+        return bool(getattr(self, f"enable_{name}", False))
+
     def is_fourth_gen_mod_active(self, name: str) -> bool:
         """True when the master switch is ON and the per-module switch is ON."""
         if not self.enable_fourth_gen:
