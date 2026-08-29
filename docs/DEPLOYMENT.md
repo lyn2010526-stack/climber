@@ -5,20 +5,29 @@
 ### Docker (Recommended)
 
 ```bash
-docker-compose up -d
+# Create .env from the template and replace credential placeholders first.
+cp .env.example .env
+
+docker compose up -d
 ```
 
+`POSTGRES_PASSWORD` and `REDIS_PASSWORD` are required by Compose. Strong random
+values may contain URL special characters such as `@:/?#%`; the API builds and
+encodes its connection URLs from separate credential fields.
+PostgreSQL and Redis are reachable only from the Compose network; the API
+remains exposed on port 8000. Containers have restart policies, health checks,
+and CPU/memory limits.
+
 This starts:
-- Backend (FastAPI) on port 8000
-- Frontend (React) on port 5173
-- ChromaDB on port 8001
+- API and built React frontend on port 8000
+- PostgreSQL and Redis on the private Compose network
+- Chroma data persisted in the `app_data` volume
 
 ### Manual
 
 #### Backend
 
 ```bash
-cd agent-engine
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -30,10 +39,18 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ```bash
 cd frontend-react
-npm install
-npm run dev    # Development
-npm run build  # Production build
+npm ci
+
+# Development server
+npm run dev
+
+# Production build
+npm run build
 ```
+
+The production Compose stack builds the React frontend into `dist` and serves
+it from the API container. The Vite development server is intended for local
+development.
 
 ## Production Considerations
 

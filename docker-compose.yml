@@ -1,17 +1,22 @@
-version: '3.8'
-
 services:
   api:
     build: .
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://climber:climber@postgres:5432/climber
-      - REDIS_URL=redis://redis:6379/0
-      - APP_ENV=production
-      - APP_DEBUG=false
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_USER: climber
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      DATABASE_NAME: climber
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      REDIS_DB: "0"
+      APP_ENV: production
+      APP_DEBUG: "false"
     volumes:
-      - ./data:/app/data
+      - app_data:/app/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -19,49 +24,43 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import json, urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3); payload = json.load(response); raise SystemExit(0 if payload.get('status') == 'ok' else 1)"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
-
-  frontend:
-    image: node:20-alpine
-    working_dir: /app
-    command: sh -c "cd frontend-react && npm install && npx vite --host 0.0.0.0"
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend-react:/app/frontend-react
-      - /app/frontend-react/node_modules
-    environment:
-      - VITE_API_URL=/api
-      - VITE_PROXY_TARGET=http://api:8000
-    depends_on:
-      api:
-        condition: service_healthy
-    restart: unless-stopped
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
 
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=climber
-      - POSTGRES_PASSWORD=climber
-      - POSTGRES_DB=climber
+      POSTGRES_USER: climber
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: climber
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U climber"]
+      test: ["CMD", "pg_isready", "-U", "climber", "-d", "climber"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -70,16 +69,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  chroma:
-    image: chromadb/chroma:latest
-    ports:
-      - "8001:8000"
-    volumes:
-      - chroma_data:/chroma/chroma
-    restart: unless-stopped
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
 
 volumes:
+  app_data:
   postgres_data:
   redis_data:
-  chroma_data:

@@ -1,0 +1,45 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Version-control and editor metadata
+.git
+.gitignore
+.github
+.idea
+.vscode
+
+# Dependency and build output
+**/node_modules
+**/dist
+**/build
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+htmlcov
+
+# Runtime state
+data
+logs
+workspace
+*.db
+*.db-shm
+*.db-wal
+dump.rdb
+
+# Tests and local tooling
+tests
+.monkeycode
+.ai-ready
+
+# Legacy and nested repository copies
+agent-engine
+climber-repo
+climber_legacy_conflict
+app_legacy_conflict

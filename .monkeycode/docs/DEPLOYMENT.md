@@ -44,7 +44,6 @@ CHROMA_DB_PATH=./data/chroma
 ### 安装依赖
 
 ```bash
-cd agent-engine
 pip install --break-system-packages -r requirements.txt
 ```
 
@@ -57,16 +56,13 @@ alembic upgrade head
 ### 启动服务
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-### 后台运行
+### 开发模式
 
 ```bash
-# 使用 tmux/screen
-tmux new -s climber
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-# Ctrl+B 然后 D 分离会话
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ## 前端部署
@@ -74,8 +70,8 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 ### 安装依赖
 
 ```bash
-cd agent-engine/frontend-react
-npm install
+cd frontend-react
+npm ci
 ```
 
 ### 开发模式
@@ -91,6 +87,10 @@ npm run build
 npm run preview
 ```
 
+The production Compose stack builds the React frontend into `dist` and serves
+it from the API container. Use the standalone Vite server only for local
+development.
+
 ### 使用 Nginx 反向代理
 
 ```nginx
@@ -99,7 +99,7 @@ server {
     server_name your-domain.com;
 
     # 前端静态文件
-    root /path/to/frontend-react/dist;
+    root /path/to/climber/frontend-react/dist;
     index index.html;
 
     # API 反向代理
@@ -118,74 +118,22 @@ server {
 
 ## 使用 Docker 部署
 
-### Dockerfile
+### 准备环境变量
 
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# 安装系统依赖
-RUN apt-get update && apt-get install -y --break-system-packages \
-    chromium \
-    && rm -rf /var/lib/apt/lists/*
-
-# 安装 Python 依赖
-COPY requirements.txt .
-RUN pip install --break-system-packages -r requirements.txt
-
-# 复制应用代码
-COPY . .
-
-# 暴露端口
-EXPOSE 8000
-
-# 启动命令
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```bash
+# 创建本地环境文件并替换密码占位符
+cp .env.example .env
 ```
 
-### docker-compose.yml
+`POSTGRES_PASSWORD` 和 `REDIS_PASSWORD` 是 Compose 必填变量。可使用包含 `@:/?#%` 等 URL 特殊字符的高熵随机值；API 会从离散凭据字段构造并安全编码连接 URL。
 
-```yaml
-version: '3.8'
+### 启动服务
 
-services:
-  backend:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=sqlite+aiosqlite:///./data/climber.db
-      - REDIS_URL=redis://redis:6379/0
-    volumes:
-      - ./data:/app/data
-    depends_on:
-      - redis
-    restart: unless-stopped
-
-  frontend:
-    build:
-      context: ./frontend-react
-      dockerfile: Dockerfile
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_URL=http://localhost:8000
-    depends_on:
-      - backend
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-
-volumes:
-  redis_data:
+```bash
+docker compose up -d
 ```
+
+运行镜像使用非 root `app` 用户。API、PostgreSQL 和 Redis 均配置健康检查、自动重启策略及 CPU/内存上限。PostgreSQL 和 Redis 仅在 Compose 内网可见；API 在宿主机 `8000` 端口同时提供前端页面和 API。
 
 ## 健康检查
 

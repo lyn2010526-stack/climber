@@ -33,11 +33,11 @@
 ```bash
 # 克隆仓库
 git clone https://github.com/lyn2010526-stack/climber.git
-cd climber/agent-engine
+cd climber
 
 # 创建虚拟环境
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate
 
 # 安装依赖
 pip install -r requirements.txt
@@ -53,7 +53,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ```bash
 cd frontend-react
-npm install
+npm ci
 npm run dev
 ```
 
@@ -213,16 +213,14 @@ DELETE /api/v1/agents/{id}           # 删除
 
 ```bash
 # 后端测试
-cd agent-engine
 python3 -m pytest tests/ -v
 
 # 前端测试
 cd frontend-react
-npm test
+npm run test
 
-# E2E 测试
-cd frontend-react
-npm run test:e2e
+# Return to the repository root
+cd ..
 ```
 
 ## 部署
@@ -230,22 +228,27 @@ npm run test:e2e
 ### Docker
 
 ```bash
-docker-compose up -d
+# 创建 .env 并替换数据库密码占位符
+cp .env.example .env
+
+docker compose up -d
 ```
+
+Compose 要求配置 `POSTGRES_PASSWORD` 和 `REDIS_PASSWORD`。应用会安全编码密码中的 URL 特殊字符，可直接使用包含 `@:/?#%` 的高熵随机值。API 在 `8000` 端口同时提供前端页面和 API，PostgreSQL 与 Redis 仅在 Compose 内网开放。
 
 ### 手动部署
 
 ```bash
 # 后端
-cd agent-engine
 pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 # 前端
 cd frontend-react
-npm install
+npm ci
 npm run build
-# 部署 dist/ 到 Nginx
+
+# 将 dist/ 部署到 Nginx
 ```
 
 ## 贡献指南

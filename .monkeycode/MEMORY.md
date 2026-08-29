@@ -31,6 +31,28 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
 
 ## 条目
 
+[文档命令审查工作流]
+- Date: 2026-08-27
+- Context: Agent 在核对部署文档与 CI 实际命令时发现
+- Category: 工作流协作
+- Instructions:
+  - 部署文档审查应同时核对 README.md、docs/DEPLOYMENT.md、.monkeycode/docs/DEPLOYMENT.md、package.json、前端 package.json 和 CI workflow
+  - 文档修正后应检查目标路径存在性、package.json 脚本存在性、命令可执行性、shell 注释格式，并查看仅目标文档的 git diff
+  - 文档审查任务只修改文档文件，不修改业务代码、配置或测试，不提交
+
+[前端产品约束]
+- Date: 2026-08-26
+- Context: 用户要求全面检查 Climber 源仓库并修复问题时明确
+- Instructions:
+  - 产品不提供登录界面，前端保持直接进入工作台的体验；认证能力继续作为后台 API 的可选基础设施处理
+
+[持续审查与优化方式]
+- Date: 2026-08-26
+- Context: 用户要求持续推进全仓库检查和优化时明确
+- Instructions:
+  - 持续执行全仓库检查和增量优化；每个问题都要经过定位、最小修复、验证和同类问题复查形成闭环
+  - 已有明确下一步时继续推进，遇到真实需求歧义或高风险策略变更时暂停并请求确认
+
 [前端项目 UI 重构]
 - Date: 2026-08-04
 - Context: 对 agent-engine/frontend-react 项目进行 UI 重构
@@ -79,7 +101,8 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
 - Context: Agent 在执行后端全量回归修复时发现
 - Category: 排错调试
 - Instructions:
-  - 全量后端测试命令: `cd /workspace && timeout 2400 /usr/bin/python3 -m pytest tests/ -q --no-header -p no:cacheprovider --timeout=180`（约 18 分钟，当前基线 1487 passed / 50 skipped / 0 failed）；单文件定位用 `-p no:cacheprovider -x`
+   - 全量后端测试命令: `cd /workspace && /usr/bin/python3 -m pytest tests/ -q --no-header -p no:cacheprovider --timeout=180 -W error::pytest.PytestUnhandledThreadExceptionWarning`（约 21 分钟）；单文件定位用 `-p no:cacheprovider -x`
+   - 基线历史：2026-08-10 1487/50/0 → 2026-08-21 1660/16/0 → 2026-08-29 1963/16/1（新增 303 个测试，1 个预存失败 `test_p0_runtime_contracts.py::test_chat_applies_model_override_to_in_memory_session` 源自历史未提交的 chat.py 重构 `engine.get_session()` 与测试 mock 的 `Engine` 只有 `_sessions` 不匹配，与架构改动无关）
   - 用后台终端跑全量（background_terminal_create），中途无输出属正常（tail 管道到结束才输出）
   - app/core/sandbox.py 用 shlex.split 而非 str.split 解析命令（引号参数会被拆坏）；已导入 shlex
   - app/core/web_content_cleaner.py 的噪音过滤不能按行长度 <20 武断删除（会误删短标题）；靠噪音模式判定
@@ -202,3 +225,89 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 新增 UI 组件需导出对应 Props 接口（export interface XxxProps），否则 TypeScript 类型检查会失败
   - vitest 测试失败常见原因：climber_legacy_conflict 子目录缺少依赖，不影响主项目；核心测试通过即可
 
+[后端 pytest 必须单进程运行]
+- Date: 2026-08-21
+- Context: Agent 在排查任务领域测试出现随机缺表错误时发现
+- Category: 测试方法
+- Instructions:
+  - 后端测试共用 `data/test.db`，`tests/conftest.py::cleanup_db` 会在每项测试后执行全库 `drop_all` 和 `init_db`
+  - 同一时间只能运行一个 pytest 进程；多个 pytest 命令需合并为单条串行命令，避免互相删表产生 `no such table` 伪失败
+  - 启动定向或全量回归前先确认没有遗留 pytest 进程；Ruff、前端检查等不访问该测试库的命令可以并行
+  - async engine 的数据库清理必须在 pytest 当前事件循环内执行，并在 teardown 中 `await engine.dispose()`；测试创建的后台数据库任务必须显式等待完成，避免进程退出时出现 aiosqlite `Event loop is closed`
+
+[Climber Agent 进化实验工作流]
+- Date: 2026-08-21
+- Context: 用户要求后续 Agent 能力优化采用可度量、可回滚、有人类审批边界的持续实验流程
+- Instructions:
+  - 每轮开始重读本条规则，研究一个已核验的官方开源标杆模块，并在 Climber 原生架构内做适配实验
+  - 修改系统提示、策略、记忆规则或多 Agent 编排逻辑前先创建检查点；每轮最多合并 3 个优化点
+  - 候选方案使用独立分叉做 A/B 测试，仅将量化结果最优且端到端无回归的方案合入主工作流
+  - 每轮执行基准、旧测、新测试、对抗测试和副作用检测，长期保存成功、失败、成本与适配记录
+  - 涉及权限体系、MCP 注册逻辑、高风险工具或沙箱规则时暂停实现并请求人工确认
+  - 连续 3 轮综合得分未提升时暂停迭代并请求人工确认；每 3 轮组织 7 个专家角色交叉验证
+  - 每轮结构化日志持久化到 `.monkeycode/evolution/`，记录量化得分、端到端完成率、标杆来源、候选结果、成本和下一轮目标
+  - 进化主线聚焦吸收已核验开源 Agent 的核心机制并适配进 Climber；测试用于基线、证伪和回归，避免把测试数量当作进化目标
+  - 每轮优先交付可运行的 Agent 能力提升，记录来源机制、Climber 适配修改点、实际能力变化、适配成本和残余风险
+
+[Climber Agent 事件回放验证]
+- Date: 2026-08-22
+- Context: Agent 在适配 Codex 有界事件缓冲和 DeepSeek Harness 回放隔离时发现
+- Category: 测试方法
+- Instructions:
+  - 第3轮事件回放验证使用后端单进程命令：`/usr/bin/python3 -m pytest tests/test_chat_replay.py tests/test_event_replay.py tests/test_agent_engine_edges.py tests/test_checkpoint_survival.py tests/test_agi_p1_survival.py tests/test_tool_pipeline_fixes.py tests/test_parallel_concurrency.py -q --no-header -p no:cacheprovider`
+  - 回放缓冲当前为进程内有界存储，默认容量 256 条、字节预算 256 KiB；重启或多 worker 交接会丢失事件，持久化事件表需要单独评估 schema 和迁移范围
+  - 回放 API 使用认证、session owner 校验、`after` 游标、`turn_id` 过滤和 `limit` 上限；游标早于保留窗口时通过 `oldest_sequence` 暴露 gap 检测信息
+  - 前端回归、lint 和构建命令：`cd /workspace/frontend-react && npm run test -- --run src/hooks/__tests__/useChat.test.ts`、`npm run lint`、`npm run build`
+
+[Climber 安全边界验证与暂停门禁]
+- Date: 2026-08-22
+- Context: Agent 在执行第3轮七专家交叉审计及第4、5轮安全进化时发现
+- Category: 测试方法
+- Instructions:
+  - 安全低于90时暂停普通能力优化；第5轮 fail-closed 加固后安全复评分为88，仍需人工确认后才能继续读取机密性、native path、认证、管理授权或 OS 隔离改造
+  - 路径隔离必须使用 `Path.resolve(strict=False)` 加组件级祖先判断；字符串 `startswith` 会误放行同前缀兄弟目录并误封同前缀安全目录
+  - blocked path 包含 glob 时应匹配目标路径及其父路径，确保 `/home/*/.ssh` 能覆盖密钥文件，同时避免误封 `.ssh-notes`
+  - 公共权限配置 API 只允许 DEFAULT、ACCEPT_EDITS、PLAN、AUTO；内部 BYPASS 仅供受信进程内调用；AUTO 必须优先执行 `denied_tools` 和显式 DENY
+  - 第4轮单进程回归命令：`/usr/bin/python3 -m pytest tests/test_evolution_round4_security.py tests/test_sandbox_integration.py tests/test_security_fixes_tools.py tests/test_permission_controller.py tests/test_permission_tiers.py tests/test_parallel_approval.py tests/test_agent_engine_edges.py tests/test_chat_replay.py tests/test_event_replay.py tests/test_checkpoint_survival.py -q --no-header -p no:cacheprovider`
+  - sandbox 初始化失败时采用正向能力声明：`ToolDefinition.sandbox_safe_when_unavailable` 默认False，只有显式受信的纯/读取工具可运行；MCP和动态工具默认拒绝，工具名称本身不授予能力
+  - debug recovery 必须复用工具验证边界；sandbox拒绝、权限拒绝和ASK结果不能触发自动副作用，也不能被恢复结果改写为成功
+  - 第5轮单进程回归命令：`/usr/bin/python3 -m pytest tests/test_evolution_round4_security.py tests/test_sandbox_integration.py tests/test_security_fixes_tools.py tests/test_permission_controller.py tests/test_permission_tiers.py tests/test_parallel_approval.py tests/test_agent_engine.py tests/test_agent_engine_edges.py tests/test_chat_replay.py tests/test_event_replay.py tests/test_checkpoint_survival.py tests/test_tool_pipeline.py tests/test_tool_pipeline_fixes.py tests/test_parallel_concurrency.py tests/test_native_tools.py tests/test_unified_tools.py tests/test_tool_runtime.py -q --no-header -p no:cacheprovider`
+  - 已知残余风险：sandbox故障时受信读取工具保留宿主可读范围、native读取使用较弱的abspath边界、固定本地身份、权限配置缺少管理员边界、宿主进程缺少强网络/文件系统隔离、路径验证与打开之间存在TOCTOU窗口
+
+[Climber 降级只读边界与符号链接安全]
+- Date: 2026-08-23
+- Context: Agent 在执行第6轮安全加固时发现
+- Category: 排错调试
+- Instructions:
+  - sandbox=None 时原实现对 sandbox_safe_when_unavailable=True 的工具无条件放行，导致 read_file 可读取宿主任意文件；修复后降级构建 SecuritySandbox 通过 validate_file_access 限制到 workdir 内
+  - native_tools.py 的 _validate_path_within_workspace 和 _validate_file_path 使用 os.path.abspath+startswith 会误放行同前缀兄弟目录（如 /workspace-data 误匹配 /workspace）；修复后使用 Path.resolve()+relative_to() 做精确祖先判断
+  - native_list_dir 缺少路径验证调用，现已添加 _validate_path_within_workspace
+  - process_video 和 process_image 接受 command 参数执行子进程，但未纳入 _COMMAND_TOOLS 或 _FILE_TOOLS，导致沙箱验证完全绕过；修复后加入 _MEDIA_TOOLS 走 sandbox.validate_command()
+  - sandbox=None 分支的 FILE_TOOLS 只检查 mode=="read"，write 模式会跳过整个分支直接放行；修复后显式拒绝 write 模式工具
+  - 第6轮单进程回归命令：`python3 -m pytest tests/test_evolution_round6_security.py tests/test_agent_engine_edges.py tests/test_security_regressions.py tests/test_security_fixes.py tests/test_security_fixes_tools.py tests/test_agi_p5_security.py tests/test_sandbox_integration.py tests/test_native_tools.py tests/test_agent_engine.py -q --timeout=120`
+
+[开源标杆研究与动态工具安全加固]
+- Date: 2026-08-23
+- Context: Agent 在执行第7轮安全加固 + 开源研究时发现
+- Category: 排错调试
+- Instructions:
+  - dynamic_tool.py 的 exec() 仅限制 builtins 但无 AST 预校验，代码可通过 __import__ 引入 os/subprocess 等模块绕过限制；修复后添加 _validate_code_safety() 用 AST walk 拦截危险 import/call
+  - dynamic_tool.py 的 _load() 加载持久化工具时未做安全校验，旧代码可能包含危险操作；修复后加载时执行 _validate_code_safety()，不通过的工具直接跳过
+  - sandbox_runtime.py 使用 create_subprocess_shell() 允许 shell 元字符注入（管道、重定向、分号）；修复后改用 shlex.split() + create_subprocess_exec()
+  - 第7轮单进程回归命令：`python3 -m pytest tests/test_evolution_round6_security.py tests/test_agent_engine_edges.py tests/test_security_regressions.py tests/test_security_fixes.py tests/test_security_fixes_tools.py tests/test_agi_p5_security.py tests/test_sandbox_integration.py tests/test_native_tools.py tests/test_agent_engine.py tests/test_tool_pipeline.py tests/test_tool_pipeline_fixes.py -q --timeout=120`
+  - 开源标杆：Hermes Agent (NousResearch) — GEPA 自进化管线、三层记忆、自修复技能、轨迹压缩、四层风险分级进化；下轮可适配自修复技能到 Climber ToolExtender
+
+[全面安全加固：文件转换路径校验 + 沙箱模式统一]
+- Date: 2026-08-23
+- Context: Agent 在执行第7轮全面优化时发现
+- Category: 排错调试
+- Instructions:
+  - file_conversion_tools.py 的 13 个工具函数接受 input_path/output_path 参数但无路径校验，LLM 可通过工具参数读写宿主任意文件；修复后添加 _validate_conversion_path() 用 Path.resolve()+relative_to() 校验 /workspace 和 /tmp 根目录
+  - sandbox_runtime.py 的 BLOCKED_PATTERNS 只有 10 条（security_sandbox.py 有 30+ 条），遗漏了 sudo、shutdown、reboot、nc 反弹 shell 等关键模式；修复后统一为 30+ 条与 HAZARD_COMMANDS 对齐
+  - container_exec 通过 sh -c 将命令传入容器，命令中的 shell 元字符（管道、重定向、分号）可在容器内注入；修复后在传递前用 HAZARD_COMMANDS 校验命令字符串
+  - agent_engine._validate_tool_call 中 tool_registry.get_tool() 被调用两次（JSON Schema 校验和 sandbox 分支各一次）；修复后缓存结果避免重复查找
+  - threading.Lock 在 resource_quotas.py 中是同步方法使用的，不能替换为 asyncio.Lock（会导致 with 语句失效）；维持原状，实际阻塞时间极短（dict 操作）
+  - 安全复审评分 78/100，主要残余：download_file 缺少内部路径验证、CLIMBER_SANDBOX_WORKDIR 环境变量信任假设
+  - sandbox-None 分支 path 回退必须包含 dir 参数，否则 list_directory 会因路径为空绕过沙箱检查
+  - _BLOCKED_PREFIXES 中 /proc /sys /dev 必须带尾斜杠，否则 /procxfoo 会被误封；用 rstrip("/") 标准化比较
+  - process_video/process_image 必须注册到测试 ToolRegistry 才能测试 _MEDIA_TOOLS 代码路径，否则命中"未分类工具"拒绝
