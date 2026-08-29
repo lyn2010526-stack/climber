@@ -497,8 +497,10 @@ class MemFS:
     def _resolve_path(self, path: str) -> Path:
         """Resolve a relative path to an absolute path, preventing traversal."""
         resolved = (self._base_path / path).resolve()
-        if not str(resolved).startswith(str(self._base_path)):
-            raise ValueError(f"Path traversal detected: {path}")
+        try:
+            resolved.relative_to(self._base_path)
+        except ValueError:
+            raise ValueError(f"Path traversal detected: {path}") from None
         return resolved
 
     def _git_commit_file(self, path: str, action: str) -> None:
