@@ -36,7 +36,7 @@ Updated: 2026-08-28
 
 - [x] 实现 Raw Payload `standard` 策略、脱敏、摘要和截断。
 - [x] 单独实现 `debug` 模式的加密载荷、过期转换和清理任务。
-- [ ] 补充 Run 查询接口、Trace/Checkpoint 关联校验和前端兼容验证。
+- [x] 补充 Run 查询接口、Trace/Checkpoint 关联校验和前端兼容验证（`list_runs`/`RunPage`、`attach_checkpoint`+`CheckpointScopeMismatchError`、`/api/v1/runs` 路由，前端契约保持兼容）。
 
 ## 第六增量：对标开源的代码审查修复
 
