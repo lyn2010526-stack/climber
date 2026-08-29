@@ -102,6 +102,31 @@ async def test_handle_message_unknown_type():
 
 
 @pytest.mark.asyncio
+async def test_handle_message_persists_metadata_and_broadcasts():
+    async with async_session() as db:
+        group = AgentGroup(name="message persistence group")
+        db.add(group)
+        await db.flush()
+        group_id = group.id
+        await db.commit()
+
+    with patch.object(GroupWebSocketHub, "broadcast", new_callable=AsyncMock) as broadcast:
+        result = await GroupWebSocketHub().handle_message(
+            group_id,
+            {
+                "type": "message",
+                "agent_id": "agent-1",
+                "sender_name": "Worker",
+                "content": "completed",
+                "metadata": {"round": 1},
+            },
+        )
+
+    assert result["ok"] is True
+    broadcast.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_websocket_cannot_write_execution_progress():
     hub = GroupWebSocketHub()
 

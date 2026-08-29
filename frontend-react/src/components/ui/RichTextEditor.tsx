@@ -8,6 +8,40 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
+const ALLOWED_HTML_ATTRIBUTES = new Set(['class', 'href', 'src', 'alt', 'title', 'target', 'rel']);
+const ALLOWED_URL_SCHEMES = /^(?:https?:|mailto:|tel:|\/|#)/i;
+
+function sanitizeEditorHtml(html: string): string {
+  if (typeof document === 'undefined') {
+    return html.replace(/[&<>"']/g, (character) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character] ?? character
+    ));
+  }
+
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  template.content.querySelectorAll('script,style,iframe,object,embed,link,meta').forEach((node) => node.remove());
+  template.content.querySelectorAll<HTMLElement>('*').forEach((element) => {
+    [...element.attributes].forEach((attribute) => {
+      const name = attribute.name.toLowerCase();
+      if (name.startsWith('on') || !ALLOWED_HTML_ATTRIBUTES.has(name)) {
+        element.removeAttribute(attribute.name);
+      }
+    });
+
+    for (const name of ['href', 'src']) {
+      const value = element.getAttribute(name);
+      if (value && !ALLOWED_URL_SCHEMES.test(value.trim())) {
+        element.removeAttribute(name);
+      }
+    }
+    if (element.getAttribute('target') === '_blank') {
+      element.setAttribute('rel', 'noopener noreferrer');
+    }
+  });
+  return template.innerHTML;
+}
+
 const editorVariants = cva(
   'flex flex-col rounded-xl border overflow-hidden transition-all duration-200',
   {
@@ -314,7 +348,7 @@ const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(
             '[&_hr]:border-white/[0.08] [&_hr]:my-3',
           )}
           data-placeholder={placeholder}
-          dangerouslySetInnerHTML={value ? { __html: value } : undefined}
+          dangerouslySetInnerHTML={value ? { __html: sanitizeEditorHtml(value) } : undefined}
           onInput={handleInput}
           onKeyDown={handleKeyDown}
           onFocus={onFocus}

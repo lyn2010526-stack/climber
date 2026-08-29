@@ -124,7 +124,7 @@ class GroupWebSocketHub:
                 sender_name=payload.get("sender_name") or "Anonymous",
                 content=payload.get("content", ""),
                 message_type=payload.get("message_type", "text"),
-                metadata=payload.get("metadata", {}),
+                metadata_=payload.get("metadata", {}),
             )
             db.add(msg)
             await db.commit()
