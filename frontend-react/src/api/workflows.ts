@@ -1,5 +1,6 @@
 // Workflows resource domain.
 import type { WorkflowSummary, WorkflowTemplate } from '../types/api';
+import type { CreateWorkflowInput, UpdateWorkflowInput, WorkflowRunResult } from '../types/workflows';
 import { ApiClient } from './client';
 
 declare module './client' {
@@ -7,9 +8,9 @@ declare module './client' {
     listWorkflows(): Promise<WorkflowSummary[]>;
     listWorkflowTemplates(): Promise<WorkflowTemplate[]>;
     createWorkflowFromTemplate(templateId: string): Promise<WorkflowSummary>;
-    createWorkflow(data: any): Promise<any>;
-    updateWorkflow(id: string, data: any): Promise<any>;
-    runWorkflow(id: string, inputs?: Record<string, string>): Promise<any>;
+    createWorkflow(data: CreateWorkflowInput): Promise<WorkflowSummary>;
+    updateWorkflow(id: string, data: UpdateWorkflowInput): Promise<WorkflowSummary>;
+    runWorkflow(id: string, inputs?: Record<string, string>): Promise<WorkflowRunResult>;
   }
 }
 
@@ -27,22 +28,22 @@ ApiClient.prototype.createWorkflowFromTemplate = function (this: ApiClient, temp
   });
 };
 
-ApiClient.prototype.createWorkflow = function (this: ApiClient, data: any) {
-  return this.request<any>('/workflows/', {
+ApiClient.prototype.createWorkflow = function (this: ApiClient, data: CreateWorkflowInput): Promise<WorkflowSummary> {
+  return this.request<WorkflowSummary>('/workflows/', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 };
 
-ApiClient.prototype.updateWorkflow = function (this: ApiClient, id: string, data: any) {
-  return this.request<any>(`/workflows/${id}`, {
+ApiClient.prototype.updateWorkflow = function (this: ApiClient, id: string, data: UpdateWorkflowInput): Promise<WorkflowSummary> {
+  return this.request<WorkflowSummary>(`/workflows/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
 };
 
-ApiClient.prototype.runWorkflow = function (this: ApiClient, id: string, inputs?: Record<string, string>) {
-  return this.request<any>(`/workflows/${id}/run`, {
+ApiClient.prototype.runWorkflow = function (this: ApiClient, id: string, inputs?: Record<string, string>): Promise<WorkflowRunResult> {
+  return this.request<WorkflowRunResult>(`/workflows/${id}/run`, {
     method: 'POST',
     body: JSON.stringify(inputs || {}),
   });

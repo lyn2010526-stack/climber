@@ -16,12 +16,16 @@ export function NotificationsPage() {
   const [result, setResult] = useState<{ ok: boolean; error?: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const fetchHistory = useCallback(async () => {
+    setHistoryError(null);
     try {
       const data = await api.listNotifications(50);
       setItems(Array.isArray(data) ? data : data?.notifications || []);
-    } catch { /* skip */ }
+    } catch {
+      setHistoryError('加载通知历史失败');
+    }
   }, []);
 
   useEffect(() => {
@@ -57,10 +61,13 @@ export function NotificationsPage() {
   };
 
   const clearAll = async () => {
+    setHistoryError(null);
     try {
       await api.clearNotifications();
       setItems([]);
-    } catch { /* skip */ }
+    } catch {
+      setHistoryError('清空通知历史失败');
+    }
   };
 
   const formatTime = (ts?: string) => {
@@ -159,7 +166,23 @@ export function NotificationsPage() {
                 </Button>
               )}
             </div>
-            {items.length === 0 ? (
+            {historyError && (
+              <div role="alert" className="py-10 flex flex-col items-center gap-3 text-[var(--color-error)]">
+                <AlertCircle size={24} />
+                <span className="text-sm">{historyError}</span>
+                {historyError === '加载通知历史失败' && (
+                  <Button
+                    onClick={() => void fetchHistory()}
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl text-xs"
+                  >
+                    重试加载通知历史
+                  </Button>
+                )}
+              </div>
+            )}
+            {historyError === '加载通知历史失败' ? null : items.length === 0 ? (
               <div className="py-10 flex flex-col items-center gap-2 text-[var(--color-text-muted)]">
                 <Inbox size={24} />
                 <span className="text-sm">暂无通知记录</span>

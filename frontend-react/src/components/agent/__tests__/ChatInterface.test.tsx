@@ -51,7 +51,7 @@ describe('ChatInterface', () => {
   });
 
   it('renders suggestions', async () => {
-    await renderChatInterface({ onStop: () => {} });
+    await renderChatInterface({ sessionId: 'session-1', onStop: () => {} });
     expect(screen.getByText('帮我分析代码')).toBeDefined();
   });
 
@@ -72,10 +72,24 @@ describe('ChatInterface', () => {
   });
 
   it('renders the new composer', async () => {
-    await renderChatInterface();
+    await renderChatInterface({ sessionId: 'session-1' });
 
     expect(screen.getByRole('textbox', { name: '消息输入框' })).toBeDefined();
     expect(screen.getByRole('button', { name: '添加附件' })).toBeDefined();
+  });
+
+  it('shows one clear session action before rendering the composer', async () => {
+    const onRequestSession = vi.fn();
+    await renderChatInterface({
+      emptyStateTitle: '需要先创建会话',
+      onRequestSession,
+    });
+
+    screen.getByRole('button', { name: '新建会话' }).click();
+
+    expect(onRequestSession).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('textbox', { name: '消息输入框' })).toBeNull();
+    expect(screen.queryByText('帮我分析代码')).toBeNull();
   });
 
   it('loads and displays pending approvals for the active session', async () => {

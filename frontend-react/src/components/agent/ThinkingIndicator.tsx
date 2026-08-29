@@ -56,12 +56,16 @@ export function ThinkingIndicator({
   useEffect(() => {
     if (!sparkle || !isActive) return;
 
+    let timeoutId: ReturnType<typeof setTimeout>;
     const sparkleInterval = setInterval(() => {
       setShowSparkle(true);
-      setTimeout(() => setShowSparkle(false), 1000);
+      timeoutId = setTimeout(() => setShowSparkle(false), 1000);
     }, 4000);
 
-    return () => clearInterval(sparkleInterval);
+    return () => {
+      clearInterval(sparkleInterval);
+      clearTimeout(timeoutId);
+    };
   }, [sparkle, isActive]);
 
   if (!isActive) return null;

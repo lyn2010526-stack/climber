@@ -20,13 +20,15 @@ vi.mock('../../store/workspace', () => ({
 }));
 
 describe('MobileChatPage', () => {
-  it('renders chat interface', () => {
+  it('renders a clear session action when no session is selected', () => {
     render(<MobileChatPage />);
-    expect(screen.getByText('开始新的对话')).toBeDefined();
+    expect(screen.getByText('需要先创建会话')).toBeDefined();
+    expect(screen.getByRole('button', { name: '新建会话' })).toBeDefined();
   });
 
-  it('renders suggestion chips', () => {
+  it('hides conversation actions until a session is selected', () => {
     render(<MobileChatPage />);
-    expect(screen.getByText('帮我分析代码')).toBeDefined();
+    expect(screen.queryByText('帮我分析代码')).toBeNull();
+    expect(screen.queryByRole('textbox', { name: '消息输入框' })).toBeNull();
   });
 });

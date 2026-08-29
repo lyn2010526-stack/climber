@@ -25,7 +25,7 @@ interface EvalRun {
   failed_cases: number;
   average_score: number;
   pass_rate: number;
-  results: EvalRunResult[];
+  results?: EvalRunResult[];
   created_at: string;
 }
 

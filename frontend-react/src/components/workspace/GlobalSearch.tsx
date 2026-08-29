@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Search, X, Database, FileText, Users,
 } from 'lucide-react';
@@ -6,11 +6,15 @@ import { api } from '../../api';
 
 interface SearchResult {
   id: string;
-  type: 'document' | 'memory' | 'group';
-  title: string;
-  preview: string;
+  document_id: string;
+  content: string;
+  chunk_index: number;
+  type?: 'document' | 'memory' | 'group';
+  title?: string;
+  preview?: string;
   score: number;
-  timestamp: string;
+  created_at: string;
+  timestamp?: string;
 }
 
 interface GlobalSearchProps {
@@ -24,6 +28,8 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
   const [filter, setFilter] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   const performSearch = useCallback(async (q: string) => {
     if (!q.trim() || q.trim().length < 2) {
@@ -34,7 +40,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
     setError(null);
     try {
       const data = await api.search(q, 20);
-        setResults(Array.isArray(data) ? data : (data as any).results || []);
+      setResults(data);
     } catch {
       setError('网络错误');
       setResults([]);
@@ -42,6 +48,16 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    restoreFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    inputRef.current?.focus();
+
+    return () => restoreFocusRef.current?.focus();
+  }, [isOpen]);
 
   useEffect(() => {
     const timer = setTimeout(() => performSearch(query), 300);
@@ -65,7 +81,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
   }, [isOpen, onClose]);
 
   const filtered = filter
-    ? results.filter(r => r.type === filter)
+    ? results.filter(r => (r.type || 'document') === filter)
     : results;
 
   const typeIcon = (type: string) => {
@@ -79,9 +95,9 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
 
   const typeColor = (type: string) => {
     switch (type) {
-      case 'document': return 'text-[#007AFF]';
-      case 'memory': return 'text-[#AF52DE]';
-      case 'group': return 'text-[#34C759]';
+      case 'document': return 'text-[var(--color-accent)]';
+      case 'memory': return 'text-[var(--color-warning)]';
+      case 'group': return 'text-[var(--color-success)]';
       default: return 'text-[var(--color-text-muted)]';
     }
   };
@@ -89,38 +105,41 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]" onClick={onClose} role="dialog" aria-modal="true" aria-label="全局搜索">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+    <div className="fixed inset-0 z-50 flex items-start justify-center px-4 pt-[12vh]" onClick={onClose} role="dialog" aria-modal="true" aria-label="全局搜索">
+      <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" />
       <div
-        className="relative w-full max-w-2xl bg-[#131A2A]/95 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
+        className="relative w-full max-w-2xl overflow-hidden rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] shadow-[var(--shadow-lg)]"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
+        <div className="flex flex-wrap items-center gap-3 border-b border-[var(--color-border-subtle)] px-4 py-3 sm:flex-nowrap">
           <Search size={20} className="text-[var(--color-text-muted)] shrink-0" />
-          <input
-            type="text"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder="搜索文档、记忆、群组..."
-            className="flex-1 bg-transparent text-sm text-[var(--color-text-secondary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
-            autoFocus
-          />
+           <input
+             ref={inputRef}
+             type="text"
+             value={query}
+             onChange={e => setQuery(e.target.value)}
+             placeholder="搜索文档、记忆、群组..."
+             aria-label="搜索文档、记忆和群组"
+             className="min-w-48 flex-1 bg-transparent text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+           />
           <div className="flex gap-1">
             {['', 'document', 'memory', 'group'].map(f => (
               <button
-                key={f || 'all'}
-                onClick={() => setFilter(f)}
-                className={`px-2.5 py-1 rounded-xl text-[10px] font-semibold transition-all duration-200 ${
+               key={f || 'all'}
+                 type="button"
+                 aria-label={`按${f ? (f === 'document' ? '文档' : f === 'memory' ? '记忆' : '群组') : '全部'}筛选`}
+                 onClick={() => setFilter(f)}
+                className={`rounded-md border px-2.5 py-1 text-[10px] font-semibold transition-colors duration-150 ${
                   filter === f
-                    ? 'bg-[#007AFF]/20 text-white border border-[#007AFF]/30'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] border border-transparent'
+                    ? 'border-[var(--color-border-accent)] bg-[var(--color-accent-subtle)] text-[var(--color-accent)]'
+                    : 'border-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)]'
                 }`}
               >
                  {f ? (f === 'document' ? '文档' : f === 'memory' ? '记忆' : f === 'group' ? '群组' : f) : '全部'}
               </button>
             ))}
           </div>
-          <button onClick={onClose} aria-label="关闭全局搜索" className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] rounded-xl hover:bg-white/5 transition-all duration-200">
+          <button onClick={onClose} aria-label="关闭全局搜索" className="rounded-lg p-1.5 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)]">
             <X size={16} />
           </button>
         </div>
@@ -128,12 +147,12 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
         <div className="max-h-96 overflow-y-auto">
           {loading && (
             <div className="px-4 py-8 text-center text-[var(--color-text-muted)] text-sm">
-              <div className="w-5 h-5 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+              <div className="mx-auto mb-2 h-5 w-5 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
                正在搜索...
             </div>
           )}
           {error && (
-            <div className="px-4 py-8 text-center text-red-400 text-sm">{error}</div>
+            <div className="px-4 py-8 text-center text-sm text-[var(--color-error)]">{error}</div>
           )}
           {!loading && !error && filtered.length === 0 && query && (
             <div className="px-4 py-8 text-center text-[var(--color-text-muted)] text-sm">
@@ -141,21 +160,22 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
             </div>
           )}
           {!loading && !error && filtered.map(result => {
-            const Icon = typeIcon(result.type);
+            const resultType = result.type || 'document';
+            const Icon = typeIcon(resultType);
             return (
               <button
                 key={result.id}
-                className="w-full flex items-start gap-3 px-5 py-3 text-left hover:bg-white/5 transition-colors border-b border-white/5 last:border-0"
+                className="flex w-full items-start gap-3 border-b border-[var(--color-border-subtle)] px-5 py-3 text-left transition-colors last:border-0 hover:bg-[var(--color-bg-surface-2)]"
               >
-                <div className={`p-1.5 rounded-xl shrink-0 mt-0.5 ${typeColor(result.type).replace('text-', 'bg-').replace(']', '/10]')}`}>
-                  <Icon size={14} className={typeColor(result.type)} />
+                <div className="mt-0.5 shrink-0 rounded-md bg-[var(--color-bg-surface-2)] p-1.5">
+                  <Icon size={14} className={typeColor(resultType)} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-[var(--color-text-secondary)] truncate font-medium">{result.title}</span>
-                    <span className="text-[10px] text-[var(--color-text-muted)] capitalize font-medium">{result.type}</span>
+                    <span className="truncate text-sm font-medium text-[var(--color-text-primary)]">{result.title || result.document_id}</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] capitalize font-medium">{resultType}</span>
                   </div>
-                  <p className="text-xs text-[var(--color-text-muted)] truncate mt-0.5">{result.preview}</p>
+                  <p className="text-xs text-[var(--color-text-muted)] truncate mt-0.5">{result.preview || result.content}</p>
                 </div>
               </button>
             );

@@ -31,15 +31,18 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-      manualChunks: (id) => {
-        if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
-          return 'react-vendor';
-        }
-        if (id.includes('node_modules/lucide-react') || id.includes('node_modules/@xyflow/react')) {
-          return 'ui-vendor';
-        }
-        return undefined;
-      },
+        manualChunks: (id) => {
+          if (id.includes('node_modules/@xterm/')) {
+            return 'xterm-vendor';
+          }
+          if (/node_modules\/(react|react-dom|scheduler)\//.test(id)) {
+            return 'react-vendor';
+          }
+          if (id.includes('node_modules/lucide-react/')) {
+            return 'icons-vendor';
+          }
+          return undefined;
+        },
       },
     },
   },

@@ -11,13 +11,37 @@ export interface ApiError {
   detail: string;
 }
 
+class HttpError extends Error {
+  readonly status: number;
+
+  constructor(status: number, detail: string) {
+    super(detail);
+    this.status = status;
+    this.name = 'HttpError';
+  }
+}
+
 export class ApiClient {
   private pendingRequests = new Map<string, Promise<any>>();
   private requestCache = new Map<string, { data: any; timestamp: number }>();
   private readonly CACHE_TTL = 5000;
+  private authContext: string | null = null;
+
+  private getAuthContext(): string {
+    return typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') || '' : '';
+  }
+
+  private syncAuthContext(): string {
+    const context = this.getAuthContext();
+    if (this.authContext !== null && this.authContext !== context) {
+      this.resetCache();
+    }
+    this.authContext = context;
+    return context;
+  }
 
   getAuthHeaders(): Record<string, string> {
-    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    const token = this.syncAuthContext();
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
@@ -37,6 +61,10 @@ export class ApiClient {
   }
 
   private isRetryableError(err: unknown): boolean {
+    if (err instanceof HttpError) {
+      const status = err.status;
+      return status === 408 || status === 429 || status >= 500;
+    }
     const message = (err as Error)?.message || '';
     const statusMatch = message.match(/HTTP (\d+)/);
     if (!statusMatch?.[1]) {
@@ -90,7 +118,7 @@ export class ApiClient {
       return;
     }
     const matches = (key: string) => {
-      const pathPart = key.split(':').slice(1).join(':');
+      const pathPart = key.split(':').slice(2).join(':');
       return pathPart === prefix || pathPart.startsWith(`${prefix}/`) || pathPart.startsWith(`${prefix}?`);
     };
     for (const key of [...this.pendingRequests.keys()]) {
@@ -109,9 +137,10 @@ export class ApiClient {
   }
 
   async request<T>(path: string, options: RequestInit = {}, useCache = true): Promise<T> {
+    const authContext = this.syncAuthContext();
     const isMutation = options.method === 'POST' || options.method === 'PUT' || options.method === 'PATCH' || options.method === 'DELETE';
     const isCacheable = useCache && !isMutation;
-    const cacheKey = isCacheable ? `${options.method || 'GET'}:${path}` : null;
+    const cacheKey = isCacheable ? `${authContext}:${options.method || 'GET'}:${path}` : null;
 
     const doRequest = async (): Promise<T> => {
       const headers: Record<string, string> = {
@@ -127,7 +156,7 @@ export class ApiClient {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-        throw new Error(error.detail || `HTTP ${response.status}`);
+        throw new HttpError(response.status, error.detail || `HTTP ${response.status}`);
       }
 
       if (isMutation) {

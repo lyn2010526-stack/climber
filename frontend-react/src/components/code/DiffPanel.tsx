@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useId, useMemo, useState } from 'react';
 import {
   Plus, Minus, FileText, ChevronDown, ChevronRight,
   Copy, Check,
@@ -213,6 +213,7 @@ interface DiffFileViewProps {
 function DiffFileView({ file, defaultExpanded = true, showLineNumbers = true }: DiffFileViewProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [copied, setCopied] = useState(false);
+  const contentId = useId();
 
   const statusIcon = {
     added: <Plus size={12} className="text-green-400" />,
@@ -237,46 +238,52 @@ function DiffFileView({ file, defaultExpanded = true, showLineNumbers = true }: 
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
       {/* File header */}
-      <button
-        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/[0.02] transition-colors"
-        onClick={() => setExpanded(!expanded)}
-      >
-        <div className="shrink-0">
-          {expanded ? (
-            <ChevronDown size={14} className="text-[var(--color-text-muted)]" />
-          ) : (
-            <ChevronRight size={14} className="text-[var(--color-text-muted)]" />
-          )}
-        </div>
-        {statusIcon}
-        <div className="flex-1 min-w-0">
-          <span className="text-xs font-medium text-[var(--color-text-secondary)]">{fileName}</span>
-          {dirPath && (
-            <span className="text-[10px] text-[var(--color-text-muted)] ml-2">{dirPath}/</span>
-          )}
-        </div>
-
-        {/* Stats */}
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[10px] text-[var(--color-text-muted)] font-mono">{totalLines} 行</span>
-          {file.additions > 0 && (
-            <span className="text-[10px] text-green-400 font-mono">+{file.additions}</span>
-          )}
-          {file.deletions > 0 && (
-            <span className="text-[10px] text-red-400 font-mono">-{file.deletions}</span>
-          )}
-          <button
-            onClick={(e) => { e.stopPropagation(); handleCopy(); }}
-            className="p-1 rounded hover:bg-white/[0.06] text-[var(--color-text-muted)] transition-colors"
-          >
-            {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
-          </button>
-        </div>
-      </button>
+      <div className="flex items-center hover:bg-white/[0.02] transition-colors">
+        <button
+          type="button"
+          className="min-w-0 flex flex-1 items-center gap-2.5 px-3 py-2.5 text-left"
+          onClick={() => setExpanded(!expanded)}
+          aria-expanded={expanded}
+          aria-controls={contentId}
+          aria-label={`${expanded ? '收起' : '展开'} ${file.path}`}
+        >
+          <div className="shrink-0">
+            {expanded ? (
+              <ChevronDown size={14} className="text-[var(--color-text-muted)]" />
+            ) : (
+              <ChevronRight size={14} className="text-[var(--color-text-muted)]" />
+            )}
+          </div>
+          {statusIcon}
+          <div className="flex-1 min-w-0">
+            <span className="text-xs font-medium text-[var(--color-text-secondary)]">{fileName}</span>
+            {dirPath && (
+              <span className="text-[10px] text-[var(--color-text-muted)] ml-2">{dirPath}/</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[10px] text-[var(--color-text-muted)] font-mono">{totalLines} 行</span>
+            {file.additions > 0 && (
+              <span className="text-[10px] text-green-400 font-mono">+{file.additions}</span>
+            )}
+            {file.deletions > 0 && (
+              <span className="text-[10px] text-red-400 font-mono">-{file.deletions}</span>
+            )}
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="mr-2 p-2 rounded hover:bg-white/[0.06] text-[var(--color-text-muted)] transition-colors"
+          aria-label={`${copied ? '已复制' : '复制'} ${file.path} 的差异`}
+        >
+          {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+        </button>
+      </div>
 
       {/* Diff content */}
       {expanded && (
-        <div className="border-t border-white/[0.04] overflow-x-auto">
+        <div id={contentId} className="border-t border-white/[0.04] overflow-x-auto">
           {file.hunks.map((hunk, hi) => (
             <div key={hi}>
               <DiffLine

@@ -108,7 +108,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
             <h3 className="text-sm font-semibold text-white">添加 MCP 服务器</h3>
              <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">配置新的模型上下文协议服务器</p>
           </div>
-          <button onClick={handleClose} className="p-2 rounded-lg hover:bg-white/[0.06] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors">
+          <button onClick={handleClose} aria-label="关闭添加 MCP 服务器对话框" className="p-2 rounded-lg hover:bg-white/[0.06] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors">
             <X size={16} />
           </button>
         </div>
@@ -243,6 +243,8 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                 </div>
                 <button
                   onClick={() => setData(d => ({ ...d, oauth: !d.oauth }))}
+                  aria-label={`${data.oauth ? '停用' : '启用'} OAuth 认证`}
+                  aria-pressed={data.oauth}
                   className={cn(
                     'w-10 h-6 rounded-full transition-all relative',
                     data.oauth ? 'bg-blue-500' : 'bg-white/[0.1]'

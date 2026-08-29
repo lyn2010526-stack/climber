@@ -90,12 +90,13 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
     }`;
 
   return (
-    <div className="h-11 flex items-center px-3 gap-1.5 bg-[var(--color-glass-bg)] border-b border-[var(--color-border-subtle)] backdrop-blur-[20px]">
+    <div className="flex h-11 items-center gap-1.5 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-3">
       <div className="flex items-center gap-0.5">
         {onToggleSessions && (
           <button onClick={onToggleSessions}
             className="p-2 rounded-lg transition-all duration-200 active:scale-95 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)]"
             title="会话列表"
+            aria-label="打开会话列表"
           >
             <MessageSquare size={14} />
           </button>
@@ -105,6 +106,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
           disabled={!activeSession || (!isRunning && !isPaused)}
           className="p-2 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)]"
           title={isPaused ? '继续' : '暂停'}
+          aria-label={isPaused ? '继续会话' : '暂停会话'}
         >
           {isPaused ? <Play size={14} /> : <Pause size={14} />}
         </button>
@@ -113,6 +115,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
           disabled={!activeSession}
           className="p-2 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95 text-[var(--color-text-secondary)] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.1)]"
           title="停止"
+          aria-label="停止会话"
         >
           <Square size={14} />
         </button>
@@ -123,6 +126,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
             disabled={!activeSession}
             className="p-2 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)]"
             title="保存快照"
+            aria-label="保存快照"
           >
             <Camera size={14} />
           </button>
@@ -131,6 +135,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
             disabled={!activeSession || snapshots.length === 0}
             className="p-2 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)]"
             title="回滚到快照"
+            aria-label="回滚到快照"
           >
             <RotateCcw size={14} />
           </button>
@@ -191,6 +196,8 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
                 onClick={() => isActive ? toggleRightPanel() : setRightPanelTab(id)}
                 className={toggleBtnClass(isActive)}
                 title={label}
+                aria-label={`${label}面板`}
+                aria-pressed={isActive}
               >
                 <Icon size={14} />
               </button>
@@ -203,6 +210,8 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
           onClick={toggleFocusMode}
           className={toggleBtnClass(focusMode)}
           title="专注模式"
+          aria-label={focusMode ? '退出专注模式' : '进入专注模式'}
+          aria-pressed={focusMode}
         >
           {focusMode ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
         </button>
@@ -216,6 +225,9 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)]'
             }`}
             title="更多设置"
+            aria-label="更多设置"
+            aria-expanded={settingsOpen}
+            aria-haspopup="menu"
           >
             <Settings size={14} />
             <ChevronDown size={10} className={`transition-transform duration-200 ${settingsOpen ? 'rotate-180' : ''}`} />
@@ -223,7 +235,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
 
           {settingsOpen && (
             <div
-              className="absolute right-0 top-full mt-1 w-56 p-3 rounded-xl z-50 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)] shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+              className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] p-3 shadow-[var(--shadow-lg)]"
             >
               <div className="space-y-3">
                 <div>
@@ -247,6 +259,8 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
                     onClick={toggleExpertMode}
                     className={toggleBtnClass(expertMode)}
                     title={expertMode ? '关闭专家模式' : '开启专家模式'}
+                    aria-label={expertMode ? '关闭专家模式' : '开启专家模式'}
+                    aria-pressed={expertMode}
                   >
                     {expertMode ? <Eye size={14} /> : <EyeOff size={14} />}
                   </button>

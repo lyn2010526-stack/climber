@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { History, Clock, ChevronRight, Brain } from 'lucide-react';
+import { History, Clock, ChevronRight, Brain, AlertCircle } from 'lucide-react';
 import { api } from '../api';
 
 interface HistoryItem {
@@ -16,6 +16,7 @@ interface HistoryItem {
 export function ReasoningHistoryPage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [selected, setSelected] = useState<HistoryItem | null>(null);
 
   useEffect(() => {
@@ -23,10 +24,14 @@ export function ReasoningHistoryPage() {
   }, []);
 
   const loadHistory = async () => {
+    setLoading(true);
+    setLoadError(false);
     try {
       const data = await api.listReasoningHistory();
       setHistory(data);
-    } catch { /* skip */ } finally {
+    } catch {
+      setLoadError(true);
+    } finally {
       setLoading(false);
     }
   };
@@ -99,7 +104,19 @@ export function ReasoningHistoryPage() {
         <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">推理历史</h2>
       </div>
 
-      {history.length === 0 ? (
+      {loadError ? (
+        <div role="alert" className="text-center py-16 text-[var(--color-error)]">
+          <AlertCircle size={48} className="mx-auto mb-4 opacity-50" />
+          <p>加载推理历史失败</p>
+          <button
+            type="button"
+            onClick={() => void loadHistory()}
+            className="mt-3 rounded-xl border border-[var(--color-border-subtle)] px-3 py-2 text-xs text-[var(--color-text-primary)] transition-colors hover:bg-white/[0.05]"
+          >
+            重试加载推理历史
+          </button>
+        </div>
+      ) : history.length === 0 ? (
         <div className="text-center py-16 text-[var(--color-text-muted)]">
           <History size={48} className="mx-auto mb-4 opacity-30" />
            <p>暂无推理历史。</p>

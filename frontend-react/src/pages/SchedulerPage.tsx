@@ -10,7 +10,7 @@ interface ScheduledTask {
   name: string;
   description: string;
   cron: string;
-  type: string;
+  type?: string;
   enabled: boolean;
   last_run: number | null;
   next_run: number | null;
@@ -181,7 +181,8 @@ export function SchedulerPage() {
             </div>
           )}
           {tasks.map((task) => {
-            const Icon = TYPE_ICONS[task.type] || Clock;
+            const taskType = task.type || 'custom';
+            const Icon = TYPE_ICONS[taskType] || Clock;
             return (
               <div
                 key={task.id}
@@ -190,14 +191,14 @@ export function SchedulerPage() {
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border border-[var(--color-border-subtle)] ${TYPE_COLORS[task.type] || TYPE_COLORS['custom']}`}>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border border-[var(--color-border-subtle)] ${TYPE_COLORS[taskType] || TYPE_COLORS['custom']}`}>
                     <Icon size={14} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-[var(--color-text-primary)]">{task.name}</span>
-                       <span className={`px-1.5 py-0.5 rounded-lg text-[10px] font-medium border border-[var(--color-border-subtle)] ${TYPE_COLORS[task.type] || TYPE_COLORS['custom']}`}>
-                        {task.type}
+                       <span className={`px-1.5 py-0.5 rounded-lg text-[10px] font-medium border border-[var(--color-border-subtle)] ${TYPE_COLORS[taskType] || TYPE_COLORS['custom']}`}>
+                         {taskType}
                       </span>
                     </div>
                     <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{task.description}</p>
@@ -210,6 +211,7 @@ export function SchedulerPage() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => toggleTask(task.id)}
+                      aria-label={`${task.enabled ? '停用' : '启用'}任务 ${task.name}`}
                       className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors"
                       title={task.enabled ? 'Disable' : 'Enable'}
                     >
@@ -217,6 +219,7 @@ export function SchedulerPage() {
                     </button>
                     <button
                       onClick={() => deleteTask(task.id)}
+                      aria-label={`删除任务 ${task.name}`}
                       className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-error)] transition-colors"
                     >
                       <Trash2 size={14} />

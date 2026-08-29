@@ -12,9 +12,10 @@ vi.mock('../../../api', () => ({
 }));
 
 describe('MobileSchedulerPage', () => {
-  it('renders page header', () => {
+  it('renders page header', async () => {
     render(<MobileSchedulerPage />);
     expect(screen.getByText('定时任务')).toBeDefined();
+    expect(await screen.findByText(/暂无定时任务/)).toBeDefined();
   });
 
   it('renders add button and empty state', async () => {

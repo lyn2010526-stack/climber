@@ -5,7 +5,7 @@ import { useChat } from '../hooks/useChat';
 import { useWorkspaceStore } from '../store/workspace';
 import { Alert } from '../components/ui';
 
-export function ChatPage() {
+export function ChatPage({ onRequestSession }: { onRequestSession?: () => void }) {
   const { activeSessionId } = useWorkspaceStore();
   const { messages, isStreaming, error, sendMessage, stopStreaming } = useChat(activeSessionId);
   const [errorVisible, setErrorVisible] = useState(false);
@@ -49,7 +49,8 @@ export function ChatPage() {
         onStop={handleStop}
         isLoading={isStreaming}
         emptyStateTitle={activeSessionId ? "开始新的对话" : "需要先创建会话"}
-        emptyStateDescription={activeSessionId ? "输入任何问题或任务，Climber 将为你自主执行。" : "点击顶部工具栏的消息图标打开会话列表，创建一个新会话。"}
+        emptyStateDescription={activeSessionId ? "输入任何问题或任务，Climber 将为你自主执行。" : "创建会话并选择智能体后，即可开始执行任务。"}
+        {...(onRequestSession ? { onRequestSession } : {})}
       />
       {error && errorVisible && (
         <div className="absolute bottom-20 left-1/2 -translate-x-1/2 cursor-pointer" onClick={() => setErrorVisible(false)}>

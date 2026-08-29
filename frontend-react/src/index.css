@@ -1,53 +1,47 @@
 @import "tailwindcss";
 
 @theme {
-  /* ─── Surface Layers (macOS-style light canvas) ─── */
-  --color-bg-page: #f5f5f7;
+  /* Neutral product surfaces */
+  --color-bg-page: #f7f7f5;
   --color-bg-surface-1: #ffffff;
-  --color-bg-surface-2: #f0f0f3;
-  --color-bg-surface-3: #e7e7eb;
-  --color-bg-surface-4: #d9d9df;
+  --color-bg-surface-2: #f1f1ee;
+  --color-bg-surface-3: #e7e7e2;
   --color-bg-base: var(--color-bg-page);
   --color-bg-surface: var(--color-bg-surface-1);
   --color-bg-surface-hover: var(--color-bg-surface-2);
   --color-bg-surface-elevated: var(--color-bg-surface-3);
 
   /* ─── Text Hierarchy ─── */
-  --color-text-primary: #1d1d1f;
-  --color-text-secondary: #515154;
-  --color-text-muted: #86868b;
-  --color-text-disabled: #b2b2b7;
+  --color-text-primary: #20201e;
+  --color-text-secondary: #5f5e59;
+  --color-text-muted: #8b8982;
   --color-text-inverse: #ffffff;
 
   /* ─── Accent System ─── */
-  --color-accent: #007aff;
-  --color-accent-hover: #006ee6;
-  --color-accent-subtle: rgba(0, 122, 255, 0.10);
-  --color-accent-glow: rgba(0, 122, 255, 0.18);
-  --color-accent-text: #ffffff;
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4ed8;
+  --color-accent-subtle: rgba(37, 99, 235, 0.09);
+  --color-accent-glow: rgba(37, 99, 235, 0.14);
 
   /* Secondary accent (cyan) */
   --color-accent-secondary: #38bdf8;
-  --color-accent-secondary-glow: rgba(56, 189, 248, 0.15);
 
   /* ─── Semantic Colors ─── */
-  --color-success: #22c55e;
-  --color-success-subtle: rgba(34, 197, 94, 0.12);
-  --color-warning: #eab308;
-  --color-warning-subtle: rgba(234, 179, 8, 0.12);
-  --color-error: #ef4444;
-  --color-error-subtle: rgba(239, 68, 68, 0.12);
+  --color-success: #16845b;
+  --color-success-subtle: rgba(22, 132, 91, 0.10);
+  --color-warning: #a16207;
+  --color-error: #c2413b;
+  --color-error-subtle: rgba(194, 65, 59, 0.10);
 
   /* ─── Borders (3-tier system) ─── */
-  --color-border-subtle: rgba(0, 0, 0, 0.06);
-  --color-border-default: rgba(0, 0, 0, 0.10);
-  --color-border-strong: rgba(0, 0, 0, 0.16);
-  --color-border-accent: rgba(0, 122, 255, 0.40);
+  --color-border-subtle: rgba(32, 32, 30, 0.07);
+  --color-border-default: rgba(32, 32, 30, 0.12);
+  --color-border-strong: rgba(32, 32, 30, 0.20);
+  --color-border-accent: rgba(37, 99, 235, 0.42);
 
   /* ─── Glass Surfaces ─── */
-  --color-glass-bg: rgba(255, 255, 255, 0.88);
-  --color-glass-border: rgba(0, 0, 0, 0.08);
-  --color-glass-highlight: rgba(255, 255, 255, 0.72);
+  --color-glass-bg: rgba(255, 255, 255, 0.94);
+  --color-glass-border: rgba(32, 32, 30, 0.09);
 
   /* ─── Code Blocks ─── */
   --color-code-bg: #1d1d1f;
@@ -61,13 +55,13 @@
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-2xl: 20px;
+  --radius-xl: 14px;
+  --radius-2xl: 16px;
 
   /* ─── Shadows ─── */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.10);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.14);
+  --shadow-md: 0 6px 18px rgba(32, 32, 30, 0.08);
+  --shadow-lg: 0 16px 40px rgba(32, 32, 30, 0.12);
   --shadow-glow: 0 0 20px var(--color-accent-glow);
 
   /* ─── Layout ─── */
@@ -77,27 +71,24 @@
 }
 
 [data-theme="dark"] {
-  --color-bg-page: #0a0a0b;
-  --color-bg-surface-1: #111113;
-  --color-bg-surface-2: #18181b;
-  --color-bg-surface-3: #1f1f23;
-  --color-bg-surface-4: #27272a;
-  --color-text-primary: #fafafa;
-  --color-text-secondary: #a1a1aa;
-  --color-text-muted: #71717a;
-  --color-text-disabled: #52525b;
-  --color-text-inverse: #0a0a0b;
-  --color-accent: #0a84ff;
-  --color-accent-hover: #409cff;
-  --color-accent-subtle: rgba(10, 132, 255, 0.14);
-  --color-accent-glow: rgba(10, 132, 255, 0.20);
+  --color-bg-page: #111110;
+  --color-bg-surface-1: #181817;
+  --color-bg-surface-2: #222220;
+  --color-bg-surface-3: #2b2b28;
+  --color-text-primary: #f4f4f0;
+  --color-text-secondary: #b0aea6;
+  --color-text-muted: #7f7d76;
+  --color-text-inverse: #111110;
+  --color-accent: #6ea0ff;
+  --color-accent-hover: #8ab2ff;
+  --color-accent-subtle: rgba(110, 160, 255, 0.13);
+  --color-accent-glow: rgba(110, 160, 255, 0.16);
   --color-border-subtle: rgba(255, 255, 255, 0.06);
   --color-border-default: rgba(255, 255, 255, 0.10);
   --color-border-strong: rgba(255, 255, 255, 0.16);
   --color-border-accent: rgba(10, 132, 255, 0.45);
-  --color-glass-bg: rgba(17, 17, 19, 0.88);
+  --color-glass-bg: rgba(24, 24, 23, 0.94);
   --color-glass-border: rgba(255, 255, 255, 0.08);
-  --color-glass-highlight: rgba(255, 255, 255, 0.04);
   --color-code-bg: #0d0d10;
   --color-code-border: rgba(255, 255, 255, 0.06);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -149,9 +140,9 @@
 
 /* ─── Design System Tokens ───────────────── */
 :root {
-  --ui-radius: 16px;
+  --ui-radius: 12px;
   --ui-radius-sm: 8px;
-  --ui-radius-lg: 24px;
+  --ui-radius-lg: 16px;
   --ui-spacing: 24px;
   --ui-transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
   --ui-font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -230,13 +221,13 @@ textarea:focus:not(:focus-visible) {
 
 /* ─── Selection Styling ───────────────── */
 ::selection {
-  background: rgba(99, 102, 241, 0.35);
-  color: #ffffff;
+  background: var(--color-accent-subtle);
+  color: var(--color-text-primary);
 }
 
 ::-moz-selection {
-  background: rgba(99, 102, 241, 0.35);
-  color: #ffffff;
+  background: var(--color-accent-subtle);
+  color: var(--color-text-primary);
 }
 
 /* ─── Base Body ───────────────────────── */
@@ -261,9 +252,7 @@ button:disabled,
 }
 
 .app-shell {
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99, 102, 241, 0.12), transparent),
-    linear-gradient(180deg, color-mix(in srgb, var(--color-bg-page) 97%, white 3%), var(--color-bg-page));
+  background: var(--color-bg-page);
 }
 
 .page-transition {
@@ -417,8 +406,8 @@ button:disabled,
 /* ─── Glass Panel ─────────────────────── */
 .glass-panel {
   background: var(--color-glass-bg);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--color-glass-border);
 }
 
@@ -446,7 +435,7 @@ button:disabled,
   transition: all 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ─── Apple-style Interaction Feedback ── */
+/* ─── Compact interaction feedback ── */
 .apple-button {
   transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -463,7 +452,7 @@ button:disabled,
 
 /* ─── Selection Glow ──────────────────── */
 .glow-selection {
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2), 0 4px 16px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 0 0 2px var(--color-accent-subtle);
 }
 
 /* ─── Hover Lift ──────────────────────── */
@@ -472,8 +461,8 @@ button:disabled,
 }
 
 .hover-lift:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 /* ─── Nav Active Indicator ────────────── */
@@ -506,17 +495,14 @@ button:disabled,
 .status-dot.active,
 .status-dot.success {
   background: var(--color-success);
-  box-shadow: 0 0 8px var(--color-success);
 }
 
 .status-dot.pending {
   background: var(--color-warning);
-  box-shadow: 0 0 6px var(--color-warning);
 }
 
 .status-dot.running {
   background: var(--color-accent);
-  box-shadow: 0 0 8px var(--color-accent);
   animation: pulseGlow 1.5s ease-in-out infinite;
 }
 
@@ -527,7 +513,6 @@ button:disabled,
 .status-dot.error,
 .status-dot.cancelled {
   background: var(--color-error);
-  box-shadow: 0 0 8px var(--color-error);
 }
 
 /* ─── High Contrast Mode ──────────────── */

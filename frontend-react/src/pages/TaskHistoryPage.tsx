@@ -27,6 +27,7 @@ const STATUS_COLORS: Record<string, string> = {
 export function TaskHistoryPage() {
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskRecord | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -35,11 +36,14 @@ export function TaskHistoryPage() {
   }, []);
 
   const loadTasks = async () => {
+    setLoading(true);
+    setLoadError(false);
     try {
       const data = await api.listTasks();
       setTasks(data);
     } catch (e) {
       console.error('Failed to load tasks:', e);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -145,7 +149,18 @@ export function TaskHistoryPage() {
         <p className="text-[10px] text-[var(--color-text-muted)] mt-1">共 {tasks.length} 个任务</p>
       </div>
       <div className="flex-1 overflow-y-auto">
-        {tasks.length === 0 ? (
+        {loadError ? (
+          <div role="alert" className="text-center py-12">
+            <p className="text-xs text-[var(--color-error)]">加载任务历史失败</p>
+            <button
+              type="button"
+              onClick={() => void loadTasks()}
+              className="mt-3 rounded-lg border border-[var(--color-border-subtle)] px-3 py-2 text-xs text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-bg-surface-2)]"
+            >
+              重试加载任务历史
+            </button>
+          </div>
+        ) : tasks.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-xs text-[var(--color-text-muted)]">暂无任务记录</p>
             <p className="text-[10px] text-[var(--color-text-muted)] mt-1">在群组中创建任务后，这里会显示历史记录</p>
@@ -153,11 +168,19 @@ export function TaskHistoryPage() {
         ) : (
           <div className="divide-y divide-[var(--color-border-subtle)]">
             {tasks.map((task) => (
-              <div
-                key={task.id}
-                onClick={() => void openTask(task)}
-                className="p-3 hover:bg-white/[0.03] cursor-pointer transition-all duration-200 group"
-              >
+               <div
+                 key={task.id}
+                 onClick={() => void openTask(task)}
+                 onKeyDown={(event) => {
+                   if (event.key === 'Enter' || event.key === ' ') {
+                     event.preventDefault();
+                     void openTask(task);
+                   }
+                 }}
+                 role="button"
+                 tabIndex={0}
+                 className="group cursor-pointer p-3 transition-colors duration-150 hover:bg-[var(--color-bg-surface-2)]"
+               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-[var(--color-text-primary)] truncate group-hover:text-white transition-colors">{task.description}</p>

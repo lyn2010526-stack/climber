@@ -68,9 +68,10 @@ export function MobileChatPage() {
           onSend={handleSend}
           onStop={handleStop}
           isLoading={isStreaming}
-          emptyStateTitle="开始新的对话"
-          emptyStateDescription="输入任何问题或任务，Climber 将为你自主执行。"
+          emptyStateTitle={activeSessionId ? '开始新的对话' : '需要先创建会话'}
+          emptyStateDescription={activeSessionId ? '输入任何问题或任务，Climber 将为你自主执行。' : '创建会话并选择智能体后，即可开始执行任务。'}
           suggestions={['帮我分析代码', '写一个 Python 脚本', '解释这个错误']}
+          onRequestSession={() => setDrawerOpen(true)}
         />
       </div>
 

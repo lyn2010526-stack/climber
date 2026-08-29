@@ -1,17 +1,17 @@
 import { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import {
   MessageSquare, Bot, Network, Cpu, BarChart3,
-  Sparkles, Search, Bell, Menu,
+  Mountain, Search, Bell, Menu,
   Settings, Workflow, Terminal, Key, Activity, FlaskConical, DollarSign,
   Puzzle, Package, Clock, History,
 } from 'lucide-react';
-import { WorkspaceLayout } from './components/workspace/WorkspaceLayout';
-import { GlobalSearch } from './components/workspace/GlobalSearch';
+const WorkspaceLayout = lazy(() => import('./components/workspace/WorkspaceLayout').then(m => ({ default: m.WorkspaceLayout })));
+const GlobalSearch = lazy(() => import('./components/workspace/GlobalSearch').then(m => ({ default: m.GlobalSearch })));
 import { PageTransition } from './components/workspace/PageTransition';
 import { ThemeToggle } from './components/ui/ThemeToggle';
-import CommandPalette from './components/workspace/CommandPalette';
-import { MobileLayout } from './components/mobile/MobileLayout';
-import { MobileChatPage } from './pages/MobileChatPage';
+const CommandPalette = lazy(() => import('./components/workspace/CommandPalette'));
+const MobileLayout = lazy(() => import('./components/mobile/MobileLayout').then(m => ({ default: m.MobileLayout })));
+const MobileChatPage = lazy(() => import('./pages/MobileChatPage').then(m => ({ default: m.MobileChatPage })));
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 const AgentsPage = lazy(() => import('./pages/AgentsPage').then(m => ({ default: m.AgentsPage })));
@@ -49,13 +49,13 @@ type Page = 'chat' | 'agents' | 'workflows' | 'apikeys' | 'skills' | 'notificati
 
 const CORE_NAV: { id: Page; icon: typeof MessageSquare; label: string; description: string }[] = [
   { id: 'chat', icon: MessageSquare, label: '工作台', description: '对话与执行' },
-  { id: 'factory', icon: Sparkles, label: '自主执行', description: '长任务与计划' },
+  { id: 'factory', icon: Activity, label: '自主执行', description: '长任务与计划' },
   { id: 'tasks', icon: Cpu, label: '任务监控', description: '实时运行状态' },
 ];
 
 const ALL_NAV_ITEMS: { id: Page; icon: typeof MessageSquare; label: string; keywords?: string }[] = [
   { id: 'chat', icon: MessageSquare, label: '工作台', keywords: 'home workspace dashboard 工作台' },
-  { id: 'factory', icon: Sparkles, label: '自主执行', keywords: 'auto agent execute 自主执行' },
+  { id: 'factory', icon: Activity, label: '自主执行', keywords: 'auto agent execute 自主执行' },
   { id: 'cluster', icon: Network, label: '集群协作', keywords: 'multi agent team 集群协作' },
   { id: 'tasks', icon: Cpu, label: '任务监控', keywords: 'monitor task running 任务监控' },
   { id: 'task-history', icon: History, label: '任务历史', keywords: 'history past 任务历史' },
@@ -151,7 +151,21 @@ export default function App() {
         case 'notifications': return <MobileNotificationsPage />;
         case 'workflows': return <MobileWorkflowsPage />;
         case 'scheduler': return <MobileSchedulerPage />;
+        case 'apikeys': return <ApiKeysPage />;
+        case 'skills': return <SkillsPage />;
+        case 'doctor': return <DoctorPage />;
+        case 'mcp': return <MCPPage />;
+        case 'stats': return <StatsPage />;
+        case 'plugins': return <PluginsPage />;
+        case 'plugin-manage': return <PluginPage />;
+        case 'traces': return <TracesPage />;
+        case 'eval': return <EvalPage />;
+        case 'cost': return <CostPage />;
         case 'settings': return <SettingsPage />;
+        case 'terminal': return <TerminalPage />;
+        case 'task-history': return <TaskHistoryPage />;
+        case 'reasoning': return <ReasoningPage />;
+        case 'reasoning-history': return <ReasoningHistoryPage />;
         default: return <MobileChatPage />;
       }
     }
@@ -206,20 +220,20 @@ export default function App() {
           )}
 
           {/* Desktop workspace navigation */}
-          <aside className="relative z-50 hidden md:flex flex-col w-[224px] shrink-0 bg-[var(--color-bg-surface-1)] border-r border-[var(--color-border-subtle)]">
-            <div className="h-14 flex items-center gap-3 px-4 shrink-0 border-b border-[var(--color-border-subtle)]">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-[var(--color-accent)] shadow-[0_5px_12px_var(--color-accent-glow)]">
-                <Sparkles size={15} className="text-white" strokeWidth={2.5} />
+          <aside className="relative z-50 hidden w-[232px] shrink-0 flex-col border-r border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] md:flex">
+            <div className="flex h-14 shrink-0 items-center gap-3 px-4">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border-default)] bg-[var(--color-text-primary)] text-[var(--color-text-inverse)]">
+                <Mountain size={16} strokeWidth={2.25} />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-semibold truncate text-[var(--color-text-primary)]">Climber</div>
-                <div className="text-[11px] truncate text-[var(--color-text-secondary)]">Agent workspace</div>
+                <div className="truncate text-sm font-semibold tracking-[-0.01em] text-[var(--color-text-primary)]">Climber</div>
+                <div className="truncate text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">AI workspace</div>
               </div>
             </div>
 
-            <nav className="flex-1 py-4 px-3 overflow-y-auto">
-              <div className="px-2 mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">Workspace</div>
-              <div className="space-y-1">
+            <nav className="flex-1 overflow-y-auto px-2.5 py-3">
+              <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-muted)]">Workspace</div>
+              <div className="space-y-0.5">
               {CORE_NAV.map(({ id, icon: Icon, label, description }) => {
                 const isActive = currentPage === id;
                 return (
@@ -227,50 +241,50 @@ export default function App() {
                     key={id}
                     onClick={() => navigate(id)}
                     aria-current={isActive ? 'page' : undefined}
-                    className="relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 text-left bg-[var(--color-accent-subtle)] data-[active=false]:bg-transparent text-[var(--color-accent)] data-[active=false]:text-[var(--color-text-secondary)]"
+                    className="relative flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[var(--color-accent)] transition-colors duration-150 hover:bg-[var(--color-bg-surface-2)] data-[active=false]:text-[var(--color-text-secondary)] data-[active=true]:bg-[var(--color-accent-subtle)]"
                     data-active={isActive}
                   >
                     <Icon size={17} strokeWidth={isActive ? 2.5 : 2} />
                     <span className="min-w-0 flex-1">
                       <span className="block text-xs font-semibold text-[var(--color-text-primary)]">{label}</span>
-                      <span className="block text-[11px] mt-0.5 text-[var(--color-text-secondary)]">{description}</span>
+                      <span className="mt-0.5 block text-[10px] text-[var(--color-text-muted)]">{description}</span>
                     </span>
                     {isActive && (
-                      <div className="absolute left-0 w-[3px] h-7 rounded-r-full bg-[var(--color-accent)]" />
+                      <div className="absolute left-0 h-5 w-0.5 rounded-full bg-[var(--color-accent)]" />
                     )}
                   </button>
                 );
               })}
               </div>
-              <div className="px-2 mt-7 mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">Explore</div>
-              <div className="space-y-1">
+              <div className="mb-1 mt-6 px-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-muted)]">Explore</div>
+              <div className="space-y-0.5">
                 {ALL_NAV_ITEMS.filter(item => !CORE_NAV.some(core => core.id === item.id) && ['cluster', 'agents', 'workflows', 'scheduler', 'skills', 'notifications'].includes(item.id)).map(({ id, icon: Icon, label }) => (
-                  <button key={id} onClick={() => navigate(id)} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors bg-[var(--color-accent-subtle)] data-[active=false]:bg-transparent text-[var(--color-accent)] data-[active=false]:text-[var(--color-text-secondary)]" data-active={currentPage === id}>
+                  <button key={id} onClick={() => navigate(id)} aria-current={currentPage === id ? 'page' : undefined} className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[var(--color-accent)] transition-colors hover:bg-[var(--color-bg-surface-2)] data-[active=false]:text-[var(--color-text-secondary)] data-[active=true]:bg-[var(--color-accent-subtle)]" data-active={currentPage === id}>
                     <Icon size={15} />
                     <span className="text-xs font-medium">{label}</span>
                   </button>
                 ))}
               </div>
-              <div className="px-2 mt-7 mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-text-secondary)]">System</div>
-              <button onClick={() => navigate('settings')} className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-colors bg-[var(--color-accent-subtle)] data-[active=false]:bg-transparent text-[var(--color-accent)] data-[active=false]:text-[var(--color-text-secondary)]" data-active={currentPage === 'settings'}>
+              <div className="mb-1 mt-6 px-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-muted)]">System</div>
+              <button onClick={() => navigate('settings')} aria-current={currentPage === 'settings' ? 'page' : undefined} className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[var(--color-accent)] transition-colors hover:bg-[var(--color-bg-surface-2)] data-[active=false]:text-[var(--color-text-secondary)] data-[active=true]:bg-[var(--color-accent-subtle)]" data-active={currentPage === 'settings'}>
                 <Settings size={15} />
                 <span className="text-xs font-medium">系统设置</span>
               </button>
             </nav>
 
             {/* Bottom actions */}
-            <div className="p-3 space-y-1 border-t border-[var(--color-border-subtle)]">
+            <div className="space-y-0.5 border-t border-[var(--color-border-subtle)] p-2.5">
               {/* Search */}
               <button
                 onClick={() => setActiveOverlay('search')}
                 onMouseEnter={() => setHoveredNav('search')}
                 onMouseLeave={() => setHoveredNav(null)}
-                 aria-label="搜索"
-                  className="relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-150 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] data-[hovered=true]:text-[var(--color-text-primary)] data-[hovered=true]:bg-[var(--color-bg-surface-2)]"
+                aria-label="全局搜索"
+                  className="relative flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)]"
                   data-hovered={hoveredNav === 'search'}
                >
                   <Search size={16} />
-                  <span className="text-xs font-medium">全局搜索</span>
+                  <span className="text-xs font-medium">全局搜索</span><kbd className="ml-auto rounded border border-[var(--color-border-default)] px-1.5 py-0.5 font-mono text-[9px]">/</kbd>
                  {hoveredNav === 'search' && (
                    <div className="nav-tooltip absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg text-xs whitespace-nowrap z-[200] pointer-events-none"
                    >
@@ -283,12 +297,12 @@ export default function App() {
                 onClick={() => setActiveOverlay('commands')}
                 onMouseEnter={() => setHoveredNav('commands')}
                 onMouseLeave={() => setHoveredNav(null)}
-                 aria-label="命令面板"
-                  className="relative w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all duration-150 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] data-[hovered=true]:text-[var(--color-text-primary)] data-[hovered=true]:bg-[var(--color-bg-surface-2)]"
+                aria-label="命令面板"
+                  className="relative flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)]"
                   data-hovered={hoveredNav === 'commands'}
                >
                   <Menu size={16} />
-                  <span className="text-xs font-medium">命令面板</span>
+                  <span className="text-xs font-medium">命令面板</span><kbd className="ml-auto rounded border border-[var(--color-border-default)] px-1.5 py-0.5 font-mono text-[9px]">⌘K</kbd>
                  {hoveredNav === 'commands' && (
                    <div className="nav-tooltip absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg text-xs whitespace-nowrap z-[200] pointer-events-none"
                    >
@@ -316,9 +330,8 @@ export default function App() {
                 <Menu size={18} />
               </button>
               <div className="ml-2.5 flex items-center gap-2">
-                <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-[linear-gradient(135deg,var(--color-accent),#8b5cf6)]"
-                >
-                  <Sparkles size={12} className="text-white" />
+                <div className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--color-text-primary)] text-[var(--color-text-inverse)]">
+                  <Mountain size={12} />
                 </div>
                 <span className="text-sm font-semibold text-[var(--color-text-primary)]">Climber</span>
               </div>
@@ -329,7 +342,7 @@ export default function App() {
               <div className="hidden md:flex items-center gap-3 px-6 h-12 border-b shrink-0 border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)]"
               >
                 <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
+                  <div className="rounded-md bg-[var(--color-accent-subtle)] p-1.5 text-[var(--color-accent)]">
                     <activeNavItem.icon size={14} />
                   </div>
                   <span className="text-sm font-semibold text-[var(--color-text-primary)]">{activeNavItem.label}</span>
@@ -349,8 +362,12 @@ export default function App() {
             </Suspense>
           </main>
 
-          <GlobalSearch isOpen={activeOverlay === 'search'} onClose={() => setActiveOverlay(null)} />
-          <CommandPalette isOpen={activeOverlay === 'commands'} onClose={() => setActiveOverlay(null)} onNavigate={(page) => navigate(page as Page)} />
+          <Suspense fallback={null}>
+            <GlobalSearch isOpen={activeOverlay === 'search'} onClose={() => setActiveOverlay(null)} />
+          </Suspense>
+          <Suspense fallback={null}>
+            <CommandPalette isOpen={activeOverlay === 'commands'} onClose={() => setActiveOverlay(null)} onNavigate={(page) => navigate(page as Page)} />
+          </Suspense>
         </>
       )}
     </div>

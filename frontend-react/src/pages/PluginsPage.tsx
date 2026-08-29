@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Search, Download, Trash2, Power, PowerOff, Package, Brain,
-  Server, FileText, Star, ChevronRight, X,
+  Server, FileText, Star, ChevronRight,
   Loader2, Plus, Filter, Zap,
 } from 'lucide-react';
 import { api } from '../api';
+import { Dialog, DialogBody, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/Dialog';
 
 interface Plugin {
   id: string;
@@ -13,13 +14,13 @@ interface Plugin {
   type: 'skill' | 'mcp' | 'prompt';
   source: string;
   status: 'enabled' | 'disabled' | 'installed' | 'error';
-  icon: string;
+  icon?: string;
   category: string;
   version: string;
   tools?: string[];
   tags?: string[];
   popularity?: number;
-  error?: string;
+  error?: string | null;
 }
 
 const TYPE_CONFIG = {
@@ -37,6 +38,8 @@ export function PluginsPage() {
   const [selectedCategory, setSelectedCategory] = useState(CATEGORY_ALL);
   const [selectedType, setSelectedType] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importUrl, setImportUrl] = useState('');
@@ -45,11 +48,14 @@ export function PluginsPage() {
   const [expandedPlugin, setExpandedPlugin] = useState<string | null>(null);
 
   const fetchPlugins = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
     try {
       const data = await api.listPlugins();
       setPlugins(data);
     } catch (e) {
       console.error('加载插件失败:', e);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -59,24 +65,33 @@ export function PluginsPage() {
 
   const handleInstall = async (id: string) => {
     setActionLoading(id);
+    setActionError(null);
     try {
       await api.installPlugin(id);
       await fetchPlugins();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setActionError('安装插件失败，请重试');
+    }
     finally { setActionLoading(null); }
   };
 
   const handleUninstall = async (id: string) => {
     setActionLoading(id);
+    setActionError(null);
     try {
       await api.uninstallPlugin(id);
       await fetchPlugins();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setActionError('卸载插件失败，请重试');
+    }
     finally { setActionLoading(null); }
   };
 
   const handleToggle = async (plugin: Plugin) => {
     setActionLoading(plugin.id);
+    setActionError(null);
     try {
       if (plugin.status === 'enabled') {
         await api.disablePlugin(plugin.id);
@@ -84,19 +99,26 @@ export function PluginsPage() {
         await api.enablePlugin(plugin.id);
       }
       await fetchPlugins();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setActionError(`${plugin.status === 'enabled' ? '停用' : '启用'}插件失败，请重试`);
+    }
     finally { setActionLoading(null); }
   };
 
   const handleImport = async () => {
     if (!importUrl.trim()) return;
+    setActionError(null);
     try {
       await api.importPlugin(importUrl, importName, importType);
       setImportModalOpen(false);
       setImportUrl('');
       setImportName('');
       await fetchPlugins();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setActionError('导入插件失败，请重试');
+    }
   };
 
   const filtered = plugins.filter(p => {
@@ -130,6 +152,25 @@ export function PluginsPage() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="h-full flex items-center justify-center p-8">
+        <div role="alert" className="max-w-md rounded-2xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/10 p-6 text-center">
+          <p className="font-semibold text-[var(--color-error)]">加载插件失败</p>
+          <p className="mt-2 text-sm text-[var(--color-text-secondary)]">插件服务暂时无法访问，请重试。</p>
+          <button
+            type="button"
+            onClick={fetchPlugins}
+            aria-label="重试加载插件"
+            className="mt-4 rounded-xl bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white"
+          >
+            重试
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full overflow-y-auto p-8">
       <div className="max-w-7xl mx-auto">
@@ -146,12 +187,21 @@ export function PluginsPage() {
              </p>
           </div>
           <button
-            onClick={() => setImportModalOpen(true)}
+            onClick={() => {
+              setActionError(null);
+              setImportModalOpen(true);
+            }}
             className="flex items-center gap-2 px-4 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold transition-all duration-200 active:scale-[0.97]"
           >
              <Plus size={16} /> 导入插件
           </button>
         </div>
+
+        {!importModalOpen && actionError && (
+          <div role="alert" className="mb-6 rounded-2xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/10 px-4 py-3 text-sm text-[var(--color-error)]">
+            {actionError}
+          </div>
+        )}
 
         <div className="flex gap-3 mb-6">
           <div className="flex-1 relative">
@@ -253,22 +303,24 @@ export function PluginsPage() {
         )}
       </div>
 
-      {importModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setImportModalOpen(false)}>
-          <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-6 w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
-                 <Download size={18} className="text-[var(--color-accent)]" /> 导入插件
-               </h3>
-               <button onClick={() => setImportModalOpen(false)} className="p-1 rounded-xl hover:bg-white/[0.06] text-[var(--color-text-muted)]">
-                 <X size={18} />
-               </button>
-            </div>
-
+      <Dialog open={importModalOpen} onClose={() => setImportModalOpen(false)} size="lg">
+        <DialogHeader className="pb-4">
+          <DialogTitle className="flex items-center gap-2 text-[var(--color-text-primary)]">
+            <Download size={18} className="text-[var(--color-accent)]" /> 导入插件
+          </DialogTitle>
+          <DialogDescription>从远程源地址导入 MCP 服务器、技能或提示词模板。</DialogDescription>
+        </DialogHeader>
+        <DialogBody className="pt-0">
+            {actionError && (
+              <div role="alert" className="mb-4 rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error)]/10 px-3 py-2 text-sm text-[var(--color-error)]">
+                {actionError}
+              </div>
+            )}
             <div className="space-y-4">
               <div>
-                 <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1.5">源地址</label>
+                 <label htmlFor="plugin-import-url" className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1.5">源地址</label>
                  <input
+                   id="plugin-import-url"
                    type="url"
                    value={importUrl}
                    onChange={(e) => setImportUrl(e.target.value)}
@@ -277,8 +329,9 @@ export function PluginsPage() {
                  />
                </div>
                <div>
-                 <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1.5">名称（可选）</label>
+                 <label htmlFor="plugin-import-name" className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1.5">名称（可选）</label>
                  <input
+                   id="plugin-import-name"
                    type="text"
                    value={importName}
                    onChange={(e) => setImportName(e.target.value)}
@@ -287,9 +340,10 @@ export function PluginsPage() {
                  />
                </div>
                <div>
-                 <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1.5">类型</label>
-                <select
-                  value={importType}
+                 <label htmlFor="plugin-import-type" className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1.5">类型</label>
+                 <select
+                   id="plugin-import-type"
+                   value={importType}
                   onChange={(e) => setImportType(e.target.value)}
                   className="w-full px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)]"
                 >
@@ -299,10 +353,10 @@ export function PluginsPage() {
                  </select>
                </div>
              </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setImportModalOpen(false)}
+        </DialogBody>
+        <DialogFooter className="pt-2">
+               <button
+                 onClick={() => setImportModalOpen(false)}
                 className="px-4 py-2 rounded-xl text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
               >
                   取消
@@ -311,13 +365,11 @@ export function PluginsPage() {
                 onClick={handleImport}
                 disabled={!importUrl.trim()}
                 className="px-5 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold disabled:opacity-50 transition-all duration-200 active:scale-[0.97]"
-              >
-                  导入
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+               >
+                   导入
+               </button>
+        </DialogFooter>
+      </Dialog>
     </div>
   );
 }
@@ -451,6 +503,7 @@ function PluginCard({
               {plugin.source !== 'builtin' && (
                 <button
                   onClick={onUninstall}
+                  aria-label={`卸载 ${plugin.name}`}
                   className="p-2 rounded-xl text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/10 transition-all duration-200"
                 >
                   <Trash2 size={14} />
@@ -460,6 +513,7 @@ function PluginCard({
           ) : (
             <button
               onClick={onInstall}
+              aria-label={`安装 ${plugin.name}`}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-xl text-xs font-semibold transition-all duration-200 active:scale-[0.97]"
             >
               <Download size={12} /> Install

@@ -8,7 +8,7 @@ import { UserSwitcher } from './UserSwitcher';
 export const SessionSidebar = React.memo(function SessionSidebar({ inDrawer = false }: { inDrawer?: boolean }) {
   const activeSessionId = useWorkspaceStore(s => s.activeSessionId);
   const setActiveSession = useWorkspaceStore(s => s.setActiveSession);
-  const { sessions, loading, createSession, deleteSession, renameSession, refresh } = useSessions();
+  const { sessions, loading, error, createSession, deleteSession, renameSession, refresh } = useSessions();
 
   const [selectedAgent, setSelectedAgent] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
@@ -58,12 +58,17 @@ export const SessionSidebar = React.memo(function SessionSidebar({ inDrawer = fa
     if (!selectedAgent || creating) return;
     setCreating(true);
     try {
-      await createSession({ title: `会话 ${sessions.length + 1}`, agent_id: selectedAgent });
+      const payload = {
+        title: `会话 ${sessions.length + 1}`,
+        agent_id: selectedAgent,
+        ...(selectedModel ? { model_settings: { model_id: selectedModel } } : {}),
+      };
+      await createSession(payload);
       await refresh();
     } finally {
       setCreating(false);
     }
-  }, [selectedAgent, creating, sessions.length, createSession, refresh]);
+  }, [selectedAgent, selectedModel, creating, sessions.length, createSession, refresh]);
 
   const filteredSessions = useMemo(() => {
     const matching = searchQuery
@@ -187,7 +192,20 @@ export const SessionSidebar = React.memo(function SessionSidebar({ inDrawer = fa
             <span className="text-[10px] text-[var(--color-text-muted)]">加载中...</span>
           </div>
         )}
-        {filteredSessions.map((s) => {
+        {!loading && error && (
+          <div role="alert" className="rounded-lg px-3 py-4 text-center bg-[var(--color-error-subtle)] text-[var(--color-error)]">
+            <p className="text-xs font-medium">加载会话失败</p>
+            <button
+              type="button"
+              onClick={refresh}
+              aria-label="重试加载会话"
+              className="mt-2 rounded-md px-2 py-1 text-[10px] font-semibold underline"
+            >
+              重试
+            </button>
+          </div>
+        )}
+        {!error && filteredSessions.map((s) => {
           const isActive = activeSessionId === s.id;
           return (
           <div
@@ -237,7 +255,7 @@ export const SessionSidebar = React.memo(function SessionSidebar({ inDrawer = fa
           </div>
           );
         })}
-        {!loading && filteredSessions.length === 0 && (
+        {!loading && !error && filteredSessions.length === 0 && (
           <div className="text-center py-6">
             <span className="text-[10px] text-[var(--color-text-muted)]">
               {searchQuery ? '无匹配会话' : '暂无会话'}

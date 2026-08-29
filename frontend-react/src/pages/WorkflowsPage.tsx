@@ -62,6 +62,7 @@ export function WorkflowsPage() {
 
   const openNewEditor = () => {
     setEditingWorkflow(null);
+    setShowEditor(true);
   };
 
   const openEditEditor = (wf: any) => {
@@ -79,9 +80,9 @@ export function WorkflowsPage() {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-8">
+    <div className="h-full overflow-y-auto p-4 md:p-6 lg:p-8">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
              <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">工作流</h2>
              <p className="text-[var(--color-text-secondary)] text-sm mt-1">基于 DAG 的工作流自动化</p>
@@ -89,13 +90,13 @@ export function WorkflowsPage() {
           <div className="flex gap-2">
             <button
               onClick={openNewEditor}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold transition-all duration-200 active:scale-[0.97]"
+              className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[var(--color-accent-hover)] active:translate-y-px"
             >
               <Plus size={16} /> 新建工作流
             </button>
             <button
               onClick={() => setShowTemplates(!showTemplates)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] rounded-2xl text-sm font-semibold hover:border-[var(--color-accent)]/30 transition-all duration-200"
+              className="flex items-center gap-2 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-4 py-2.5 text-sm font-semibold text-[var(--color-text-secondary)] transition-colors duration-150 hover:border-[var(--color-border-default)]"
             >
               <Layout size={16} /> 模板
             </button>
@@ -103,14 +104,14 @@ export function WorkflowsPage() {
         </div>
 
         {showTemplates && (
-          <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-6 mb-6">
+          <div className="mb-6 rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] p-6">
              <h3 className="font-medium text-[var(--color-text-primary)] mb-4">工作流模板</h3>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {templates.map(t => (
                 <button
                   key={t.template_id}
                   onClick={() => applyTemplate(t.template_id)}
-                  className="text-left p-4 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl hover:border-[var(--color-accent)]/30 transition-all duration-200"
+                  className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-4 text-left transition-colors duration-150 hover:border-[var(--color-border-default)]"
                 >
                   <div className="font-medium text-sm text-[var(--color-text-primary)]">{t.name}</div>
                   <div className="text-xs text-[var(--color-text-muted)] mt-1">{t.description}</div>
@@ -121,8 +122,8 @@ export function WorkflowsPage() {
         )}
 
         {(editingWorkflow || showEditor) && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-8">
-            <div className="bg-[var(--color-bg)] border border-[var(--color-border-subtle)] rounded-2xl w-full h-full max-w-7xl max-h-[90vh] flex flex-col">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-3 backdrop-blur-[2px] md:p-8">
+            <div className="flex h-full max-h-[90vh] w-full max-w-7xl flex-col rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-page)] shadow-[var(--shadow-lg)]">
               <div className="flex items-center justify-between p-4 border-b border-[var(--color-border-subtle)]">
                 <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">
                   {editingWorkflow ? '编辑工作流' : '新建工作流'}
@@ -149,7 +150,7 @@ export function WorkflowsPage() {
 
         {/* Error state */}
         {error && (
-          <div className="bg-[var(--color-error)]/10 border border-[var(--color-error)]/30 rounded-2xl p-4 mb-6 flex items-center gap-3">
+          <div className="mb-6 flex items-center gap-3 rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] p-4">
             <AlertCircle size={18} className="text-[var(--color-error)] shrink-0" />
             <p className="text-sm text-[var(--color-error)] flex-1">{error}</p>
             <button
@@ -165,14 +166,14 @@ export function WorkflowsPage() {
         {loading && (
           <div className="space-y-3">
             {[1, 2, 3].map(i => (
-              <div key={i} className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-5 animate-pulse">
+              <div key={i} className="animate-pulse rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] p-5">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-white/[0.03]" />
+                  <div className="h-10 w-10 rounded-lg bg-[var(--color-bg-surface-3)]" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-4 w-32 bg-white/[0.03] rounded-xl" />
-                    <div className="h-3 w-24 bg-white/[0.03] rounded-xl" />
+                    <div className="h-4 w-32 rounded bg-[var(--color-bg-surface-3)]" />
+                    <div className="h-3 w-24 rounded bg-[var(--color-bg-surface-3)]" />
                   </div>
-                  <div className="h-8 w-20 bg-white/[0.03] rounded-xl" />
+                  <div className="h-8 w-20 rounded-lg bg-[var(--color-bg-surface-3)]" />
                 </div>
               </div>
             ))}
@@ -185,7 +186,7 @@ export function WorkflowsPage() {
             {workflows.map(wf => (
               <div
                 key={wf.id}
-                className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-5"
+                className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] p-5"
               >
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-lg bg-[var(--color-accent-secondary)]/10 flex items-center justify-center border border-[var(--color-accent-secondary)]/20">
@@ -197,14 +198,14 @@ export function WorkflowsPage() {
                   </div>
                   <button
                     onClick={() => openEditEditor(wf)}
-                    className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] rounded-2xl text-sm font-semibold hover:bg-white/[0.06] transition-all duration-200"
+                    className="flex items-center gap-2 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] px-4 py-2 text-sm font-semibold text-[var(--color-text-secondary)] transition-colors duration-150 hover:bg-[var(--color-bg-surface-3)]"
                   >
                     <Edit size={14} /> 编辑
                   </button>
                   <button
                     onClick={() => runWorkflow(wf.id)}
                     disabled={running === wf.id}
-                    className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold disabled:opacity-50 transition-all duration-200 active:scale-[0.97]"
+                    className="flex items-center gap-2 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-white transition-colors duration-150 hover:bg-[var(--color-accent-hover)] disabled:opacity-50 active:translate-y-px"
                   >
                      <Play size={14} /> {running === wf.id ? '运行中...' : '运行'}
                   </button>

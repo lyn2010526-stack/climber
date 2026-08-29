@@ -87,7 +87,7 @@ export function ChatComposer({ onSend, onStop, isLoading, placeholder }: ChatCom
         </div>
       )}
 
-      <div className="overflow-hidden rounded-2xl shadow-sm transition-shadow focus-within:shadow-md" style={{ backgroundColor: 'var(--color-bg-surface-1)', border: '1px solid var(--color-border-default)' }}>
+      <div className="overflow-hidden rounded-xl shadow-sm transition-[border-color,box-shadow] focus-within:border-[var(--color-border-accent)] focus-within:shadow-md" style={{ backgroundColor: 'var(--color-bg-surface-1)', border: '1px solid var(--color-border-default)' }}>
         {files.length > 0 && (
           <div className="flex flex-wrap gap-2 px-3 pt-3">
             {files.map((file, index) => (

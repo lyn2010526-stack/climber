@@ -9,7 +9,6 @@ describe('MobileBottomNav', () => {
     render(<MobileBottomNav currentPage="chat" onNavigate={mockNavigate} />);
     expect(screen.getByText('工作台')).toBeDefined();
     expect(screen.getByText('执行')).toBeDefined();
-    expect(screen.getByText('集群')).toBeDefined();
     expect(screen.getByText('任务')).toBeDefined();
     expect(screen.getByText('智能体')).toBeDefined();
   });
@@ -28,7 +27,10 @@ describe('MobileBottomNav', () => {
   it('shows more menu when more button is clicked', () => {
     render(<MobileBottomNav currentPage="chat" onNavigate={mockNavigate} />);
     fireEvent.click(screen.getByText('更多'));
+    expect(screen.getByText('集群协作')).toBeDefined();
     expect(screen.getByText('系统设置')).toBeDefined();
+    expect(screen.getByText('API 密钥')).toBeDefined();
+    expect(screen.getByText('终端沙箱')).toBeDefined();
   });
 
   it('highlights active tab', () => {

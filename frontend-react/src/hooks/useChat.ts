@@ -9,6 +9,7 @@ export function useChat(sessionId: string | null) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<(() => void) | null>(null);
+  const activeAssistantIdRef = useRef<string | null>(null);
   const isStreamingRef = useRef(false);
   const mountedRef = useRef(true);
   const sessionVersionRef = useRef(0);
@@ -59,6 +60,19 @@ export function useChat(sessionId: string | null) {
     });
   }, [sessionId]);
 
+  const failRunningToolCalls = useCallback((assistantId: string | null, message: string) => {
+    if (!assistantId) return;
+    setMessages(prev => prev.map(msg => {
+      if (msg.id !== assistantId || !msg.toolCalls) return msg;
+      return {
+        ...msg,
+        toolCalls: msg.toolCalls.map(tc => tc.status === 'running'
+          ? { ...tc, status: 'error' as const, error: message }
+          : tc),
+      };
+    }));
+  }, []);
+
   const sendMessage = useCallback(async (content: string, model?: { provider?: string; modelId?: string }) => {
     if (!sessionId || isStreamingRef.current) return;
     isStreamingRef.current = true;
@@ -78,6 +92,7 @@ export function useChat(sessionId: string | null) {
     setMessages(prev => [...prev, userMsg]);
 
     const assistantId = `assistant-${Date.now()}`;
+    activeAssistantIdRef.current = assistantId;
     const assistantMsg: ChatMessage = {
       id: assistantId,
       role: 'assistant',
@@ -127,7 +142,7 @@ export function useChat(sessionId: string | null) {
           )
         );
       } else if (eventType === 'tool_result') {
-        const toolId = data.id;
+        const toolId = data.tool_call_id ?? data.id;
         const existing = toolCallsMap.get(toolId);
         if (existing) {
           toolCallsMap.set(toolId, {
@@ -144,45 +159,46 @@ export function useChat(sessionId: string | null) {
           })
         );
       } else if (eventType === 'done') {
-        setMessages(prev =>
-          prev.map(msg => {
-            if (msg.id !== assistantId) return msg;
-            const updatedToolCalls = msg.toolCalls
-              ? msg.toolCalls.map(tc => tc.status === 'running' ? { ...tc, status: 'success' as const } : tc)
-              : undefined;
-            return { ...msg, toolCalls: updatedToolCalls } as ChatMessage;
-          })
-        );
+        failRunningToolCalls(assistantId, 'Tool stream ended before a result was received');
+        activeAssistantIdRef.current = null;
         isStreamingRef.current = false;
         setIsStreaming(false);
       } else if (eventType === 'error' || eventType === 'eof') {
         const errMsg = typeof data === 'string' ? data : (data?.detail || data?.error || 'Unknown error');
+        failRunningToolCalls(
+          assistantId,
+          eventType === 'error' ? errMsg : 'Tool stream ended before a result was received',
+        );
         if (eventType === 'error') {
           setMessages(prev => prev.map(msg => msg.id === assistantId
             ? { ...msg, content: msg.content + `\n[Error: ${errMsg}]` }
             : msg));
           setError(errMsg);
         }
+        activeAssistantIdRef.current = null;
         isStreamingRef.current = false;
         setIsStreaming(false);
       }
     }, model);
-  }, [sessionId]);
+  }, [failRunningToolCalls, sessionId]);
 
   const stopStreaming = useCallback(() => {
     if (abortRef.current) {
       abortRef.current();
       abortRef.current = null;
     }
+    failRunningToolCalls(activeAssistantIdRef.current, 'Tool execution was cancelled');
+    activeAssistantIdRef.current = null;
     isStreamingRef.current = false;
     setIsStreaming(false);
-  }, []);
+  }, [failRunningToolCalls]);
 
   const clear = useCallback(() => {
     if (abortRef.current) {
       abortRef.current();
       abortRef.current = null;
     }
+    activeAssistantIdRef.current = null;
     isStreamingRef.current = false;
     setMessages([]);
     setError(null);

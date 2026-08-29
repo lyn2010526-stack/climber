@@ -4,6 +4,7 @@ import { CollabMessage, type CollabMessage as CollabMessageType } from './Collab
 import { ProgressHeader } from './ProgressHeader';
 import { Send } from 'lucide-react';
 import { api } from '../../api';
+import { getErrorMessage } from '../../types/common';
 
 function genId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
@@ -19,6 +20,89 @@ export interface TaskOptions {
   context?: string[];
   guardrails?: Array<{ name: string; description: string }>;
   humanReviewRequired?: boolean;
+}
+
+interface CollaborationEventData {
+  sender_id: string | undefined;
+  sender_name: string | undefined;
+  member_id: string | undefined;
+  member_name: string | undefined;
+  member_avatar: string | undefined;
+  manager_id: string | undefined;
+  manager_name: string | undefined;
+  content: string | undefined;
+  status: string | undefined;
+  error: string | undefined;
+  guardrail_name: string | undefined;
+  reason: string | undefined;
+  plan: string | undefined;
+  consensus_keyword: string | undefined;
+  task: string | undefined;
+  delta: string | undefined;
+  final_output: string | undefined;
+  active_member: string | undefined;
+  created_at: string | undefined;
+  attempt: number | undefined;
+  max_attempts: number | undefined;
+  current_round: number | undefined;
+  max_rounds: number | undefined;
+  memory_count: number | undefined;
+  rounds: number | undefined;
+}
+
+interface CollaborationEvent {
+  type: string;
+  data: CollaborationEventData;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function optionalString(data: Record<string, unknown>, key: string): string | undefined {
+  const value = data[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function optionalNumber(data: Record<string, unknown>, key: string): number | undefined {
+  const value = data[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function parseCollaborationEvent(value: unknown): CollaborationEvent | null {
+  if (!isRecord(value) || typeof value['type'] !== 'string') return null;
+  const data = isRecord(value['data']) ? value['data'] : {};
+
+  return {
+    type: value['type'],
+    data: {
+      sender_id: optionalString(data, 'sender_id'),
+      sender_name: optionalString(data, 'sender_name'),
+      member_id: optionalString(data, 'member_id'),
+      member_name: optionalString(data, 'member_name'),
+      member_avatar: optionalString(data, 'member_avatar'),
+      manager_id: optionalString(data, 'manager_id'),
+      manager_name: optionalString(data, 'manager_name'),
+      content: optionalString(data, 'content'),
+      status: optionalString(data, 'status'),
+      error: optionalString(data, 'error'),
+      guardrail_name: optionalString(data, 'guardrail_name'),
+      reason: optionalString(data, 'reason'),
+      plan: optionalString(data, 'plan'),
+      consensus_keyword: optionalString(data, 'consensus_keyword'),
+      task: optionalString(data, 'task'),
+      delta: optionalString(data, 'delta'),
+      final_output: optionalString(data, 'final_output'),
+      active_member: optionalString(data, 'active_member'),
+      created_at: optionalString(data, 'created_at'),
+      attempt: optionalNumber(data, 'attempt'),
+      max_attempts: optionalNumber(data, 'max_attempts'),
+      current_round: optionalNumber(data, 'current_round'),
+      max_rounds: optionalNumber(data, 'max_rounds'),
+      memory_count: optionalNumber(data, 'memory_count'),
+      rounds: optionalNumber(data, 'rounds'),
+    },
+  };
 }
 
 export function CollaborationConsole({ groupId, availableTasks = [] }: CollaborationConsoleProps) {
@@ -59,9 +143,11 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleWSMessage = useCallback((msg: any) => {
-    const data = msg.data || {};
-    switch (msg.type) {
+  const handleWSMessage = useCallback((value: unknown) => {
+    const event = parseCollaborationEvent(value);
+    if (!event) return;
+    const { data } = event;
+    switch (event.type) {
       case 'message':
         setMessages((prev) => [...prev, {
           id: genId(),
@@ -70,7 +156,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: data.content || '',
           timestamp: data.created_at || new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
 
       case 'member_update':
@@ -81,7 +167,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: `成员状态更新: ${data.status || 'unknown'}`,
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
 
       case 'task_update':
@@ -92,7 +178,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: `任务状态更新: ${data.status || 'unknown'}`,
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
 
       case 'system_message':
@@ -103,7 +189,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: data.content || '',
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
 
       case 'reviewer_error':
@@ -114,7 +200,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: `审查者错误: ${data.error || 'unknown'}`,
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
 
       case 'guardrail_passed':
@@ -125,7 +211,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: `校验通过: ${data.guardrail_name || 'unnamed'} (尝试 ${data.attempt || 1}/${data.max_attempts || 1})`,
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
 
       case 'guardrail_failed':
@@ -136,7 +222,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: `校验失败: ${data.guardrail_name || 'unnamed'} - ${data.reason || 'no reason'} (尝试 ${data.attempt || 1}/${data.max_attempts || 1})`,
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
 
       case 'human_review_needed':
@@ -148,7 +234,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: `需要人工审批: ${data.content || '任务产出需要审核'}\n\n回复 "approve" 批准或 "reject" 拒绝`,
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
 
       case 'checkpoint_saved':
@@ -159,7 +245,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: `断点已保存 (轮次 ${data.current_round || 0}/${data.max_rounds || 5})`,
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
 
       case 'memory_injected':
@@ -170,7 +256,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: `记忆已注入: ${data.memory_count || 0} 条相关记忆`,
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
 
       case 'manager_plan':
@@ -181,7 +267,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: `Manager 规划: ${data.plan || '无计划'}`,
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
 
       case 'group_chat_message':
@@ -192,7 +278,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'worker',
           content: data.content || '',
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
 
       case 'consensus_reached':
@@ -203,7 +289,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: `群组达成共识 (${data.consensus_keyword || 'default'})`,
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
 
       case 'task_started':
@@ -219,7 +305,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
         break;
 
       case 'worker_start':
-        setActiveMember(data.member_name);
+        setActiveMember(data.member_name || '');
         setStatus('running');
         break;
 
@@ -233,17 +319,17 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
             id: genId(),
             memberId: data.member_id || '',
             memberName: data.member_name || 'Unknown',
-            memberAvatar: data.member_avatar,
+            ...(data.member_avatar ? { memberAvatar: data.member_avatar } : {}),
             role: 'worker',
             content: data.delta || '',
             timestamp: new Date().toISOString(),
-          }] as CollabMessageType[];
+          }];
         });
         break;
       }
 
       case 'worker_done': {
-        const workerContent = data.content as string;
+        const workerContent = data.content || '';
         setMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last && last.memberId === data.member_id && last.role === 'worker') {
@@ -254,11 +340,11 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
             id: genId(),
             memberId: data.member_id || '',
             memberName: data.member_name || 'Unknown',
-            memberAvatar: data.member_avatar,
+            ...(data.member_avatar ? { memberAvatar: data.member_avatar } : {}),
             role: 'worker',
             content: workerContent,
             timestamp: new Date().toISOString(),
-          }] as CollabMessageType[];
+          }];
         });
         break;
       }
@@ -267,7 +353,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
         setCurrentRound(data.current_round || 0);
         setMaxRounds(data.max_rounds || 5);
         setStatus(data.status || 'running');
-        setActiveMember(data.active_member);
+        setActiveMember(data.active_member || '');
         break;
 
       case 'task_completed':
@@ -282,7 +368,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: `任务完成！最终产出:\n\n${data.final_output || ''}`,
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
 
       case 'task_partial':
@@ -297,7 +383,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: `任务部分完成 (${data.rounds || 0} 轮):\n\n${data.final_output || ''}`,
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
 
       case 'task_failed':
@@ -312,7 +398,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: `任务失败: ${data.error || 'unknown'}`,
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
         break;
     }
   }, []);
@@ -326,12 +412,13 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
       setMessages(prev => [...prev, {
         id: genId(), memberId: 'system', memberName: 'System', role: 'system',
         content: '已连接到群组协作空间', timestamp: new Date().toISOString(),
-      }] as CollabMessageType[]);
+      }]);
     };
     ws.onclose = () => { /* disconnected */ };
     ws.onmessage = (event) => {
       try {
-        handleWSMessage(JSON.parse(event.data));
+        const value: unknown = JSON.parse(event.data);
+        handleWSMessage(value);
       } catch { /* skip */ }
     };
 
@@ -362,19 +449,19 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
           role: 'system',
           content: `任务已创建 (ID: ${resp.id.slice(0, 8)}...)`,
           timestamp: new Date().toISOString(),
-        }] as CollabMessageType[]);
+        }]);
 
         await api.runTask(resp.id);
       }
-    } catch (e: any) {
+    } catch (error: unknown) {
       setMessages([{
         id: genId(),
         memberId: 'system',
         memberName: 'System',
         role: 'system',
-        content: `启动失败: ${e.message}`,
+        content: `启动失败: ${getErrorMessage(error)}`,
         timestamp: new Date().toISOString(),
-      }] as CollabMessageType[]);
+      }]);
     }
   }, [groupId]);
 
@@ -385,15 +472,15 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
       setStatus('paused');
       setStartTime(null);
       setElapsedTime(0);
-    } catch (e: any) {
+    } catch (error: unknown) {
       setMessages((prev) => [...prev, {
         id: genId(),
         memberId: 'system',
         memberName: 'System',
         role: 'system',
-        content: `暂停失败: ${e.message}`,
+        content: `暂停失败: ${getErrorMessage(error)}`,
         timestamp: new Date().toISOString(),
-      }] as CollabMessageType[]);
+      }]);
     }
   }, [sessionId]);
 
@@ -404,15 +491,15 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
       setStatus('running');
       setStartTime(Date.now());
       setElapsedTime(0);
-    } catch (e: any) {
+    } catch (error: unknown) {
       setMessages((prev) => [...prev, {
         id: genId(),
         memberId: 'system',
         memberName: 'System',
         role: 'system',
-        content: `恢复失败: ${e.message}`,
+        content: `恢复失败: ${getErrorMessage(error)}`,
         timestamp: new Date().toISOString(),
-      }] as CollabMessageType[]);
+      }]);
     }
   }, [sessionId]);
 
@@ -424,15 +511,15 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
       setActiveMember('');
       setStartTime(null);
       setElapsedTime(0);
-    } catch (e: any) {
+    } catch (error: unknown) {
       setMessages((prev) => [...prev, {
         id: genId(),
         memberId: 'system',
         memberName: 'System',
         role: 'system',
-        content: `停止失败: ${e.message}`,
+        content: `停止失败: ${getErrorMessage(error)}`,
         timestamp: new Date().toISOString(),
-      }] as CollabMessageType[]);
+      }]);
     }
   }, [sessionId]);
 

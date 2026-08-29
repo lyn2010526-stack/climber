@@ -37,6 +37,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const keyboardIndexRef = useRef(0);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   const allItems = useMemo(() => [
     { id: 'chat', label: '工作台', icon: 'MessageSquare', keywords: 'home workspace dashboard 对话 工作台', group: '核心' },
@@ -48,7 +49,6 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
     { id: 'reasoning-history', label: '推理历史', icon: 'History', keywords: 'reasoning history 推理历史', group: '核心' },
     { id: 'agents', label: '智能体管理', icon: 'Bot', keywords: 'agent config 智能体 管理', group: '管理' },
     { id: 'workflows', label: '工作流', icon: 'Workflow', keywords: 'workflow dag 工作流', group: '管理' },
-    { id: 'crews', label: '团队协作', icon: 'Users', keywords: 'crew team 团队', group: '管理' },
     { id: 'scheduler', label: '定时任务', icon: 'Clock', keywords: 'cron schedule 定时', group: '管理' },
     { id: 'plugins', label: '插件市场', icon: 'Puzzle', keywords: 'plugin marketplace 插件 市场', group: '配置' },
     { id: 'plugin-manage', label: '插件管理', icon: 'Package', keywords: 'plugin manage installed 插件 管理', group: '配置' },
@@ -80,9 +80,13 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
   }, [query]);
 
   useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
-    }
+    if (!isOpen) return;
+    restoreFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    inputRef.current?.focus();
+
+    return () => restoreFocusRef.current?.focus();
   }, [isOpen]);
 
   useEffect(() => {
@@ -138,11 +142,12 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
           <Search size={18} className="shrink-0 text-[var(--color-text-muted)]" />
           <input
             ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="搜索页面、功能..."
-            className="flex-1 bg-transparent text-sm outline-none text-[var(--color-text-primary)]"
+             type="text"
+             value={query}
+             onChange={(e) => setQuery(e.target.value)}
+             placeholder="搜索页面、功能..."
+             aria-label="搜索页面和功能"
+             className="flex-1 bg-transparent text-sm outline-none text-[var(--color-text-primary)]"
           />
           <kbd className="text-[10px] px-1.5 py-0.5 rounded-md font-mono bg-[var(--color-bg-surface-3)] text-[var(--color-text-muted)] border border-[var(--color-border-subtle)]">ESC</kbd>
         </div>

@@ -1,37 +1,46 @@
 // Groups / cluster resource domain.
 import type { GroupSummary } from '../types/api';
+import type {
+  AddedGroupMember,
+  AddGroupMemberInput,
+  ClusterCreateResult,
+  ClusterStatus,
+  CreateGroupInput,
+  GroupMessagesResponse,
+  RemoveGroupMemberResult,
+} from '../types/groups';
 import { ApiClient } from './client';
 
 declare module './client' {
   interface ApiClient {
-    createCluster(requirements: string): Promise<any>;
-    getClusterStatus(): Promise<any>;
+    createCluster(requirements: string): Promise<ClusterCreateResult>;
+    getClusterStatus(): Promise<ClusterStatus>;
     listGroups(): Promise<GroupSummary[]>;
-    createGroup(data: { name: string; description?: string; topic?: string }): Promise<any>;
+    createGroup(data: CreateGroupInput): Promise<GroupSummary>;
     getGroup(id: string): Promise<GroupSummary>;
-    addGroupMember(groupId: string, data: Record<string, any>): Promise<any>;
-    removeGroupMember(groupId: string, memberId: string): Promise<any>;
-    listGroupMessages(groupId: string, limit?: number): Promise<any>;
+    addGroupMember(groupId: string, data: AddGroupMemberInput): Promise<AddedGroupMember>;
+    removeGroupMember(groupId: string, memberId: string): Promise<RemoveGroupMemberResult>;
+    listGroupMessages(groupId: string, limit?: number): Promise<GroupMessagesResponse>;
   }
 }
 
-ApiClient.prototype.createCluster = function (this: ApiClient, requirements: string) {
-  return this.request<any>('/cluster/create', {
+ApiClient.prototype.createCluster = function (this: ApiClient, requirements: string): Promise<ClusterCreateResult> {
+  return this.request<ClusterCreateResult>('/cluster/create', {
     method: 'POST',
     body: JSON.stringify({ requirements }),
   });
 };
 
-ApiClient.prototype.getClusterStatus = function (this: ApiClient) {
-  return this.request<any>('/cluster/status');
+ApiClient.prototype.getClusterStatus = function (this: ApiClient): Promise<ClusterStatus> {
+  return this.request<ClusterStatus>('/cluster/status');
 };
 
 ApiClient.prototype.listGroups = function (this: ApiClient): Promise<GroupSummary[]> {
   return this.request<GroupSummary[]>('/groups/');
 };
 
-ApiClient.prototype.createGroup = function (this: ApiClient, data: { name: string; description?: string; topic?: string }) {
-  return this.request<any>('/groups/', {
+ApiClient.prototype.createGroup = function (this: ApiClient, data: CreateGroupInput): Promise<GroupSummary> {
+  return this.request<GroupSummary>('/groups/', {
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -41,17 +50,17 @@ ApiClient.prototype.getGroup = function (this: ApiClient, id: string): Promise<G
   return this.request<GroupSummary>(`/groups/${id}`);
 };
 
-ApiClient.prototype.addGroupMember = function (this: ApiClient, groupId: string, data: Record<string, any>) {
-  return this.request<any>(`/groups/${groupId}/members`, {
+ApiClient.prototype.addGroupMember = function (this: ApiClient, groupId: string, data: AddGroupMemberInput): Promise<AddedGroupMember> {
+  return this.request<AddedGroupMember>(`/groups/${groupId}/members`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
 };
 
-ApiClient.prototype.removeGroupMember = function (this: ApiClient, groupId: string, memberId: string) {
-  return this.request<any>(`/groups/${groupId}/members/${memberId}`, { method: 'DELETE' });
+ApiClient.prototype.removeGroupMember = function (this: ApiClient, groupId: string, memberId: string): Promise<RemoveGroupMemberResult> {
+  return this.request<RemoveGroupMemberResult>(`/groups/${groupId}/members/${memberId}`, { method: 'DELETE' });
 };
 
-ApiClient.prototype.listGroupMessages = function (this: ApiClient, groupId: string, limit = 50) {
-  return this.request<any>(`/groups/${groupId}/messages?limit=${limit}`);
+ApiClient.prototype.listGroupMessages = function (this: ApiClient, groupId: string, limit = 50): Promise<GroupMessagesResponse> {
+  return this.request<GroupMessagesResponse>(`/groups/${groupId}/messages?limit=${limit}`);
 };

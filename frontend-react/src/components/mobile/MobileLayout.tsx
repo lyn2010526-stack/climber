@@ -1,5 +1,5 @@
 import { MobileBottomNav } from './MobileBottomNav';
-import { Sparkles } from 'lucide-react';
+import { Mountain } from 'lucide-react';
 
 export function MobileLayout({ children, currentPage, onNavigate }: { 
   children: React.ReactNode; 
@@ -13,23 +13,17 @@ export function MobileLayout({ children, currentPage, onNavigate }: {
         style={{
           backgroundColor: 'var(--color-glass-bg)',
           borderBottom: '1px solid var(--color-glass-border)',
-          backdropFilter: 'blur(24px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
         }}
       >
         <div className="flex items-center justify-between px-4 h-12">
           <div className="flex items-center gap-2">
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center"
-              style={{
-                backgroundColor: 'var(--color-accent)',
-                boxShadow: '0 0 12px var(--color-accent-glow)',
-              }}
-            >
-              <Sparkles size={16} className="text-white" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-text-primary)] text-[var(--color-text-inverse)]">
+              <Mountain size={16} strokeWidth={2.25} />
             </div>
             <h1
-              className="text-base font-semibold"
+              className="text-sm font-semibold tracking-[-0.01em]"
               style={{ color: 'var(--color-text-primary)' }}
             >
               Climber

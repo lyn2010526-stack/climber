@@ -1,15 +1,15 @@
-import { useEffect, forwardRef } from 'react';
+import { createContext, forwardRef, useContext, useEffect, useId, useRef } from 'react';
 import { cva } from 'class-variance-authority';
 import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const dialogOverlayVariants = cva(
-  'fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300',
+  'fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-200',
   {
     variants: {
       blur: {
-        true: 'backdrop-blur-sm bg-black/60',
-        false: 'bg-black/60',
+        true: 'backdrop-blur-[2px] bg-black/45',
+        false: 'bg-black/45',
       },
     },
     defaultVariants: {
@@ -19,7 +19,7 @@ const dialogOverlayVariants = cva(
 );
 
 const dialogContentVariants = cva(
-  'relative w-full rounded-2xl border shadow-2xl shadow-black/50 transition-all duration-300 animate-in fade-in zoom-in-95 slide-in-from-bottom-2',
+  'relative w-full rounded-xl border shadow-[var(--shadow-lg)] transition-all duration-200 animate-in fade-in zoom-in-95 slide-in-from-bottom-2',
   {
     variants: {
       size: {
@@ -30,8 +30,8 @@ const dialogContentVariants = cva(
         full: 'max-w-[calc(100vw-2rem)] max-h-[calc(100vh-2rem)]',
       },
       variant: {
-        default: 'border-white/[0.08] bg-[#1a1a2e]',
-        glass: 'border-white/[0.06] bg-white/[0.04] backdrop-blur-xl',
+        default: 'border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)]',
+        glass: 'border-[var(--color-glass-border)] bg-[var(--color-glass-bg)] backdrop-blur-xl',
       },
     },
     defaultVariants: {
@@ -65,23 +65,72 @@ interface DialogDescriptionProps extends React.HTMLAttributes<HTMLParagraphEleme
 
 interface DialogFooterProps extends React.HTMLAttributes<HTMLDivElement> {}
 
+interface DialogContextValue {
+  titleId: string;
+  descriptionId: string;
+}
+
+const DialogContext = createContext<DialogContextValue | null>(null);
+
+const focusableSelector = [
+  'button:not([disabled])',
+  '[href]',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
 const Dialog = forwardRef<HTMLDivElement, DialogProps>(
   ({ open, onClose, children, className, size, variant, closeOnOverlayClick = true, closeOnEscape = true, showCloseButton = true, blur = true }, ref) => {
+    const contentRef = useRef<HTMLDivElement>(null);
+    const restoreFocusRef = useRef<HTMLElement | null>(null);
+    const titleId = useId();
+    const descriptionId = useId();
+
     useEffect(() => {
       if (!open) return;
 
-      function handleEscape(e: KeyboardEvent) {
+      restoreFocusRef.current = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+
+      function handleKeyDown(e: KeyboardEvent) {
         if (e.key === 'Escape' && closeOnEscape) {
           onClose();
+          return;
+        }
+        if (e.key !== 'Tab' || !contentRef.current) return;
+
+        const focusableElements = Array.from(
+          contentRef.current.querySelectorAll<HTMLElement>(focusableSelector)
+        );
+        if (focusableElements.length === 0) {
+          e.preventDefault();
+          contentRef.current.focus();
+          return;
+        }
+
+        const firstElement = focusableElements[0]!;
+        const lastElement = focusableElements[focusableElements.length - 1]!;
+        if (e.shiftKey && document.activeElement === firstElement) {
+          e.preventDefault();
+          lastElement.focus();
+        } else if (!e.shiftKey && document.activeElement === lastElement) {
+          e.preventDefault();
+          firstElement.focus();
         }
       }
 
-      document.addEventListener('keydown', handleEscape);
+      document.addEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'hidden';
+      const focusableElement = contentRef.current?.querySelector<HTMLElement>(focusableSelector);
+      (focusableElement ?? contentRef.current)?.focus();
 
       return () => {
-        document.removeEventListener('keydown', handleEscape);
+        document.removeEventListener('keydown', handleKeyDown);
         document.body.style.overflow = '';
+        restoreFocusRef.current?.focus();
       };
     }, [open, closeOnEscape, onClose]);
 
@@ -94,22 +143,28 @@ const Dialog = forwardRef<HTMLDivElement, DialogProps>(
         onClick={closeOnOverlayClick ? onClose : undefined}
       >
         <div
+          ref={contentRef}
           className={cn(dialogContentVariants({ size, variant }), className)}
           onClick={(e) => e.stopPropagation()}
           role="dialog"
           aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={descriptionId}
+          tabIndex={-1}
         >
-          {showCloseButton && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="absolute right-4 top-4 z-10 p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
-              aria-label="关闭"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-          {children}
+          <DialogContext.Provider value={{ titleId, descriptionId }}>
+            {showCloseButton && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="absolute right-4 top-4 z-10 p-2 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)] transition-colors"
+                aria-label="关闭"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+            {children}
+          </DialogContext.Provider>
         </div>
       </div>
     );
@@ -128,7 +183,8 @@ const DialogHeader = forwardRef<HTMLDivElement, DialogHeaderProps>(
         <button
           type="button"
           onClick={onClose}
-          className="absolute right-4 top-4 p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
+          className="absolute right-4 top-4 p-2 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)] transition-colors"
+          aria-label="关闭"
         >
           <X className="h-4 w-4" />
         </button>
@@ -140,24 +196,32 @@ const DialogHeader = forwardRef<HTMLDivElement, DialogHeaderProps>(
 DialogHeader.displayName = 'DialogHeader';
 
 const DialogTitle = forwardRef<HTMLHeadingElement, DialogTitleProps>(
-  ({ className, ...props }, ref) => (
-    <h2
-      ref={ref}
-      className={cn('text-lg font-semibold text-white leading-none tracking-tight', className)}
-      {...props}
-    />
-  )
+  ({ className, id, ...props }, ref) => {
+    const context = useContext(DialogContext);
+    return (
+      <h2
+        ref={ref}
+        id={id ?? context?.titleId}
+        className={cn('text-lg font-semibold text-[var(--color-text-primary)] leading-none tracking-tight', className)}
+        {...props}
+      />
+    );
+  }
 );
 DialogTitle.displayName = 'DialogTitle';
 
 const DialogDescription = forwardRef<HTMLParagraphElement, DialogDescriptionProps>(
-  ({ className, ...props }, ref) => (
-    <p
-      ref={ref}
-      className={cn('text-sm text-white/50 leading-relaxed', className)}
-      {...props}
-    />
-  )
+  ({ className, id, ...props }, ref) => {
+    const context = useContext(DialogContext);
+    return (
+      <p
+        ref={ref}
+        id={id ?? context?.descriptionId}
+        className={cn('text-sm text-[var(--color-text-secondary)] leading-relaxed', className)}
+        {...props}
+      />
+    );
+  }
 );
 DialogDescription.displayName = 'DialogDescription';
 

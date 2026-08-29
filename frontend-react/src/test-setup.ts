@@ -19,3 +19,36 @@ Object.defineProperty(window, 'matchMedia', {
   unobserve() {}
   disconnect() {}
 };
+
+const canvasContext = {
+  createLinearGradient: () => ({ addColorStop: () => {} }),
+  fillRect: () => {},
+  clearRect: () => {},
+  getImageData: () => ({ data: new Uint8ClampedArray(4) }),
+  putImageData: () => {},
+  createImageData: () => ({ data: new Uint8ClampedArray(4) }),
+  setTransform: () => {},
+  drawImage: () => {},
+  save: () => {},
+  fillText: () => {},
+  restore: () => {},
+  beginPath: () => {},
+  moveTo: () => {},
+  lineTo: () => {},
+  closePath: () => {},
+  stroke: () => {},
+  translate: () => {},
+  scale: () => {},
+  rotate: () => {},
+  arc: () => {},
+  fill: () => {},
+  measureText: (text: string) => ({ width: text.length * 8 }),
+  transform: () => {},
+  rect: () => {},
+  clip: () => {},
+};
+
+Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+  writable: true,
+  value: () => canvasContext,
+});

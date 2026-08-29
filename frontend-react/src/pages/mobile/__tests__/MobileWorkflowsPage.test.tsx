@@ -12,9 +12,10 @@ vi.mock('../../../api', () => ({
 }));
 
 describe('MobileWorkflowsPage', () => {
-  it('renders page header', () => {
+  it('renders page header', async () => {
     render(<MobileWorkflowsPage />);
     expect(screen.getByText('工作流')).toBeDefined();
+    expect(await screen.findByText(/暂无工作流/)).toBeDefined();
   });
 
   it('renders templates button and empty state', async () => {

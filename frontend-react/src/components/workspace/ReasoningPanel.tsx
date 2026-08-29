@@ -22,11 +22,10 @@ interface PathTrace {
 
 interface CoverageReport {
   score: number;
-  edge_cases_count: number;
-  risks_count: number;
-  assumptions_count: number;
-  blind_spots_count: number;
-  high_risks: number;
+  edge_cases: Array<{ description: string; category: string; tested: boolean; result: string }>;
+  risks: Array<{ description: string; probability: string; impact: string; mitigation: string }>;
+  assumptions: Array<{ statement: string; validated: boolean; evidence: string; risk_if_wrong: string }>;
+  blind_spots: string[];
   checklist: Record<string, boolean>;
 }
 
@@ -256,25 +255,25 @@ export function ReasoningPanel() {
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="flex items-center justify-between p-2 bg-[var(--color-bg-base)] rounded">
                      <span className="text-[var(--color-text-secondary)]">边界情况</span>
-                    <span className="text-[var(--color-text-primary)] font-mono">{result.coverage.edge_cases_count}</span>
+                    <span className="text-[var(--color-text-primary)] font-mono">{result.coverage.edge_cases.length}</span>
                   </div>
                   <div className="flex items-center justify-between p-2 bg-[var(--color-bg-base)] rounded">
                      <span className="text-[var(--color-text-secondary)]">风险</span>
-                    <span className="text-[var(--color-text-primary)] font-mono">{result.coverage.risks_count}</span>
+                    <span className="text-[var(--color-text-primary)] font-mono">{result.coverage.risks.length}</span>
                   </div>
                   <div className="flex items-center justify-between p-2 bg-[var(--color-bg-base)] rounded">
                      <span className="text-[var(--color-text-secondary)]">假设</span>
-                    <span className="text-[var(--color-text-primary)] font-mono">{result.coverage.assumptions_count}</span>
+                    <span className="text-[var(--color-text-primary)] font-mono">{result.coverage.assumptions.length}</span>
                   </div>
                   <div className="flex items-center justify-between p-2 bg-[var(--color-bg-base)] rounded">
                      <span className="text-[var(--color-text-secondary)]">盲点</span>
-                    <span className="text-[var(--color-text-primary)] font-mono">{result.coverage.blind_spots_count}</span>
+                    <span className="text-[var(--color-text-primary)] font-mono">{result.coverage.blind_spots.length}</span>
                   </div>
                 </div>
-                {result.coverage.high_risks > 0 && (
+                {result.coverage.risks.filter((risk) => risk.probability === 'high' && risk.impact === 'high').length > 0 && (
                   <div className="mt-2 p-2 bg-red-900/20 border border-red-700/30 rounded text-xs text-red-300">
                     <AlertTriangle size={11} className="inline mr-1" />
-                     检测到 {result.coverage.high_risks} 个高风险问题
+                     检测到 {result.coverage.risks.filter((risk) => risk.probability === 'high' && risk.impact === 'high').length} 个高风险问题
                   </div>
                 )}
               </div>

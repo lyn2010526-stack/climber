@@ -20,9 +20,10 @@ export function MCPPage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [installing, setInstalling] = useState<string | null>(null);
+  const [pendingServerId, setPendingServerId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchServers();
@@ -51,7 +52,9 @@ export function MCPPage() {
   };
 
   const installServer = async (serverId: string) => {
-    setInstalling(serverId);
+    if (pendingServerId) return;
+    setPendingServerId(serverId);
+    setActionError(null);
     try {
       await api.installMCPServer(serverId, {});
         setServers(prev => prev.map(s =>
@@ -59,11 +62,16 @@ export function MCPPage() {
         ));
     } catch (e) {
       console.error('Failed to install:', e);
+      setActionError('安装 MCP 服务器失败，请重试');
+    } finally {
+      setPendingServerId(null);
     }
-    setInstalling(null);
   };
 
   const uninstallServer = async (serverId: string) => {
+    if (pendingServerId) return;
+    setPendingServerId(serverId);
+    setActionError(null);
     try {
       await api.deleteMCPServer(serverId);
         setServers(prev => prev.map(s =>
@@ -71,6 +79,9 @@ export function MCPPage() {
         ));
     } catch (e) {
       console.error('Failed to uninstall:', e);
+      setActionError('卸载 MCP 服务器失败，请重试');
+    } finally {
+      setPendingServerId(null);
     }
   };
 
@@ -127,7 +138,7 @@ export function MCPPage() {
 
         {/* Error state */}
         {error && (
-          <div className="bg-[var(--color-error)]/10 border border-[var(--color-error)]/30 rounded-2xl p-4 mb-6 flex items-center gap-3">
+          <div role="alert" className="bg-[var(--color-error)]/10 border border-[var(--color-error)]/30 rounded-2xl p-4 mb-6 flex items-center gap-3">
             <AlertCircle size={18} className="text-[var(--color-error)] shrink-0" />
             <p className="text-sm text-[var(--color-error)] flex-1">{error}</p>
             <button
@@ -136,6 +147,13 @@ export function MCPPage() {
             >
                <RefreshCw size={14} /> 重试
             </button>
+          </div>
+        )}
+
+        {actionError && (
+          <div role="alert" className="bg-[var(--color-error)]/10 border border-[var(--color-error)]/30 rounded-2xl p-4 mb-6 flex items-center gap-3">
+            <AlertCircle size={18} className="text-[var(--color-error)] shrink-0" />
+            <p className="text-sm text-[var(--color-error)] flex-1">{actionError}</p>
           </div>
         )}
 
@@ -217,18 +235,21 @@ export function MCPPage() {
                     {server.is_installed ? (
                       <button
                         onClick={() => uninstallServer(server.id)}
-                        className="flex items-center gap-2 px-4 py-2 border border-[var(--color-error)]/30 text-[var(--color-error)] hover:bg-[var(--color-error)]/10 rounded-2xl text-sm font-medium transition-all duration-200"
+                        disabled={pendingServerId !== null}
+                        aria-label={`卸载 ${server.name}`}
+                        className="flex items-center gap-2 px-4 py-2 border border-[var(--color-error)]/30 text-[var(--color-error)] hover:bg-[var(--color-error)]/10 rounded-2xl text-sm font-medium transition-all duration-200 disabled:opacity-40"
                       >
-                        <Trash2 size={14} /> 卸载
+                        <Trash2 size={14} /> {pendingServerId === server.id ? '卸载中...' : '卸载'}
                       </button>
                     ) : (
                       <button
                         onClick={() => installServer(server.id)}
-                        disabled={installing === server.id}
+                        disabled={pendingServerId !== null}
+                        aria-label={`安装 ${server.name}`}
                         className="flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold disabled:opacity-40 transition-all duration-200 active:scale-[0.97] shadow-lg shadow-[var(--color-accent)]/20"
                       >
                         <Download size={14} />
-                        {installing === server.id ? '安装中...' : '安装'}
+                        {pendingServerId === server.id ? '安装中...' : '安装'}
                       </button>
                     )}
                   </div>

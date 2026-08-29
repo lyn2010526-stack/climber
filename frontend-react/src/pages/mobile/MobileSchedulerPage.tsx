@@ -7,7 +7,7 @@ interface ScheduledTask {
   name: string;
   description: string;
   cron: string;
-  type: string;
+  type?: string;
   enabled: boolean;
   last_run: number | null;
   next_run: number | null;
@@ -175,21 +175,22 @@ export function MobileSchedulerPage() {
               </div>
             )}
             {tasks.map((task) => {
-              const Icon = TYPE_ICONS[task.type] || Clock;
+              const taskType = task.type || 'custom';
+              const Icon = TYPE_ICONS[taskType] || Clock;
               return (
                 <div
                   key={task.id}
                   className={`p-4 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl transition-all duration-200 ${task.enabled ? '' : 'opacity-60'}`}
                 >
                   <div className="flex items-start gap-3">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border border-[var(--color-border-subtle)] ${TYPE_COLORS[task.type] || TYPE_COLORS['custom']}`}>
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border border-[var(--color-border-subtle)] ${TYPE_COLORS[taskType] || TYPE_COLORS['custom']}`}>
                       <Icon size={14} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-[var(--color-text-primary)] truncate">{task.name}</span>
-                        <span className={`px-1.5 py-0.5 rounded-lg text-[10px] font-medium border border-[var(--color-border-subtle)] shrink-0 ${TYPE_COLORS[task.type] || TYPE_COLORS['custom']}`}>
-                          {task.type}
+                        <span className={`px-1.5 py-0.5 rounded-lg text-[10px] font-medium border border-[var(--color-border-subtle)] shrink-0 ${TYPE_COLORS[taskType] || TYPE_COLORS['custom']}`}>
+                          {taskType}
                         </span>
                       </div>
                       <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{task.description}</p>
@@ -202,6 +203,7 @@ export function MobileSchedulerPage() {
                     <div className="flex flex-col items-center gap-1.5 shrink-0">
                       <button
                         onClick={() => toggleTask(task.id)}
+                        aria-label={`${task.enabled ? '停用' : '启用'}任务 ${task.name}`}
                         className="p-2 text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors"
                         title={task.enabled ? 'Disable' : 'Enable'}
                       >
@@ -209,6 +211,7 @@ export function MobileSchedulerPage() {
                       </button>
                       <button
                         onClick={() => deleteTask(task.id)}
+                        aria-label={`删除任务 ${task.name}`}
                         className="p-2 text-[var(--color-text-muted)] hover:text-[var(--color-error)] transition-colors"
                       >
                         <Trash2 size={15} />

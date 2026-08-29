@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import App from '../App';
 import { ThemeProvider } from '../hooks/useTheme';
@@ -24,6 +24,10 @@ vi.mock('../pages/mobile/MobileAgentsPage', () => ({
   MobileAgentsPage: () => <div>Mobile Agents</div>,
 }));
 
+vi.mock('../pages/PluginsPage', () => ({
+  PluginsPage: () => <div>Mobile Plugins</div>,
+}));
+
 describe('App mobile routing', () => {
   const originalInnerWidth = window.innerWidth;
 
@@ -35,18 +39,11 @@ describe('App mobile routing', () => {
     Object.defineProperty(window, 'innerWidth', { value: originalInnerWidth, writable: true });
   });
 
-  it('renders mobile layout on small screens', () => {
-    render(
-      <ThemeProvider>
-        <ErrorBoundary>
-          <App />
-        </ErrorBoundary>
-      </ThemeProvider>
-    );
-    expect(screen.getByText('Climber')).toBeDefined();
+  beforeEach(() => {
+    window.history.replaceState(null, '', window.location.pathname);
   });
 
-  it('renders mobile chat page by default', () => {
+  it('renders mobile layout on small screens', async () => {
     render(
       <ThemeProvider>
         <ErrorBoundary>
@@ -54,6 +51,31 @@ describe('App mobile routing', () => {
         </ErrorBoundary>
       </ThemeProvider>
     );
-    expect(screen.getByText('Mobile Chat')).toBeDefined();
+    expect(await screen.findByRole('heading', { name: 'Climber' }, { timeout: 5000 })).toBeDefined();
+  });
+
+  it('renders mobile chat page by default', async () => {
+    render(
+      <ThemeProvider>
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
+      </ThemeProvider>
+    );
+    expect(await screen.findByText('Mobile Chat', {}, { timeout: 5000 })).toBeDefined();
+  });
+
+  it('renders shared responsive pages for valid mobile hashes', async () => {
+    window.location.hash = '#plugins';
+
+    render(
+      <ThemeProvider>
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
+      </ThemeProvider>
+    );
+
+    expect(await screen.findByText('Mobile Plugins', {}, { timeout: 5000 })).toBeDefined();
   });
 });

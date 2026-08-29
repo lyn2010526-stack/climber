@@ -75,7 +75,11 @@ export function useSessions() {
     fetchSessions();
   }, [fetchSessions]);
 
-  const createSession = useCallback(async (payload?: { title?: string; agent_id?: string }) => {
+  const createSession = useCallback(async (payload?: {
+    title?: string;
+    agent_id?: string;
+    model_settings?: { provider?: string; model_id?: string };
+  }) => {
     const session = await api.createSession(payload || {});
     await fetchSessions();
     return session;

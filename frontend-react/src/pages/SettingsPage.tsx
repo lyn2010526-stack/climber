@@ -27,10 +27,10 @@ const MODE_DESCRIPTIONS: Record<string, { title: string; description: string }> 
 function McpStatusBadge({ status }: { status: string }) {
   const config = {
     disconnected: { icon: XCircle, color: 'text-[var(--color-text-muted)]', label: '未连接' },
-    starting: { icon: AlertCircle, color: 'text-yellow-400', label: '启动中' },
-    ready: { icon: CheckCircle2, color: 'text-green-400', label: '就绪' },
-    error: { icon: XCircle, color: 'text-red-400', label: '失败' },
-    restarting: { icon: AlertCircle, color: 'text-yellow-400', label: '重启中' },
+    starting: { icon: AlertCircle, color: 'text-[var(--color-warning)]', label: '启动中' },
+    ready: { icon: CheckCircle2, color: 'text-[var(--color-success)]', label: '就绪' },
+    error: { icon: XCircle, color: 'text-[var(--color-error)]', label: '失败' },
+    restarting: { icon: AlertCircle, color: 'text-[var(--color-warning)]', label: '重启中' },
   };
 
   const { icon: Icon, color, label } = config[status as keyof typeof config] || config.disconnected;
@@ -77,9 +77,9 @@ export function SettingsPage() {
   const currentMode = MODE_DESCRIPTIONS[modeKey as keyof typeof MODE_DESCRIPTIONS] ?? MODE_DESCRIPTIONS['off-off'];
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-6 lg:p-8">
       <div className="flex items-center gap-3 mb-8">
-        <div className="p-2.5 rounded-xl bg-white/[0.03] border border-[var(--color-border-subtle)]">
+        <div className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-2.5">
           <Settings size={20} className="text-[var(--color-text-muted)]" />
         </div>
         <div>
@@ -109,7 +109,7 @@ export function SettingsPage() {
         />
 
         {mode.token_throttle_mcp_enabled && (
-          <div className="px-5 py-3 rounded-xl bg-white/[0.02] border border-[var(--color-border-subtle)]">
+          <div className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-5 py-3">
             <div className="flex items-center justify-between">
               <span className="text-xs text-[var(--color-text-muted)]">MCP 服务状态</span>
               <McpStatusBadge status={mode.mcp_status} />
@@ -124,7 +124,7 @@ export function SettingsPage() {
         </Alert>
       )}
 
-      <Card className="rounded-2xl p-5" padding="none">
+      <Card className="rounded-xl p-5" padding="none">
         <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">当前运行模式</h3>
         <div className="space-y-2">
           <div className="flex items-center justify-between">

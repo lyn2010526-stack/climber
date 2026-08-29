@@ -9,11 +9,11 @@ interface Plugin {
   source: string;
   status: string;
   description: string;
-  icon: string;
+  icon?: string;
   category: string;
   version: string;
-  config: Record<string, any>;
-  error: string | null;
+  config?: Record<string, unknown>;
+  error?: string | null;
 }
 
 export default function PluginPage() {

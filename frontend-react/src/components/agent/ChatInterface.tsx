@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Drawer } from 'vaul';
-import { ArrowDown, ArrowUpRight, Bot, Edit3, Check, X, Maximize2, Sparkles, TerminalSquare } from 'lucide-react';
+import { ArrowDown, ArrowUpRight, Bot, Edit3, Check, X, Maximize2, Plus, Sparkles, TerminalSquare } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 import { api } from '../../api';
@@ -29,6 +29,7 @@ interface ChatInterfaceProps {
   emptyStateTitle?: string;
   emptyStateDescription?: string;
   suggestions?: string[];
+  onRequestSession?: () => void;
 }
 
 type EditState = { mode: 'view'; messageId: string } | { mode: 'edit'; messageId: string } | { mode: 'modal'; messageId: string } | null;
@@ -71,6 +72,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   emptyStateTitle = '开始新的对话',
   emptyStateDescription = '输入任何问题或任务，Climber 将为你自主执行。',
   suggestions = ['帮我分析代码', '写一个 Python 脚本', '解释这个错误'],
+  onRequestSession,
 }) => {
   const [editState, setEditState] = useState<EditState>(null);
   const [editContent, setEditContent] = useState('');
@@ -283,8 +285,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <p className="mb-2 text-[11px] font-semibold uppercase text-[var(--color-accent)]">Climber Agent</p>
               <h1 className="mb-2 text-xl font-semibold tracking-tight text-[var(--color-text-primary)]">{emptyStateTitle}</h1>
               <p className="mb-6 max-w-md text-sm leading-relaxed text-[var(--color-text-secondary)]">{emptyStateDescription}</p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {suggestions.map((suggestion, idx) => (
+              {sessionId ? (
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {suggestions.map((suggestion, idx) => (
                   <motion.button
                     key={idx}
                     onClick={() => onSend(suggestion)}
@@ -295,8 +298,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     <span className="min-w-0 flex-1">{suggestion}</span>
                     <ArrowUpRight size={14} className="shrink-0 opacity-50 transition-opacity group-hover:opacity-100" />
                   </motion.button>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : onRequestSession ? (
+                <Button onClick={onRequestSession} className="min-h-11 px-4">
+                  <Plus size={15} /> 新建会话
+                </Button>
+              ) : null}
             </div>
           </div>
         )}
@@ -333,14 +341,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         )}
       </div>
 
-      <div className="border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-canvas)]">
-        <ChatComposer
-          onSend={onSend}
-          placeholder={placeholder}
-          {...(onStop ? { onStop } : {})}
-          {...(isLoading !== undefined ? { isLoading } : {})}
-        />
-      </div>
+      {sessionId && (
+        <div className="border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-page)]">
+          <ChatComposer
+            onSend={onSend}
+            placeholder={placeholder}
+            {...(onStop ? { onStop } : {})}
+            {...(isLoading !== undefined ? { isLoading } : {})}
+          />
+        </div>
+      )}
 
       {/* Edit Drawer */}
       <Drawer.Root

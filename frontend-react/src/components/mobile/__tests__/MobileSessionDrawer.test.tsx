@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MobileSessionDrawer } from '../MobileSessionDrawer';
 
 const { setActiveSession, createSession, listAgents } = vi.hoisted(() => ({
@@ -58,29 +58,35 @@ describe('MobileSessionDrawer', () => {
   const renderDrawer = (onOpenChange = vi.fn()) =>
     render(<MobileSessionDrawer open onOpenChange={onOpenChange} />);
 
-  it('renders session list', () => {
+  it('renders session list', async () => {
     renderDrawer();
     expect(screen.getByText('会话 1')).toBeDefined();
     expect(screen.getByText('Untitled')).toBeDefined();
     expect(screen.getByText('2 个会话')).toBeDefined();
+    await waitFor(() => expect(listAgents).toHaveBeenCalled());
   });
 
-  it('renders loading state', () => {
+  it('renders loading state', async () => {
     sessionState.loading = true;
     renderDrawer();
     expect(screen.getByText('加载中...')).toBeDefined();
+    await waitFor(() => expect(listAgents).toHaveBeenCalled());
   });
 
-  it('renders empty state', () => {
+  it('renders empty state', async () => {
     sessionState.sessions = [];
     renderDrawer();
     expect(screen.getByText('暂无会话，点击上方新建')).toBeDefined();
+    await waitFor(() => expect(listAgents).toHaveBeenCalled());
   });
 
-  it('selects a session on click and closes the drawer', () => {
+  it('selects a session on click and closes the drawer', async () => {
     const onOpenChange = vi.fn();
     renderDrawer(onOpenChange);
-    fireEvent.click(screen.getByText('会话 1'));
+    await waitFor(() => expect(listAgents).toHaveBeenCalled());
+    await act(async () => {
+      fireEvent.click(screen.getByText('会话 1'));
+    });
     expect(setActiveSession).toHaveBeenCalledWith('session-1');
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
@@ -89,8 +95,11 @@ describe('MobileSessionDrawer', () => {
     createSession.mockResolvedValue({ id: 'session-new', title: '会话 3', status: 'idle', created_at: '' });
     const onOpenChange = vi.fn();
     renderDrawer(onOpenChange);
-    fireEvent.click(screen.getByText('新建会话'));
-    await waitFor(() => expect(createSession).toHaveBeenCalled());
+    await waitFor(() => expect(listAgents).toHaveBeenCalled());
+    await act(async () => {
+      fireEvent.click(screen.getByText('新建会话'));
+    });
+    expect(createSession).toHaveBeenCalled();
     await waitFor(() => expect(setActiveSession).toHaveBeenCalledWith('session-new'));
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
