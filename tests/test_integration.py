@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from unittest.mock import patch
 
@@ -357,7 +358,7 @@ def test_fourth_gen_default_third_gen_mode():
     original = settings.enable_fourth_gen
     try:
         settings.enable_fourth_gen = False
-        assert _init_fourth_gen() is None
+        assert asyncio.run(_init_fourth_gen()) is None
     finally:
         settings.enable_fourth_gen = original
 
@@ -381,7 +382,7 @@ def test_fourth_gen_full_wiring_then_rollback():
         settings.enable_goal_centered = True
         settings.enable_swarm = True
 
-        handles = _init_fourth_gen()
+        handles = asyncio.run(_init_fourth_gen())
         assert handles is not None
         assert 'autodiscovery' in handles
         assert 'meta_agent' in handles
@@ -390,7 +391,7 @@ def test_fourth_gen_full_wiring_then_rollback():
 
         # Fall back: master off → third-gen only
         settings.enable_fourth_gen = False
-        assert _init_fourth_gen() is None
+        assert asyncio.run(_init_fourth_gen()) is None
     finally:
         settings.enable_fourth_gen = originals['master']
         settings.enable_autodiscovery = originals['auto']

@@ -110,13 +110,14 @@ class GoalCenteredPlanner:
         # Bounded simulation
         effective_timeout = max_seconds if max_seconds is not None else self.max_seconds
         try:
-            steps = await self._simulate(goal, effective_timeout)
+            steps_or_none = await self._simulate(goal, effective_timeout)
         except TimeoutError:
             logger.warning("goal_planner.timeout", goal=goal, max_seconds=effective_timeout)
             return None
 
-        if not steps:
+        if not steps_or_none:
             return None
+        steps = steps_or_none
 
         logger.info("goal_planner.simulated", goal=goal, steps=len(steps))
         return PlanResult(goal=goal, steps=steps, source="simulation")

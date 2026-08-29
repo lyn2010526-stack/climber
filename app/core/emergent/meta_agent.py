@@ -176,12 +176,14 @@ class MetaAgent:
         """Apply an approved proposal, snapshot-first, guard-filtered."""
         if proposal is None or not proposal.approved:
             return False
+        if proposal.applied:
+            return False
+        if self.apply_fn is None:
+            return False
         guard = get_hard_guard()
         snap = await guard.require_snapshot_before(proposal.summary, self._snap)
         if not snap.allowed:
             logger.warning("meta_agent.apply_aborted", reason=snap.reason)
-            return False
-        if self.apply_fn is None:
             return False
         await self.apply_fn(proposal)
         proposal.applied = True

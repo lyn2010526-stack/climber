@@ -72,13 +72,15 @@ class AutodiscoveryEngine:
         """Attach the event bus at wiring time."""
         self.event_bus = bus
 
-    @staticmethod
-    def _candidate_name(goal: str) -> str:
+    def _candidate_name(self, goal: str) -> str:
         words = re.findall(r"[a-zA-Z]+", goal.lower())
         key_words = [w for w in words if w not in {
             "a", "an", "the", "to", "for", "of", "in", "on", "and", "or", "is",
         }]
-        return "_".join(key_words[:3]) if key_words else "capability"
+        name = "_".join(key_words[:3]) if key_words else "capability"
+        if name in self._pending:
+            name = f"{name}_{len(self._pending)}"
+        return name
 
     def set_snapshot_fn(self, fn: Any) -> None:
         """Attach the snapshot-first hook (async () -> snapshot_id|None)."""
@@ -90,6 +92,9 @@ class AutodiscoveryEngine:
         Returns a candidate when the success rate clears the threshold;
         otherwise returns None (silently discarded).
         """
+        if not primitives:
+            logger.warning("autodiscovery.no_primitives", goal=goal)
+            return None
         candidate = DiscoveredCapability(
             name=self._candidate_name(goal),
             goal=goal,
@@ -98,11 +103,12 @@ class AutodiscoveryEngine:
             output_description=f"Discovered capability for: {goal}",
         )
         steps = 0
+        num_primitives = len(primitives)
         while steps < self.config.sandbox_steps_max:
             steps += 1
             # Explore one primitive at a time inside the sandbox and observe
             # whether it makes observable progress toward the goal.
-            primitive = primitives[steps % len(primitives)]
+            primitive = primitives[steps % num_primitives]
             outcome = await self._try_primitive(goal, primitive)
             candidate.attempts += 1
             if outcome == "success":
@@ -180,6 +186,8 @@ class AutodiscoveryEngine:
             return None
         if not candidate.approved:
             return None
+        if candidate.committed:
+            return None
 
         guard = get_hard_guard()
         change = f"commit capability {name}"
@@ -197,6 +205,7 @@ class AutodiscoveryEngine:
         )
         self.registry.register(composed)
         candidate.committed = True
+        self._pending.pop(name, None)
         if self.event_bus is not None:
             await self.event_bus.publish("capability_committed", {
                 "name": composed.name, "snapshot_id": snap.snapshot_id,

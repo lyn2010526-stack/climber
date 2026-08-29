@@ -48,15 +48,23 @@ class StructuralSnapshotManager:
     ):
         self.storage_dir = storage_dir
         self.keep_last = keep_last
-        self.registry_dump = registry_dump or (lambda: {})
+        self.registry_dump = registry_dump or self._empty_registry
         self.registry_restore = registry_restore or (lambda payload: None)
-        self.graph_dump = graph_dump or (lambda: {})
+        self.graph_dump = graph_dump or self._empty_state
         self.graph_restore = graph_restore or (lambda payload: None)
-        self.switches_dump = switches_dump or (lambda: {})
+        self.switches_dump = switches_dump or self._empty_state
         self.switches_restore = switches_restore or (lambda payload: None)
         self._snapshots: dict[str, StructuralSnapshot] = {}
         self._seq = 0
         self._load_index()
+
+    @staticmethod
+    def _empty_registry() -> dict[str, Any]:
+        return {}
+
+    @staticmethod
+    def _empty_state() -> dict[str, Any]:
+        return {}
 
     @property
     def _index_path(self) -> str:
@@ -101,7 +109,7 @@ class StructuralSnapshotManager:
         """
         sid = f"snap_{int(time.time() * 1000)}_{self._seq}"
         self._seq += 1
-        payload = {
+        payload: dict[str, Any] = {
             "id": sid,
             "label": label,
             "created_at": time.time(),

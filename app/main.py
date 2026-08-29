@@ -246,7 +246,7 @@ async def lifespan(app: FastAPI):
         from app.services.notifications import notification_service
         app.state.notification_service = notification_service
 
-        fourth_gen = _init_fourth_gen()
+        fourth_gen = await _init_fourth_gen()
         if fourth_gen:
             app.state.fourth_gen = fourth_gen
             logger.info("fourth_gen.enabled", modules=[k for k in fourth_gen if k not in ("bus", "registry", "guard")])
@@ -295,7 +295,7 @@ async def _run_scheduler(scheduler):
         await asyncio.sleep(30)
 
 
-def _init_fourth_gen() -> dict[str, Any] | None:
+async def _init_fourth_gen() -> dict[str, Any] | None:
     """Wire up the fourth-generation emergent modules (master-gated).
 
     Returns a dict of started module handles (empty/None when the master
@@ -351,6 +351,7 @@ def _init_fourth_gen() -> dict[str, Any] | None:
 
     if settings.is_fourth_gen_mod_active("meta_agent"):
         meta = MetaAgent(event_bus=bus, snapshot_fn=_snap)
+        await meta.start_monitoring()
         handles["meta_agent"] = meta
         logger.info("fourth_gen.meta_agent_enabled")
 
