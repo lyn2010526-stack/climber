@@ -950,6 +950,15 @@ class AgentEngine:
                                 "error": tr.error,
                             },
                         )
+                        await self._event_bus.publish(
+                            "tool_result",
+                            {
+                                "session_id": session.session_id,
+                                "tool_name": tr.tool_name,
+                                "result": tr.result,
+                                "error": tr.error,
+                            },
+                        )
 
                         tool_content = tr.error or tr.result
                         session.messages.append({"role": MessageRole.TOOL, "content": tool_content, "tool_call_id": tr.tool_call_id or tr.tool_name})

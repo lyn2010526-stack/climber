@@ -498,10 +498,19 @@ async def _init_arch_v2() -> dict[str, Any] | None:
         logger.info("arch_v2.self_learning_enabled")
 
     if settings.is_arch_v2_active("long_context"):
+        from app.core.long_context.embeddings import DEFAULT_EMBEDDING_DIM, default_embed_fn
+        from app.core.long_context.rag import RAGMemoryIndex
+
         budget = ContextBudgetManager()
         prefix_cache = PrefixCache()
+        rag_index = RAGMemoryIndex(
+            db_path=str(BASE_DIR / "data" / "rag_memory.db"),
+            embed_fn=default_embed_fn(),
+            dimension=DEFAULT_EMBEDDING_DIM,
+        )
         handles["context_budget"] = budget
         handles["prefix_cache"] = prefix_cache
+        handles["rag_index"] = rag_index
         logger.info("arch_v2.long_context_enabled")
 
     if settings.is_arch_v2_active("integration"):
@@ -517,6 +526,20 @@ async def _init_arch_v2() -> dict[str, Any] | None:
         handles["event_sourcing_manager"] = es_manager
         handles["protocol_router"] = proto_router
         logger.info("arch_v2.integration_enabled")
+
+    # Self-learning wiring runs last: L1/L2 subscribe to the legacy bus and
+    # L2 reads trajectories from the event store created above (if present).
+    if "self_learning_l1" in handles:
+        from app.core.event_bus import get_event_bus
+        from app.core.self_learning.wiring import wire_self_learning
+
+        wire_self_learning(
+            handles["self_learning_l1"],
+            handles["self_learning_l2"],
+            skill_store,
+            get_event_bus(),
+            event_store=handles.get("event_store"),
+        )
 
     return handles
 
