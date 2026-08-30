@@ -61,7 +61,7 @@ const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(
           <div
             role="tooltip"
             className={cn(
-              'absolute z-50 whitespace-nowrap rounded-lg border border-white/[0.08] bg-[var(--color-code-bg)] px-2.5 py-1.5 text-xs text-[var(--color-text-inverse)] shadow-lg shadow-black/30 animate-in fade-in zoom-in-95 duration-150',
+              'absolute z-50 whitespace-nowrap rounded-lg border border-[var(--color-border-default)] bg-[var(--color-code-bg)] px-2.5 py-1.5 text-xs text-[var(--color-text-inverse)] shadow-lg shadow-black/30 animate-in fade-in zoom-in-95 duration-150',
               sideStyles[side],
               alignStyles[side]?.[align] || '',
             )}

@@ -113,7 +113,7 @@ export function MobileNotificationsPage() {
               <button
                 onClick={test}
                 disabled={sending}
-                className="flex items-center justify-center gap-1.5 flex-1 py-2.5 bg-white/[0.03] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] rounded-2xl text-sm font-semibold hover:bg-white/[0.06] disabled:opacity-50 transition-all duration-200"
+                className="flex items-center justify-center gap-1.5 flex-1 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] rounded-2xl text-sm font-semibold hover:bg-[var(--color-bg-surface-3)] disabled:opacity-50 transition-all duration-200"
               >
                 <Bell size={14} />
                 系统测试
@@ -156,7 +156,7 @@ export function MobileNotificationsPage() {
           ) : (
             <ul className="space-y-2">
               {items.map((n, i) => (
-                <li key={n.id || i} className="p-3 bg-white/[0.03] border border-[var(--color-border-subtle)] rounded-xl">
+                <li key={n.id || i} className="p-3 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-xs font-medium text-[var(--color-text-primary)] truncate">{n.title}</span>
                     <span className="text-[10px] text-[var(--color-text-muted)] shrink-0">{formatTime(n.created_at)}</span>

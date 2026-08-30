@@ -178,12 +178,12 @@ export default function PluginPage() {
             {[1, 2, 3, 4].map(i => (
               <div key={i} className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-5 animate-pulse">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-white/[0.03]" />
+                  <div className="w-10 h-10 rounded-lg bg-[var(--color-bg-surface-2)]" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-4 w-32 bg-white/[0.03] rounded-xl" />
-                    <div className="h-3 w-64 bg-white/[0.03] rounded-xl" />
+                    <div className="h-4 w-32 bg-[var(--color-bg-surface-2)] rounded-xl" />
+                    <div className="h-3 w-64 bg-[var(--color-bg-surface-2)] rounded-xl" />
                   </div>
-                  <div className="h-6 w-16 bg-white/[0.03] rounded-full" />
+                  <div className="h-6 w-16 bg-[var(--color-bg-surface-2)] rounded-full" />
                 </div>
               </div>
             ))}
@@ -205,9 +205,9 @@ export default function PluginPage() {
                   <div className="flex items-center gap-2">
                     <h3 className="font-medium truncate text-[var(--color-text-primary)]">{plugin.name}</h3>
                     {plugin.version && (
-                      <span className="text-xs text-[var(--color-text-muted)] bg-white/[0.03] border border-[var(--color-border-subtle)] px-2 py-0.5 rounded">v{plugin.version}</span>
+                      <span className="text-xs text-[var(--color-text-muted)] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] px-2 py-0.5 rounded">v{plugin.version}</span>
                     )}
-                    <span className="text-xs text-[var(--color-text-muted)] bg-white/[0.03] border border-[var(--color-border-subtle)] px-2 py-0.5 rounded">{plugin.type}</span>
+                    <span className="text-xs text-[var(--color-text-muted)] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] px-2 py-0.5 rounded">{plugin.type}</span>
                   </div>
                   <p className="text-sm text-[var(--color-text-muted)] mt-1 line-clamp-1">{plugin.description}</p>
                 </div>
@@ -218,7 +218,7 @@ export default function PluginPage() {
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-200 ${
                       plugin.status === 'enabled'
                         ? 'bg-[var(--color-success)]/10 text-[var(--color-success)] hover:bg-[var(--color-success)]/20 border border-[var(--color-success)]/20'
-                        : 'bg-white/[0.03] text-[var(--color-text-muted)] hover:bg-white/[0.06] border border-[var(--color-border-subtle)]'
+                        : 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-3)] border border-[var(--color-border-subtle)]'
                     }`}
                   >
                      {plugin.status === 'enabled' ? (

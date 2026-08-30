@@ -3,7 +3,7 @@ import { cva } from 'class-variance-authority';
 import { cn } from '../../lib/utils';
 
 const progressVariants = cva(
-  'relative w-full overflow-hidden rounded-full bg-white/[0.06]',
+  'relative w-full overflow-hidden rounded-full bg-[var(--color-bg-surface-3)]',
   {
     variants: {
       size: {
@@ -62,8 +62,8 @@ const Progress = forwardRef<HTMLDivElement, ProgressProps>(
       <div ref={ref} className={cn('w-full', className)}>
         {(label || showValue) && (
           <div className="flex items-center justify-between mb-1.5">
-            {label && <span className="text-xs text-white/60">{label}</span>}
-            {showValue && <span className="text-xs text-white/60 font-medium">{Math.round(percentage)}%</span>}
+            {label && <span className="text-xs text-[var(--color-text-secondary)]">{label}</span>}
+            {showValue && <span className="text-xs text-[var(--color-text-secondary)] font-medium">{Math.round(percentage)}%</span>}
           </div>
         )}
         <div className={cn(progressVariants({ size }))} role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={max} aria-label={label || '进度'}>
@@ -114,7 +114,7 @@ const CircularProgress = forwardRef<SVGSVGElement, CircularProgressProps>(
             cy={size / 2}
             r={radius}
             fill="none"
-            stroke="rgba(255,255,255,0.06)"
+            stroke="var(--color-border-strong)"
             strokeWidth={strokeWidth}
           />
           <circle
@@ -131,7 +131,7 @@ const CircularProgress = forwardRef<SVGSVGElement, CircularProgressProps>(
           />
         </svg>
         {showValue && (
-          <span className="absolute text-xs font-medium text-white/70">
+          <span className="absolute text-xs font-medium text-[var(--color-text-secondary)]">
             {Math.round(percentage)}%
           </span>
         )}

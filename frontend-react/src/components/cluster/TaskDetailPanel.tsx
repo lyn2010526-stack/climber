@@ -53,7 +53,7 @@ export function TaskDetailPanel({
               <span className="text-[10px] text-[var(--color-text-muted)]">依赖任务:</span>
               <div className="flex flex-wrap gap-1 mt-1">
                 {taskDetails.context.map((ctx: string) => (
-                  <span key={ctx} className="px-2 py-0.5 rounded-lg text-[9px] bg-white/[0.03] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)]">{ctx.slice(0, 8)}</span>
+                  <span key={ctx} className="px-2 py-0.5 rounded-lg text-[9px] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)]">{ctx.slice(0, 8)}</span>
                 ))}
               </div>
             </div>
@@ -63,7 +63,7 @@ export function TaskDetailPanel({
               <span className="text-[10px] text-[var(--color-text-muted)]">校验规则:</span>
               <div className="space-y-1 mt-1">
                 {taskDetails.guardrails.map((g: any, i: number) => (
-                  <div key={i} className="p-2 bg-white/[0.02] border border-[var(--color-border-subtle)] rounded-xl">
+                  <div key={i} className="p-2 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl">
                     <p className="text-[10px] text-[var(--color-text-primary)]">{g.name}</p>
                     {g.description && <p className="text-[9px] text-[var(--color-text-muted)]">{g.description}</p>}
                   </div>

@@ -158,7 +158,7 @@ export function GroupsView({ state }: { state: ClusterState }) {
                   {members.map((member) => (
                     <div
                       key={member.id}
-                      className="flex items-center justify-between p-2 bg-white/[0.02] border border-[var(--color-border-subtle)] rounded-xl"
+                      className="flex items-center justify-between p-2 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl"
                     >
                       <div>
                         <span className="text-xs text-[var(--color-text-primary)]">{member.agent_id || member.id}</span>
@@ -201,7 +201,7 @@ export function GroupsView({ state }: { state: ClusterState }) {
                   <Hash size={14} className="text-[var(--color-accent)]" />
                   <span className="text-sm font-medium text-[var(--color-text-primary)]">{group.name}</span>
                   <span className={`ml-auto px-2 py-0.5 text-[10px] rounded-full ${
-                    group.status === 'active' ? 'bg-[var(--color-success)]/10 text-[var(--color-success)] border border-[var(--color-success)]/20' : 'bg-white/[0.03] text-[var(--color-text-muted)] border border-[var(--color-border-subtle)]'
+                    group.status === 'active' ? 'bg-[var(--color-success)]/10 text-[var(--color-success)] border border-[var(--color-success)]/20' : 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] border border-[var(--color-border-subtle)]'
                   }`}>
                     {group.status}
                   </span>
@@ -216,7 +216,7 @@ export function GroupsView({ state }: { state: ClusterState }) {
                 <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[var(--color-border-subtle)]">
                   <button
                     onClick={() => openGroup(group.id, 'chat')}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] bg-white/[0.03] border border-[var(--color-border-subtle)] rounded-xl hover:bg-white/[0.06] transition-all duration-200"
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl hover:bg-[var(--color-bg-surface-3)] transition-all duration-200"
                   >
                     <Users size={10} />
                     Chat
@@ -230,7 +230,7 @@ export function GroupsView({ state }: { state: ClusterState }) {
                   </button>
                   <button
                     onClick={() => openManageMembers(group.id)}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] bg-white/[0.03] border border-[var(--color-border-subtle)] rounded-xl hover:bg-white/[0.06] transition-all duration-200"
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl hover:bg-[var(--color-bg-surface-3)] transition-all duration-200"
                   >
                     <Users size={10} />
                     管理

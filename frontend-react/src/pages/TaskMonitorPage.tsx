@@ -172,7 +172,7 @@ export default function TaskMonitorPage() {
             <button
               onClick={createTask}
               disabled={loading || !newTask.trim()}
-              className="px-3 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-white/[0.03] disabled:text-[var(--color-text-muted)] text-white rounded-2xl transition-all duration-200 active:scale-[0.97]"
+              className="px-3 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-surface-2)] disabled:text-[var(--color-text-muted)] text-white rounded-2xl transition-all duration-200 active:scale-[0.97]"
             >
               {loading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
             </button>
@@ -190,7 +190,7 @@ export default function TaskMonitorPage() {
               key={task.id}
               onClick={() => setSelectedTaskId(task.id)}
               className={`w-full text-left px-4 py-3 border-b border-[var(--color-border-subtle)] transition-all duration-200 border-l-2 ${
-                selectedTaskId === task.id ? 'bg-white/[0.06] border-l-[var(--color-accent)]' : 'hover:bg-white/[0.03] border-l-transparent'
+                selectedTaskId === task.id ? 'bg-[var(--color-bg-surface-3)] border-l-[var(--color-accent)]' : 'hover:bg-[var(--color-bg-surface-2)] border-l-transparent'
               }`}
             >
               <div className="flex items-center justify-between">
@@ -200,7 +200,7 @@ export default function TaskMonitorPage() {
                 </span>
               </div>
               {task.status === 'running' && task.current_round != null && task.max_rounds != null && task.max_rounds > 0 && (
-                <div className="mt-1.5 w-full h-1 bg-white/[0.06] rounded-full overflow-hidden">
+                <div className="mt-1.5 w-full h-1 bg-[var(--color-bg-surface-3)] rounded-full overflow-hidden">
                   <div
                     className="h-full bg-[var(--color-accent)] rounded-full transition-all"
                     style={{ width: `${(task.current_round / task.max_rounds) * 100}%` }}
@@ -257,7 +257,7 @@ export default function TaskMonitorPage() {
                   return (
                     <div key={step.id} className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl overflow-hidden">
                       <div className="flex items-center gap-3 px-4 py-3">
-                        <div className="p-1.5 rounded-xl bg-white/[0.03] border border-[var(--color-border-subtle)] text-[var(--color-text-muted)]">
+                        <div className="p-1.5 rounded-xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] text-[var(--color-text-muted)]">
                           <Icon size={14} />
                         </div>
                         <div className="flex-1 min-w-0">

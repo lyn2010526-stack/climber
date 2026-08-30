@@ -20,7 +20,7 @@ const modes: PermissionModeConfig[] = [
     label: '手动模式',
     description: '每个操作都需要你的确认',
     icon: Shield,
-    color: 'text-blue-400',
+    color: 'text-[var(--color-accent)]',
     bgColor: 'bg-blue-500/10',
     features: ['文件操作需确认', '命令执行需确认', '网络访问需确认', 'MCP 工具需确认'],
   },
@@ -76,8 +76,8 @@ export function PermissionModes({
               className={cn(
                 'w-full flex items-start gap-3 px-3 py-2.5 rounded-xl border transition-all duration-200 text-left',
                 isActive
-                  ? 'border-white/[0.12] bg-white/[0.04]'
-                  : 'border-white/[0.04] bg-transparent hover:bg-white/[0.02] hover:border-white/[0.08]'
+                  ? 'border-[var(--color-border-strong)] bg-[var(--color-bg-surface-2)]'
+                  : 'border-[var(--color-border-subtle)] bg-transparent hover:bg-[var(--color-bg-surface-2)] hover:border-[var(--color-border-default)]'
               )}
               onClick={() => onModeChange(mode.id)}
               onMouseEnter={() => setHoveredMode(mode.id)}
@@ -85,7 +85,7 @@ export function PermissionModes({
             >
               <div className={cn(
                 'p-2 rounded-lg transition-colors',
-                isActive ? mode.bgColor : 'bg-white/[0.03]'
+                isActive ? mode.bgColor : 'bg-[var(--color-bg-surface-2)]'
               )}>
                 <Icon
                   size={14}
@@ -100,7 +100,7 @@ export function PermissionModes({
                 <div className="flex items-center gap-2">
                   <span className={cn(
                     'text-xs font-medium transition-colors',
-                    isActive ? 'text-white' : 'text-[var(--color-text-secondary)]'
+                    isActive ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'
                   )}>
                     {mode.label}
                   </span>

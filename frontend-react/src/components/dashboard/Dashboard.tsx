@@ -11,7 +11,7 @@ const statCardVariants = cva(
     variants: {
       variant: {
         default: '',
-        bordered: 'border border-white/10 bg-white/[0.02]',
+        bordered: 'border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)]',
         elevated: 'shadow-lg shadow-black/20',
       },
     },
@@ -52,7 +52,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   const trendColors = {
     up: 'text-emerald-400 bg-emerald-500/10',
     down: 'text-rose-400 bg-rose-500/10',
-    neutral: 'text-[var(--color-text-secondary)] bg-white/5',
+    neutral: 'text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-2)]',
   };
 
   return (
@@ -60,13 +60,13 @@ export const StatCard: React.FC<StatCardProps> = ({
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wider">{title}</span>
         {icon && (
-          <div className="p-2 rounded-xl bg-white/5 text-[var(--color-text-secondary)]">
+          <div className="p-2 rounded-xl bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)]">
             {icon}
           </div>
         )}
       </div>
       <div className="flex items-baseline gap-3">
-        <span className="text-3xl font-bold text-white tracking-tight">{value}</span>
+        <span className="text-3xl font-bold text-[var(--color-text-primary)] tracking-tight">{value}</span>
         {change && (
           <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1', trendColors[change.trend])}>
             <TrendIcon trend={change.trend} />

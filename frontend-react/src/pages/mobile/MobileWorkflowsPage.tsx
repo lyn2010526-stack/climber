@@ -115,10 +115,10 @@ export function MobileWorkflowsPage() {
             {[1, 2, 3].map(i => (
               <div key={i} className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-4 animate-pulse">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-white/[0.03]" />
+                  <div className="w-9 h-9 rounded-lg bg-[var(--color-bg-surface-2)]" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-3.5 w-28 bg-white/[0.03] rounded-lg" />
-                    <div className="h-3 w-20 bg-white/[0.03] rounded-lg" />
+                    <div className="h-3.5 w-28 bg-[var(--color-bg-surface-2)] rounded-lg" />
+                    <div className="h-3 w-20 bg-[var(--color-bg-surface-2)] rounded-lg" />
                   </div>
                 </div>
               </div>

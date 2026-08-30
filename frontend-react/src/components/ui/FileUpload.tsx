@@ -8,7 +8,7 @@ const uploadZoneVariants = cva(
   {
     variants: {
       variant: {
-        default: 'border-white/[0.1] bg-white/[0.02] hover:border-blue-500/40 hover:bg-blue-500/[0.03]',
+        default: 'border-[var(--color-border-default)] bg-[var(--color-bg-surface-2)] hover:border-[var(--color-border-accent)] hover:bg-[var(--color-accent-subtle)]',
         active: 'border-blue-500/60 bg-blue-500/[0.05] shadow-lg shadow-blue-500/10',
         error: 'border-red-500/40 bg-red-500/[0.03]',
         success: 'border-emerald-500/40 bg-emerald-500/[0.03]',
@@ -31,7 +31,7 @@ const fileItemVariants = cva(
   {
     variants: {
       status: {
-        pending: 'border-white/[0.06] bg-white/[0.02]',
+        pending: 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)]',
         uploading: 'border-blue-500/20 bg-blue-500/[0.03]',
         success: 'border-emerald-500/20 bg-emerald-500/[0.03]',
         error: 'border-red-500/20 bg-red-500/[0.03]',
@@ -77,7 +77,7 @@ function getFileIcon(file: File) {
   if (type.includes('pdf') || type.includes('document') || type.includes('text')) {
     return <FileText className="h-4 w-4 text-blue-400" />;
   };
-  return <File className="h-4 w-4 text-white/50" />;
+  return <File className="h-4 w-4 text-[var(--color-text-muted)]" />;
 }
 
 function formatFileSize(bytes: number): string {
@@ -185,11 +185,11 @@ const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
             disabled={disabled}
             onChange={handleInputChange}
           />
-          <Upload className={cn('mb-2 text-white/30', size === 'sm' && 'h-5 w-5', size === 'md' && 'h-7 w-7', size === 'lg' && 'h-9 w-9')} />
-          <p className={cn('text-white/60', size === 'sm' && 'text-xs', size === 'md' && 'text-sm', size === 'lg' && 'text-base')}>
+          <Upload className={cn('mb-2 text-[var(--color-text-muted)]', size === 'sm' && 'h-5 w-5', size === 'md' && 'h-7 w-7', size === 'lg' && 'h-9 w-9')} />
+          <p className={cn('text-[var(--color-text-secondary)]', size === 'sm' && 'text-xs', size === 'md' && 'text-sm', size === 'lg' && 'text-base')}>
             {isDragging ? '释放以上传文件' : '拖拽文件到此处或点击上传'}
           </p>
-          <p className={cn('text-white/30 mt-1', size === 'sm' && 'text-[10px]', size !== 'sm' && 'text-xs')}>
+          <p className={cn('text-[var(--color-text-muted)] mt-1', size === 'sm' && 'text-[10px]', size !== 'sm' && 'text-xs')}>
             支持 {Object.keys(accept || {}).join('、') || '所有文件类型'}
             {maxSize && `，单个文件不超过 ${formatFileSize(maxSize)}`}
           </p>
@@ -202,17 +202,17 @@ const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
                 {file.preview ? (
                   <img src={file.preview} alt="" className="h-8 w-8 rounded object-cover shrink-0" />
                 ) : (
-                  <div className="flex h-8 w-8 items-center justify-center rounded bg-white/[0.05] shrink-0">
+                  <div className="flex h-8 w-8 items-center justify-center rounded bg-[var(--color-bg-surface-2)] shrink-0">
                     {getFileIcon(file.file)}
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-white truncate">{file.file.name}</p>
-                    <span className="text-[10px] text-white/40 shrink-0">{formatFileSize(file.file.size)}</span>
+                    <p className="text-xs text-[var(--color-text-primary)] truncate">{file.file.name}</p>
+                    <span className="text-[10px] text-[var(--color-text-muted)] shrink-0">{formatFileSize(file.file.size)}</span>
                   </div>
                   {file.status === 'uploading' && (
-                    <div className="mt-1.5 h-1 w-full rounded-full bg-white/[0.06] overflow-hidden">
+                    <div className="mt-1.5 h-1 w-full rounded-full bg-[var(--color-bg-surface-3)] overflow-hidden">
                       <div
                         className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500 transition-all duration-300"
                         style={{ width: `${file.progress}%` }}
@@ -234,7 +234,7 @@ const FileUpload = forwardRef<HTMLDivElement, FileUploadProps>(
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); handleRemove(file.id); }}
-                    className="p-0.5 rounded hover:bg-white/10 text-white/30 hover:text-white/60 transition-colors"
+                    className="p-0.5 rounded hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
                     aria-label={`移除 ${file.file.name}`}
                   >
                     <X className="h-3.5 w-3.5" />

@@ -59,7 +59,7 @@ export function ClusterView({ state }: { state: ClusterState }) {
               <span className="text-xs text-[var(--color-text-secondary)]">进度</span>
               <span className="text-xs font-medium text-[var(--color-accent)]">{progress.progress_pct}%</span>
             </div>
-            <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
+            <div className="h-2 bg-[var(--color-bg-surface-3)] rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-accent-hover)] rounded-full transition-all duration-500"
                 style={{ width: `${progress.progress_pct}%` }}

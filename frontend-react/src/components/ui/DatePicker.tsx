@@ -4,7 +4,7 @@ import { Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const datePickerVariants = cva(
-  'flex w-full rounded-lg border bg-white/[0.03] px-3 py-2 text-sm transition-all duration-200 text-white placeholder:text-white/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:border-blue-500/50 disabled:cursor-not-allowed disabled:opacity-50',
+  'flex w-full rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] px-3 py-2 text-sm transition-all duration-200 text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-accent)] focus-visible:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50',
   {
     variants: {
       inputSize: {
@@ -127,34 +127,34 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
               <button
                 type="button"
                 onClick={handleClear}
-                className="p-0.5 rounded hover:bg-white/10 text-white/40 hover:text-white/70 transition-colors"
+                className="p-0.5 rounded hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
                 aria-label="清除日期"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
-            <Calendar className="h-4 w-4 text-white/40" />
+            <Calendar className="h-4 w-4 text-[var(--color-text-muted)]" />
           </div>
         </div>
 
         {isOpen && (
-          <div className="absolute z-50 mt-2 w-72 rounded-xl border border-white/[0.08] bg-[#1a1a2e] p-3 shadow-xl shadow-black/40 animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="absolute z-50 mt-2 w-72 rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] p-3 shadow-xl shadow-black/40 animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="flex items-center justify-between mb-3">
               <button
                 type="button"
                 onClick={prevMonth}
-                className="p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                className="p-1 rounded-lg hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
                 aria-label="上个月"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <span className="text-sm font-medium text-white">
+              <span className="text-sm font-medium text-[var(--color-text-primary)]">
                 {viewDate.getFullYear()}年 {MONTHS[viewDate.getMonth()]}
               </span>
               <button
                 type="button"
                 onClick={nextMonth}
-                className="p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+                className="p-1 rounded-lg hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
                 aria-label="下个月"
               >
                 <ChevronRight className="h-4 w-4" />
@@ -163,7 +163,7 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
 
             <div className="grid grid-cols-7 gap-0.5 mb-2">
               {WEEKDAYS.map((wd) => (
-                <div key={wd} className="h-8 flex items-center justify-center text-xs text-white/40 font-medium">
+                <div key={wd} className="h-8 flex items-center justify-center text-xs text-[var(--color-text-muted)] font-medium">
                   {wd}
                 </div>
               ))}
@@ -191,10 +191,10 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
                     className={cn(
                       'h-8 w-full rounded-lg text-sm transition-all duration-150',
                       'flex items-center justify-center',
-                      disabled && 'text-white/20 cursor-not-allowed',
-                      !disabled && !selected && 'text-white/80 hover:bg-white/10',
-                      isToday && !selected && 'ring-1 ring-blue-500/50 text-blue-400',
-                      selected && 'bg-gradient-to-r from-blue-500 to-violet-500 text-white font-medium shadow-md shadow-blue-500/20',
+                      disabled && 'text-[var(--color-text-muted)] opacity-40 cursor-not-allowed',
+                      !disabled && !selected && 'text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)]',
+                      isToday && !selected && 'ring-1 ring-[var(--color-border-accent)] text-[var(--color-accent)]',
+                      selected && 'bg-[var(--color-accent)] text-[var(--color-text-inverse)] font-medium shadow-md',
                     )}
                   >
                     {day}
@@ -203,7 +203,7 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
               })}
             </div>
 
-            <div className="mt-3 pt-2 border-t border-white/[0.06] flex justify-between">
+            <div className="mt-3 pt-2 border-t border-[var(--color-border-subtle)] flex justify-between">
               <button
                 type="button"
                 onClick={() => {
@@ -217,7 +217,7 @@ const DatePicker = forwardRef<HTMLInputElement, DatePickerProps>(
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="text-xs text-white/40 hover:text-white/60 transition-colors"
+                className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
               >
                 关闭
               </button>

@@ -16,7 +16,7 @@ describe('StatCard', () => {
 
   it('renders bordered variant', () => {
     const { container } = render(<StatCard title="Test" value={1} variant="bordered" />);
-    expect(container.querySelector('.border-white\\/10')).not.toBeNull();
+    expect(container.querySelector('.border-\\[var\\(--color-border-default\\)\\]')).not.toBeNull();
   });
 });
 

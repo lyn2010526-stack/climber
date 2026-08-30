@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import { AlertTriangle } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -32,14 +33,14 @@ export class ErrorBoundary extends Component<Props, State> {
 
       return (
         <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-          <div className="text-red-400 text-4xl mb-4">⚠</div>
+          <AlertTriangle size={40} className="mb-4 text-[var(--color-error)]" aria-hidden="true" />
           <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-2">Something went wrong</h2>
           <p className="text-sm text-[var(--color-text-secondary)] mb-4 max-w-md">
             {this.state.error?.message || 'An unexpected error occurred'}
           </p>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded transition-colors"
+            className="px-4 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-[var(--color-text-inverse)] text-sm rounded-[var(--radius-md)] transition-colors"
           >
             Try Again
           </button>

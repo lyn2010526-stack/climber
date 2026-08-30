@@ -54,7 +54,7 @@ function ToolCallCard({ call, defaultExpanded }: { call: ToolCall; defaultExpand
 
   const statusConfig = {
     pending: { icon: Loader2, color: 'text-[var(--color-text-muted)]', bg: 'bg-[var(--color-text-muted)]/10', label: '等待中', spin: true },
-    running: { icon: Loader2, color: 'text-blue-400', bg: 'bg-blue-500/10', label: '执行中', spin: true },
+    running: { icon: Loader2, color: 'text-[var(--color-accent)]', bg: 'bg-blue-500/10', label: '执行中', spin: true },
     success: { icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-500/10', label: '完成', spin: false },
     error: { icon: XCircle, color: 'text-red-400', bg: 'bg-red-500/10', label: '失败', spin: false },
   }[call.status];
@@ -69,7 +69,7 @@ function ToolCallCard({ call, defaultExpanded }: { call: ToolCall; defaultExpand
           ? 'border-red-500/20 bg-red-500/[0.02]'
           : call.status === 'running'
           ? 'border-blue-500/20 bg-blue-500/[0.02]'
-          : 'border-white/[0.06] bg-white/[0.02]'
+          : 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)]'
       )}
     >
       {/* Main row */}
@@ -77,7 +77,7 @@ function ToolCallCard({ call, defaultExpanded }: { call: ToolCall; defaultExpand
         type="button"
         aria-expanded={isExpanded}
         aria-label={`${call.displayName || call.name}，${statusConfig.label}`}
-        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.03] transition-colors rounded-lg"
+        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--color-bg-surface-2)] transition-colors rounded-lg"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className={cn('p-1.5 rounded-lg', statusConfig.bg)}>
@@ -197,7 +197,7 @@ export function ToolCallVisualization({
             工具调用 <span className="font-mono text-[var(--color-text-muted)]">{calls.length}</span>
           </span>
           {runningCount > 0 && (
-            <span className="flex items-center gap-1 text-[10px] text-blue-400">
+            <span className="flex items-center gap-1 text-[10px] text-[var(--color-accent)]">
               <Loader2 size={9} className="animate-spin" />
               {runningCount} 运行中
             </span>

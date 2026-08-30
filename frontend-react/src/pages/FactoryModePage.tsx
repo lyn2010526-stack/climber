@@ -159,7 +159,7 @@ export function FactoryModePage() {
                   className={`px-4 py-2 rounded-2xl text-sm font-medium border transition-all duration-200 ${
                     selectedSkills.includes(s.id)
                       ? 'bg-[var(--color-accent)]/15 border-[var(--color-accent)]/30 text-[var(--color-text-primary)]'
-                      : 'bg-white/[0.03] border-[var(--color-border-subtle)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/30'
+                      : 'bg-[var(--color-bg-surface-2)] border-[var(--color-border-subtle)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/30'
                   }`}
                 >
                   {s.icon} {s.name}
@@ -221,7 +221,7 @@ export function FactoryModePage() {
                     {step.action}
                   </span>
                   {step.tool && (
-                    <span className="px-2.5 py-0.5 bg-white/[0.03] text-[var(--color-text-muted)] rounded-xl text-xs font-medium border border-[var(--color-border-subtle)]">{step.tool}</span>
+                    <span className="px-2.5 py-0.5 bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] rounded-xl text-xs font-medium border border-[var(--color-border-subtle)]">{step.tool}</span>
                   )}
                   {step.status === 'running' && <Loader2 size={14} className="text-[var(--color-accent)] animate-spin" />}
                   {step.status === 'done' && <CheckCircle size={14} className="text-[var(--color-success)]" />}
@@ -237,7 +237,7 @@ export function FactoryModePage() {
              <h3 className="font-semibold text-[var(--color-text-primary)] mb-4">子任务执行</h3>
             <div className="space-y-3">
               {tasks.map(task => (
-                <div key={task.id} className="flex items-start gap-3 p-4 bg-white/[0.03] rounded-2xl border border-[var(--color-border-subtle)]">
+                <div key={task.id} className="flex items-start gap-3 p-4 bg-[var(--color-bg-surface-2)] rounded-2xl border border-[var(--color-border-subtle)]">
                   {getStatusIcon(task.status)}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-[var(--color-text-primary)]">{task.description}</p>

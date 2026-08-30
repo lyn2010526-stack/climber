@@ -31,8 +31,8 @@ export function DAGPanel() {
         <div className="space-y-2">
           {[1, 2, 3].map(i => (
             <div key={i} className="flex items-center gap-2 animate-pulse">
-              <div className="w-3 h-3 rounded-full bg-white/10" />
-              <div className="h-3 w-32 bg-white/5 rounded-xl" />
+              <div className="w-3 h-3 rounded-full bg-[var(--color-bg-surface-2)]" />
+              <div className="h-3 w-32 bg-[var(--color-bg-surface-2)] rounded-xl" />
             </div>
           ))}
         </div>
@@ -62,14 +62,14 @@ export function DAGPanel() {
             <div className="flex flex-col items-center">
               <div className={`w-3 h-3 rounded-full border-2 ${
                 node.status === 'completed' ? 'bg-green-500 border-green-500' :
-                node.status === 'running' ? 'bg-[#007AFF] border-[#007AFF] animate-pulse' :
+                node.status === 'running' ? 'bg-[var(--color-accent)] border-[var(--color-accent)] animate-pulse' :
                 'border-[var(--color-border-subtle)]'
               }`} />
-              {i < nodes.length - 1 && <div className="w-0.5 h-4 bg-white/10" />}
+              {i < nodes.length - 1 && <div className="w-0.5 h-4 bg-[var(--color-bg-surface-2)]" />}
             </div>
              <span className={`min-w-0 truncate text-xs ${
               node.status === 'completed' ? 'text-green-400' :
-              node.status === 'running' ? 'text-blue-400 font-medium' :
+              node.status === 'running' ? 'text-[var(--color-accent)] font-medium' :
               'text-[var(--color-text-muted)]'
             }`}>
               {node.label}

@@ -33,7 +33,7 @@ export function MobileChatPage() {
   return (
     <div className="flex flex-col h-full">
       <div
-        className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-white/[0.04]"
+        className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-[var(--color-border-subtle)]"
         style={{
           backgroundColor: 'var(--color-glass-bg)',
           backdropFilter: 'blur(24px) saturate(180%)',

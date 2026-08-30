@@ -203,7 +203,7 @@ export function WorkflowEditor({
             fitView
              className="bg-[var(--color-bg-deep)]"
           >
-            <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="rgba(255,255,255,0.05)" />
+            <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--color-border-default)" />
              <Controls className="!bg-[var(--color-bg-surface)] !border-[var(--color-border-subtle)] !shadow-lg [&>button]:!bg-[var(--color-bg-surface)] [&>button]:!border-[var(--color-border-subtle)] [&>button]:!text-[var(--color-text-muted)] [&>button:hover]:!bg-[var(--color-bg-surface-elevated)]/50" />
             <MiniMap
                className="!bg-[var(--color-bg-surface)] !border-[var(--color-border-subtle)]"

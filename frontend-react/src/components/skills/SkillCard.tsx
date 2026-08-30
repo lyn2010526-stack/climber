@@ -28,7 +28,7 @@ const categoryGradients: Record<string, string> = {
 };
 
 const categoryBg: Record<string, string> = {
-  productivity: 'bg-blue-500/10 text-blue-400',
+  productivity: 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]',
   development: 'bg-violet-500/10 text-violet-400',
   communication: 'bg-pink-500/10 text-pink-400',
   analysis: 'bg-amber-500/10 text-amber-400',
@@ -48,7 +48,7 @@ export function SkillCard({ skill, onToggle, onSelect, selected }: SkillCardProp
         'hover:translate-y-[-2px] hover:shadow-xl hover:shadow-black/30',
         selected
           ? 'border-blue-500/40 bg-blue-500/[0.06] shadow-lg shadow-blue-500/10'
-          : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]'
+          : 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] hover:border-[var(--color-border-strong)] hover:bg-[var(--color-bg-surface-2)]'
       )}
     >
       {/* Active indicator */}
@@ -75,7 +75,7 @@ export function SkillCard({ skill, onToggle, onSelect, selected }: SkillCardProp
         </div>
 
         {/* Name & Category */}
-        <h3 className="text-sm font-semibold text-white mb-1 truncate">{skill.name}</h3>
+        <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-1 truncate">{skill.name}</h3>
         <p className="text-xs text-[var(--color-text-muted)] leading-relaxed line-clamp-2 mb-3">{skill.description}</p>
 
         {/* Tags */}
@@ -84,14 +84,14 @@ export function SkillCard({ skill, onToggle, onSelect, selected }: SkillCardProp
             {skill.category}
           </span>
           {skill.tags?.slice(0, 2).map(tag => (
-             <span key={tag} className="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-white/[0.04] text-[var(--color-text-muted)] border border-white/[0.06]">
+             <span key={tag} className="px-2 py-0.5 rounded-lg text-[10px] font-medium bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] border border-[var(--color-border-subtle)]">
               {tag}
             </span>
           ))}
         </div>
 
         {/* Stats & Action */}
-        <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
+        <div className="flex items-center justify-between pt-3 border-t border-[var(--color-border-subtle)]">
           <div className="flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
             {skill.installCount != null && (
               <span className="flex items-center gap-1">
@@ -118,8 +118,8 @@ export function SkillCard({ skill, onToggle, onSelect, selected }: SkillCardProp
             className={cn(
               'px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-200',
               skill.enabled
-                ? 'bg-white/[0.06] text-[var(--color-text-muted)] hover:bg-red-500/10 hover:text-red-400'
-                : 'bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
+                ? 'bg-[var(--color-bg-surface-3)] text-[var(--color-text-muted)] hover:bg-red-500/10 hover:text-red-400'
+                : 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)] hover:bg-blue-500/20'
             )}
           >
             {skill.enabled ? '禁用' : '安装'}

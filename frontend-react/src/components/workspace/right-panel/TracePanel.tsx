@@ -32,7 +32,7 @@ export function TracePanel() {
   };
   const kindClass = (kind: string) =>
     kind === 'llm_call'
-      ? 'bg-blue-500/10 text-blue-400'
+      ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]'
       : kind === 'tool_call'
         ? 'bg-green-500/10 text-green-400'
         : 'bg-[var(--color-text-muted)]/10 text-[var(--color-text-secondary)]';
@@ -43,8 +43,8 @@ export function TracePanel() {
          <p className="text-xs text-[var(--color-text-muted)]">加载追踪中...</p>
         <div className="space-y-1.5">
           {[1, 2].map(i => (
-            <div key={i} className="p-2 bg-white/5 rounded-xl animate-pulse">
-              <div className="h-3 w-24 bg-white/10 rounded-xl" />
+            <div key={i} className="p-2 bg-[var(--color-bg-surface-2)] rounded-xl animate-pulse">
+              <div className="h-3 w-24 bg-[var(--color-bg-surface-2)] rounded-xl" />
             </div>
           ))}
         </div>
@@ -70,7 +70,7 @@ export function TracePanel() {
        <p className="text-xs text-[var(--color-text-muted)]">完整执行追踪 — 包含每次 LLM 调用和工具调用</p>
       <div className="space-y-1.5">
         {traces.map(t => (
-          <div key={t.trace_id} className="p-2 bg-white/5 rounded-xl">
+          <div key={t.trace_id} className="p-2 bg-[var(--color-bg-surface-2)] rounded-xl">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <span className={`px-1.5 py-0.5 rounded-xl text-[10px] font-medium ${kindClass(t.kind)}`}>

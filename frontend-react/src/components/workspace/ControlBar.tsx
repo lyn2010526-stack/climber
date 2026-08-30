@@ -113,7 +113,7 @@ export function ControlBar({ onToggleSessions }: { onToggleSessions?: () => void
         <button
           onClick={handleStop}
           disabled={!activeSession}
-          className="p-2 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95 text-[var(--color-text-secondary)] hover:text-[rgba(239,68,68,0.9)] hover:bg-[rgba(239,68,68,0.1)]"
+          className="p-2 rounded-lg transition-all duration-200 disabled:opacity-30 hover:scale-105 active:scale-95 text-[var(--color-text-secondary)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-subtle)]"
           title="停止"
           aria-label="停止会话"
         >

@@ -236,9 +236,9 @@ function DiffFileView({ file, defaultExpanded = true, showLineNumbers = true }: 
   const totalLines = file.hunks.reduce((sum, h) => sum + h.rows.length, 0);
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] overflow-hidden">
       {/* File header */}
-      <div className="flex items-center hover:bg-white/[0.02] transition-colors">
+      <div className="flex items-center hover:bg-[var(--color-bg-surface-2)] transition-colors">
         <button
           type="button"
           className="min-w-0 flex flex-1 items-center gap-2.5 px-3 py-2.5 text-left"
@@ -274,7 +274,7 @@ function DiffFileView({ file, defaultExpanded = true, showLineNumbers = true }: 
         <button
           type="button"
           onClick={handleCopy}
-          className="mr-2 p-2 rounded hover:bg-white/[0.06] text-[var(--color-text-muted)] transition-colors"
+          className="mr-2 p-2 rounded hover:bg-[var(--color-bg-surface-3)] text-[var(--color-text-muted)] transition-colors"
           aria-label={`${copied ? '已复制' : '复制'} ${file.path} 的差异`}
         >
           {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
@@ -283,7 +283,7 @@ function DiffFileView({ file, defaultExpanded = true, showLineNumbers = true }: 
 
       {/* Diff content */}
       {expanded && (
-        <div id={contentId} className="border-t border-white/[0.04] overflow-x-auto">
+        <div id={contentId} className="border-t border-[var(--color-border-subtle)] overflow-x-auto">
           {file.hunks.map((hunk, hi) => (
             <div key={hi}>
               <DiffLine

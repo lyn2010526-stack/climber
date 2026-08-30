@@ -47,9 +47,9 @@ const editorVariants = cva(
   {
     variants: {
       variant: {
-        default: 'border-white/[0.08] bg-white/[0.02]',
-        outline: 'border-white/[0.12] bg-transparent',
-        filled: 'border-transparent bg-white/[0.04]',
+        default: 'border-[var(--color-border-default)] bg-[var(--color-bg-surface-2)]',
+        outline: 'border-[var(--color-border-strong)] bg-transparent',
+        filled: 'border-transparent bg-[var(--color-bg-surface-2)]',
       },
     },
     defaultVariants: {
@@ -63,7 +63,7 @@ const toolbarVariants = cva(
   {
     variants: {
       variant: {
-        default: 'border-white/[0.06] bg-white/[0.02]',
+        default: 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)]',
         minimal: 'border-transparent bg-transparent',
       },
     },
@@ -74,7 +74,7 @@ const toolbarVariants = cva(
 );
 
 const contentVariants = cva(
-  'flex-1 min-h-[120px] px-4 py-3 text-sm text-white outline-none overflow-y-auto leading-relaxed',
+  'flex-1 min-h-[120px] px-4 py-3 text-sm text-[var(--color-text-primary)] outline-none overflow-y-auto leading-relaxed',
   {
     variants: {
       size: {
@@ -122,8 +122,8 @@ function ToolbarButton({ icon, label, isActive, disabled, onClick }: ToolbarButt
       onClick={onClick}
       className={cn(
         'flex h-7 w-7 items-center justify-center rounded-md transition-all duration-150',
-        isActive && 'bg-blue-500/20 text-blue-400',
-        !isActive && 'text-white/50 hover:text-white/80 hover:bg-white/[0.06]',
+        isActive && 'bg-blue-500/20 text-[var(--color-accent)]',
+        !isActive && 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-3)]',
         disabled && 'opacity-30 cursor-not-allowed',
       )}
     >
@@ -137,7 +137,7 @@ interface ToolbarDividerProps {
 }
 
 function ToolbarDivider({ className }: ToolbarDividerProps) {
-  return <div className={cn('h-5 w-px bg-white/[0.08] mx-1', className)} />;
+  return <div className={cn('h-5 w-px bg-[var(--color-bg-surface-3)] mx-1', className)} />;
 }
 
 function execCommand(command: string, value?: string) {
@@ -335,17 +335,17 @@ const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(
           suppressContentEditableWarning
           className={cn(
             contentVariants({ size }),
-            '[&]:empty:before:content-[attr(data-placeholder)] [&]:empty:before:text-white/30 [&]:empty:before:pointer-events-none',
-            '[&_h1]:text-xl [&_h1]:font-bold [&_h1]:text-white [&_h1]:mb-2',
-            '[&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-white [&_h2]:mb-2',
-            '[&_h3]:text-base [&_h3]:font-medium [&_h3]:text-white [&_h3]:mb-1',
+            '[&]:empty:before:content-[attr(data-placeholder)] [&]:empty:before:text-[var(--color-text-muted)] [&]:empty:before:pointer-events-none',
+            '[&_h1]:text-xl [&_h1]:font-bold [&_h1]:text-[var(--color-text-primary)] [&_h1]:mb-2',
+            '[&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-[var(--color-text-primary)] [&_h2]:mb-2',
+            '[&_h3]:text-base [&_h3]:font-medium [&_h3]:text-[var(--color-text-primary)] [&_h3]:mb-1',
             '[&_p]:mb-1',
             '[&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-2',
             '[&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-2',
-            '[&_blockquote]:border-l-2 [&_blockquote]:border-white/20 [&_blockquote]:pl-3 [&_blockquote]:text-white/60 [&_blockquote]:italic [&_blockquote]:my-2',
-            '[&_code]:bg-white/[0.06] [&_code]:rounded [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-sm [&_code]:text-violet-300 [&_code]:font-mono',
-            '[&_a]:text-blue-400 [&_a]:underline',
-            '[&_hr]:border-white/[0.08] [&_hr]:my-3',
+            '[&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-border-strong)] [&_blockquote]:pl-3 [&_blockquote]:text-[var(--color-text-secondary)] [&_blockquote]:italic [&_blockquote]:my-2',
+            '[&_code]:bg-[var(--color-bg-surface-3)] [&_code]:rounded [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-sm [&_code]:text-violet-300 [&_code]:font-mono',
+            '[&_a]:text-[var(--color-accent)] [&_a]:underline',
+            '[&_hr]:border-[var(--color-border-default)] [&_hr]:my-3',
           )}
           data-placeholder={placeholder}
           dangerouslySetInnerHTML={value ? { __html: sanitizeEditorHtml(value) } : undefined}
@@ -357,10 +357,10 @@ const RichTextEditor = forwardRef<HTMLDivElement, RichTextEditorProps>(
         />
 
         {maxLength && (
-          <div className="border-t border-white/[0.06] px-4 py-1.5 flex justify-end">
+          <div className="border-t border-[var(--color-border-subtle)] px-4 py-1.5 flex justify-end">
             <span className={cn(
               'text-[10px]',
-              charCount > maxLength ? 'text-red-400' : 'text-white/30',
+              charCount > maxLength ? 'text-red-400' : 'text-[var(--color-text-muted)]',
             )}>
               {charCount} / {maxLength}
             </span>

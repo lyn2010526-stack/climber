@@ -25,7 +25,7 @@ interface Plugin {
 
 const TYPE_CONFIG = {
   skill: { icon: Brain, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20', label: 'Skill' },
-  mcp: { icon: Server, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20', label: 'MCP' },
+  mcp: { icon: Server, color: 'text-[var(--color-accent)]', bg: 'bg-blue-500/10', border: 'border-blue-500/20', label: 'MCP' },
   prompt: { icon: FileText, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20', label: 'Prompt' },
 };
 
@@ -222,7 +222,7 @@ export function PluginsPage() {
                 className={`px-4 py-2 rounded-2xl text-sm font-medium border transition-all duration-200 ${
                   selectedType === type
                     ? 'bg-[var(--color-accent)]/15 border-[var(--color-accent)]/30 text-[var(--color-text-primary)]'
-                    : 'bg-white/[0.03] border-[var(--color-border-subtle)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/30'
+                    : 'bg-[var(--color-bg-surface-2)] border-[var(--color-border-subtle)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/30'
                 }`}
               >
                  {type ? TYPE_CONFIG[type].label : '全部'}
@@ -237,7 +237,7 @@ export function PluginsPage() {
             className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap border transition-all duration-200 ${
               selectedCategory === CATEGORY_ALL
                 ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] border-[var(--color-accent)]/30'
-                : 'bg-white/[0.03] text-[var(--color-text-muted)] border-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]'
+                : 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] border-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]'
             }`}
           >
               全部 ({totalCount})
@@ -247,7 +247,7 @@ export function PluginsPage() {
             className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap border transition-all duration-200 ${
               selectedCategory === CATEGORY_INSTALLED
                 ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] border-[var(--color-accent)]/30'
-                : 'bg-white/[0.03] text-[var(--color-text-muted)] border-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]'
+                : 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] border-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]'
             }`}
           >
               已启用 ({enabledCount})
@@ -261,7 +261,7 @@ export function PluginsPage() {
                 className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap capitalize border transition-all duration-200 ${
                   selectedCategory === cat
                     ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] border-[var(--color-accent)]/30'
-                    : 'bg-white/[0.03] text-[var(--color-text-muted)] border-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]'
+                    : 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] border-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]'
                 }`}
               >
                 {cat} ({count})
@@ -441,7 +441,7 @@ function PluginCard({
       {plugin.tags && plugin.tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-3">
           {plugin.tags.slice(0, 3).map(tag => (
-            <span key={tag} className="px-2 py-0.5 bg-white/[0.03] rounded-lg text-xs text-[var(--color-text-muted)] border border-[var(--color-border-subtle)]">
+            <span key={tag} className="px-2 py-0.5 bg-[var(--color-bg-surface-2)] rounded-lg text-xs text-[var(--color-text-muted)] border border-[var(--color-border-subtle)]">
               {tag}
             </span>
           ))}
@@ -494,7 +494,7 @@ function PluginCard({
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-200 border ${
                   isEnabled
                     ? 'bg-[var(--color-success)]/10 text-[var(--color-success)] hover:bg-[var(--color-success)]/20 border-[var(--color-success)]/20'
-                    : 'bg-white/[0.03] text-[var(--color-text-muted)] hover:bg-white/[0.06] border-[var(--color-border-subtle)]'
+                    : 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-3)] border-[var(--color-border-subtle)]'
                 }`}
               >
                 {isEnabled ? <Power size={12} /> : <PowerOff size={12} />}

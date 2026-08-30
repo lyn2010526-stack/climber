@@ -33,7 +33,7 @@ const dotVariants = cva(
   {
     variants: {
       status: {
-        default: 'bg-white/40',
+        default: 'bg-[var(--color-text-muted)]',
         success: 'bg-emerald-500',
         warning: 'bg-amber-500',
         error: 'bg-red-500',
@@ -56,9 +56,9 @@ const dotVariants = cva(
 const lineVariants = cva('absolute left-[5.5px] top-4 bottom-0 w-px', {
   variants: {
     variant: {
-      default: 'bg-white/[0.08]',
-      dotted: 'border-l border-dashed border-white/[0.12]',
-      solid: 'bg-white/[0.12]',
+      default: 'bg-[var(--color-bg-surface-3)]',
+      dotted: 'border-l border-dashed border-[var(--color-border-strong)]',
+      solid: 'bg-[var(--color-border-strong)]',
     },
   },
   defaultVariants: {
@@ -137,11 +137,11 @@ const TimelineContent = forwardRef<HTMLDivElement, TimelineContentProps>(
       <div ref={ref} className={cn('flex-1 min-w-0', className)} {...props}>
         {(title || timestamp) && (
           <div className="flex items-center justify-between gap-2 mb-1">
-            {title && <h4 className="text-sm font-medium text-white">{title}</h4>}
-            {timestamp && <span className="text-xs text-white/40 shrink-0">{timestamp}</span>}
+            {title && <h4 className="text-sm font-medium text-[var(--color-text-primary)]">{title}</h4>}
+            {timestamp && <span className="text-xs text-[var(--color-text-muted)] shrink-0">{timestamp}</span>}
           </div>
         )}
-        {description && <p className="text-sm text-white/60 leading-relaxed">{description}</p>}
+        {description && <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">{description}</p>}
         {children}
       </div>
     );

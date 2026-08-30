@@ -99,22 +99,22 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={handleClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-xl bg-[#12121A] border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden"
+        className="relative w-full max-w-xl bg-[var(--color-bg-surface-1)] border border-[var(--color-border-default)] rounded-2xl shadow-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border-subtle)]">
           <div>
-            <h3 className="text-sm font-semibold text-white">添加 MCP 服务器</h3>
+            <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">添加 MCP 服务器</h3>
              <p className="text-[11px] text-[var(--color-text-muted)] mt-0.5">配置新的模型上下文协议服务器</p>
           </div>
-          <button onClick={handleClose} aria-label="关闭添加 MCP 服务器对话框" className="p-2 rounded-lg hover:bg-white/[0.06] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors">
+          <button onClick={handleClose} aria-label="关闭添加 MCP 服务器对话框" className="p-2 rounded-lg hover:bg-[var(--color-bg-surface-3)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors">
             <X size={16} />
           </button>
         </div>
 
         {/* Step indicator */}
-        <div className="px-6 py-4 border-b border-white/[0.04]">
+        <div className="px-6 py-4 border-b border-[var(--color-border-subtle)]">
           <div className="flex items-center gap-2">
             {steps.map((s, i) => (
               <React.Fragment key={s.id}>
@@ -122,20 +122,20 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                   <div className={cn(
                     'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold transition-all',
                     i < step ? 'bg-green-500/20 text-green-400' :
-                    i === step ? 'bg-blue-500/20 text-blue-400 ring-2 ring-blue-500/30' :
-                     'bg-white/[0.04] text-[var(--color-text-muted)]'
+                    i === step ? 'bg-blue-500/20 text-[var(--color-accent)] ring-2 ring-blue-500/30' :
+                     'bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)]'
                   )}>
                     {i < step ? <Check size={12} /> : i + 1}
                   </div>
                   <span className={cn(
                     'text-[11px] font-medium hidden sm:inline',
-                     i === step ? 'text-white' : 'text-[var(--color-text-muted)]'
+                     i === step ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'
                   )}>
                     {s.label}
                   </span>
                 </div>
                 {i < steps.length - 1 && (
-                  <div className={cn('flex-1 h-px', i < step ? 'bg-green-500/30' : 'bg-white/[0.06]')} />
+                  <div className={cn('flex-1 h-px', i < step ? 'bg-green-500/30' : 'bg-[var(--color-bg-surface-3)]')} />
                 )}
               </React.Fragment>
             ))}
@@ -155,17 +155,17 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                     'w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left',
                     data.transport === opt.type
                       ? 'border-blue-500/40 bg-blue-500/[0.06]'
-                      : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.1] hover:bg-white/[0.04]'
+                      : 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] hover:border-[var(--color-border-default)] hover:bg-[var(--color-bg-surface-2)]'
                   )}
                 >
                   <div className={cn(
                     'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0',
-                     data.transport === opt.type ? 'bg-blue-500/20 text-blue-400' : 'bg-white/[0.04] text-[var(--color-text-muted)]'
+                     data.transport === opt.type ? 'bg-blue-500/20 text-[var(--color-accent)]' : 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)]'
                   )}>
                     <opt.icon size={18} />
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-white">{opt.label}</div>
+                    <div className="text-sm font-medium text-[var(--color-text-primary)]">{opt.label}</div>
                      <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5">{opt.description}</div>
                   </div>
                 </button>
@@ -182,7 +182,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                   value={data.name}
                   onChange={e => setData(d => ({ ...d, name: e.target.value }))}
                   placeholder="my-mcp-server"
-                  className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
+                  className="w-full h-10 px-3 rounded-xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)] text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
                 />
               </div>
               {data.transport === 'stdio' ? (
@@ -194,7 +194,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                       value={data.command}
                       onChange={e => setData(d => ({ ...d, command: e.target.value }))}
                       placeholder="npx -y @modelcontextprotocol/server-filesystem"
-                      className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
+                      className="w-full h-10 px-3 rounded-xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)] text-sm text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
                     />
                   </div>
                   <div>
@@ -204,7 +204,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                       value={data.args}
                       onChange={e => setData(d => ({ ...d, args: e.target.value }))}
                       placeholder="/path/to/directory"
-                      className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
+                      className="w-full h-10 px-3 rounded-xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)] text-sm text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
                     />
                   </div>
                 </>
@@ -216,7 +216,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                     value={data.url}
                     onChange={e => setData(d => ({ ...d, url: e.target.value }))}
                     placeholder={data.transport === 'sse' ? 'https://example.com/sse' : 'https://example.com/api'}
-                    className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
+                    className="w-full h-10 px-3 rounded-xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)] text-sm text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
                   />
                 </div>
               )}
@@ -227,7 +227,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                   onChange={e => setData(d => ({ ...d, env: e.target.value }))}
                   placeholder={"KEY=value\nANOTHER_KEY=value2"}
                   rows={3}
-                  className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all resize-none"
+                  className="w-full px-3 py-2.5 rounded-xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)] text-sm text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all resize-none"
                 />
               </div>
             </div>
@@ -235,10 +235,10 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
 
           {step === 2 && (
             <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+              <div className="flex items-center gap-3 p-4 rounded-xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)]">
                 <Shield size={18} className="text-amber-400 flex-shrink-0" />
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-white">OAuth 认证</div>
+                  <div className="text-sm font-medium text-[var(--color-text-primary)]">OAuth 认证</div>
                   <div className="text-[11px] text-[var(--color-text-muted)] mt-0.5">如果服务器需要 OAuth 认证，请启用此选项</div>
                 </div>
                 <button
@@ -264,7 +264,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                     value={data.tokenUrl}
                     onChange={e => setData(d => ({ ...d, tokenUrl: e.target.value }))}
                     placeholder="https://auth.example.com/oauth/token"
-                    className="w-full h-10 px-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
+                    className="w-full h-10 px-3 rounded-xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)] text-sm text-[var(--color-text-primary)] font-mono placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/40 transition-all"
                   />
                 </div>
               )}
@@ -273,7 +273,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
 
           {step === 3 && (
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] space-y-3">
+              <div className="p-4 rounded-xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] space-y-3">
                  <div className="flex justify-between text-xs">
                    <span className="text-[var(--color-text-muted)]">名称</span>
                    <span className="text-[var(--color-text-secondary)] font-medium">{data.name}</span>
@@ -300,7 +300,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                 <button
                   onClick={handleTest}
                   disabled={testing}
-                  className="w-full py-3 rounded-xl bg-blue-500/10 text-blue-400 text-sm font-medium border border-blue-500/20 hover:bg-blue-500/15 transition-all flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-xl bg-[var(--color-accent-subtle)] text-[var(--color-accent)] text-sm font-medium border border-blue-500/20 hover:bg-blue-500/15 transition-all flex items-center justify-center gap-2"
                 >
                   {testing ? (
                     <>
@@ -340,7 +340,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-white/[0.06]">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--color-border-subtle)]">
           <button
             onClick={() => setStep(s => Math.max(0, s - 1))}
             disabled={step === 0}
@@ -348,7 +348,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
               'flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium transition-all',
                 step === 0
                   ? 'text-[var(--color-text-muted)] cursor-not-allowed'
-                  : 'text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.06]'
+                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-3)]'
             )}
           >
             <ArrowLeft size={13} />
@@ -363,7 +363,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                   'flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium transition-all',
                   canNext()
                     ? 'bg-gradient-to-r from-blue-500 to-violet-500 text-white shadow-lg shadow-blue-500/20 hover:brightness-110'
-                    : 'bg-white/[0.04] text-[var(--color-text-muted)] cursor-not-allowed'
+                    : 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] cursor-not-allowed'
                 )}
               >
                 下一步
@@ -377,7 +377,7 @@ export function AddServerWizard({ isOpen, onClose, onAdd }: AddServerWizardProps
                   'flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium transition-all',
                   canNext()
                     ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg shadow-green-500/20 hover:brightness-110'
-                    : 'bg-white/[0.04] text-[var(--color-text-muted)] cursor-not-allowed'
+                    : 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] cursor-not-allowed'
                 )}
               >
                 <Check size={13} />

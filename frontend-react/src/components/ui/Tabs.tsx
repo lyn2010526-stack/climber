@@ -12,8 +12,8 @@ const tabsListVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-white/[0.04] border border-white/[0.06]',
-        underline: 'border-b border-white/[0.08] rounded-none p-0 gap-0',
+        default: 'bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)]',
+        underline: 'border-b border-[var(--color-border-default)] rounded-none p-0 gap-0',
         pills: 'bg-transparent gap-2',
       },
       fullWidth: {
@@ -29,13 +29,13 @@ const tabsListVariants = cva(
 );
 
 const tabVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-accent)] disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
-        default: 'text-white/50 hover:text-white hover:bg-white/[0.06] data-[state=active]:text-white data-[state=active]:bg-white/[0.08]',
-        underline: 'text-white/50 hover:text-white border-b-2 border-transparent rounded-none px-4 py-2 data-[state=active]:text-blue-400 data-[state=active]:border-blue-400',
-        pills: 'text-white/50 hover:text-white hover:bg-white/[0.06] data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500/80 data-[state=active]:to-violet-500/80 data-[state=active]:shadow-md data-[state=active]:shadow-blue-500/20',
+        default: 'text-[var(--color-text-muted)] hover:text-white hover:bg-[var(--color-bg-surface-3)] data-[state=active]:text-white data-[state=active]:bg-[var(--color-bg-surface-3)]',
+        underline: 'text-[var(--color-text-muted)] hover:text-white border-b-2 border-transparent rounded-none px-4 py-2 data-[state=active]:text-[var(--color-accent)] data-[state=active]:border-blue-400',
+        pills: 'text-[var(--color-text-muted)] hover:text-white hover:bg-[var(--color-bg-surface-3)] data-[state=active]:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500/80 data-[state=active]:to-violet-500/80 data-[state=active]:shadow-md data-[state=active]:shadow-blue-500/20',
       },
       fullWidth: {
         true: 'flex-1',
@@ -130,7 +130,7 @@ const TabsTrigger = forwardRef<HTMLButtonElement, TabsTriggerProps>(
         {icon && <span className="shrink-0">{icon}</span>}
         {children}
         {badge !== undefined && (
-          <span className="inline-flex items-center justify-center rounded-full bg-white/[0.1] px-1.5 py-0.5 text-[10px] font-medium text-white/60">
+          <span className="inline-flex items-center justify-center rounded-full bg-white/[0.1] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-secondary)]">
             {badge}
           </span>
         )}

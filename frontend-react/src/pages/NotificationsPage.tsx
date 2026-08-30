@@ -129,7 +129,7 @@ export function NotificationsPage() {
                   disabled={sending}
                   variant="secondary"
                   size="lg"
-                  className="rounded-2xl bg-white/[0.03] text-[var(--color-text-secondary)]"
+                  className="rounded-2xl bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)]"
                 >
                   <Bell size={14} />
                   系统测试
@@ -190,7 +190,7 @@ export function NotificationsPage() {
             ) : (
               <ul className="space-y-2">
                 {items.map((n, i) => (
-                  <li key={n.id || i} className="p-3 bg-white/[0.03] border border-[var(--color-border-subtle)] rounded-2xl">
+                  <li key={n.id || i} className="p-3 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm font-medium text-[var(--color-text-primary)] truncate">{n.title}</span>
                       <span className="text-[10px] text-[var(--color-text-muted)] shrink-0">{formatTime(n.created_at)}</span>

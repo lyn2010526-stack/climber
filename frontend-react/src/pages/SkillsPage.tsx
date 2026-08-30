@@ -110,7 +110,7 @@ export function SkillsPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="搜索技能..."
-              className="rounded-2xl pl-9 py-2.5 bg-white/[0.03] placeholder:text-[var(--color-text-muted)]"
+              className="rounded-2xl pl-9 py-2.5 bg-[var(--color-bg-surface-2)] placeholder:text-[var(--color-text-muted)]"
             />
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -155,19 +155,19 @@ export function SkillsPage() {
           <div className="space-y-6">
             {[1, 2].map(i => (
               <div key={i} className="animate-pulse">
-                <div className="h-5 w-24 bg-white/5 rounded-xl mb-4" />
+                <div className="h-5 w-24 bg-[var(--color-bg-surface-2)] rounded-xl mb-4" />
                 <div className="grid grid-cols-2 gap-4">
                   {[1, 2].map(j => (
                     <div key={j} className="border border-[var(--color-border-subtle)] rounded-2xl p-5">
                       <div className="flex items-start gap-3">
-                        <div className="w-5 h-5 rounded bg-white/5" />
+                        <div className="w-5 h-5 rounded bg-[var(--color-bg-surface-2)]" />
                         <div className="flex-1 space-y-2">
                           <div className="flex items-center gap-2">
-                            <div className="h-6 w-6 bg-white/5 rounded-xl" />
-                            <div className="h-4 w-24 bg-white/5 rounded-xl" />
+                            <div className="h-6 w-6 bg-[var(--color-bg-surface-2)] rounded-xl" />
+                            <div className="h-4 w-24 bg-[var(--color-bg-surface-2)] rounded-xl" />
                           </div>
-                          <div className="h-3 w-full bg-white/5 rounded-xl" />
-                          <div className="h-3 w-3/4 bg-white/5 rounded-xl" />
+                          <div className="h-3 w-full bg-[var(--color-bg-surface-2)] rounded-xl" />
+                          <div className="h-3 w-3/4 bg-[var(--color-bg-surface-2)] rounded-xl" />
                         </div>
                       </div>
                     </div>

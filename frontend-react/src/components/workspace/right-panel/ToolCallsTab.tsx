@@ -33,8 +33,8 @@ export function ToolCallsTab({ sessionId }: { sessionId: string | null }) {
         <p className="text-xs text-[var(--color-text-muted)]">加载工具调用中...</p>
         <div className="space-y-1.5">
           {[1, 2].map(i => (
-            <div key={i} className="p-2 bg-white/5 rounded-xl animate-pulse">
-              <div className="h-3 w-24 bg-white/10 rounded-xl" />
+            <div key={i} className="p-2 bg-[var(--color-bg-surface-2)] rounded-xl animate-pulse">
+              <div className="h-3 w-24 bg-[var(--color-bg-surface-2)] rounded-xl" />
             </div>
           ))}
         </div>

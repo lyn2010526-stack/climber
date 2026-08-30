@@ -8,9 +8,9 @@ const statCardVariants = cva(
   {
     variants: {
       variant: {
-        default: 'border-white/[0.06] bg-white/[0.02]',
-        elevated: 'border-white/[0.06] bg-white/[0.03] shadow-lg shadow-black/20',
-        gradient: 'border-white/[0.06] bg-gradient-to-br from-white/[0.04] to-white/[0.01]',
+        default: 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)]',
+        elevated: 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] shadow-lg shadow-black/20',
+        gradient: 'border-[var(--color-border-subtle)] bg-gradient-to-br from-white/[0.04] to-white/[0.01]',
       },
     },
     defaultVariants: {
@@ -82,15 +82,15 @@ const StatCard = forwardRef<HTMLDivElement, StatCardProps>(
       <div ref={ref} className={cn(statCardVariants({ variant }), className)} {...props}>
         <div className="flex items-start justify-between mb-3">
           <div>
-            <p className="text-sm text-white/50 mb-1">{title}</p>
+            <p className="text-sm text-[var(--color-text-muted)] mb-1">{title}</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-semibold text-white">{value}</span>
+              <span className="text-2xl font-semibold text-[var(--color-text-primary)]">{value}</span>
               {trend !== null && (
                 <span className={cn(
                   'inline-flex items-center gap-0.5 text-xs font-medium',
                   trend === 'up' && 'text-emerald-400',
                   trend === 'down' && 'text-red-400',
-                  trend === 'flat' && 'text-white/40',
+                  trend === 'flat' && 'text-[var(--color-text-muted)]',
                 )}>
                   {trend === 'up' && <TrendingUp className="h-3 w-3" />}
                   {trend === 'down' && <TrendingDown className="h-3 w-3" />}
@@ -99,10 +99,10 @@ const StatCard = forwardRef<HTMLDivElement, StatCardProps>(
                 </span>
               )}
             </div>
-            {changeLabel && <p className="text-xs text-white/30 mt-0.5">{changeLabel}</p>}
+            {changeLabel && <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{changeLabel}</p>}
           </div>
           {icon && (
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.05] text-white/60">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)]">
               {icon}
             </div>
           )}
@@ -190,7 +190,7 @@ const BarChart = forwardRef<HTMLDivElement, BarChartProps>(
               y1={chartPadding.top + innerHeight * (1 - ratio)}
               x2={chartWidth - chartPadding.right}
               y2={chartPadding.top + innerHeight * (1 - ratio)}
-              stroke="rgba(255,255,255,0.04)"
+              stroke="var(--color-border-default)"
               strokeWidth="0.5"
             />
           ))}
@@ -274,8 +274,8 @@ const DonutChart = forwardRef<HTMLDivElement, DonutChartProps>(
         </svg>
         {(centerLabel || centerValue) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            {centerValue && <span className="text-lg font-semibold text-white">{centerValue}</span>}
-            {centerLabel && <span className="text-xs text-white/40">{centerLabel}</span>}
+            {centerValue && <span className="text-lg font-semibold text-[var(--color-text-primary)]">{centerValue}</span>}
+            {centerLabel && <span className="text-xs text-[var(--color-text-muted)]">{centerLabel}</span>}
           </div>
         )}
       </div>

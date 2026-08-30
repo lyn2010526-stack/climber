@@ -4,13 +4,13 @@ import { ChevronDown, Check, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const selectVariants = cva(
-  'flex w-full items-center justify-between rounded-lg border bg-white/[0.03] px-3 py-2 text-sm transition-all duration-200 text-white cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50',
+  'flex w-full items-center justify-between rounded-lg border bg-[var(--color-bg-surface-1)] px-3 py-2 text-sm transition-all duration-200 text-[var(--color-text-primary)] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border-accent)]',
   {
     variants: {
       variant: {
-        default: 'border-white/[0.08] hover:border-white/[0.12]',
-        error: 'border-red-500/50',
-        success: 'border-emerald-500/50',
+        default: 'border-[var(--color-border-default)] hover:border-[var(--color-border-strong)]',
+        error: 'border-[var(--color-error)]',
+        success: 'border-[var(--color-success)]',
       },
       inputSize: {
         sm: 'h-8 px-2.5 text-xs',
@@ -152,23 +152,23 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
           className={cn(
             selectVariants({ variant, inputSize }),
             disabled && 'opacity-50 cursor-not-allowed',
-            isOpen && 'ring-2 ring-blue-500/50 border-blue-500/50',
+            isOpen && 'ring-2 ring-[var(--color-border-accent)] border-[var(--color-accent)]',
           )}
         >
-          <span className={cn('flex-1 truncate text-left', !value && 'text-white/40')}>
+          <span className={cn('flex-1 truncate text-left', !value && 'text-[var(--color-text-muted)]')}>
             {multiple && value
               ? (selectedValues.length > 0 && (
                   <span className="flex items-center gap-1.5">
                     {selectedValues.slice(0, 2).map((v) => {
                       const opt = options.find((o) => o.value === v);
                       return (
-                        <span key={v} className="inline-flex items-center gap-1 rounded-md bg-white/[0.08] px-1.5 py-0.5 text-xs">
+                        <span key={v} className="inline-flex items-center gap-1 rounded-md bg-[var(--color-bg-surface-3)] px-1.5 py-0.5 text-xs">
                           {opt?.label}
                         </span>
                       );
                     })}
                     {selectedValues.length > 2 && (
-                      <span className="text-white/40 text-xs">+{selectedValues.length - 2}</span>
+                      <span className="text-[var(--color-text-muted)] text-xs">+{selectedValues.length - 2}</span>
                     )}
                   </span>
                 )) || placeholder
@@ -179,36 +179,36 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
               <button
                 type="button"
                 onClick={handleClear}
-                className="p-0.5 rounded hover:bg-white/10 text-white/30 hover:text-white/60"
+                className="p-0.5 rounded hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
-            <ChevronDown className={cn('h-4 w-4 text-white/40 transition-transform duration-200', isOpen && 'rotate-180')} />
+            <ChevronDown className={cn('h-4 w-4 text-[var(--color-text-muted)] transition-transform duration-200', isOpen && 'rotate-180')} />
           </div>
         </div>
 
         {isOpen && (
           <div
-            className="absolute z-50 mt-1 w-full rounded-xl border border-white/[0.08] bg-[#1a1a2e] shadow-xl shadow-black/40 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150"
+            className="absolute z-50 mt-1 w-full rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] shadow-xl shadow-black/40 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150"
             role="listbox"
             style={{ maxHeight }}
           >
             {searchable && (
-              <div className="p-2 border-b border-white/[0.06]">
+              <div className="p-2 border-b border-[var(--color-border-subtle)]">
                 <input
                   ref={searchInputRef}
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="搜索..."
-                  className="w-full rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-sm text-white placeholder:text-white/30 outline-none focus:ring-1 focus:ring-blue-500/30"
+                  className="w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] px-3 py-1.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] outline-none focus:ring-1 focus:ring-[var(--color-border-accent)]"
                 />
               </div>
             )}
             <div className="overflow-y-auto" style={{ maxHeight: maxHeight - (searchable ? 52 : 0) }}>
               {filteredOptions.length === 0 ? (
-                <div className="px-3 py-6 text-center text-sm text-white/30">
+                <div className="px-3 py-6 text-center text-sm text-[var(--color-text-muted)]">
                   无匹配选项
                 </div>
               ) : (
@@ -222,10 +222,10 @@ const Select = forwardRef<HTMLDivElement, SelectProps>(
                       onClick={() => !option.disabled && toggleOption(option.value)}
                       className={cn(
                         'flex items-center gap-2 px-3 py-2 text-sm transition-colors cursor-pointer',
-                        isSelected && 'bg-blue-500/10 text-blue-400',
-                        !isSelected && 'text-white/70 hover:bg-white/[0.04] hover:text-white',
+                        isSelected && 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]',
+                        !isSelected && 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)]',
                         option.disabled && 'opacity-30 cursor-not-allowed',
-                        index === highlightedIndex && !isSelected && 'bg-white/[0.04]',
+                        index === highlightedIndex && !isSelected && 'bg-[var(--color-bg-surface-2)]',
                       )}
                     >
                       {option.icon && <span className="shrink-0">{option.icon}</span>}

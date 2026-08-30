@@ -22,7 +22,7 @@ interface FloatingPermissionDialogProps {
 }
 
 const actionConfig = {
-  file_read: { icon: FileText, color: 'text-blue-400', bg: 'bg-blue-500/10', label: '读取文件' },
+  file_read: { icon: FileText, color: 'text-[var(--color-accent)]', bg: 'bg-blue-500/10', label: '读取文件' },
   file_write: { icon: FileText, color: 'text-amber-400', bg: 'bg-amber-500/10', label: '修改文件' },
   file_delete: { icon: FileText, color: 'text-red-400', bg: 'bg-red-500/10', label: '删除文件' },
   command: { icon: Terminal, color: 'text-orange-400', bg: 'bg-orange-500/10', label: '执行命令' },
@@ -86,10 +86,10 @@ export function FloatingPermissionDialog({
               )}
             >
               {/* Header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-white/[0.02]">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)]">
                 <div className="flex items-center gap-2">
                   <Shield size={16} className="text-amber-400" />
-                  <span className="text-sm font-semibold text-white">权限请求</span>
+                  <span className="text-sm font-semibold text-[var(--color-text-primary)]">权限请求</span>
                   {requests.length > 1 && (
                     <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-amber-500/10 text-amber-400 font-medium">
                       {requests.length} 个待处理
@@ -105,7 +105,7 @@ export function FloatingPermissionDialog({
                   <button
                     onClick={() => { setVisible(false); }}
                     aria-label="关闭权限请求"
-                    className="p-1 rounded-lg hover:bg-white/[0.06] text-[var(--color-text-secondary)] transition-colors"
+                    className="p-1 rounded-lg hover:bg-[var(--color-bg-surface-3)] text-[var(--color-text-secondary)] transition-colors"
                   >
                     <X size={14} />
                   </button>
@@ -123,15 +123,15 @@ export function FloatingPermissionDialog({
                     <div
                       key={req.id}
                       className={cn(
-                        'border-b border-white/[0.04] last:border-b-0',
-                        isLatest ? 'bg-white/[0.02]' : 'bg-transparent'
+                        'border-b border-[var(--color-border-subtle)] last:border-b-0',
+                        isLatest ? 'bg-[var(--color-bg-surface-2)]' : 'bg-transparent'
                       )}
                     >
                       <button
                         type="button"
                         aria-expanded={isExpanded}
                         aria-controls={`permission-details-${req.id}`}
-                        className="flex w-full items-start gap-3 px-4 py-3 text-left cursor-pointer hover:bg-white/[0.02] transition-colors"
+                        className="flex w-full items-start gap-3 px-4 py-3 text-left cursor-pointer hover:bg-[var(--color-bg-surface-2)] transition-colors"
                         onClick={() => setExpanded(isExpanded ? null : req.id)}
                       >
                         <div className={cn('p-2 rounded-xl', config.bg)}>
@@ -150,7 +150,7 @@ export function FloatingPermissionDialog({
                           <p className="text-xs text-[var(--color-text-secondary)] mt-0.5 truncate">{req.description}</p>
                         </div>
                         {isLatest && (
-                          <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-blue-500/10 text-blue-400 font-medium animate-pulse">
+                          <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-[var(--color-accent-subtle)] text-[var(--color-accent)] font-medium animate-pulse">
                             新请求
                           </span>
                         )}
@@ -191,7 +191,7 @@ export function FloatingPermissionDialog({
 
               {/* Quick actions for latest request */}
               {requests.length === 1 && (
-                <div className="flex items-center gap-2 px-4 py-3 border-t border-white/[0.06] bg-white/[0.01]">
+                <div className="flex items-center gap-2 px-4 py-3 border-t border-[var(--color-border-subtle)] bg-white/[0.01]">
                   <Button
                     variant="primary"
                     size="sm"

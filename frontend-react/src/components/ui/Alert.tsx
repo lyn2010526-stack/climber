@@ -68,7 +68,7 @@ const Alert = forwardRef<HTMLDivElement, AlertProps>(
           <button
             type="button"
             onClick={handleDismiss}
-            className="shrink-0 p-1 rounded-md opacity-60 hover:opacity-100 hover:bg-white/[0.06] transition-all"
+            className="shrink-0 p-1 rounded-md opacity-60 hover:opacity-100 hover:bg-[var(--color-bg-surface-3)] transition-all"
           >
             <X className="h-3.5 w-3.5" />
           </button>

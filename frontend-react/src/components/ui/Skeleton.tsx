@@ -30,7 +30,7 @@ const Skeleton = forwardRef<HTMLDivElement, SkeletonProps>(
             <div
               key={i}
               className={cn(
-                'bg-white/[0.06]',
+                'bg-[var(--color-bg-surface-3)]',
                 variantStyles[variant],
                 animated && 'animate-pulse',
               )}
@@ -48,7 +48,7 @@ const Skeleton = forwardRef<HTMLDivElement, SkeletonProps>(
       <div
         ref={ref}
         className={cn(
-          'bg-white/[0.06]',
+          'bg-[var(--color-bg-surface-3)]',
           variantStyles[variant],
           animated && 'animate-pulse',
           className,

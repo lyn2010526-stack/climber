@@ -32,12 +32,12 @@ const variantStyles: Record<string, React.CSSProperties> = {
   },
   destructive: {
     backgroundColor: 'var(--color-error-subtle)',
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: 'var(--color-error)',
     color: 'var(--color-error)',
   },
   success: {
     backgroundColor: 'var(--color-success-subtle)',
-    borderColor: 'rgba(34, 197, 94, 0.3)',
+    borderColor: 'var(--color-success)',
     color: 'var(--color-success)',
   },
 };

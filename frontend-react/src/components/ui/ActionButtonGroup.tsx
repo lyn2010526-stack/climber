@@ -19,7 +19,7 @@ export function ActionButtonGroup({ buttons, className }: ActionButtonGroupProps
         const variantClass = btn.variant === 'danger'
           ? 'text-[var(--color-error)] hover:bg-[var(--color-error)]/10'
           : btn.variant === 'secondary'
-            ? 'border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:bg-white/[0.03]'
+            ? 'border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)]'
             : 'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] shadow-lg shadow-[var(--color-accent)]/20';
         return (
           <button

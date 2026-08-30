@@ -121,13 +121,13 @@ export function MCPPage() {
               placeholder="搜索 MCP 服务器..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-white/[0.03] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
+              className="w-full pl-10 pr-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
             />
           </div>
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-4 py-2.5 bg-white/[0.03] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
+            className="px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
           >
             <option value="">全部分类</option>
             {categories.map(c => (
@@ -162,16 +162,16 @@ export function MCPPage() {
           <div className="space-y-6">
             {[1, 2].map(i => (
               <div key={i} className="animate-pulse">
-                <div className="h-4 w-20 bg-white/5 rounded-xl mb-3" />
+                <div className="h-4 w-20 bg-[var(--color-bg-surface-2)] rounded-xl mb-3" />
                 <div className="grid grid-cols-2 gap-4">
                   {[1, 2].map(j => (
-                    <div key={j} className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-5">
+                    <div key={j} className="bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)] rounded-2xl p-5">
                       <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-white/5" />
+                        <div className="w-10 h-10 rounded-2xl bg-[var(--color-bg-surface-2)]" />
                         <div className="flex-1 space-y-2">
-                          <div className="h-4 w-24 bg-white/5 rounded-xl" />
-                          <div className="h-3 w-full bg-white/5 rounded-xl" />
-                          <div className="h-3 w-3/4 bg-white/5 rounded-xl" />
+                          <div className="h-4 w-24 bg-[var(--color-bg-surface-2)] rounded-xl" />
+                          <div className="h-3 w-full bg-[var(--color-bg-surface-2)] rounded-xl" />
+                          <div className="h-3 w-3/4 bg-[var(--color-bg-surface-2)] rounded-xl" />
                         </div>
                       </div>
                     </div>
@@ -224,7 +224,7 @@ export function MCPPage() {
                   {/* Tags */}
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {server.tags.map(tag => (
-                      <span key={tag} className="px-2.5 py-1 bg-white/[0.03] text-[var(--color-text-muted)] rounded-xl text-xs font-medium border border-[var(--color-border-subtle)]">
+                      <span key={tag} className="px-2.5 py-1 bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] rounded-xl text-xs font-medium border border-[var(--color-border-subtle)]">
                         {tag}
                       </span>
                     ))}
@@ -261,7 +261,7 @@ export function MCPPage() {
 
         {!loading && !error && filteredServers.length === 0 && (
           <div className="text-center py-16">
-            <div className="w-16 h-16 rounded-3xl bg-white/5 border border-[var(--color-border-subtle)] flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 rounded-3xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] flex items-center justify-center mx-auto mb-4">
               <Server size={28} className="text-[var(--color-text-muted)]" />
             </div>
             <p className="text-[var(--color-text-muted)] text-sm">未找到 MCP 服务器。</p>

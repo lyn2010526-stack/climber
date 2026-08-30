@@ -118,9 +118,9 @@ interface ToolCallCardProps {
 }
 
 const statusConfig = {
-  running: { color: '#5E6AD2', bg: 'rgba(94,106,210,0.12)', label: '执行中', pulse: true },
-  success: { color: '#10B981', bg: 'rgba(16,185,129,0.12)', label: '成功', pulse: false },
-  error: { color: '#EF4444', bg: 'rgba(239,68,68,0.12)', label: '失败', pulse: false },
+  running: { color: 'var(--color-accent)', bg: 'var(--color-accent-subtle)', label: '执行中', pulse: true },
+  success: { color: 'var(--color-success)', bg: 'var(--color-success-subtle)', label: '成功', pulse: false },
+  error: { color: 'var(--color-error)', bg: 'var(--color-error-subtle)', label: '失败', pulse: false },
 };
 
 export const ToolCallCard: React.FC<ToolCallCardProps> = ({ name, arguments: args, result, error, isRunning, status: explicitStatus }) => {
@@ -161,14 +161,14 @@ export const ToolCallCard: React.FC<ToolCallCardProps> = ({ name, arguments: arg
           )}
           {status === 'success' && (
             <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{
-              backgroundColor: 'rgba(16,185,129,0.12)',
-              color: '#10B981',
+              backgroundColor: 'var(--color-success-subtle)',
+              color: 'var(--color-success)',
             }}>成功</span>
           )}
           {status === 'error' && (
             <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{
-              backgroundColor: 'rgba(239,68,68,0.12)',
-              color: '#EF4444',
+              backgroundColor: 'var(--color-error-subtle)',
+              color: 'var(--color-error)',
             }}>{config.label}</span>
           )}
           <div className="p-1 rounded-lg transition-all duration-200" style={{
@@ -192,8 +192,8 @@ export const ToolCallCard: React.FC<ToolCallCardProps> = ({ name, arguments: arg
             )}
             {error && (
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: '#EF4444' }}>Error</div>
-                <pre className="code-block text-xs" style={{ color: '#EF4444' }}>{error}</pre>
+                <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-error)' }}>Error</div>
+                <pre className="code-block text-xs" style={{ color: 'var(--color-error)' }}>{error}</pre>
               </div>
             )}
           </div>

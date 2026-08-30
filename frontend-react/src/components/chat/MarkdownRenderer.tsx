@@ -2,7 +2,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '../../lib/utils';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, ChevronRight } from 'lucide-react';
 
 interface MarkdownRendererProps {
   content: string;
@@ -111,7 +111,7 @@ function CodeBlock({ children, className: codeClassName }: { children?: React.Re
       </div>
       <pre className="code-block text-xs p-4 pt-10 rounded-xl overflow-x-auto" style={{
         border: '1px solid var(--color-border-subtle)',
-        boxShadow: '0 0 0 1px rgba(94,106,210,0.05)',
+        boxShadow: '0 0 0 1px var(--color-accent-subtle)',
       }}>
         <code className={cn('text-xs', codeClassName)}>
           {showLineNumbers ? (
@@ -137,9 +137,9 @@ function CodeBlock({ children, className: codeClassName }: { children?: React.Re
 function InlineCode({ children }: { children?: React.ReactNode }) {
   return (
     <code className="code-block text-xs px-1.5 py-0.5 rounded-md" style={{
-      color: '#f87171',
-      backgroundColor: 'rgba(248,113,113,0.08)',
-      border: '1px solid rgba(248,113,113,0.15)',
+      color: 'var(--color-error)',
+      backgroundColor: 'var(--color-error-subtle)',
+      border: '1px solid var(--color-border-subtle)',
     }}>{children}</code>
   );
 }
@@ -147,14 +147,14 @@ function InlineCode({ children }: { children?: React.ReactNode }) {
 /* Reference: Dify `markdown-blocks/thinking-details.tsx` + Vercel */
 function ThinkDetails({ children, open: defaultOpen }: { children?: React.ReactNode; open?: boolean | undefined }) {
   return (
-    <details open={defaultOpen} className="group my-3 rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden message-enter" style={{
-      boxShadow: '0 0 0 1px rgba(94,106,210,0.05)',
+    <details open={defaultOpen} className="group my-3 rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-surface-2)] overflow-hidden message-enter" style={{
+      boxShadow: '0 0 0 1px var(--color-accent-subtle)',
     }}>
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-medium text-[#5E6AD2] select-none hover:bg-white/[0.03] transition-colors">
-        <span className="transition-transform duration-300 group-open:rotate-90 text-[10px]">▶</span>
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-medium text-[var(--color-accent)] select-none hover:bg-[var(--color-bg-surface-3)] transition-colors">
+        <ChevronRight size={12} className="transition-transform duration-300 group-open:rotate-90" />
         <span>Thinking</span>
       </summary>
-      <div className="border-t border-white/[0.06] px-4 py-3">
+      <div className="border-t border-[var(--color-border-subtle)] px-4 py-3">
         <div className="text-sm text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap font-mono text-xs">
           {children}
         </div>
@@ -167,7 +167,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
   const processedContent = preprocessContent(content);
 
   return (
-    <div className={cn('markdown-body prose prose-invert max-w-none text-sm leading-relaxed stagger-children', className)}>
+    <div className={cn('markdown-body prose max-w-none text-sm leading-relaxed stagger-children', className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         urlTransform={customUrlTransform}
@@ -200,17 +200,15 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
           },
           a({ href, children }) {
             return (
-              <a href={href} className="text-[#5E6AD2] hover:underline underline-offset-4 decoration-[#5E6AD2]/30 hover:decoration-[#5E6AD2] transition-all duration-200" target="_blank" rel="noopener noreferrer">
+              <a href={href} className="text-[var(--color-accent)] hover:underline underline-offset-4 decoration-[var(--color-accent-subtle)] hover:decoration-[var(--color-accent)] transition-all duration-200" target="_blank" rel="noopener noreferrer">
                 {children}
               </a>
             );
           },
           table({ children }) {
             return (
-              <div className="overflow-x-auto my-4 rounded-xl border border-white/[0.08]" style={{
-                boxShadow: '0 0 0 1px rgba(255,255,255,0.03)',
-              }}>
-                <table className="min-w-full divide-y divide-white/[0.06] text-xs">
+              <div className="overflow-x-auto my-4 rounded-xl border border-[var(--color-border-default)]">
+                <table className="min-w-full divide-y divide-[var(--color-border-subtle)] text-xs">
                   {children}
                 </table>
               </div>
@@ -218,7 +216,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
           },
           th({ children }) {
             return (
-              <th className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-text-secondary)] bg-white/[0.04] uppercase tracking-wider" style={{
+              <th className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-2)] uppercase tracking-wider" style={{
                 borderBottom: '1px solid var(--color-border-subtle)',
               }}>
                 {children}
@@ -227,44 +225,44 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
           },
           td({ children }) {
             return (
-              <td className="px-4 py-2.5 text-xs text-[var(--color-text-secondary)] border-t border-white/[0.04]">
+              <td className="px-4 py-2.5 text-xs text-[var(--color-text-secondary)] border-t border-[var(--color-border-subtle)]">
                 {children}
               </td>
             );
           },
           blockquote({ children }) {
             return (
-              <blockquote className="border-l-2 border-[#5E6AD2]/40 pl-4 py-2 my-4 bg-[#5E6AD2]/[0.03] rounded-r-xl text-[var(--color-text-secondary)] italic">
+              <blockquote className="border-l-2 border-[var(--color-border-accent)] pl-4 py-2 my-4 bg-[var(--color-accent-subtle)] rounded-r-xl text-[var(--color-text-secondary)] italic">
                 {children}
               </blockquote>
             );
           },
           ul({ children }) {
-            return <ul className="list-disc list-inside my-3 space-y-1.5 text-[var(--color-text-secondary)] marker:text-[#5E6AD2]">{children}</ul>;
+            return <ul className="list-disc list-inside my-3 space-y-1.5 text-[var(--color-text-secondary)] marker:text-[var(--color-accent)]">{children}</ul>;
           },
           ol({ children }) {
-            return <ol className="list-decimal list-inside my-3 space-y-1.5 text-[var(--color-text-secondary)] marker:text-[#5E6AD2]">{children}</ol>;
+            return <ol className="list-decimal list-inside my-3 space-y-1.5 text-[var(--color-text-secondary)] marker:text-[var(--color-accent)]">{children}</ol>;
           },
           h1({ children }) {
-            return <h1 className="text-xl font-bold text-white mt-6 mb-3 tracking-tight">{children}</h1>;
+            return <h1 className="text-xl font-bold text-[var(--color-text-primary)] mt-6 mb-3 tracking-tight">{children}</h1>;
           },
           h2({ children }) {
-            return <h2 className="text-lg font-semibold text-white mt-5 mb-2 tracking-tight">{children}</h2>;
+            return <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mt-5 mb-2 tracking-tight">{children}</h2>;
           },
           h3({ children }) {
-            return <h3 className="text-base font-semibold text-white mt-4 mb-2 tracking-tight">{children}</h3>;
+            return <h3 className="text-base font-semibold text-[var(--color-text-primary)] mt-4 mb-2 tracking-tight">{children}</h3>;
           },
           p({ children }) {
             return <p className="my-2.5 text-[var(--color-text-secondary)] leading-relaxed">{children}</p>;
           },
           strong({ children }) {
-            return <strong className="font-semibold text-white">{children}</strong>;
+            return <strong className="font-semibold text-[var(--color-text-primary)]">{children}</strong>;
           },
           em({ children }) {
             return <em className="italic text-[var(--color-text-secondary)]">{children}</em>;
           },
           hr() {
-            return <hr className="border-white/[0.08] my-6" />;
+            return <hr className="border-[var(--color-border-default)] my-6" />;
           },
         }}
       >

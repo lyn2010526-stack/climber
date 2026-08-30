@@ -45,7 +45,7 @@ export function ConfigPanel({ session }: { session: any }) {
         <div className="flex flex-wrap gap-1.5">
           {(session?.activeTools && session.activeTools.length > 0)
             ? session.activeTools.map((tool: string) => (
-              <span key={tool} className="px-2.5 py-1 bg-white/5 text-[var(--color-text-secondary)] rounded-xl text-xs font-medium border border-white/10">
+              <span key={tool} className="px-2.5 py-1 bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)] rounded-xl text-xs font-medium border border-[var(--color-border-default)]">
                 {tool}
               </span>
             ))
@@ -61,9 +61,9 @@ export function ConfigPanel({ session }: { session: any }) {
             <span className="text-[var(--color-text-muted)]">已用</span>
             <span className="text-[var(--color-text-secondary)] font-medium">{session?.tokenUsage?.used || 0} / {session?.tokenUsage?.limit || 128000}</span>
           </div>
-          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-[var(--color-bg-surface-2)] rounded-full overflow-hidden">
             <div
-              className="h-full bg-[#007AFF] rounded-full transition-all"
+              className="h-full bg-[var(--color-accent)] rounded-full transition-all"
               style={{ width: `${Math.min(((session?.tokenUsage?.used || 0) / (session?.tokenUsage?.limit || 128000)) * 100, 100)}%` }}
             />
           </div>

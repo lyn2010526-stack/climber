@@ -78,10 +78,10 @@ function FileChangeRow({ change, onRevert, onPreview }: {
   const dirPath = change.path.split('/').slice(0, -1).join('/');
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+    <div className="rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] overflow-hidden">
       {/* File header */}
       <button
-        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.02] transition-colors"
+        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--color-bg-surface-2)] transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className={cn('p-1.5 rounded-lg', config.bg)}>
@@ -125,13 +125,13 @@ function FileChangeRow({ change, onRevert, onPreview }: {
 
       {/* Expanded content */}
       {isExpanded && (
-        <div className="border-t border-white/[0.04] animate-[fadeIn_0.15s_ease_forwards]">
+        <div className="border-t border-[var(--color-border-subtle)] animate-[fadeIn_0.15s_ease_forwards]">
           {/* View toggle */}
           <div className="flex items-center gap-1 px-3 py-2 bg-white/[0.01]">
             <button
               className={cn(
                  'px-2 py-1 rounded-md text-[10px] font-medium transition-colors',
-                 !showPreview ? 'bg-white/[0.08] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
+                 !showPreview ? 'bg-[var(--color-bg-surface-3)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
               )}
               onClick={() => setShowPreview(false)}
             >
@@ -140,7 +140,7 @@ function FileChangeRow({ change, onRevert, onPreview }: {
             <button
               className={cn(
                 'px-2 py-1 rounded-md text-[10px] font-medium transition-colors',
-                 showPreview ? 'bg-white/[0.08] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
+                 showPreview ? 'bg-[var(--color-bg-surface-3)] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
               )}
               onClick={() => setShowPreview(true)}
             >
@@ -171,7 +171,7 @@ function FileChangeRow({ change, onRevert, onPreview }: {
 
           {/* Actions */}
           {(onRevert || onPreview) && (
-            <div className="flex items-center gap-2 px-3 py-2 border-t border-white/[0.04] bg-white/[0.01]">
+            <div className="flex items-center gap-2 px-3 py-2 border-t border-[var(--color-border-subtle)] bg-white/[0.01]">
               {onRevert && change.type !== 'created' && (
                 <Button
                   variant="ghost"

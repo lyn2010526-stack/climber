@@ -24,7 +24,7 @@ export function FilesPanel() {
          <p className="text-xs text-[var(--color-text-muted)]">加载文档中...</p>
         <div className="space-y-1">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-6 bg-white/5 rounded-xl animate-pulse" />
+            <div key={i} className="h-6 bg-[var(--color-bg-surface-2)] rounded-xl animate-pulse" />
           ))}
         </div>
       </div>
@@ -47,9 +47,9 @@ export function FilesPanel() {
   return (
     <div className="space-y-2">
        <p className="text-xs text-[var(--color-text-muted)]">已上传文档 ({documents.length})</p>
-      <div className="bg-white/5 rounded-2xl p-1.5 space-y-0.5 border border-white/10">
+      <div className="bg-[var(--color-bg-surface-2)] rounded-2xl p-1.5 space-y-0.5 border border-[var(--color-border-default)]">
         {documents.map(doc => (
-          <div key={doc.id} className="flex items-center gap-2 py-1.5 px-2 rounded-xl hover:bg-white/5 text-xs text-[var(--color-text-secondary)] transition-colors">
+          <div key={doc.id} className="flex items-center gap-2 py-1.5 px-2 rounded-xl hover:bg-[var(--color-bg-surface-2)] text-xs text-[var(--color-text-secondary)] transition-colors">
             <FolderTree size={12} className="text-[var(--color-text-muted)]" />
             <span className="truncate flex-1">{doc.filename || doc.name}</span>
              {doc.chunks && <span className="text-[10px] text-[var(--color-text-muted)]">{doc.chunks} 段</span>}

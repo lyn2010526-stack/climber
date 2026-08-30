@@ -36,7 +36,7 @@ export function ToggleSwitch({
   return (
     <div
       className={cn(
-        'flex flex-col gap-3 p-5 rounded-2xl border border-white/10 bg-white/[0.02] transition-all duration-200',
+        'flex flex-col gap-3 p-5 rounded-2xl border border-[var(--color-border-default)] bg-[var(--color-bg-surface-2)] transition-all duration-200',
         statusColors[status],
         className
       )}
@@ -44,7 +44,7 @@ export function ToggleSwitch({
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-white">{label}</h3>
+            <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{label}</h3>
             {statusBadge[status]}
           </div>
           <p className="mt-1 text-xs text-[var(--color-text-secondary)] leading-relaxed">
@@ -58,7 +58,7 @@ export function ToggleSwitch({
           disabled={disabled}
           className={cn(
             'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200',
-            checked ? 'bg-[#007AFF]' : 'bg-white/10',
+            checked ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-bg-surface-2)]',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
         >

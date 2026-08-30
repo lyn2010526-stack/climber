@@ -29,7 +29,7 @@ export function DiffPanelTab({ sessionId }: { sessionId: string | null }) {
         <p className="text-xs text-[var(--color-text-muted)]">加载变更中...</p>
         <div className="space-y-1.5">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-6 bg-white/5 rounded-xl animate-pulse" />
+            <div key={i} className="h-6 bg-[var(--color-bg-surface-2)] rounded-xl animate-pulse" />
           ))}
         </div>
       </div>

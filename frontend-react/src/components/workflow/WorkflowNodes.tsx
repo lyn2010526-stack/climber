@@ -21,9 +21,9 @@ const nodeStyles: Record<
 > = {
   input: {
     icon: FileInput,
-    color: 'text-blue-400',
+    color: 'text-[var(--color-accent)]',
     bg: 'bg-blue-600/10',
-    borderHover: 'hover:border-blue-500/40',
+    borderHover: 'hover:border-[var(--color-border-accent)]',
     borderSelected: 'border-blue-500',
   },
   llm: {
@@ -49,9 +49,9 @@ const nodeStyles: Record<
   },
   output: {
     icon: FileOutput,
-    color: 'text-blue-400',
+    color: 'text-[var(--color-accent)]',
     bg: 'bg-blue-500/10',
-    borderHover: 'hover:border-blue-500/40',
+    borderHover: 'hover:border-[var(--color-border-accent)]',
     borderSelected: 'border-blue-500',
   },
 };
@@ -91,7 +91,7 @@ export function InputNode({ data, selected }: NodeProps) {
       className={cn(
         'px-4 py-3 rounded-xl border min-w-[160px] transition-all duration-200',
         style.bg,
-        selected ? style.borderSelected : 'border-white/10',
+        selected ? style.borderSelected : 'border-[var(--color-border-default)]',
         style.borderHover
       )}
     >
@@ -112,7 +112,7 @@ export function LLMNode({ data, selected }: NodeProps) {
       className={cn(
         'px-4 py-3 rounded-xl border min-w-[180px] transition-all duration-200',
         style.bg,
-        selected ? style.borderSelected : 'border-white/10',
+        selected ? style.borderSelected : 'border-[var(--color-border-default)]',
         style.borderHover
       )}
     >
@@ -140,7 +140,7 @@ export function ToolNode({ data, selected }: NodeProps) {
       className={cn(
         'px-4 py-3 rounded-xl border min-w-[170px] transition-all duration-200',
         style.bg,
-        selected ? style.borderSelected : 'border-white/10',
+        selected ? style.borderSelected : 'border-[var(--color-border-default)]',
         style.borderHover
       )}
     >
@@ -162,7 +162,7 @@ export function ConditionNode({ data, selected }: NodeProps) {
       className={cn(
         'px-4 py-3 rounded-xl border min-w-[170px] transition-all duration-200',
         style.bg,
-        selected ? style.borderSelected : 'border-white/10',
+        selected ? style.borderSelected : 'border-[var(--color-border-default)]',
         style.borderHover
       )}
     >
@@ -188,7 +188,7 @@ export function OutputNode({ data, selected }: NodeProps) {
       className={cn(
         'px-4 py-3 rounded-xl border min-w-[160px] transition-all duration-200',
         style.bg,
-        selected ? style.borderSelected : 'border-white/10',
+        selected ? style.borderSelected : 'border-[var(--color-border-default)]',
         style.borderHover
       )}
     >

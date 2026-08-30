@@ -76,10 +76,10 @@ export function ThinkingIndicator({
     return (
       <div className={cn('flex items-center gap-2', className)}>
         <div className="relative">
-          <Brain size={14} className="text-blue-400" />
+          <Brain size={14} className="text-[var(--color-accent)]" />
           <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" />
         </div>
-        <span className="text-xs text-blue-400/80">
+        <span className="text-xs text-[var(--color-accent)]/80">
           {displayText}{dots}
         </span>
       </div>
@@ -97,7 +97,7 @@ export function ThinkingIndicator({
       {/* Animated icon */}
       <div className="relative shrink-0">
         <div className="p-2 rounded-xl bg-blue-500/10">
-          <Brain size={16} className="text-blue-400" />
+          <Brain size={16} className="text-[var(--color-accent)]" />
         </div>
         {sparkle && (
           <Sparkles
@@ -115,7 +115,7 @@ export function ThinkingIndicator({
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs font-semibold text-blue-400">思考中</span>
+          <span className="text-xs font-semibold text-[var(--color-accent)]">思考中</span>
           <div className="flex gap-1">
             <span
               className="w-1 h-1 rounded-full bg-blue-400 animate-bounce"
@@ -136,7 +136,7 @@ export function ThinkingIndicator({
         </p>
 
         {/* Subtle progress bar */}
-        <div className="mt-3 h-0.5 bg-white/[0.06] rounded-full overflow-hidden">
+        <div className="mt-3 h-0.5 bg-[var(--color-bg-surface-3)] rounded-full overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-blue-500 to-violet-500 rounded-full animate-[progress_2s_ease-in-out_infinite]"
             style={{ width: '60%' }}
@@ -172,7 +172,7 @@ export function ThinkingDots({ text }: { text?: string }) {
 
   return (
     <span className="inline-flex items-center gap-1 text-sm text-[var(--color-text-secondary)]">
-      <Brain size={13} className="text-blue-400/70" />
+      <Brain size={13} className="text-[var(--color-accent)]/70" />
       {text || '思考中'}{dots}
     </span>
   );

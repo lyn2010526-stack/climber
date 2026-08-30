@@ -38,23 +38,23 @@ export function StatsPage() {
             {[1, 2, 3, 4].map(i => (
               <Card key={i} className="rounded-2xl p-5 animate-pulse" padding="none">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="w-10 h-10 rounded-2xl bg-white/[0.03]" />
-                  <div className="h-3 w-10 bg-white/[0.03] rounded-xl" />
+                  <div className="w-10 h-10 rounded-2xl bg-[var(--color-bg-surface-2)]" />
+                  <div className="h-3 w-10 bg-[var(--color-bg-surface-2)] rounded-xl" />
                 </div>
-                <div className="h-8 w-16 bg-white/[0.03] rounded-xl" />
-                <div className="h-3 w-20 bg-white/[0.03] rounded-xl mt-1" />
+                <div className="h-8 w-16 bg-[var(--color-bg-surface-2)] rounded-xl" />
+                <div className="h-3 w-20 bg-[var(--color-bg-surface-2)] rounded-xl mt-1" />
               </Card>
             ))}
           </div>
           <Card className="rounded-2xl p-6 animate-pulse" padding="none">
-            <div className="h-4 w-28 bg-white/[0.03] rounded-xl mb-4" />
+            <div className="h-4 w-28 bg-[var(--color-bg-surface-2)] rounded-xl mb-4" />
             <div className="space-y-3">
               {[1, 2, 3, 4, 5].map(i => (
                 <div key={i} className="flex items-center gap-3 py-2">
-                  <div className="w-8 h-8 rounded-xl bg-white/[0.03]" />
+                  <div className="w-8 h-8 rounded-xl bg-[var(--color-bg-surface-2)]" />
                   <div className="flex-1 space-y-1.5">
-                    <div className="h-3 w-32 bg-white/[0.03] rounded-xl" />
-                    <div className="h-2 w-20 bg-white/[0.03] rounded-xl" />
+                    <div className="h-3 w-32 bg-[var(--color-bg-surface-2)] rounded-xl" />
+                    <div className="h-2 w-20 bg-[var(--color-bg-surface-2)] rounded-xl" />
                   </div>
                 </div>
               ))}
@@ -128,7 +128,7 @@ export function StatsPage() {
             </CardTitle>
           </CardHeader>
           <div className="text-center py-8">
-            <div className="w-12 h-12 rounded-2xl bg-white/[0.03] border border-[var(--color-border-subtle)] flex items-center justify-center mx-auto mb-3">
+            <div className="w-12 h-12 rounded-2xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] flex items-center justify-center mx-auto mb-3">
               <Clock size={24} className="text-[var(--color-text-muted)]" />
             </div>
              <p className="text-sm text-[var(--color-text-muted)]">暂无最近活动</p>

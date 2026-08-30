@@ -110,8 +110,8 @@ export function MobileSessionDrawer({ open, onOpenChange }: MobileSessionDrawerP
                     onClick={() => handleSelect(s.id)}
                     className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl transition-all duration-200 active:scale-[0.98] text-left ${
                       isActive
-                        ? 'bg-white/[0.06] border border-white/[0.08]'
-                        : 'bg-white/[0.02] border border-transparent hover:bg-white/[0.04]'
+                        ? 'bg-[var(--color-bg-surface-3)] border border-[var(--color-border-default)]'
+                        : 'bg-[var(--color-bg-surface-2)] border border-transparent hover:bg-[var(--color-bg-surface-2)]'
                     }`}
                   >
                     <MessageSquare

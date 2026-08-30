@@ -5,12 +5,12 @@ export function Section({ title, icon: Icon, children }: { title: string; icon: 
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl overflow-hidden backdrop-blur-sm">
+    <div className="bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)] rounded-2xl overflow-hidden backdrop-blur-sm">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
       >
-        <div className="p-1 rounded-lg bg-blue-500/10 text-blue-400">
+        <div className="p-1 rounded-lg bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
           <Icon size={11} />
         </div>
         <span className="flex-1 text-left">{title}</span>

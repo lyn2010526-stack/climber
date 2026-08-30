@@ -162,7 +162,7 @@ export function MobileTasksPage() {
           <button
             onClick={createTask}
             disabled={loading || !newTask.trim()}
-            className="shrink-0 min-w-[44px] px-3 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-white/[0.03] disabled:text-[var(--color-text-muted)] text-white rounded-2xl transition-all duration-200 active:scale-[0.97]"
+            className="shrink-0 min-w-[44px] px-3 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-surface-2)] disabled:text-[var(--color-text-muted)] text-white rounded-2xl transition-all duration-200 active:scale-[0.97]"
           >
             {loading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
           </button>
@@ -182,7 +182,7 @@ export function MobileTasksPage() {
             >
               <button
                 onClick={() => setExpandedId(expandedId === task.id ? null : task.id)}
-                className="w-full text-left px-4 py-3.5 transition-all duration-200 active:bg-white/[0.03]"
+                className="w-full text-left px-4 py-3.5 transition-all duration-200 active:bg-[var(--color-bg-surface-2)]"
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs font-semibold text-[var(--color-text-primary)] truncate">
@@ -193,7 +193,7 @@ export function MobileTasksPage() {
                   </span>
                 </div>
                 {task.status === 'running' && (
-                  <div className="mt-2 w-full h-1 bg-white/[0.06] rounded-full overflow-hidden">
+                  <div className="mt-2 w-full h-1 bg-[var(--color-bg-surface-3)] rounded-full overflow-hidden">
                     <div
                       className="h-full bg-[var(--color-accent)] rounded-full transition-all"
                       style={{ width: `${task.max_rounds && task.current_round != null ? Math.min(100, (task.current_round / task.max_rounds) * 100) : 20}%` }}
@@ -224,7 +224,7 @@ export function MobileTasksPage() {
                     return (
                       <div key={step.id} className="bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl overflow-hidden">
                         <div className="flex items-center gap-3 px-3 py-2.5">
-                          <div className="p-1.5 rounded-lg bg-white/[0.03] border border-[var(--color-border-subtle)] text-[var(--color-text-muted)]">
+                          <div className="p-1.5 rounded-lg bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] text-[var(--color-text-muted)]">
                             <Icon size={13} />
                           </div>
                           <div className="flex-1 min-w-0">

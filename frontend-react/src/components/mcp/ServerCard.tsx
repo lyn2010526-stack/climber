@@ -51,7 +51,7 @@ export function ServerCard({ server, onStart, onStop, onRestart }: ServerCardPro
         ? 'border-green-500/20 bg-green-500/[0.02]'
         : server.status === 'error'
           ? 'border-red-500/20 bg-red-500/[0.02]'
-          : 'border-white/[0.06] bg-white/[0.02]'
+          : 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)]'
     )}>
       <div className="p-4">
         {/* Header row */}
@@ -67,8 +67,8 @@ export function ServerCard({ server, onStart, onStop, onRestart }: ServerCardPro
           {/* Server info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <h4 className="text-sm font-semibold text-white truncate">{server.name}</h4>
-              <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-white/[0.04] text-[var(--color-text-muted)] font-medium">
+              <h4 className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{server.name}</h4>
+              <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] font-medium">
                 {transportLabels[server.transport]}
               </span>
             </div>
@@ -90,14 +90,14 @@ export function ServerCard({ server, onStart, onStop, onRestart }: ServerCardPro
               <>
                 <button
                   onClick={() => onRestart(server.id)}
-                  className="p-2 rounded-lg bg-white/[0.04] text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.08] transition-all"
+                  className="p-2 rounded-lg bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-white hover:bg-[var(--color-bg-surface-3)] transition-all"
                   title="重启"
                 >
                   <RotateCcw size={13} />
                 </button>
                 <button
                   onClick={() => onStop(server.id)}
-                  className="p-2 rounded-lg bg-white/[0.04] text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  className="p-2 rounded-lg bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-all"
                   title="停止"
                 >
                   <Square size={13} />
@@ -114,7 +114,7 @@ export function ServerCard({ server, onStart, onStop, onRestart }: ServerCardPro
             )}
             <button
               onClick={() => setExpanded(!expanded)}
-              className="p-2 rounded-lg bg-white/[0.04] text-[var(--color-text-muted)] hover:text-white hover:bg-white/[0.08] transition-all"
+              className="p-2 rounded-lg bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-white hover:bg-[var(--color-bg-surface-3)] transition-all"
             >
               <ChevronDown size={13} className={cn('transition-transform', expanded && 'rotate-180')} />
             </button>
@@ -131,12 +131,12 @@ export function ServerCard({ server, onStart, onStop, onRestart }: ServerCardPro
 
       {/* Expanded tool list */}
       {expanded && server.tools && server.tools.length > 0 && (
-        <div className="px-4 pb-4 pt-1 border-t border-white/[0.04]">
+        <div className="px-4 pb-4 pt-1 border-t border-[var(--color-border-subtle)]">
           <div className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">可用工具</div>
           <div className="space-y-1.5">
             {server.tools.map(tool => (
-              <div key={tool.name} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
-                <Zap size={11} className="text-blue-400 flex-shrink-0" />
+              <div key={tool.name} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[var(--color-bg-surface-2)] hover:bg-[var(--color-bg-surface-2)] transition-colors">
+                <Zap size={11} className="text-[var(--color-accent)] flex-shrink-0" />
                 <span className="text-[11px] text-[var(--color-text-secondary)] font-mono flex-1 truncate">{tool.name}</span>
               </div>
             ))}
