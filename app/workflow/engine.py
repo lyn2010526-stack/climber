@@ -21,6 +21,7 @@ from typing import Any
 import structlog
 
 from app.core.agent_engine import AgentEngine
+from app.core.workflow_recovery import ErrorType, classify_error
 from app.models.registry import ModelRegistry
 from app.workflow import (
     NodeStatus,
@@ -186,46 +187,116 @@ class WorkflowEngine:
         user_id: str,
         skipped_nodes: set[str],
     ) -> None:
-        """Execute a single workflow node with conditional branching."""
+        """Execute a single workflow node with retry and failure strategies."""
         node.status = NodeStatus.RUNNING
 
-        try:
-            # Resolve inputs from predecessor outputs
-            resolved_inputs = self._resolve_inputs(node, workflow)
+        retry_cfg = node.config.get("retry") or {}
+        max_retries = int(retry_cfg.get("max_retries", 0))
+        base_delay = float(retry_cfg.get("base_delay", 1.0))
+        max_delay = float(retry_cfg.get("max_delay", 60.0))
 
-            if node.type == NodeType.LLM:
-                output = await self._execute_llm_node(node, resolved_inputs, user_id)
-            elif node.type == NodeType.TOOL:
-                output = await self._execute_tool_node(
-                    node,
-                    resolved_inputs,
-                    workflow_id=workflow.id,
-                    user_id=user_id,
-                )
-            elif node.type == NodeType.CONDITION:
-                output, skip_targets = self._execute_condition_node(
-                    node, resolved_inputs, workflow,
-                )
-                # Mark downstream nodes for skipping
-                for target_id in skip_targets:
-                    self._skip_downstream(target_id, node.id, workflow, skipped_nodes)
-            elif node.type == NodeType.ITERATOR:
-                output = await self._execute_iterator_node(
-                    node, resolved_inputs, user_id, skipped_nodes,
-                )
-            elif node.type == NodeType.CODE:
-                output = self._execute_code_node(node, resolved_inputs)
-            elif node.type == NodeType.END:
-                output = resolved_inputs
-            else:
-                output = resolved_inputs
+        attempt = 0
+        while True:
+            try:
+                output = await self._dispatch_node(node, workflow, user_inputs, user_id, skipped_nodes)
+                node.output = output
+                node.status = NodeStatus.COMPLETED
+                if attempt:
+                    node.error = ""
+                return
+            except Exception as e:
+                node.error = str(e)
+                error_type = classify_error(e)
+                if error_type != ErrorType.PERMANENT and attempt < max_retries:
+                    delay = min(base_delay * (2 ** attempt), max_delay)
+                    logger.warning(
+                        "Node failed, retrying",
+                        node=node.name,
+                        attempt=attempt + 1,
+                        max_retries=max_retries,
+                        error=str(e),
+                        delay=delay,
+                    )
+                    if delay > 0:
+                        await asyncio.sleep(delay)
+                    attempt += 1
+                    continue
+                break
 
-            node.output = output
+        if self._handle_node_failure(node, workflow, skipped_nodes):
+            return
+
+        node.status = NodeStatus.FAILED
+        logger.error("Node execution failed", node=node.name, error=node.error)
+
+    async def _dispatch_node(
+        self,
+        node: WorkflowNode,
+        workflow: Workflow,
+        user_inputs: dict[str, str],
+        user_id: str,
+        skipped_nodes: set[str],
+    ) -> Any:
+        """Run one node attempt: resolve inputs and execute by type."""
+        resolved_inputs = self._resolve_inputs(node, workflow)
+
+        if node.type == NodeType.LLM:
+            return await self._execute_llm_node(node, resolved_inputs, user_id)
+        if node.type == NodeType.TOOL:
+            return await self._execute_tool_node(
+                node,
+                resolved_inputs,
+                workflow_id=workflow.id,
+                user_id=user_id,
+            )
+        if node.type == NodeType.CONDITION:
+            output, skip_targets = self._execute_condition_node(
+                node, resolved_inputs, workflow,
+            )
+            # Mark downstream nodes for skipping
+            for target_id in skip_targets:
+                self._skip_downstream(target_id, node.id, workflow, skipped_nodes)
+            return output
+        if node.type == NodeType.ITERATOR:
+            return await self._execute_iterator_node(
+                node, resolved_inputs, user_id, skipped_nodes,
+            )
+        if node.type == NodeType.CODE:
+            return self._execute_code_node(node, resolved_inputs)
+        return resolved_inputs
+
+    def _handle_node_failure(
+        self,
+        node: WorkflowNode,
+        workflow: Workflow,
+        skipped_nodes: set[str],
+    ) -> bool:
+        """Apply the node's on_failure strategy.
+
+        Returns True when the failure was handled (workflow may continue):
+        - default_value: degrade to a configured fallback output
+        - fail_branch: route to edges marked condition="fail", skip the rest
+        """
+        strategy = node.config.get("on_failure", "fail")
+
+        if strategy == "default_value":
+            node.output = node.config.get("default_value")
             node.status = NodeStatus.COMPLETED
-        except Exception as e:
-            node.status = NodeStatus.FAILED
-            node.error = str(e)
-            logger.error("Node execution failed", node=node.name, error=str(e))
+            logger.warning("Node degraded to default value", node=node.name, error=node.error)
+            return True
+
+        if strategy == "fail_branch":
+            successors = workflow.get_successors(node.id)
+            fail_targets = {e.target for e in successors if e.condition == "fail"}
+            if fail_targets:
+                for edge in successors:
+                    if edge.target not in fail_targets:
+                        self._skip_downstream(edge.target, node.id, workflow, skipped_nodes)
+                node.status = NodeStatus.COMPLETED
+                logger.warning("Node routed to fail branch", node=node.name, error=node.error)
+                return True
+
+        return False
 
     def _skip_downstream(
         self,
@@ -241,6 +312,15 @@ class WorkflowEngine:
         """
         # Find all successors of the branch node
         branch_successors = workflow.get_successors(branch_node_id)
+
+        # Skip the branch node itself when no live alternative path leads to it
+        other_preds = [
+            p for p in workflow.get_predecessors(branch_node_id)
+            if p != condition_node_id and p not in skipped_nodes
+        ]
+        if not other_preds:
+            skipped_nodes.add(branch_node_id)
+
         for edge in branch_successors:
             succ_id = edge.target
             if succ_id == condition_node_id:

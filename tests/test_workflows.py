@@ -359,3 +359,213 @@ class TestWorkflowEngine:
 
         with pytest.raises(RuntimeError, match="tool exploded"):
             await wf_engine._execute_tool_node(node, {}, workflow_id="workflow-id", user_id="user-1")
+
+
+class TestWorkflowResilience:
+    """Node-level retry and failure strategies (Dify-style)."""
+
+    def _engine(self):
+        from unittest.mock import MagicMock
+
+        engine = MagicMock(spec=AgentEngine)
+        engine.tool_registry = MagicMock()
+        return WorkflowEngine(engine)
+
+    def _make_workflow(self, tool_node, extra_nodes=None, extra_edges=None):
+        nodes = [
+            WorkflowNode(id="start", type=NodeType.START, name="start"),
+            tool_node,
+            WorkflowNode(id="end", type=NodeType.END, name="end"),
+        ]
+        edges = [
+            WorkflowEdge(source="start", target=tool_node.id),
+            WorkflowEdge(source=tool_node.id, target="end"),
+        ]
+        if extra_nodes:
+            nodes.extend(extra_nodes)
+        if extra_edges:
+            edges.extend(extra_edges)
+        return Workflow(name="resilience", nodes=nodes, edges=edges)
+
+    @pytest.mark.asyncio
+    async def test_retry_recovers_transient_failure(self, monkeypatch):
+        """Transient failure retried per node config; workflow completes."""
+        from app.core.parallel import ParallelToolExecutor, ToolExecutionResult
+
+        attempts = {"n": 0}
+
+        async def flaky(self, tool_calls):
+            attempts["n"] += 1
+            if attempts["n"] < 3:
+                return [ToolExecutionResult(tool_name="flaky", success=False, error="connection timeout")]
+            return [ToolExecutionResult(tool_name="flaky", success=True, result="ok")]
+
+        monkeypatch.setattr(ParallelToolExecutor, "execute_all", flaky)
+
+        tool_node = WorkflowNode(
+            id="t1",
+            type=NodeType.TOOL,
+            name="flaky tool",
+            config={
+                "tool_name": "flaky",
+                "tool_inputs": {},
+                "retry": {"max_retries": 3, "base_delay": 0, "max_delay": 0},
+            },
+        )
+        wf = self._make_workflow(tool_node)
+        result = await self._engine().execute(wf, user_inputs={"q": "x"})
+
+        assert result.status == "completed"
+        assert attempts["n"] == 3
+        assert wf.get_node("t1").status == NodeStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_retry_exhausted_fails_workflow(self, monkeypatch):
+        """Retries exhausted with default strategy -> workflow still fails (backward compat)."""
+        from app.core.parallel import ParallelToolExecutor, ToolExecutionResult
+
+        attempts = {"n": 0}
+
+        async def always_fail(self, tool_calls):
+            attempts["n"] += 1
+            return [ToolExecutionResult(tool_name="bad", success=False, error="503 unavailable")]
+
+        monkeypatch.setattr(ParallelToolExecutor, "execute_all", always_fail)
+
+        tool_node = WorkflowNode(
+            id="t1",
+            type=NodeType.TOOL,
+            name="bad tool",
+            config={
+                "tool_name": "bad",
+                "tool_inputs": {},
+                "retry": {"max_retries": 2, "base_delay": 0, "max_delay": 0},
+            },
+        )
+        wf = self._make_workflow(tool_node)
+        result = await self._engine().execute(wf)
+
+        assert result.status == "failed"
+        assert attempts["n"] == 3  # initial + 2 retries
+
+    @pytest.mark.asyncio
+    async def test_permanent_error_not_retried(self, monkeypatch):
+        """Permanent errors (invalid input) skip retries entirely."""
+        from app.core.parallel import ParallelToolExecutor
+
+        attempts = {"n": 0}
+
+        async def perm_fail(self, tool_calls):
+            attempts["n"] += 1
+            raise ValueError("invalid input schema")
+
+        monkeypatch.setattr(ParallelToolExecutor, "execute_all", perm_fail)
+
+        tool_node = WorkflowNode(
+            id="t1",
+            type=NodeType.TOOL,
+            name="perm tool",
+            config={
+                "tool_name": "bad",
+                "tool_inputs": {},
+                "retry": {"max_retries": 3, "base_delay": 0, "max_delay": 0},
+            },
+        )
+        wf = self._make_workflow(tool_node)
+        result = await self._engine().execute(wf)
+
+        assert result.status == "failed"
+        assert attempts["n"] == 1
+
+    @pytest.mark.asyncio
+    async def test_on_failure_default_value_continues(self, monkeypatch):
+        """on_failure=default_value degrades gracefully and workflow completes."""
+        from app.core.parallel import ParallelToolExecutor, ToolExecutionResult
+
+        async def fail(self, tool_calls):
+            return [ToolExecutionResult(tool_name="bad", success=False, error="boom")]
+
+        monkeypatch.setattr(ParallelToolExecutor, "execute_all", fail)
+
+        tool_node = WorkflowNode(
+            id="t1",
+            type=NodeType.TOOL,
+            name="degradable tool",
+            config={
+                "tool_name": "bad",
+                "tool_inputs": {},
+                "on_failure": "default_value",
+                "default_value": {"result": "fallback"},
+            },
+        )
+        wf = self._make_workflow(tool_node)
+        result = await self._engine().execute(wf)
+
+        assert result.status == "completed"
+        node = wf.get_node("t1")
+        assert node.status == NodeStatus.COMPLETED
+        assert node.output == {"result": "fallback"}
+        assert "boom" in node.error
+
+    @pytest.mark.asyncio
+    async def test_on_failure_fail_branch_routes(self, monkeypatch):
+        """on_failure=fail_branch skips success path, executes fail edge branch."""
+        from app.core.parallel import ParallelToolExecutor, ToolExecutionResult
+
+        async def fail(self, tool_calls):
+            return [ToolExecutionResult(tool_name="bad", success=False, error="boom")]
+
+        monkeypatch.setattr(ParallelToolExecutor, "execute_all", fail)
+
+        tool_node = WorkflowNode(
+            id="t1",
+            type=NodeType.TOOL,
+            name="branchy tool",
+            config={
+                "tool_name": "bad",
+                "tool_inputs": {},
+                "on_failure": "fail_branch",
+            },
+        )
+        success_end = WorkflowNode(id="ok_end", type=NodeType.END, name="ok end")
+        fail_end = WorkflowNode(id="fail_end", type=NodeType.END, name="fail end")
+        wf = Workflow(
+            name="branchy",
+            nodes=[
+                WorkflowNode(id="start", type=NodeType.START, name="start"),
+                tool_node,
+                success_end,
+                fail_end,
+            ],
+            edges=[
+                WorkflowEdge(source="start", target="t1"),
+                WorkflowEdge(source="t1", target="ok_end"),
+                WorkflowEdge(source="t1", target="fail_end", condition="fail"),
+            ],
+        )
+        result = await self._engine().execute(wf)
+
+        assert result.status == "completed"
+        assert wf.get_node("ok_end").status == NodeStatus.PENDING  # never ran
+        assert wf.get_node("fail_end").status == NodeStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_fail_branch_without_fail_edge_fails(self, monkeypatch):
+        """fail_branch declared but no fail edge -> workflow fails."""
+        from app.core.parallel import ParallelToolExecutor, ToolExecutionResult
+
+        async def fail(self, tool_calls):
+            return [ToolExecutionResult(tool_name="bad", success=False, error="boom")]
+
+        monkeypatch.setattr(ParallelToolExecutor, "execute_all", fail)
+
+        tool_node = WorkflowNode(
+            id="t1",
+            type=NodeType.TOOL,
+            name="orphan tool",
+            config={"tool_name": "bad", "tool_inputs": {}, "on_failure": "fail_branch"},
+        )
+        wf = self._make_workflow(tool_node)
+        result = await self._engine().execute(wf)
+
+        assert result.status == "failed"
