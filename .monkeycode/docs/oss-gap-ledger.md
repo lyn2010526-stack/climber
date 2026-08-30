@@ -13,15 +13,15 @@
 | 1 | **工作流韧性与错误处理**：节点级重试、失败策略与恢复 | Dify + Mastra | exists | 已完成 | app/workflow/engine.py:190-230、268-300 已执行 retry 与 failure strategy；提交 460a9dce |
 | 2 | **评估体系升级**：scorer 抽象与 CI 门禁 | Mastra + OpenHands + AutoGPT | exists | 已完成 | app/core/eval_scorers.py 提供 Scorer 协议与 4 类 scorer；app/core/evaluation.py:16-42 执行 gates；提交 fe2b6e4e |
 | 3 | **Guardrails 接入主 agent loop**：输入、输出与可选审计 | openai-agents-python | exists | 已完成 | app/core/agent_engine.py:709、956、1202 已接入 input/output guardrails 与 OutputAuditor；提交 eeae9837 |
-| 4 | **LSP 代码智能感知**：编码 agent 拿不到类型错误/编译诊断，只能靠跑测试间接验证 | opencode | missing | 中 | 全仓无 LSP client/server 管理代码 |
+| 4 | **LSP 代码智能感知**：编码 agent 拿不到类型错误/编译诊断，只能靠跑测试间接验证 | opencode | exists | 已完成 | app/core/language_service.py 管理 stdio JSON-RPC、文档同步和诊断；app/tools/code_intelligence_tools.py 提供统一工具；提交 ecc9d970 |
 | 5 | **Repo 级知识包与确定性触发注入**：keyword/path 触发与会话去重 | OpenHands microagents | exists | 已完成 | app/skills/registry.py:43-47、127-146；app/skills/repo_knowledge.py；提交 b35dbde3 |
 | 6 | **Time-travel 引擎层**：精确恢复、历史查询与 checkpoint fork | LangGraph | exists | 已完成 | pregel/engine.py:334-376 与 graph.py:294-324 暴露 history/fork；提交 c8db612e |
 | 7 | **LLM 驱动的 speaker selection**：动态选择与确定性回退 | AutoGen | exists | 已完成 | app/core/group_collaboration.py:1277、1801-1848；提交 c9eb43c8 |
-| 8 | **SOP 结构化文档工件流**：无 PRD/设计稿 Artifact 类型系统与阶段门控接力 | MetaGPT | partial | 中 | grep PRD/SOP 无命中；current_artifact 只是文本快照 |
-| 9 | **画布组件可扩展模型**：节点类型前后端双向硬编码（后端 7 类/前端 5 类且不对齐），无注册机制、无类型化端口、无单节点运行 | Langflow + Dify | partial | 中-高 | app/workflow/__init__.py:12-19 硬编码；WorkflowEditor.tsx:30-36 调色板 5 类 |
+| 8 | **SOP 结构化文档工件流**：无 PRD/设计稿 Artifact 类型系统与阶段门控接力 | MetaGPT | exists | 已完成 | app/core/artifacts.py 提供版本、lineage、stage gate 与 handoff audit；group checkpoint 可恢复 FINAL Artifact；提交 640badd0 |
+| 9 | **画布组件可扩展模型**：节点类型前后端双向硬编码（后端 7 类/前端 5 类且不对齐），无注册机制、无类型化端口、无单节点运行 | Langflow + Dify | exists | 已完成 | app/workflow/registry.py 统一节点元数据与类型化端口；前端由元数据驱动并支持单节点运行；提交 0d3c2896 |
 | 10 | **Delegation 工具注入**：agent 在 ReAct 循环中自主委派/问询同事 | CrewAI | exists | 已完成 | app/engine/hierarchical.py:49-106、225-255、530-574；提交 a16bb32d |
-| 11 | **Cache-First 完整闭环**：前缀稳定已有，缺仅追加历史约束 + stale snip + 缓存命中率埋点 | deepseek-reasonix | partial | 中 | long_context/prefix_cache.py 有一半；compressor.py 会破坏前缀 |
-| 12 | **统一通道 Gateway + DM 配对安全**：仅 Telegram bot 单点，无配对/白名单；注意 channels.py 是 StateGraph 数据通道，命名误导 | openclaw | partial+missing | 高 | app/services/telegram_bot.py 单点；配对机制零命中 |
+| 11 | **Cache-First 完整闭环**：前缀稳定已有，缺仅追加历史约束 + stale snip + 缓存命中率埋点 | deepseek-reasonix | exists | 已完成 | cache_first.py 提供 credential-scoped singleflight；PrefixCache 有条目、字节和 stale 上限；模型 adapter 暴露缓存 token 指标；提交 7712ff6d |
+| 12 | **统一通道 Gateway + DM 配对安全**：仅 Telegram bot 单点，无配对/白名单；注意 channels.py 是 StateGraph 数据通道，命名误导 | openclaw | exists | 已完成 | channel_gateway.py 实施默认关闭、显式配对、TTL 与 pending 容量；外部 session deny-all tools；提交 e8e8fb02 |
 
 ## 二、次优先差距（中低价值）
 
@@ -79,4 +79,4 @@
 
 ## 五、参考项目覆盖度说明
 
-17 个项目全部完成挖掘。其中 smolagents（6/6 全部 exists）、openai-agents-python（6/6 中 5 exists）、LangGraph（8 项中 5 exists）覆盖率最高；openclaw 通道层、Langflow 组件 SDK、MetaGPT 文档工件流覆盖最弱。
+17 个项目全部完成挖掘。其中 Top 12 高优先级差距已全部闭环；其余候选能力继续按产品定位和收益排序推进。
