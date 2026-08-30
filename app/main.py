@@ -477,7 +477,14 @@ async def _init_arch_v2() -> dict[str, Any] | None:
         logger.info("arch_v2.four_layer_memory_enabled")
 
     if settings.is_arch_v2_active("capability"):
+        from app.core.capability.bridge import register_tool_capabilities
+
         registry = CapabilityRegistry()
+        try:
+            register_tool_capabilities(registry, di_resolve("ToolRegistry"))
+        except Exception as exc:
+            logger.warning("arch_v2.capability_bridge_failed", error=str(exc))
+        di_register("CapabilityRegistry", registry)
         handles["capability_registry"] = registry
         logger.info("arch_v2.capability_enabled")
 

@@ -155,25 +155,58 @@ class ToolRegistry:
 
         Always returns a string (LLMs expect text responses from tools).
         Complex objects are serialized as JSON for structured parsing.
+
+        When the arch-v2 CapabilityRegistry is installed and governs this
+        tool, execution is delegated to it (routing + fallback + stats);
+        otherwise the legacy direct path runs unchanged.
         """
         func = self._tools.get(name)
         if not func:
             raise ValueError(f"Tool '{name}' not found")
+
+        delegated = await self._execute_via_capability(name, arguments)
+        if delegated is not None:
+            return delegated
 
         try:
             if asyncio.iscoroutinefunction(func):
                 result = await func(**arguments)
             else:
                 result = func(**arguments)
-            if isinstance(result, str):
-                return result
-            if isinstance(result, (dict, list)):
-                import json
-                return json.dumps(result, ensure_ascii=False, default=str)
-            return str(result)
+            return self._serialize_result(result)
         except Exception as e:
             logger.error("Tool execution failed", tool=name, error=str(e))
             return f"Error executing {name}: {e!s}"
+
+    async def _execute_via_capability(self, name: str, arguments: dict[str, Any]) -> str | None:
+        """Delegate to the CapabilityRegistry when it governs this tool.
+
+        Returns None when no registry is installed or the tool has no
+        registered capability implementations (legacy path applies).
+        """
+        try:
+            from app.core.di import resolve
+
+            registry = resolve("CapabilityRegistry")
+        except Exception:
+            return None
+        if registry is None or not registry.get_implementations(name):
+            return None
+        try:
+            result = await registry.execute(name, **arguments)
+        except Exception as e:
+            logger.error("Tool execution failed", tool=name, error=str(e))
+            return f"Error executing {name}: {e!s}"
+        return self._serialize_result(result)
+
+    @staticmethod
+    def _serialize_result(result: Any) -> str:
+        if isinstance(result, str):
+            return result
+        if isinstance(result, (dict, list)):
+            import json
+            return json.dumps(result, ensure_ascii=False, default=str)
+        return str(result)
 
     def get_openai_tools(self) -> list[dict[str, Any]]:
         """Return tools in OpenAI function calling format."""
