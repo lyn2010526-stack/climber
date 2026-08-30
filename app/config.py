@@ -96,6 +96,12 @@ class Settings(BaseSettings):
     enable_goal_centered: bool = Field(default=False)
     enable_swarm: bool = Field(default=False)
 
+    # Input/output guardrails in the main agent loop (PII redaction,
+    # prompt-injection blocking, output length). Disable only for debugging.
+    enable_guardrails: bool = Field(default=True)
+    # LLM-based output quality audit (extra model call per response).
+    enable_output_audit: bool = Field(default=False)
+
     # Architecture-v2 modules (plugin kernel / 4-layer memory / capability /
     # long-context / self-learning / trace log / skill store / integration).
     # Master switch gates every sub-module.

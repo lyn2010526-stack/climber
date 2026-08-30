@@ -671,6 +671,36 @@ class AgentEngine:
     ) -> AsyncIterator[AgentEvent]:
         """Internal run method — executes under session lock."""
         session.current_turn_id = run_id or str(uuid4())
+
+        # Input guardrail (fail-fast): block injection before any LLM call,
+        # sanitize PII before the message enters context or storage.
+        try:
+            from app.config import settings as _settings
+            if _settings.enable_guardrails:
+                from app.core.guardrails import ActionType, default_guardrails
+                message, input_violations = await default_guardrails.apply_guardrails(message, is_input=True)
+                blocked = next((v for v in input_violations if v.action == ActionType.BLOCK), None)
+                if blocked:
+                    logger.warning(
+                        "guardrail_blocked_input",
+                        rule=blocked.rule_name,
+                        reason=blocked.reason,
+                        session_id=session.session_id,
+                    )
+                    yield AgentEvent(type=AgentEventType.ERROR, data={
+                        "error": f"Input blocked by guardrail: {blocked.reason or blocked.rule_name}",
+                        "guardrail": blocked.rule_name,
+                    })
+                    return
+                if input_violations:
+                    logger.info(
+                        "guardrail_sanitized_input",
+                        rules=[v.rule_name for v in input_violations],
+                        session_id=session.session_id,
+                    )
+        except Exception:
+            logger.debug("agent_engine.guardrail_input_skipped", exc_info=True)
+
         # Allow restart: COMPLETED/FAILED/CANCELLED sessions must reset to PENDING first
         current = session.state_machine.state
         if current in (TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED):
@@ -875,6 +905,24 @@ class AgentEngine:
                             result.content = ""
 
                 if result.content:
+                    # Output guardrail: redact PII / enforce length before the
+                    # content is persisted or emitted. Note: streaming deltas
+                    # are emitted per-chunk above; this sanitizes the final
+                    # accumulated content (history, DONE event, memory).
+                    try:
+                        from app.config import settings as _settings
+                        if _settings.enable_guardrails:
+                            from app.core.guardrails import default_guardrails
+                            sanitized, output_violations = await default_guardrails.apply_guardrails(result.content, is_input=False)
+                            if output_violations:
+                                result.content = sanitized
+                                logger.info(
+                                    "guardrail_sanitized_output",
+                                    rules=[v.rule_name for v in output_violations],
+                                    session_id=session.session_id,
+                                )
+                    except Exception:
+                        logger.debug("agent_engine.guardrail_output_skipped", exc_info=True)
                     session.messages.append({"role": MessageRole.ASSISTANT, "content": result.content})
                     await self._persist_message(
                         session.session_id,
@@ -1096,6 +1144,29 @@ class AgentEngine:
             _spawn(memory_reflection.maybe_reflect(session.user_id))
         except Exception:
             logger.debug("agent_engine.suppressed", exc_info=True)
+
+        # Optional LLM-based output quality audit (config-gated; costs one
+        # extra model call per response, so off by default).
+        try:
+            from app.config import settings as _settings
+            if _settings.enable_output_audit and result and result.content:
+                from app.core.output_auditor import get_output_auditor
+                audit = await get_output_auditor().audit(
+                    task=message,
+                    output=result.content,
+                    model_adapter=adapter,
+                    context={"session_id": session.session_id},
+                )
+                logger.info(
+                    "output_audit",
+                    session_id=session.session_id,
+                    passed=audit.passed,
+                    score=audit.overall_score,
+                    recommendation=audit.recommendation,
+                    issues=len(audit.issues),
+                )
+        except Exception:
+            logger.debug("agent_engine.output_audit_skipped", exc_info=True)
 
         yield AgentEvent(type=AgentEventType.DONE, data={"status": session.status.value, "iterations": iteration, "content": result.content if result else "", "tokens_used": getattr(result, 'tokens_used', 0) if result else 0})
 

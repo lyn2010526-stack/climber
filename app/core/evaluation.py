@@ -157,8 +157,8 @@ class EvaluationRunner:
             self._apply_gates(run, gates)
         self._runs[run_id] = run
         logger.info(
-            "eval_completed", run_id=run_id, passed=run.passed,
-            failed=run.failed, verdict=run.verdict,
+            "eval_completed run_id=%s passed=%d failed=%d verdict=%s",
+            run_id, run.passed, run.failed, run.verdict,
         )
         return run
 
