@@ -1,8 +1,12 @@
 """Tests for the fourth-generation emergent modules (A-D) and snapshots."""
 from __future__ import annotations
 
+from types import SimpleNamespace
+from typing import Any
+
 import pytest
 
+from app.core.approval import ApprovalStatus
 from app.core.emergent.autodiscovery import AutodiscoveryConfig, AutodiscoveryEngine
 from app.core.emergent.goal_centered import GoalCenteredPlanner, GoalState
 from app.core.emergent.meta_agent import MetaAgent, MetaProposal
@@ -20,6 +24,29 @@ from app.core.sandbox import SandboxConfig, SandboxExecutor
 
 def _registry(tmp_path) -> CapabilityDiscovery:
     return CapabilityDiscovery(storage_path=str(tmp_path / "caps.json"))
+
+
+class _FakeApprovalManager:
+    """Stand-in for the HITL approval channel with a scripted decision."""
+
+    def __init__(self, decision: ApprovalStatus = ApprovalStatus.APPROVED):
+        self.decision = decision
+        self.submissions: list[dict[str, Any]] = []
+
+    async def request(
+        self,
+        session_id: str,
+        tool_name: str,
+        arguments: dict[str, Any],
+        user_id: str = "default-user",
+    ) -> Any:
+        self.submissions.append(
+            {"session_id": session_id, "tool_name": tool_name, "arguments": arguments}
+        )
+        return SimpleNamespace(id=f"req-{len(self.submissions)}")
+
+    async def wait_for_decision(self, request_id: str, timeout: float | None = None) -> Any:
+        return SimpleNamespace(id=request_id, status=self.decision)
 
 
 # --- Module A: Autodiscovery ---
@@ -68,12 +95,14 @@ async def test_autodiscovery_full_commit_cycle(tmp_path):
     async def snap():
         return "snap_a"
 
+    approvals = _FakeApprovalManager(ApprovalStatus.APPROVED)
     eng = AutodiscoveryEngine(
         registry=reg, sandbox=sb,
         config=AutodiscoveryConfig(
             sandbox_steps_max=8, success_threshold=0.8,
             approval_required=True, snapshot_fn=snap,
         ),
+        approval_manager=approvals,
     )
     cand = await eng.explore("analyze report data", ["ls -la", "pwd", "echo hello"])
     assert cand is not None
@@ -81,9 +110,61 @@ async def test_autodiscovery_full_commit_cycle(tmp_path):
     # Unapproved cannot commit
     assert await eng.commit(cand.name) is None
     assert await eng.request_approval(cand.name)
+    assert len(approvals.submissions) == 1
+    assert approvals.submissions[0]["tool_name"] == f"autodiscovery:{cand.name}"
     composed = await eng.commit(cand.name)
     assert composed is not None
     assert reg.get_capability(cand.name) is not None
+
+
+@pytest.mark.asyncio
+async def test_autodiscovery_rejection_blocks_commit(tmp_path):
+    reg = _registry(tmp_path)
+    sb = SandboxExecutor(config=SandboxConfig(timeout_seconds=3))
+
+    async def snap():
+        return "snap_r"
+
+    approvals = _FakeApprovalManager(ApprovalStatus.REJECTED)
+    eng = AutodiscoveryEngine(
+        registry=reg, sandbox=sb,
+        config=AutodiscoveryConfig(
+            sandbox_steps_max=8, success_threshold=0.8,
+            approval_required=True, snapshot_fn=snap,
+        ),
+        approval_manager=approvals,
+    )
+    cand = await eng.explore("analyze report data", ["ls -la", "pwd", "echo hello"])
+    assert cand is not None
+    assert await eng.request_approval(cand.name) is False
+    assert cand.approved is False
+    assert await eng.commit(cand.name) is None
+    assert reg.get_capability(cand.name) is None
+
+
+@pytest.mark.asyncio
+async def test_autodiscovery_timeout_blocks_commit(tmp_path):
+    reg = _registry(tmp_path)
+    sb = SandboxExecutor(config=SandboxConfig(timeout_seconds=3))
+
+    async def snap():
+        return "snap_t"
+
+    # EXPIRED simulates a timed-out human decision.
+    approvals = _FakeApprovalManager(ApprovalStatus.EXPIRED)
+    eng = AutodiscoveryEngine(
+        registry=reg, sandbox=sb,
+        config=AutodiscoveryConfig(
+            sandbox_steps_max=8, success_threshold=0.8,
+            approval_required=True, snapshot_fn=snap,
+        ),
+        approval_manager=approvals,
+    )
+    cand = await eng.explore("analyze report data", ["ls -la", "pwd", "echo hello"])
+    assert cand is not None
+    assert await eng.request_approval(cand.name) is False
+    assert cand.approved is False
+    assert await eng.commit(cand.name) is None
 
 
 # --- Module B: Meta-Agent ---

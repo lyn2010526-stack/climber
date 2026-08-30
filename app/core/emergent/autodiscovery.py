@@ -28,6 +28,7 @@ class AutodiscoveryConfig:
     sandbox_steps_max: int = 50
     success_threshold: float = 0.8
     approval_required: bool = True
+    approval_timeout: float = 300.0
     snapshot_fn: Any | None = None  # async () -> snapshot_id | None
 
 
@@ -61,11 +62,13 @@ class AutodiscoveryEngine:
         sandbox: SandboxExecutor | None = None,
         config: AutodiscoveryConfig | None = None,
         event_bus: Any | None = None,
+        approval_manager: Any | None = None,
     ):
         self.registry = registry
         self.sandbox = sandbox or SandboxExecutor()
         self.config = config or AutodiscoveryConfig()
         self.event_bus = event_bus
+        self._approval_manager = approval_manager
         self._pending: dict[str, DiscoveredCapability] = {}
 
     def set_event_bus(self, bus: Any) -> None:
@@ -161,19 +164,51 @@ class AutodiscoveryEngine:
         return list(self._pending.values())
 
     async def request_approval(self, name: str) -> bool:
-        """Submit a candidate for user approval (approval gate)."""
+        """Route a candidate through the HITL approval channel.
+
+        With ``approval_required`` enabled the request is submitted to the
+        durable approval manager and this call blocks until a human resolves
+        it or the configured timeout expires. Rejection and timeout both keep
+        the candidate unapproved so ``commit`` stays blocked.
+        """
         candidate = self._pending.get(name)
         if not candidate:
             return False
         if not self.config.approval_required:
             candidate.approved = True
             return True
-        # In a real deployment this routes to the HITL approval channel.
-        candidate.approved = True
-        logger.info("autodiscovery.approved", name=name)
-        if self.event_bus is not None:
-            await self.event_bus.publish("autodiscovery_approved", {"name": name})
-        return True
+        manager = self._approval_manager
+        if manager is None:
+            from app.core.approval import ApprovalStatus, approval_manager
+
+            manager = approval_manager
+        else:
+            from app.core.approval import ApprovalStatus
+
+        request = await manager.request(
+            session_id="autodiscovery",
+            tool_name=f"autodiscovery:{name}",
+            arguments={
+                "goal": candidate.goal,
+                "tool_chain": candidate.tool_chain,
+                "success_rate": round(candidate.success_rate, 3),
+                "attempts": candidate.attempts,
+            },
+        )
+        decision = await manager.wait_for_decision(
+            request.id,
+            timeout=self.config.approval_timeout,
+        )
+        approved = bool(decision and decision.status == ApprovalStatus.APPROVED)
+        candidate.approved = approved
+        if approved:
+            logger.info("autodiscovery.approved", name=name)
+            if self.event_bus is not None:
+                await self.event_bus.publish("autodiscovery_approved", {"name": name})
+        else:
+            status = getattr(decision, "status", None)
+            logger.info("autodiscovery.approval_denied", name=name, status=str(status))
+        return approved
 
     async def commit(self, name: str) -> ComposedCapability | None:
         """Snapshot-first commit into the registry.
