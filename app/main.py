@@ -201,6 +201,28 @@ async def lifespan(app: FastAPI):
             logger.info("Redis unavailable, using in-process cache")
 
         register_builtins()
+        from app.core.language_service import LanguageServerConfig, LanguageServiceManager
+        from app.tools.code_intelligence_tools import configure_code_intelligence
+
+        language_servers = {}
+        for suffix, raw_config in settings.lsp_servers.items():
+            argv = raw_config.get("argv")
+            language_id = raw_config.get("language_id") or suffix.removeprefix(".")
+            if not isinstance(argv, list) or not all(isinstance(arg, str) and arg for arg in argv):
+                logger.warning("language_service.invalid_config", suffix=suffix)
+                continue
+            language_servers[suffix] = LanguageServerConfig(
+                argv=tuple(argv),
+                language_id=str(language_id),
+            )
+        language_service_manager = LanguageServiceManager(
+            _default_workdir(),
+            language_servers,
+            timeout=settings.lsp_request_timeout,
+            max_result_chars=settings.lsp_max_result_chars,
+        )
+        configure_code_intelligence(language_service_manager)
+        app.state.language_service_manager = language_service_manager
         main_engine = di_resolve("AgentEngine")
         main_engine.start()
         from app.core.agent_engine import set_main_engine
@@ -242,7 +264,13 @@ async def lifespan(app: FastAPI):
             from app.services.telegram_bot import configure_bot, start_telegram_bot
             model_registry = di_resolve("ModelRegistry")
             tool_registry = di_resolve("ToolRegistry")
-            configure_bot(model_registry, tool_registry)
+            configure_bot(
+                model_registry,
+                tool_registry,
+                dm_enabled=settings.channel_dm_enabled,
+                pairing_ttl_seconds=settings.channel_pairing_ttl_seconds,
+                max_pending_pairings=settings.channel_max_pending_pairings,
+            )
             telegram_started = await start_telegram_bot()
             if telegram_started:
                 logger.info("Telegram remote control enabled")
@@ -307,6 +335,13 @@ async def lifespan(app: FastAPI):
             await stop_telegram_bot()
         except Exception as exc:
             logger.warning("main.telegram_bot_stop_failed", error=str(exc))
+        try:
+            from app.tools.code_intelligence_tools import configure_code_intelligence
+
+            await app.state.language_service_manager.close()
+            configure_code_intelligence(None)
+        except Exception as exc:
+            logger.warning("main.language_service_stop_failed", error=str(exc))
         await close_redis()
         from app.models.anthropic_adapter import AnthropicAdapter
         from app.models.openai_adapter import OpenAIAdapter

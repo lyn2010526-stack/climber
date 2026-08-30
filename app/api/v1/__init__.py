@@ -6,6 +6,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import api_keys as api_keys_router
 from app.api.v1 import approvals as approvals_router
+from app.api.v1 import channels as channels_router
 from app.api.v1 import chat as chat_router
 from app.api.v1 import crews as crews_router
 from app.api.v1 import doctor as doctor_router
@@ -33,6 +34,7 @@ router.include_router(sessions_router.router, prefix="/sessions", tags=["session
 router.include_router(settings_router.router, prefix="/settings", tags=["settings"])
 router.include_router(workflows_router.router, prefix="/workflows", tags=["workflows"])
 router.include_router(prompt_templates_router.router, prefix="/prompt-templates", tags=["prompt-templates"])
+router.include_router(channels_router.router, prefix="/channels", tags=["channels"])
 router.include_router(generic_router.router, tags=["generic"])
 router.include_router(api_keys_router.router, prefix="/api-keys", tags=["api-keys"])
 router.include_router(documents_router.router, prefix="/documents", tags=["documents"])

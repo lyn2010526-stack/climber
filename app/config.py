@@ -84,6 +84,18 @@ class Settings(BaseSettings):
     memory_limit_mb: int = Field(default=2048)
     memory_check_interval: int = Field(default=60)
 
+    # External language servers are opt-in and must be configured with an
+    # explicit argv list per suffix, for example {".py": {"argv": ["pylsp"],
+    # "language_id": "python"}}.
+    lsp_servers: dict[str, dict[str, object]] = Field(default_factory=dict)
+    lsp_request_timeout: float = Field(default=10.0, gt=0)
+    lsp_max_result_chars: int = Field(default=20_000, gt=0)
+
+    # External direct-message channels are fail-closed until explicitly enabled.
+    channel_dm_enabled: bool = Field(default=False)
+    channel_pairing_ttl_seconds: int = Field(default=600, ge=1)
+    channel_max_pending_pairings: int = Field(default=100, ge=1)
+
     # Local network access: 0.0.0.0 lets phones on the LAN reach the UI
     host: str = Field(default="127.0.0.1")
     port: int = Field(default=8000)
