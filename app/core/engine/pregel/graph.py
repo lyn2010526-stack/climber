@@ -14,6 +14,7 @@ from typing import Any, Protocol, runtime_checkable
 
 import structlog
 
+from app.core.engine.pregel.checkpoint import Checkpoint
 from app.core.engine.pregel.command import Command
 from app.core.engine.pregel.state import GraphState, StateReducer
 
@@ -31,7 +32,9 @@ class CompiledGraph(Protocol):
     async def astream(self, input: dict, config: dict | None = None) -> Any: ...
     async def astream_events(self, input: dict, config: dict | None = None) -> Any: ...
     async def get_state(self, config: dict) -> GraphState: ...
+    async def get_state_history(self, config: dict, *, limit: int = 10, before: str | None = None) -> list[Checkpoint]: ...
     async def update_state(self, config: dict, values: dict) -> dict: ...
+    async def fork(self, config: dict, *, new_thread_id: str, values: dict | None = None) -> dict: ...
 
 
 class Branch:
@@ -288,6 +291,16 @@ class CompiledGraphImpl:
         """Get the current state for a thread."""
         return await self._engine.get_state(config)
 
+    async def get_state_history(
+        self,
+        config: dict,
+        *,
+        limit: int = 10,
+        before: str | None = None,
+    ) -> list[Checkpoint]:
+        """Get checkpoint history for a thread, newest first."""
+        return await self._engine.get_state_history(config, limit=limit, before=before)
+
     async def update_state(self, config: dict, values: dict) -> dict:
         """Update the state for a thread."""
         return await self._engine.update_state(config, values)
@@ -295,3 +308,17 @@ class CompiledGraphImpl:
     async def resume_with(self, config: dict, value: Any) -> dict:
         """Resume from an interrupt with a value."""
         return await self._engine.resume_with(config, value)
+
+    async def fork(
+        self,
+        config: dict,
+        *,
+        new_thread_id: str,
+        values: dict | None = None,
+    ) -> dict:
+        """Fork a checkpoint into a new thread and continue execution."""
+        return await self._engine.fork(
+            config,
+            new_thread_id=new_thread_id,
+            values=values,
+        )

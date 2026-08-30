@@ -121,6 +121,8 @@ class InMemoryCheckpointSaver:
 
     async def get(self, config: CheckpointConfig) -> Checkpoint | None:
         if config.checkpoint_id:
+            if config.checkpoint_id not in self._thread_index.get(config.thread_id, []):
+                return None
             return self._checkpoints.get(config.checkpoint_id)
         thread_cps = self._thread_index.get(config.thread_id, [])
         if not thread_cps:
@@ -135,10 +137,16 @@ class InMemoryCheckpointSaver:
         before: str | None = None,
     ) -> list[Checkpoint]:
         thread_cps = self._thread_index.get(config.thread_id, [])
-        checkpoints = [self._checkpoints[cid] for cid in thread_cps if cid in self._checkpoints]
-        checkpoints.sort(key=lambda c: c.step, reverse=True)
         if before:
-            checkpoints = [c for c in checkpoints if c.id < before]
+            try:
+                thread_cps = thread_cps[:thread_cps.index(before)]
+            except ValueError:
+                return []
+        checkpoints = [
+            self._checkpoints[cid]
+            for cid in reversed(thread_cps)
+            if cid in self._checkpoints
+        ]
         return checkpoints[:limit]
 
     async def delete_thread(self, thread_id: str) -> int:
@@ -222,8 +230,8 @@ class SqliteCheckpointSaver:
             conn.row_factory = sqlite3.Row
             if config.checkpoint_id:
                 row = conn.execute(
-                    "SELECT * FROM checkpoints WHERE id = ?",
-                    (config.checkpoint_id,),
+                    "SELECT * FROM checkpoints WHERE id = ? AND thread_id = ?",
+                    (config.checkpoint_id, config.thread_id),
                 ).fetchone()
             else:
                 row = conn.execute(
@@ -255,17 +263,20 @@ class SqliteCheckpointSaver:
                 rows = conn.execute(
                     """
                     SELECT * FROM checkpoints
-                    WHERE thread_id = ? AND id < ?
-                    ORDER BY step DESC LIMIT ?
+                    WHERE thread_id = ? AND rowid < (
+                        SELECT rowid FROM checkpoints
+                        WHERE id = ? AND thread_id = ?
+                    )
+                    ORDER BY rowid DESC LIMIT ?
                     """,
-                    (config.thread_id, before, limit),
+                    (config.thread_id, before, config.thread_id, limit),
                 ).fetchall()
             else:
                 rows = conn.execute(
                     """
                     SELECT * FROM checkpoints
                     WHERE thread_id = ?
-                    ORDER BY step DESC LIMIT ?
+                    ORDER BY rowid DESC LIMIT ?
                     """,
                     (config.thread_id, limit),
                 ).fetchall()

@@ -104,20 +104,30 @@ class PregelEngine:
         config = config or {}
         thread_id = config.get("thread_id", "default")
         max_steps = config.get("max_steps", 100)
+        checkpoint_id = config.get("checkpoint_id")
+        self._active_nodes = []
+        self._step = 0
+        self._checkpoint_ids = []
 
         # Check for resume config
         resume_value = config.get("__resume_value__")
         resume_nodes = config.get("__resume_nodes__")
 
         # Restore from checkpoint if available
-        checkpoint_config = CheckpointConfig(thread_id=thread_id)
+        checkpoint_config = CheckpointConfig(
+            thread_id=thread_id,
+            checkpoint_id=checkpoint_id,
+        )
         existing = await self._checkpointer.get(checkpoint_config)
+        if checkpoint_id and existing is None:
+            raise ValueError(f"Checkpoint not found for thread {thread_id}: {checkpoint_id}")
         if existing:
             logger.info("restoring_from_checkpoint", thread_id=thread_id, step=existing.step)
             state = GraphState(existing.values, schema=self._graph.schema)
             state.step = existing.step
             self._step = existing.step
             self._active_nodes = list(existing.next_nodes)
+            self._checkpoint_ids = [existing.id]
 
         # Apply resume value if present
         if resume_value is not None:
@@ -126,7 +136,7 @@ class PregelEngine:
 
         if resume_nodes:
             self._active_nodes = resume_nodes
-        elif not self._active_nodes:
+        elif not self._active_nodes and not (checkpoint_id and existing):
             # Check if we're resuming from an interrupt
             interrupt_node = state.get("__interrupt_node__")
             if interrupt_node and state.get("__interrupted__"):
@@ -141,8 +151,6 @@ class PregelEngine:
                     next_node = await self._resolve_router(branch.router, state)
                     entry = next_node
                 self._active_nodes = [entry] if entry else []
-
-        self._checkpoint_ids = []
 
         for _ in range(max_steps):
             if not self._active_nodes:
@@ -168,6 +176,7 @@ class PregelEngine:
                     CheckpointConfig(thread_id=thread_id),
                     checkpoint,
                 )
+                self._checkpoint_ids.append(checkpoint.id)
                 break
 
             self._active_nodes = step_result.next_active
@@ -187,16 +196,26 @@ class PregelEngine:
         config = config or {}
         thread_id = config.get("thread_id", "default")
         max_steps = config.get("max_steps", 100)
+        checkpoint_id = config.get("checkpoint_id")
+        self._active_nodes = []
+        self._step = 0
+        self._checkpoint_ids = []
 
-        checkpoint_config = CheckpointConfig(thread_id=thread_id)
+        checkpoint_config = CheckpointConfig(
+            thread_id=thread_id,
+            checkpoint_id=checkpoint_id,
+        )
         existing = await self._checkpointer.get(checkpoint_config)
+        if checkpoint_id and existing is None:
+            raise ValueError(f"Checkpoint not found for thread {thread_id}: {checkpoint_id}")
         if existing:
             state = GraphState(existing.values, schema=self._graph.schema)
             state.step = existing.step
             self._step = existing.step
             self._active_nodes = list(existing.next_nodes)
+            self._checkpoint_ids = [existing.id]
 
-        if not self._active_nodes:
+        if not self._active_nodes and not (checkpoint_id and existing):
             entry = self._graph._entry_point
             if entry is None:
                 branch = self._graph.get_conditional_edges("__start__")
@@ -232,16 +251,26 @@ class PregelEngine:
         config = config or {}
         thread_id = config.get("thread_id", "default")
         max_steps = config.get("max_steps", 100)
+        checkpoint_id = config.get("checkpoint_id")
+        self._active_nodes = []
+        self._step = 0
+        self._checkpoint_ids = []
 
-        checkpoint_config = CheckpointConfig(thread_id=thread_id)
+        checkpoint_config = CheckpointConfig(
+            thread_id=thread_id,
+            checkpoint_id=checkpoint_id,
+        )
         existing = await self._checkpointer.get(checkpoint_config)
+        if checkpoint_id and existing is None:
+            raise ValueError(f"Checkpoint not found for thread {thread_id}: {checkpoint_id}")
         if existing:
             state = GraphState(existing.values, schema=self._graph.schema)
             state.step = existing.step
             self._step = existing.step
             self._active_nodes = list(existing.next_nodes)
+            self._checkpoint_ids = [existing.id]
 
-        if not self._active_nodes:
+        if not self._active_nodes and not (checkpoint_id and existing):
             entry = self._graph._entry_point
             if entry is None:
                 branch = self._graph.get_conditional_edges("__start__")
@@ -286,29 +315,104 @@ class PregelEngine:
             self._active_nodes = step_result.next_active
 
     async def get_state(self, config: dict) -> GraphState:
-        """Get current state from the latest checkpoint."""
+        """Get state from the latest or a specific checkpoint."""
         thread_id = config.get("thread_id", "default")
-        checkpoint_config = CheckpointConfig(thread_id=thread_id)
+        checkpoint_id = config.get("checkpoint_id")
+        checkpoint_config = CheckpointConfig(
+            thread_id=thread_id,
+            checkpoint_id=checkpoint_id,
+        )
         checkpoint = await self._checkpointer.get(checkpoint_config)
+        if checkpoint_id and checkpoint is None:
+            raise ValueError(f"Checkpoint not found for thread {thread_id}: {checkpoint_id}")
         if checkpoint:
             state = GraphState(checkpoint.values, schema=self._graph.schema)
             state.step = checkpoint.step
             return state
         return GraphState(schema=self._graph.schema)
 
+    async def get_state_history(
+        self,
+        config: dict,
+        *,
+        limit: int = 10,
+        before: str | None = None,
+    ) -> list[Checkpoint]:
+        """Return checkpoint history for a thread, newest first."""
+        thread_id = config.get("thread_id", "default")
+        return await self._checkpointer.list(
+            CheckpointConfig(thread_id=thread_id),
+            limit=limit,
+            before=before,
+        )
+
+    async def fork(
+        self,
+        config: dict,
+        *,
+        new_thread_id: str,
+        values: dict | None = None,
+    ) -> dict:
+        """Fork a checkpoint into a new thread and continue execution."""
+        source_thread_id = config.get("thread_id", "default")
+        source_checkpoint = await self._checkpointer.get(CheckpointConfig(
+            thread_id=source_thread_id,
+            checkpoint_id=config.get("checkpoint_id"),
+        ))
+        if source_checkpoint is None:
+            raise ValueError(f"Checkpoint not found for thread {source_thread_id}")
+
+        state = GraphState(source_checkpoint.values, schema=self._graph.schema)
+        if values:
+            state.merge_update(values)
+        fork_checkpoint = Checkpoint(
+            values=dict(state),
+            next_nodes=list(source_checkpoint.next_nodes),
+            parent_id=source_checkpoint.id,
+            step=source_checkpoint.step,
+            metadata={
+                "thread_id": new_thread_id,
+                "forked_from_thread": source_thread_id,
+                "forked_from_checkpoint": source_checkpoint.id,
+            },
+        )
+        fork_config = await self._checkpointer.put(
+            CheckpointConfig(thread_id=new_thread_id),
+            fork_checkpoint,
+        )
+        run_config = {
+            **config,
+            "thread_id": new_thread_id,
+            "checkpoint_id": fork_config.checkpoint_id,
+        }
+        result = await self.run(state, run_config)
+        return dict(result)
+
     async def update_state(self, config: dict, values: dict) -> dict:
         """Update state by saving a new checkpoint."""
         thread_id = config.get("thread_id", "default")
-        state = await self.get_state(config)
+        checkpoint_id = config.get("checkpoint_id")
+        source = await self._checkpointer.get(CheckpointConfig(
+            thread_id=thread_id,
+            checkpoint_id=checkpoint_id,
+        ))
+        if checkpoint_id and source is None:
+            raise ValueError(f"Checkpoint not found for thread {thread_id}: {checkpoint_id}")
+
+        state = GraphState(
+            source.values if source else {},
+            schema=self._graph.schema,
+        )
         state.merge_update(values)
         checkpoint = Checkpoint(
             values=dict(state),
-            next_nodes=self._active_nodes,
-            step=self._step,
-            parent_id=self._checkpoint_ids[-1] if self._checkpoint_ids else None,
+            next_nodes=list(source.next_nodes) if source else [],
+            step=source.step if source else 0,
+            parent_id=source.id if source else None,
+            metadata={"thread_id": thread_id, "source": "update_state"},
         )
-        await self._checkpointer.put(CheckpointConfig(thread_id=thread_id), checkpoint)
-        return config
+        saved = await self._checkpointer.put(CheckpointConfig(thread_id=thread_id), checkpoint)
+        return {**config, "checkpoint_id": saved.checkpoint_id}
 
     async def resume_with(self, config: dict, value: Any) -> dict:
         """Resume from an interrupt with a human-provided value."""
@@ -318,7 +422,10 @@ class PregelEngine:
 
         # Determine which node to resume from:
         # After an interrupt at node X, we continue with X's successors
-        checkpoint_config = CheckpointConfig(thread_id=thread_id)
+        checkpoint_config = CheckpointConfig(
+            thread_id=thread_id,
+            checkpoint_id=config.get("checkpoint_id"),
+        )
         existing = await self._checkpointer.get(checkpoint_config)
         interrupt_node = existing.values.get("__interrupt_node__") if existing else None
 
