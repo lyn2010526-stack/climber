@@ -164,6 +164,13 @@ class ToolRegistry:
         if not func:
             raise ValueError(f"Tool '{name}' not found")
 
+        # The injected security_risk annotation is metadata for the
+        # permission layer, never an input to the tool implementation.
+        from app.core.permission_controller import SECURITY_RISK_PARAM
+
+        if SECURITY_RISK_PARAM in arguments:
+            arguments = {k: v for k, v in arguments.items() if k != SECURITY_RISK_PARAM}
+
         delegated = await self._execute_via_capability(name, arguments)
         if delegated is not None:
             return delegated

@@ -452,6 +452,11 @@ class ApprovalManager:
 def tool_requires_approval(tool_name: str, arguments: dict[str, Any] | None = None) -> bool:
     """Check if a tool requires human approval based on configuration."""
     arguments = arguments or {}
+    # Inline LLM risk self-assessment: HIGH forces approval for any tool.
+    from app.core.permission_controller import extract_security_risk
+
+    if extract_security_risk(arguments) == "HIGH":
+        return True
     approval_required_tools = {
         "run_command": lambda args: True,
         "execute_code": lambda args: True,

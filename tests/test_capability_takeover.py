@@ -30,6 +30,14 @@ def _tool_registry() -> ToolRegistry:
 
 
 @pytest.mark.asyncio
+async def test_execute_strips_security_risk_param():
+    """The inline risk annotation must not reach the tool implementation."""
+    tools = _tool_registry()
+    result = await tools.execute("echo", {"text": "hi", "security_risk": "LOW"})
+    assert result == "echo:hi"
+
+
+@pytest.mark.asyncio
 async def test_execute_delegates_to_capability_registry():
     tools = _tool_registry()
     caps = CapabilityRegistry()

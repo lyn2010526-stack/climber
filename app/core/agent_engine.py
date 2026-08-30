@@ -1102,10 +1102,12 @@ class AgentEngine:
 
 
     def _build_tools(self, tool_names: list[str], task_description: str = "") -> list[dict[str, Any]]:
+        from app.core.permission_controller import inject_security_risk_param
+
         if task_description and len(tool_names) > 1:
             name_to_defn = {name: self.tool_registry.get_tool(name) for name in tool_names}
             available = [
-                {"type": "function", "function": {"name": d.name, "description": d.description, "parameters": d.parameters}}
+                {"type": "function", "function": {"name": d.name, "description": d.description, "parameters": inject_security_risk_param(d.parameters)}}
                 for name, d in name_to_defn.items() if d
             ]
             ranked = self.tool_prioritizer.rank_tools(task_description, available)
@@ -1119,7 +1121,7 @@ class AgentEngine:
                     "function": {
                         "name": defn.name,
                         "description": defn.description,
-                        "parameters": defn.parameters,
+                        "parameters": inject_security_risk_param(defn.parameters),
                     },
                 })
         return result

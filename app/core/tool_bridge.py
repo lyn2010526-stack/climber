@@ -59,6 +59,8 @@ class ToolBridge:
             tool_names: Specific tool names to include. None = all available.
             is_worker: If False, exclude worker-only tools.
         """
+        from app.core.permission_controller import inject_security_risk_param
+
         result = []
         available = self._get_available_tools(is_worker)
 
@@ -70,7 +72,7 @@ class ToolBridge:
                 "function": {
                     "name": name,
                     "description": defn.description,
-                    "parameters": defn.parameters,
+                    "parameters": inject_security_risk_param(defn.parameters),
                 },
             })
         return result

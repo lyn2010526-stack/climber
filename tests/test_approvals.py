@@ -57,6 +57,15 @@ def test_tool_requires_approval():
     assert tool_requires_approval("web_search") is False
 
 
+def test_tool_requires_approval_llm_high_risk():
+    """An inline LLM HIGH risk assessment forces approval for any tool."""
+    assert tool_requires_approval("read_file", {"security_risk": "HIGH"}) is True
+    assert tool_requires_approval("read_file", {"security_risk": "high"}) is True
+    assert tool_requires_approval("read_file", {"security_risk": "LOW"}) is False
+    assert tool_requires_approval("read_file", {"security_risk": "MEDIUM"}) is False
+    assert tool_requires_approval("read_file", {}) is False
+
+
 @pytest.mark.asyncio
 async def test_approval_manager_request_and_approve():
     """Test full approval flow: request -> approve -> resolved."""

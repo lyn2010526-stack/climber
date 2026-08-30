@@ -126,6 +126,20 @@ async def engine():
 
 
 @pytest.mark.asyncio
+async def test_build_tools_injects_security_risk(engine: AgentEngine):
+    """Tool schemas presented to the LLM carry the inline risk param."""
+    built = engine._build_tools(["echo"])
+    assert len(built) == 1
+    params = built[0]["function"]["parameters"]
+    prop = params["properties"]["security_risk"]
+    assert prop["type"] == "string"
+    assert set(prop["enum"]) == {"LOW", "MEDIUM", "HIGH"}
+    assert "security_risk" not in params.get("required", [])
+    # registry definition stays unmodified
+    assert "security_risk" not in engine.tool_registry.get_tool("echo").parameters["properties"]
+
+
+@pytest.mark.asyncio
 async def test_simple_conversation(engine: AgentEngine):
     """Test a simple text-only conversation (no tool calls)."""
     fake_model = FakeModelAdapter(
