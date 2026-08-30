@@ -13,6 +13,12 @@ from app.core.integration.event_sourcing import (
     EventSourcingManager,
 )
 from app.core.integration.event_store import EventStore
+from app.core.integration.projections import (
+    project_session,
+    project_skill_usage,
+    project_stats,
+    project_trajectory,
+)
 from app.core.integration.protocol_router import (
     ProtocolRouter,
     get_protocol_router,
@@ -24,4 +30,8 @@ __all__ = [
     "EventStore",
     "ProtocolRouter",
     "get_protocol_router",
+    "project_session",
+    "project_skill_usage",
+    "project_stats",
+    "project_trajectory",
 ]
