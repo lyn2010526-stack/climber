@@ -415,3 +415,113 @@ class TestMainLoopGuardrails:
 
         assert fake_model._call_count >= 1
         assert not [e for e in events if e.type == AgentEventType.ERROR]
+
+
+class TestSkillTriggerInjection:
+    """Triggered skills inject their knowledge into the main loop context."""
+
+    def _engine_with_skills(self, engine: AgentEngine) -> Any:
+        from app.skills.registry import SkillCategory, SkillInfo, SkillRegistry
+
+        reg = SkillRegistry()
+        reg.register(SkillInfo(
+            id="deploy-guide",
+            name="Deploy Guide",
+            description="deployment rules",
+            category=SkillCategory.ENGINEERING,
+            system_prompt="Always rollback on failure.",
+            triggers=["deploy"],
+        ))
+        engine.skill_registry = reg
+        return reg
+
+    @pytest.mark.asyncio
+    async def test_triggered_skill_injected(self, engine: AgentEngine):
+        self._engine_with_skills(engine)
+        fake_model = FakeModelAdapter(responses=[ChatResult(content="done")])
+        engine.model_registry._models["fake:fake-model"] = fake_model
+        session = engine.create_session(
+            agent_id="t", user_id="u", provider="fake", model_id="fake-model", api_key="k",
+        )
+
+        async for _ in engine.run(session, "please deploy the service"):
+            pass
+
+        sys_msgs = [m["content"] for m in session.messages if m["role"] == MessageRole.SYSTEM]
+        assert any("Always rollback on failure." in c for c in sys_msgs)
+
+    @pytest.mark.asyncio
+    async def test_unrelated_message_no_injection(self, engine: AgentEngine):
+        self._engine_with_skills(engine)
+        fake_model = FakeModelAdapter(responses=[ChatResult(content="done")])
+        engine.model_registry._models["fake:fake-model"] = fake_model
+        session = engine.create_session(
+            agent_id="t", user_id="u", provider="fake", model_id="fake-model", api_key="k",
+        )
+
+        async for _ in engine.run(session, "just say hi"):
+            pass
+
+        sys_msgs = [m["content"] for m in session.messages if m["role"] == MessageRole.SYSTEM]
+        assert not any("Always rollback on failure." in c for c in sys_msgs)
+
+    @pytest.mark.asyncio
+    async def test_skill_injected_once_per_session(self, engine: AgentEngine):
+        self._engine_with_skills(engine)
+        fake_model = FakeModelAdapter(responses=[ChatResult(content="done")])
+        engine.model_registry._models["fake:fake-model"] = fake_model
+        session = engine.create_session(
+            agent_id="t", user_id="u", provider="fake", model_id="fake-model", api_key="k",
+        )
+
+        async for _ in engine.run(session, "deploy now"):
+            pass
+        async for _ in engine.run(session, "deploy again"):
+            pass
+
+        marker_msgs = [
+            m for m in session.messages
+            if m["role"] == MessageRole.SYSTEM and "Always rollback on failure." in m.get("content", "")
+        ]
+        assert len(marker_msgs) == 1
+
+    @pytest.mark.asyncio
+    async def test_tool_argument_path_triggers_skill(self, engine: AgentEngine):
+        from app.skills.registry import SkillCategory, SkillInfo, SkillRegistry
+
+        reg = SkillRegistry()
+        reg.register(SkillInfo(
+            id="python-guide",
+            name="Python Guide",
+            description="Python repository rules",
+            category=SkillCategory.KNOWLEDGE,
+            system_prompt="Apply repository Python conventions.",
+            path_triggers=["**/*.py"],
+        ))
+        engine.skill_registry = reg
+        fake_model = FakeModelAdapter(responses=[
+            ChatResult(content="", tool_calls=[{
+                "id": "call_path",
+                "type": "function",
+                "function": {"name": "echo", "arguments": {"text": "src/main.py"}},
+            }]),
+            ChatResult(content="done"),
+        ])
+        engine.model_registry._models["fake:fake-model"] = fake_model
+        session = engine.create_session(
+            agent_id="t",
+            user_id="u",
+            provider="fake",
+            model_id="fake-model",
+            api_key="k",
+            tools=["echo"],
+        )
+
+        async for _ in engine.run(session, "inspect the code"):
+            pass
+
+        assert any(
+            "Apply repository Python conventions." in message.get("content", "")
+            for message in session.messages
+            if message["role"] == MessageRole.SYSTEM
+        )

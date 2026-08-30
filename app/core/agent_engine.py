@@ -167,9 +167,11 @@ class _SessionMemory:
 
 
 class AgentEngine:
-    def __init__(self, model_registry: ModelRegistry | None = None, tool_registry: ToolRegistry | None = None, checkpoint_store: InMemoryCheckpointStore | None = None, middlewares: list[MiddlewareBase] | None = None):
+    def __init__(self, model_registry: ModelRegistry | None = None, tool_registry: ToolRegistry | None = None, checkpoint_store: InMemoryCheckpointStore | None = None, middlewares: list[MiddlewareBase] | None = None, skill_registry: Any = None):
         self.model_registry = model_registry or di_resolve("ModelRegistry")
         self.tool_registry = tool_registry or di_resolve("ToolRegistry")
+        # Optional; may also be set post-construction (main.py wires it after DI)
+        self.skill_registry = skill_registry
         self._checkpoints = checkpoint_store or InMemoryCheckpointStore()
         self._sessions: dict[str, AgentSession] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
@@ -372,6 +374,32 @@ class AgentEngine:
         except Exception as e:
             return False, f"sandbox validation error: {e}"
         return True, approval_reason or "OK"
+
+    def _inject_triggered_skills(
+        self,
+        session: AgentSession,
+        text: str = "",
+        file_paths: list[str] | None = None,
+    ) -> None:
+        """Inject newly triggered skill prompts once per session."""
+        skill_registry = self.skill_registry
+        if skill_registry is None:
+            try:
+                skill_registry = di_resolve("SkillRegistry")
+                self.skill_registry = skill_registry
+            except Exception:
+                return
+
+        for skill in skill_registry.match_triggers(text, file_paths=file_paths):
+            marker = f"<!-- SKILL_TRIGGER:{skill.id} -->"
+            if not skill.system_prompt:
+                continue
+            if any(message.get("content", "").startswith(marker) for message in session.messages):
+                continue
+            session.messages.insert(-1, {
+                "role": MessageRole.SYSTEM,
+                "content": f"{marker}\n[Skill: {skill.name}]\n{skill.system_prompt}",
+            })
 
     def create_session(self, agent_id: str, user_id: str, provider: str, model_id: str, api_key: str, base_url: str | None = None, system_prompt: str = "", tools: list[str] | None = None, context_config: ContextConfig | None = None, session_id: str | None = None) -> AgentSession:
         from uuid import uuid4
@@ -758,6 +786,18 @@ class AgentEngine:
         except Exception:
             logger.debug("agent_engine.suppressed", exc_info=True)
 
+        # Deterministic skill trigger injection (OpenHands microagents style).
+        try:
+            from app.skills.repo_knowledge import extract_file_paths
+
+            self._inject_triggered_skills(
+                session,
+                text=message,
+                file_paths=extract_file_paths(message),
+            )
+        except Exception:
+            logger.debug("agent_engine.suppressed", exc_info=True)
+
         iteration = 0
         executor = ParallelToolExecutor(
             self.tool_registry,
@@ -960,6 +1000,16 @@ class AgentEngine:
                         "tool_names": [tc.get("function", {}).get("name") for tc in result.tool_calls],
                     })
                     tool_results = await executor.execute_all(result.tool_calls)
+                    try:
+                        from app.skills.repo_knowledge import extract_paths_from_values
+
+                        touched_paths = extract_paths_from_values([
+                            tool_result.arguments or {} for tool_result in tool_results
+                        ])
+                        if touched_paths:
+                            self._inject_triggered_skills(session, file_paths=touched_paths)
+                    except Exception:
+                        logger.debug("agent_engine.skill_path_trigger_skipped", exc_info=True)
                     for tr in tool_results:
                         policy_rejection = tr.error.startswith(("blocked by sandbox:", "permission denied:"))
                         if self.debug_loop and tr.error and not policy_rejection:

@@ -40,6 +40,11 @@ class SkillInfo(BaseModel):
     is_mcp: bool = False
     mcp_config: dict[str, Any] = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)
+    # Deterministic triggers (OpenHands microagents style): a keyword in the
+    # user message or a touched file path matching a glob pulls this skill's
+    # system_prompt into context without relying on model choice.
+    triggers: list[str] = Field(default_factory=list)
+    path_triggers: list[str] = Field(default_factory=list)
 
 
 class SkillRegistry:
@@ -118,6 +123,27 @@ class SkillRegistry:
             s for s in self._skills.values()
             if (s.category.value if hasattr(s.category, "value") else str(s.category)) == category
         ]
+
+    def match_triggers(self, text: str, file_paths: list[str] | None = None) -> list[SkillInfo]:
+        """Return enabled skills whose triggers fire for the given input.
+
+        Keyword triggers are case-insensitive substring matches against
+        ``text``; path triggers are glob matches against ``file_paths``.
+        """
+        from fnmatch import fnmatch
+
+        text_lower = text.lower()
+        matched: list[SkillInfo] = []
+        for skill in self._skills.values():
+            if not skill.enabled:
+                continue
+            if any(t.lower() in text_lower for t in skill.triggers if t):
+                matched.append(skill)
+                continue
+            if file_paths and skill.path_triggers:
+                if any(fnmatch(p, pat) for p in file_paths for pat in skill.path_triggers):
+                    matched.append(skill)
+        return matched
 
 
 # Legacy compatibility: keep the old interface working
