@@ -18,6 +18,7 @@ from app.core.agent_run_adapter import AgentEngineRunAdapter
 from app.core.api_key_crypto import decrypt_api_key
 from app.core.auth import get_current_user
 from app.core.di import resolve as di_resolve
+from app.core.integration.recorder import record
 from app.core.run_protocol import (
     MessageEnvelope,
     RunNotFoundError,
@@ -156,10 +157,26 @@ async def chat(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     if request.provider and request.provider != session.provider:
+        old_provider, old_model = session.provider, session.model_id
         session.api_key, session.base_url = await _load_provider_credentials(request.provider, user_id)
         session.provider = request.provider
-    if request.model_id:
+        if request.model_id:
+            session.model_id = request.model_id
+        await record(
+            session_id,
+            "model_switch",
+            {"from_provider": old_provider, "to_provider": session.provider,
+             "from_model": old_model, "to_model": session.model_id},
+        )
+    elif request.model_id and request.model_id != session.model_id:
+        old_model = session.model_id
         session.model_id = request.model_id
+        await record(
+            session_id,
+            "model_switch",
+            {"from_provider": session.provider, "to_provider": session.provider,
+             "from_model": old_model, "to_model": session.model_id},
+        )
 
     async def _stream() -> Any:
         try:

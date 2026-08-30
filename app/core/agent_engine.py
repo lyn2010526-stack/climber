@@ -51,6 +51,7 @@ from app.core.checkpoint import InMemoryCheckpointStore
 from app.core.compressor import ContextCompressor, estimate_tokens
 from app.core.di import resolve as di_resolve
 from app.core.event_replay import EventReplayBuffer, ReplayRecord
+from app.core.integration.recorder import RECORDED_AGENT_EVENTS, attach_session_recorder, record
 from app.core.middleware import MiddlewareBase, MiddlewareChain
 from app.core.parallel import ParallelToolExecutor
 from app.core.persistent_memory import PersistentMemoryService
@@ -82,6 +83,7 @@ class AgentSession:
         self.event_replay = EventReplayBuffer()
         # State machine: use TaskState for unified lifecycle management
         self.state_machine = TaskStateMachine(task_id=session_id, initial_state=TaskState.PENDING)
+        attach_session_recorder(self)
         # Agent mode: plan (read-only) or act (real execution)
         self.mode = mode
         # Debug tracking per task
@@ -427,6 +429,18 @@ class AgentEngine:
     ) -> None:
         """Persist a message via batch buffer (flushes every ~2s or on buffer full)."""
         try:
+            await record(
+                session_id,
+                "message",
+                {
+                    "role": role,
+                    "content": content,
+                    "tool_calls": tool_calls or [],
+                    "tool_name": tool_name,
+                    "tokens": tokens,
+                    "run_id": run_id,
+                },
+            )
             now = time.monotonic()
             buf = self._msg_buffers.setdefault(session_id, [])
             if not buf:
@@ -602,6 +616,12 @@ class AgentEngine:
                         event.data,
                         turn_id=session.current_turn_id or "",
                     )
+                    if event.type.value in RECORDED_AGENT_EVENTS:
+                        await record(
+                            session.session_id,
+                            event.type.value,
+                            {"turn_id": session.current_turn_id or "", **event.data},
+                        )
                     yield event
 
     @staticmethod

@@ -255,6 +255,9 @@ async def lifespan(app: FastAPI):
         if arch_v2:
             app.state.arch_v2 = arch_v2
             logger.info("arch_v2.enabled", modules=list(arch_v2.keys()))
+            if arch_v2.get("event_store") is not None:
+                from app.core.integration.recorder import set_event_store
+                set_event_store(arch_v2["event_store"])
 
         APP_INFO.info({"version": _APP_VERSION, "debug": str(settings.app_debug)})
 
@@ -270,6 +273,14 @@ async def lifespan(app: FastAPI):
         arch_v2 = getattr(app.state, "arch_v2", None)
         if arch_v2:
             await _stop_arch_v2(arch_v2)
+            event_store = arch_v2.get("event_store")
+            if event_store is not None:
+                from app.core.integration.recorder import clear_event_store
+                clear_event_store()
+                try:
+                    await event_store.close()
+                except Exception as exc:
+                    logger.warning("arch_v2.event_store_close_failed", error=str(exc))
 
         await watchdog.stop()
         await guardian.stop()
