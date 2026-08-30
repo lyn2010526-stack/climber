@@ -394,16 +394,30 @@ def _get_group_engine():
         "properties": {
             "task_id": {"type": "string", "description": "The task ID to hand off"},
             "target_agent_id": {"type": "string", "description": "The agent ID to hand the task to"},
-            "reason": {"type": "string", "description": "Reason for the handoff"}
+            "reason": {"type": "string", "description": "Reason for the handoff"},
+            "artifact": {
+                "type": "object",
+                "description": "Approved structured artifact and pinned version to hand off",
+            },
         },
         "required": ["task_id", "target_agent_id"],
     },
 )
-async def handoff_task(task_id: str, target_agent_id: str, reason: str = "") -> str:
+async def handoff_task(
+    task_id: str,
+    target_agent_id: str,
+    reason: str = "",
+    artifact: dict[str, Any] | None = None,
+) -> str:
     """Hand off a task to another agent."""
     try:
         engine = _get_group_engine()
-        result = await engine.handoff_task(task_id, target_agent_id, reason)
+        parsed_artifact = None
+        if artifact is not None:
+            from app.core.artifacts import Artifact
+
+            parsed_artifact = Artifact.from_dict(artifact)
+        result = await engine.handoff_task(task_id, target_agent_id, reason, artifact=parsed_artifact)
         return f"Task handed off successfully: {result}"
     except Exception as e:
         return f"Handoff failed: {e!s}"

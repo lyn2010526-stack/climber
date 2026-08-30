@@ -60,7 +60,7 @@ DANGEROUS_PATTERNS = [
 
 # Tools that require elevated permission
 HIGH_RISK_TOOLS = {"shell_exec", "write_file", "delete_file", "database_exec", "api_call"}
-READ_ONLY_TOOLS = {"read_file", "search", "list_dir", "query"}
+READ_ONLY_TOOLS = {"read_file", "search", "list_dir", "query", "code_intelligence"}
 
 # Inline risk levels the LLM may self-report via the injected schema property.
 SECURITY_RISK_PARAM = "security_risk"

@@ -45,7 +45,7 @@ class ToolBridge:
 
     # Tools restricted to Worker only
     WORKER_ONLY_TOOLS = {
-        "read_file", "write_file", "list_files", "run_command",
+        "read_file", "write_file", "list_files", "run_command", "code_intelligence",
         "generate_image",
     }
 

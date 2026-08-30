@@ -294,6 +294,7 @@ def register_builtins() -> None:
         builtins,
         calendar_tools,
         chart_tools,
+        code_intelligence_tools,
         core_memory_tools,
         data_analysis_tools,
         email_tools,
