@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 
 import pytest
 
+from app.models.anthropic_adapter import AnthropicAdapter
 from app.models.ollama_adapter import OllamaAdapter
 from app.models.openai_adapter import OpenAIAdapter
 
@@ -48,6 +49,149 @@ async def test_openai_chat_does_not_join_incremental_and_accumulated_content(mon
 
     assert result.content == "Hello"
     assert result.accumulated_content == "Hello"
+
+
+@pytest.mark.asyncio
+async def test_openai_stream_emits_only_incremental_content(monkeypatch):
+    adapter = OpenAIAdapter("test-model", "test-key", "https://example.test/v1")
+    monkeypatch.setattr(
+        OpenAIAdapter,
+        "get_client",
+        classmethod(lambda cls: _OpenAIClient(_OpenAIResponse())),
+    )
+
+    chunks = [
+        chunk
+        async for chunk in adapter.stream_chat([{"role": "user", "content": "hi"}])
+    ]
+
+    assert [chunk.content for chunk in chunks] == ["Hel", "lo", ""]
+    assert chunks[-1].accumulated_content == "Hello"
+
+
+class _OpenAICachedUsageResponse(_OpenAIResponse):
+    async def aiter_bytes(self) -> AsyncIterator[bytes]:
+        content_payload = {
+            "choices": [{"delta": {"content": "cached"}}],
+        }
+        usage_payload = {
+            "choices": [],
+            "usage": {
+                "total_tokens": 11,
+                "prompt_tokens_details": {"cached_tokens": 7},
+            },
+        }
+        yield f"data: {json.dumps(content_payload)}\n".encode()
+        yield f"data: {json.dumps(usage_payload)}\n".encode()
+        yield b"data: [DONE]\n"
+
+
+class _OpenAITerminalFrameResponse(_OpenAIResponse):
+    async def aiter_bytes(self) -> AsyncIterator[bytes]:
+        content_payload = {"choices": [{"delta": {"content": "done"}}]}
+        terminal_payload = {
+            "choices": [{"delta": {}, "finish_reason": "stop"}],
+            "usage": {"total_tokens": 13},
+        }
+        yield f"data: {json.dumps(content_payload)}\n".encode()
+        yield f"data: {json.dumps(terminal_payload)}\n".encode()
+
+
+class _OpenAITerminalFrameWithoutNewlineResponse(_OpenAIResponse):
+    async def aiter_bytes(self) -> AsyncIterator[bytes]:
+        terminal_payload = {
+            "choices": [{"delta": {"content": "done"}, "finish_reason": "stop"}],
+            "usage": {"total_tokens": 13},
+        }
+        yield f"data: {json.dumps(terminal_payload)}".encode()
+
+
+@pytest.mark.asyncio
+async def test_openai_cached_token_usage_is_exposed(monkeypatch):
+    adapter = OpenAIAdapter("cached-model", "test-key", "https://example.test/v1")
+    monkeypatch.setattr(
+        OpenAIAdapter,
+        "get_client",
+        classmethod(lambda cls: _OpenAIClient(_OpenAICachedUsageResponse())),
+    )
+
+    result = await adapter.chat([{"role": "user", "content": "hi"}])
+
+    assert result.cached_tokens == 7
+    assert result.tokens_used == 11
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "response_type",
+    [_OpenAITerminalFrameResponse, _OpenAITerminalFrameWithoutNewlineResponse],
+)
+async def test_openai_terminal_frame_is_emitted_once_with_metadata(monkeypatch, response_type):
+    adapter = OpenAIAdapter("test-model", "test-key", "https://example.test/v1")
+    monkeypatch.setattr(
+        OpenAIAdapter,
+        "get_client",
+        classmethod(lambda cls: _OpenAIClient(response_type())),
+    )
+
+    chunks = [chunk async for chunk in adapter.stream_chat([{"role": "user", "content": "hi"}])]
+
+    assert "".join(chunk.content for chunk in chunks) == "done"
+    assert len([chunk for chunk in chunks if chunk.finish_reason == "stop"]) == 1
+    assert chunks[-1].tokens_used == 13
+    assert chunks[-1].accumulated_content == "done"
+
+
+class _AnthropicResponse:
+    def raise_for_status(self) -> None:
+        return None
+
+    async def aiter_lines(self) -> AsyncIterator[str]:
+        events = [
+            {
+                "type": "message_start",
+                "message": {
+                    "usage": {
+                        "input_tokens": 10,
+                        "cache_read_input_tokens": 6,
+                        "cache_creation_input_tokens": 3,
+                    }
+                },
+            },
+            {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "hello"}},
+            {"type": "message_delta", "usage": {"output_tokens": 2}},
+        ]
+        for event in events:
+            yield f"data: {json.dumps(event)}"
+
+
+class _AnthropicStreamContext:
+    async def __aenter__(self):
+        return _AnthropicResponse()
+
+    async def __aexit__(self, *args):
+        return None
+
+
+class _AnthropicClient:
+    def stream(self, *args, **kwargs):
+        return _AnthropicStreamContext()
+
+
+@pytest.mark.asyncio
+async def test_anthropic_cached_token_usage_is_exposed(monkeypatch):
+    adapter = AnthropicAdapter("cached-model", "test-key")
+    monkeypatch.setattr(
+        AnthropicAdapter,
+        "get_client",
+        classmethod(lambda cls: _AnthropicClient()),
+    )
+
+    result = await adapter.chat([{"role": "user", "content": "hi"}])
+
+    assert result.cached_tokens == 6
+    assert result.cache_creation_tokens == 3
+    assert result.tokens_used == 12
 
 
 class _OllamaResponse:

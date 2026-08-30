@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import re
 import time
@@ -52,6 +53,7 @@ from app.core.compressor import ContextCompressor, estimate_tokens
 from app.core.di import resolve as di_resolve
 from app.core.event_replay import EventReplayBuffer, ReplayRecord
 from app.core.integration.recorder import RECORDED_AGENT_EVENTS, attach_session_recorder, record
+from app.core.long_context.cache_first import CacheFirstRuntime, CacheRequest
 from app.core.middleware import MiddlewareBase, MiddlewareChain
 from app.core.parallel import ParallelToolExecutor
 from app.core.persistent_memory import PersistentMemoryService
@@ -176,6 +178,7 @@ class AgentEngine:
         self._sessions: dict[str, AgentSession] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
         self.memory_service = PersistentMemoryService()
+        self.cache_first = CacheFirstRuntime()
         # Build default middleware stack
         default_middlewares = self._build_default_middlewares()
         # Merge with user-provided middlewares (user middlewares take precedence)
@@ -289,6 +292,7 @@ class AgentEngine:
         "file_diff": ("path", "read"),
         "list_directory": ("dir", "read"),
         "list_files": ("directory", "read"),
+        "code_intelligence": ("file_path", "read"),
     }
 
     def _validate_tool_call(self, session: AgentSession, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
@@ -524,7 +528,11 @@ class AgentEngine:
                         "message": {"content": result.content, "tool_calls": result.tool_calls},
                     }
                 ],
-                "usage": {"total_tokens": result.tokens_used},
+                "usage": {
+                    "total_tokens": result.tokens_used,
+                    "cached_tokens": getattr(result, "cached_tokens", 0),
+                    "cache_creation_tokens": getattr(result, "cache_creation_tokens", 0),
+                },
             }
             snapshot = build_raw_payload(
                 run_id=run_id,
@@ -604,6 +612,131 @@ class AgentEngine:
                 attempt += 1
                 logger.warning("llm_chat_retrying", attempt=attempt, error=str(exc))
                 await asyncio.sleep(delay * attempt)
+
+    async def _sanitize_output(self, session: AgentSession, result: ChatResult) -> bool:
+        """Apply output guardrails once and mark results safe for cache storage."""
+        if getattr(result, "_guardrail_processed", False):
+            return True
+        try:
+            from app.config import settings as _settings
+
+            if _settings.enable_guardrails and result.content:
+                from app.core.guardrails import default_guardrails
+
+                sanitized, output_violations = await default_guardrails.apply_guardrails(
+                    result.content,
+                    is_input=False,
+                )
+                if output_violations:
+                    result.content = sanitized
+                    logger.info(
+                        "guardrail_sanitized_output",
+                        rules=[violation.rule_name for violation in output_violations],
+                        session_id=session.session_id,
+                    )
+            result._guardrail_processed = True
+            return True
+        except Exception:
+            logger.debug("agent_engine.guardrail_output_skipped", exc_info=True)
+            return False
+
+    @staticmethod
+    def _normalize_model_tool_calls(result: ChatResult) -> None:
+        """Expose provider-specific XML tool calls before cache eligibility checks."""
+        if result.tool_calls or not result.content:
+            return
+        xml_tool_calls = OpenAIAdapter._parse_xml_tool_calls(result.content)
+        if not xml_tool_calls:
+            return
+        result.tool_calls = xml_tool_calls
+        cleaned = re.sub(
+            r"<function=[^>]+/?>|</function>",
+            "",
+            result.content,
+            flags=re.DOTALL | re.IGNORECASE,
+        ).strip()
+        if not cleaned:
+            result.content = ""
+
+    async def _chat_cache_first(
+        self,
+        adapter: Any,
+        session: AgentSession,
+        messages: list[dict],
+        tools: list[dict] | None,
+    ) -> ChatResult:
+        request = CacheRequest.from_call(
+            messages=messages,
+            tools=tools,
+            provider=session.provider,
+            model_id=session.model_id,
+            parameters={
+                "adapter": getattr(adapter, "_extra_body", None) or {},
+                "base_url": session.base_url or getattr(adapter, "_base_url", None),
+                "user_scope": session.user_id,
+                "credential_scope": hashlib.sha256(session.api_key.encode()).hexdigest() if session.api_key else "",
+            },
+        )
+
+        async def produce() -> ChatResult:
+            result = await self._chat_with_retry(adapter, messages, tools)
+            self._normalize_model_tool_calls(result)
+            await self._sanitize_output(session, result)
+            return result
+
+        return await self.cache_first.run(
+            request,
+            produce,
+            cancelled=lambda: session._stop_requested,
+            require_sanitized=True,
+        )
+
+    async def _stream_cache_first(
+        self,
+        adapter: Any,
+        session: AgentSession,
+        messages: list[dict],
+        tools: list[dict] | None,
+    ) -> tuple[ChatResult, list[tuple[str, list[dict]]]]:
+        request = CacheRequest.from_call(
+            messages=messages,
+            tools=tools,
+            provider=session.provider,
+            model_id=session.model_id,
+            parameters={
+                "adapter": getattr(adapter, "_extra_body", None) or {},
+                "base_url": session.base_url or getattr(adapter, "_base_url", None),
+                "user_scope": session.user_id,
+                "credential_scope": hashlib.sha256(session.api_key.encode()).hexdigest() if session.api_key else "",
+            },
+        )
+
+        produced_events: list[tuple[str, list[dict]]] = []
+
+        async def produce() -> ChatResult:
+            nonlocal produced_events
+            events, total_tokens = await self._stream_with_retry(adapter, messages, tools)
+            produced_events = events
+            result = ChatResult(
+                content="".join(content for content, _ in events),
+                tool_calls=next((calls for _, calls in reversed(events) if calls), []),
+                finish_reason="stop",
+                tokens_used=total_tokens,
+            )
+            self._normalize_model_tool_calls(result)
+            await self._sanitize_output(session, result)
+            return result
+
+        result = await self.cache_first.run(
+            request,
+            produce,
+            cancelled=lambda: session._stop_requested,
+            require_sanitized=True,
+        )
+        replay_events = produced_events or (
+            [(result.content, result.tool_calls)] if result.content or result.tool_calls else []
+        )
+        return result, replay_events
 
     async def run(
         self,
@@ -856,22 +989,27 @@ class AgentEngine:
                         async with llm_cm as llm_span:
                             try:
                                 if adapter.capabilities.streaming:
-                                    events, total_tokens = await self._stream_with_retry(adapter, session.messages, tools or None)
-                                    full_content = ""
-                                    accumulated_tool_calls = []
-                                    for delta_content, tool_calls in events:
+                                    r, events = await self._stream_cache_first(
+                                        adapter,
+                                        session,
+                                        session.messages,
+                                        tools or None,
+                                    )
+                                    for delta_content, _tool_calls in events:
                                         if session._stop_requested:
                                             yield AgentEvent(type=AgentEventType.STOPPED, data={"reason": "user_requested"})
                                             await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
                                             return
                                         if delta_content:
-                                            full_content += delta_content
                                             yield AgentEvent(type=AgentEventType.TEXT, data={"content": delta_content})
-                                        if tool_calls:
-                                            accumulated_tool_calls = tool_calls
-                                    yield ("result", ChatResult(content=full_content, tool_calls=accumulated_tool_calls, finish_reason="stop", tokens_used=total_tokens))
+                                    yield ("result", r)
                                 else:
-                                    r = await self._chat_with_retry(adapter, session.messages, tools or None)
+                                    r = await self._chat_cache_first(
+                                        adapter,
+                                        session,
+                                        session.messages,
+                                        tools or None,
+                                    )
                                     if llm_span is not None:
                                         llm_span.set_tokens(getattr(r, "tokens_used", 0) or 0, model=session.model_id)
                                         llm_span.set_output(r.content if r else "")
@@ -899,22 +1037,26 @@ class AgentEngine:
                     async with llm_cm as llm_span:
                         try:
                             if adapter.capabilities.streaming:
-                                events, total_tokens = await self._stream_with_retry(adapter, session.messages, tools or None)
-                                full_content = ""
-                                accumulated_tool_calls = []
-                                for delta_content, tool_calls in events:
+                                result, events = await self._stream_cache_first(
+                                    adapter,
+                                    session,
+                                    session.messages,
+                                    tools or None,
+                                )
+                                for delta_content, _tool_calls in events:
                                     if session._stop_requested:
                                         yield AgentEvent(type=AgentEventType.STOPPED, data={"reason": "user_requested"})
                                         await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
                                         return
                                     if delta_content:
-                                        full_content += delta_content
                                         yield AgentEvent(type=AgentEventType.TEXT, data={"content": delta_content})
-                                    if tool_calls:
-                                        accumulated_tool_calls = tool_calls
-                                result = ChatResult(content=full_content, tool_calls=accumulated_tool_calls, finish_reason="stop", tokens_used=total_tokens)
                             else:
-                                result = await self._chat_with_retry(adapter, session.messages, tools or None)
+                                result = await self._chat_cache_first(
+                                    adapter,
+                                    session,
+                                    session.messages,
+                                    tools or None,
+                                )
                             if llm_span is not None:
                                 llm_span.set_tokens(getattr(result, "tokens_used", 0) or 0, model=session.model_id)
                                 llm_span.set_output(result.content if result else "")
@@ -935,34 +1077,15 @@ class AgentEngine:
                 if run_id is not None:
                     await self._record_raw_payload(session, run_id=run_id, result=result)
 
-                # Parse XML-style tool calls for non-standard providers (e.g., StepFun)
-                if not result.tool_calls and result.content:
-                    xml_tool_calls = OpenAIAdapter._parse_xml_tool_calls(result.content)
-                    if xml_tool_calls:
-                        result.tool_calls = xml_tool_calls
-                        cleaned = re.sub(r'<function=[^>]+/?>|</function>', '', result.content, flags=re.DOTALL | re.IGNORECASE).strip()
-                        if not cleaned:
-                            result.content = ""
+                # Parse provider-specific tool calls before execution.
+                self._normalize_model_tool_calls(result)
 
                 if result.content:
                     # Output guardrail: redact PII / enforce length before the
                     # content is persisted or emitted. Note: streaming deltas
                     # are emitted per-chunk above; this sanitizes the final
                     # accumulated content (history, DONE event, memory).
-                    try:
-                        from app.config import settings as _settings
-                        if _settings.enable_guardrails:
-                            from app.core.guardrails import default_guardrails
-                            sanitized, output_violations = await default_guardrails.apply_guardrails(result.content, is_input=False)
-                            if output_violations:
-                                result.content = sanitized
-                                logger.info(
-                                    "guardrail_sanitized_output",
-                                    rules=[v.rule_name for v in output_violations],
-                                    session_id=session.session_id,
-                                )
-                    except Exception:
-                        logger.debug("agent_engine.guardrail_output_skipped", exc_info=True)
+                    await self._sanitize_output(session, result)
                     session.messages.append({"role": MessageRole.ASSISTANT, "content": result.content})
                     await self._persist_message(
                         session.session_id,
@@ -1218,7 +1341,15 @@ class AgentEngine:
         except Exception:
             logger.debug("agent_engine.output_audit_skipped", exc_info=True)
 
-        yield AgentEvent(type=AgentEventType.DONE, data={"status": session.status.value, "iterations": iteration, "content": result.content if result else "", "tokens_used": getattr(result, 'tokens_used', 0) if result else 0})
+        yield AgentEvent(type=AgentEventType.DONE, data={
+            "status": session.status.value,
+            "iterations": iteration,
+            "content": result.content if result else "",
+            "tokens_used": getattr(result, "tokens_used", 0) if result else 0,
+            "cached_tokens": getattr(result, "cached_tokens", 0) if result else 0,
+            "cache_creation_tokens": getattr(result, "cache_creation_tokens", 0) if result else 0,
+            "cache_hit": getattr(result, "cache_hit", False) if result else False,
+        })
 
 
 

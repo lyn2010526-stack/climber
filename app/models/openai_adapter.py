@@ -18,6 +18,17 @@ from app.models import ModelAdapter, ModelCapability
 logger = structlog.get_logger()
 
 
+def _with_cache_usage(
+    result: ChatResult,
+    *,
+    cached_tokens: int = 0,
+    cache_creation_tokens: int = 0,
+) -> ChatResult:
+    result.cached_tokens = cached_tokens
+    result.cache_creation_tokens = cache_creation_tokens
+    return result
+
+
 def _default_extra_body() -> dict[str, Any]:
     """Read extra request body params from MODEL_EXTRA_PARAMS (JSON).
 
@@ -159,6 +170,71 @@ class OpenAIAdapter(ModelAdapter):
         accumulated_tool_calls: list[dict] = []
         finish_reason = None
         tokens_used = 0
+        cached_tokens = 0
+        cache_creation_tokens = 0
+        reported_cached_tokens = 0
+
+        def _consume_chunk(chunk: dict[str, Any]) -> tuple[ChatResult, bool]:
+            nonlocal accumulated_content
+            nonlocal accumulated_tool_calls
+            nonlocal finish_reason
+            nonlocal tokens_used
+            nonlocal cached_tokens
+            nonlocal cache_creation_tokens
+            nonlocal reported_cached_tokens
+
+            choices = chunk.get("choices") or [{}]
+            delta = choices[0].get("delta", {})
+            delta_content = delta.get("content") or ""
+            if delta_content:
+                accumulated_content += delta_content
+            if delta.get("tool_calls"):
+                new_calls = self._parse_tool_calls_from_delta(delta["tool_calls"])
+                for i, tool_call in enumerate(new_calls):
+                    while len(accumulated_tool_calls) <= i:
+                        accumulated_tool_calls.append(
+                            {"id": "", "type": "function", "function": {"name": "", "arguments": ""}}
+                        )
+                    if tool_call.get("id"):
+                        accumulated_tool_calls[i]["id"] = tool_call["id"]
+                    if tool_call.get("function", {}).get("name"):
+                        accumulated_tool_calls[i]["function"]["name"] = tool_call["function"]["name"]
+                    if tool_call.get("function", {}).get("arguments"):
+                        args = tool_call["function"]["arguments"]
+                        accumulated_tool_calls[i]["function"]["arguments"] += (
+                            args if isinstance(args, str) else str(args)
+                        )
+            if chunk.get("usage"):
+                usage = chunk["usage"]
+                tokens_used = usage.get("total_tokens", tokens_used)
+                details = usage.get("prompt_tokens_details", {})
+                cached_tokens = details.get("cached_tokens", usage.get("cached_tokens", cached_tokens))
+                cache_creation_tokens = details.get("cache_creation_tokens", cache_creation_tokens)
+                if cached_tokens > reported_cached_tokens:
+                    from app.middleware.metrics import record_provider_cached_tokens
+
+                    record_provider_cached_tokens(
+                        "openai",
+                        self._model_id,
+                        cached_tokens - reported_cached_tokens,
+                    )
+                    reported_cached_tokens = cached_tokens
+            frame_finish_reason = choices[0].get("finish_reason")
+            if frame_finish_reason:
+                finish_reason = frame_finish_reason
+
+            result = _with_cache_usage(
+                ChatResult(
+                    content=delta_content,
+                    tool_calls=list(accumulated_tool_calls),
+                    finish_reason=finish_reason,
+                    tokens_used=tokens_used,
+                    accumulated_content=accumulated_content,
+                ),
+                cached_tokens=cached_tokens,
+                cache_creation_tokens=cache_creation_tokens,
+            )
+            return result, self._is_stream_terminated(chunk)
 
         client = self.get_client()
         response: httpx.Response | None = None
@@ -215,15 +291,15 @@ class OpenAIAdapter(ModelAdapter):
                         continue
 
                     if line == "data: [DONE]":
-                        # Only yield final chunk if there's content or tool calls
+                        # Final chunks carry the snapshot and metadata; content remains incremental.
                         if accumulated_content or accumulated_tool_calls:
-                            yield ChatResult(
-                                content=accumulated_content,
+                            yield _with_cache_usage(ChatResult(
+                                content="",
                                 tool_calls=list(accumulated_tool_calls),
                                 finish_reason=finish_reason or "stop",
                                 tokens_used=tokens_used,
                                 accumulated_content=accumulated_content,
-                            )
+                            ), cached_tokens=cached_tokens, cache_creation_tokens=cache_creation_tokens)
                         return
 
                     if not line.startswith("data:"):
@@ -238,66 +314,31 @@ class OpenAIAdapter(ModelAdapter):
                     except json.JSONDecodeError:
                         continue
 
-                    delta = chunk.get("choices", [{}])[0].get("delta", {})
-                    delta_content = delta.get("content") or ""
-                    if delta_content:
-                        accumulated_content += delta_content
-                    if delta.get("tool_calls"):
-                        new_calls = self._parse_tool_calls_from_delta(delta["tool_calls"])
-                        for i, tc in enumerate(new_calls):
-                            while len(accumulated_tool_calls) <= i:
-                                accumulated_tool_calls.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
-                            if tc.get("id"):
-                                accumulated_tool_calls[i]["id"] = tc["id"]
-                            if tc.get("function", {}).get("name"):
-                                accumulated_tool_calls[i]["function"]["name"] = tc["function"]["name"]
-                            if tc.get("function", {}).get("arguments"):
-                                args = tc["function"]["arguments"]
-                                accumulated_tool_calls[i]["function"]["arguments"] += args if isinstance(args, str) else str(args)
-                    if chunk.get("usage"):
-                        tokens_used = chunk["usage"].get("total_tokens", tokens_used)
-                    fr = chunk.get("choices", [{}])[0].get("finish_reason")
-                    if fr:
-                        finish_reason = fr
-
-                    yield ChatResult(
-                        content=delta_content,
-                        tool_calls=list(accumulated_tool_calls),
-                        finish_reason=finish_reason,
-                        tokens_used=tokens_used,
-                        accumulated_content=accumulated_content,
-                    )
-
-                    if self._is_stream_terminated(chunk):
-                        # Yield final chunk with accumulated content if not already yielded
-                        if accumulated_content and not delta_content:
-                            yield ChatResult(
-                                content=accumulated_content,
-                                tool_calls=list(accumulated_tool_calls),
-                                finish_reason=finish_reason,
-                                tokens_used=tokens_used,
-                                accumulated_content=accumulated_content,
-                            )
+                    result, terminated = _consume_chunk(chunk)
+                    yield result
+                    if terminated:
                         return
 
             # Process any remaining data in buffer (no trailing newline)
             if buffer.strip():
                 line = buffer.decode("utf-8", errors="replace").strip("\r")
                 if line.startswith("data:") and line[5:].strip():
-                    try:
-                        chunk = json.loads(line[5:].strip())
-                        delta = chunk.get("choices", [{}])[0].get("delta", {})
-                        delta_content = delta.get("content") or ""
-                        if delta_content:
-                            accumulated_content += delta_content
-                            yield ChatResult(
-                                content=delta_content,
+                    data_str = line[5:].strip()
+                    if data_str == "[DONE]":
+                        if accumulated_content or accumulated_tool_calls:
+                            yield _with_cache_usage(ChatResult(
+                                content="",
                                 tool_calls=list(accumulated_tool_calls),
-                                finish_reason=finish_reason,
+                                finish_reason=finish_reason or "stop",
                                 tokens_used=tokens_used,
                                 accumulated_content=accumulated_content,
-                            )
-                    except (json.JSONDecodeError, IndexError):
+                            ), cached_tokens=cached_tokens, cache_creation_tokens=cache_creation_tokens)
+                        return
+                    try:
+                        chunk = json.loads(data_str)
+                        result, _terminated = _consume_chunk(chunk)
+                        yield result
+                    except json.JSONDecodeError:
                         pass
 
         except httpx.ReadTimeout:
@@ -391,13 +432,20 @@ class OpenAIAdapter(ModelAdapter):
                 tool_calls = []
             usage = data.get("usage", {})
             tokens_used = usage.get("total_tokens", 0)
+            details = usage.get("prompt_tokens_details", {})
+            cached_tokens = details.get("cached_tokens", usage.get("cached_tokens", 0))
+            cache_creation_tokens = details.get("cache_creation_tokens", 0)
+            if cached_tokens:
+                from app.middleware.metrics import record_provider_cached_tokens
+
+                record_provider_cached_tokens("openai", self._model_id, cached_tokens)
             finish_reason = data.get("choices", [{}])[0].get("finish_reason", "stop")
-            return ChatResult(
+            return _with_cache_usage(ChatResult(
                 content=content,
                 tool_calls=tool_calls,
                 finish_reason=finish_reason,
                 tokens_used=tokens_used,
-            )
+            ), cached_tokens=cached_tokens, cache_creation_tokens=cache_creation_tokens)
         except Exception as exc:  # pragma: no cover
             logger.error("chat_failed", error=str(exc), model=self._model_id)
             raise
@@ -423,14 +471,19 @@ class OpenAIAdapter(ModelAdapter):
         for c in chunks:
             if c.tool_calls:
                 all_tool_calls = c.tool_calls
-        total_tokens = sum(c.tokens_used or 0 for c in chunks)
-        return ChatResult(
+        total_tokens = max((c.tokens_used or 0 for c in chunks), default=0)
+        cached_tokens = max((getattr(c, "cached_tokens", 0) for c in chunks), default=0)
+        cache_creation_tokens = max(
+            (getattr(c, "cache_creation_tokens", 0) for c in chunks),
+            default=0,
+        )
+        return _with_cache_usage(ChatResult(
             content=full_content or "",
             tool_calls=all_tool_calls,
             finish_reason=chunks[-1].finish_reason or "stop",
             tokens_used=total_tokens,
             accumulated_content=full_content or "",
-        )
+        ), cached_tokens=cached_tokens, cache_creation_tokens=cache_creation_tokens)
 
     @property
     def capabilities(self) -> ModelCapability:

@@ -13,6 +13,7 @@ from app.core.long_context import (
     SlidingWindowSummarizer,
     get_rag_memory_index,
 )
+from app.core.long_context.prefix_cache import CacheEntry
 
 
 def test_budget_total_32k():
@@ -82,6 +83,80 @@ def test_prefix_cache_stable_order():
     msgs = cache.assemble({"recent_turns": "recent", "summary": "sum"})
     assert msgs[0]["role"] == "system"
     assert "<system>" in msgs[0]["content"]
+
+
+def test_prefix_cache_is_append_only_and_records_first_stale_block():
+    cache = PrefixCache()
+    original = CacheEntry(
+        key="first",
+        blocks=(
+            ("prefix_revision", "rev-1"),
+            ("tool_schema", "tools-1"),
+            ("model", "openai:test"),
+        ),
+        value="original",
+        input_tokens=12,
+    )
+
+    assert cache.append(original) is True
+    assert cache.append(CacheEntry(**{**original.__dict__, "value": "replacement"})) is False
+    assert cache.lookup("first").value == "original"
+
+    cache.record_stale(
+        (
+            ("prefix_revision", "rev-2"),
+            ("tool_schema", "tools-2"),
+            ("model", "openai:test"),
+        )
+    )
+
+    snip = cache.stale_snips[-1]
+    assert snip.block == "prefix_revision"
+    assert snip.reason == "prefix revision changed"
+    assert snip.expected == "rev-1"
+    assert snip.actual == "rev-2"
+
+
+def test_prefix_cache_evicts_oldest_entries_at_count_and_byte_limits():
+    count_limited = PrefixCache(max_entries=2, max_entry_bytes=10_000)
+    for key in ("first", "second", "third"):
+        assert count_limited.append(
+            CacheEntry(key=key, blocks=(("messages", key),), value=key)
+        )
+
+    assert [entry.key for entry in count_limited.entries] == ["second", "third"]
+    assert count_limited.lookup("first") is None
+
+    sample = CacheEntry(key="sample", blocks=(("messages", "sample"),), value="x" * 100)
+    byte_limited = PrefixCache(max_entries=10, max_entry_bytes=1)
+
+    assert byte_limited.append(sample) is False
+    assert byte_limited.entries == ()
+
+    first = CacheEntry(key="first", blocks=(("messages", "first"),), value="x" * 100)
+    second = CacheEntry(key="second", blocks=(("messages", "second"),), value="y" * 100)
+    cumulative_limit = max(len(repr(first).encode("utf-8")), len(repr(second).encode("utf-8"))) + 10
+    cumulative_limited = PrefixCache(max_entries=10, max_entry_bytes=cumulative_limit)
+
+    assert cumulative_limited.append(first) is True
+    assert cumulative_limited.append(second) is True
+    assert [entry.key for entry in cumulative_limited.entries] == ["second"]
+
+
+def test_prefix_cache_retains_only_recent_stale_diagnostics():
+    cache = PrefixCache(max_stale_snips=2)
+    cache.append(
+        CacheEntry(
+            key="base",
+            blocks=(("prefix_revision", "original"),),
+            value="result",
+        )
+    )
+
+    for revision in ("revision-1", "revision-2", "revision-3"):
+        cache.record_stale((("prefix_revision", revision),))
+
+    assert [snip.actual for snip in cache.stale_snips] == ["revision-2", "revision-3"]
 
 
 def test_rag_memory_index(tmp_path):

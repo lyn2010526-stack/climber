@@ -55,6 +55,29 @@ TOKEN_USAGE = Counter(
     ["provider", "model_id", "type"],  # type: prompt/completion/total
 )
 
+CACHE_REQUEST_TOTAL = Counter(
+    "llm_cache_requests_total",
+    "Model response cache requests",
+    ["result"],
+)
+
+CACHE_TOKEN_TOTAL = Counter(
+    "llm_cache_tokens_total",
+    "Tokens served by application or provider caches",
+    ["provider", "model_id", "type"],
+)
+
+
+def record_cache_lookup(provider: str, model_id: str, *, hit: bool, tokens: int) -> None:
+    CACHE_REQUEST_TOTAL.labels(result="hit" if hit else "miss").inc()
+    if hit and tokens > 0:
+        CACHE_TOKEN_TOTAL.labels(provider=provider, model_id=model_id, type="hit").inc(tokens)
+
+
+def record_provider_cached_tokens(provider: str, model_id: str, tokens: int) -> None:
+    if tokens > 0:
+        CACHE_TOKEN_TOTAL.labels(provider=provider, model_id=model_id, type="provider_cached").inc(tokens)
+
 # Active sessions
 ACTIVE_SESSIONS = Gauge(
     "active_sessions",

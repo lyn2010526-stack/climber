@@ -15,6 +15,17 @@ from app.models import ModelAdapter, ModelCapability
 logger = structlog.get_logger()
 
 
+def _with_cache_usage(
+    result: ChatResult,
+    *,
+    cached_tokens: int = 0,
+    cache_creation_tokens: int = 0,
+) -> ChatResult:
+    result.cached_tokens = cached_tokens
+    result.cache_creation_tokens = cache_creation_tokens
+    return result
+
+
 class AnthropicAdapter(ModelAdapter):
     """Adapter for Anthropic Messages API with streaming."""
 
@@ -167,6 +178,8 @@ class AnthropicAdapter(ModelAdapter):
         current_tool_name = None
         current_tool_input = ""
         tokens_used = 0
+        cached_tokens = 0
+        cache_creation_tokens = 0
 
         try:
             client = self.get_client()
@@ -191,6 +204,12 @@ class AnthropicAdapter(ModelAdapter):
                         if etype == "message_start":
                             usage = event.get("message", {}).get("usage", {})
                             tokens_used = usage.get("input_tokens", 0)
+                            cached_tokens = usage.get("cache_read_input_tokens", 0)
+                            cache_creation_tokens = usage.get("cache_creation_input_tokens", 0)
+                            if cached_tokens:
+                                from app.middleware.metrics import record_provider_cached_tokens
+
+                                record_provider_cached_tokens("anthropic", self._model_id, cached_tokens)
 
                         elif etype == "content_block_start":
                             block = event.get("content_block", {})
@@ -202,12 +221,12 @@ class AnthropicAdapter(ModelAdapter):
                         elif etype == "content_block_delta":
                             delta = event.get("delta", {})
                             if delta.get("type") == "text_delta":
-                                yield ChatResult(
+                                yield _with_cache_usage(ChatResult(
                                     content=delta.get("text", ""),
                                     tool_calls=[],
                                     finish_reason=None,
                                     tokens_used=tokens_used,
-                                )
+                                ), cached_tokens=cached_tokens, cache_creation_tokens=cache_creation_tokens)
                             elif delta.get("type") == "input_json_delta":
                                 current_tool_input += delta.get("partial_json", "")
 
@@ -217,7 +236,7 @@ class AnthropicAdapter(ModelAdapter):
                                     args = json.loads(current_tool_input) if current_tool_input else {}
                                 except json.JSONDecodeError:
                                     args = {}
-                                yield ChatResult(
+                                yield _with_cache_usage(ChatResult(
                                     content="",
                                     tool_calls=[{
                                         "id": current_tool_id,
@@ -229,13 +248,24 @@ class AnthropicAdapter(ModelAdapter):
                                     }],
                                     finish_reason="tool_use",
                                     tokens_used=tokens_used,
-                                )
+                                ), cached_tokens=cached_tokens, cache_creation_tokens=cache_creation_tokens)
                             current_tool_id = None
                             current_tool_name = None
                             current_tool_input = ""
 
                         elif etype == "message_delta":
                             tokens_used += event.get("usage", {}).get("output_tokens", 0)
+                            finish_reason = event.get("delta", {}).get("stop_reason") or "stop"
+                            yield _with_cache_usage(
+                                ChatResult(
+                                    content="",
+                                    tool_calls=[],
+                                    finish_reason=finish_reason,
+                                    tokens_used=tokens_used,
+                                ),
+                                cached_tokens=cached_tokens,
+                                cache_creation_tokens=cache_creation_tokens,
+                            )
 
         except Exception as e:
             logger.error("Anthropic streaming error", error=str(e))
@@ -257,6 +287,8 @@ class AnthropicAdapter(ModelAdapter):
         tool_calls = []
         finish_reason = "stop"
         tokens_used = 0
+        cached_tokens = 0
+        cache_creation_tokens = 0
 
         async for chunk in self.stream_chat(messages, tools, **kwargs):
             full_content += chunk.content
@@ -265,10 +297,15 @@ class AnthropicAdapter(ModelAdapter):
             if chunk.finish_reason:
                 finish_reason = chunk.finish_reason
             tokens_used = max(tokens_used, chunk.tokens_used)
+            cached_tokens = max(cached_tokens, getattr(chunk, "cached_tokens", 0))
+            cache_creation_tokens = max(
+                cache_creation_tokens,
+                getattr(chunk, "cache_creation_tokens", 0),
+            )
 
-        return ChatResult(
+        return _with_cache_usage(ChatResult(
             content=full_content,
             tool_calls=tool_calls,
             finish_reason=finish_reason,
             tokens_used=tokens_used,
-        )
+        ), cached_tokens=cached_tokens, cache_creation_tokens=cache_creation_tokens)
