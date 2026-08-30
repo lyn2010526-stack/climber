@@ -53,6 +53,10 @@ class EvalRun(Base):
     average_score: Mapped[float] = mapped_column(Float, default=0.0)
     pass_rate: Mapped[float] = mapped_column(Float, default=0.0)
 
+    # CI gate outcome (Mastra-style gates/verdicts)
+    verdict: Mapped[str] = mapped_column(String(16), default="pass")
+    gate_failures_json: Mapped[str] = mapped_column(Text, default="[]")
+
     # Detailed results
     results_json: Mapped[str] = mapped_column(Text, default="[]")
 

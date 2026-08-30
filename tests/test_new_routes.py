@@ -109,7 +109,35 @@ def test_eval_roundtrip(client):
 
     run = client.post("/api/v1/eval/run", json={"dataset_id": did, "agent_id": agent["id"]})
     assert run.status_code == 200, run.text
+    assert run.json()["verdict"] == "pass"
     assert client.get("/api/v1/eval/datasets").status_code == 200
+
+
+def test_eval_run_gates_verdict(client):
+    """Posted eval results with gates get a server-side CI verdict."""
+    agent = client.post("/api/v1/agents", json={"name": "GateAgent"}).json()
+    ds = client.post("/api/v1/eval/datasets", json={"name": "gated", "data_json": "[]"})
+    did = ds.json()["id"]
+
+    payload = {
+        "dataset_id": did,
+        "agent_id": agent["id"],
+        "total_cases": 10,
+        "passed_cases": 7,
+        "failed_cases": 3,
+        "pass_rate": 0.7,
+        "average_score": 0.7,
+        "gates": {"min_pass_rate": 0.9},
+    }
+    run = client.post("/api/v1/eval/run", json=payload)
+    assert run.status_code == 200, run.text
+    body = run.json()
+    assert body["verdict"] == "fail"
+    assert any("pass_rate" in f for f in body["gate_failures"])
+
+    payload["gates"] = {"min_pass_rate": 0.5}
+    ok = client.post("/api/v1/eval/run", json=payload)
+    assert ok.json()["verdict"] == "pass"
 
 
 def test_cost_roundtrip(client):

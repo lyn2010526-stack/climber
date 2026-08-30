@@ -46,6 +46,8 @@ def _eval_run_dict(r: EvalRun) -> dict[str, Any]:
         "failed_cases": r.failed_cases,
         "pass_rate": r.pass_rate,
         "average_score": r.average_score,
+        "verdict": getattr(r, "verdict", "pass"),
+        "gate_failures": json.loads(getattr(r, "gate_failures_json", "[]") or "[]"),
         "created_at": r.created_at.isoformat() if r.created_at else "",
     }
 
@@ -89,6 +91,20 @@ async def create_eval_dataset(request: Request) -> dict[str, Any]:
 @router.post("/eval/run/")
 async def run_evaluation(request: Request) -> dict[str, Any]:
     data = await _payload(request)
+
+    # Optional CI gates: evaluated server-side against the posted summary
+    verdict = "pass"
+    gate_failures: list[str] = []
+    gates = data.get("gates")
+    if isinstance(gates, dict) and gates:
+        from app.core.evaluation import evaluate_gates
+
+        verdict, gate_failures = evaluate_gates(
+            pass_rate=float(data.get("pass_rate") or 0.0),
+            avg_score=float(data.get("average_score") or 0.0),
+            gates={k: float(v) for k, v in gates.items()},
+        )
+
     async with async_session() as db:
         run = EvalRun(
             user_id=DEFAULT_USER,
@@ -100,6 +116,8 @@ async def run_evaluation(request: Request) -> dict[str, Any]:
             average_score=float(data.get("average_score") or 0.0),
             pass_rate=float(data.get("pass_rate") or 0.0),
             results_json=data.get("results_json", "[]"),
+            verdict=verdict,
+            gate_failures_json=json.dumps(gate_failures),
         )
         db.add(run)
         await db.commit()
