@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -17,6 +19,92 @@ from pydantic import BaseModel, Field
 from app.multi_agent import AgentRole, AgentTask, CrewOutput
 
 logger = structlog.get_logger()
+
+
+@dataclass(frozen=True)
+class _DelegationContext:
+    crew: HierarchicalCrew
+    delegator_name: str
+    assignment: TaskAssignment
+    shared_context: str
+    depth: int = 0
+
+
+_active_delegation: ContextVar[_DelegationContext | None] = ContextVar(
+    "hierarchical_delegation",
+    default=None,
+)
+
+
+def _require_delegation_context() -> _DelegationContext:
+    context = _active_delegation.get()
+    if context is None:
+        raise RuntimeError("Delegation tools are only available during hierarchical crew execution")
+    delegator = context.crew.agents.get(context.delegator_name)
+    if delegator is None or not delegator.can_delegate:
+        raise PermissionError(f"Agent '{context.delegator_name}' cannot delegate")
+    return context
+
+
+async def _delegate_work(
+    agent_name: str,
+    description: str,
+    expected_output: str = "",
+    context: str = "",
+) -> str:
+    delegation = _require_delegation_context()
+    return await delegation.crew._run_delegated_task(
+        delegation,
+        agent_name=agent_name,
+        description=description,
+        expected_output=expected_output or "Complete the delegated task thoroughly.",
+        context=context,
+    )
+
+
+async def _ask_question(agent_name: str, question: str, context: str = "") -> str:
+    delegation = _require_delegation_context()
+    return await delegation.crew._run_delegated_task(
+        delegation,
+        agent_name=agent_name,
+        description=f"Answer this question from {delegation.delegator_name}: {question}",
+        expected_output="A direct, evidence-based answer to the question.",
+        context=context,
+    )
+
+
+def _register_delegation_tools(registry: Any) -> None:
+    if registry.get_tool("delegate_work") is None:
+        registry.register(
+            "delegate_work",
+            "Delegate a concrete subtask to another agent in this crew and return its result.",
+            {
+                "type": "object",
+                "properties": {
+                    "agent_name": {"type": "string", "description": "Name of the agent receiving the task"},
+                    "description": {"type": "string", "description": "Specific task to complete"},
+                    "expected_output": {"type": "string", "description": "Desired result format"},
+                    "context": {"type": "string", "description": "Additional context for the receiving agent"},
+                },
+                "required": ["agent_name", "description"],
+            },
+            _delegate_work,
+        )
+    if registry.get_tool("ask_question") is None:
+        registry.register(
+            "ask_question",
+            "Ask another agent in this crew a focused question and return its answer.",
+            {
+                "type": "object",
+                "properties": {
+                    "agent_name": {"type": "string", "description": "Name of the agent to ask"},
+                    "question": {"type": "string", "description": "Focused question for the agent"},
+                    "context": {"type": "string", "description": "Additional context for the question"},
+                },
+                "required": ["agent_name", "question"],
+            },
+            _ask_question,
+        )
 
 
 class TaskAssignment(BaseModel):
@@ -119,7 +207,15 @@ class ManagerAgent:
         logger.info("manager_plan_created", assignment_count=len(assignments))
         return assignments
 
-    async def assign(self, assignment: TaskAssignment, agent: AgentRole, engine: Any, context: str, user_id: str) -> str:
+    async def assign(
+        self,
+        assignment: TaskAssignment,
+        agent: AgentRole,
+        engine: Any,
+        context: str,
+        user_id: str,
+        delegation_context: _DelegationContext | None = None,
+    ) -> str:
         """Assign task to an agent and return result."""
         system_prompt = (
             f"You are {agent.name}, {agent.role}.\n"
@@ -129,6 +225,11 @@ class ManagerAgent:
             f"Focus only on your assigned task. Be thorough and specific."
         )
 
+        tools = list(agent.tools)
+        if agent.can_delegate and delegation_context is not None:
+            _register_delegation_tools(engine.tool_registry)
+            tools.extend(name for name in ("delegate_work", "ask_question") if name not in tools)
+
         session = engine.create_session(
             agent_id=f"hierarchical-{agent.name}-{uuid.uuid4().hex[:6]}",
             user_id=user_id,
@@ -136,7 +237,7 @@ class ManagerAgent:
             model_id="gpt-4",
             api_key="",
             system_prompt=system_prompt,
-            tools=agent.tools,
+            tools=tools,
         )
 
         task_message = f"## Your Task\n{assignment.description}\n"
@@ -147,9 +248,13 @@ class ManagerAgent:
 
         full_response_parts: list[str] = []
 
-        async for event in engine.run(session, task_message):
-            if event.type.value == "text":
-                full_response_parts.append(event.data.get("content", ""))
+        token = _active_delegation.set(delegation_context)
+        try:
+            async for event in engine.run(session, task_message):
+                if event.type.value == "text":
+                    full_response_parts.append(event.data.get("content", ""))
+        finally:
+            _active_delegation.reset(token)
 
         result = "".join(full_response_parts)
         logger.info(
@@ -274,6 +379,7 @@ class HierarchicalCrew:
         tasks: list[AgentTask] | None = None,
         engine: Any = None,
         max_iterations: int = 10,
+        max_delegation_depth: int = 3,
         verbose: bool = True,
         user_id: str = "system",
     ):
@@ -283,6 +389,7 @@ class HierarchicalCrew:
         self.tasks = tasks or []
         self.engine = engine
         self.max_iterations = max_iterations
+        self.max_delegation_depth = max_delegation_depth
         self.verbose = verbose
         self.user_id = user_id
         self._results: list[dict[str, Any]] = []
@@ -353,7 +460,12 @@ class HierarchicalCrew:
             total_iterations=self._iterations,
         )
 
-    async def _execute_with_verification(self, assignment: TaskAssignment, context: str) -> str:
+    async def _execute_with_verification(
+        self,
+        assignment: TaskAssignment,
+        context: str,
+        delegation_depth: int = 0,
+    ) -> str:
         """Execute a task with manager verification and retry logic."""
         agent_spec = self.agents.get(assignment.agent_name)
         if not agent_spec:
@@ -373,7 +485,18 @@ class HierarchicalCrew:
 
         for attempt in range(max_retries + 1):
             result = await self.manager.assign(
-                assignment, agent, self.engine, context, self.user_id,
+                assignment,
+                agent,
+                self.engine,
+                context,
+                self.user_id,
+                delegation_context=_DelegationContext(
+                    crew=self,
+                    delegator_name=agent.name,
+                    assignment=assignment,
+                    shared_context=context,
+                    depth=delegation_depth,
+                ),
             )
             last_result = result
 
@@ -406,6 +529,43 @@ class HierarchicalCrew:
                 )
 
         return last_result
+
+    async def _run_delegated_task(
+        self,
+        delegation: _DelegationContext,
+        *,
+        agent_name: str,
+        description: str,
+        expected_output: str,
+        context: str,
+    ) -> str:
+        if delegation.depth >= self.max_delegation_depth:
+            raise RuntimeError(f"Maximum delegation depth of {self.max_delegation_depth} reached")
+        if agent_name == delegation.delegator_name:
+            raise ValueError("An agent cannot delegate work to itself")
+        if agent_name not in self.agents:
+            available = ", ".join(sorted(self.agents))
+            raise ValueError(f"Agent '{agent_name}' not found. Available agents: {available}")
+
+        delegated_context = (
+            f"{delegation.shared_context}\n\n"
+            f"## Delegated by {delegation.delegator_name}\n"
+            f"Parent task: {delegation.assignment.description}"
+        )
+        if context:
+            delegated_context += f"\nAdditional delegation context: {context}"
+
+        assignment = TaskAssignment(
+            agent_name=agent_name,
+            description=description,
+            expected_output=expected_output,
+            context=delegated_context,
+        )
+        return await self._execute_with_verification(
+            assignment,
+            delegated_context,
+            delegation_depth=delegation.depth + 1,
+        )
 
     def _get_ready_tasks(
         self, remaining: list[TaskAssignment], completed: dict[str, str],
