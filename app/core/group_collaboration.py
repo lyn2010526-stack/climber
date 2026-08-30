@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import json
 import os
+import re
 import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
@@ -1270,12 +1272,25 @@ class GroupCollaborationEngine:
                 "data": {"current_round": round_num, "max_rounds": max_rounds, "status": "running"},
             })
 
-            for participant in participants:
+            remaining_participants = list(participants)
+            while remaining_participants:
+                participant = await self._select_group_chat_speaker(
+                    group,
+                    task_description=task.description,
+                    candidates=remaining_participants,
+                    conversation=conversation,
+                )
+                remaining_participants.remove(participant)
                 if not await self._task_is_running(task.id, lease.token):
                     return
                 await group_ws_hub.broadcast(task.group_id, {
                     "type": "group_chat_turn",
-                    "data": {"member_id": participant.id, "member_name": participant.agent_id, "round": round_num},
+                    "data": {
+                        "member_id": participant.id,
+                        "member_name": participant.agent_id,
+                        "round": round_num,
+                        "selection_method": "auto" if group.manager_llm else "round_robin",
+                    },
                 })
 
                 # Build conversation context
@@ -1782,6 +1797,86 @@ Respond with:
         for msg in conversation:
             parts.append(f"[{msg.get('agent_name', 'Unknown')} ({msg.get('role', 'participant')})]: {msg.get('content', '')}")
         return "\n".join(parts)
+
+    async def _select_group_chat_speaker(
+        self,
+        group: AgentGroup,
+        *,
+        task_description: str,
+        candidates: list[AgentGroupMember],
+        conversation: list[dict[str, Any]],
+    ) -> AgentGroupMember:
+        """Select the next speaker with the manager LLM and deterministic fallback."""
+        if not candidates:
+            raise ValueError("No speaker candidates")
+        if not group.manager_llm or len(candidates) == 1:
+            return candidates[0]
+
+        manager_member = next(
+            (member for member in group.members if member.agent_id == group.manager_agent_id),
+            None,
+        )
+        model_ref = group.manager_llm.strip()
+        if "/" in model_ref:
+            provider, model_id = model_ref.split("/", 1)
+        else:
+            provider = manager_member.model_provider if manager_member and manager_member.model_provider else "openai"
+            model_id = model_ref
+
+        candidate_lines = "\n".join(
+            f"- {candidate.agent_id} ({candidate.role})" for candidate in candidates
+        )
+        recent_context = self._build_group_chat_context(task_description, conversation[-12:])
+        selector_prompt = f"""Choose the best next speaker for this group discussion.
+
+Candidates:
+{candidate_lines}
+
+Conversation:
+{recent_context}
+
+Return only JSON in this form: {{"agent_id": "candidate-id"}}"""
+
+        try:
+            output, _ = await self._run_agent_simple(
+                agent_id=manager_member.agent_id if manager_member and manager_member.agent_id else "group-chat-selector",
+                provider=provider,
+                model_id=model_id,
+                api_key=_resolve_api_key(
+                    provider,
+                    manager_member.api_key_encrypted if manager_member else None,
+                ),
+                base_url=_resolve_base_url(provider, None),
+                system_prompt=(
+                    "You select the next speaker in a multi-agent discussion. "
+                    "Choose exactly one provided candidate based on role and conversation context."
+                ),
+                user_message=selector_prompt,
+                tools=[],
+            )
+            cleaned = output.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            try:
+                selected_id = str(json.loads(cleaned).get("agent_id", ""))
+            except (json.JSONDecodeError, AttributeError):
+                selected_id = ""
+            if selected_id:
+                for candidate in candidates:
+                    if candidate.agent_id == selected_id:
+                        return candidate
+
+            mentioned = [
+                candidate for candidate in candidates
+                if candidate.agent_id and re.search(
+                    rf"(?<![\w-]){re.escape(candidate.agent_id)}(?![\w-])",
+                    output,
+                )
+            ]
+            if len(mentioned) == 1:
+                return mentioned[0]
+        except Exception as e:
+            logger.warning("group_chat_speaker_selection_failed", error=str(e))
+
+        return candidates[0]
 
     def _build_manager_planning_prompt(self, task_description: str, workers: list[AgentGroupMember]) -> str:
         worker_names = [f"- {w.agent_id} ({w.role})" for w in workers]
