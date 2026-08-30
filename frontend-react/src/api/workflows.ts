@@ -1,6 +1,13 @@
 // Workflows resource domain.
 import type { WorkflowSummary, WorkflowTemplate } from '../types/api';
-import type { CreateWorkflowInput, UpdateWorkflowInput, WorkflowRunResult } from '../types/workflows';
+import type {
+  CreateWorkflowInput,
+  UpdateWorkflowInput,
+  WorkflowNode,
+  WorkflowNodeRunResult,
+  WorkflowNodeTypeDefinition,
+  WorkflowRunResult,
+} from '../types/workflows';
 import { ApiClient } from './client';
 
 declare module './client' {
@@ -11,6 +18,8 @@ declare module './client' {
     createWorkflow(data: CreateWorkflowInput): Promise<WorkflowSummary>;
     updateWorkflow(id: string, data: UpdateWorkflowInput): Promise<WorkflowSummary>;
     runWorkflow(id: string, inputs?: Record<string, string>): Promise<WorkflowRunResult>;
+    getWorkflowNodeTypes(): Promise<WorkflowNodeTypeDefinition[]>;
+    runWorkflowNode(node: WorkflowNode, inputs?: Record<string, unknown>): Promise<WorkflowNodeRunResult>;
   }
 }
 
@@ -45,6 +54,21 @@ ApiClient.prototype.updateWorkflow = function (this: ApiClient, id: string, data
 ApiClient.prototype.runWorkflow = function (this: ApiClient, id: string, inputs?: Record<string, string>): Promise<WorkflowRunResult> {
   return this.request<WorkflowRunResult>(`/workflows/${id}/run`, {
     method: 'POST',
-    body: JSON.stringify(inputs || {}),
+    body: JSON.stringify({ inputs: inputs || {} }),
+  });
+};
+
+ApiClient.prototype.getWorkflowNodeTypes = function (this: ApiClient): Promise<WorkflowNodeTypeDefinition[]> {
+  return this.request<WorkflowNodeTypeDefinition[]>('/workflows/node-types');
+};
+
+ApiClient.prototype.runWorkflowNode = function (
+  this: ApiClient,
+  node: WorkflowNode,
+  inputs?: Record<string, unknown>,
+): Promise<WorkflowNodeRunResult> {
+  return this.request<WorkflowNodeRunResult>('/workflows/nodes/run', {
+    method: 'POST',
+    body: JSON.stringify({ node, inputs: inputs || {} }),
   });
 };

@@ -8,7 +8,7 @@ interface PropertiesPanelProps {
   onDelete: () => void;
 }
 
-const FIELD_CONFIG: Record<string, { label: string; type: 'text' | 'select' | 'textarea'; options?: string[] }[]> = {
+const FIELD_CONFIG: Record<string, { label: string; type: 'text' | 'number' | 'select' | 'textarea'; options?: string[]; min?: number; max?: number }[]> = {
   input: [
     { label: 'Label', type: 'text' },
     { label: 'Description', type: 'textarea' },
@@ -32,6 +32,17 @@ const FIELD_CONFIG: Record<string, { label: string; type: 'text' | 'select' | 't
     { label: 'Variable', type: 'text' },
     { label: 'Operator', type: 'select', options: ['equals', 'not_equals', 'contains', 'not_empty', 'greater_than', 'less_than'] },
     { label: 'Expected Value', type: 'text' },
+  ],
+  code: [
+    { label: 'Label', type: 'text' },
+    { label: 'Code', type: 'textarea' },
+  ],
+  iterator: [
+    { label: 'Label', type: 'text' },
+    { label: 'Collection', type: 'text' },
+    { label: 'Item Var', type: 'text' },
+    { label: 'Max Iterations', type: 'number', min: 1, max: 10000 },
+    { label: 'Transform', type: 'textarea' },
   ],
   output: [
     { label: 'Label', type: 'text' },
@@ -107,7 +118,9 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: PropertiesPanelPro
                 />
               ) : (
                 <input
-                  type="text"
+                  type={field.type}
+                  min={field.min}
+                  max={field.max}
                   value={value}
                   onChange={(e) => handleChange(key, e.target.value)}
                    className="w-full px-2 py-1.5 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded text-[11px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50"

@@ -13,6 +13,8 @@ from app.workflow import (
     WorkflowNode,
 )
 from app.workflow.engine import WorkflowEngine
+from app.workflow.io import WorkflowIO
+from app.workflow.registry import NodePort, NodeTypeDefinition, node_registry
 
 
 class TestWorkflowNode:
@@ -43,8 +45,24 @@ class TestWorkflowEdge:
         edge = WorkflowEdge(source="node_a", target="node_b", condition="result == true")
         assert edge.condition == "result == true"
 
+    def test_edge_preserves_typed_handles(self):
+        edge = WorkflowEdge(
+            source="node_a",
+            target="node_b",
+            sourceHandle="result",
+            targetHandle="prompt",
+        )
+
+        assert edge.source_handle == "result"
+        assert edge.target_handle == "prompt"
+
 
 class TestWorkflow:
+    def test_unknown_node_type_is_preserved_for_display(self):
+        node = WorkflowNode(type="plugin.missing", name="Missing plugin")
+
+        assert node.type == "plugin.missing"
+
     def test_topological_sort_linear(self):
         w = Workflow(name="linear")
         w.nodes = [
@@ -152,6 +170,142 @@ class TestWorkflow:
 
 
 class TestWorkflowEngine:
+    @pytest.mark.asyncio
+    async def test_unknown_node_fails_closed(self):
+        from unittest.mock import MagicMock
+
+        workflow = Workflow(
+            name="unknown",
+            nodes=[WorkflowNode(id="missing", type="plugin.missing", name="Missing plugin")],
+        )
+
+        result = await WorkflowEngine(MagicMock(spec=AgentEngine)).execute(workflow)
+
+        assert result.status == "failed"
+        assert "Unknown workflow node type" in result.error
+
+    @pytest.mark.asyncio
+    async def test_registered_custom_executor_runs(self):
+        from unittest.mock import MagicMock
+
+        async def execute(node, inputs, context):
+            return {"echo": inputs["value"], "user_id": context["user_id"]}
+
+        node_registry.register(
+            NodeTypeDefinition(
+                type="custom.echo.test",
+                label="Echo",
+                inputs=[NodePort(id="value")],
+                outputs=[NodePort(id="result")],
+            ),
+            execute,
+        )
+        try:
+            node = WorkflowNode(id="echo", type="custom.echo.test", name="Echo")
+            result = await WorkflowEngine(MagicMock(spec=AgentEngine)).execute_single_node(
+                node,
+                inputs={"value": "hello"},
+                user_id="user-1",
+            )
+        finally:
+            node_registry.unregister("custom.echo.test")
+
+        assert result["status"] == "completed"
+        assert result["output"] == {"echo": "hello", "user_id": "user-1"}
+
+
+class TestWorkflowGraphContract:
+    def test_graph_conversion_preserves_unknown_type_and_handles(self):
+        from app.core.workflow_executor import build_workflow_from_graph
+
+        workflow = build_workflow_from_graph(
+            [
+                {"id": "source", "type": "input", "data": {"label": "Input"}},
+                {"id": "missing", "type": "plugin.missing", "data": {"label": "Missing"}},
+            ],
+            [{
+                "source": "source",
+                "target": "missing",
+                "sourceHandle": "value",
+                "targetHandle": "input",
+            }],
+        )
+
+        assert workflow.nodes[1].type == "plugin.missing"
+        assert workflow.edges[0].source_handle == "value"
+        assert workflow.edges[0].target_handle == "input"
+
+    def test_graph_validation_rejects_incompatible_handles(self):
+        from app.core.workflow_executor import validate_workflow_graph
+
+        result = validate_workflow_graph(
+            [
+                {"id": "llm", "type": "llm", "data": {"model": "test"}},
+                {"id": "iterator", "type": "iterator", "data": {}},
+            ],
+            [{
+                "source": "llm",
+                "target": "iterator",
+                "sourceHandle": "response",
+                "targetHandle": "items",
+            }],
+        )
+
+        assert result["valid"] is False
+        assert any("incompatible" in error.lower() for error in result["errors"])
+
+    @pytest.mark.parametrize(
+        ("nodes", "edges", "message"),
+        [
+            ([42], [], "nodes[0] must be an object"),
+            ([{"id": "input", "type": "input", "data": {}}], [42], "edges[0] must be an object"),
+            ([{"type": "input", "data": {}}], [], "nodes[0].id is required"),
+            ([{"id": "input", "type": "input", "data": []}], [], "nodes[0].data must be an object"),
+            ([{"id": "input", "type": "input", "data": {}}], [{"source": [], "target": "input"}], "edges[0].source must be a string"),
+            ([{"id": "input", "type": "input", "data": {}}], [{"source": "input", "target": "input", "sourceHandle": []}], "edges[0].sourceHandle must be a string"),
+        ],
+    )
+    def test_graph_validation_rejects_malformed_graph_values(self, nodes, edges, message):
+        from app.core.workflow_executor import validate_workflow_graph
+
+        with pytest.raises(ValueError, match=message.replace("[", r"\[").replace("]", r"\]")):
+            validate_workflow_graph(nodes, edges)
+
+    def test_graph_validation_accepts_null_optional_handles(self):
+        from app.core.workflow_executor import validate_workflow_graph
+
+        result = validate_workflow_graph(
+            [
+                {"id": "input", "type": "input", "data": {}},
+                {"id": "output", "type": "output", "data": {}},
+            ],
+            [{"source": "input", "target": "output", "sourceHandle": None, "targetHandle": None}],
+        )
+
+        assert result["valid"] is True
+
+    def test_workflow_io_round_trips_handles_and_unknown_nodes(self):
+        workflow = Workflow(
+            name="plugins",
+            nodes=[WorkflowNode(id="plugin", type="plugin.missing", name="Missing")],
+            edges=[WorkflowEdge(
+                source="plugin",
+                target="plugin",
+                source_handle="result",
+                target_handle="input",
+            )],
+        )
+
+        exported = WorkflowIO.export_workflow(workflow)
+        imported = WorkflowIO.import_workflow(exported)
+
+        assert exported["edges"][0]["sourceHandle"] == "result"
+        assert imported.success is True
+        assert imported.workflow is not None
+        assert imported.workflow.nodes[0].type == "plugin.missing"
+        assert imported.workflow.edges[0].target_handle == "input"
+
+
     def test_resolve_inputs(self):
         from unittest.mock import MagicMock
 
@@ -167,6 +321,26 @@ class TestWorkflowEngine:
 
         resolved = wf_engine._resolve_inputs(w.get_node("b"), w)
         assert resolved["name"] == "World"
+
+    def test_resolve_inputs_routes_typed_edge_handles(self):
+        from unittest.mock import MagicMock
+
+        wf_engine = WorkflowEngine(MagicMock(spec=AgentEngine))
+        workflow = Workflow(
+            name="typed",
+            nodes=[
+                WorkflowNode(id="source", type=NodeType.LLM, name="source", output={"response": "hello"}),
+                WorkflowNode(id="target", type=NodeType.TOOL, name="target"),
+            ],
+            edges=[WorkflowEdge(
+                source="source",
+                target="target",
+                source_handle="response",
+                target_handle="input",
+            )],
+        )
+
+        assert wf_engine._resolve_inputs(workflow.get_node("target"), workflow) == {"input": "hello"}
 
     def test_resolve_inputs_with_path(self):
         from unittest.mock import MagicMock
@@ -359,6 +533,165 @@ class TestWorkflowEngine:
 
         with pytest.raises(RuntimeError, match="tool exploded"):
             await wf_engine._execute_tool_node(node, {}, workflow_id="workflow-id", user_id="user-1")
+
+    @pytest.mark.asyncio
+    async def test_llm_node_uses_connected_prompt_input_when_config_prompt_is_empty(self):
+        from unittest.mock import MagicMock
+
+        engine = MagicMock(spec=AgentEngine)
+        session = object()
+        engine.create_session.return_value = session
+        received: list[str] = []
+
+        async def run(_session, prompt):
+            received.append(prompt)
+            yield type("Event", (), {"type": type("Type", (), {"value": "text"})(), "data": {"content": "ok"}})()
+
+        engine.run = run
+        wf_engine = WorkflowEngine(engine)
+        node = WorkflowNode(
+            id="llm",
+            type=NodeType.LLM,
+            name="llm",
+            config={"model_id": "gpt-4", "prompt": ""},
+        )
+
+        result = await wf_engine._execute_llm_node(node, {"prompt": "connected prompt"}, "user-1")
+
+        assert received == ["connected prompt"]
+        assert result["response"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_node_types_and_single_node_api(client):
+    response = await client.get("/api/v1/workflows/node-types")
+
+    assert response.status_code == 200
+    assert len(response.json()) == 7
+
+    for node_type in ("input", "output"):
+        response = await client.post(
+            "/api/v1/workflows/nodes/run",
+            json={
+                "node": {"id": node_type, "type": node_type, "data": {"label": node_type}},
+                "inputs": {"value": "hello"},
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "completed"
+
+    response = await client.post(
+        "/api/v1/workflows/nodes/run",
+        json={
+            "node": {"id": "missing", "type": "plugin.missing", "data": {"label": "Missing"}},
+            "inputs": {"value": "hello"},
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "failed"
+    assert "Unknown workflow node type" in response.json()["error"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("payload", "error"),
+    [
+        ({"node": {"id": "code", "type": "code", "data": []}, "inputs": {}}, "node.data must be an object"),
+        ({"node": {"id": "code", "type": "code", "data": {}}, "inputs": []}, "inputs must be an object"),
+        (
+            {"node": {"id": "iterator", "type": "iterator", "data": {"max_iterations": "many"}}, "inputs": {}},
+            "iterator max_iterations must be an integer",
+        ),
+        (
+            {"node": {"id": "iterator", "type": "iterator", "data": {"max_iterations": 0}}, "inputs": {}},
+            "iterator max_iterations must be between 1 and 10000",
+        ),
+    ],
+)
+async def test_single_node_api_maps_invalid_payloads_to_422(client, payload, error):
+    response = await client.post("/api/v1/workflows/nodes/run", json=payload)
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {"errors": [error]}
+
+
+@pytest.mark.asyncio
+async def test_iterator_node_parses_and_limits_max_iterations():
+    from unittest.mock import MagicMock
+
+    wf_engine = WorkflowEngine(MagicMock(spec=AgentEngine))
+    node = WorkflowNode(
+        id="iterator",
+        type=NodeType.ITERATOR,
+        name="iterator",
+        config={
+            "collection": "items",
+            "item_var": "item",
+            "max_iterations": "2",
+            "transform": "item",
+        },
+    )
+
+    result = await wf_engine._execute_iterator_node(
+        node,
+        {"items": [1, 2, 3]},
+        "user-1",
+        set(),
+    )
+
+    assert result["results"] == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_workflow_run_rejects_invalid_typed_connection(client):
+    response = await client.post(
+        "/api/v1/workflows/ad-hoc/run",
+        json={
+            "nodes": [
+                {"id": "input", "type": "input", "data": {}},
+                {"id": "llm", "type": "llm", "data": {"model": "test"}},
+                {"id": "iterator", "type": "iterator", "data": {}},
+                {"id": "output", "type": "output", "data": {}},
+            ],
+            "edges": [{
+                "source": "llm",
+                "target": "iterator",
+                "sourceHandle": "response",
+                "targetHandle": "items",
+            }],
+        },
+    )
+
+    assert response.status_code == 422
+    assert any("incompatible" in error.lower() for error in response.json()["detail"]["errors"])
+
+
+@pytest.mark.asyncio
+async def test_workflow_run_maps_malformed_graph_to_422(client):
+    response = await client.post(
+        "/api/v1/workflows/ad-hoc/run",
+        json={"nodes": [42], "edges": []},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {"errors": ["nodes[0] must be an object"]}
+
+
+@pytest.mark.asyncio
+async def test_workflow_run_maps_malformed_edge_fields_to_422(client):
+    response = await client.post(
+        "/api/v1/workflows/ad-hoc/run",
+        json={
+            "nodes": [
+                {"id": "input", "type": "input", "data": {}},
+                {"id": "output", "type": "output", "data": {}},
+            ],
+            "edges": [{"source": [], "target": "output"}],
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {"errors": ["edges[0].source must be a string"]}
 
 
 class TestWorkflowResilience:

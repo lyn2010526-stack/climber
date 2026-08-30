@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -13,11 +13,15 @@ import type { Connection, Edge, Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
   Play, Save,
-  FileInput, Bot, Wrench, GitBranch, FileOutput,
 } from 'lucide-react';
-import { nodeTypes, createWorkflowNode } from './WorkflowNodes';
+import {
+  createMetadataNodeTypes,
+  createWorkflowNode,
+  getWorkflowNodeIcon,
+} from './WorkflowNodes';
 import { PropertiesPanel } from './PropertiesPanel';
 import { api } from '../../api';
+import type { WorkflowNodeTypeDefinition } from '../../types/workflows';
 
 interface WorkflowEditorProps {
   onSave?: (workflow: { id: string; nodes: Node[]; edges: Edge[] }) => void;
@@ -26,14 +30,6 @@ interface WorkflowEditorProps {
   initialEdges?: Edge[];
   workflowId?: string;
 }
-
-const NODE_PALETTE = [
-  { type: 'input', label: 'Input', icon: FileInput, description: 'User input variables' },
-  { type: 'llm', label: 'LLM', icon: Bot, description: 'Call a language model' },
-  { type: 'tool', label: 'Tool', icon: Wrench, description: 'Execute a tool' },
-  { type: 'condition', label: 'Condition', icon: GitBranch, description: 'Branch by condition' },
-  { type: 'output', label: 'Output', icon: FileOutput, description: 'Return results' },
-];
 
 export function WorkflowEditor({
   onSave,
@@ -48,13 +44,50 @@ export function WorkflowEditor({
   const [workflowName, setWorkflowName] = useState('Untitled Workflow');
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
+  const [runningNode, setRunningNode] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nodeDefinitions, setNodeDefinitions] = useState<WorkflowNodeTypeDefinition[]>([]);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+  const nodeTypeSignature = nodes.map((node) => node.type || '').sort().join('|');
+
+  useEffect(() => {
+    let active = true;
+    api.getWorkflowNodeTypes()
+      .then((definitions) => {
+        if (active) setNodeDefinitions(definitions);
+      })
+      .catch((e: Error) => {
+        if (active) setError(e.message || '加载节点类型失败');
+      });
+    return () => { active = false; };
+  }, []);
+
+  const canvasNodeTypes = useMemo(
+    () => createMetadataNodeTypes(nodeDefinitions, nodeTypeSignature.split('|')),
+    [nodeDefinitions, nodeTypeSignature],
+  );
+  const definitionsByType = useMemo(
+    () => new Map(nodeDefinitions.map((definition) => [definition.type, definition])),
+    [nodeDefinitions],
+  );
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true }, eds)),
     [setEdges]
   );
+
+  const isValidConnection = useCallback((connection: Connection | Edge) => {
+    if (!connection.sourceHandle || !connection.targetHandle) return true;
+    const sourceNode = nodes.find((node) => node.id === connection.source);
+    const targetNode = nodes.find((node) => node.id === connection.target);
+    const sourceDefinition = definitionsByType.get(sourceNode?.type || '');
+    const targetDefinition = definitionsByType.get(targetNode?.type || '');
+    if (!sourceDefinition || !targetDefinition) return false;
+    const output = sourceDefinition.outputs.find((port) => port.id === connection.sourceHandle);
+    const input = targetDefinition.inputs.find((port) => port.id === connection.targetHandle);
+    if (!output || !input) return false;
+    return output.data_type === 'any' || input.data_type === 'any' || output.data_type === input.data_type;
+  }, [definitionsByType, nodes]);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -73,10 +106,11 @@ export function WorkflowEditor({
         y: event.clientY - bounds.top - 20,
       };
 
-      const newNode = createWorkflowNode(type, position);
+      const definition = definitionsByType.get(type);
+      const newNode = createWorkflowNode(type, position, { label: definition?.label || type });
       setNodes((nds) => nds.concat(newNode));
     },
-    [setNodes]
+    [definitionsByType, setNodes]
   );
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
@@ -113,8 +147,21 @@ export function WorkflowEditor({
     try {
       const payload = {
         name: workflowName,
-        nodes: nodes.map((n) => ({ id: n.id, type: n.type, data: n.data, position: n.position })),
-        edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target, condition: (e as any).condition })),
+        nodes: nodes.map((n) => {
+          const data = { ...n.data } as Record<string, unknown>;
+          delete data['executionStatus'];
+          delete data['executionOutput'];
+          delete data['executionError'];
+          return { id: n.id, type: n.type, data, position: n.position };
+        }),
+        edges: edges.map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          sourceHandle: e.sourceHandle ?? null,
+          targetHandle: e.targetHandle ?? null,
+          condition: (e as any).condition,
+        })),
       };
 
       let result;
@@ -149,6 +196,32 @@ export function WorkflowEditor({
     }
   };
 
+  const handleRunNode = async () => {
+    if (!selectedNode || !definitionsByType.has(selectedNode.type || '')) return;
+    setRunningNode(true);
+    setError(null);
+    updateNodeData(selectedNode.id, { executionStatus: 'running', executionError: '' });
+    try {
+      const result = await api.runWorkflowNode({
+        id: selectedNode.id,
+        type: selectedNode.type,
+        data: selectedNode.data as Record<string, unknown>,
+        position: selectedNode.position,
+      }, {});
+      updateNodeData(selectedNode.id, {
+        executionStatus: result.status,
+        executionOutput: result.output,
+        executionError: result.error,
+      });
+      if (result.status === 'failed') setError(result.error || '节点运行失败');
+    } catch (e: any) {
+      updateNodeData(selectedNode.id, { executionStatus: 'failed', executionError: e.message });
+      setError(e.message || '节点运行失败');
+    } finally {
+      setRunningNode(false);
+    }
+  };
+
   return (
     <div className="flex h-full">
       {/* Canvas */}
@@ -162,6 +235,15 @@ export function WorkflowEditor({
             className="text-xs font-medium text-[var(--color-text-primary)] bg-transparent border-none focus:outline-none"
           />
           <div className="ml-auto flex items-center gap-1">
+            <button
+              aria-label="Run selected node"
+              title="Run selected node"
+              onClick={handleRunNode}
+              disabled={runningNode || !selectedNode || !definitionsByType.has(selectedNode.type || '')}
+              className="flex h-7 w-7 items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] disabled:opacity-40"
+            >
+              <Play size={12} />
+            </button>
             <button
               onClick={handleSave}
               disabled={saving}
@@ -199,7 +281,8 @@ export function WorkflowEditor({
             onPaneClick={onPaneClick}
             onDrop={onDrop}
             onDragOver={onDragOver}
-            nodeTypes={nodeTypes}
+            nodeTypes={canvasNodeTypes}
+            isValidConnection={isValidConnection}
             fitView
              className="bg-[var(--color-bg-deep)]"
           >
@@ -208,14 +291,7 @@ export function WorkflowEditor({
             <MiniMap
                className="!bg-[var(--color-bg-surface)] !border-[var(--color-border-subtle)]"
               nodeColor={(n) => {
-                const colors: Record<string, string> = {
-                  input: '#6366f1',
-                  llm: '#a855f7',
-                  tool: '#10b981',
-                  condition: '#f59e0b',
-                  output: '#3b82f6',
-                };
-                return colors[n.type || ''] || '#64748b';
+                return definitionsByType.get(n.type || '')?.color || '#ef4444';
               }}
             />
           </ReactFlow>
@@ -230,7 +306,9 @@ export function WorkflowEditor({
             Node Palette
           </h3>
           <div className="space-y-1">
-            {NODE_PALETTE.map(({ type, label, icon: Icon, description }) => (
+            {nodeDefinitions.map(({ type, label, description, color }) => {
+              const Icon = getWorkflowNodeIcon(type);
+              return (
               <div
                 key={type}
                 draggable
@@ -240,13 +318,14 @@ export function WorkflowEditor({
                 }}
                 className="flex items-center gap-2 px-2 py-2 rounded-lg bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] cursor-grab hover:border-[var(--color-accent)]/30 transition-colors"
               >
-                <Icon size={13} className="text-blue-400" />
+                <Icon size={13} style={{ color }} />
                 <div className="flex-1 min-w-0">
                    <p className="text-[11px] font-medium text-[var(--color-text-primary)]">{label}</p>
                    <p className="text-[9px] text-[var(--color-text-muted)] truncate">{description}</p>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

@@ -13,6 +13,27 @@ export interface WorkflowEdge {
   source: string;
   target: string;
   condition?: unknown;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+}
+
+export interface WorkflowNodePort {
+  id: string;
+  label: string;
+  data_type: string;
+  required: boolean;
+}
+
+export interface WorkflowNodeTypeDefinition {
+  type: string;
+  label: string;
+  description: string;
+  category: string;
+  color: string;
+  inputs: WorkflowNodePort[];
+  outputs: WorkflowNodePort[];
+  runtime_type?: string | null;
+  builtin: boolean;
 }
 
 export interface CreateWorkflowInput {
@@ -30,6 +51,14 @@ export interface WorkflowRunResult {
   status: string;
   outputs: JsonObject;
   node_results: JsonObject;
+  execution_time_ms: number;
+  error: string;
+}
+
+export interface WorkflowNodeRunResult {
+  node_id: string;
+  status: string;
+  output: unknown;
   execution_time_ms: number;
   error: string;
 }

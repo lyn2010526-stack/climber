@@ -11,7 +11,8 @@ from typing import Any
 import structlog
 from pydantic import BaseModel
 
-from app.workflow import NodeType, Workflow, WorkflowEdge, WorkflowNode
+from app.workflow import Workflow, WorkflowEdge, WorkflowNode
+from app.workflow.registry import node_registry
 
 logger = structlog.get_logger()
 
@@ -45,7 +46,7 @@ def _serialize_workflow(workflow: Workflow) -> dict[str, Any]:
         "nodes": [
             {
                 "id": n.id,
-                "type": n.type.value,
+                "type": n.type.value if hasattr(n.type, "value") else str(n.type),
                 "name": n.name,
                 "config": n.config or {},
                 "inputs": n.inputs or {},
@@ -57,6 +58,8 @@ def _serialize_workflow(workflow: Workflow) -> dict[str, Any]:
                 "source": e.source,
                 "target": e.target,
                 "condition": e.condition or "",
+                "sourceHandle": e.source_handle,
+                "targetHandle": e.target_handle,
             }
             for e in workflow.edges
         ],
@@ -68,7 +71,7 @@ def _deserialize_workflow(data: dict[str, Any]) -> Workflow:
     nodes = [
         WorkflowNode(
             id=n.get("id", str(uuid.uuid4())[:8]),
-            type=NodeType(n.get("type", "llm")),
+            type=n.get("type", "llm"),
             name=n.get("name", "node"),
             config=n.get("config", {}),
             inputs=n.get("inputs", {}),
@@ -80,6 +83,8 @@ def _deserialize_workflow(data: dict[str, Any]) -> Workflow:
             source=e.get("source", ""),
             target=e.get("target", ""),
             condition=e.get("condition", ""),
+            sourceHandle=e.get("sourceHandle", e.get("source_handle", "")),
+            targetHandle=e.get("targetHandle", e.get("target_handle", "")),
         )
         for e in data.get("edges", [])
     ]
@@ -160,8 +165,8 @@ class WorkflowIO:
             else:
                 node_ids.add(nid)
             ntype = node.get("type")
-            if ntype not in {t.value for t in NodeType}:
-                errors.append(WorkflowValidationError(field=f"nodes[{i}].type", message=f"Unknown node type: {ntype}"))
+            if node_registry.get(str(ntype)) is None:
+                warnings.append(f"Node {nid or i}: unavailable node type '{ntype}' preserved")
             if not node.get("name"):
                 warnings.append(f"Node {nid or i}: missing name")
 

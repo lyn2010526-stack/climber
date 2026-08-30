@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import inspect
 import json
 import time
 from types import SimpleNamespace
@@ -27,9 +28,11 @@ from app.workflow import (
     NodeStatus,
     NodeType,
     Workflow,
+    WorkflowEdge,
     WorkflowNode,
     WorkflowResult,
 )
+from app.workflow.registry import node_registry
 
 _SAFE_EVAL_BUILTINS = {
     "len": len, "str": str, "int": int, "float": float,
@@ -179,6 +182,34 @@ class WorkflowEngine:
             execution_time_ms=execution_time,
         )
 
+    async def execute_single_node(
+        self,
+        node: WorkflowNode,
+        inputs: dict[str, Any] | None = None,
+        user_id: str = "system",
+    ) -> dict[str, Any]:
+        """Execute one node using the same fail-closed dispatch as a full DAG."""
+        started = time.time()
+        inputs = inputs or {}
+        if node.type == NodeType.START:
+            node.output = inputs
+            node.status = NodeStatus.COMPLETED
+        else:
+            start = WorkflowNode(id="__single_input__", type=NodeType.START, name="Input", output=inputs)
+            workflow = Workflow(
+                name="Single node run",
+                nodes=[start, node],
+                edges=[WorkflowEdge(source=start.id, target=node.id)],
+            )
+            await self._execute_node(node, workflow, inputs, user_id, set())
+        return {
+            "node_id": node.id,
+            "status": node.status.value,
+            "output": node.output,
+            "error": node.error,
+            "execution_time_ms": (time.time() - started) * 1000,
+        }
+
     async def _execute_node(
         self,
         node: WorkflowNode,
@@ -263,7 +294,18 @@ class WorkflowEngine:
             )
         if node.type == NodeType.CODE:
             return self._execute_code_node(node, resolved_inputs)
-        return resolved_inputs
+        if node.type in {NodeType.START, NodeType.END}:
+            return resolved_inputs
+        node_type = node.type.value if hasattr(node.type, "value") else str(node.type)
+        executor = node_registry.get_executor(node_type)
+        if executor is None:
+            raise ValueError(f"Unknown workflow node type: {node_type}")
+        output = executor(
+            node,
+            resolved_inputs,
+            {"workflow": workflow, "user_id": user_id, "user_inputs": user_inputs},
+        )
+        return await output if inspect.isawaitable(output) else output
 
     def _handle_node_failure(
         self,
@@ -364,7 +406,7 @@ class WorkflowEngine:
         provider = node.config.get("provider", "openai")
         model_id = node.config.get("model_id", "gpt-4")
         api_key = node.config.get("api_key", "")
-        prompt_template = node.config.get("prompt", "")
+        prompt_template = node.config.get("prompt") or str(inputs.get("prompt", ""))
         system_prompt = node.config.get("system_prompt", "")
 
         prompt = self._render_template(prompt_template, inputs)
@@ -550,7 +592,12 @@ class WorkflowEngine:
         """
         collection_var = node.config.get("collection", "")
         item_var = node.config.get("item_var", "item")
-        max_iterations = node.config.get("max_iterations", 100)
+        try:
+            max_iterations = int(node.config.get("max_iterations", 100))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("iterator max_iterations must be an integer") from exc
+        if not 1 <= max_iterations <= 10_000:
+            raise ValueError("iterator max_iterations must be between 1 and 10000")
         transform = node.config.get("transform", "item")
 
         # Resolve the collection
@@ -623,16 +670,21 @@ class WorkflowEngine:
         """
         resolved: dict[str, Any] = {}
 
-        # Auto-merge predecessor outputs
-        predecessors = workflow.get_predecessors(node.id)
-        for pred_id in predecessors:
-            pred_node = workflow.get_node(pred_id)
+        # Route typed edge handles, while retaining whole-output merging for legacy edges.
+        incoming_edges = [edge for edge in workflow.edges if edge.target == node.id]
+        for edge in incoming_edges:
+            pred_node = workflow.get_node(edge.source)
             if pred_node and pred_node.output is not None:
-                if isinstance(pred_node.output, dict):
+                if edge.source_handle and edge.target_handle:
+                    if isinstance(pred_node.output, dict) and edge.source_handle in pred_node.output:
+                        resolved[edge.target_handle] = pred_node.output[edge.source_handle]
+                    else:
+                        resolved[edge.target_handle] = pred_node.output
+                elif isinstance(pred_node.output, dict):
                     for k, v in pred_node.output.items():
                         resolved[k] = v
                 else:
-                    resolved[pred_id] = pred_node.output
+                    resolved[edge.source] = pred_node.output
 
         # Apply explicit input references (override auto-merged)
         for key, ref in node.inputs.items():
@@ -687,7 +739,7 @@ class WorkflowEngine:
             if node.output is not None:
                 results[node.id] = {
                     "name": node.name,
-                    "type": node.type.value,
+                    "type": node.type.value if hasattr(node.type, "value") else str(node.type),
                     "output": node.output,
                     "status": node.status.value,
                 }

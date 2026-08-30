@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import uuid
-from enum import Enum, StrEnum
+from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 
 class NodeType(StrEnum):
@@ -31,13 +31,23 @@ class WorkflowNode(BaseModel):
     """A single node in the workflow DAG."""
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
-    type: NodeType
+    type: NodeType | str
     name: str
     config: dict[str, Any] = Field(default_factory=dict)
     inputs: dict[str, str] = Field(default_factory=dict)
     status: NodeStatus = NodeStatus.PENDING
     output: Any = None
     error: str = ""
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def preserve_unknown_type(cls, value: Any) -> NodeType | str:
+        if isinstance(value, NodeType):
+            return value
+        try:
+            return NodeType(value)
+        except ValueError:
+            return str(value)
 
 
 class WorkflowEdge(BaseModel):
@@ -46,6 +56,14 @@ class WorkflowEdge(BaseModel):
     source: str
     target: str
     condition: str = ""  # For conditional branching
+    source_handle: str = Field(
+        default="",
+        validation_alias=AliasChoices("source_handle", "sourceHandle"),
+    )
+    target_handle: str = Field(
+        default="",
+        validation_alias=AliasChoices("target_handle", "targetHandle"),
+    )
 
 
 class Workflow(BaseModel):
@@ -100,3 +118,11 @@ class WorkflowResult(BaseModel):
     node_results: dict[str, Any] = Field(default_factory=dict)
     execution_time_ms: float = 0
     error: str = ""
+
+
+from app.workflow.registry import (
+    NodePort,
+    NodeRegistry,
+    NodeTypeDefinition,
+    node_registry,
+)

@@ -78,6 +78,77 @@ async def create_workflow(request: Request) -> dict[str, Any]:
         return _workflow_dict(wf)
 
 
+@router.get("/workflows/node-types")
+async def list_workflow_node_types() -> list[dict[str, Any]]:
+    """Return serializable canvas metadata for every registered node type."""
+    from app.workflow.registry import node_registry
+
+    return [definition.model_dump() for definition in node_registry.list_types()]
+
+
+@router.post("/workflows/nodes/run")
+async def run_workflow_node(
+    request: Request,
+    user_id: str = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Run one canvas node without creating or mutating a stored workflow."""
+    from app.core.agent_engine import AgentEngine
+    from app.core.workflow_executor import build_workflow_from_graph
+    from app.workflow.engine import WorkflowEngine
+
+    data = await _payload(request)
+    node_data = data.get("node")
+    if (
+        not isinstance(node_data, dict)
+        or not isinstance(node_data.get("id"), str)
+        or not node_data["id"].strip()
+        or not isinstance(node_data.get("type"), str)
+        or not node_data["type"].strip()
+    ):
+        raise HTTPException(status_code=422, detail={"errors": ["node.id and node.type are required"]})
+    if "data" in node_data and not isinstance(node_data["data"], dict):
+        raise HTTPException(status_code=422, detail={"errors": ["node.data must be an object"]})
+    inputs = data.get("inputs", {})
+    if not isinstance(inputs, dict):
+        raise HTTPException(status_code=422, detail={"errors": ["inputs must be an object"]})
+
+    from app.workflow.registry import node_registry
+
+    canvas_type = str(node_data["type"])
+    if node_registry.get(canvas_type) is None:
+        return {
+            "node_id": node_data["id"],
+            "status": "failed",
+            "output": None,
+            "error": f"Unknown workflow node type: {canvas_type}",
+            "execution_time_ms": 0.0,
+        }
+    try:
+        workflow = build_workflow_from_graph([node_data], [])
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail={"errors": [str(exc)]}) from exc
+    node = workflow.nodes[0]
+    from app.workflow import NodeType
+
+    if node.type in {NodeType.START, NodeType.END}:
+        return {
+            "node_id": node.id,
+            "status": "completed",
+            "output": inputs,
+            "error": "",
+            "execution_time_ms": 0.0,
+        }
+    model_registry = di_resolve("ModelRegistry")
+    tool_registry = di_resolve("ToolRegistry")
+    agent_engine = AgentEngine(model_registry=model_registry, tool_registry=tool_registry)
+    engine = WorkflowEngine(engine=agent_engine, model_registry=model_registry)
+    return await engine.execute_single_node(
+        node,
+        inputs=inputs,
+        user_id=user_id,
+    )
+
+
 @router.get("/workflows/{workflow_id}")
 async def get_workflow(workflow_id: str) -> dict[str, Any]:
     async with async_session() as db:
@@ -122,7 +193,7 @@ async def run_workflow(
 ) -> dict[str, Any]:
     """Execute a stored workflow, or an ad-hoc graph supplied in the body."""
     from app.core.agent_engine import AgentEngine
-    from app.core.workflow_executor import build_workflow_from_graph
+    from app.core.workflow_executor import build_workflow_from_graph, validate_workflow_graph
     from app.storage.database import Agent
     from app.workflow.engine import WorkflowEngine
 
@@ -139,13 +210,29 @@ async def run_workflow(
         if not nodes:
             raise HTTPException(status_code=422, detail="Workflow has no nodes to execute")
 
+        try:
+            validation = validate_workflow_graph(nodes, edges)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={"errors": [str(exc)]},
+            ) from None
+        if not validation["valid"]:
+            raise HTTPException(status_code=422, detail={"errors": validation["errors"]})
+
         agent = (await db.execute(select(Agent).limit(1))).scalar_one_or_none()
 
     run = WorkflowRun(workflow_id=workflow_id if wf else None, inputs=data.get("inputs", {}))
 
     try:
         workflow = build_workflow_from_graph(nodes, edges, name=(wf.name if wf else f"Workflow {workflow_id}"))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"errors": [str(exc)]},
+        ) from None
 
+    try:
         model_registry = di_resolve("ModelRegistry")
         tool_registry = di_resolve("ToolRegistry")
         agent_engine = AgentEngine(model_registry=model_registry, tool_registry=tool_registry)

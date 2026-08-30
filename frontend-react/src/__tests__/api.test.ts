@@ -22,6 +22,35 @@ afterEach(() => {
 });
 
 describe('ApiClient paginated lists', () => {
+  it('loads workflow node metadata and runs one node', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ type: 'code', label: 'Code', inputs: [], outputs: [] }],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ node_id: 'code-1', status: 'completed', output: {}, error: '' }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(api.getWorkflowNodeTypes()).resolves.toEqual([
+      { type: 'code', label: 'Code', inputs: [], outputs: [] },
+    ]);
+    await api.runWorkflowNode({ id: 'code-1', type: 'code', data: {} }, { value: 'hello' });
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/v1/workflows/nodes/run',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          node: { id: 'code-1', type: 'code', data: {} },
+          inputs: { value: 'hello' },
+        }),
+      }),
+    );
+  });
+
   it('returns agent items from the paginated response', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

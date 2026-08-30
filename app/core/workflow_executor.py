@@ -14,6 +14,7 @@ from app.core.agent_engine import AgentEngine
 from app.core.di import resolve as di_resolve
 from app.workflow import NodeType, Workflow, WorkflowEdge, WorkflowNode
 from app.workflow.engine import WorkflowEngine
+from app.workflow.registry import node_registry
 
 
 def build_workflow_from_graph(
@@ -36,17 +37,14 @@ def build_workflow_from_graph(
     -------
     Workflow
     """
-    type_mapping: dict[str, NodeType] = {
-        "input": NodeType.START,
-        "llm": NodeType.LLM,
-        "tool": NodeType.TOOL,
-        "condition": NodeType.CONDITION,
-        "output": NodeType.END,
-    }
-
     workflow_nodes: list[WorkflowNode] = []
     for node in nodes:
-        node_type = type_mapping.get(node.get("type", ""), NodeType.LLM)
+        canvas_type = str(node.get("type", ""))
+        runtime_type = node_registry.runtime_type(canvas_type)
+        try:
+            node_type: NodeType | str = NodeType(runtime_type)
+        except ValueError:
+            node_type = canvas_type
         data = node.get("data", {})
 
         config: dict[str, Any] = {}
@@ -82,6 +80,26 @@ def build_workflow_from_graph(
                 "label": data.get("label", "Output"),
                 "format": data.get("format", "text"),
             }
+        elif node_type == NodeType.ITERATOR:
+            raw_max_iterations = data.get("max_iterations", 100)
+            try:
+                max_iterations = int(raw_max_iterations)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("iterator max_iterations must be an integer") from exc
+            if not 1 <= max_iterations <= 10_000:
+                raise ValueError("iterator max_iterations must be between 1 and 10000")
+            config = {
+                "collection": data.get("collection", ""),
+                "item_var": data.get("item_var", "item"),
+                "max_iterations": max_iterations,
+                "transform": data.get("transform", "item"),
+            }
+        else:
+            config = dict(data.get("config") or data)
+            config.pop("label", None)
+            config.pop("executionStatus", None)
+            config.pop("executionOutput", None)
+            config.pop("executionError", None)
 
         workflow_nodes.append(WorkflowNode(
             id=node["id"],
@@ -92,7 +110,7 @@ def build_workflow_from_graph(
 
     workflow_edges: list[WorkflowEdge] = []
     for edge in edges:
-        source_handle = edge.get("sourceHandle", "")
+        source_handle = edge.get("sourceHandle") or ""
         # Map handle IDs to condition labels
         condition = ""
         if source_handle == "true":
@@ -104,6 +122,8 @@ def build_workflow_from_graph(
             source=edge["source"],
             target=edge["target"],
             condition=condition,
+            sourceHandle=source_handle,
+            targetHandle=edge.get("targetHandle") or "",
         ))
 
     return Workflow(
@@ -155,6 +175,10 @@ async def execute_visual_workflow(
     dict
         Execution result with status, outputs, and node results
     """
+    validation = validate_workflow_graph(nodes, edges)
+    if not validation["valid"]:
+        raise ValueError("Invalid workflow graph: " + "; ".join(validation["errors"]))
+
     if engine is None:
         from app.tools import tool_registry
         model_registry = di_resolve("ModelRegistry")
@@ -185,6 +209,27 @@ def validate_workflow_graph(
     errors: list[str] = []
     warnings: list[str] = []
 
+    if not isinstance(nodes, list):
+        raise ValueError("nodes must be an array")
+    if not isinstance(edges, list):
+        raise ValueError("edges must be an array")
+    for index, node in enumerate(nodes):
+        if not isinstance(node, dict):
+            raise ValueError(f"nodes[{index}] must be an object")
+        if not isinstance(node.get("id"), str) or not node["id"].strip():
+            raise ValueError(f"nodes[{index}].id is required")
+        if "data" in node and not isinstance(node["data"], dict):
+            raise ValueError(f"nodes[{index}].data must be an object")
+    for index, edge in enumerate(edges):
+        if not isinstance(edge, dict):
+            raise ValueError(f"edges[{index}] must be an object")
+        for field in ("source", "target"):
+            if not isinstance(edge.get(field), str) or not edge[field].strip():
+                raise ValueError(f"edges[{index}].{field} must be a string")
+        for field in ("sourceHandle", "targetHandle"):
+            if edge.get(field) is not None and not isinstance(edge[field], str):
+                raise ValueError(f"edges[{index}].{field} must be a string")
+
     node_ids = {n["id"] for n in nodes}
 
     # Check for input and output nodes
@@ -197,11 +242,26 @@ def validate_workflow_graph(
         errors.append("Workflow must have at least one Output node")
 
     # Check edges reference valid nodes
+    nodes_by_id = {node["id"]: node for node in nodes}
     for edge in edges:
         if edge.get("source") not in node_ids:
             errors.append(f"Edge references unknown source node: {edge.get('source')}")
         if edge.get("target") not in node_ids:
             errors.append(f"Edge references unknown target node: {edge.get('target')}")
+        source_handle = edge.get("sourceHandle", "")
+        target_handle = edge.get("targetHandle", "")
+        if source_handle and target_handle:
+            source_node = nodes_by_id.get(edge.get("source"))
+            target_node = nodes_by_id.get(edge.get("target"))
+            if source_node and target_node:
+                compatibility_error = node_registry.check_connection(
+                    str(source_node.get("type", "")),
+                    source_handle,
+                    str(target_node.get("type", "")),
+                    target_handle,
+                )
+                if compatibility_error:
+                    errors.append(compatibility_error)
 
     # Check for disconnected nodes
     connected_ids: set[str] = set()
@@ -226,9 +286,13 @@ def validate_workflow_graph(
     # Detect cycles via topological sort
     try:
         workflow = build_workflow_from_graph(nodes, edges)
-        workflow.topological_sort()
-    except ValueError as e:
-        errors.append(f"Cycle detected: {e}")
+    except (TypeError, ValueError) as e:
+        errors.append(f"Invalid workflow graph: {e}")
+    else:
+        try:
+            workflow.topological_sort()
+        except ValueError as e:
+            errors.append(f"Cycle detected: {e}")
 
     return {
         "valid": len(errors) == 0,

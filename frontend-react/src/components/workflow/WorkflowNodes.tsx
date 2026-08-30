@@ -1,10 +1,21 @@
-import type { NodeProps } from '@xyflow/react';
+import type { NodeProps, NodeTypes } from '@xyflow/react';
 import {
   Position,
   Handle,
 } from '@xyflow/react';
-import { Bot, Wrench, GitBranch, FileInput, FileOutput, AlertTriangle } from 'lucide-react';
+import {
+  AlertTriangle,
+  Bot,
+  Braces,
+  FileInput,
+  FileOutput,
+  GitBranch,
+  HelpCircle,
+  IterationCw,
+  Wrench,
+} from 'lucide-react';
 import { cn } from '../../lib/utils';
+import type { WorkflowNodeTypeDefinition } from '../../types/workflows';
 
 // ─── Custom Node Components ───
 
@@ -206,6 +217,111 @@ export const nodeTypes = {
   condition: ConditionNode,
   output: OutputNode,
 };
+
+const metadataIcons = {
+  input: FileInput,
+  llm: Bot,
+  tool: Wrench,
+  condition: GitBranch,
+  code: Braces,
+  iterator: IterationCw,
+  output: FileOutput,
+};
+
+export function getWorkflowNodeIcon(type: string) {
+  return metadataIcons[type as keyof typeof metadataIcons] || HelpCircle;
+}
+
+function portOffset(index: number, count: number): string {
+  return `${((index + 1) / (count + 1)) * 100}%`;
+}
+
+export function MetadataWorkflowNode({
+  data,
+  selected,
+  definition,
+  unavailableType,
+}: NodeProps & { definition?: WorkflowNodeTypeDefinition; unavailableType?: string }) {
+  const nodeData = data as Record<string, any>;
+  const Icon = definition ? getWorkflowNodeIcon(definition.type) : HelpCircle;
+  const color = definition?.color || '#ef4444';
+
+  return (
+    <div
+      className={cn(
+        'relative min-w-[180px] border bg-[var(--color-bg-surface)] px-4 py-3 transition-colors',
+        selected ? 'border-[var(--color-accent)]' : 'border-[var(--color-border-default)]',
+        unavailableType && 'border-red-500/60',
+      )}
+      style={{ borderLeftColor: color, borderLeftWidth: 3 }}
+    >
+      {(definition?.inputs || []).map((port, index, ports) => (
+        <Handle
+          key={port.id}
+          id={port.id}
+          type="target"
+          position={Position.Left}
+          title={`${port.label || port.id}: ${port.data_type}`}
+          style={{ top: portOffset(index, ports.length), backgroundColor: color }}
+          className="!h-2 !w-2"
+        />
+      ))}
+      {(definition?.outputs || []).map((port, index, ports) => (
+        <Handle
+          key={port.id}
+          id={port.id}
+          type="source"
+          position={Position.Right}
+          title={`${port.label || port.id}: ${port.data_type}`}
+          style={{ top: portOffset(index, ports.length), backgroundColor: color }}
+          className="!h-2 !w-2"
+        />
+      ))}
+      <div className="flex items-center gap-2">
+        <Icon size={14} style={{ color }} />
+        <span className="max-w-[150px] truncate text-xs font-medium text-[var(--color-text-primary)]">
+          {nodeData['label'] || definition?.label || unavailableType || 'Node'}
+        </span>
+      </div>
+      {unavailableType ? (
+        <p className="mt-1 text-[9px] text-red-400">Unavailable: {unavailableType}</p>
+      ) : (
+        <p className="mt-1 max-w-[170px] truncate text-[9px] text-[var(--color-text-muted)]">
+          {definition?.description}
+        </p>
+      )}
+      {nodeData['executionStatus'] && (
+        <p className={cn(
+          'mt-2 text-[9px]',
+          nodeData['executionStatus'] === 'failed' ? 'text-red-400' : 'text-emerald-400',
+        )}>
+          {nodeData['executionStatus']}
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function createMetadataNodeTypes(
+  definitions: WorkflowNodeTypeDefinition[],
+  nodeTypes: string[],
+): NodeTypes {
+  const result: NodeTypes = {};
+  for (const definition of definitions) {
+    result[definition.type] = (props: NodeProps) => (
+      <MetadataWorkflowNode {...props} definition={definition} />
+    );
+  }
+  const knownTypes = new Set(definitions.map((definition) => definition.type));
+  for (const type of nodeTypes) {
+    if (type && !knownTypes.has(type) && !result[type]) {
+      result[type] = (props: NodeProps) => (
+        <MetadataWorkflowNode {...props} unavailableType={type} />
+      );
+    }
+  }
+  return result;
+}
 
 // ─── Helper to create nodes ───
 
