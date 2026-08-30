@@ -30,6 +30,7 @@ from sqlalchemy import select, update
 from app.core import AgentEvent, AgentEventType
 from app.core.agent_engine import AgentEngine
 from app.core.api_key_crypto import decrypt_api_key
+from app.core.artifacts import Artifact, ArtifactStage, ArtifactType, GateKind, HandoffAudit
 from app.core.di import resolve as di_resolve
 from app.core.group_ws_hub import group_ws_hub
 from app.core.task_dag import HandoffMessage, TaskDAG, TaskNode
@@ -423,12 +424,14 @@ class GroupCollaborationEngine:
 
             # Check for resume from checkpoint
             checkpoint = await self._load_latest_checkpoint(task_id)
-            if checkpoint and checkpoint.status in ("running", "paused"):
+            if checkpoint and checkpoint.status in ("running", "paused", "completed"):
                 logger.info("resuming_from_checkpoint", task_id=task_id, checkpoint_id=checkpoint.id)
                 resumed_task = await self._resume_from_checkpoint(task, checkpoint, token=lease.token)
                 if resumed_task is None:
                     return
                 task = resumed_task
+                if task.status == "completed":
+                    return
 
             # Dispatch based on process type
             process_type = group.process_type or "sequential"
@@ -731,7 +734,14 @@ class GroupCollaborationEngine:
         })
         return True
 
-    async def handoff_task(self, task_id: str, target_agent_id: str, reason: str = "") -> dict[str, Any]:
+    async def handoff_task(
+        self,
+        task_id: str,
+        target_agent_id: str,
+        reason: str = "",
+        *,
+        artifact: Artifact | None = None,
+    ) -> dict[str, Any]:
         """Hand off a task from one agent to another.
 
         """
@@ -742,35 +752,57 @@ class GroupCollaborationEngine:
 
             target = (
                 await db.execute(
-                    select(AgentGroupMember).where(AgentGroupMember.agent_id == target_agent_id)
+                    select(AgentGroupMember).where(
+                        AgentGroupMember.agent_id == target_agent_id,
+                        AgentGroupMember.group_id == task.group_id,
+                    )
                 )
             ).scalar_one_or_none()
             if not target:
                 raise HTTPException(status_code=404, detail="Target agent not found")
+
+            source_agent_id = task.worker_id or ""
+            handoff_audit = (
+                HandoffAudit.capture(
+                    artifact,
+                    from_agent=source_agent_id,
+                    to_agent=target.id,
+                    reason=reason,
+                )
+                if artifact is not None
+                else None
+            )
 
             # Update task worker
             task.worker_id = target.id
             await db.commit()
 
             msg = HandoffMessage(
-                source_agent=task.worker_id or "",
+                source_agent=source_agent_id,
                 target_agent=target.id,
                 task_id=task_id,
                 context=task.description,
                 reason=reason,
+                metadata={"artifact": handoff_audit.to_dict()} if handoff_audit else {},
             )
+
+            event_data: dict[str, Any] = {
+                "task_id": task_id,
+                "from_agent": msg.source_agent,
+                "to_agent": target.id,
+                "reason": reason,
+            }
+            result: dict[str, Any] = {"ok": True, "task_id": task_id, "handoff_to": target.id}
+            if handoff_audit is not None:
+                event_data["artifact"] = handoff_audit.to_dict()
+                result["handoff_audit"] = handoff_audit.to_dict()
 
             await group_ws_hub.broadcast(task.group_id, {
                 "type": "task_handoff",
-                "data": {
-                    "task_id": task_id,
-                    "from_agent": msg.source_agent,
-                    "to_agent": target.id,
-                    "reason": reason,
-                },
+                "data": event_data,
             })
 
-            return {"ok": True, "task_id": task_id, "handoff_to": target.id}
+            return result
 
     async def _run_sequential_process(
         self,
@@ -811,8 +843,23 @@ class GroupCollaborationEngine:
                         return False
             return True
 
-        async def _checkpoint_and_broadcast(t: AgentGroupTask, round_num: int, output: str, issues: list[dict[str, Any]]) -> None:
-            saved = await self._save_checkpoint(task.id, task.group_id, round_num, max_rounds, output, issues, token=lease.token)
+        async def _checkpoint_and_broadcast(
+            t: AgentGroupTask,
+            round_num: int,
+            output: str | Artifact,
+            issues: list[dict[str, Any]],
+            status: str | None = None,
+        ) -> None:
+            saved = await self._save_checkpoint(
+                task.id,
+                task.group_id,
+                round_num,
+                max_rounds,
+                output,
+                issues,
+                token=lease.token,
+                status=status,
+            )
             if not saved:
                 return
             await group_ws_hub.broadcast(task.group_id, {
@@ -936,6 +983,7 @@ class GroupCollaborationEngine:
 
                 # Reviewer turn
                 all_issues = []
+                reviewer_gate_passed = True
                 for reviewer in reviewers:
                     await group_ws_hub.broadcast(task.group_id, {
                         "type": "reviewer_start",
@@ -963,14 +1011,20 @@ class GroupCollaborationEngine:
                         review_error = str(e)
 
                     if review_error:
+                        reviewer_gate_passed = False
+                        all_issues.append(
+                            {
+                                "description": f"Reviewer stage gate failed: {review_error}",
+                                "severity": "high",
+                            }
+                        )
                         await group_ws_hub.broadcast(task.group_id, {
                             "type": "reviewer_error",
                             "data": {"member_id": reviewer.id, "member_name": reviewer.agent_id, "error": review_error},
                         })
                         continue
 
-                    lower_output = review_output.lower()
-                    passed = any(k in lower_output for k in ["通过", "pass", "approved", "looks good", "accept"])
+                    passed = self._review_passed(review_output)
                     issues = self._parse_issues(review_output)
 
                     await group_ws_hub.broadcast(task.group_id, {
@@ -986,7 +1040,11 @@ class GroupCollaborationEngine:
                     })
 
                     if not passed:
-                        all_issues.extend(issues)
+                        reviewer_gate_passed = False
+                        all_issues.extend(
+                            issues
+                            or [{"description": "Reviewer stage gate rejected the artifact", "severity": "high"}]
+                        )
 
                 if not all_issues:
                     # Validate structured output if schema provided
@@ -1003,9 +1061,40 @@ class GroupCollaborationEngine:
                     completion_values: dict[str, Any] = {
                         "final_output": worker_output,
                     }
+                    checkpoint_artifact: str | Artifact = worker_output
                     if task.output_schema:
                         completion_values["structured_output"] = parsed if 'parsed' in dir() else {}
-                    await _checkpoint_and_broadcast(task, current_round, worker_output, [])
+                        required_gates = [GateKind.SCHEMA]
+                        if reviewers:
+                            required_gates.append(GateKind.REVIEWER)
+                        if task.human_review_required:
+                            required_gates.append(GateKind.HUMAN)
+                        checkpoint_artifact = Artifact.create(
+                            artifact_type=ArtifactType.RESULT,
+                            stage=ArtifactStage.REVIEW,
+                            content=parsed,
+                            required_gates=tuple(required_gates),
+                        ).record_gate(GateKind.SCHEMA, approved=True, actor="json-schema")
+                        if reviewers:
+                            checkpoint_artifact = checkpoint_artifact.record_gate(
+                                GateKind.REVIEWER,
+                                approved=reviewer_gate_passed,
+                                actor=",".join(reviewer.agent_id or reviewer.id for reviewer in reviewers),
+                            )
+                        if task.human_review_required:
+                            checkpoint_artifact = checkpoint_artifact.record_gate(
+                                GateKind.HUMAN,
+                                approved=True,
+                                actor="human-review",
+                            )
+                        checkpoint_artifact = checkpoint_artifact.advance(ArtifactStage.FINAL)
+                    await _checkpoint_and_broadcast(
+                        task,
+                        current_round,
+                        checkpoint_artifact,
+                        [],
+                        status="completed",
+                    )
                     if not await self._complete_running_task(
                         task.id,
                         lease.token,
@@ -1537,7 +1626,17 @@ Respond with:
             return False, {"errors": errors[:10], "raw": output[:500]}
         return True, parsed
 
-    async def _save_checkpoint(self, task_id: str, group_id: str, current_round: int, max_rounds: int, current_artifact: str, all_issues: list[dict[str, Any]], token: int | None = None) -> bool:
+    async def _save_checkpoint(
+        self,
+        task_id: str,
+        group_id: str,
+        current_round: int,
+        max_rounds: int,
+        current_artifact: str | Artifact,
+        all_issues: list[dict[str, Any]],
+        token: int | None = None,
+        status: str | None = None,
+    ) -> bool:
         """Save execution checkpoint for resume capability, fenced by lease token."""
         async with async_session() as db:
             if token is not None:
@@ -1564,13 +1663,24 @@ Respond with:
             if row is None:
                 logger.info("checkpoint_save_skipped", task_id=task_id)
                 return False
+            checkpoint_payload = (
+                current_artifact.to_checkpoint()
+                if isinstance(current_artifact, Artifact)
+                else current_artifact
+            )
+            checkpoint_status = status or (
+                "completed"
+                if isinstance(current_artifact, Artifact)
+                and current_artifact.stage is ArtifactStage.FINAL
+                else "running"
+            )
             checkpoint = AgentGroupTaskCheckpoint(
                 group_id=group_id,
                 task_id=task_id,
-                status="running",
+                status=checkpoint_status,
                 current_round=current_round,
                 max_rounds=max_rounds,
-                current_artifact=current_artifact,
+                current_artifact=checkpoint_payload,
                 all_issues=all_issues,
                 task_description=row.description,
                 output_schema=row.output_schema,
@@ -1598,16 +1708,32 @@ Respond with:
     ) -> AgentGroupTask | None:
         """Resume task execution from a checkpoint."""
         restored_task = None
+        restored_artifact = Artifact.from_checkpoint(checkpoint.current_artifact)
+        restored_output = (
+            restored_artifact.content_json()
+            if restored_artifact is not None
+            else checkpoint.current_artifact
+        )
         async with async_session() as db:
+            completed = checkpoint.status == "completed"
+            restore_values: dict[str, Any] = {
+                "status": "completed" if completed else "running",
+                "final_output": restored_output,
+                "current_round": checkpoint.current_round,
+            }
+            if completed:
+                restore_values.update({
+                    "completed_at": _db_now(),
+                    "lease_owner": None,
+                    "lease_expires_at": None,
+                })
+            if restored_artifact is not None and isinstance(restored_artifact.content, dict):
+                restore_values["structured_output"] = restored_artifact.content
             stmt = (
                 update(AgentGroupTask)
                 .where(AgentGroupTask.id == task.id)
                 .where(AgentGroupTask.status.in_(("running", "paused")))
-                .values(
-                    status="running",
-                    final_output=checkpoint.current_artifact,
-                    current_round=checkpoint.current_round,
-                )
+                .values(**restore_values)
             )
             if token is not None:
                 stmt = stmt.where(AgentGroupTask.lease_token == token)
@@ -1619,13 +1745,20 @@ Respond with:
             restored_task = await db.get(AgentGroupTask, task.id)
         if restored_task is None:
             return None
+        restored_data: dict[str, Any] = {
+            "task_id": task.id,
+            "checkpoint_id": checkpoint.id,
+            "round": checkpoint.current_round,
+        }
+        if restored_artifact is not None:
+            restored_data["artifact"] = restored_artifact.to_dict()
         await group_ws_hub.broadcast(task.group_id, {
             "type": "checkpoint_restored",
-            "data": {"task_id": task.id, "checkpoint_id": checkpoint.id, "round": checkpoint.current_round},
+            "data": restored_data,
         })
         await group_ws_hub.broadcast(task.group_id, {
-            "type": "task_partial",
-            "data": {"task_id": task.id, "final_output": checkpoint.current_artifact, "rounds": checkpoint.current_round},
+            "type": "task_completed" if completed else "task_partial",
+            "data": {"task_id": task.id, "final_output": restored_output, "rounds": checkpoint.current_round},
         })
         return restored_task
 
@@ -2061,6 +2194,22 @@ Output: {worker_output}
 Respond with:
 1. "通过" if the output meets all requirements, or "不通过" if not.
 2. If not passing, list specific issues found."""
+
+    @staticmethod
+    def _review_passed(review_output: str) -> bool:
+        """Parse the explicit verdict from the reviewer's first non-empty line."""
+        first_line = next((line.strip() for line in review_output.splitlines() if line.strip()), "")
+        verdict = re.sub(r"^(?:\d+[.)]\s*|[-*]\s*)", "", first_line.lower()).strip()
+        if verdict.startswith(("不通过", "未通过")):
+            return False
+        if re.search(
+            r"\b(?:not\s+(?:approved|accepted)|did\s+not\s+pass|failed?|rejected?|unacceptable|changes\s+required)\b",
+            verdict,
+        ):
+            return False
+        return verdict.startswith("通过") or bool(
+            re.match(r"^(?:pass(?:ed)?|approved|accepted|looks\s+good)\b", verdict)
+        )
 
     def _build_group_chat_prompt(self, role: str) -> str:
         role_descriptions = {
