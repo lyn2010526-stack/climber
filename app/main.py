@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.v1 import router as api_router
-from app.config import settings
+from app.config import BASE_DIR, settings
 from app.core.di import ScopeContext
 from app.core.di import register as di_register
 from app.core.di import resolve as di_resolve
@@ -488,10 +488,14 @@ async def _init_arch_v2() -> dict[str, Any] | None:
 
     if settings.is_arch_v2_active("integration"):
         from app.core.integration.event_sourcing import EventSourcingManager
+        from app.core.integration.event_store import EventStore
         from app.core.integration.protocol_router import ProtocolRouter
 
-        es_manager = EventSourcingManager()
+        event_store = EventStore(BASE_DIR / "data" / "events.db")
+        es_manager = EventSourcingManager(event_store=event_store)
+        await es_manager.restore()
         proto_router = ProtocolRouter()
+        handles["event_store"] = event_store
         handles["event_sourcing_manager"] = es_manager
         handles["protocol_router"] = proto_router
         logger.info("arch_v2.integration_enabled")

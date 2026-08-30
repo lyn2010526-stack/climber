@@ -42,24 +42,49 @@ class EventSourcedStore:
 
 
 class EventSourcingManager:
-    """Manages multiple event-sourced stores sharing one event stream."""
+    """Manages multiple event-sourced stores sharing one event stream.
 
-    def __init__(self) -> None:
+    Args:
+        event_store: optional persistent append-only store. When set, every
+            emitted event is persisted and :meth:`restore` rebuilds the
+            in-memory stream from disk after a restart.
+        stream_id: stream used when persisting to ``event_store``.
+    """
+
+    def __init__(self, event_store: Any = None, stream_id: str = "main") -> None:
         self._stores: dict[str, EventSourcedStore] = {}
         self._events: list[dict[str, Any]] = []
-        self._stream_id: str = "main"
+        self._stream_id: str = stream_id
+        self._event_store = event_store
 
     def register_store(self, store: EventSourcedStore) -> None:
         store.events = self._events
         self._stores[store.name] = store
 
     async def emit(self, event_type: str, data: dict[str, Any]) -> None:
+        if self._event_store is not None:
+            await self._event_store.append(event_type, data, stream_id=self._stream_id)
         self._events.append({"type": event_type, **data})
         # Rebuild affected projections lazily by name; callers can also
         # query any store's project().
         for store in self._stores.values():
             # touch the store so the shared list is used on next project()
             store.events = self._events
+
+    async def restore(self) -> int:
+        """Reload the shared stream from the persistent event store.
+
+        Returns the number of events loaded. No-op without an event store.
+        """
+        if self._event_store is None:
+            return 0
+        persisted = await self._event_store.read(stream_id=self._stream_id)
+        self._events.clear()
+        for event in persisted:
+            self._events.append({"type": event["event_type"], **event["data"]})
+        for store in self._stores.values():
+            store.events = self._events
+        return len(self._events)
 
     def get_store(self, name: str) -> EventSourcedStore | None:
         return self._stores.get(name)

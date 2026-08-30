@@ -12,6 +12,7 @@ from app.core.integration.event_sourcing import (
     EventSourcedStore,
     EventSourcingManager,
 )
+from app.core.integration.event_store import EventStore
 from app.core.integration.protocol_router import (
     ProtocolRouter,
     get_protocol_router,
@@ -20,6 +21,7 @@ from app.core.integration.protocol_router import (
 __all__ = [
     "EventSourcedStore",
     "EventSourcingManager",
+    "EventStore",
     "ProtocolRouter",
     "get_protocol_router",
 ]
