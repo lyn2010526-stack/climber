@@ -1,44 +1,33 @@
 import { useState, useEffect } from 'react';
 import { Clock, CheckCircle2, AlertCircle, Copy, Download, ChevronRight } from 'lucide-react';
-import { api } from '../api';
-
-interface TaskRecord {
-  id: string;
-  group_id: string;
-  description: string;
-  status: string;
-  current_round: number;
-  max_rounds: number;
-  final_output: string;
-  total_tokens: number;
-  started_at: string;
-  completed_at: string;
-  created_at: string;
-}
+import { api, type TaskSummary, type TaskDetail } from '../api';
 
 const STATUS_LABELS: Record<string, string> = {
   pending: '等待中',
   running: '执行中',
-  reviewing: '审查中',
   completed: '已完成',
-  partial: '部分完成',
   failed: '失败',
-  stopped: '已停止',
+  cancelled: '已取消',
 };
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'text-[var(--color-text-muted)]',
-  reviewing: 'text-amber-400',
+  running: 'text-[var(--color-accent)]',
   completed: 'text-green-400',
-  partial: 'text-amber-400',
   failed: 'text-red-400',
-  stopped: 'text-[var(--color-text-muted)]',
+  cancelled: 'text-[var(--color-text-muted)]',
+};
+
+const taskOutput = (task: TaskDetail | null): string => {
+  if (!task?.result) return '';
+  const output = (task.result as Record<string, unknown>).output;
+  return typeof output === 'string' ? output : JSON.stringify(output ?? '', null, 2);
 };
 
 export function TaskHistoryPage() {
-  const [tasks, setTasks] = useState<TaskRecord[]>([]);
+  const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTask, setSelectedTask] = useState<TaskRecord | null>(null);
+  const [selectedTask, setSelectedTask] = useState<TaskDetail | null>(null);
 
   useEffect(() => {
     loadTasks();
@@ -55,16 +44,24 @@ export function TaskHistoryPage() {
     }
   };
 
+  const openTask = async (taskId: string) => {
+    try {
+      setSelectedTask(await api.getTask(taskId));
+    } catch {
+      setSelectedTask(null);
+    }
+  };
+
   const copyOutput = (text: string) => {
     navigator.clipboard.writeText(text);
   };
 
-  const downloadOutput = (task: TaskRecord) => {
-    const blob = new Blob([task.final_output || ''], { type: 'text/plain' });
+  const downloadOutput = (task: TaskDetail) => {
+    const blob = new Blob([taskOutput(task) || ''], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `task-${task.id.slice(0, 8)}-output.txt`;
+    a.download = `task-${task.task_id.slice(0, 8)}-output.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -81,6 +78,8 @@ export function TaskHistoryPage() {
   }
 
   if (selectedTask) {
+    const output = taskOutput(selectedTask);
+    const tokens = (selectedTask.result as Record<string, unknown> | undefined)?.tokens_used;
     return (
       <div className="h-full flex flex-col">
         <div className="flex items-center gap-2 p-3 border-b border-[var(--color-border-subtle)]">
@@ -95,11 +94,11 @@ export function TaskHistoryPage() {
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div className="space-y-2">
-            <h3 className="text-sm font-medium text-[var(--color-text-primary)]">{selectedTask.description}</h3>
+            <h3 className="text-sm font-medium text-[var(--color-text-primary)]">{selectedTask.objective}</h3>
             <div className="flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
-              <span>ID: {selectedTask.id.slice(0, 8)}...</span>
-              <span>轮次: {selectedTask.current_round}/{selectedTask.max_rounds}</span>
-              <span>Tokens: {selectedTask.total_tokens.toLocaleString()}</span>
+              <span>ID: {selectedTask.task_id.slice(0, 8)}...</span>
+              <span>步骤: {selectedTask.progress}/{selectedTask.total_steps}</span>
+              {typeof tokens === 'number' && <span>Tokens: {tokens.toLocaleString()}</span>}
             </div>
             <div className="flex items-center gap-2">
               <span className={`text-[10px] ${STATUS_COLORS[selectedTask.status] || 'text-[var(--color-text-muted)]'}`}>
@@ -107,13 +106,13 @@ export function TaskHistoryPage() {
               </span>
             </div>
           </div>
-          {selectedTask.final_output && (
+          {output && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-medium text-[var(--color-text-secondary)]">最终产出</h4>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => copyOutput(selectedTask.final_output)}
+                    onClick={() => copyOutput(output)}
                     className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] flex items-center gap-1 transition-colors"
                   >
                     <Copy size={10} /> 复制
@@ -127,9 +126,14 @@ export function TaskHistoryPage() {
                 </div>
               </div>
               <pre className="p-3 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-xl text-xs text-[var(--color-text-primary)] whitespace-pre-wrap font-mono">
-                {selectedTask.final_output}
+                {output}
               </pre>
             </div>
+          )}
+          {selectedTask.error && (
+            <pre className="p-3 bg-[var(--color-bg-surface-1)] border border-red-500/20 rounded-xl text-xs text-red-400 whitespace-pre-wrap font-mono">
+              {selectedTask.error}
+            </pre>
           )}
         </div>
       </div>
@@ -146,25 +150,25 @@ export function TaskHistoryPage() {
         {tasks.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-xs text-[var(--color-text-muted)]">暂无任务记录</p>
-            <p className="text-[10px] text-[var(--color-text-muted)] mt-1">在群组中创建任务后，这里会显示历史记录</p>
+            <p className="text-[10px] text-[var(--color-text-muted)] mt-1">创建 Agent 任务后，这里会显示历史记录</p>
           </div>
         ) : (
           <div className="divide-y divide-[var(--color-border-subtle)]">
             {tasks.map((task) => (
               <div
-                key={task.id}
-                onClick={() => setSelectedTask(task)}
+                key={task.task_id}
+                onClick={() => openTask(task.task_id)}
                 className="p-3 hover:bg-white/[0.03] cursor-pointer transition-all duration-200 group"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-[var(--color-text-primary)] truncate group-hover:text-white transition-colors">{task.description}</p>
+                    <p className="text-xs text-[var(--color-text-primary)] truncate group-hover:text-white transition-colors">{task.objective}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <span className={`text-[10px] ${STATUS_COLORS[task.status] || 'text-[var(--color-text-muted)]'}`}>
                         {STATUS_LABELS[task.status] || task.status}
                       </span>
                       <span className="text-[10px] text-[var(--color-text-muted)]">
-                        {new Date(task.created_at).toLocaleString('zh-CN')}
+                        {task.created_at ? new Date(task.created_at).toLocaleString('zh-CN') : '-'}
                       </span>
                     </div>
                   </div>

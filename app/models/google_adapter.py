@@ -56,10 +56,8 @@ class GoogleGeminiAdapter(ModelAdapter):
         tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[ChatResult]:
-        """Gemini doesn't support true streaming in this adapter, yield full result."""
+        """Yield the complete Gemini result once."""
         result = await self.chat(messages, tools, **kwargs)
-        if result.content:
-            yield ChatResult(content=result.content, tool_calls=[], finish_reason=None, tokens_used=result.tokens_used)
         yield result
 
     async def chat(

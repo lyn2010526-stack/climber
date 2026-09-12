@@ -32,13 +32,19 @@ export function useChat(sessionId: string | null) {
       return;
     }
 
-    api.getSessionMessages(sessionId).then((data: any) => {
-      const msgs: Message[] = (data.messages || []).map((m: any) => ({
+    api.getSessionMessages(sessionId).then((data) => {
+      const msgs: Message[] = data.map((m) => ({
         id: m.id,
         role: m.role,
         content: m.content || '',
-        toolCalls: Array.isArray(m.toolCalls) ? m.toolCalls : [],
-        tool_name: m.tool_name,
+        toolCalls: m.tool_calls.map(toolCall => ({
+          id: toolCall.id,
+          name: toolCall.function?.name || toolCall.name || 'unknown',
+          arguments: typeof toolCall.function?.arguments === 'string'
+            ? JSON.parse(toolCall.function.arguments || '{}')
+            : toolCall.function?.arguments || toolCall.arguments || {},
+        })),
+        tool_name: m.tool_name || undefined,
         timestamp: new Date(m.created_at),
       }));
       setMessages(msgs);

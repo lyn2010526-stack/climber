@@ -41,6 +41,8 @@ class MessageOut(BaseModel):
     id: str
     role: str
     content: str | None
+    tool_call_id: str | None
+    tool_calls: list[dict[str, Any]]
     tool_name: str | None
     created_at: str
 
@@ -140,6 +142,8 @@ async def get_session_messages(session_id: str, user_id: str = Depends(get_curre
                 id=r.id,
                 role=r.role,
                 content=r.content,
+                tool_call_id=r.tool_call_id,
+                tool_calls=r.tool_calls or [],
                 tool_name=r.tool_name,
                 created_at=r.created_at.isoformat() if r.created_at else "",
             )

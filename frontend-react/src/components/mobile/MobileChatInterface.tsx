@@ -251,7 +251,7 @@ export function MobileChatInterface({
             )}
           </button>
           
-          {onStop && !isLoading && messages.some(m => m.role === 'assistant') && (
+          {onStop && isLoading && (
             <button
               type="button"
               onClick={onStop}

@@ -138,3 +138,14 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 前端完整 vitest 用默认并发 worker 会长时间无输出（卡死/超时）；可信全量用 `NODE_OPTIONS="--max-old-space-size=4096" npx vitest run --maxWorkers=2`，并串行执行 typecheck/build/test，避免并行争抢内存
   - 依赖 Task 子代理生成项目文档时可能返回空结果或失败报 `Upstream HTTP/2 stream failed`；文档与规格类产出应直接由主会话写入，不要反复重试子代理
 
+
+[项目知识摘要]
+- Date: 2026-09-12
+- Context: Agent 在执行阻断级修复与交付验证时发现
+- Category: 构建方法
+- Instructions:
+  - 当前可信验证基线（覆盖并修正 2026-08-05 条目中过时的 3305 tests 声明）：后端 `python3 -m pytest tests/` 41 passed；前端 `src/` 内 vitest 38 files / 640 tests；`npm run typecheck` 与 `npm run build` 零错误通过。孤儿测试 NotFoundPage.test.tsx / ForbiddenPage.test.tsx 因页面已删除且无引用，经用户确认已删除
+  - cleanup 系列提交曾删除仍被路由/页面引用的组件（tracing/TraceViewer、workflow/WorkflowNodes、mobile/LazyImage、ios/IOSToast、store/auth 等），修复时用 `git show <删除提交>^:<路径>` 恢复；barrel 文件（chat/ui/ios/index.ts、components/index.ts）中指向不存在文件的导出行必须同步修剪
+  - 前端任务契约以 `app/api/v1/routes/tasks.py` 为准（`task_id`/TaskSubmitRequest），`api.ts` 中 `/tasks/{id}/run|pause|resume` 是后端不存在的幻影端点，调用方应改接 submit/cancel/getStatus
+  - docker-compose 启动需要环境变量 `POSTGRES_PASSWORD`（compose 用 `${POSTGRES_PASSWORD:?}`），不再提供明文默认凭证
+  - 平台 Git 凭证助手（/app/agent/bin/agent git-credential-helper）会间歇性返回 500 导致 push 失败；git 提交需在仓库级先 `git config user.name/user.email`，否则容器内无法自动探测身份

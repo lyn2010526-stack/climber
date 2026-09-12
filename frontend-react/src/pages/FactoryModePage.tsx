@@ -57,6 +57,8 @@ export function FactoryModePage() {
   const [selectedSkills, setSelectedSkills] = useState<string[]>(['code_executor', 'web_search']);
   const [selectedPrompt, setSelectedPrompt] = useState('senior-engineer');
   const abortRef = useRef(false);
+  const controllerRef = useRef<AbortController | null>(null);
+  const taskIdRef = useRef<string | null>(null);
 
   const toggleSkill = (id: string) => {
     setSelectedSkills(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
@@ -65,6 +67,9 @@ export function FactoryModePage() {
   const startExecution = async () => {
     if (!goal.trim()) return;
     abortRef.current = false;
+    taskIdRef.current = null;
+    const controller = new AbortController();
+    controllerRef.current = controller;
     setIsRunning(true);
     setFinalReport('');
     setTasks([]);
@@ -73,7 +78,13 @@ export function FactoryModePage() {
     try {
       const res = await fetch('/api/v1/skills/autonomous/run', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localStorage.getItem('auth_token')
+            ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` }
+            : {}),
+        },
+        signal: controller.signal,
         body: JSON.stringify({
           goal,
           skills: selectedSkills,
@@ -109,8 +120,15 @@ export function FactoryModePage() {
         }
       }
     } catch (e) {
-      console.error('Execution error:', e);
+      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        setTasks(prev => [...prev, {
+          id: `error-${Date.now()}`,
+          description: e instanceof Error ? e.message : '执行失败',
+          status: 'failed',
+        }]);
+      }
     } finally {
+      controllerRef.current = null;
       setIsRunning(false);
     }
   };
@@ -121,6 +139,7 @@ export function FactoryModePage() {
         setPlan(event.data.steps || []);
         break;
       case 'task_start':
+        taskIdRef.current = event.data.task_id || null;
         setTasks(prev => [...prev, {
           id: event.data.task_id || String(Date.now()),
           description: event.data.description || '',
@@ -148,8 +167,19 @@ export function FactoryModePage() {
     }
   };
 
-  const stopExecution = () => {
+  const stopExecution = async () => {
     abortRef.current = true;
+    controllerRef.current?.abort();
+    if (taskIdRef.current) {
+      try {
+        await fetch(`/api/v1/tasks/${taskIdRef.current}/cancel`, {
+          method: 'POST',
+          headers: localStorage.getItem('auth_token')
+            ? { Authorization: `Bearer ${localStorage.getItem('auth_token')}` }
+            : {},
+        });
+      } catch { /* stream cancellation still stops the local request */ }
+    }
     setIsRunning(false);
   };
 

@@ -1,6 +1,6 @@
 # Climber — 本地优先 AI Agent 工作台
 
-[![Tests](https://img.shields.io/badge/tests-458%2B%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-41%20passing-brightgreen)]()
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.88%2B-009688)]()

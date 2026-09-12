@@ -192,15 +192,11 @@ class OpenAIAdapter(ModelAdapter):
                         continue
 
                     if line == "data: [DONE]":
-                        # Only yield final chunk if there's content or tool calls
-                        if accumulated_content or accumulated_tool_calls:
-                            yield ChatResult(
-                                content=accumulated_content,
-                                tool_calls=list(accumulated_tool_calls),
-                                finish_reason=finish_reason or "stop",
-                                tokens_used=tokens_used,
-                                accumulated_content=accumulated_content,
-                            )
+                        yield ChatResult(
+                            finish_reason=finish_reason or "stop",
+                            tokens_used=tokens_used,
+                            accumulated_content=accumulated_content,
+                        )
                         return
 
                     if not line.startswith("data:"):
@@ -239,22 +235,13 @@ class OpenAIAdapter(ModelAdapter):
 
                     yield ChatResult(
                         content=delta_content,
-                        tool_calls=list(accumulated_tool_calls),
+                        tool_calls=new_calls if delta.get("tool_calls") else [],
                         finish_reason=finish_reason,
                         tokens_used=tokens_used,
                         accumulated_content=accumulated_content,
                     )
 
                     if self._is_stream_terminated(chunk):
-                        # Yield final chunk with accumulated content if not already yielded
-                        if accumulated_content and not delta_content:
-                            yield ChatResult(
-                                content=accumulated_content,
-                                tool_calls=list(accumulated_tool_calls),
-                                finish_reason=finish_reason,
-                                tokens_used=tokens_used,
-                                accumulated_content=accumulated_content,
-                            )
                         return
 
             # Process any remaining data in buffer (no trailing newline)
@@ -392,9 +379,8 @@ class OpenAIAdapter(ModelAdapter):
         full_content = "".join(c.content or "" for c in chunks)
         all_tool_calls: list[dict] = []
         for c in chunks:
-            if c.tool_calls:
-                all_tool_calls = c.tool_calls
-        total_tokens = sum(c.tokens_used or 0 for c in chunks)
+            self._accumulate_tool_call_deltas(all_tool_calls, c.tool_calls)
+        total_tokens = max((c.tokens_used or 0 for c in chunks), default=0)
         return ChatResult(
             content=full_content or "",
             tool_calls=all_tool_calls,
@@ -403,16 +389,36 @@ class OpenAIAdapter(ModelAdapter):
             accumulated_content=full_content or "",
         )
 
+    @staticmethod
+    def _accumulate_tool_call_deltas(
+        accumulated: list[dict[str, Any]], deltas: list[dict[str, Any]]
+    ) -> None:
+        for delta in deltas:
+            index = delta.get("index", 0)
+            while len(accumulated) <= index:
+                accumulated.append(
+                    {"id": "", "type": "function", "function": {"name": "", "arguments": ""}}
+                )
+            target = accumulated[index]
+            if delta.get("id"):
+                target["id"] = delta["id"]
+            function = delta.get("function", {})
+            if function.get("name"):
+                target["function"]["name"] = function["name"]
+            if function.get("arguments"):
+                target["function"]["arguments"] += function["arguments"]
+
     @property
     def capabilities(self) -> ModelCapability:
         if self._capabilities is not None:
             return self._capabilities
         return ModelCapability(
+            chat=True,
             streaming=True,
-            function_calling=True,
+            tools=True,
             vision=False,
-            max_context_length=128000,
-            supports_system_prompt=True,
+            embedding=False,
+            max_tokens=128000,
         )
 
     @property

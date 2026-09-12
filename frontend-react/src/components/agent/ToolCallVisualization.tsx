@@ -15,7 +15,7 @@ export interface ToolCall {
   error?: string;
   status: 'pending' | 'running' | 'success' | 'error';
   duration?: number;
-  startTime?: number;
+  startTime?: string;
   toolType?: 'builtin' | 'mcp' | 'custom';
 }
 
