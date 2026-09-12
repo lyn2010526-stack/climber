@@ -18,6 +18,8 @@ from app.storage.models_platform import AutoLoopTask
 
 logger = structlog.get_logger()
 
+_SENSITIVE_PAYLOAD_KEYS = {"api_key", "api_key_encrypted"}
+
 
 class TaskStatus(StrEnum):
     PENDING = "pending"
@@ -66,9 +68,14 @@ class TaskManager:
         now = datetime.now(UTC)
 
         async with async_session() as session:
+            persisted_payload = {
+                key: value
+                for key, value in payload.items()
+                if key not in _SENSITIVE_PAYLOAD_KEYS
+            }
             record = AutoLoopTask(
                 id=task_id,
-                objective=json.dumps({"type": task_type, **payload}),
+                objective=json.dumps({"type": task_type, **persisted_payload}),
                 status=TaskStatus.PENDING.value,
                 max_steps=payload.get("max_steps", 10),
                 current_step=0,
@@ -83,14 +90,23 @@ class TaskManager:
             session.add(record)
             await session.commit()
 
-        asyncio.create_task(self._run_task(task_id, task_type, payload))
+        worker = asyncio.create_task(self._run_task(task_id, task_type, payload))
+        self._active_tasks[task_id] = worker
+        worker.add_done_callback(lambda _task: self._active_tasks.pop(task_id, None))
         return task_id
 
     async def cancel(self, task_id: str) -> bool:
-        if task_id in self._active_tasks:
-            self._active_tasks[task_id].cancel()
-            return True
-        return False
+        task = self._active_tasks.get(task_id)
+        if task is None or task.done() or task.cancelling():
+            return False
+        task.cancel()
+        async with async_session() as session:
+            record = await session.get(AutoLoopTask, task_id)
+            if record:
+                record.status = TaskStatus.CANCELLED.value
+                record.finished_at = datetime.now(UTC)
+                await session.commit()
+        return True
 
     async def get_status(self, task_id: str) -> dict[str, Any] | None:
         async with async_session() as session:
@@ -99,6 +115,7 @@ class TaskManager:
                 return None
             return {
                 "task_id": record.id,
+                "objective": self._objective_from_record(record.objective),
                 "status": record.status,
                 "progress": record.current_step,
                 "total_steps": record.max_steps,
@@ -108,6 +125,19 @@ class TaskManager:
                 "started_at": record.started_at.isoformat() if record.started_at else None,
                 "finished_at": record.finished_at.isoformat() if record.finished_at else None,
             }
+
+    @staticmethod
+    def _objective_from_record(raw_objective: str) -> str:
+        try:
+            payload = json.loads(raw_objective)
+        except (TypeError, json.JSONDecodeError):
+            return raw_objective
+        return str(
+            payload.get("objective")
+            or payload.get("workflow")
+            or payload.get("type")
+            or ""
+        )
 
     async def list_tasks(self, status_filter: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
         from sqlalchemy import select
@@ -120,7 +150,7 @@ class TaskManager:
             return [
                 {
                     "task_id": r.id,
-                    "objective": r.objective[:100],
+                    "objective": self._objective_from_record(r.objective)[:100],
                     "status": r.status,
                     "progress": r.current_step,
                     "total_steps": r.max_steps,
@@ -131,7 +161,6 @@ class TaskManager:
 
     async def _run_task(self, task_id: str, task_type: str, payload: dict[str, Any]) -> None:
         async with self._semaphore:
-            self._active_tasks[task_id] = asyncio.current_task()
             now = datetime.now(UTC)
             handler = self._handlers[task_type]
 
@@ -187,9 +216,6 @@ class TaskManager:
                         await session.commit()
                 await self._emit_progress(task_id, {"status": "failed", "error": str(exc)})
 
-            finally:
-                self._active_tasks.pop(task_id, None)
-
     async def _emit_progress(self, task_id: str, data: dict) -> None:
         for cb in self._progress_callbacks:
             try:
@@ -201,12 +227,47 @@ class TaskManager:
 async def handle_agent_run(payload: dict[str, Any], on_progress) -> dict[str, Any]:
     """Execute an autonomous agent run with the given objective."""
     from app.core.agent_engine import AgentEngine
+    from app.core.di import resolve as di_resolve
     objective = payload.get("objective", "")
-    max_steps = payload.get("max_steps", 10)
-    model = payload.get("model")
-    engine = AgentEngine()
-    result = await engine.run(objective=objective, max_steps=max_steps, model=model, on_progress=on_progress)
-    return result
+    if not objective.strip():
+        raise ValueError("objective is required")
+    max_steps = int(payload.get("max_steps", 10))
+    try:
+        engine = di_resolve("AgentEngine")
+    except KeyError:
+        engine = AgentEngine()
+    session = engine.create_session(
+        agent_id="task-worker",
+        user_id=str(payload.get("user_id", "system")),
+        provider=str(payload.get("provider", "openai")),
+        model_id=str(payload.get("model", "gpt-4o-mini")),
+        api_key=str(payload.get("api_key", "")),
+        base_url=payload.get("base_url"),
+        system_prompt=str(payload.get("system_prompt", "")),
+        tools=payload.get("tools") or [],
+    )
+    session.max_iterations = max_steps
+    output: list[str] = []
+    current_iteration = 0
+    async for event in engine.run(session, objective):
+        if event.type.value == "thinking":
+            current_iteration = int(event.data.get("iteration", current_iteration))
+            await on_progress(
+                current_iteration,
+                max_steps,
+                f"Running iteration {current_iteration}",
+            )
+        elif event.type.value == "text":
+            output.append(str(event.data.get("content", "")))
+        elif event.type.value == "error":
+            raise RuntimeError(str(event.data.get("error", "Agent execution failed")))
+    completed_steps = max(current_iteration, 1)
+    await on_progress(completed_steps, completed_steps, "Complete")
+    return {
+        "output": "".join(output),
+        "tokens_used": session.metrics.total_tokens_used,
+        "iterations": session.metrics.total_iterations,
+    }
 
 
 async def handle_data_processing(payload: dict[str, Any], on_progress) -> dict[str, Any]:

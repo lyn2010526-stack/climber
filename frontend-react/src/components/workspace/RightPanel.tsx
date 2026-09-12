@@ -381,13 +381,13 @@ function DiffPanelTab({ sessionId }: { sessionId: string | null }) {
     if (!sessionId) return;
     setLoading(true);
     api.getSessionMessages(sessionId).then((messages) => {
-      const toolResults = messages.filter((m: any) => m.type === 'tool-result');
+      const toolResults = messages.filter(m => m.role === 'tool');
       const diffMessages = toolResults.filter((m: any) =>
         m.content && typeof m.content === 'string' && m.content.includes('diff --git')
       );
       if (diffMessages.length > 0) {
         const latestDiff = diffMessages[diffMessages.length - 1];
-        setDiffText(latestDiff.content);
+        setDiffText(latestDiff?.content ?? '');
       }
     }).catch(() => {})
     .finally(() => setLoading(false));
@@ -437,20 +437,32 @@ function ToolCallsTab({ sessionId }: { sessionId: string | null }) {
     if (!sessionId) return;
     setLoading(true);
     api.getSessionMessages(sessionId).then((messages) => {
-      const toolMessages = messages.filter((m: any) => m.type === 'tool-call' || m.type === 'tool_call');
-      const calls: ToolCall[] = toolMessages.map((m: any, idx: number) => ({
-        id: m.id || `tool-${idx}`,
-        name: m.metadata?.toolName || m.content?.name || 'unknown',
-        arguments: m.metadata?.toolArgs || m.content?.arguments || {},
-        result: m.content?.result,
-        error: m.content?.error,
-        status: m.metadata?.status || 'success',
-        duration: m.metadata?.durationMs,
-        startTime: m.timestamp,
-      }));
+      const results = new Map(
+        messages
+          .filter(message => message.role === 'tool' && message.tool_call_id)
+          .map(message => [message.tool_call_id, message])
+      );
+      const calls: ToolCall[] = messages.flatMap(message =>
+        message.tool_calls.map((call, idx) => {
+          const result = results.get(call.id);
+          const rawArguments = call.function?.arguments ?? call.arguments ?? {};
+          let args: Record<string, unknown> = {};
+          try {
+            args = typeof rawArguments === 'string' ? JSON.parse(rawArguments || '{}') : rawArguments;
+          } catch { /* keep malformed model arguments empty */ }
+          return {
+            id: call.id || `${message.id}-${idx}`,
+            name: call.function?.name || call.name || 'unknown',
+            arguments: args,
+            result: result?.content || undefined,
+            status: result ? 'success' : 'running',
+            startTime: message.created_at,
+          };
+        })
+      );
       setToolCalls(calls);
-    }).catch(() => {});
-    setLoading(false);
+    }).catch(() => {})
+      .finally(() => setLoading(false));
   }, [sessionId]);
 
   if (loading) {

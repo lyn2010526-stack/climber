@@ -680,10 +680,24 @@ class AgentEngine:
         for tr in tool_results:
             session.metrics.tool_call_durations.append(getattr(tr, "duration_ms", 0.0) or 0.0)
             self.tool_prioritizer.record_outcome(tr.tool_name, tr.success, tr.duration_ms)
-            yield AgentEvent(type=AgentEventType.TOOL_RESULT, data={"tool_name": tr.tool_name, "result": tr.result, "error": tr.error})
+            yield AgentEvent(
+                type=AgentEventType.TOOL_RESULT,
+                data={
+                    "id": tr.tool_call_id,
+                    "tool_name": tr.tool_name,
+                    "result": tr.result,
+                    "error": tr.error,
+                },
+            )
             await self._handle_tool_debug(session, tr)
             session.messages.append({"role": MessageRole.TOOL, "content": tr.result, "tool_call_id": tr.tool_call_id or tr.tool_name})
-            await persist_message(session.session_id, MessageRole.TOOL, content=tr.result, tool_name=tr.tool_name)
+            await persist_message(
+                session.session_id,
+                MessageRole.TOOL,
+                content=tr.result,
+                tool_name=tr.tool_name,
+                tool_call_id=tr.tool_call_id,
+            )
 
         cp = CheckpointData(
             session_id=session.session_id,

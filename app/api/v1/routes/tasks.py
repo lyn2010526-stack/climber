@@ -17,6 +17,7 @@ class SubmitTaskRequest(BaseModel):
 
 class TaskResponse(BaseModel):
     task_id: str
+    objective: str = ""
     status: str
     progress: int = 0
     total_steps: int = 0
@@ -32,12 +33,12 @@ async def _ws_broadcast(task_id: str, data: dict):
     import json
     msg = json.dumps({"task_id": task_id, **data})
     disconnected = []
-    for ws in _ws_clients:
+    for ws in list(_ws_clients):
         try:
             await ws.send_text(msg)
         except Exception:
             disconnected.append(ws)
-    for ws in _ws_clients:
+    for ws in disconnected:
         try:
             _ws_clients.remove(ws)
         except ValueError:
@@ -67,9 +68,13 @@ async def get_task(task_id: str):
 
 
 @router.get("/")
-async def list_tasks(status_filter: str | None = None, limit: int = 50):
+async def list_tasks(
+    status_filter: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+):
     """List recent tasks, optionally filtered by status."""
-    return await task_manager.list_tasks(status_filter, limit)
+    return await task_manager.list_tasks(status_filter or status, limit)
 
 
 @router.post("/{task_id}/cancel")

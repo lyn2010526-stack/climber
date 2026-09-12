@@ -1,29 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Square, CheckCircle2, XCircle, Plus } from 'lucide-react';
-import { api } from '../api';
+import { api, type TaskDetail, type TaskSummary } from '../api';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
 import { EmptyState } from '../components/ui/EmptyState';
-
-interface Task {
-  id: string;
-  group_id: string;
-  description: string;
-  status: string;
-  worker_id: string | null;
-  current_round: number;
-  max_rounds: number;
-  total_tokens: number;
-  final_output?: string;
-  created_at: string;
-}
-
-interface TaskGroup {
-  id: string;
-  name: string;
-}
 
 function statusColor(status: string) {
   switch (status) {
@@ -34,7 +16,7 @@ function statusColor(status: string) {
   }
 }
 
-function TaskListItem({ task, isSelected, onClick }: { task: Task; isSelected: boolean; onClick: () => void }) {
+function TaskListItem({ task, isSelected, onClick }: { task: TaskSummary; isSelected: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -45,7 +27,7 @@ function TaskListItem({ task, isSelected, onClick }: { task: Task; isSelected: b
       }`}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-semibold text-[var(--color-text-primary)] truncate">{task.description}</span>
+        <span className="text-xs font-semibold text-[var(--color-text-primary)] truncate">{task.objective}</span>
         <span className={`text-[10px] font-medium shrink-0 ${statusColor(task.status)}`}>
           {task.status}
         </span>
@@ -54,7 +36,7 @@ function TaskListItem({ task, isSelected, onClick }: { task: Task; isSelected: b
         <div className="mt-2 w-full h-1.5 bg-[var(--color-bg-surface-3)] rounded-full overflow-hidden">
           <div
             className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-300"
-            style={{ width: `${(task.current_round / Math.max(task.max_rounds, 1)) * 100}%` }}
+            style={{ width: `${(task.progress / Math.max(task.total_steps, 1)) * 100}%` }}
           />
         </div>
       )}
@@ -63,10 +45,9 @@ function TaskListItem({ task, isSelected, onClick }: { task: Task; isSelected: b
 }
 
 export default function TaskMonitorPage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [groups, setGroups] = useState<TaskGroup[]>([]);
+  const [tasks, setTasks] = useState<TaskSummary[]>([]);
+  const [selectedTask, setSelectedTask] = useState<TaskDetail | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [selectedGroupId, setSelectedGroupId] = useState('');
   const [newTask, setNewTask] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -74,8 +55,9 @@ export default function TaskMonitorPage() {
     try {
       const data = await api.listTasks();
       setTasks(data);
-      if (data.length > 0) {
-        setSelectedTaskId(current => current || data[0].id);
+      const first = data[0];
+      if (first) {
+        setSelectedTaskId(current => current || first.task_id);
       }
     } catch { /* skip */ }
   }, []);
@@ -85,16 +67,10 @@ export default function TaskMonitorPage() {
   }, [fetchTasks]);
 
   useEffect(() => {
-    api.listGroups().then(data => {
-      setGroups(data);
-      if (data.length > 0) setSelectedGroupId(data[0].id);
-    }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
     if (!selectedTaskId) return;
     api.getTask(selectedTaskId).then(task => {
-      setTasks(previous => previous.map(item => item.id === task.id ? task : item));
+      setSelectedTask(task);
+      setTasks(previous => previous.map(item => item.task_id === task.task_id ? task : item));
     }).catch(() => {});
   }, [selectedTaskId]);
 
@@ -103,12 +79,12 @@ export default function TaskMonitorPage() {
     setLoading(true);
     try {
       const data = await api.createTask({
-        group_id: selectedGroupId,
-        description: newTask,
+        task_type: 'agent_run',
+        payload: { objective: newTask },
       });
       setNewTask('');
       fetchTasks();
-      setSelectedTaskId(data.id);
+      setSelectedTaskId(data.task_id);
     } catch { /* skip */ }
     setLoading(false);
   };
@@ -120,7 +96,6 @@ export default function TaskMonitorPage() {
     } catch { /* skip */ }
   };
 
-  const selectedTask = tasks.find(t => t.id === selectedTaskId);
   return (
     <div className="h-full flex flex-col md:flex-row">
       <div className="w-full md:w-72 lg:w-80 border-b md:border-b-0 md:border-r border-[var(--color-border-subtle)] flex flex-col shrink-0">
@@ -141,20 +116,12 @@ export default function TaskMonitorPage() {
               variant="primary"
               size="icon"
               onClick={createTask}
-              disabled={loading || !newTask.trim() || !selectedGroupId}
+              disabled={loading || !newTask.trim()}
               loading={loading}
             >
               <Plus size={16} />
             </Button>
           </div>
-          <select
-            value={selectedGroupId}
-            onChange={event => setSelectedGroupId(event.target.value)}
-            className="mt-2 w-full px-3 py-2 rounded border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] text-xs"
-          >
-            <option value="">请选择协作组</option>
-            {groups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}
-          </select>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -166,10 +133,10 @@ export default function TaskMonitorPage() {
           )}
           {tasks.map(task => (
             <TaskListItem
-              key={task.id}
+              key={task.task_id}
               task={task}
-              isSelected={selectedTaskId === task.id}
-              onClick={() => setSelectedTaskId(task.id)}
+              isSelected={selectedTaskId === task.task_id}
+              onClick={() => setSelectedTaskId(task.task_id)}
             />
           ))}
         </div>
@@ -180,9 +147,9 @@ export default function TaskMonitorPage() {
           <>
             <div className="p-4 border-b border-[var(--color-border-subtle)] flex items-center justify-between shrink-0">
               <div className="min-w-0">
-                <h3 className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{selectedTask.description}</h3>
+                <h3 className="text-sm font-semibold text-[var(--color-text-primary)] truncate">{selectedTask.objective}</h3>
                 <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-                  第 {selectedTask.current_round}/{selectedTask.max_rounds} 轮 &middot; {selectedTask.total_tokens} tokens
+                  第 {selectedTask.progress}/{selectedTask.total_steps} 步
                 </p>
               </div>
               {selectedTask.status === 'running' && (
@@ -190,7 +157,7 @@ export default function TaskMonitorPage() {
                   variant="destructive"
                   size="sm"
                   icon={<Square size={12} />}
-                  onClick={() => stopTask(selectedTask.id)}
+                  onClick={() => stopTask(selectedTask.task_id)}
                 >
                   取消
                 </Button>
@@ -198,14 +165,16 @@ export default function TaskMonitorPage() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {selectedTask.final_output && (
+              {selectedTask.result && (
                 <Card variant="default" className="border-[var(--color-success)]/30 bg-[var(--color-success)]/5">
                   <CardContent className="p-5">
                     <div className="flex items-center gap-2 mb-2">
                       <CheckCircle2 size={14} className="text-[var(--color-success)]" />
                       <span className="text-xs font-semibold text-[var(--color-success)]">任务完成</span>
                     </div>
-                    <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">{selectedTask.final_output}</p>
+                    <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap">
+                      {String(selectedTask.result.output ?? JSON.stringify(selectedTask.result, null, 2))}
+                    </p>
                   </CardContent>
                 </Card>
               )}
@@ -217,7 +186,7 @@ export default function TaskMonitorPage() {
                       <XCircle size={14} className="text-[var(--color-error)]" />
                       <span className="text-xs font-semibold text-[var(--color-error)]">任务失败</span>
                     </div>
-                    <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">任务执行失败</p>
+                    <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">{selectedTask.error || '任务执行失败'}</p>
                   </CardContent>
                 </Card>
               )}

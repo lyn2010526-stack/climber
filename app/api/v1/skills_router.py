@@ -2,18 +2,106 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
 from app.api.v1.common import current_user_id
 from app.api.v1.helpers import DEFAULT_USER
 from app.api.v1.helpers import payload as _payload
+from app.core.api_key_crypto import decrypt_api_key
+from app.core.task_worker import TaskStatus, task_manager
 from app.storage import async_session
+from app.storage.database import Agent, ApiKey
 from app.storage.models_platform import Skill
 
 router = APIRouter()
+
+_DEFAULT_MODELS = {
+    "anthropic": "claude-3-5-sonnet-20240620",
+    "google": "gemini-1.5-flash",
+    "ollama": "llama3",
+    "openai": "gpt-4o-mini",
+    "stepfun": "step-3.5-flash",
+}
+
+_FACTORY_TOOLS = {
+    "code_executor": ["run_command"],
+    "web_search": ["web_search"],
+    "file_manager": ["read_file", "write_file", "list_files"],
+    "data_analyzer": ["calculator"],
+    "task_planner": [],
+    "code_reviewer": ["read_file", "list_files"],
+}
+
+_FACTORY_PROMPTS = {
+    "senior-engineer": "Act as a senior software engineer. Plan carefully and produce a complete, verifiable result.",
+    "code-reviewer": "Act as a code reviewer. Focus on correctness, regressions, security, and missing tests.",
+    "architect": "Act as a system architect. Focus on clear boundaries, tradeoffs, and maintainability.",
+    "research-analyst": "Act as a research analyst. Distinguish evidence, assumptions, and conclusions.",
+    "data-scientist": "Act as a data scientist. Use reproducible analysis and explain the evidence.",
+}
+
+
+def _sse(event_type: str, data: dict[str, Any]) -> str:
+    payload = json.dumps({"type": event_type, "data": data})
+    return f"event: {event_type}\ndata: {payload}\n\n"
+
+
+async def _factory_agent_payload(user_id: str, data: dict[str, Any]) -> dict[str, Any]:
+    async with async_session() as db:
+        agent = await db.scalar(
+            select(Agent)
+            .where(Agent.user_id == user_id, Agent.is_active)
+            .order_by(Agent.created_at.desc())
+        )
+        provider = agent.provider if agent else "openai"
+        model = agent.model_id if agent else _DEFAULT_MODELS[provider]
+        api_key = decrypt_api_key(agent.api_key_encrypted or "") if agent else ""
+        base_url = agent.base_url if agent else None
+        agent_tools = list(agent.tool_ids or []) if agent else []
+
+        if not api_key:
+            key = await db.scalar(
+                select(ApiKey)
+                .where(
+                    ApiKey.user_id == user_id,
+                    ApiKey.provider == provider,
+                    ApiKey.is_active,
+                )
+                .order_by(ApiKey.created_at.desc())
+            )
+            if key:
+                api_key = decrypt_api_key(key.api_key_encrypted)
+                base_url = key.base_url or base_url
+
+    requested_tools = [
+        tool
+        for skill in data.get("skills", [])
+        for tool in _FACTORY_TOOLS.get(str(skill), [])
+    ]
+    tools = list(dict.fromkeys(requested_tools or agent_tools))
+    prompt_name = str(data.get("prompt_template", "senior-engineer"))
+    system_prompt = _FACTORY_PROMPTS.get(prompt_name, _FACTORY_PROMPTS["senior-engineer"])
+    if agent and agent.system_prompt:
+        system_prompt = f"{agent.system_prompt}\n\n{system_prompt}"
+
+    return {
+        "objective": str(data.get("goal", "")).strip(),
+        "user_id": user_id,
+        "provider": provider,
+        "model": model,
+        "api_key": api_key,
+        "base_url": base_url,
+        "system_prompt": system_prompt,
+        "tools": tools,
+        "max_steps": 10,
+    }
 
 
 def _skill_dict(s: Skill) -> dict[str, Any]:
@@ -117,6 +205,51 @@ async def update_skill(skill_id: str, request: Request) -> dict[str, Any]:
 
 
 @router.post("/skills/autonomous/run")
-async def run_autonomous_skill(request: Request) -> dict[str, Any]:
+async def run_autonomous_skill(request: Request) -> StreamingResponse:
     data = await _payload(request)
-    return {"ok": True, "message": "Autonomous skill run requested", "input": data}
+    goal = str(data.get("goal", "")).strip()
+    if not goal:
+        raise HTTPException(status_code=422, detail="goal is required")
+
+    task_payload = await _factory_agent_payload(current_user_id(request), data)
+    task_id = await task_manager.submit("agent_run", task_payload)
+
+    async def stream() -> AsyncIterator[str]:
+        yield _sse("plan", {"steps": [{"step": 1, "action": goal, "status": "running"}]})
+        yield _sse("task_start", {"task_id": task_id, "description": goal})
+        previous_progress = -1
+        try:
+            while True:
+                status = await task_manager.get_status(task_id)
+                if status is None:
+                    yield _sse("task_failed", {"task_id": task_id, "error": "Task not found"})
+                    break
+
+                progress = int(status["progress"])
+                if progress != previous_progress:
+                    previous_progress = progress
+                    yield _sse("progress", {
+                        "task_id": task_id,
+                        "step": progress,
+                        "total": int(status["total_steps"]),
+                    })
+
+                if status["status"] == TaskStatus.COMPLETED.value:
+                    result = status.get("result") or {}
+                    report = result.get("output", "") if isinstance(result, dict) else str(result)
+                    yield _sse("task_complete", {"task_id": task_id, "result": report})
+                    yield _sse("synthesize", {"report": report})
+                    break
+                if status["status"] in {TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}:
+                    yield _sse("task_failed", {
+                        "task_id": task_id,
+                        "error": status.get("error") or status["status"],
+                    })
+                    break
+                await asyncio.sleep(0.25)
+        except asyncio.CancelledError:
+            await task_manager.cancel(task_id)
+            raise
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(stream(), media_type="text/event-stream")

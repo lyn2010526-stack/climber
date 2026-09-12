@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 import structlog
@@ -132,6 +133,3 @@ class Crew:
             role = agent.role if agent else "Unknown"
             lines.append(f"{i}. [{task.agent_name} - {role}]: {task.description}")
         return "\n".join(lines)
-
-
-import uuid  # noqa: E402

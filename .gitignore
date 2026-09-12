@@ -94,3 +94,10 @@ frontend-react/coverage/
 # OS
 .DS_Store
 Thumbs.db
+
+# Runtime artifacts (added 2026-09-12)
+sessions/
+data/
+logs/
+benchmark_results*.json
+comprehensive_performance_report.json

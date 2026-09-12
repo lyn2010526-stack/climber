@@ -345,26 +345,27 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
 
     try {
       const resp = await api.createTask({
-          group_id: groupId,
-          description: task,
-          max_rounds: rounds || 5,
-          context: options?.context || [],
-          guardrails: options?.guardrails || [],
-          human_review_required: options?.humanReviewRequired || false,
+          task_type: 'agent_run',
+          payload: {
+            group_id: groupId,
+            objective: task,
+            max_steps: rounds || 5,
+            context: options?.context || [],
+            guardrails: options?.guardrails || [],
+            human_review_required: options?.humanReviewRequired || false,
+          },
         });
 
-      if (resp.id) {
-        setSessionId(resp.id);
+      if (resp.task_id) {
+        setSessionId(resp.task_id);
         setMessages([{
           id: genId(),
           memberId: 'system',
           memberName: 'System',
           role: 'system',
-          content: `任务已创建 (ID: ${resp.id.slice(0, 8)}...)`,
+          content: `任务已创建 (ID: ${resp.task_id.slice(0, 8)}...)`,
           timestamp: new Date().toISOString(),
         }] as CollabMessageType[]);
-
-        await api.runTask(resp.id);
       }
     } catch (e: any) {
       setMessages([{
@@ -378,42 +379,26 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
     }
   }, [groupId]);
 
-  const pauseTask = useCallback(async () => {
+  const pauseTask = useCallback(() => {
     if (!sessionId) return;
-    try {
-      await api.pauseTask(sessionId);
-      setStatus('paused');
-      setStartTime(null);
-      setElapsedTime(0);
-    } catch (e: any) {
-      setMessages((prev) => [...prev, {
-        id: genId(),
-        memberId: 'system',
-        memberName: 'System',
-        role: 'system',
-        content: `暂停失败: ${e.message}`,
-        timestamp: new Date().toISOString(),
-      }] as CollabMessageType[]);
-    }
+    setStatus('paused');
+    setStartTime(null);
+    setElapsedTime(0);
+    setMessages((prev) => [...prev, {
+      id: genId(),
+      memberId: 'system',
+      memberName: 'System',
+      role: 'system',
+      content: '后端任务仍在运行，此处仅暂停前端视图更新。',
+      timestamp: new Date().toISOString(),
+    }] as CollabMessageType[]);
   }, [sessionId]);
 
-  const resumeTask = useCallback(async () => {
+  const resumeTask = useCallback(() => {
     if (!sessionId) return;
-    try {
-      await api.resumeTask(sessionId);
-      setStatus('running');
-      setStartTime(Date.now());
-      setElapsedTime(0);
-    } catch (e: any) {
-      setMessages((prev) => [...prev, {
-        id: genId(),
-        memberId: 'system',
-        memberName: 'System',
-        role: 'system',
-        content: `恢复失败: ${e.message}`,
-        timestamp: new Date().toISOString(),
-      }] as CollabMessageType[]);
-    }
+    setStatus('running');
+    setStartTime(Date.now());
+    setElapsedTime(0);
   }, [sessionId]);
 
   const stopTask = useCallback(async () => {

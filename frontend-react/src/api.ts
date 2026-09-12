@@ -6,6 +6,42 @@ export interface ApiError {
   detail: string;
 }
 
+export interface TaskSummary {
+  task_id: string;
+  objective: string;
+  status: string;
+  progress: number;
+  total_steps: number;
+  created_at?: string | null;
+}
+
+export interface TaskDetail extends TaskSummary {
+  result?: Record<string, unknown> | null;
+  error?: string | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+}
+
+export interface TaskSubmitRequest {
+  task_type: 'agent_run' | 'data_processing' | 'workflow';
+  payload: Record<string, unknown>;
+}
+
+export interface SessionMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string | null;
+  tool_call_id: string | null;
+  tool_calls: Array<{
+    id: string;
+    name?: string;
+    arguments?: Record<string, unknown>;
+    function?: { name?: string; arguments?: string | Record<string, unknown> };
+  }>;
+  tool_name: string | null;
+  created_at: string;
+}
+
 let isRefreshing = false;
 let refreshSubscribers: ((token: string) => void)[] = [];
 
@@ -118,8 +154,9 @@ class ApiClient {
     return this.request(`/sessions/${id}`, { method: 'DELETE' });
   }
 
-  async getSessionMessages(sessionId: string) {
-    return this.request<any>(`/sessions/${sessionId}/messages`);
+  async getSessionMessages(sessionId: string): Promise<SessionMessage[]> {
+    const response = await this.request<{ messages: SessionMessage[] }>(`/sessions/${sessionId}/messages`);
+    return response.messages;
   }
 
   // Chat (SSE)
@@ -481,39 +518,27 @@ class ApiClient {
   }
 
   // Tasks
-  async listTasks(params?: { status?: string; limit?: number }) {
-    const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
-    return this.request<any[]>(`/tasks${qs}`);
+  async listTasks(params?: { status?: string; limit?: number }): Promise<TaskSummary[]> {
+    const search = new URLSearchParams();
+    if (params?.status) search.set('status', params.status);
+    if (params?.limit) search.set('limit', String(params.limit));
+    const qs = search.size ? `?${search.toString()}` : '';
+    return this.request<TaskSummary[]>(`/tasks/${qs}`);
   }
 
-  async getTask(taskId: string) {
-    return this.request<any>(`/tasks/${taskId}`);
+  async getTask(taskId: string): Promise<TaskDetail> {
+    return this.request<TaskDetail>(`/tasks/${taskId}`);
   }
 
-  async createTask(data: any) {
-    return this.request<any>('/tasks', {
+  async createTask(data: TaskSubmitRequest): Promise<TaskDetail> {
+    return this.request<TaskDetail>('/tasks/submit', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async runTask(id: string, inputs?: Record<string, any>) {
-    return this.request<any>(`/tasks/${id}/run`, {
-      method: 'POST',
-      body: JSON.stringify(inputs || {}),
-    });
-  }
-
-  async pauseTask(id: string) {
-    return this.request<any>(`/tasks/${id}/pause`, { method: 'POST' });
-  }
-
-  async resumeTask(id: string) {
-    return this.request<any>(`/tasks/${id}/resume`, { method: 'POST' });
-  }
-
   async stopTask(id: string) {
-    return this.request<any>(`/tasks/${id}/stop`, { method: 'POST' });
+    return this.request<{ task_id: string; cancelled: boolean }>(`/tasks/${id}/cancel`, { method: 'POST' });
   }
 
   // Cost
