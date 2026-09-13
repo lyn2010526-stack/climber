@@ -5,6 +5,7 @@ import asyncio
 import json
 import traceback
 import uuid
+from collections import OrderedDict, defaultdict, deque
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -53,12 +54,52 @@ class TaskManager:
         self._semaphore = asyncio.Semaphore(max_workers)
         self._active_tasks: dict[str, asyncio.Task] = {}
         self._progress_callbacks: list[Callable[[str, dict], Coroutine]] = []
+        self._event_history: OrderedDict[str, deque[dict[str, Any]]] = OrderedDict()
+        self._event_subscribers: dict[str, set[asyncio.Queue[dict[str, Any]]]] = defaultdict(set)
 
     def register(self, task_type: str, handler: Callable[..., Coroutine]) -> None:
         self._handlers[task_type] = handler
 
     def on_progress(self, callback: Callable[[str, dict], Coroutine]) -> None:
         self._progress_callbacks.append(callback)
+
+    def subscribe(self, task_id: str) -> asyncio.Queue[dict[str, Any]]:
+        """Subscribe to task-specific lifecycle events, replaying recent history."""
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        for event in self._event_history.get(task_id, ()):
+            queue.put_nowait(event)
+        self._event_subscribers[task_id].add(queue)
+        return queue
+
+    def unsubscribe(self, task_id: str, queue: asyncio.Queue[dict[str, Any]]) -> None:
+        subscribers = self._event_subscribers.get(task_id)
+        if subscribers is None:
+            return
+        subscribers.discard(queue)
+        if not subscribers:
+            self._event_subscribers.pop(task_id, None)
+            while len(self._event_history) > 100:
+                self._event_history.popitem(last=False)
+
+    async def emit_event(self, task_id: str, event_type: str, data: dict[str, Any]) -> None:
+        event = {"type": event_type, "data": data}
+        history = self._event_history.setdefault(task_id, deque(maxlen=100))
+        history.append(event)
+        self._event_history.move_to_end(task_id)
+        while len(self._event_history) > 100:
+            removable = next(
+                (
+                    history_task_id
+                    for history_task_id in self._event_history
+                    if not self._event_subscribers.get(history_task_id)
+                ),
+                None,
+            )
+            if removable is None:
+                break
+            self._event_history.pop(removable, None)
+        for queue in tuple(self._event_subscribers.get(task_id, ())):
+            queue.put_nowait(event)
 
     async def submit(self, task_type: str, payload: dict[str, Any]) -> str:
         if task_type not in self._handlers:
@@ -183,7 +224,8 @@ class TaskManager:
                             await session.commit()
                     await self._emit_progress(task_id, {"step": step, "total": total, "message": message})
 
-                result = await handler(payload=payload, on_progress=_progress_cb)
+                runtime_payload = {**payload, "_task_id": task_id}
+                result = await handler(payload=runtime_payload, on_progress=_progress_cb)
 
                 async with async_session() as session:
                     record = await session.get(AutoLoopTask, task_id)
@@ -270,6 +312,213 @@ async def handle_agent_run(payload: dict[str, Any], on_progress) -> dict[str, An
     }
 
 
+def _build_factory_plan(goal: str, skills: list[str]) -> list[dict[str, Any]]:
+    """Build a safe fallback plan from selected capabilities."""
+    steps: list[dict[str, Any]] = []
+    if "web_search" in skills:
+        steps.append({
+            "action": "Research current evidence and constraints",
+            "objective": f"Research reliable, current information needed to accomplish: {goal}",
+            "tools": ["web_search"],
+        })
+    if "file_manager" in skills or "code_reviewer" in skills:
+        steps.append({
+            "action": "Inspect the existing project and identify the smallest correct change",
+            "objective": f"Inspect the available project context and determine a concrete approach for: {goal}",
+            "tools": ["read_file", "list_files"],
+        })
+    execution_tools = [
+        tool
+        for skill in skills
+        for tool in _FACTORY_SKILL_TOOLS.get(skill, [])
+        if tool not in {"web_search", "read_file", "list_files"}
+    ]
+    steps.append({
+        "action": "Execute the goal and produce a verifiable result",
+        "objective": goal,
+        "tools": list(dict.fromkeys(execution_tools)),
+    })
+    return [
+        {"step": index, "status": "pending", **step}
+        for index, step in enumerate(steps, start=1)
+    ]
+
+
+def _parse_factory_plan(raw_plan: str, goal: str, skills: list[str]) -> list[dict[str, Any]]:
+    """Validate planner output and constrain it to selected tools."""
+    text = raw_plan.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        text = "\n".join(lines[1:-1])
+    parsed = json.loads(text)
+    raw_steps = parsed.get("steps") if isinstance(parsed, dict) else parsed
+    if not isinstance(raw_steps, list) or not raw_steps:
+        raise ValueError("Planner returned no steps")
+    allowed_tools = {
+        tool for skill in skills for tool in _FACTORY_SKILL_TOOLS.get(skill, [])
+    }
+    plan: list[dict[str, Any]] = []
+    for index, raw_step in enumerate(raw_steps[:5], start=1):
+        if not isinstance(raw_step, dict):
+            raise ValueError("Planner returned an invalid step")
+        action = str(raw_step.get("action", "")).strip()
+        objective = str(raw_step.get("objective", action)).strip()
+        if not action or not objective:
+            raise ValueError("Planner step is missing an action or objective")
+        requested_tools = raw_step.get("tools", [])
+        tools = [
+            str(tool) for tool in requested_tools
+            if str(tool) in allowed_tools
+        ] if isinstance(requested_tools, list) else []
+        plan.append({
+            "step": index,
+            "status": "pending",
+            "action": action,
+            "objective": objective,
+            "tools": list(dict.fromkeys(tools)),
+        })
+    return plan
+
+
+_FACTORY_SKILL_TOOLS = {
+    "code_executor": ["run_command"],
+    "web_search": ["web_search"],
+    "file_manager": ["read_file", "write_file", "list_files"],
+    "data_analyzer": ["calculator"],
+    "task_planner": [],
+    "code_reviewer": ["read_file", "list_files"],
+}
+
+
+async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, Any]:
+    """Run a planned, retryable multi-stage Agent Factory workflow."""
+    task_id = str(payload["_task_id"])
+    goal = str(payload.get("objective", "")).strip()
+    if not goal:
+        raise ValueError("objective is required")
+    skills = [str(skill) for skill in payload.get("factory_skills", [])]
+    await task_manager.emit_event(task_id, "factory_start", {"task_id": task_id})
+    await task_manager.emit_event(task_id, "planning", {"message": "Creating execution plan"})
+    agent_handler = task_manager._handlers["agent_run"]
+    planner_payload = {
+        **payload,
+        "objective": (
+            "Create a concise execution plan for the goal below. Return JSON only as "
+            '{"steps":[{"action":"...","objective":"...","tools":["..."]}]}. '
+            f"Use at most 5 steps and only these tools: {payload.get('tools', [])}.\n\n"
+            f"Goal: {goal}"
+        ),
+        "tools": [],
+        "max_steps": 3,
+    }
+    planner_payload.pop("_task_id", None)
+    try:
+        planner_result = await agent_handler(
+            payload=planner_payload,
+            on_progress=lambda *_: asyncio.sleep(0),
+        )
+        planner_output = (
+            planner_result.get("output", "")
+            if isinstance(planner_result, dict)
+            else str(planner_result)
+        )
+        plan = _parse_factory_plan(planner_output, goal, skills)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        plan = _build_factory_plan(goal, skills)
+        await task_manager.emit_event(task_id, "plan_fallback", {"reason": str(exc)})
+    await task_manager.emit_event(task_id, "plan", {
+        "steps": [
+            {"step": step["step"], "action": step["action"], "status": "pending"}
+            for step in plan
+        ]
+    })
+
+    results: list[dict[str, Any]] = []
+    for index, step in enumerate(plan, start=1):
+        step_id = f"{task_id}:{index}"
+        await task_manager.emit_event(task_id, "task_start", {
+            "task_id": step_id,
+            "step": index,
+            "description": step["action"],
+        })
+        step_payload = {
+            **payload,
+            "objective": step["objective"],
+            "tools": step["tools"] or payload.get("tools", []),
+            "max_steps": min(int(payload.get("max_steps", 10)), 6),
+        }
+        step_payload.pop("_task_id", None)
+        last_error: Exception | None = None
+        for attempt in range(1, 3):
+            try:
+                async def _step_progress(current: int, total: int, message: str = "") -> None:
+                    await task_manager.emit_event(task_id, "progress", {
+                        "task_id": step_id,
+                        "step": index,
+                        "current": current,
+                        "total": total,
+                        "message": message,
+                    })
+
+                result = await agent_handler(payload=step_payload, on_progress=_step_progress)
+                output = result.get("output", "") if isinstance(result, dict) else str(result)
+                results.append({"step": index, "action": step["action"], "output": output})
+                await task_manager.emit_event(task_id, "task_complete", {
+                    "task_id": step_id,
+                    "step": index,
+                    "result": output,
+                })
+                break
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                last_error = exc
+                if attempt < 2:
+                    await task_manager.emit_event(task_id, "task_retry", {
+                        "task_id": step_id,
+                        "step": index,
+                        "retries": attempt,
+                        "error": str(exc),
+                    })
+                    await asyncio.sleep(0.5)
+        else:
+            error = str(last_error or "Step failed")
+            await task_manager.emit_event(task_id, "task_failed", {
+                "task_id": step_id,
+                "step": index,
+                "error": error,
+            })
+            raise RuntimeError(f"Factory step {index} failed: {error}")
+        await on_progress(index, len(plan) + 1, step["action"])
+
+    evidence = "\n\n".join(
+        f"Step {item['step']} - {item['action']}:\n{item['output']}" for item in results
+    )
+    synthesis_payload = {
+        **payload,
+        "objective": (
+            f"Produce the final answer for this goal:\n{goal}\n\n"
+            f"Use these completed step results as evidence:\n{evidence}"
+        ),
+        "tools": [],
+        "max_steps": 4,
+    }
+    synthesis_payload.pop("_task_id", None)
+    try:
+        synthesis = await agent_handler(payload=synthesis_payload, on_progress=lambda *_: asyncio.sleep(0))
+        report = synthesis.get("output", "") if isinstance(synthesis, dict) else str(synthesis)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.warning("factory_synthesis_failed", task_id=task_id, error=str(exc))
+        report = evidence
+    await on_progress(len(plan) + 1, len(plan) + 1, "Synthesis complete")
+    await task_manager.emit_event(task_id, "synthesize", {"report": report})
+    return {"output": report, "plan": plan, "steps": results}
+
+
 async def handle_data_processing(payload: dict[str, Any], on_progress) -> dict[str, Any]:
     """Process data: transform, filter, aggregate."""
     data = payload.get("data", [])
@@ -304,6 +553,7 @@ async def handle_workflow(payload: dict[str, Any], on_progress) -> dict[str, Any
 
 task_manager = TaskManager(max_workers=3)
 task_manager.register("agent_run", handle_agent_run)
+task_manager.register("factory_run", handle_factory_run)
 task_manager.register("data_processing", handle_data_processing)
 task_manager.register("workflow", handle_workflow)
 

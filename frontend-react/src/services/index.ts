@@ -1,6 +1,3 @@
-export { authService } from './authService';
-export type { LoginRequest, RegisterRequest, AuthResponse } from './authService';
-
 export { agentService } from './agentService';
 export type { Agent, AgentExecution, CreateAgentRequest, UpdateAgentRequest } from './agentService';
 

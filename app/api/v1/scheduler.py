@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from app.core.auth_manager import require_scopes
 from sqlalchemy import select
 
 from app.api.v1.common import current_user_id
-from app.api.v1.helpers import DEFAULT_USER
 from app.api.v1.helpers import payload as _payload
 from app.storage import async_session
 from app.storage.models_platform import Workflow
@@ -23,19 +23,23 @@ _SCHEDULER_MARKET = [
 
 @router.get("/scheduler")
 @router.get("/scheduler/")
-async def list_scheduled() -> list[dict[str, Any]]:
+async def list_scheduled(request: Request) -> list[dict[str, Any]]:
+    user_id = current_user_id(request)
     async with async_session() as db:
-        rows = (await db.execute(select(Workflow).where(Workflow.schedule is not None))).scalars().all()
+        rows = (await db.execute(select(Workflow).where(Workflow.schedule.isnot(None), Workflow.user_id == user_id))).scalars().all()
         return [{"id": w.id, "name": w.name, "schedule": w.schedule, "last_status": w.last_status, "run_count": w.run_count} for w in rows]
 
 
 @router.post("/scheduler")
 @router.post("/scheduler/")
-async def create_scheduled(request: Request) -> dict[str, Any]:
+async def create_scheduled(request: Request,
+    _auth: dict = Depends(require_scopes("write")),
+)  -> dict[str, Any]:
     data = await _payload(request)
+    user_id = current_user_id(request)
     async with async_session() as db:
         wf = Workflow(
-            user_id=DEFAULT_USER,
+            user_id=user_id,
             name=data.get("name", "Scheduled Workflow"),
             nodes=data.get("nodes", []),
             edges=data.get("edges", []),
@@ -56,7 +60,7 @@ async def list_scheduler_tasks(request: Request) -> list[dict[str, Any]]:
         user_id = current_user_id(request)
         rows = (
             await db.execute(
-                select(Workflow).where(Workflow.schedule is not None, Workflow.user_id == user_id).order_by(Workflow.created_at.desc())
+                select(Workflow).where(Workflow.schedule.isnot(None), Workflow.user_id == user_id).order_by(Workflow.created_at.desc())
             )
         ).scalars().all()
         return [{"id": w.id, "name": w.name, "cron": w.schedule, "description": getattr(w, "description", ""), "enabled": True, "last_run": None, "next_run": None, "run_count": w.run_count or 0} for w in rows]
@@ -64,7 +68,9 @@ async def list_scheduler_tasks(request: Request) -> list[dict[str, Any]]:
 
 @router.post("/scheduler/tasks")
 @router.post("/scheduler/tasks/")
-async def create_scheduler_task(request: Request) -> dict[str, Any]:
+async def create_scheduler_task(request: Request,
+    _auth: dict = Depends(require_scopes("write")),
+)  -> dict[str, Any]:
     data = await _payload(request)
     async with async_session() as db:
         wf = Workflow(
@@ -82,7 +88,9 @@ async def create_scheduler_task(request: Request) -> dict[str, Any]:
 
 
 @router.patch("/scheduler/tasks/{task_id}")
-async def update_scheduler_task(task_id: str, request: Request) -> dict[str, Any]:
+async def update_scheduler_task(task_id: str, request: Request,
+    _auth: dict = Depends(require_scopes("write")),
+)  -> dict[str, Any]:
     data = await _payload(request)
     async with async_session() as db:
         user_id = current_user_id(request)
@@ -105,7 +113,9 @@ async def update_scheduler_task(task_id: str, request: Request) -> dict[str, Any
 
 
 @router.delete("/scheduler/tasks/{task_id}")
-async def delete_scheduler_task(task_id: str, request: Request) -> dict[str, Any]:
+async def delete_scheduler_task(task_id: str, request: Request,
+    _auth: dict = Depends(require_scopes("write")),
+)  -> dict[str, Any]:
     async with async_session() as db:
         user_id = current_user_id(request)
         wf = (

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -13,6 +14,18 @@ from app.storage import async_session
 from app.storage.models_cost import BudgetConfig, CostRecord, UsageQuota
 
 router = APIRouter()
+
+
+def _budget_window_start(period: str) -> datetime:
+    """Return the UTC datetime at which the given budget period started."""
+    now = datetime.now(timezone.utc)
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if period == "daily":
+        return midnight
+    if period == "weekly":
+        return midnight - timedelta(days=midnight.weekday())
+    # monthly (default)
+    return midnight.replace(day=1)
 
 
 def _cost_dict(c: CostRecord) -> dict[str, Any]:
@@ -40,7 +53,29 @@ async def get_budget() -> dict[str, Any]:
             db.add(cfg)
             await db.commit()
             await db.refresh(cfg)
-        return {"amount": cfg.amount, "period": cfg.period, "is_active": cfg.is_active, "per_session_limit": cfg.per_session_limit, "per_request_limit": cfg.per_request_limit}
+        current_spend = 0.0
+        try:
+            window_start = _budget_window_start(cfg.period)
+            total = (
+                await db.execute(
+                    select(func.sum(CostRecord.total_cost)).where(
+                        CostRecord.user_id == DEFAULT_USER,
+                        CostRecord.created_at >= window_start,
+                    )
+                )
+            ).scalar()
+            if total is not None:
+                current_spend = round(float(total), 6)
+        except Exception:
+            current_spend = 0.0
+        return {
+            "amount": cfg.amount,
+            "period": cfg.period,
+            "is_active": cfg.is_active,
+            "current_spend": current_spend,
+            "per_session_limit": cfg.per_session_limit,
+            "per_request_limit": cfg.per_request_limit,
+        }
 
 
 @router.get("/cost/quota")

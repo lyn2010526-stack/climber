@@ -29,7 +29,6 @@ export function RightPanel() {
 
   return (
     <div className="flex w-full min-w-0 flex-col border-l border-white/10 bg-[#0F0F14]/80 shadow-sm shadow-white/5 backdrop-blur-2xl">
-      {/* Tab bar */}
       <div className="flex border-b border-white/10">
         {tabs.map(({ id, icon: Icon, label }) => (
           <button
@@ -50,7 +49,6 @@ export function RightPanel() {
         ))}
       </div>
 
-      {/* Tab content */}
       <div className="flex-1 overflow-y-auto p-3">
         {rightPanelTab === 'config' && <ConfigPanel session={activeSession} />}
         {rightPanelTab === 'diff' && <DiffPanelTab sessionId={activeSessionId} />}
@@ -64,8 +62,6 @@ export function RightPanel() {
   );
 }
 
-// ── Config Panel ──
-
 function ConfigPanel({ session }: { session: any }) {
   const provider = session?.modelConfig?.provider || '—';
   const modelId = session?.modelConfig?.modelId || '—';
@@ -73,7 +69,6 @@ function ConfigPanel({ session }: { session: any }) {
 
   return (
     <div className="space-y-3">
-      {/* Model Config */}
       <Section title="模型配置" icon={Sliders}>
         <div className="space-y-2.5">
           <div className="flex justify-between text-xs">
@@ -91,7 +86,6 @@ function ConfigPanel({ session }: { session: any }) {
         </div>
       </Section>
 
-      {/* Active Skills */}
       <Section title="已启用技能" icon={Brain}>
         <div className="flex flex-wrap gap-1.5">
           {(session?.activeSkills && session.activeSkills.length > 0)
@@ -105,7 +99,6 @@ function ConfigPanel({ session }: { session: any }) {
         </div>
       </Section>
 
-      {/* Active Tools */}
       <Section title="已启用工具" icon={Zap}>
         <div className="flex flex-wrap gap-1.5">
           {(session?.activeTools && session.activeTools.length > 0)
@@ -119,7 +112,6 @@ function ConfigPanel({ session }: { session: any }) {
         </div>
       </Section>
 
-      {/* Token Usage */}
       <Section title="Token 用量" icon={Timer}>
         <div className="space-y-2.5">
           <div className="flex justify-between text-xs">
@@ -135,7 +127,6 @@ function ConfigPanel({ session }: { session: any }) {
         </div>
       </Section>
 
-      {/* Safety */}
       <Section title="安全设置" icon={Shield}>
         <div className="space-y-2.5">
           <div className="flex items-center justify-between">
@@ -155,8 +146,6 @@ function ConfigPanel({ session }: { session: any }) {
     </div>
   );
 }
-
-// ── DAG Panel ──
 
 function DAGPanel() {
   const [nodes, setNodes] = useState<any[]>([]);
@@ -237,8 +226,6 @@ function DAGPanel() {
   );
 }
 
-// ── Trace Panel ──
-
 function TracePanel() {
   const [traces, setTraces] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -311,8 +298,6 @@ function TracePanel() {
   );
 }
 
-// ── Files Panel ──
-
 function FilesPanel() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -371,8 +356,6 @@ function FilesPanel() {
   );
 }
 
-// ── Diff Panel Tab ──
-
 function DiffPanelTab({ sessionId }: { sessionId: string | null }) {
   const [diffText, setDiffText] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -426,8 +409,6 @@ function DiffPanelTab({ sessionId }: { sessionId: string | null }) {
     </div>
   );
 }
-
-// ── Tool Calls Tab ──
 
 function ToolCallsTab({ sessionId }: { sessionId: string | null }) {
   const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
@@ -500,8 +481,6 @@ function ToolCallsTab({ sessionId }: { sessionId: string | null }) {
     </div>
   );
 }
-
-// ── Section Component ──
 
 function Section({ title, icon: Icon, children }: { title: string; icon: any; children: React.ReactNode }) {
   const [expanded, setExpanded] = useState(true);

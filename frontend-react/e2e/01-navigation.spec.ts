@@ -35,12 +35,41 @@ test.describe('Navigation & Dashboard', () => {
   });
 
   test('sidebar is visible with navigation items', async ({ page }) => {
+    // No login UI: the login form fields must be absent; the chat composer keeps its own <form>.
+    await expect(page.locator('input[type="password"]')).toHaveCount(0);
+    await expect(page.locator('input[name="username"], input[autocomplete="username"], input[type="email"]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /sign in|log in|登录/i })).toHaveCount(0);
+
     const sidebar = page.getByRole('complementary').first();
     await expect(sidebar).toBeVisible();
 
     const navLabels = ['Chat', 'Agents', 'Settings'];
     for (const label of navLabels) {
       await expect(sidebar.getByText(label).first()).toBeVisible();
+    }
+  });
+
+  const CORE_NAV: { label: string; id: string }[] = [
+    { label: 'Dashboard', id: 'dashboard' },
+    { label: 'Chat', id: 'chat' },
+    { label: 'Agents', id: 'agents' },
+    { label: 'Workflows', id: 'workflows' },
+    { label: 'Tasks', id: 'tasks' },
+    { label: 'Factory', id: 'factory' },
+    { label: 'Settings', id: 'settings' },
+  ];
+
+  test('core nav items carry the correct aria-current marker', async ({ page }) => {
+    const currentItem = page.locator('aside nav [aria-current="page"]');
+
+    await navigateTo(page, 'chat');
+    await expect(currentItem).toHaveText('Chat', { timeout: 5000 });
+
+    for (const { label, id } of CORE_NAV) {
+      await page.locator('aside nav button', { hasText: label }).first().click();
+      await expect(page).toHaveURL(new RegExp(`#${id}$`));
+      await expect(currentItem).toHaveText(label);
+      await expect(page.locator('aside nav [aria-current="page"]')).toHaveCount(1);
     }
   });
 

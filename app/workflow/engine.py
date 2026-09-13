@@ -42,7 +42,7 @@ _SAFE_EVAL_BUILTINS = {
 
 _SAFE_NODES = (
     ast.Expression, ast.BinOp, ast.UnaryOp, ast.BoolOp, ast.Compare,
-    ast.Call, ast.Constant, ast.Name, ast.Load, ast.Attribute,
+    ast.Call, ast.Constant, ast.Name, ast.Load, ast.Store, ast.Attribute,
     ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod, ast.Pow,
     ast.USub, ast.UAdd, ast.Not, ast.And, ast.Or,
     ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE,
@@ -54,12 +54,22 @@ _SAFE_NODES = (
 )
 
 
+def _is_dangerous_attr(attr: str) -> bool:
+    """Reject dunder and private attributes to prevent sandbox escapes.
+
+    Blocks __class__, __bases__, __subclasses__, __globals__, __builtins__,
+    __import__, __code__ and any other underscore-prefixed attribute that
+    could traverse the Python object graph.
+    """
+    return attr.startswith("_")
+
+
 def _validate_ast(node: ast.AST) -> None:
     for child in ast.walk(node):
         if not isinstance(child, _SAFE_NODES):
             raise ValueError(f"Unsafe expression node: {type(child).__name__}")
-        if isinstance(child, ast.Name) and child.id not in _SAFE_EVAL_BUILTINS and child.id not in {"__builtins__"}:
-            pass
+        if isinstance(child, ast.Attribute) and _is_dangerous_attr(child.attr):
+            raise ValueError(f"Access to attribute '{child.attr}' is not allowed")
 
 
 def safe_eval(expression: str, local_vars: dict[str, Any]) -> Any:
@@ -93,6 +103,8 @@ def _validate_code_ast(node: ast.AST) -> None:
     for child in ast.walk(node):
         if not isinstance(child, allowed_nodes):
             raise ValueError(f"Unsafe code node: {type(child).__name__}")
+        if isinstance(child, ast.Attribute) and _is_dangerous_attr(child.attr):
+            raise ValueError(f"Access to attribute '{child.attr}' is not allowed")
         if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name.startswith("_"):
             raise ValueError(f"Private function definition not allowed: {child.name}")
         if isinstance(child, (ast.Import, ast.ImportFrom)):
@@ -116,9 +128,15 @@ logger = structlog.get_logger()
 class WorkflowEngine:
     """Executes workflow DAGs with full conditional branching and iteration."""
 
-    def __init__(self, engine: AgentEngine, model_registry: ModelRegistry | None = None):
+    def __init__(
+        self,
+        engine: AgentEngine,
+        model_registry: ModelRegistry | None = None,
+        tool_registry: ToolRegistry | None = None,
+    ):
         self.agent_engine = engine
         self.model_registry = model_registry
+        self.tool_registry = tool_registry
 
     async def execute(
         self,
@@ -291,9 +309,13 @@ class WorkflowEngine:
         user_id: str,
     ) -> dict[str, Any]:
         """Execute an LLM node."""
+        import os
+
         provider = node.config.get("provider", "openai")
         model_id = node.config.get("model_id", "gpt-4")
-        api_key = node.config.get("api_key", "")
+        # Prefer env-var reference over plaintext key stored in workflow config
+        api_key_env = node.config.get("api_key_env", "")
+        api_key = os.environ.get(api_key_env, "") if api_key_env else node.config.get("api_key", "")
         prompt_template = node.config.get("prompt", "")
         system_prompt = node.config.get("system_prompt", "")
 
@@ -337,7 +359,7 @@ class WorkflowEngine:
                 resolved_tool_inputs[k] = v
 
         from app.core.parallel import ParallelToolExecutor
-        registry = ToolRegistry()
+        registry = self.tool_registry or ToolRegistry()
         executor = ParallelToolExecutor(registry)
         tool_result = await executor.execute_all([{
             "id": f"wf-{node.id}",
@@ -444,6 +466,11 @@ class WorkflowEngine:
                 return False
         elif operator == "regex":
             import re
+            if len(expected) > 500:
+                return False
+            # Reject catastrophic nested quantifiers like (a+)+ or (a*)*
+            if re.search(r"\([^()]*[+*{][^()]*\)[+*{]", expected):
+                return False
             try:
                 return bool(re.search(expected, actual_str))
             except re.error:
@@ -506,8 +533,30 @@ class WorkflowEngine:
         """Execute a code node with sandboxed Python."""
         code = node.config.get("code", "")
 
-        # Render template variables in code
-        rendered_code = self._render_template(code, inputs)
+        # Validate the author's static code BEFORE any substitution
+        try:
+            tree = ast.parse(code, mode="exec")
+            _validate_code_ast(tree)
+        except Exception as e:
+            return {
+                "result": f"Error: {e}",
+                "node_id": node.id,
+                "node_name": node.name,
+            }
+
+        # Render template variables as safe repr() literals (injection-proof)
+        rendered_code = self._render_code_template(code, inputs)
+
+        # Re-validate after substitution to catch any unsafe constructs
+        try:
+            tree = ast.parse(rendered_code, mode="exec")
+            _validate_code_ast(tree)
+        except Exception as e:
+            return {
+                "result": f"Error: {e}",
+                "node_id": node.id,
+                "node_name": node.name,
+            }
 
         # Sandboxed execution — expose both individual vars and "inputs" dict
         local_vars: dict[str, Any] = {"inputs": inputs, **inputs}
@@ -596,6 +645,16 @@ class WorkflowEngine:
         for key, value in variables.items():
             placeholder = "{{" + key + "}}"
             result = result.replace(placeholder, str(value) if value is not None else "")
+        return result
+
+    def _render_code_template(self, template: str, variables: dict[str, Any]) -> str:
+        """Render templates for code nodes using repr() so values become safe
+        literals instead of raw text — prevents input values from injecting
+        code structure into the executed source."""
+        result = template
+        for key, value in variables.items():
+            placeholder = "{{" + key + "}}"
+            result = result.replace(placeholder, repr(value) if value is not None else "None")
         return result
 
     def _collect_results(self, workflow: Workflow) -> dict[str, Any]:

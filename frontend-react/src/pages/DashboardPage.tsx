@@ -13,7 +13,7 @@ export function DashboardPage() {
   const checkHealth = useCallback(async () => {
     setHealth('loading');
     try {
-      const response = await fetch('/api/v1/auth/health');
+      const response = await fetch('/health');
       setHealth(response.ok ? 'online' : 'offline');
     } catch {
       setHealth('offline');
@@ -45,7 +45,7 @@ export function DashboardPage() {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">API service</h3>
-                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">来自当前环境的实时健康检查</p>
+                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">后端运行时实时健康检查</p>
                 </div>
                 <button onClick={checkHealth} className="icon-button" aria-label="刷新 API 状态"><RefreshCw size={16} /></button>
               </div>
@@ -55,7 +55,7 @@ export function DashboardPage() {
                 {health === 'offline' && <AlertCircle size={18} className="text-[var(--color-error)]" />}
                 <div>
                   <p className="text-sm font-medium text-[var(--color-text-primary)]">{health === 'loading' ? 'Checking service' : health === 'online' ? 'Service available' : 'Service unavailable'}</p>
-                  <p className="text-xs text-[var(--color-text-muted)]">{health === 'offline' ? '检查后端服务后重试' : 'Authentication health endpoint'}</p>
+                  <p className="text-xs text-[var(--color-text-muted)]">{health === 'offline' ? '检查后端服务后重试' : 'GET /health · backend runtime'}</p>
                 </div>
               </div>
             </CardContent>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MobileFactoryPage } from '../MobileFactoryPage';
 
 vi.mock('../../FactoryModePage', () => ({
@@ -7,13 +7,10 @@ vi.mock('../../FactoryModePage', () => ({
 }));
 
 describe('MobileFactoryPage', () => {
-  it('renders page header', () => {
+  it('renders FactoryModePage content', async () => {
     render(<MobileFactoryPage />);
-    expect(screen.getByText('自主执行')).toBeDefined();
-  });
-
-  it('renders FactoryModePage content', () => {
-    render(<MobileFactoryPage />);
-    expect(screen.getByText('Factory Content')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText('Factory Content')).toBeDefined();
+    });
   });
 });

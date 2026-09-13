@@ -235,6 +235,9 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix="/api/v1")
+from app.core.observability.api import router as observability_router
+
+app.include_router(observability_router)
 for websocket_route in websocket_router.routes:
     app.add_api_websocket_route(
         f"/api/v1{websocket_route.path}",

@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from app.api.v1.common import DEFAULT_USER, current_user_id, get_or_404, ok_response, parse_request_payload
+from app.api.v1.common import DEFAULT_USER, current_user_id, get_or_404, mask_env_values, ok_response, parse_request_payload
+from app.core.auth_manager import require_admin, require_scopes
 from app.storage import async_session
 from app.storage.database import Document
 from app.storage.models_platform import Cluster, DocumentChunk, Trace, Workflow
@@ -18,6 +21,17 @@ from app.storage.models_plugins import MCPServerRecord, PluginRecord
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
+
+
+def _budget_window_start(period: str) -> datetime:
+    """Return the UTC datetime at which the given budget period started."""
+    now = datetime.now(timezone.utc)
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if period == "daily":
+        return midnight
+    if period == "weekly":
+        return midnight - timedelta(days=midnight.weekday())
+    return midnight.replace(day=1)
 
 
 # ─── Models ─────────────────────────────────────────────────────────────────
@@ -120,9 +134,49 @@ async def get_stats() -> dict[str, Any]:
 
 @router.get("/profile")
 @router.get("/profile/")
-async def get_profile() -> dict[str, Any]:
+async def get_profile(request: Request) -> dict[str, Any]:
     """Get the current user profile."""
-    return {"id": DEFAULT_USER, "display_name": "Local User", "email": "local@localhost", "is_admin": True}
+    from app.core.principal import get_context_principal
+
+    try:
+        principal = get_context_principal()
+    except RuntimeError:
+        principal = None
+    subject = principal.subject_id if principal else DEFAULT_USER
+    role = principal.role if principal else None
+    scopes = principal.scopes if principal else ()
+    is_admin = role == "admin" or "admin" in scopes
+    return {"id": subject, "display_name": subject, "email": f"{subject}@localhost", "is_admin": is_admin}
+
+
+# ─── Terminal ───────────────────────────────────────────────────────────────
+
+
+class TerminalExecuteRequest(BaseModel):
+    command: str
+    timeout: int | None = None
+
+
+@router.post("/terminal/execute")
+async def terminal_execute(
+    request: Request,
+    body: TerminalExecuteRequest,
+    _auth: dict = Depends(require_admin()),
+) -> dict[str, Any]:
+    """Execute a sandboxed shell command and return stdout / exit status."""
+    from app.core.di import resolve as di_resolve
+
+    command = (body.command or "").strip()
+    if not command:
+        raise HTTPException(status_code=422, detail="command is required")
+    try:
+        sandbox = di_resolve("SandboxExecutor")
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"sandbox unavailable: {exc}") from exc
+    effective_timeout = min(body.timeout or 30, 120)
+    output = await sandbox.execute(command, timeout=effective_timeout)
+    logger.info("terminal_command_executed", command=command, user_id=current_user_id(request), timeout=effective_timeout)
+    return {"command": command, "output": output, "success": not (output.startswith("TIMEOUT") or output.startswith("Error"))}
 
 
 # ─── Cluster ────────────────────────────────────────────────────────────────
@@ -140,7 +194,10 @@ async def list_cluster_nodes() -> list[dict[str, Any]]:
 @router.post("/cluster")
 @router.post("/cluster/")
 @router.post("/cluster/create")
-async def create_cluster_node(request: Request) -> dict[str, Any]:
+async def create_cluster_node(
+    request: Request,
+    _auth: dict = Depends(require_admin()),
+) -> dict[str, Any]:
     """Create a new cluster node."""
     data = await parse_request_payload(request)
     if not data.get("name"):
@@ -188,7 +245,10 @@ async def get_cluster_stats() -> dict[str, Any]:
 
 
 @router.delete("/cluster/{node_id}")
-async def delete_cluster_node(node_id: str) -> dict[str, bool | str]:
+async def delete_cluster_node(
+    node_id: str,
+    _auth: dict = Depends(require_admin()),
+) -> dict[str, bool | str]:
     """Delete a cluster node."""
     async with async_session() as db:
         node = await get_or_404(db, Cluster, node_id, detail="Node not found")
@@ -273,7 +333,11 @@ async def get_plugin_categories() -> list[str]:
 
 
 @router.post("/plugins/{plugin_key}/install")
-async def install_plugin(plugin_key: str, request: Request) -> dict[str, Any]:
+async def install_plugin(
+    plugin_key: str,
+    request: Request,
+    _auth: dict = Depends(require_admin()),
+) -> dict[str, Any]:
     """Install a plugin from the marketplace or with custom data."""
     from app.config import settings
 
@@ -308,20 +372,29 @@ async def install_plugin(plugin_key: str, request: Request) -> dict[str, Any]:
 
 
 @router.post("/plugins/{plugin_id}/enable")
-async def enable_plugin(plugin_id: str) -> dict[str, Any]:
+async def enable_plugin(
+    plugin_id: str,
+    _auth: dict = Depends(require_admin()),
+) -> dict[str, Any]:
     """Enable a plugin by ID or key."""
     return await _set_plugin_enabled(plugin_id, True)
 
 
 @router.post("/plugins/{plugin_id}/disable")
-async def disable_plugin(plugin_id: str) -> dict[str, Any]:
+async def disable_plugin(
+    plugin_id: str,
+    _auth: dict = Depends(require_admin()),
+) -> dict[str, Any]:
     """Disable a plugin by ID or key."""
     return await _set_plugin_enabled(plugin_id, False)
 
 
 @router.delete("/plugins/{plugin_id}")
 @router.post("/plugins/{plugin_id}/uninstall")
-async def uninstall_plugin(plugin_id: str) -> dict[str, bool | str]:
+async def uninstall_plugin(
+    plugin_id: str,
+    _auth: dict = Depends(require_admin()),
+) -> dict[str, bool | str]:
     """Uninstall a plugin by ID or key."""
     async with async_session() as db:
         plugin = await _find_plugin(db, plugin_id)
@@ -347,7 +420,10 @@ async def get_plugin_status(plugin_id: str) -> dict[str, Any]:
 
 
 @router.post("/plugins/import")
-async def import_plugin(request: Request) -> dict[str, Any]:
+async def import_plugin(
+    request: Request,
+    _auth: dict = Depends(require_admin()),
+) -> dict[str, Any]:
     """Import a custom plugin."""
     data = await parse_request_payload(request)
     key = data.get("plugin_key") or data.get("name")
@@ -378,10 +454,11 @@ async def import_plugin(request: Request) -> dict[str, Any]:
 
 @router.get("/scheduler")
 @router.get("/scheduler/")
-async def list_scheduled() -> list[dict[str, Any]]:
+async def list_scheduled(request: Request) -> list[dict[str, Any]]:
     """List all scheduled workflows."""
+    user_id = current_user_id(request)
     async with async_session() as db:
-        rows = (await db.execute(select(Workflow).where(Workflow.schedule is not None))).scalars().all()
+        rows = (await db.execute(select(Workflow).where(Workflow.schedule.isnot(None), Workflow.user_id == user_id))).scalars().all()
         return [
             {
                 "id": w.id,
@@ -396,7 +473,9 @@ async def list_scheduled() -> list[dict[str, Any]]:
 
 @router.post("/scheduler")
 @router.post("/scheduler/")
-async def create_scheduled(request: Request) -> dict[str, Any]:
+async def create_scheduled(request: Request,
+    _auth: dict = Depends(require_scopes("write")),
+)  -> dict[str, Any]:
     """Create a scheduled workflow."""
     data = await parse_request_payload(request)
     user_id = current_user_id(request)
@@ -428,9 +507,13 @@ async def list_mcp_servers() -> list[dict[str, Any]]:
 
 @router.post("/mcp")
 @router.post("/mcp/")
-async def create_mcp_server(request: Request) -> dict[str, Any]:
+async def create_mcp_server(request: Request,
+    _auth: dict = Depends(require_admin()),
+)  -> dict[str, Any]:
     """Create a new MCP server."""
     data = await parse_request_payload(request)
+    if not data.get("command") and not data.get("url"):
+        raise HTTPException(status_code=422, detail="MCP server requires either a command (stdio) or a url (sse/http)")
     async with async_session() as db:
         server = MCPServerRecord(
             plugin_id=data.get("plugin_id"),
@@ -447,7 +530,9 @@ async def create_mcp_server(request: Request) -> dict[str, Any]:
 
 
 @router.post("/mcp/{server_id}/start")
-async def start_mcp_server(server_id: str) -> dict[str, Any]:
+async def start_mcp_server(server_id: str,
+    _auth: dict = Depends(require_admin()),
+)  -> dict[str, Any]:
     """Start an MCP server."""
     async with async_session() as db:
         server = await get_or_404(db, MCPServerRecord, server_id, detail="MCP server not found")
@@ -457,7 +542,9 @@ async def start_mcp_server(server_id: str) -> dict[str, Any]:
 
 
 @router.post("/mcp/{server_id}/stop")
-async def stop_mcp_server(server_id: str) -> dict[str, Any]:
+async def stop_mcp_server(server_id: str,
+    _auth: dict = Depends(require_admin()),
+)  -> dict[str, Any]:
     """Stop an MCP server."""
     async with async_session() as db:
         server = await get_or_404(db, MCPServerRecord, server_id, detail="MCP server not found")
@@ -467,7 +554,9 @@ async def stop_mcp_server(server_id: str) -> dict[str, Any]:
 
 
 @router.delete("/mcp/{server_id}")
-async def delete_mcp_server(server_id: str) -> dict[str, bool | str]:
+async def delete_mcp_server(server_id: str,
+    _auth: dict = Depends(require_admin()),
+)  -> dict[str, bool | str]:
     """Delete an MCP server."""
     async with async_session() as db:
         server = await get_or_404(db, MCPServerRecord, server_id, detail="MCP server not found")
@@ -499,7 +588,9 @@ async def list_eval_datasets(request: Request) -> list[dict[str, Any]]:
 
 @router.post("/eval/datasets")
 @router.post("/eval/datasets/")
-async def create_eval_dataset(request: Request) -> dict[str, Any]:
+async def create_eval_dataset(request: Request,
+    _auth: dict = Depends(require_scopes("write")),
+)  -> dict[str, Any]:
     """Create an evaluation dataset."""
     from app.storage.models_eval import EvalDataset
 
@@ -520,7 +611,9 @@ async def create_eval_dataset(request: Request) -> dict[str, Any]:
 
 @router.post("/eval/run")
 @router.post("/eval/run/")
-async def run_evaluation(request: Request) -> dict[str, Any]:
+async def run_evaluation(request: Request,
+    _auth: dict = Depends(require_scopes("write")),
+)  -> dict[str, Any]:
     """Create an evaluation run record."""
     from app.storage.database import Agent
     from app.storage.models_eval import EvalDataset, EvalRun
@@ -587,7 +680,7 @@ async def list_cost_records(request: Request, session_id: str = "") -> list[dict
 @router.get("/cost/budget/")
 async def get_budget(request: Request) -> dict[str, Any]:
     """Get or create budget configuration for the current user."""
-    from app.storage.models_cost import BudgetConfig
+    from app.storage.models_cost import BudgetConfig, CostRecord
 
     user_id = current_user_id(request)
     async with async_session() as db:
@@ -597,10 +690,26 @@ async def get_budget(request: Request) -> dict[str, Any]:
             db.add(cfg)
             await db.commit()
             await db.refresh(cfg)
+        current_spend = 0.0
+        try:
+            window_start = _budget_window_start(cfg.period)
+            total = (
+                await db.execute(
+                    select(func.sum(CostRecord.total_cost)).where(
+                        CostRecord.user_id == user_id,
+                        CostRecord.created_at >= window_start,
+                    )
+                )
+            ).scalar()
+            if total is not None:
+                current_spend = round(float(total), 6)
+        except Exception:
+            current_spend = 0.0
         return {
             "amount": cfg.amount,
             "period": cfg.period,
             "is_active": cfg.is_active,
+            "current_spend": current_spend,
             "per_session_limit": cfg.per_session_limit,
             "per_request_limit": cfg.per_request_limit,
         }
@@ -764,7 +873,8 @@ def _mcp_dict(m: MCPServerRecord) -> dict[str, Any]:
         "command": m.command,
         "url": m.url,
         "args": m.args,
-        "env": m.env,
+        "env": mask_env_values(m.env),
+        "has_env": bool(m.env),
         "status": m.status,
         "tools_count": m.tools_count,
         "created_at": m.created_at.isoformat() if m.created_at else "",

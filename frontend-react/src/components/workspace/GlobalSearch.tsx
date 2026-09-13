@@ -3,6 +3,7 @@ import {
   Search, X, Database, FileText, Users,
 } from 'lucide-react';
 import { api } from '../../api';
+import { useI18n } from '../../i18n';
 
 interface SearchResult {
   id: string;
@@ -19,6 +20,7 @@ interface GlobalSearchProps {
 }
 
 export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [filter, setFilter] = useState<string>('');
@@ -36,12 +38,12 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
       const data = await api.search(q, 20);
         setResults(Array.isArray(data) ? data : (data as any).results || []);
     } catch {
-      setError('网络错误');
+      setError(t('common.network_error'));
       setResults([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const timer = setTimeout(() => performSearch(query), 300);
@@ -89,7 +91,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]" onClick={onClose} role="dialog" aria-modal="true" aria-label="全局搜索">
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]" onClick={onClose} role="dialog" aria-modal="true" aria-label={t('sidebar.global_search')}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
         className="relative w-full max-w-2xl bg-[#131A2A]/95 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
@@ -101,26 +103,32 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="搜索文档、记忆、群组..."
+            placeholder={t('global_search.placeholder')}
             className="flex-1 bg-transparent text-sm text-[var(--color-text-secondary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
             autoFocus
           />
           <div className="flex gap-1">
-            {['', 'document', 'memory', 'group'].map(f => (
-              <button
-                key={f || 'all'}
-                onClick={() => setFilter(f)}
-                className={`px-2.5 py-1 rounded-xl text-[10px] font-semibold transition-all duration-200 ${
-                  filter === f
-                    ? 'bg-[#007AFF]/20 text-white border border-[#007AFF]/30'
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] border border-transparent'
-                }`}
-              >
-                 {f ? (f === 'document' ? '文档' : f === 'memory' ? '记忆' : f === 'group' ? '群组' : f) : '全部'}
-              </button>
-            ))}
+            {(['', 'document', 'memory', 'group'] as const).map(f => {
+              const label = f === '' ? t('global_search.all')
+                : f === 'document' ? t('global_search.document')
+                : f === 'memory' ? t('global_search.memory')
+                : t('global_search.group');
+              return (
+                <button
+                  key={f || 'all'}
+                  onClick={() => setFilter(f)}
+                  className={`px-2.5 py-1 rounded-xl text-[10px] font-semibold transition-all duration-200 ${
+                    filter === f
+                      ? 'bg-[#007AFF]/20 text-white border border-[#007AFF]/30'
+                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] border border-transparent'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
-          <button onClick={onClose} aria-label="关闭全局搜索" className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] rounded-xl hover:bg-white/5 transition-all duration-200">
+          <button onClick={onClose} aria-label={t('common.close')} className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] rounded-xl hover:bg-white/5 transition-all duration-200">
             <X size={16} />
           </button>
         </div>
@@ -129,7 +137,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
           {loading && (
             <div className="px-4 py-8 text-center text-[var(--color-text-muted)] text-sm">
               <div className="w-5 h-5 border-2 border-[#007AFF] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-               正在搜索...
+               {t('global_search.searching')}
             </div>
           )}
           {error && (
@@ -137,7 +145,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
           )}
           {!loading && !error && filtered.length === 0 && query && (
             <div className="px-4 py-8 text-center text-[var(--color-text-muted)] text-sm">
-                未找到 "{query}" 的结果
+                {t('common.no_results')} "{query}"
             </div>
           )}
           {!loading && !error && filtered.map(result => {

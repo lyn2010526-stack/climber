@@ -4,6 +4,7 @@ import { api } from '../api';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
 import { Progress } from '../components/ui/Progress';
 import { SkeletonCard } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -17,12 +18,12 @@ interface CostData {
 }
 
 interface BudgetData {
-  daily_limit: number;
-  weekly_limit: number;
-  monthly_limit: number;
-  current_daily: number;
-  current_weekly: number;
-  current_monthly: number;
+  amount: number;
+  period: string;
+  is_active: boolean;
+  current_spend: number;
+  per_session_limit: number | null;
+  per_request_limit: number | null;
 }
 
 function BudgetBar({ label, current, limit, percent }: { label: string; current: number; limit: number; percent: number }) {
@@ -67,9 +68,8 @@ export default function CostPage() {
     fetchData();
   }, []);
 
-  const dailyPercent = budget ? Math.min((budget.current_daily / budget.daily_limit) * 100, 100) : 0;
-  const weeklyPercent = budget ? Math.min((budget.current_weekly / budget.weekly_limit) * 100, 100) : 0;
-  const monthlyPercent = budget ? Math.min((budget.current_monthly / budget.monthly_limit) * 100, 100) : 0;
+  const periodLabel = budget?.period === 'daily' ? '每日' : budget?.period === 'weekly' ? '每周' : '每月';
+  const budgetPercent = budget && budget.amount ? Math.min((budget.current_spend / budget.amount) * 100, 100) : 0;
 
   return (
     <div className="h-full overflow-y-auto page-transition">
@@ -149,12 +149,23 @@ export default function CostPage() {
             {budget && (
               <Card variant="default" className="mb-6">
                 <CardContent className="p-6">
-                  <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">预算使用</h3>
-                  <div className="space-y-4">
-                    <BudgetBar label="每日" current={budget.current_daily} limit={budget.daily_limit} percent={dailyPercent} />
-                    <BudgetBar label="每周" current={budget.current_weekly} limit={budget.weekly_limit} percent={weeklyPercent} />
-                    <BudgetBar label="每月" current={budget.current_monthly} limit={budget.monthly_limit} percent={monthlyPercent} />
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">预算使用</h3>
+                    <Badge variant={budget.is_active ? 'success' : 'secondary'}>{budget.is_active ? '已启用' : '未启用'}</Badge>
                   </div>
+                  {budget.is_active ? (
+                    <div className="space-y-4">
+                      <BudgetBar label={periodLabel} current={budget.current_spend} limit={budget.amount} percent={budgetPercent} />
+                      {(budget.per_session_limit != null || budget.per_request_limit != null) && (
+                        <div className="flex flex-wrap gap-6 text-xs text-[var(--color-text-muted)] pt-1">
+                          {budget.per_session_limit != null && <span>单会话上限 ${budget.per_session_limit.toFixed(2)}</span>}
+                          {budget.per_request_limit != null && <span>单次请求上限 ${budget.per_request_limit.toFixed(2)}</span>}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-[var(--color-text-muted)]">未配置预算限制，可在设置中启用。</p>
+                  )}
                 </CardContent>
               </Card>
             )}

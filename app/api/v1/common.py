@@ -17,6 +17,14 @@ from app.core.principal import LOCAL_SUBJECT_ID, get_context_principal
 
 DEFAULT_USER: str = LOCAL_SUBJECT_ID
 
+
+def mask_env_values(env: dict[str, Any] | None) -> dict[str, str]:
+    """Return env mapping with values masked, key names preserved for UI."""
+    if not env:
+        return {}
+    return {str(k): "***" for k in env}
+
+
 T = TypeVar("T", bound=DeclarativeBase)
 
 _SENSITIVE_RESPONSE_FIELDS = {"api_key", "api_key_encrypted", "env", "environment"}

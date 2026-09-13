@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  /* ─── Surface Layers (Premium Light/Dark) ─── */
+  /* Surface Layers (Premium Light/Dark) */
   --color-bg-page: #0d0e11;
   --color-bg-surface-1: #121318;
   --color-bg-surface-2: #181a20;
@@ -12,14 +12,14 @@
   --color-bg-surface-hover: var(--color-bg-surface-2);
   --color-bg-surface-elevated: var(--color-bg-surface-3);
 
-  /* ─── Text Hierarchy ─── */
+  /* Text Hierarchy */
   --color-text-primary: #e7e8ec;
   --color-text-secondary: #a8abb4;
   --color-text-muted: #777b86;
   --color-text-disabled: #4f525b;
   --color-text-inverse: #11111b;
 
-  /* ─── Accent System ─── */
+  /* Accent System */
   --color-accent: #5E6AD2;
   --color-accent-hover: #6E7AE3;
   --color-accent-subtle: rgba(94, 106, 210, 0.08);
@@ -29,7 +29,7 @@
   --color-accent-secondary: #6366F1;
   --color-accent-secondary-glow: rgba(99, 102, 241, 0.12);
 
-  /* ─── Semantic Colors ─── */
+  /* Semantic Colors */
   --color-success: #10B981;
   --color-success-subtle: rgba(16, 185, 129, 0.08);
   --color-warning: #F59E0B;
@@ -39,22 +39,22 @@
   --color-info: #3B82F6;
   --color-info-subtle: rgba(59, 130, 246, 0.08);
 
-  /* ─── Borders ─── */
+  /* Borders */
   --color-border-subtle: rgba(255, 255, 255, 0.06);
   --color-border-default: rgba(255, 255, 255, 0.1);
   --color-border-strong: rgba(255, 255, 255, 0.18);
   --color-border-accent: rgba(94, 106, 210, 0.35);
 
-  /* ─── Glass Surfaces ─── */
+  /* Glass Surfaces */
   --color-glass-bg: rgba(10, 10, 15, 0.85);
   --color-glass-border: rgba(255, 255, 255, 0.08);
   --color-glass-highlight: rgba(255, 255, 255, 0.04);
 
-  /* ─── Code Blocks ─── */
+  /* Code Blocks */
   --color-code-bg: #0D1117;
   --color-code-border: rgba(255, 255, 255, 0.06);
 
-  /* ─── Typography ─── */
+  /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
   --content-max: 1120px;
@@ -69,7 +69,7 @@
   --color-accent-muted: var(--color-accent-subtle);
   --control-height: 44px;
 
-  /* ─── Z-Index System ─── */
+  /* Z-Index System */
   --z-base: 0;
   --z-dropdown: 100;
   --z-sticky: 200;
@@ -78,7 +78,7 @@
   --z-toast: 500;
   --z-tooltip: 600;
 
-  /* ─── Shadow System ─── */
+  /* Shadow System */
   --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.4);
   --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.4);
   --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
@@ -89,12 +89,12 @@
   --shadow-glow-strong: 0 0 32px rgba(94, 106, 210, 0.25);
   --shadow-elevated: 0 8px 32px rgb(0 0 0 / 0.4);
 
-  /* ─── Gradients ─── */
+  /* Gradients */
   --gradient-accent: linear-gradient(135deg, #5E6AD2, #6366F1);
   --gradient-accent-subtle: linear-gradient(135deg, rgba(94, 106, 210, 0.1), rgba(99, 102, 241, 0.05));
   --gradient-surface: linear-gradient(180deg, var(--color-bg-surface-1), var(--color-bg-page));
 
-  /* ─── Motion ─── */
+  /* Motion */
   --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
@@ -104,18 +104,18 @@
   --transition-slow: 300ms var(--ease-spring);
   --transition-slower: 500ms var(--ease-spring);
 
-  /* ─── Focus ─── */
+  /* Focus */
   --focus-ring: 0 0 0 2px var(--color-bg-page), 0 0 0 4px var(--color-accent);
   --focus-ring-offset: 2px;
 
-  /* ─── Glass ─── */
+  /* Glass */
   --glass-blur: 24px;
   --glass-saturate: 180%;
   --glass-bg: rgba(15, 15, 20, 0.8);
   --glass-border: rgba(255, 255, 255, 0.06);
   --glass-highlight: rgba(255, 255, 255, 0.04);
 
-  /* ─── Typography Scale ─── */
+  /* Typography Scale */
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
   --text-base: 1rem;
@@ -132,7 +132,7 @@
   --weight-semibold: 600;
   --weight-bold: 700;
 
-  /* ─── Spacing ─── */
+  /* Spacing */
   --space-0: 0;
   --space-0-5: 0.125rem;
   --space-1: 0.25rem;
@@ -149,7 +149,7 @@
   --space-16: 4rem;
   --space-20: 5rem;
 
-  /* ─── Icon Sizes ─── */
+  /* Icon Sizes */
   --icon-xs: 0.75rem;
   --icon-sm: 0.875rem;
   --icon-md: 1rem;
@@ -157,15 +157,16 @@
   --icon-xl: 1.5rem;
   --icon-2xl: 2rem;
 
-  /* ─── Layout ─── */
-  --sidebar-width: 260px;
+  /* Layout */
+  --desktop-sidebar-width: 240px;
   --sidebar-collapsed-width: 64px;
+  --session-sidebar-width: 240px;
   --header-height: 52px;
   --max-width: 1440px;
   --content-max-width: 896px;
 }
 
-/* ─── Light Mode ─── */
+/* Light Mode */
 [data-theme="light"] {
   --color-bg-page: #F6F7F9;
   --color-bg-surface-1: #FFFFFF;
@@ -187,7 +188,7 @@
   --color-code-border: rgba(0, 0, 0, 0.12);
 }
 
-/* ─── Smooth Theme Transitions ─── */
+/* Smooth Theme Transitions */
 button,
 a,
 [role="button"],
@@ -202,7 +203,7 @@ a,
   transition: all 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ─── Mobile Touch Targets ─── */
+/* Mobile Touch Targets */
 .mobile-touch-target {
   min-height: 44px;
   min-width: 44px;
@@ -230,7 +231,7 @@ a,
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ─── iOS Safe Area ─── */
+/* iOS Safe Area */
 .safe-area-top {
   padding-top: env(safe-area-inset-top, 0px);
   padding-top: constant(safe-area-inset-top, 0px);
@@ -255,7 +256,7 @@ a,
   flex-direction: column;
 }
 
-/* ─── Scroll Performance ─── */
+/* Scroll Performance */
 .mobile-scroll-optimized {
   will-change: transform;
   transform: translateZ(0);
@@ -272,7 +273,7 @@ a,
   }
 }
 
-/* ─── Keyframe Animations ─── */
+/* Keyframe Animations */
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -365,7 +366,7 @@ a,
   animation: slideUp 400ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ─── Apple-style Touch Feedback ─── */
+/* Apple-style Touch Feedback */
 .apple-touch-feedback {
   transition: all 120ms cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -375,7 +376,7 @@ a,
   opacity: 0.85;
 }
 
-/* ─── Scrollbar Styling ─── */
+/* Scrollbar Styling */
 * {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
@@ -411,7 +412,7 @@ a,
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.12));
 }
 
-/* ─── Selection Styling ─── */
+/* Selection Styling */
 ::selection {
   background: rgba(94, 106, 210, 0.3);
   color: #FFFFFF;
@@ -432,7 +433,7 @@ a,
   color: #1F2937;
 }
 
-/* ─── Base Body ─── */
+/* Base Body */
 body {
   background-color: var(--color-bg-page);
   color: var(--color-text-primary);
@@ -462,7 +463,7 @@ button:disabled,
   cursor: not-allowed;
 }
 
-/* ─── App Shell Background ─── */
+/* App Shell Background */
 .app-shell {
   background: var(--color-bg-page);
 }
@@ -559,8 +560,8 @@ button:disabled,
 
 .session-sidebar {
   display: flex;
-  width: 232px;
-  flex: 0 0 232px;
+  width: var(--session-sidebar-width);
+  flex: 0 0 var(--session-sidebar-width);
   flex-direction: column;
   border-right: 1px solid var(--color-border-subtle);
   background: var(--color-bg-surface-1);
@@ -605,10 +606,6 @@ button:disabled,
   width: min(100%, var(--content-max));
   margin-inline: auto;
   padding: var(--page-gutter);
-}
-
-.agent-list-row {
-  border-radius: var(--radius-lg);
 }
 
 .view-tab {
@@ -778,24 +775,24 @@ button:disabled,
   color: var(--color-accent);
 }
 
-/* ─── Page Transition ─── */
+/* Page Transition */
 .page-transition {
   animation: pageSlideIn 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ─── Mobile Layout ─── */
+/* Mobile Layout */
 .mobile-main {
   padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
 }
 
-/* ─── Focus Ring ─── */
+/* Focus Ring */
 :focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--color-bg-page), 0 0 0 4px var(--color-accent);
   border-radius: 8px;
 }
 
-/* ─── Code Block ─── */
+/* Code Block */
 .code-block {
   background: var(--color-code-bg);
   border: 1px solid var(--color-code-border);
@@ -807,7 +804,7 @@ button:disabled,
   overflow-x: auto;
 }
 
-/* ─── Tool Call Card ─── */
+/* Tool Call Card */
 .tool-call-card {
   background: var(--color-bg-surface-1);
   border: 1px solid var(--color-border-subtle);
@@ -831,7 +828,7 @@ button:disabled,
   gap: 8px;
 }
 
-/* ─── Dark Mode Shadows ─── */
+/* Dark Mode Shadows */
 [data-theme="dark"] .shadow-lg {
   box-shadow: 0 12px 28px -6px rgb(0 0 0 / 0.5), 0 4px 12px -4px rgb(0 0 0 / 0.3);
 }
@@ -848,7 +845,7 @@ button:disabled,
   box-shadow: 0 0 24px rgba(94, 106, 210, 0.2);
 }
 
-/* ─── Light Mode Shadows ─── */
+/* Light Mode Shadows */
 [data-theme="light"] .shadow-lg {
   box-shadow: 0 12px 28px -6px rgb(0 0 0 / 0.1), 0 4px 12px -4px rgb(0 0 0 / 0.05);
 }
@@ -865,7 +862,7 @@ button:disabled,
   box-shadow: 0 0 24px rgba(94, 106, 210, 0.15);
 }
 
-/* ─── Elevated Surface ─── */
+/* Elevated Surface */
 .surface-elevated {
   background: var(--color-bg-surface-1);
   transition: box-shadow 200ms ease;
@@ -879,7 +876,7 @@ button:disabled,
   box-shadow: 0 12px 28px -6px rgb(0 0 0 / 0.08), 0 4px 12px -4px rgb(0 0 0 / 0.04);
 }
 
-/* ─── Hover Lift ─── */
+/* Hover Lift */
 .hover-lift {
   transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms ease;
 }
@@ -896,7 +893,7 @@ button:disabled,
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
-/* ─── Message Enter ─── */
+/* Message Enter */
 .message-enter {
   animation: messageEnter 300ms cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -909,7 +906,7 @@ button:disabled,
   animation: scaleIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ─── Streaming Cursor ─── */
+/* Streaming Cursor */
 .streaming-cursor::after {
   content: '▊';
   display: inline-block;
@@ -922,12 +919,12 @@ button:disabled,
   line-height: 1;
 }
 
-/* ─── Pulse Glow ─── */
+/* Pulse Glow */
 .pulse-glow {
   animation: pulseGlow 2s ease-in-out infinite;
 }
 
-/* ─── Modal Overlay ─── */
+/* Modal Overlay */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -950,7 +947,7 @@ button:disabled,
   z-index: var(--z-overlay, 300);
 }
 
-/* ─── Modal Content ─── */
+/* Modal Content */
 .modal-content {
   background: var(--color-bg-surface-1);
   border: 1px solid var(--color-border-default);
@@ -983,7 +980,7 @@ button:disabled,
   to { opacity: 0; }
 }
 
-/* ─── Panel Divider ─── */
+/* Panel Divider */
 .panel-divider {
   width: 1px;
   background: linear-gradient(to bottom, transparent, var(--color-border-subtle), transparent);
@@ -994,7 +991,7 @@ button:disabled,
   background: linear-gradient(to bottom, transparent, var(--color-border-accent), transparent);
 }
 
-/* ─── Glass Panel ─── */
+/* Glass Panel */
 .glass-panel {
   background: var(--color-glass-bg);
   backdrop-filter: blur(24px) saturate(180%);
@@ -1008,7 +1005,7 @@ button:disabled,
   border-color: rgba(0, 0, 0, 0.1);
 }
 
-/* ─── Apple Button ─── */
+/* Apple Button */
 .apple-button {
   transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -1018,17 +1015,17 @@ button:disabled,
   opacity: 0.9;
 }
 
-/* ─── Subtle Shadow ─── */
+/* Subtle Shadow */
 .shadow-apple {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* ─── Selection Glow ─── */
+/* Selection Glow */
 .glow-selection {
   box-shadow: 0 0 0 2px rgba(94, 106, 210, 0.2), 0 4px 16px rgba(94, 106, 210, 0.1);
 }
 
-/* ─── Nav Active Indicator ─── */
+/* Nav Active Indicator */
 .nav-active-indicator::before {
   content: '';
   position: absolute;
@@ -1047,7 +1044,7 @@ button:disabled,
   opacity: 1;
 }
 
-/* ─── Status Dot ─── */
+/* Status Dot */
 .status-dot {
   width: 6px;
   height: 6px;
@@ -1082,7 +1079,7 @@ button:disabled,
   box-shadow: 0 0 8px var(--color-error);
 }
 
-/* ─── High Contrast ─── */
+/* High Contrast */
 .high-contrast {
   --color-text-primary: #FFFFFF;
   --color-text-secondary: #D1D5DB;
@@ -1094,7 +1091,7 @@ button:disabled,
   --color-warning: #F59E0B;
 }
 
-/* ─── Stagger Children ─── */
+/* Stagger Children */
 .stagger-children > * {
   animation: messageEnter 300ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
@@ -1108,7 +1105,7 @@ button:disabled,
 .stagger-children > *:nth-child(7) { animation-delay: 90ms; }
 .stagger-children > *:nth-child(8) { animation-delay: 105ms; }
 
-/* ─── Mobile Layout ─── */
+/* Mobile Layout */
 @media (max-width: 767px) {
   .desktop-context-bar {
     display: none;
@@ -1234,7 +1231,7 @@ button:disabled,
   }
 }
 
-/* ─── Reduced Motion ─── */
+/* Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1246,7 +1243,7 @@ button:disabled,
   }
 }
 
-/* ─── Smooth Transitions ─── */
+/* Smooth Transitions */
 .transition-smooth {
   transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -1255,7 +1252,7 @@ button:disabled,
   transition: all 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ─── Chart Colors ─── */
+/* Chart Colors */
 .chart-primary { color: #5E6AD2; }
 .chart-secondary { color: #6366F1; }
 .chart-success { color: #10B981; }
@@ -1271,12 +1268,12 @@ button:disabled,
   stroke: rgba(0, 0, 0, 0.08);
 }
 
-/* ─── Input Zoom Prevention ─── */
+/* Input Zoom Prevention */
 input, textarea {
   font-size: 16px !important;
 }
 
-/* ─── Tap Highlight Removal ─── */
+/* Tap Highlight Removal */
 * {
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
@@ -1290,7 +1287,7 @@ button, [role="button"], a {
   touch-action: manipulation;
 }
 
-/* ─── Autofill Fix ─── */
+/* Autofill Fix */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
@@ -1305,22 +1302,15 @@ select:-webkit-autofill:focus {
   transition: background-color 5000s ease-in-out 0s;
 }
 
-/* ─── Responsive ─── */
-@media (max-width: 768px) {
+/* Responsive */
+/* Breakpoint constants live in src/layout/breakpoints.ts; keep values in sync. */
+@media (max-width: 767px) {
   .sidebar-mobile-hidden {
     transform: translateX(-100%);
   }
 
   .sidebar-mobile-visible {
     transform: translateX(0);
-  }
-
-  .mobile-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(8px);
-    z-index: var(--z-overlay);
   }
 
   .chat-input-mobile {
@@ -1333,20 +1323,14 @@ select:-webkit-autofill:focus {
   }
 }
 
-@media (min-width: 769px) and (max-width: 1024px) {
+/* Compact desktop: 768px–1023px, aligned with DESKTOP_MIN / COMPACT_DESKTOP_MAX */
+@media (min-width: 768px) and (max-width: 1023px) {
   .sidebar-tablet-collapsed {
-    width: 64px !important;
+    width: var(--sidebar-collapsed-width) !important;
   }
-}
 
-@media (min-width: 768px) and (max-width: 1024px) {
   .desktop-context-bar {
     padding-inline: 16px;
-  }
-
-  .session-sidebar {
-    width: 208px;
-    flex-basis: 208px;
   }
 
   .app-shell button,
@@ -1366,11 +1350,9 @@ select:-webkit-autofill:focus {
 }
 @tailwind utilities;
 
-/* ═══════════════════════════════════════════════════════════════
-   iOS-style Component Utilities
-   ═══════════════════════════════════════════════════════════════ */
+/* iOS-style Component Utilities */
 
-/* ─── iOS List Group (Settings-style) ─── */
+/* iOS List Group (Settings-style) */
 .ios-list-group {
   background: var(--color-bg-surface-1);
   border-radius: 12px;
@@ -1424,7 +1406,7 @@ select:-webkit-autofill:focus {
   gap: 4px;
 }
 
-/* ─── iOS Segmented Control ─── */
+/* iOS Segmented Control */
 .ios-segmented {
   display: flex;
   background: var(--color-bg-surface-2);
@@ -1452,7 +1434,7 @@ select:-webkit-autofill:focus {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
-/* ─── iOS Switch ─── */
+/* iOS Switch */
 .ios-switch {
   position: relative;
   width: 51px;
@@ -1484,7 +1466,7 @@ select:-webkit-autofill:focus {
   transform: translateX(20px);
 }
 
-/* ─── iOS Card ─── */
+/* iOS Card */
 .ios-card {
   background: var(--color-bg-surface-1);
   border-radius: 12px;
@@ -1496,7 +1478,7 @@ select:-webkit-autofill:focus {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-/* ─── iOS Navigation Bar ─── */
+/* iOS Navigation Bar */
 .ios-navbar {
   height: 44px;
   display: flex;
@@ -1515,7 +1497,7 @@ select:-webkit-autofill:focus {
   flex: 1;
 }
 
-/* ─── iOS Skeleton Shimmer ─── */
+/* iOS Skeleton Shimmer */
 .ios-skeleton {
   background: linear-gradient(
     90deg,
@@ -1528,7 +1510,7 @@ select:-webkit-autofill:focus {
   border-radius: 6px;
 }
 
-/* ─── iOS Ripple ─── */
+/* iOS Ripple */
 .ios-ripple {
   position: relative;
   overflow: hidden;
@@ -1554,19 +1536,19 @@ select:-webkit-autofill:focus {
   opacity: 1;
 }
 
-/* ─── iOS Spring Transition ─── */
+/* iOS Spring Transition */
 .ios-spring {
   transition: all 350ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ─── iOS Blur Modal Backdrop ─── */
+/* iOS Blur Modal Backdrop */
 .ios-backdrop {
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   background: rgba(0, 0, 0, 0.4);
 }
 
-/* ─── iOS Pull-to-refresh indicator ─── */
+/* iOS Pull-to-refresh indicator */
 .ios-pull-indicator {
   width: 24px;
   height: 24px;
@@ -1576,7 +1558,7 @@ select:-webkit-autofill:focus {
   animation: spin 700ms linear infinite;
 }
 
-/* ─── iOS Typography Scale ─── */
+/* iOS Typography Scale */
 .ios-title-1 { font-size: 28px; font-weight: 700; letter-spacing: 0.35px; }
 .ios-title-2 { font-size: 22px; font-weight: 700; letter-spacing: 0.35px; }
 .ios-title-3 { font-size: 20px; font-weight: 600; letter-spacing: 0.35px; }
@@ -1586,7 +1568,7 @@ select:-webkit-autofill:focus {
 .ios-caption { font-size: 13px; font-weight: 400; letter-spacing: -0.08px; }
 .ios-footnote { font-size: 12px; font-weight: 400; letter-spacing: 0; }
 
-/* ─── iOS Empty State ─── */
+/* iOS Empty State */
 .ios-empty-state {
   display: flex;
   flex-direction: column;
@@ -1603,7 +1585,7 @@ select:-webkit-autofill:focus {
   letter-spacing: -0.24px;
 }
 
-/* ─── Line Clamp ─── */
+/* Line Clamp */
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;

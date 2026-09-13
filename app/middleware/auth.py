@@ -2,11 +2,15 @@
 
 Authentication is disabled by default for backward compatibility.
 Set ENABLE_AUTH=true to activate.
+
+Even when authentication is disabled, every request propagates a local
+Principal via contextvars so downstream code always sees a consistent identity.
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 
@@ -15,13 +19,20 @@ import json
 import secrets
 
 import jwt
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
+from app.core.principal import (
+    LOCAL_SUBJECT_ID,
+    Principal,
+    principal_from_auth,
+    reset_current_principal,
+    set_current_principal,
+)
 from app.models.users import ApiKey
 from app.storage import engine
 
@@ -109,7 +120,11 @@ class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if not settings.enable_auth:
             request.state.auth = None
-            return await call_next(request)
+            token = set_current_principal(Principal(subject_id=LOCAL_SUBJECT_ID))
+            try:
+                return await call_next(request)
+            finally:
+                reset_current_principal(token)
 
         if self._is_websocket_upgrade(request):
             request.state.auth = None
@@ -120,7 +135,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
             request.state.auth = None
             return await call_next(request)
 
-        auth_result = await self._authenticate(request)
+        try:
+            auth_result = await self._authenticate(request)
+        except HTTPException as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
         if auth_result is None:
             return JSONResponse(
                 status_code=401,
@@ -132,8 +150,17 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        try:
+            principal = principal_from_auth(auth_result)
+        except ValueError as exc:
+            return JSONResponse(status_code=401, content={"detail": str(exc)})
         request.state.auth = auth_result
-        return await call_next(request)
+        request.state.principal = principal
+        token = set_current_principal(principal)
+        try:
+            return await call_next(request)
+        finally:
+            reset_current_principal(token)
 
     async def _authenticate(self, request: Request) -> dict | None:
         return await authenticate_credentials(request.headers)

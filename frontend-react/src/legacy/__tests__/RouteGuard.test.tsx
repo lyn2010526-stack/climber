@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { RouteGuard } from '../components/route-guard/RouteGuard';
 import { useAuthStore } from '../store/auth';
-import { useCurrentPage } from '../store/page';
+import { useCurrentPage } from '../../store/page';
 
 vi.mock('../store/auth', () => ({
   useAuthStore: vi.fn(),
 }));
 
-vi.mock('../store/page', () => ({
+vi.mock('../../store/page', () => ({
   useCurrentPage: vi.fn(),
 }));
 

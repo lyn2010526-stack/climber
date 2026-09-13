@@ -31,6 +31,23 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
 
 ## 条目
 
+[用户指令摘要]
+- Date: 2026-09-13
+- Context: 用户要求 React 前端全面重构达到比赛标准
+- Instructions:
+  - 前端定位为桌面（电脑）使用，布局以桌面优先，移动端仅作兼容。
+  - 前端不得出现登录界面/登录流程。
+  - 前端代码避免装饰性、描述 JSX 结构的注释（"AI 味"），注释只在解释 why 时保留。
+  - 参考开源 Agent 产品（如 Hermes）时只借鉴交互范式，不复制源码/图标/品牌资产。
+  - 多批次子任务持续推进，不要中途停下来反复询问。
+
+[Headless 开发协作约束]
+- Date: 2026-09-13
+- Context: 用户要求继续实施并验证 headless harness
+- Instructions:
+  - 本次任务保留其他工作区改动，禁止 commit/push，所有手动编辑使用 apply_patch。
+  - Headless 验证使用独立 unittest，避免加载 tests/conftest.py 的数据库清理；scripted fake 测试需明确标注，真实模型验证需用户提供项目凭据。
+
 [项目知识摘要]
 - Date: 2026-08-05
 - Context: Agent 在真实运行后端全量测试时发现

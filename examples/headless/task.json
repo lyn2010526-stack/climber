@@ -1,0 +1,4 @@
+{
+  "id": "local-greeting",
+  "prompt": "Create greeting.txt containing Hello from Climber. Summarize your change and state that command execution and independent tests were unavailable."
+}

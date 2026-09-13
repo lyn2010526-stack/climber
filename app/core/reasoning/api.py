@@ -6,6 +6,8 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+
+from app.core.auth_manager import require_scopes as _require_scopes
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
@@ -40,6 +42,7 @@ async def reason_with_slash(
     req: ReasoningRequest,
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = RateLimit,
+    _auth: dict = Depends(_require_scopes("write")),
 ) -> ReasoningResult:
     from app.api.v1 import get_engine
 
@@ -56,7 +59,7 @@ async def reason_with_slash(
             await trace_repo.create({
                 "trace_id": result.trace.trace_id,
                 "user_id": user_id,
-                "task": result.trace.task,
+                "task": result.trace.request_task,
                 "mode": result.mode_used.value,
                 "candidates_count": len(result.candidates),
                 "best_confidence": max((c.confidence for c in result.candidates), default=0.0),
@@ -91,6 +94,7 @@ async def reason_stream(
     request: Request,
     req: ReasoningRequest,
     db: AsyncSession = Depends(get_db),
+    _auth: dict = Depends(_require_scopes("write")),
 ) -> EventSourceResponse:
     from app.api.v1 import get_engine
 
@@ -110,7 +114,7 @@ async def reason_stream(
                 await trace_repo.create({
                     "trace_id": result.trace.trace_id,
                     "user_id": user_id,
-                    "task": result.trace.task,
+                    "task": result.trace.request_task,
                     "mode": result.mode_used.value,
                     "candidates_count": len(result.candidates),
                     "best_confidence": max((c.confidence for c in result.candidates), default=0.0),

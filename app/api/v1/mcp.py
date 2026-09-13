@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from app.core.auth_manager import require_admin
 from sqlalchemy import select
 
 from app.api.v1.helpers import payload as _payload
@@ -24,6 +25,8 @@ _MARKET_SERVERS: list[dict[str, Any]] = [
 
 
 def _mcp_dict(m: MCPServerRecord) -> dict[str, Any]:
+    from app.api.v1.common import mask_env_values
+
     return {
         "id": m.id,
         "plugin_id": m.plugin_id,
@@ -31,7 +34,8 @@ def _mcp_dict(m: MCPServerRecord) -> dict[str, Any]:
         "command": m.command,
         "url": m.url,
         "args": m.args,
-        "env": m.env,
+        "env": mask_env_values(m.env),
+        "has_env": bool(m.env),
         "status": m.status,
         "tools_count": m.tools_count,
         "created_at": m.created_at.isoformat() if m.created_at else "",
@@ -49,8 +53,12 @@ async def list_mcp_servers() -> list[dict[str, Any]]:
 
 @router.post("/mcp")
 @router.post("/mcp/")
-async def create_mcp_server(request: Request) -> dict[str, Any]:
+async def create_mcp_server(request: Request,
+    _auth: dict = Depends(require_admin()),
+)  -> dict[str, Any]:
     data = await _payload(request)
+    if not data.get("command") and not data.get("url"):
+        raise HTTPException(status_code=422, detail="MCP server requires either a command (stdio) or a url (sse/http)")
     async with async_session() as db:
         server = MCPServerRecord(
             plugin_id=data.get("plugin_id"),
@@ -67,7 +75,9 @@ async def create_mcp_server(request: Request) -> dict[str, Any]:
 
 
 @router.post("/mcp/{server_id}/start")
-async def start_mcp_server(server_id: str) -> dict[str, Any]:
+async def start_mcp_server(server_id: str,
+    _auth: dict = Depends(require_admin()),
+)  -> dict[str, Any]:
     async with async_session() as db:
         server = (await db.execute(select(MCPServerRecord).where(MCPServerRecord.id == server_id))).scalars().first()
         if server is None:
@@ -78,7 +88,9 @@ async def start_mcp_server(server_id: str) -> dict[str, Any]:
 
 
 @router.post("/mcp/{server_id}/stop")
-async def stop_mcp_server(server_id: str) -> dict[str, Any]:
+async def stop_mcp_server(server_id: str,
+    _auth: dict = Depends(require_admin()),
+)  -> dict[str, Any]:
     async with async_session() as db:
         server = (await db.execute(select(MCPServerRecord).where(MCPServerRecord.id == server_id))).scalars().first()
         if server is None:
@@ -89,7 +101,9 @@ async def stop_mcp_server(server_id: str) -> dict[str, Any]:
 
 
 @router.delete("/mcp/{server_id}")
-async def delete_mcp_server(server_id: str) -> dict[str, Any]:
+async def delete_mcp_server(server_id: str,
+    _auth: dict = Depends(require_admin()),
+)  -> dict[str, Any]:
     async with async_session() as db:
         server = (await db.execute(select(MCPServerRecord).where(MCPServerRecord.id == server_id))).scalars().first()
         if server is None:
@@ -119,7 +133,9 @@ async def list_mcp_categories() -> list[str]:
 
 
 @router.post("/mcp/servers/{server_id}/install")
-async def install_mcp_server(server_id: str) -> dict[str, Any]:
+async def install_mcp_server(server_id: str,
+    _auth: dict = Depends(require_admin()),
+)  -> dict[str, Any]:
     async with async_session() as db:
         existing = (await db.execute(select(MCPServerRecord).where(MCPServerRecord.plugin_id == server_id))).scalars().first()
         if existing is not None:
@@ -144,7 +160,9 @@ async def install_mcp_server(server_id: str) -> dict[str, Any]:
 
 
 @router.delete("/mcp/servers/{server_id}")
-async def delete_mcp_market_server(server_id: str) -> dict[str, Any]:
+async def delete_mcp_market_server(server_id: str,
+    _auth: dict = Depends(require_admin()),
+)  -> dict[str, Any]:
     async with async_session() as db:
         server = (await db.execute(select(MCPServerRecord).where(MCPServerRecord.plugin_id == server_id))).scalars().first()
         if server is None:

@@ -74,9 +74,20 @@ class AgentEngine:
         self.resource_tracker = ResourceTracker()
         self.memory_service = PersistentMemoryService()
         self.tool_prioritizer = ToolPrioritizer()
+        self.reasoning = None
         self._init_debug_loop()
         self._init_sandbox()
         self._init_permissions()
+        self._init_reasoning()
+
+    def _init_reasoning(self) -> None:
+        """Initialize the multi-strategy reasoning service so the /reason API works."""
+        try:
+            from app.core.reasoning.service import ReasoningService
+
+            self.reasoning = ReasoningService(model_registry=self.model_registry)
+        except Exception:
+            self.reasoning = None
 
     def _init_debug_loop(self) -> None:
         """Initialize the debug loop engine."""
@@ -103,12 +114,50 @@ class AgentEngine:
             self.agent_mode = None
 
     def _init_permissions(self) -> None:
-        """Initialize default permission configuration."""
+        """Initialize default permission configuration, reloading any persisted config."""
         try:
-            from app.core.permission_rules import get_default_config
-            self._default_permission_config = get_default_config()
+            from app.core.permission_rules import PermissionConfig, get_default_config
+            persisted = self._load_permission_config()
+            self._default_permission_config = persisted or get_default_config()
         except Exception:
-            self._default_permission_config = None
+            try:
+                from app.core.permission_rules import get_default_config
+                self._default_permission_config = get_default_config()
+            except Exception:
+                self._default_permission_config = None
+
+    @staticmethod
+    def _permission_config_path() -> str:
+        import os
+        data_dir = os.environ.get("CLIMBER_DATA_DIR", "data")
+        return os.path.join(data_dir, "permission_config.json")
+
+    def _load_permission_config(self) -> Any:
+        """Load the persisted default permission config, if any."""
+        import json
+        import os
+        path = self._permission_config_path()
+        if not os.path.exists(path):
+            return None
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            from app.core.permission_rules import PermissionConfig
+            return PermissionConfig.from_dict(data)
+        except Exception:
+            return None
+
+    def _save_permission_config(self, config: Any) -> None:
+        """Persist the default permission config so it survives restarts."""
+        import json
+        import os
+        path = self._permission_config_path()
+        try:
+            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(config.to_dict(), f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
 
     def _setup_default_permissions(self) -> None:
         """Setup default three-layer permission rules."""
@@ -267,6 +316,7 @@ class AgentEngine:
             "content": result.content if result else "",
             "tokens_used": getattr(result, "tokens_used", 0) if result else 0,
             "metrics": session.metrics.to_dict(),
+            "message_id": getattr(session, "_last_assistant_message_id", None),
         })
 
     async def _iteration_loop(
@@ -608,7 +658,9 @@ class AgentEngine:
                     result.content = ""
 
         session.messages.append({"role": MessageRole.ASSISTANT, "content": result.content})
-        await persist_message(session.session_id, MessageRole.ASSISTANT, content=result.content, tokens=getattr(result, "tokens_used", 0))
+        persisted_id = await persist_message(session.session_id, MessageRole.ASSISTANT, content=result.content, tokens=getattr(result, "tokens_used", 0))
+        if persisted_id:
+            session._last_assistant_message_id = persisted_id
         if not (adapter.capabilities and adapter.capabilities.streaming):
             yield AgentEvent(type=AgentEventType.TEXT, data={"content": result.content})
 
@@ -889,9 +941,15 @@ class AgentEngine:
         return self._default_permission_config
 
     def update_permission_config(self, config: Any) -> None:
-        """Update the default permission configuration for new sessions.
+        """Update the default permission configuration for new and existing sessions, and persist it.
 
         Args:
             config: The new permission configuration.
         """
         self._default_permission_config = config
+        for session in list(self._sessions.values()):
+            try:
+                session.permission_config = config
+            except Exception:
+                pass
+        self._save_permission_config(config)

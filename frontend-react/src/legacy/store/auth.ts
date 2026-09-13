@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { devtools } from 'zustand/middleware';
-import type { AuthUser } from './types';
+import type { AuthUser } from '../../store/types';
 import { authService } from '../services/authService';
 
 interface AuthState {

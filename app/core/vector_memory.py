@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import re
+
 import asyncio
 import functools
 from datetime import UTC, datetime
@@ -17,6 +19,8 @@ import structlog
 from chromadb.api.types import EmbeddingFunction
 
 logger = structlog.get_logger()
+
+_COLLECTION_NAME_RE = re.compile(r"[^a-zA-Z0-9._-]")
 
 
 class _DefaultEmbeddingWrapper(EmbeddingFunction):
@@ -46,22 +50,32 @@ class VectorMemoryService:
     - reflection: task reflections and insights
     """
 
-    def __init__(self, persist_directory: str = "./data/chroma") -> None:
+    def __init__(self, persist_directory: str | None = None) -> None:
+        if persist_directory is None:
+            from app.config import settings
+
+            persist_directory = getattr(settings, "vector_store_path", "./data/chroma")
         self._client = chromadb.PersistentClient(path=persist_directory)
         self._collections: dict[str, Any] = {}
         self._ef = _DefaultEmbeddingWrapper()
 
     def _get_collection(self, name: str) -> Any:
-        if name not in self._collections:
-            self._collections[name] = self._client.get_or_create_collection(
-                name=name,
+        safe_name = _COLLECTION_NAME_RE.sub("_", name)
+        if safe_name not in self._collections:
+            self._collections[safe_name] = self._client.get_or_create_collection(
+                name=safe_name,
                 embedding_function=self._ef,
             )
-        return self._collections[name]
+        return self._collections[safe_name]
 
     @staticmethod
     def _run(func: Any, *args: Any, **kwargs: Any) -> Any:
-        loop = asyncio.get_event_loop()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError as exc:
+            raise RuntimeError(
+                "VectorMemoryService._run must be called from an async context"
+            ) from exc
         if kwargs:
             func = functools.partial(func, **kwargs)
             return loop.run_in_executor(None, func, *args)

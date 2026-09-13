@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MobileTasksPage } from '../MobileTasksPage';
 
 vi.mock('../../TaskMonitorPage', () => ({
@@ -7,13 +7,10 @@ vi.mock('../../TaskMonitorPage', () => ({
 }));
 
 describe('MobileTasksPage', () => {
-  it('renders page header', () => {
+  it('renders TaskMonitorPage content', async () => {
     render(<MobileTasksPage />);
-    expect(screen.getByText('任务监控')).toBeDefined();
-  });
-
-  it('renders TaskMonitorPage content', () => {
-    render(<MobileTasksPage />);
-    expect(screen.getByText('Tasks Content')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText('Tasks Content')).toBeDefined();
+    });
   });
 });

@@ -2,24 +2,52 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   MessageSquare, Plus, Trash2, Sparkles, History,
 } from 'lucide-react';
-import { useWorkspaceStore } from '../../store/workspace';
-import { useSessions } from '../../stores/useSessions';
+import {
+  useWorkspaceStore,
+  type Session,
+  type ApiSession,
+} from '../../store/workspace';
 import { api } from '../../api';
 import { UserSwitcher } from './UserSwitcher';
 import { PermissionModes } from '../agent/PermissionModes';
 import type { PermissionMode } from '../agent/PermissionModes';
 
+interface ModelOption {
+  id: string;
+  name?: string;
+  label?: string;
+  model_id?: string;
+  provider?: string;
+}
+
+function pickModelName(model: ModelOption): string {
+  return model.label || model.name || model.model_id || model.id;
+}
+
 export function SessionSidebar() {
-  const { activeSessionId, setActiveSession } = useWorkspaceStore();
-  const { sessions, loading, createSession, deleteSession, refresh } = useSessions();
+  const {
+    sessions, activeSessionId, setActiveSession,
+    loadSessions, createSessionLocal, deleteSession, updateSession,
+    loadingSessions, sessionsLoaded, setSessionsLoading,
+  } = useWorkspaceStore();
 
   const [agents, setAgents] = useState<any[]>([]);
-  const [models, setModels] = useState<any[]>([]);
+  const [models, setModels] = useState<ModelOption[]>([]);
   const [selectedAgent, setSelectedAgent] = useState('');
-  const [selectedModel, setSelectedModel] = useState('');
+  const [selectedModelId, setSelectedModelId] = useState('');
   const [creating, setCreating] = useState(false);
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('manual');
   const [showCheckpoints, setShowCheckpoints] = useState(false);
+
+  const refreshSessions = useCallback(async () => {
+    setSessionsLoading(true);
+    try {
+      const data = (await api.listSessions()) as ApiSession[];
+      loadSessions(Array.isArray(data) ? data : []);
+    } catch {
+      setSessionsLoading(false);
+    }
+  }, [loadSessions, setSessionsLoading]);
 
   useEffect(() => {
     api.listAgents().then((data) => {
@@ -29,26 +57,84 @@ export function SessionSidebar() {
   }, []);
 
   useEffect(() => {
-    api.listModels().then((data) => {
-      setModels(data);
-      if (data.length > 0) setSelectedModel(data[0].id || data[0].model_id);
+    api.listModels().then((data: any[]) => {
+      const list: ModelOption[] = Array.isArray(data) ? data : [];
+      setModels(list);
+      if (list.length > 0) {
+        const first = list[0];
+        setSelectedModelId(first ? (first.model_id || first.id) : '');
+      }
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!sessionsLoaded) {
+      refreshSessions();
+    }
+  }, [sessionsLoaded, refreshSessions]);
 
   const handleCreate = useCallback(async () => {
     if (!selectedAgent || creating) return;
     setCreating(true);
     try {
-      await createSession({ title: `会话 ${sessions.length + 1}`, agent_id: selectedAgent });
-      await refresh();
+      const chosen = models.find((m) => (m.model_id || m.id) === selectedModelId);
+      const title = `会话 ${sessions.length + 1}`;
+      const created = await api.createSession({
+        title,
+        agent_id: selectedAgent,
+        model_settings: chosen
+          ? { model_id: chosen.model_id || chosen.id, provider: chosen.provider ?? null }
+          : null,
+      });
+      const newId: string = created?.id || created?.session_id || '';
+      const modelConfig: Session['modelConfig'] = {
+        provider: chosen?.provider || 'unknown',
+        modelId: chosen?.model_id || chosen?.id || '',
+        temperature: 0.7,
+        maxTokens: 4096,
+      };
+      await refreshSessions();
+      if (newId) {
+        const exists = useWorkspaceStore.getState().sessions.some((s) => s.id === newId);
+        if (!exists) {
+          createSessionLocal({
+            id: newId,
+            title: created?.title ?? title,
+            status: 'idle',
+            messages: [],
+            activeSkills: [],
+            activeTools: [],
+            modelConfig,
+            tokenUsage: { used: 0, limit: 200000 },
+            createdAt: Date.now(),
+          });
+        } else {
+          updateSession(newId, { modelConfig });
+        }
+        setActiveSession(newId);
+      }
     } finally {
       setCreating(false);
     }
-  }, [selectedAgent, creating, sessions.length, createSession, refresh]);
+  }, [
+    selectedAgent, selectedModelId, creating, sessions.length, models,
+    refreshSessions, createSessionLocal, updateSession, setActiveSession,
+  ]);
+
+  const handleDelete = useCallback(async (id: string) => {
+    try {
+      await api.deleteSession(id);
+    } catch {
+      // fallthrough: still remove locally to keep UI consistent with server list next time
+    }
+    deleteSession(id);
+    await refreshSessions();
+  }, [deleteSession, refreshSessions]);
+
+  const activeSession = sessions.find((s) => s.id === activeSessionId);
 
   return (
     <aside className="session-sidebar" aria-label="会话">
-      {/* Permission Mode Selector */}
       <div className="border-b border-[var(--color-border-subtle)] p-3">
         <PermissionModes
           currentMode={permissionMode}
@@ -56,7 +142,6 @@ export function SessionSidebar() {
         />
       </div>
 
-      {/* Header — New Chat Button */}
       <div className="space-y-2 border-b border-[var(--color-border-subtle)] p-3">
         <button
           onClick={handleCreate}
@@ -77,23 +162,22 @@ export function SessionSidebar() {
           ))}
         </select>
         <select
-          value={selectedModel}
-          onChange={(e) => setSelectedModel(e.target.value)}
+          value={selectedModelId}
+          onChange={(e) => setSelectedModelId(e.target.value)}
           aria-label="选择模型"
           className="h-11 w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] px-3 text-xs text-[var(--color-text-primary)] transition-colors hover:border-[var(--color-border-default)] focus:border-[var(--color-accent)] focus:outline-none"
         >
           {models.length === 0 && <option value="">暂无可用模型</option>}
           {models.map(m => (
-            <option key={m.id || m.model_id} value={m.id || m.model_id}>
-              {m.name || m.model_id || m.id}
+            <option key={m.id || m.model_id} value={m.model_id || m.id}>
+              {pickModelName(m)}
             </option>
           ))}
         </select>
       </div>
 
-      {/* Session list */}
-      <div className="flex-1 space-y-0.5 overflow-y-auto p-2" aria-live="polite" aria-busy={loading}>
-        {loading && (
+      <div className="flex-1 space-y-0.5 overflow-y-auto p-2" aria-live="polite" aria-busy={loadingSessions}>
+        {loadingSessions && (
           <div className="text-center py-8">
             <div className="mx-auto mb-2 h-5 w-5 animate-spin rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
             <span className="text-[10px] text-[var(--color-text-muted)]">加载中...</span>
@@ -122,7 +206,7 @@ export function SessionSidebar() {
                </span>
              </button>
             <button
-              onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
+              onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}
                aria-label={`删除会话 ${s.title || 'Untitled'}`}
                 className="flex h-11 w-11 items-center justify-center rounded-md text-[var(--color-text-muted)] opacity-0 transition-colors hover:bg-[var(--color-error-subtle)] hover:text-[var(--color-error)] group-hover:opacity-100 group-focus-within:opacity-100"
             >
@@ -130,33 +214,31 @@ export function SessionSidebar() {
             </button>
            </div>
         ))}
-        {!loading && sessions.length === 0 && (
+        {!loadingSessions && sessions.length === 0 && (
           <div className="text-center py-8">
             <span className="text-[10px] text-[var(--color-text-muted)]">暂无会话</span>
           </div>
         )}
       </div>
 
-      {/* Checkpoint History Panel */}
       {showCheckpoints && (
         <div className="max-h-48 space-y-2 overflow-y-auto border-t border-[var(--color-border-subtle)] p-3">
           <div className="flex items-center gap-2 px-1">
             <History size={12} className="text-[var(--color-accent)]" />
             <span className="text-[11px] font-medium text-[var(--color-text-secondary)]">检查点历史</span>
           </div>
-          {(sessions.find(s => s.id === activeSessionId) as any)?.messages?.slice(-10).reverse().map((msg: any, i: number) => (
+          {(activeSession?.messages ?? []).slice(-10).reverse().map((msg, i) => (
             <div key={i} className="rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] px-2 py-1.5 text-[10px] text-[var(--color-text-secondary)]">
               <span className="text-[var(--color-text-muted)]">{new Date(msg.timestamp).toLocaleTimeString()}</span>
               <span className="ml-2">{msg.type}</span>
             </div>
           ))}
-          {(!(sessions.find(s => s.id === activeSessionId) as any)?.messages?.length) && (
+          {(!activeSession?.messages?.length) && (
             <p className="text-[10px] text-[var(--color-text-muted)] text-center py-2">暂无检查点</p>
           )}
         </div>
       )}
 
-      {/* Footer */}
       <div className="border-t border-[var(--color-border-subtle)] p-3">
         <div className="flex items-center gap-2 mb-2">
           <button

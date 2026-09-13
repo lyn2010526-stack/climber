@@ -48,22 +48,8 @@ def _safe_eval_math(expression: str, local_vars: dict[str, Any]) -> Any:
     return eval(compile(tree, "<calculator>", "eval"), {"__builtins__": _SAFE_EVAL_BUILTINS}, local_vars)
 
 # Register browser tools so they are available in the tool registry
-# Register vision tools for screen capture, OCR, and interaction
-# Register vector memory tools for semantic memory search
-# Register core memory tools for LLM self-directed core memory management
-# Register memory tools for LLM self-directed memory management
-from app.tools import (  # noqa: E402
-    browser_tools,  # noqa: E402, F401
-    core_memory_tools,  # noqa: E402, F401
-    memory_tools,  # noqa: E402, F401
-    memory_vector_tools,  # noqa: E402, F401
-    vision_tools,  # noqa: E402, F401
-)
-
-# Register core memory tools for LLM self-directed core memory management
-
-
-# Register browser tools so they are available in the tool registry
+# (native_tools registers screen/browser-style tools and lives in this package too)
+from app.tools import browser_tools  # noqa: E402, F401
 
 
 @tool(description="Get the current date and time")

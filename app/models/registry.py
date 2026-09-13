@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import structlog
@@ -92,15 +93,22 @@ class ModelRegistry:
     def get_or_create(
         self,
         provider: str,
-        model_id: str,
-        api_key: str,
+        model_id: str = "",
+        api_key: str = "",
         base_url: str | None = None,
     ) -> ModelAdapter:
         """Get existing model or create new one with user-provided key.
 
         Supports friendly aliases like ``gpt-4o-mini``. If ``provider`` matches
         an alias key, it is rewritten to the canonical ``(provider, model_id)``.
+
+        Also accepts a single-argument spec form used by the reasoning layer:
+        ``get_or_create("openai:gpt-4o-mini")`` or ``get_or_create("step-3.5-flash")``,
+        resolving provider/model from MODEL_ALIASES or ``provider:model`` syntax and
+        pulling key/base_url from environment variables.
         """
+        if not model_id and not api_key:
+            return self._resolve_spec(provider)
         resolved_provider, resolved_model = MODEL_ALIASES.get(provider, (provider, model_id))
         if resolved_provider != provider or resolved_model != model_id:
             logger.info("model_alias_resolved", alias=f"{provider}:{model_id}", resolved=f"{resolved_provider}:{resolved_model}")
@@ -108,6 +116,32 @@ class ModelRegistry:
             return self.get_model(resolved_provider, resolved_model)
         except ValueError:
             return self.register_model(resolved_model, resolved_provider, api_key, base_url)
+
+    def _resolve_spec(self, spec: str) -> ModelAdapter:
+        """Resolve a single-string alias or ``provider:model`` spec into an adapter."""
+        if ":" in spec:
+            provider, model_id = spec.split(":", 1)
+        elif spec in MODEL_ALIASES:
+            provider, model_id = MODEL_ALIASES[spec]
+        else:
+            provider, model_id = "openai", spec
+        try:
+            return self.get_model(provider, model_id)
+        except ValueError:
+            from app.core.collaboration.resolver import resolve_api_key, resolve_base_url
+
+            api_key = resolve_api_key(provider, None)
+            base_url = resolve_base_url(provider, None)
+            return self.register_model(model_id, provider, api_key, base_url)
+
+    def get_default(self) -> ModelAdapter:
+        """Return the default model adapter for background reasoning pipelines.
+
+        Uses ``DEFAULT_MODEL_SPEC`` from environment if present; falls back to
+        the alias used by chat requests (``gpt-4o``).
+        """
+        spec = os.environ.get("DEFAULT_MODEL_SPEC") or "gpt-4o"
+        return self._resolve_spec(spec)
 
     def register_keys(
         self,

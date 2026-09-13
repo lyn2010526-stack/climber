@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.core.auth_manager import require_scopes
 
 from app.core.prompt_engine.template_repository import PromptTemplateRepository
 
@@ -55,7 +57,7 @@ async def list_templates(
 
 
 @router.post("")
-async def create_template(body: dict[str, Any]) -> dict[str, Any]:
+async def create_template(body: dict[str, Any], _auth: dict = Depends(require_scopes("write"))) -> dict[str, Any]:
     """Create a new prompt template."""
     repo = get_repository()
     name = body.get("name", "").strip()
@@ -78,7 +80,7 @@ async def create_template(body: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.post("/import")
-async def import_template(body: dict[str, Any]) -> dict[str, Any]:
+async def import_template(body: dict[str, Any], _auth: dict = Depends(require_scopes("write"))) -> dict[str, Any]:
     """Import a template from JSON."""
     repo = get_repository()
     json_str = body.get("json", "")
@@ -93,7 +95,7 @@ async def import_template(body: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.post("/import-bulk")
-async def import_bulk(body: dict[str, Any]) -> dict[str, Any]:
+async def import_bulk(body: dict[str, Any], _auth: dict = Depends(require_scopes("write"))) -> dict[str, Any]:
     """Import multiple templates from JSON array."""
     repo = get_repository()
     json_str = body.get("json", "")
@@ -126,7 +128,7 @@ async def get_template(template_id: str) -> dict[str, Any]:
 
 
 @router.put("/{template_id}")
-async def update_template(template_id: str, body: dict[str, Any]) -> dict[str, Any]:
+async def update_template(template_id: str, body: dict[str, Any], _auth: dict = Depends(require_scopes("write"))) -> dict[str, Any]:
     """Update an existing template."""
     repo = get_repository()
     updates = {
@@ -141,7 +143,7 @@ async def update_template(template_id: str, body: dict[str, Any]) -> dict[str, A
 
 
 @router.delete("/{template_id}")
-async def delete_template(template_id: str) -> dict[str, str]:
+async def delete_template(template_id: str, _auth: dict = Depends(require_scopes("write"))) -> dict[str, str]:
     """Delete a template."""
     repo = get_repository()
     if not repo.delete(template_id):
@@ -151,7 +153,7 @@ async def delete_template(template_id: str) -> dict[str, str]:
 
 @router.post("/{template_id}/duplicate")
 async def duplicate_template(
-    template_id: str, body: dict[str, Any] | None = None
+    template_id: str, body: dict[str, Any] | None = None, _auth: dict = Depends(require_scopes("write"))
 ) -> dict[str, Any]:
     """Duplicate an existing template."""
     repo = get_repository()
@@ -164,7 +166,7 @@ async def duplicate_template(
 
 @router.post("/{template_id}/render")
 async def render_template(
-    template_id: str, body: dict[str, Any] | None = None
+    template_id: str, body: dict[str, Any] | None = None, _auth: dict = Depends(require_scopes("write"))
 ) -> dict[str, str]:
     """Render a template with variable substitution."""
     repo = get_repository()

@@ -16,7 +16,7 @@ async def persist_message(
     tool_name: str | None = None,
     tool_call_id: str | None = None,
     tokens: int = 0,
-) -> None:
+) -> str | None:
     """Persist a message to the database (fire-and-forget safe).
 
     Args:
@@ -27,6 +27,9 @@ async def persist_message(
         tool_name: The tool name if this is a tool result.
         tool_call_id: ID linking a tool result to its tool call.
         tokens: Token count for this message.
+
+    Returns:
+        The persisted message id, or None when persistence failed.
     """
     try:
         from app.storage import async_session
@@ -44,5 +47,8 @@ async def persist_message(
             )
             db.add(msg)
             await db.commit()
+            await db.refresh(msg)
+            return msg.id
     except Exception:
         logger.exception("Failed to persist session message", extra={"session_id": session_id})
+        return None

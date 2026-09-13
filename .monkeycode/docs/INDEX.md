@@ -9,6 +9,7 @@
 - [开发者指南](DEVELOPER_GUIDE.md) - 构建、测试、验收命令与项目约定
 - [API 文档](API.md) - `/api/v1` 端点与认证
 - [部署指南](DEPLOYMENT.md) - 环境变量、Docker、静态托管
+- [Headless 本地运行器](HEADLESS.md) - 独立 CLI、文件工具、预算、JSONL 与限制
 
 ## 规格
 

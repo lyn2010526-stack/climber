@@ -75,15 +75,13 @@ async def _authenticate_websocket(
     if not settings.enable_auth:
         return LOCAL_USER_ID
 
-    auth = await authenticate_credentials(
-        websocket.headers,
-        token=websocket.query_params.get("token"),
-    )
+    # Prefer headers or cookies so credentials do not enter URL logs and history.
+    auth = await authenticate_credentials(websocket.headers, token=websocket.cookies.get("access_token"))
     user_id = None
     if auth:
         user_id = auth.get("sub") or auth.get("owner")
     if not user_id:
-        await websocket.close(code=4401)
+        await websocket.close(code=1008)
         return None
 
     if resource_model is not None and resource_id is not None:
@@ -94,7 +92,7 @@ async def _authenticate_websocket(
                 )
             ).scalar_one_or_none()
         if owner_id is not None and str(owner_id) != str(user_id):
-            await websocket.close(code=4403)
+            await websocket.close(code=1008)
             return None
 
     return str(user_id)
@@ -230,11 +228,7 @@ async def ws_group_endpoint(websocket: WebSocket, group_id: str) -> None:
                 if payload.get("type") == "message":
                     payload["sender_id"] = user_id
 
-                await group_ws_hub.disconnect(group_id, websocket)
-                try:
-                    result = await group_ws_hub.handle_message(group_id, payload)
-                finally:
-                    await group_ws_hub.connect(group_id, websocket)
+                result = await group_ws_hub.handle_message(group_id, payload)
                 await websocket.send_json({"type": "ack", "data": result})
 
             except WebSocketDisconnect:
