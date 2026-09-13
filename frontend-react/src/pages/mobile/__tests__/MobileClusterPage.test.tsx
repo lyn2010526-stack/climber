@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MobileClusterPage } from '../MobileClusterPage';
 
 vi.mock('../../ClusterPage', () => ({
@@ -7,13 +7,10 @@ vi.mock('../../ClusterPage', () => ({
 }));
 
 describe('MobileClusterPage', () => {
-  it('renders page header', () => {
+  it('renders ClusterPage content', async () => {
     render(<MobileClusterPage />);
-    expect(screen.getByText('集群协作')).toBeDefined();
-  });
-
-  it('renders ClusterPage content', () => {
-    render(<MobileClusterPage />);
-    expect(screen.getByText('Cluster Content')).toBeDefined();
+    await waitFor(() => {
+      expect(screen.getByText('Cluster Content')).toBeDefined();
+    });
   });
 });

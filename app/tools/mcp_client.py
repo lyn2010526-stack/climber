@@ -11,9 +11,6 @@ from collections.abc import Callable
 from typing import Any
 
 import structlog
-from mcp import ClientSession
-from mcp.client.stdio import stdio_client
-from mcp.client.streamable_http import streamablehttp_client
 
 from app.tools.mcp_models import (
     MCPContent,
@@ -22,6 +19,17 @@ from app.tools.mcp_models import (
     MCPTool,
     MCPToolResult,
 )
+
+try:  # optional dependency — keeps import safe when mcp is not installed
+    from mcp import ClientSession
+    from mcp.client.stdio import stdio_client
+    from mcp.client.streamable_http import streamablehttp_client
+    _MCP_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _MCP_AVAILABLE = False
+    ClientSession = None  # type: ignore[assignment]
+    stdio_client = None  # type: ignore[assignment]
+    streamablehttp_client = None  # type: ignore[assignment]
 
 logger = structlog.get_logger()
 
@@ -70,6 +78,10 @@ class MCPClient:
         return self.session is not None
 
     async def connect(self) -> None:
+        if not _MCP_AVAILABLE:
+            raise ImportError(
+                "MCP transport requires the `mcp` package. Install with: pip install mcp"
+            )
         """Connect to MCP server using configured transport."""
         if self.transport == "stdio":
             await self._connect_stdio()
@@ -88,6 +100,10 @@ class MCPClient:
 
     async def _connect_stdio(self) -> None:
         """Connect via stdio transport."""
+        if not _MCP_AVAILABLE:
+            raise ImportError(
+                "MCP transport requires the `mcp` package. Install with: pip install mcp"
+            )
         from mcp.client.stdio import StdioServerParameters
 
         if not self.command:
@@ -107,6 +123,10 @@ class MCPClient:
 
     async def _connect_http(self) -> None:
         """Connect via streamable HTTP transport."""
+        if not _MCP_AVAILABLE:
+            raise ImportError(
+                "MCP transport requires the `mcp` package. Install with: pip install mcp"
+            )
         if not self.url:
             raise ValueError("streamable_http transport requires 'url' parameter")
 

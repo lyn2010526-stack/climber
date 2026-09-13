@@ -42,18 +42,6 @@ export interface SessionMessage {
   created_at: string;
 }
 
-let isRefreshing = false;
-let refreshSubscribers: ((token: string) => void)[] = [];
-
-function onTokenRefreshed(token: string) {
-  refreshSubscribers.forEach(cb => cb(token));
-  refreshSubscribers = [];
-}
-
-function subscribeTokenRefresh(cb: (token: string) => void) {
-  refreshSubscribers.push(cb);
-}
-
 class ApiClient {
   private getAuthHeaders(): Record<string, string> {
     const token = localStorage.getItem('auth_token');
@@ -105,9 +93,6 @@ class ApiClient {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user_info');
-        if (!window.location.hash.includes('login')) {
-          window.location.hash = 'login';
-        }
         throw new Error('Authentication required');
       }
     }
@@ -539,6 +524,14 @@ class ApiClient {
 
   async stopTask(id: string) {
     return this.request<{ task_id: string; cancelled: boolean }>(`/tasks/${id}/cancel`, { method: 'POST' });
+  }
+
+  // Terminal
+  async executeSandboxCommand(command: string, timeout?: number): Promise<{ command: string; output: string; success: boolean }> {
+    return this.request('/terminal/execute', {
+      method: 'POST',
+      body: JSON.stringify({ command, timeout }),
+    });
   }
 
   // Cost

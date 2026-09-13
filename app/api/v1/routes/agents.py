@@ -125,4 +125,6 @@ def _agent_dict(a: Agent) -> dict[str, Any]:
         "tool_ids": getattr(a, "tool_ids", []) or [],
         "skill_ids": getattr(a, "skill_ids", []) or [],
         "created_at": a.created_at.isoformat() if a.created_at else None,
+        "updated_at": a.updated_at.isoformat() if a.updated_at else None,
+        "is_active": bool(a.is_active),
     }

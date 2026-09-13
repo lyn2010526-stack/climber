@@ -100,6 +100,7 @@ async def _factory_agent_payload(user_id: str, data: dict[str, Any]) -> dict[str
         "base_url": base_url,
         "system_prompt": system_prompt,
         "tools": tools,
+        "factory_skills": [str(skill) for skill in data.get("skills", [])],
         "max_steps": 10,
     }
 
@@ -146,9 +147,13 @@ async def create_skill(request: Request) -> dict[str, Any]:
         return _skill_dict(skill)
 
 
-async def _set_skill_enabled(skill_id: str, enabled: bool) -> dict:
+async def _set_skill_enabled(skill_id: str, enabled: bool, user_id: str) -> dict:
     async with async_session() as db:
-        skill = (await db.execute(select(Skill).where(Skill.id == skill_id))).scalar_one_or_none()
+        skill = (
+            await db.execute(
+                select(Skill).where(Skill.id == skill_id, Skill.user_id == user_id)
+            )
+        ).scalar_one_or_none()
         if skill is None:
             raise HTTPException(status_code=404, detail="Skill not found")
         skill.is_enabled = enabled
@@ -157,19 +162,22 @@ async def _set_skill_enabled(skill_id: str, enabled: bool) -> dict:
 
 
 @router.post("/skills/{skill_id}/enable")
-async def enable_skill(skill_id: str) -> dict:
-    return await _set_skill_enabled(skill_id, True)
+async def enable_skill(skill_id: str, request: Request) -> dict:
+    return await _set_skill_enabled(skill_id, True, current_user_id(request))
 
 
 @router.post("/skills/{skill_id}/disable")
-async def disable_skill(skill_id: str) -> dict:
-    return await _set_skill_enabled(skill_id, False)
+async def disable_skill(skill_id: str, request: Request) -> dict:
+    return await _set_skill_enabled(skill_id, False, current_user_id(request))
 
 
 @router.delete("/skills/{skill_id}")
-async def delete_skill(skill_id: str) -> dict:
+async def delete_skill(skill_id: str, request: Request) -> dict:
+    user_id = current_user_id(request)
     async with async_session() as db:
-        skill = (await db.execute(select(Skill).where(Skill.id == skill_id))).scalar_one_or_none()
+        skill = (
+            await db.execute(select(Skill).where(Skill.id == skill_id, Skill.user_id == user_id))
+        ).scalar_one_or_none()
         if skill is None:
             raise HTTPException(status_code=404, detail="Skill not found")
         await db.delete(skill)
@@ -212,44 +220,46 @@ async def run_autonomous_skill(request: Request) -> StreamingResponse:
         raise HTTPException(status_code=422, detail="goal is required")
 
     task_payload = await _factory_agent_payload(current_user_id(request), data)
-    task_id = await task_manager.submit("agent_run", task_payload)
+    provider = str(task_payload["provider"])
+    if provider != "ollama" and not task_payload["api_key"]:
+        raise HTTPException(
+            status_code=409,
+            detail="Configure an active model API key before starting Agent Factory",
+        )
+    task_id = await task_manager.submit("factory_run", task_payload)
 
     async def stream() -> AsyncIterator[str]:
-        yield _sse("plan", {"steps": [{"step": 1, "action": goal, "status": "running"}]})
-        yield _sse("task_start", {"task_id": task_id, "description": goal})
-        previous_progress = -1
+        queue = task_manager.subscribe(task_id)
         try:
             while True:
+                if await request.is_disconnected():
+                    await task_manager.cancel(task_id)
+                    break
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=1.0)
+                    yield _sse(event["type"], event["data"])
+                except TimeoutError:
+                    pass
                 status = await task_manager.get_status(task_id)
-                if status is None:
-                    yield _sse("task_failed", {"task_id": task_id, "error": "Task not found"})
+                if status is None or status["status"] in {
+                    TaskStatus.COMPLETED.value,
+                    TaskStatus.FAILED.value,
+                    TaskStatus.CANCELLED.value,
+                }:
+                    while not queue.empty():
+                        event = queue.get_nowait()
+                        yield _sse(event["type"], event["data"])
+                    if status and status["status"] in {TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}:
+                        yield _sse("factory_failed", {
+                            "task_id": task_id,
+                            "error": status.get("error") or status["status"],
+                        })
                     break
-
-                progress = int(status["progress"])
-                if progress != previous_progress:
-                    previous_progress = progress
-                    yield _sse("progress", {
-                        "task_id": task_id,
-                        "step": progress,
-                        "total": int(status["total_steps"]),
-                    })
-
-                if status["status"] == TaskStatus.COMPLETED.value:
-                    result = status.get("result") or {}
-                    report = result.get("output", "") if isinstance(result, dict) else str(result)
-                    yield _sse("task_complete", {"task_id": task_id, "result": report})
-                    yield _sse("synthesize", {"report": report})
-                    break
-                if status["status"] in {TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}:
-                    yield _sse("task_failed", {
-                        "task_id": task_id,
-                        "error": status.get("error") or status["status"],
-                    })
-                    break
-                await asyncio.sleep(0.25)
         except asyncio.CancelledError:
             await task_manager.cancel(task_id)
             raise
+        finally:
+            task_manager.unsubscribe(task_id, queue)
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")

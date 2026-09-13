@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Key, LogIn, AlertCircle, Eye, EyeOff } from 'lucide-react';
-import { Card, CardContent } from '../components/ui/Card';
-import { Input } from '../components/ui/Input';
-import { Button } from '../components/ui/Button';
+import { Card, CardContent } from '../../components/ui/Card';
+import { Input } from '../../components/ui/Input';
+import { Button } from '../../components/ui/Button';
 
 interface LoginPageProps {
     onLogin?: (token: string, user: any) => void;

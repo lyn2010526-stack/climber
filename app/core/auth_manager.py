@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -56,6 +57,16 @@ def verify_token(token: str, expected_type: str = "access") -> dict[str, Any]:
         payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode()))
     except Exception:
         raise HTTPException(401, "Malformed token")
+    exp = payload.get("exp")
+    if exp:
+        try:
+            expires_at = datetime.fromisoformat(str(exp))
+        except ValueError:
+            raise HTTPException(401, "Malformed token expiry")
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        if datetime.now(UTC) >= expires_at:
+            raise HTTPException(401, "Token expired")
     return payload
 
 
@@ -96,22 +107,102 @@ async def authenticate_user(username: str, password: str) -> dict[str, Any]:
 
 
 async def get_current_user(request: Request) -> str:
-    """Extract current user from request."""
-    return "default-user"
+    """Extract current user id from the request-scoped principal."""
+    from app.core.principal import get_context_principal
+
+    try:
+        return get_context_principal().subject_id
+    except RuntimeError as exc:
+        raise HTTPException(401, str(exc)) from exc
+
+
+def _principal_dict() -> dict[str, Any]:
+    from app.core.principal import get_context_principal
+
+    try:
+        principal = get_context_principal()
+    except RuntimeError as exc:
+        raise HTTPException(401, str(exc)) from exc
+    return {
+        "id": principal.subject_id,
+        "user_id": principal.subject_id,
+        "scopes": list(principal.scopes),
+        "role": principal.role,
+    }
+
+
+def _has_scope(principal: dict[str, Any], scope: str) -> bool:
+    scopes = principal.get("scopes") or []
+    return "admin" in scopes or scope in scopes or principal.get("role") == scope or principal.get("role") == "admin"
 
 
 def require_admin():
-    """Dependency that requires admin scope."""
-    async def _check(request: Request):
-        return {"user_id": "admin", "scopes": ["admin"]}
+    """Dependency factory that rejects callers without admin scope."""
+    async def _check(request: Request) -> dict[str, Any]:
+        principal = _principal_dict()
+        # Local mode (auth disabled) resolves to the seeded default identity.
+        if not settings.enable_auth and principal["id"] == "default-user":
+            return {**principal, "scopes": ["admin"], "role": "admin"}
+        if principal.get("role") == "admin" or "admin" in principal["scopes"]:
+            return principal
+        raise HTTPException(403, "Admin scope required")
     return _check
 
 
 def require_scopes(*required_scopes: str):
-    """Dependency that requires specific scopes."""
-    async def _check(request: Request):
-        return {"user_id": "default-user", "scopes": list(required_scopes)}
+    """Dependency factory that enforces each required scope."""
+    async def _check(request: Request) -> dict[str, Any]:
+        principal = _principal_dict()
+        if not settings.enable_auth and principal["id"] == "default-user":
+            return {**principal, "scopes": list(required_scopes)}
+        for scope in required_scopes:
+            if not _has_scope(principal, scope):
+                raise HTTPException(403, f"Missing required scope: {scope}")
+        return principal
     return _check
+
+
+async def validate_api_key(raw_key: str) -> dict[str, Any]:
+    """Validate a hashed API key against the database and return auth info."""
+    from sqlalchemy import select
+
+    from app.models.users import ApiKey
+    from app.storage import async_session
+
+    if not raw_key or not raw_key.startswith("ae_"):
+        raise HTTPException(401, "Invalid API key format")
+
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    async with async_session() as session:
+        result = await session.execute(
+            select(ApiKey).where(ApiKey.key_hash == key_hash)
+        )
+        record = result.scalar_one_or_none()
+        if record is None or not record.is_active:
+            raise HTTPException(401, "Invalid API key")
+        if record.expires_at is not None:
+            expires = record.expires_at
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=UTC)
+            if datetime.now(UTC) >= expires:
+                raise HTTPException(401, "API key expired")
+        try:
+            decoded_scopes = json.loads(record.scopes) if record.scopes else ["read", "write"]
+        except (TypeError, ValueError):
+            raise HTTPException(401, "Invalid API key scopes") from None
+        if not isinstance(decoded_scopes, list) or not all(isinstance(scope, str) for scope in decoded_scopes):
+            raise HTTPException(401, "Invalid API key scopes")
+        scopes = decoded_scopes
+        record.last_used_at = datetime.utcnow()
+        await session.commit()
+
+    return {
+        "method": "api_key",
+        "user_id": str(record.owner),
+        "key_id": record.id,
+        "scopes": scopes,
+        "role": "admin" if "admin" in scopes else None,
+    }
 
 
 async def initialize_auth_system() -> dict[str, Any] | None:

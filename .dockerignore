@@ -57,6 +57,7 @@ docker-compose*.yml
 data
 logs
 workspace
+sessions
 
 # Tests
 tests

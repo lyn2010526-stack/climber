@@ -227,7 +227,23 @@ async def test_factory_run_streams_agent_output(client, monkeypatch: pytest.Monk
         return {"output": f"finished: {payload['objective']}"}
 
     from app.core.task_worker import task_manager
+    from app.api.v1 import skills_router
 
+    async def _factory_payload(user_id, data):
+        return {
+            "objective": data["goal"],
+            "user_id": user_id,
+            "provider": "openai",
+            "model": "test-model",
+            "api_key": "test-key",
+            "base_url": None,
+            "system_prompt": "test",
+            "tools": ["web_search"],
+            "factory_skills": data.get("skills", []),
+            "max_steps": 10,
+        }
+
+    monkeypatch.setattr(skills_router, "_factory_agent_payload", _factory_payload)
     monkeypatch.setitem(task_manager._handlers, "agent_run", _fake_handler)
 
     resp = await client.post(
@@ -244,10 +260,51 @@ async def test_factory_run_streams_agent_output(client, monkeypatch: pytest.Monk
                 events.append(json.loads(line[6:]))
 
     types = [e["type"] for e in events]
+    assert "factory_start" in types
     assert "plan" in types
     assert "task_start" in types
+    assert "task_complete" in types
     assert "synthesize" in types
-    assert next(e for e in events if e["type"] == "synthesize")["data"]["report"] == "finished: ship it"
+    report = next(e for e in events if e["type"] == "synthesize")["data"]["report"]
+    assert "Produce the final answer" in report
+
+
+async def test_factory_retries_failed_step(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    attempts = 0
+
+    async def _flaky_handler(payload, on_progress):
+        nonlocal attempts
+        attempts += 1
+        if payload["objective"] == "recover this" and attempts == 2:
+            raise RuntimeError("temporary model failure")
+        return {"output": "recovered"}
+
+    from app.core.task_worker import task_manager
+    from app.api.v1 import skills_router
+
+    async def _factory_payload(user_id, data):
+        return {
+            "objective": data["goal"],
+            "user_id": user_id,
+            "provider": "openai",
+            "model": "test-model",
+            "api_key": "test-key",
+            "base_url": None,
+            "system_prompt": "test",
+            "tools": ["run_command"],
+            "factory_skills": data.get("skills", []),
+            "max_steps": 10,
+        }
+
+    monkeypatch.setattr(skills_router, "_factory_agent_payload", _factory_payload)
+    monkeypatch.setitem(task_manager._handlers, "agent_run", _flaky_handler)
+    resp = await client.post(
+        "/api/v1/skills/autonomous/run",
+        json={"goal": "recover this", "skills": ["code_executor"]},
+    )
+    assert resp.status_code == 200
+    assert '"type": "task_retry"' in resp.text
+    assert '"type": "synthesize"' in resp.text
 
 
 async def test_factory_run_rejects_empty_goal(client) -> None:
@@ -306,3 +363,359 @@ def test_crew_module_has_uuid_import() -> None:
     import app.multi_agent.crew as crew_module
 
     assert hasattr(crew_module, "uuid")
+
+
+def test_permission_config_roundtrips_through_dict() -> None:
+    from app.core.permission_rules import (
+        PermissionConfig,
+        PermissionMode,
+        PermissionRule,
+        RuleDecision,
+    )
+
+    cfg = PermissionConfig(
+        mode=PermissionMode.AUTO,
+        rules=[PermissionRule(decision=RuleDecision.DENY, tool="run_command", pattern="rm *")],
+        allowed_tools=["web_search"],
+        denied_tools=["file_delete"],
+    )
+    restored = PermissionConfig.from_dict(cfg.to_dict())
+    assert restored.mode == PermissionMode.AUTO
+    assert restored.rules[0].decision == RuleDecision.DENY
+    assert restored.rules[0].tool == "run_command"
+    assert restored.rules[0].pattern == "rm *"
+    assert restored.allowed_tools == ["web_search"]
+    assert restored.denied_tools == ["file_delete"]
+
+
+async def test_engine_persists_and_propagates_permission_config(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.agent_engine import AgentEngine
+    from app.core.permission_rules import PermissionConfig, PermissionMode
+
+    monkeypatch.setenv("CLIMBER_DATA_DIR", str(tmp_path))
+    engine = AgentEngine()
+    session = engine.create_session(
+        agent_id="t", user_id="u", provider="openai", model_id="m", api_key="k",
+    )
+    new_config = PermissionConfig(mode=PermissionMode.AUTO)
+    engine.update_permission_config(new_config)
+
+    assert session.permission_config is new_config
+    assert (tmp_path / "permission_config.json").exists()
+
+    engine2 = AgentEngine()
+    reloaded = engine2.get_permission_config()
+    assert reloaded is not None
+    assert reloaded.mode == PermissionMode.AUTO
+
+
+async def test_budget_endpoint_returns_current_spend(client) -> None:
+    from app.storage import async_session
+    from app.storage.models_cost import BudgetConfig, CostRecord
+
+    async with async_session() as db:
+        db.add(BudgetConfig(user_id="default-user", amount=25.0, period="monthly", is_active=True))
+        db.add(CostRecord(
+            user_id="default-user", provider="openai", model_id="gpt-4o-mini",
+            prompt_tokens=10, completion_tokens=5, total_tokens=15,
+            input_cost=0.01, output_cost=0.02, total_cost=0.03,
+        ))
+        await db.commit()
+
+    resp = await client.get("/api/v1/cost/budget")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) >= {"amount", "period", "is_active", "current_spend", "per_session_limit", "per_request_limit"}
+    assert body["amount"] == 25.0
+    assert body["is_active"] is True
+    assert body["current_spend"] == round(0.03, 6)
+
+
+async def test_auth_me_returns_user_object(client) -> None:
+    resp = await client.get("/api/v1/auth/me")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert isinstance(body, dict)
+    assert {"id", "username", "email", "role"} <= set(body)
+    assert body["id"] == body["username"]
+
+
+async def test_settings_exposes_mcp_ready(client) -> None:
+    resp = await client.get("/api/v1/settings/")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "mcp_ready" in body
+    assert "mcp_status" in body
+    assert body["mcp_ready"] == (body["mcp_status"] == "ready")
+
+
+# ── Sandbox escape regressions (#105/#106/#107) ───────────────────────────────
+
+
+def test_safe_eval_rejects_dunder_attribute_escape() -> None:
+    """safe_eval must block __class__/__subclasses__ traversal."""
+    from app.workflow.engine import safe_eval
+
+    with pytest.raises(ValueError, match="attribute"):
+        safe_eval("[].__class__", {})
+    with pytest.raises(ValueError):
+        safe_eval("[].__class__.__bases__[0].__subclasses__()", {})
+    with pytest.raises(ValueError):
+        safe_eval("(1).__class__", {})
+
+
+def test_safe_exec_rejects_dunder_attribute_escape() -> None:
+    """safe_exec must block dunder attribute traversal too."""
+    from app.workflow.engine import safe_exec
+
+    with pytest.raises(ValueError, match="attribute"):
+        safe_exec("x = [].__class__", {})
+
+
+def test_safe_eval_allows_legitimate_expressions() -> None:
+    """Non-dunder expressions still work after the fix."""
+    from app.workflow.engine import safe_eval
+
+    assert safe_eval("len([1, 2, 3])", {}) == 3
+    assert safe_eval("x + 1", {"x": 41}) == 42
+    assert safe_eval("[i * 2 for i in range(3)]", {}) == [0, 2, 4]
+
+
+# ── Scheduler identity-check regression (#73/#74) ─────────────────────────────
+
+
+async def test_scheduler_list_filters_by_user_and_schedule(client) -> None:
+    """list_scheduled must filter by user_id AND non-null schedule."""
+    # Non-scheduled workflow for default user — must NOT appear.
+    resp = await client.post(
+        "/api/v1/scheduler",
+        json={"name": "Unscheduled", "nodes": [], "edges": []},
+    )
+    assert resp.status_code == 200
+    # Scheduled workflow — must appear.
+    resp2 = await client.post(
+        "/api/v1/scheduler",
+        json={"name": "Daily", "schedule": "0 9 * * *", "nodes": [], "edges": []},
+    )
+    assert resp2.status_code == 200
+    listed = (await client.get("/api/v1/scheduler")).json()
+    names = {w["name"] for w in listed}
+    assert "Daily" in names
+    assert "Unscheduled" not in names
+
+
+# ── vector_memory hardening regressions (#58/#59/#60) ─────────────────────────
+
+
+def test_vector_memory_collection_name_sanitized() -> None:
+    """Path separators and control chars are stripped from collection names."""
+    from app.core.vector_memory import _COLLECTION_NAME_RE
+
+    cleaned = _COLLECTION_NAME_RE.sub("_", "user/../../etc/passwd")
+    assert "/" not in cleaned
+    assert "\\" not in cleaned
+    assert "\x00" not in cleaned
+
+
+async def test_vector_memory_run_works_in_async_context() -> None:
+    """_run uses get_running_loop (no DeprecationWarning) in async callers."""
+    from app.core.vector_memory import VectorMemoryService
+
+    fut = VectorMemoryService._run(lambda: 42)
+    assert await fut == 42
+
+
+class _FakeChatResult:
+    def __init__(self, content: str) -> None:
+        self.content = content
+        self.total_tokens = 50
+        self.prompt_tokens = 20
+        self.completion_tokens = 30
+        self.input_tokens = 20
+        self.output_tokens = 30
+
+
+class _FakeModelAdapter:
+    provider = "openai"
+    model_id = "gpt-4o"
+    api_key = "sk-test"
+    total_tokens = 0
+
+    class capabilities:
+        chat = True
+        streaming = True
+        tools = False
+        vision = False
+        embedding = False
+        max_tokens = 4096
+
+    async def chat(self, messages, **kwargs):
+        return _FakeChatResult(
+            "Proposed solution: build a CLI tool with argparse and tests. "
+            "Edge cases: empty input, unicode, huge files. Alternative: use click. "
+            "Reasoning: CLI simplest with tests. Risk: parsing bugs mitigated by unit tests. "
+            "Conclusion: build the CLI with argparse and test coverage."
+        )
+
+    async def stream_chat(self, messages, **kwargs):
+        yield await self.chat(messages)
+
+
+def test_model_registry_resolves_single_string_spec() -> None:
+    from app.models.registry import ModelRegistry
+
+    reg = ModelRegistry()
+    adapter = reg.get_or_create("gpt-4o-mini")
+    assert reg.get_model("openai", "gpt-4o-mini") is adapter
+    default = reg.get_default()
+    assert reg.get_model("openai", "gpt-4o") is default
+
+
+async def test_reasoning_endpoint_returns_result(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    """POST /reason wires the ModelRegistry contract and finishes a full run."""
+    from types import SimpleNamespace
+
+    from app.core.reasoning.service import ReasoningService
+    from app.models.registry import ModelRegistry
+
+    reg = ModelRegistry()
+    reg._models["openai:gpt-4o"] = _FakeModelAdapter()
+    fake_engine = SimpleNamespace(
+        reasoning=ReasoningService(model_registry=reg),
+        model_registry=reg,
+    )
+    monkeypatch.setattr("app.api.v1.get_engine", lambda: fake_engine)
+
+    resp = await client.post(
+        "/api/v1/reason",
+        json={
+            "task": "Design a CLI tool in Python that renames files in bulk.",
+            "mode": "auto",
+            "coverage_enabled": False,
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["answer"]
+    assert len(body["candidates"]) >= 1
+
+
+# ── Track A auth hardening regressions ─────────────────────────────────────
+
+
+async def test_require_admin_rejects_non_admin_principal(monkeypatch: pytest.MonkeyPatch) -> None:
+    from fastapi import HTTPException
+
+    from app.config import settings
+    from app.core.auth_manager import require_admin
+    from app.core.principal import Principal, reset_current_principal, set_current_principal
+
+    monkeypatch.setattr(settings, "enable_auth", True)
+    dep = require_admin()
+
+    token = set_current_principal(Principal(subject_id="u1", scopes=("read", "write")))
+    try:
+        with pytest.raises(HTTPException) as exc_info:
+            await dep(request=None)
+        assert exc_info.value.status_code == 403
+    finally:
+        reset_current_principal(token)
+
+    token = set_current_principal(Principal(subject_id="u2", scopes=("read", "write", "admin")))
+    try:
+        result = await dep(request=None)
+        assert result["user_id"] == "u2"
+    finally:
+        reset_current_principal(token)
+
+
+async def test_require_scopes_admin_bypass_and_enforcement(monkeypatch: pytest.MonkeyPatch) -> None:
+    from fastapi import HTTPException
+
+    from app.config import settings
+    from app.core.auth_manager import require_scopes
+    from app.core.principal import Principal, reset_current_principal, set_current_principal
+
+    monkeypatch.setattr(settings, "enable_auth", True)
+    dep = require_scopes("write")
+
+    token = set_current_principal(Principal(subject_id="u3", scopes=("admin",)))
+    try:
+        result = await dep(request=None)
+        assert result["user_id"] == "u3"
+    finally:
+        reset_current_principal(token)
+
+    token = set_current_principal(Principal(subject_id="u4", scopes=("read",)))
+    try:
+        with pytest.raises(HTTPException) as exc_info:
+            await dep(request=None)
+        assert exc_info.value.status_code == 403
+    finally:
+        reset_current_principal(token)
+
+
+def test_verify_token_rejects_expired_without_secret_leak() -> None:
+    import base64
+    import hashlib
+    import hmac
+    import json
+    from datetime import UTC, datetime, timedelta
+
+    from fastapi import HTTPException
+
+    from app.config import settings
+    from app.core.auth_manager import verify_token
+
+    payload = {
+        "sub": "1",
+        "scopes": ["read"],
+        "iat": (datetime.now(UTC) - timedelta(hours=48)).isoformat(),
+        "exp": (datetime.now(UTC) - timedelta(hours=24)).isoformat(),
+    }
+    pb = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
+    secret = getattr(settings, "APP_SECRET_KEY", "dev-secret-key-change-in-production")
+    sig = hmac.new(secret.encode(), pb.encode(), "sha256").hexdigest()[:16]
+    with pytest.raises(HTTPException) as exc_info:
+        verify_token(f"{pb}.{sig}")
+    assert exc_info.value.status_code == 401
+    assert "expired" in str(exc_info.value.detail).lower()
+
+
+async def test_workflow_export_blocks_cross_tenant_access(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Under auth, a non-admin caller cannot export another user's workflow."""
+    from httpx import ASGITransport, AsyncClient
+
+    from app.config import settings
+    from app.core.auth_manager import create_access_token
+    from app.main import app
+
+    monkeypatch.setattr(settings, "enable_auth", True)
+    owner_tok = create_access_token("owner-user", ["read", "write"])
+    intruder_tok = create_access_token("intruder-user", ["read", "write"])
+    admin_tok = create_access_token("admin-user", ["read", "write", "admin"])
+    owner_h = {"Authorization": f"Bearer {owner_tok}"}
+    intruder_h = {"Authorization": f"Bearer {intruder_tok}"}
+    admin_h = {"Authorization": f"Bearer {admin_tok}"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        created = await ac.post("/api/v1/workflows/", json={"name": "Secret Flow"}, headers=owner_h)
+        assert created.status_code == 200
+        wf_id = created.json()["id"]
+        owner_row = await ac.get("/api/v1/workflows/", headers=owner_h)
+        assert any(w["id"] == wf_id for w in owner_row.json())
+        intruder_row = await ac.get("/api/v1/workflows/", headers=intruder_h)
+        assert all(w["id"] != wf_id for w in intruder_row.json())
+
+        denied_post = await ac.post(f"/api/v1/workflows/{wf_id}/export", json={"format": "json"}, headers=intruder_h)
+        denied_get = await ac.get(f"/api/v1/workflows/{wf_id}/export", headers=intruder_h)
+        assert denied_post.status_code == 404
+        assert denied_get.status_code == 404
+
+        allowed = await ac.post(f"/api/v1/workflows/{wf_id}/export", json={"format": "json"}, headers=owner_h)
+        assert allowed.status_code == 200
+        admin_view = await ac.post(f"/api/v1/workflows/{wf_id}/export", json={"format": "json"}, headers=admin_h)
+        assert admin_view.status_code == 200

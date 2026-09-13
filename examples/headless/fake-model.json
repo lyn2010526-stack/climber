@@ -1,0 +1,30 @@
+[
+  {
+    "usage": {"total_tokens": 40},
+    "choices": [{
+      "finish_reason": "tool_calls",
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [{
+          "id": "write-greeting",
+          "type": "function",
+          "function": {
+            "name": "write_file",
+            "arguments": "{\"path\":\"greeting.txt\",\"content\":\"Hello from Climber.\\n\"}"
+          }
+        }]
+      }
+    }]
+  },
+  {
+    "usage": {"total_tokens": 20},
+    "choices": [{
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "Scripted fake model: created greeting.txt. Command execution and independent tests were unavailable."
+      }
+    }]
+  }
+]

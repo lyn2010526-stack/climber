@@ -5,7 +5,7 @@ import '@xterm/xterm/css/xterm.css';
 import { cn } from '../../lib/utils';
 
 interface TerminalPanelProps {
-  onCommand?: (command: string) => void;
+  onCommand?: (command: string) => void | string | string[] | Promise<void | string | string[]>;
   className?: string;
   readOnly?: boolean;
 }
@@ -68,18 +68,46 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ onCommand, classNa
     term.write('\x1b[1;32m➜\x1b[0m \x1b[37m~\x1b[0m ');
 
     if (!readOnly && onCommand) {
+      let commandBuffer = '';
+      let isExecuting = false;
+      const promptText = () => '\x1b[1;32m➜\x1b[0m \x1b[37m~\x1b[0m ';
+      const writePrompt = () => term.write(promptText());
+
       term.onData((data) => {
+        if (isExecuting) return;
+
         if (data === '\r') {
+          const command = commandBuffer.trim();
+          commandBuffer = '';
           term.write('\r\n');
-          const line = (term as any)._lines?.map((l: any) => l.translateToString(0)).join('') || '';
-          const match = line.match(/➜ .*~\s*([^\u0000]*)$/);
-          if (match) {
-            onCommand(match[1].trim());
+          if (!command) {
+            writePrompt();
+            return;
           }
-          term.write('\x1b[1;32m➜\x1b[0m \x1b[37m~\x1b[0m ');
-        } else if (data === '\u007F') {
-          term.write('\b \b');
-        } else {
+
+          isExecuting = true;
+          Promise.resolve(onCommand(command)).then((out) => {
+            const text = Array.isArray(out) ? out.join('\r\n') : String(out ?? '');
+            if (text) term.write(text.endsWith('\n') ? `\r\n${text}` : `\r\n${text}\r\n`);
+          }).catch((err) => {
+            term.write(`\r\n\x1b[31m${String(err?.message ?? err)}\x1b[0m\r\n`);
+          }).finally(() => {
+            isExecuting = false;
+            writePrompt();
+          });
+          return;
+        }
+
+        if (data === '\u007F') {
+          if (commandBuffer.length > 0) {
+            commandBuffer = commandBuffer.slice(0, -1);
+            term.write('\b \b');
+          }
+          return;
+        }
+
+        if (data >= ' ' && data !== '\u007F') {
+          commandBuffer += data;
           term.write(data);
         }
       });

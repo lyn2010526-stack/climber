@@ -9,7 +9,10 @@ import structlog
 from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import select
 
+from app.api.v1.common import current_user_id
 from app.api.v1.helpers import payload as _payload
+from app.config import settings
+from app.core.principal import LOCAL_SUBJECT_ID, get_context_principal
 from app.storage import async_session
 from app.storage.models_platform import Workflow as WorkflowModel
 from app.workflow import Workflow, WorkflowEdge, WorkflowNode
@@ -18,6 +21,21 @@ from app.workflow.templates import WorkflowTemplates
 
 logger = structlog.get_logger()
 router = APIRouter()
+
+
+def _caller_identity(request: Request) -> tuple[str, bool]:
+    """Return (subject_id, is_admin) for the current caller.
+
+    Mirrors ``require_admin`` semantics: with authentication disabled the local
+    default identity is treated as admin so single-tenant deployments keep
+    access to pre-existing rows.
+    """
+    del request
+    principal = get_context_principal()
+    is_admin = principal.role == "admin" or "admin" in principal.scopes
+    if not settings.enable_auth and principal.subject_id == LOCAL_SUBJECT_ID:
+        is_admin = True
+    return principal.subject_id, is_admin
 
 
 def _workflow_dict(w: WorkflowModel) -> dict[str, Any]:
@@ -100,9 +118,10 @@ async def create_from_template(template_id: str, request: Request) -> dict[str, 
         raise HTTPException(status_code=404, detail=f"Template '{template_id}' not found")
 
     data = await _payload(request)
+    user_id, _is_admin = _caller_identity(request)
     async with async_session() as db:
         wf = WorkflowModel(
-            user_id="default-user",
+            user_id=user_id,
             name=data.get("name") or tpl["name"],
             description=tpl["description"],
             nodes=tpl.get("nodes", []),
@@ -139,7 +158,7 @@ async def import_workflow(request: Request) -> dict[str, Any]:
 
     async with async_session() as db:
         wf = WorkflowModel(
-            user_id="default-user",
+            user_id=current_user_id(request),
             name=result.workflow.name,
             description=result.workflow.description,
             nodes=[n.model_dump() for n in result.workflow.nodes],
@@ -162,10 +181,12 @@ async def export_workflow(workflow_id: str, request: Request) -> Response:
     body = await request.json()
     fmt = (body.get("format") or "json").lower() if isinstance(body, dict) else "json"
 
+    user_id, is_admin = _caller_identity(request)
     async with async_session() as db:
-        wf = (await db.execute(
-            select(WorkflowModel).where(WorkflowModel.id == workflow_id)
-        )).scalar_one_or_none()
+        query = select(WorkflowModel).where(WorkflowModel.id == workflow_id)
+        if not is_admin:
+            query = query.where(WorkflowModel.user_id == user_id)
+        wf = (await db.execute(query)).scalar_one_or_none()
         if wf is None:
             raise HTTPException(status_code=404, detail="Workflow not found")
 
@@ -181,14 +202,16 @@ async def export_workflow(workflow_id: str, request: Request) -> Response:
 
 
 @router.get("/{workflow_id}/export")
-async def export_workflow_get(workflow_id: str, format: str = "json") -> Response:
+async def export_workflow_get(workflow_id: str, request: Request, format: str = "json") -> Response:
     """Export a workflow as a downloadable file (GET)."""
     fmt = format.lower()
 
+    user_id, is_admin = _caller_identity(request)
     async with async_session() as db:
-        wf = (await db.execute(
-            select(WorkflowModel).where(WorkflowModel.id == workflow_id)
-        )).scalar_one_or_none()
+        query = select(WorkflowModel).where(WorkflowModel.id == workflow_id)
+        if not is_admin:
+            query = query.where(WorkflowModel.user_id == user_id)
+        wf = (await db.execute(query)).scalar_one_or_none()
         if wf is None:
             raise HTTPException(status_code=404, detail="Workflow not found")
 

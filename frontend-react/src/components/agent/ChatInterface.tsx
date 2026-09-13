@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Send, Square, Bot, Edit3, Check, X, Maximize2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
+import { api } from '../../api';
 import { MessageContent, MessageActions, ToolCallCard } from '../chat/MessageContent';
 import { ThinkingDetails } from '../chat/ThinkingDetails';
 import { ThinkingIndicator } from './ThinkingIndicator';
@@ -61,6 +62,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [editState, setEditState] = useState<EditState>(null);
   const [editContent, setEditContent] = useState('');
   const [permissionRequests, setPermissionRequests] = useState<PermissionRequest[]>([]);
+  const [feedbacks, setFeedbacks] = useState<Record<string, 'up' | 'down'>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -75,6 +77,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const handleApproveAllPermissions = useCallback(async () => {
     setPermissionRequests([]);
   }, []);
+
+  const submitFeedback = useCallback(async (messageId: string, type: 'up' | 'down') => {
+    if (feedbacks[messageId]) return;
+    try {
+      await api.submitFeedback(messageId, type);
+      setFeedbacks(prev => ({ ...prev, [messageId]: type }));
+    } catch (e) {
+      console.error('feedback failed', e);
+    }
+  }, [feedbacks]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -219,7 +231,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               msg.role === 'assistant' ? (
                 <MessageActions
                   onCopy={() => navigator.clipboard.writeText(msg.content)}
-                  onFeedback={(type) => console.log('feedback', type)}
+                  onFeedback={(type) => submitFeedback(msg.id, type)}
                   onEdit={() => startEditing(msg.id, msg.content)}
                 />
               ) : undefined

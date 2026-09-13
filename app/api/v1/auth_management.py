@@ -158,20 +158,33 @@ async def logout(request: Request) -> dict:
 
 
 @router.get("/me", response_model=dict)
-async def get_me(current_user: dict = Depends(get_current_user)) -> dict:
+async def get_me(current_user: str = Depends(get_current_user)) -> dict:
     """Get current user information."""
-    return current_user
+    if not settings.enable_auth:
+        return {"id": current_user, "username": current_user, "email": "", "role": "local"}
+    async with async_session() as session:
+        result = await session.execute(select(User).where(User.id == current_user))
+        user = result.scalar_one_or_none()
+        if user is None:
+            return {"id": current_user, "username": current_user, "email": "", "role": "user"}
+        role = user.role.value if getattr(user, "role", None) else "user"
+        return {
+            "id": str(user.id),
+            "username": user.username,
+            "email": user.email or "",
+            "role": role,
+        }
 
 
 @router.post("/change-password")
 async def change_password(
     payload: ChangePasswordRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: str = Depends(get_current_user),
 ) -> dict:
     """Change current user password."""
     async with async_session() as session:
         result = await session.execute(
-            select(User).where(User.id == current_user["id"])
+            select(User).where(User.id == current_user)
         )
         user = result.scalar_one_or_none()
         if not user:

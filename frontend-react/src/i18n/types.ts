@@ -205,6 +205,17 @@ export interface Agents {
   agent_created: string;
   agent_updated: string;
   agent_deleted: string;
+  card_aria_label: string;
+  status_configured: string;
+  status_incomplete: string;
+  status_disabled: string;
+  coming_soon_title: string;
+  view_grid_two_col: string;
+  menu_aria_label: string;
+  close_form_aria_label: string;
+  create_steps_aria_label: string;
+  search_aria_label: string;
+  loading_aria_label: string;
 }
 
 export interface Projects {

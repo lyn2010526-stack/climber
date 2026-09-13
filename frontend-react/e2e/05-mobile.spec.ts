@@ -17,7 +17,7 @@ test.describe('Mobile Responsive', () => {
   });
 
   test('mobile navigation is accessible', async ({ page }) => {
-    const navLabels = ['工作台', '智能体', '任务', '集群'];
+    const navLabels = ['Chat', 'Agents', 'Tasks', 'Cluster'];
     let visibleCount = 0;
     for (const label of navLabels) {
       const isVisible = await page.locator('button').filter({ hasText: label }).or(page.getByText(label)).first().isVisible().catch(() => false);

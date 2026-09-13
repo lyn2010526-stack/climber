@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Bot, Sparkles, ChevronRight, ChevronLeft, Check, RefreshCw, AlertCircle, Search, MoreVertical, Copy, Settings, Wrench, Boxes } from 'lucide-react';
 import { api } from '../api';
+import { useTranslation } from '../i18n';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -8,6 +9,8 @@ import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Dropdown } from '../components/ui/Dropdown';
 import { PageHeader } from '../components/ui/PageHeader';
+import { AgentSigil } from '../components/agents/AgentSigil';
+import { AgentStatusBadge } from '../components/agents/AgentStatusBadge';
 
 const PROVIDERS = [
   { id: 'openai', label: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'o1', 'o1-mini'] },
@@ -21,8 +24,8 @@ interface Skill {
   name: string;
   description: string;
   category: string;
-  icon: string;
-  tools: string[];
+  icon?: string;
+  tools?: string[];
 }
 
 interface AgentCardProps {
@@ -30,52 +33,69 @@ interface AgentCardProps {
   onDelete: (id: string) => void;
 }
 
-function AgentCard({ agent, onDelete }: AgentCardProps) {
+export function AgentCard({ agent, onDelete }: AgentCardProps) {
+  const { t } = useTranslation();
+  const toolCount = agent.tool_ids?.length ?? 0;
+  const skillCount = agent.skill_ids?.length ?? 0;
+
   return (
-    <Card variant="default" padding="none" className="group agent-list-row">
-      <CardContent className="p-3 md:p-4">
-        <div className="flex items-start gap-3 md:gap-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent-subtle)] ring-1 ring-[var(--color-border-accent)]">
-            <Bot size={18} className="text-[var(--color-accent)]" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              <h3 className="font-semibold text-sm text-[var(--color-text-primary)] truncate">{agent.name}</h3>
-              <Badge variant="primary" size="xs">{agent.provider}</Badge>
-            </div>
-            <p className="text-xs text-[var(--color-text-muted)] truncate">{agent.model_id}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--color-text-muted)]">
-              <span className="inline-flex items-center gap-1.5"><Wrench size={12} />{agent.tools?.length ?? 0} tools</span>
-              <span className="inline-flex items-center gap-1.5"><Boxes size={12} />{agent.skill_ids?.length ?? 0} skills</span>
-              {agent.model_id && <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-[var(--color-success)]" />Model configured</span>}
-            </div>
-          </div>
-          <Dropdown
-            trigger={
-              <button aria-label={`打开 ${agent.name} 操作菜单`} className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-text-muted)] opacity-100 transition-colors hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)] md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
-                <MoreVertical size={16} />
-              </button>
-            }
-          >
-            <div className="w-36 p-1">
-              <button className="flex w-full items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-xs text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] transition-colors">
-                <Copy size={13} /> Copy Config
-              </button>
-              <button className="flex w-full items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-xs text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] transition-colors">
-                <Settings size={13} /> Edit Settings
-              </button>
-              <div className="my-1 h-px bg-[var(--color-border-subtle)]" />
-              <button
-                className="flex w-full items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-xs text-[var(--color-error)] hover:bg-[var(--color-error-subtle)] transition-colors"
-                onClick={() => onDelete(agent.id)}
-              >
-                <Trash2 size={13} /> Delete
-              </button>
-            </div>
-          </Dropdown>
+    <article
+      aria-label={t('agents.card_aria_label', { name: agent.name })}
+      data-agent-id={agent.id}
+      className="group flex items-start gap-3 rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] p-3 shadow-[var(--shadow-panel)] transition-colors md:gap-4 md:p-4"
+    >
+      <AgentSigil id={agent.id} name={agent.name} provider={agent.provider} size={44} />
+      <div className="min-w-0 flex-1">
+        <div className="mb-0.5 flex items-center gap-2">
+          <h3 className="truncate text-sm font-semibold text-[var(--color-text-primary)]">{agent.name}</h3>
+          <Badge variant="primary" size="xs">{agent.provider}</Badge>
         </div>
-      </CardContent>
-    </Card>
+        <p className="truncate text-xs text-[var(--color-text-muted)]">
+          {agent.description || agent.provider}
+        </p>
+        <p className="mt-0.5 truncate text-xs text-[var(--color-text-secondary)]">{agent.model_id}</p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[var(--color-text-muted)]">
+          <span className="inline-flex items-center gap-1.5"><Wrench size={12} />{toolCount} tools</span>
+          <span className="inline-flex items-center gap-1.5"><Boxes size={12} />{skillCount} skills</span>
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-col items-end justify-between self-stretch">
+        <AgentStatusBadge agent={agent} />
+        <Dropdown
+          align="right"
+          trigger={
+            <button aria-label={t('agents.menu_aria_label', { name: agent.name })} className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-text-muted)] opacity-100 transition-colors hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)] md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+              <MoreVertical size={16} />
+            </button>
+          }
+        >
+          <div className="w-36 p-1">
+            <button
+              disabled
+              title={t('agents.coming_soon_title')}
+              className="flex w-full cursor-not-allowed items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-xs text-[var(--color-text-muted)] opacity-60"
+            >
+              <Copy size={13} /> Copy Config
+            </button>
+            <button
+              disabled
+              title={t('agents.coming_soon_title')}
+              className="flex w-full cursor-not-allowed items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-xs text-[var(--color-text-muted)] opacity-60"
+            >
+              <Settings size={13} /> Edit Settings
+            </button>
+            <div className="my-1 h-px bg-[var(--color-border-subtle)]" />
+            <button
+              role="menuitem"
+              className="flex w-full items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-xs text-[var(--color-error)] hover:bg-[var(--color-error-subtle)] transition-colors"
+              onClick={() => onDelete(agent.id)}
+            >
+              <Trash2 size={13} /> Delete
+            </button>
+          </div>
+        </Dropdown>
+      </div>
+    </article>
   );
 }
 
@@ -84,7 +104,20 @@ interface CreateAgentFormProps {
   onSuccess: () => void;
 }
 
+export function buildAgentCreatePayload(
+  form: Record<string, any>,
+  selectedTools: string[],
+  selectedSkills: string[],
+) {
+  return {
+    ...form,
+    tool_ids: selectedTools,
+    skill_ids: selectedSkills,
+  };
+}
+
 function CreateAgentForm({ onClose, onSuccess }: CreateAgentFormProps) {
+  const { t } = useTranslation();
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({
     name: '', provider: 'openai', model_id: 'gpt-4o',
@@ -98,7 +131,9 @@ function CreateAgentForm({ onClose, onSuccess }: CreateAgentFormProps) {
 
   useEffect(() => {
     api.listTools().then(setTools).catch(() => {});
-    api.getMarketplace().then(data => setSkills(data.skills || [])).catch(() => {});
+    api.listSkills()
+      .then((data: any) => setSkills(Array.isArray(data) ? data : (data?.skills ?? [])))
+      .catch(() => {});
   }, []);
 
   const selectedProvider = PROVIDERS.find(p => p.id === form.provider);
@@ -115,7 +150,7 @@ function CreateAgentForm({ onClose, onSuccess }: CreateAgentFormProps) {
   const handleCreate = async () => {
     setCreating(true);
     try {
-      await api.createAgent({ ...form, tools: selectedTools, skills: selectedSkills });
+      await api.createAgent(buildAgentCreatePayload(form, selectedTools, selectedSkills));
       onSuccess();
     } finally {
       setCreating(false);
@@ -132,14 +167,14 @@ function CreateAgentForm({ onClose, onSuccess }: CreateAgentFormProps) {
           </div>
           <button
             onClick={onClose}
-            aria-label="关闭创建表单"
+            aria-label={t('agents.close_form_aria_label')}
             className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)]"
           >
             <span className="text-lg leading-none">&times;</span>
           </button>
         </div>
 
-            <div className="grid grid-cols-3 gap-2" aria-label={`创建步骤 ${step}/3`}>
+        <div className="grid grid-cols-3 gap-2" aria-label={t('agents.create_steps_aria_label', { step })}>
           {[1, 2, 3].map(s => (
             <div key={s} className="flex items-center gap-2">
               <div className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-semibold transition-colors duration-200 ${
@@ -227,7 +262,7 @@ function CreateAgentForm({ onClose, onSuccess }: CreateAgentFormProps) {
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-base">{skill.icon}</span>
+                        {skill.icon ? <span className="text-base">{skill.icon}</span> : null}
                         <span className="font-medium text-sm text-[var(--color-text-primary)]">{skill.name}</span>
                         {selectedSkills.includes(skill.id) && <Check size={14} className="text-[var(--color-accent)] ml-auto" />}
                       </div>
@@ -293,6 +328,7 @@ function CreateAgentForm({ onClose, onSuccess }: CreateAgentFormProps) {
 }
 
 export function AgentsPage() {
+  const { t } = useTranslation();
   const [agents, setAgents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -363,13 +399,13 @@ export function AgentsPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               leftIcon={<Search size={14} />}
-              aria-label="搜索智能体"
+              aria-label={t('agents.search_aria_label')}
             />
           </div>
         )}
 
         {loading && (
-            <div className="mt-4 grid gap-2 md:mt-6" aria-busy="true" aria-label="正在加载智能体">
+          <div className="mt-4 grid gap-2 md:mt-6" aria-busy="true" aria-label={t('agents.loading_aria_label')}>
             {[1, 2, 3].map(i => (
               <div key={i} className="h-20 md:h-24 rounded-[var(--radius-lg)] skeleton-shimmer" style={{ animationDelay: `${i * 100}ms` }} />
             ))}
@@ -377,7 +413,11 @@ export function AgentsPage() {
         )}
 
         {!loading && !error && (
-          <div className="mt-4 grid gap-2 md:mt-6" aria-live="polite">
+          <div
+            className="mt-4 grid gap-2 md:mt-6 lg:grid-cols-2"
+            aria-live="polite"
+            aria-label={t('agents.view_grid_two_col')}
+          >
             {filteredAgents.map(agent => (
               <AgentCard key={agent.id} agent={agent} onDelete={deleteAgent} />
             ))}

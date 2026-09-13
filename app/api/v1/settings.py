@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.common import current_user_id
+from app.core.auth_manager import require_scopes
 from app.services.settings_service import SettingsService
 from app.storage import get_db
 
@@ -27,7 +28,8 @@ async def get_settings(
     return {
         "autonomous_agent_mode": settings.autonomous_agent_mode,
         "token_throttle_mcp_enabled": settings.token_throttle_mcp_enabled,
-        "mcp_status": settings.mcp_status.value,
+        "mcp_status": settings.mcp_status,
+        "mcp_ready": settings.mcp_status == "ready",
         **mode,
     }
 
@@ -36,6 +38,7 @@ async def get_settings(
 async def update_settings(
     request: Request,
     data: dict[str, Any],
+    _auth: dict = Depends(require_scopes("write")),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Update user settings."""
@@ -61,6 +64,7 @@ async def update_settings(
     return {
         "autonomous_agent_mode": settings.autonomous_agent_mode,
         "token_throttle_mcp_enabled": settings.token_throttle_mcp_enabled,
-        "mcp_status": settings.mcp_status.value,
+        "mcp_status": settings.mcp_status,
+        "mcp_ready": settings.mcp_status == "ready",
         **mode,
     }

@@ -2,13 +2,13 @@ import i18n from 'i18next';
 import type { InitOptions } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
-import enTranslation from '../../public/locales/en.json';
-import zhCNTranslation from '../../public/locales/zh-CN.json';
-import jaTranslation from '../../public/locales/ja.json';
-import koTranslation from '../../public/locales/ko.json';
-import esTranslation from '../../public/locales/es.json';
-import frTranslation from '../../public/locales/fr.json';
-import deTranslation from '../../public/locales/de.json';
+import enTranslation from '../locales/en.json';
+import zhCNTranslation from '../locales/zh-CN.json';
+import jaTranslation from '../locales/ja.json';
+import koTranslation from '../locales/ko.json';
+import esTranslation from '../locales/es.json';
+import frTranslation from '../locales/fr.json';
+import deTranslation from '../locales/de.json';
 
 export const supportedLanguages = [
   { code: 'en', name: 'English', flag: '🇺🇸', rtl: false },

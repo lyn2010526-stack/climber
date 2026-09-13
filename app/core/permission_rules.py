@@ -206,6 +206,51 @@ class PermissionConfig:
 
         return "low"
 
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the permission config for persistence across restarts."""
+        return {
+            "mode": self.mode.value,
+            "rules": [
+                {
+                    "decision": r.decision.value,
+                    "tool": r.tool,
+                    "pattern": r.pattern,
+                    "description": r.description,
+                }
+                for r in self.rules
+            ],
+            "allowed_tools": list(self.allowed_tools),
+            "denied_tools": list(self.denied_tools),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "PermissionConfig":
+        """Reconstruct a PermissionConfig from a persisted dict."""
+        try:
+            mode = PermissionMode(data.get("mode", PermissionMode.DEFAULT.value))
+        except ValueError:
+            mode = PermissionMode.DEFAULT
+        rules: list[PermissionRule] = []
+        for r in data.get("rules") or []:
+            try:
+                decision = RuleDecision(r.get("decision", RuleDecision.ASK.value))
+            except ValueError:
+                decision = RuleDecision.ASK
+            rules.append(
+                PermissionRule(
+                    decision=decision,
+                    tool=str(r.get("tool", "")),
+                    pattern=r.get("pattern"),
+                    description=str(r.get("description", "")),
+                )
+            )
+        return cls(
+            mode=mode,
+            rules=rules,
+            allowed_tools=list(data.get("allowed_tools") or []),
+            denied_tools=list(data.get("denied_tools") or []),
+        )
+
 
 def get_default_config() -> PermissionConfig:
     """获取默认权限配置"""

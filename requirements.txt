@@ -1,7 +1,9 @@
 fastapi>=0.88.0
 httpx>=0.24
 sqlalchemy>=2.0
+alembic>=1.13
 aiosqlite>=0.19
+asyncpg>=0.29
 structlog>=24.1
 pydantic>=2.0
 pydantic-settings>=2.0
@@ -18,3 +20,4 @@ cryptography>=41.0
 pyjwt>=2.8
 # 可选功能
 redis>=4.5
+mcp>=1.0.0

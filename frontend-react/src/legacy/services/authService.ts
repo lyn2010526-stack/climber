@@ -1,4 +1,4 @@
-import { apiClient } from '../lib/api-client';
+import { apiClient } from '../../lib/api-client';
 
 export interface LoginRequest {
   username: string;

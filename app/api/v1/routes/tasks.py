@@ -1,10 +1,11 @@
 """Task execution API — submit, query, cancel long-running tasks."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from typing import Any
 
+from app.core.auth_manager import require_scopes, require_admin
 from app.core.task_worker import task_manager, TaskStatus
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -49,7 +50,7 @@ task_manager.on_progress(_ws_broadcast)
 
 
 @router.post("/submit", response_model=TaskResponse)
-async def submit_task(req: SubmitTaskRequest):
+async def submit_task(req: SubmitTaskRequest, _auth: dict = Depends(require_scopes("write"))):
     """Submit a new long-running task."""
     try:
         task_id = await task_manager.submit(req.task_type, req.payload)
@@ -78,7 +79,7 @@ async def list_tasks(
 
 
 @router.post("/{task_id}/cancel")
-async def cancel_task(task_id: str):
+async def cancel_task(task_id: str, _auth: dict = Depends(require_admin())):
     """Cancel a running task."""
     success = await task_manager.cancel(task_id)
     if not success:

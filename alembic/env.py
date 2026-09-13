@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import os
+import asyncio
 import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import pool
+from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
@@ -29,6 +30,7 @@ from app.storage import (
     models_skills,  # noqa: F401
     models_traces,  # noqa: F401
 )
+from app.config import settings
 
 config = context.config
 
@@ -59,17 +61,23 @@ def do_run_migrations(connection) -> None:
         context.run_migrations()
 
 
-def run_migrations_online() -> None:
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section),
+async def run_async_migrations() -> None:
+    configuration = config.get_section(config.config_ini_section) or {}
+    configuration["sqlalchemy.url"] = settings.database_url
+    connectable = async_engine_from_config(
+        configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
-    with connectable.connect() as connection:
-        do_run_migrations(connection)
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
 
-    connectable.dispose()
+    await connectable.dispose()
+
+
+def run_migrations_online() -> None:
+    asyncio.run(run_async_migrations())
 
 
 if context.is_offline_mode():

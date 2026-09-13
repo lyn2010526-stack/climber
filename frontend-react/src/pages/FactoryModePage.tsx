@@ -12,6 +12,7 @@ interface SubTask {
   status: 'pending' | 'running' | 'completed' | 'failed' | 'retrying';
   result?: string;
   retries?: number;
+  retryError?: string;
 }
 
 interface PlanStep {
@@ -54,6 +55,7 @@ export function FactoryModePage() {
   const [plan, setPlan] = useState<PlanStep[]>([]);
   const [tasks, setTasks] = useState<SubTask[]>([]);
   const [finalReport, setFinalReport] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [selectedSkills, setSelectedSkills] = useState<string[]>(['code_executor', 'web_search']);
   const [selectedPrompt, setSelectedPrompt] = useState('senior-engineer');
   const abortRef = useRef(false);
@@ -72,6 +74,7 @@ export function FactoryModePage() {
     controllerRef.current = controller;
     setIsRunning(true);
     setFinalReport('');
+    setErrorMessage('');
     setTasks([]);
     setPlan([]);
 
@@ -92,7 +95,10 @@ export function FactoryModePage() {
         }),
       });
 
-      if (!res.ok) throw new Error('启动失败');
+      if (!res.ok) {
+        const detail = await res.json().catch(() => null);
+        throw new Error(detail?.detail || `启动失败（${res.status}）`);
+      }
 
       const reader = res.body?.getReader();
       if (!reader) throw new Error('无数据流');
@@ -111,7 +117,10 @@ export function FactoryModePage() {
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const data = line.slice(6);
-          if (data === '[DONE]') break;
+          if (data === '[DONE]') {
+            abortRef.current = true;
+            break;
+          }
 
           try {
             const event = JSON.parse(data);
@@ -121,6 +130,7 @@ export function FactoryModePage() {
       }
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        setErrorMessage(e instanceof Error ? e.message : '执行失败');
         setTasks(prev => [...prev, {
           id: `error-${Date.now()}`,
           description: e instanceof Error ? e.message : '执行失败',
@@ -138,8 +148,13 @@ export function FactoryModePage() {
       case 'plan':
         setPlan(event.data.steps || []);
         break;
-      case 'task_start':
+      case 'factory_start':
         taskIdRef.current = event.data.task_id || null;
+        break;
+      case 'task_start':
+        setPlan(prev => prev.map(step =>
+          step.step === event.data.step ? { ...step, status: 'running' } : step
+        ));
         setTasks(prev => [...prev, {
           id: event.data.task_id || String(Date.now()),
           description: event.data.description || '',
@@ -147,19 +162,37 @@ export function FactoryModePage() {
         }]);
         break;
       case 'task_complete':
+        setPlan(prev => prev.map(step =>
+          step.step === event.data.step ? { ...step, status: 'done' } : step
+        ));
         setTasks(prev => prev.map(t =>
           t.id === event.data.task_id ? { ...t, status: 'completed', result: event.data.result } : t
         ));
         break;
       case 'task_retry':
         setTasks(prev => prev.map(t =>
-          t.id === event.data.task_id ? { ...t, status: 'retrying', retries: event.data.retries } : t
+          t.id === event.data.task_id ? {
+            ...t,
+            status: 'retrying',
+            retries: event.data.retries,
+            retryError: event.data.error,
+          } : t
         ));
         break;
       case 'task_failed':
-        setTasks(prev => prev.map(t =>
-          t.id === event.data.task_id ? { ...t, status: 'failed' } : t
+        setPlan(prev => prev.map(step =>
+          step.step === event.data.step ? { ...step, status: 'error' } : step
         ));
+        setTasks(prev => prev.map(t =>
+          t.id === event.data.task_id ? { ...t, status: 'failed', result: event.data.error } : t
+        ));
+        break;
+      case 'factory_failed':
+        setTasks(prev => [...prev, {
+          id: event.data.task_id || `error-${Date.now()}`,
+          description: event.data.error || 'Factory execution failed',
+          status: 'failed',
+        }]);
         break;
       case 'synthesize':
         setFinalReport(event.data.report || '');
@@ -264,6 +297,12 @@ export function FactoryModePage() {
           />
         )}
 
+        {errorMessage && (
+          <div role="alert" className="mb-6 rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] px-4 py-3 text-sm text-[var(--color-error)]">
+            {errorMessage}
+          </div>
+        )}
+
         {plan.length > 0 && (
           <Card variant="default" className="mb-6">
             <CardContent className="p-6">
@@ -306,7 +345,9 @@ export function FactoryModePage() {
                         <p className="text-xs text-[var(--color-text-muted)] mt-1 line-clamp-2">{task.result}</p>
                       )}
                       {task.retries !== undefined && task.retries > 0 && (
-                        <p className="text-xs text-amber-400 mt-1">重试 #{task.retries}</p>
+                        <p className="text-xs text-amber-400 mt-1">
+                          重试 #{task.retries}{task.retryError ? `: ${task.retryError}` : ''}
+                        </p>
                       )}
                     </div>
                   </div>

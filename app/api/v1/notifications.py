@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+
+from app.core.auth_manager import require_admin
 
 router = APIRouter()
 
@@ -16,7 +18,10 @@ class NotifyRequest(BaseModel):
 
 @router.post("/send")
 @router.post("send")
-async def send_notification(payload: NotifyRequest) -> dict:
+async def send_notification(
+    payload: NotifyRequest,
+    _auth: dict = Depends(require_admin()),
+) -> dict:
     try:
         from app.main import app
         service = app.state.notification_service

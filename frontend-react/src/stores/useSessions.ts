@@ -1,46 +1,56 @@
-import { useState, useCallback, useEffect } from 'react';
+/**
+ * Thin wrapper over the workspace store session API.
+ *
+ * Historical note: the workspace session list used to live here as local
+ * React state, which caused the store's `sessions` to go out of sync.
+ * The backend / workspace store are now the single source of truth; the
+ * `Session` type and hook below simply delegate to useWorkspaceStore.
+ */
+import { useEffect, useCallback } from 'react';
+import {
+  useWorkspaceStore,
+  type ApiSession,
+  type Session,
+} from '../store/workspace';
 import { api } from '../api';
 
-export interface Session {
-  id: string;
-  title: string | null;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
+export type { ApiSession, Session };
 
 export function useSessions() {
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const sessions = useWorkspaceStore((s) => s.sessions);
+  const loading = useWorkspaceStore((s) => s.loadingSessions);
+  const loaded = useWorkspaceStore((s) => s.sessionsLoaded);
+  const loadSessions = useWorkspaceStore((s) => s.loadSessions);
+  const setSessionsLoading = useWorkspaceStore((s) => s.setSessionsLoading);
+  const deleteSession = useWorkspaceStore((s) => s.deleteSession);
 
   const fetchSessions = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setSessionsLoading(true);
     try {
-      const data = await api.listSessions();
-      setSessions(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load sessions');
-    } finally {
-      setLoading(false);
+      const data = (await api.listSessions()) as ApiSession[];
+      loadSessions(Array.isArray(data) ? data : []);
+    } catch {
+      setSessionsLoading(false);
     }
-  }, []);
+  }, [loadSessions, setSessionsLoading]);
 
   useEffect(() => {
-    fetchSessions();
-  }, [fetchSessions]);
+    if (!loaded) fetchSessions();
+  }, [loaded, fetchSessions]);
 
-  const createSession = useCallback(async (payload?: { title?: string; agent_id?: string }) => {
-    const session = await api.createSession(payload || {});
-    await fetchSessions();
-    return session;
-  }, [fetchSessions]);
+  const refresh = fetchSessions;
 
-  const deleteSession = useCallback(async (id: string) => {
+  const removeSession = useCallback(async (id: string) => {
     await api.deleteSession(id);
-    setSessions(prev => prev.filter(s => s.id !== id));
-  }, []);
+    deleteSession(id);
+    await fetchSessions();
+  }, [deleteSession, fetchSessions]);
 
-  return { sessions, loading, error, createSession, deleteSession, refresh: fetchSessions };
+  return {
+    sessions,
+    loading,
+    error: null as string | null,
+    deleteSession: removeSession,
+    refresh,
+  };
 }

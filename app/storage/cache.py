@@ -15,14 +15,22 @@ _redis_client = None
 
 
 async def get_redis():
-    """Get or create Redis client singleton."""
+    """Get or create Redis client singleton.
+
+    Returns None when the optional `redis` package is not installed or no
+    server is reachable — callers must treat `None` as "caching disabled".
+    """
     global _redis_client
     if _redis_client is None:
-        import redis.asyncio as redis
+        try:
+            import redis.asyncio as redis
+        except ImportError:
+            logger.info("redis package not installed, caching disabled")
+            return None
 
         from app.config import settings
-        _redis_client = redis.from_url(settings.redis_url, decode_responses=True)
         try:
+            _redis_client = redis.from_url(settings.redis_url, decode_responses=True)
             await _redis_client.ping()
             logger.info("Redis connected")
         except Exception:

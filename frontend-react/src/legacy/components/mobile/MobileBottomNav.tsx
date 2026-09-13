@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { MessageSquare, Sparkles, Network, Cpu, Bot, Settings, MoreHorizontal } from 'lucide-react';
-import { useWorkspaceStore } from '../../store/workspace';
+import { useWorkspaceStore } from '../../../store/workspace';
 
 const MOBILE_TABS: { id: string; icon: typeof MessageSquare; label: string }[] = [
   { id: 'chat', icon: MessageSquare, label: '工作台' },

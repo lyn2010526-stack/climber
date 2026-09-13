@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useWorkspaceStore } from '../workspace';
+import { useWorkspaceStore, type ApiSession, type Session } from '../workspace';
 
 describe('WorkspaceStore', () => {
   beforeEach(() => {
@@ -194,5 +194,133 @@ describe('WorkspaceStore', () => {
   it('addSnapshot adds snapshot', () => {
     useWorkspaceStore.getState().addSnapshot({ id: 'snap1', sessionId: 's1', timestamp: Date.now(), label: 'test' });
     expect(useWorkspaceStore.getState().snapshots.length).toBe(1);
+  });
+
+  describe('loadSessions merge semantics', () => {
+    const backendSession = (overrides: Partial<ApiSession> = {}): ApiSession => ({
+      id: 'b1',
+      title: 'Backend Session',
+      status: 'idle',
+      created_at: '2026-01-02T03:04:05',
+      ...overrides,
+    });
+
+    it('creates runtime fields for brand new backend sessions', () => {
+      useWorkspaceStore.getState().loadSessions([
+        backendSession({ provider: 'anthropic', model_id: 'claude-3-opus-20240220' }),
+      ]);
+      const state = useWorkspaceStore.getState();
+      expect(state.sessions).toHaveLength(1);
+      const session = state.sessions[0];
+      expect(session.id).toBe('b1');
+      expect(session.title).toBe('Backend Session');
+      expect(session.status).toBe('idle');
+      expect(session.messages).toEqual([]);
+      expect(session.activeSkills).toEqual([]);
+      expect(session.activeTools).toEqual([]);
+      expect(session.modelConfig).toEqual({
+        provider: 'anthropic',
+        modelId: 'claude-3-opus-20240220',
+        temperature: 0.7,
+        maxTokens: 4096,
+      });
+      expect(session.tokenUsage).toEqual({ used: 0, limit: 200000 });
+      expect(session.createdAt).toBe(Date.parse('2026-01-02T03:04:05'));
+      expect(state.sessionsLoaded).toBe(true);
+      expect(state.loadingSessions).toBe(false);
+    });
+
+    it('keeps runtime fields (messages, tokenUsage) when merging existing sessions', () => {
+      const existing: Session = {
+        id: 'b1',
+        title: 'Stale Title',
+        status: 'running',
+        messages: [{ id: 'm1', type: 'user', content: 'hello', timestamp: 123 }],
+        activeSkills: ['web-search'],
+        activeTools: ['read_file'],
+        modelConfig: { provider: 'openai', modelId: 'gpt-4', temperature: 0.3, maxTokens: 1024 },
+        tokenUsage: { used: 512, limit: 100000 },
+        createdAt: 111,
+      };
+      useWorkspaceStore.setState({ sessions: [existing], activeSessionId: 'b1' });
+
+      useWorkspaceStore.getState().loadSessions([
+        backendSession({ title: 'Fresh Title', status: 'paused' }),
+      ]);
+
+      const session = useWorkspaceStore.getState().sessions[0];
+      expect(session.messages).toEqual(existing.messages);
+      expect(session.tokenUsage).toEqual(existing.tokenUsage);
+      expect(session.activeSkills).toEqual(['web-search']);
+      expect(session.activeTools).toEqual(['read_file']);
+      expect(session.modelConfig).toEqual(existing.modelConfig);
+      expect(session.createdAt).toBe(111);
+      expect(session.title).toBe('Fresh Title');
+      expect(session.status).toBe('paused');
+      expect(useWorkspaceStore.getState().activeSessionId).toBe('b1');
+    });
+
+    it('applies backend model fields without wiping existing config', () => {
+      const existing: Session = {
+        id: 'b1',
+        title: null,
+        status: 'idle',
+        messages: [],
+        activeSkills: [],
+        activeTools: [],
+        modelConfig: { provider: 'openai', modelId: 'gpt-4', temperature: 0.3, maxTokens: 1024 },
+        tokenUsage: { used: 0, limit: 100000 },
+        createdAt: 111,
+      };
+      useWorkspaceStore.setState({ sessions: [existing] });
+
+      useWorkspaceStore.getState().loadSessions([
+        backendSession({ provider: 'anthropic', model_id: 'claude-3-haiku' }),
+      ]);
+
+      const { modelConfig } = useWorkspaceStore.getState().sessions[0];
+      expect(modelConfig).toEqual({
+        provider: 'anthropic',
+        modelId: 'claude-3-haiku',
+        temperature: 0.3,
+        maxTokens: 1024,
+      });
+    });
+
+    it('removes sessions missing from backend list', () => {
+      useWorkspaceStore.getState().loadSessions([
+        backendSession(),
+        backendSession({ id: 's2', title: 'S2' }),
+      ]);
+      expect(useWorkspaceStore.getState().sessions.map((s) => s.id)).toEqual(['b1', 's2']);
+
+      useWorkspaceStore.getState().loadSessions([
+        backendSession({ id: 's2', title: 'S2 renamed' }),
+      ]);
+      const state = useWorkspaceStore.getState();
+      expect(state.sessions).toHaveLength(1);
+      expect(state.sessions[0].id).toBe('s2');
+    });
+
+    it('clears active session when it disappears from backend list', () => {
+      useWorkspaceStore.getState().loadSessions([
+        backendSession(),
+        backendSession({ id: 'b2', title: 'B2' }),
+      ]);
+      useWorkspaceStore.getState().setActiveSession('b2');
+      expect(useWorkspaceStore.getState().activeSessionId).toBe('b2');
+
+      useWorkspaceStore.getState().loadSessions([backendSession()]);
+      expect(useWorkspaceStore.getState().activeSessionId).toBeNull();
+    });
+
+    it('normalizes unknown backend status to idle and null title stays null', () => {
+      useWorkspaceStore.getState().loadSessions([
+        backendSession({ title: null, status: 'weird-state' }),
+      ]);
+      const session = useWorkspaceStore.getState().sessions[0];
+      expect(session.title).toBeNull();
+      expect(session.status).toBe('idle');
+    });
   });
 });

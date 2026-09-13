@@ -62,6 +62,32 @@ def _first_identity(auth: dict[str, Any]) -> str | None:
     return None
 
 
+def principal_from_auth(auth: dict[str, Any]) -> Principal:
+    """Build a Principal from an authentication result dict.
+
+    Raises ValueError when the identity cannot be resolved, so callers can map
+    it to a 401 response.
+    """
+    subject_id = _first_identity(auth)
+    if subject_id is None:
+        raise ValueError("Authenticated user identity is missing")
+
+    raw_scopes = auth.get("scopes") or ()
+    if isinstance(raw_scopes, str):
+        raw_scopes = raw_scopes.split()
+    scopes = tuple(str(scope) for scope in raw_scopes)
+    role = str(auth["role"]) if auth.get("role") is not None else (
+        "admin" if "admin" in scopes else None
+    )
+    return Principal(
+        subject_id=subject_id,
+        tenant_id=str(auth["tenant_id"]) if auth.get("tenant_id") is not None else None,
+        role=role,
+        scopes=scopes,
+        auth_method=str(auth.get("method") or "authenticated"),
+    )
+
+
 async def get_current_principal(request: Request) -> AsyncIterator[Principal]:
     """Build and propagate the caller principal from authentication state."""
     if not settings.enable_auth:
@@ -70,21 +96,10 @@ async def get_current_principal(request: Request) -> AsyncIterator[Principal]:
         auth = getattr(request.state, "auth", None)
         if not isinstance(auth, dict):
             raise HTTPException(status_code=401, detail="Authenticated principal is missing")
-
-        subject_id = _first_identity(auth)
-        if subject_id is None:
-            raise HTTPException(status_code=401, detail="Authenticated user identity is missing")
-
-        raw_scopes = auth.get("scopes") or ()
-        if isinstance(raw_scopes, str):
-            raw_scopes = raw_scopes.split()
-        principal = Principal(
-            subject_id=subject_id,
-            tenant_id=str(auth["tenant_id"]) if auth.get("tenant_id") is not None else None,
-            role=str(auth["role"]) if auth.get("role") is not None else None,
-            scopes=tuple(str(scope) for scope in raw_scopes),
-            auth_method=str(auth.get("method") or "authenticated"),
-        )
+        try:
+            principal = principal_from_auth(auth)
+        except ValueError as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
 
     token = set_current_principal(principal)
     try:

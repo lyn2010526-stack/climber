@@ -5,9 +5,23 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.core.auth_manager import require_admin, require_scopes
 
 logger = structlog.get_logger(__name__)
+
+
+def _identity() -> tuple[str, bool]:
+    from app.config import settings
+
+    from app.core.principal import LOCAL_SUBJECT_ID, get_context_principal
+
+    principal = get_context_principal()
+    is_admin = principal.role == "admin" or "admin" in principal.scopes
+    if not settings.enable_auth and principal.subject_id == LOCAL_SUBJECT_ID:
+        is_admin = True
+    return principal.subject_id, is_admin
 
 router = APIRouter()
 
@@ -28,7 +42,11 @@ async def list_langgraph() -> dict[str, Any]:
 
 
 @router.post("/integrations/langgraph/{graph_name}/invoke")
-async def invoke_langgraph(graph_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+async def invoke_langgraph(
+    graph_name: str,
+    payload: dict[str, Any],
+    _auth: dict = Depends(require_admin()),
+) -> dict[str, Any]:
     """Invoke a LangGraph graph."""
     try:
         from app.core.integration.langgraph_bridge import get_bridge
@@ -38,6 +56,8 @@ async def invoke_langgraph(graph_name: str, payload: dict[str, Any]) -> dict[str
         config = payload.get("config", {})
         result = await bridge.invoke(graph_name, inputs, config)
         return {"result": result, "status": "ok"}
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail=f"LangGraph runtime not installed: {exc}")
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
@@ -61,15 +81,21 @@ async def mem0_status() -> dict[str, Any]:
 
 
 @router.post("/integrations/mem0/search")
-async def mem0_search(payload: dict[str, Any]) -> dict[str, Any]:
-    """Search Mem0 memories."""
+async def mem0_search(
+    payload: dict[str, Any],
+    _auth: dict = Depends(require_scopes("read")),
+) -> dict[str, Any]:
+    """Search Mem0 memories scoped to the caller."""
     try:
         from app.core.integration.mem0_memory import get_mem0_service
 
         svc = get_mem0_service()
         query = payload.get("query", "")
         limit = payload.get("limit", 10)
-        user_id = payload.get("user_id")
+        caller_id, is_admin = _identity()
+        # Non-admins can only search their own namespace; admins may pass an explicit user_id.
+        requested_user = str(payload.get("user_id") or "").strip()
+        user_id = requested_user if (is_admin and requested_user) else caller_id
 
         if not svc.is_available:
             if not await svc.initialize():
@@ -83,15 +109,20 @@ async def mem0_search(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.post("/integrations/mem0/add")
-async def mem0_add(payload: dict[str, Any]) -> dict[str, Any]:
-    """Add a memory to Mem0."""
+async def mem0_add(
+    payload: dict[str, Any],
+    _auth: dict = Depends(require_scopes("write")),
+) -> dict[str, Any]:
+    """Add a memory to Mem0 under the caller's namespace."""
     try:
         from app.core.integration.mem0_memory import get_mem0_service
 
         svc = get_mem0_service()
         content = payload.get("content", "")
         metadata = payload.get("metadata", {})
-        user_id = payload.get("user_id")
+        caller_id, is_admin = _identity()
+        requested_user = str(payload.get("user_id") or "").strip()
+        user_id = requested_user if (is_admin and requested_user) else caller_id
 
         if not svc.is_available:
             if not await svc.initialize():
@@ -109,7 +140,10 @@ async def mem0_add(payload: dict[str, Any]) -> dict[str, Any]:
 # ─── Pydantic-AI Endpoints ───
 
 @router.post("/integrations/agent/run")
-async def agent_run(payload: dict[str, Any]) -> dict[str, Any]:
+async def agent_run(
+    payload: dict[str, Any],
+    _auth: dict = Depends(require_admin()),
+) -> dict[str, Any]:
     """Run a Pydantic-AI agent."""
     try:
         from app.core.integration.pydantic_ai_agent import create_agent

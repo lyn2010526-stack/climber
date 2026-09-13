@@ -64,5 +64,5 @@ async def api_health() -> dict:
 
 
 def get_engine():
-    from app.core.agent_engine import get_engine as _get_engine
+    from app.api.v1.chat import get_engine as _get_engine
     return _get_engine()

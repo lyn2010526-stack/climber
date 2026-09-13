@@ -131,13 +131,14 @@ export function useChat(sessionId: string | null) {
           })
         );
       } else if (eventType === 'done') {
+        const doneMessageId = data?.message_id as string | undefined;
         setMessages(prev =>
           prev.map(msg => {
             if (msg.id !== assistantId) return msg;
             const updatedToolCalls = msg.toolCalls
               ? msg.toolCalls.map(tc => ({ ...tc, status: 'success' as const }))
               : undefined;
-            return { ...msg, toolCalls: updatedToolCalls } as Message;
+            return { ...msg, id: doneMessageId ?? msg.id, toolCalls: updatedToolCalls } as Message;
           })
         );
         setIsStreaming(false);

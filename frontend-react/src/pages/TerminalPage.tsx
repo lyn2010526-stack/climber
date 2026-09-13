@@ -1,10 +1,21 @@
 import { TerminalPanel } from '../components/terminal/TerminalPanel';
 import { PageHeader } from '../components/ui/PageHeader';
 import { TerminalSquare } from 'lucide-react';
+import { api } from '../api';
+
+const prompt = (text: string): string => `\x1b[37m${text}\x1b[0m`;
 
 export default function TerminalPage() {
-  const handleCommand = (command: string) => {
-    console.log('Terminal command:', command);
+  const handleCommand = async (command: string): Promise<string> => {
+    if (!command) return '';
+    if (command === 'clear') return '\x1b[2J\x1b[H';
+    try {
+      const res = await api.executeSandboxCommand(command);
+      const out = (res.output ?? '').replace(/\n/g, '\r\n');
+      return res.success ? prompt(out) : `\x1b[31m${prompt(out)}\x1b[0m`;
+    } catch (err: any) {
+      return `\x1b[31m${String(err?.message ?? err)}\x1b[0m`;
+    }
   };
 
   return (

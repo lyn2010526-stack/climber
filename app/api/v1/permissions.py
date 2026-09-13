@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.api.v1.chat import get_engine
-from app.core.auth_manager import require_admin
+from app.core.auth_manager import get_current_user, require_admin
 from app.core.permission_rules import (
     PermissionConfig,
     PermissionMode,
@@ -37,7 +37,7 @@ class PermissionConfigUpdate(BaseModel):
 
 
 @router.post("/resolve")
-async def resolve_permission(request: PermissionResolveRequest):
+async def resolve_permission(request: PermissionResolveRequest, _user: str = Depends(get_current_user)):
     engine = get_engine()
     tool_call_id = request.tool_call_id
     decision = request.decision

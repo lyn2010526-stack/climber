@@ -3,7 +3,7 @@
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-engine"
@@ -11,6 +11,9 @@ version = "1.0.0"
 description = "Climber - Local-first AI Agent Platform"
 requires-python = ">=3.11"
 license = {text = "MIT"}
+
+[project.scripts]
+climber-headless = "app.headless.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["app*"]

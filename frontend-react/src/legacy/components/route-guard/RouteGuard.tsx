@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { LogIn } from 'lucide-react';
 import { useAuthStore } from '../../store/auth';
-import { useCurrentPage } from '../../store/page';
+import { useCurrentPage } from '../../../store/page';
 
 interface RouteGuardProps {
   children: React.ReactNode;

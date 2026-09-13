@@ -56,9 +56,9 @@ test.describe('Agent Management', () => {
     await navigateTo(page, 'agents');
     await expect(page.getByText('E2E Delete Me')).toBeVisible();
 
-    const agentNameEl = page.getByText('E2E Delete Me', { exact: false }).first();
-    const card = agentNameEl.locator('xpath=ancestor::div[contains(@class, "rounded-xl")][1]');
-    await card.locator('button').first().click();
+    const card = page.locator(`article[aria-label="Agent E2E Delete Me"]`);
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await card.locator('[data-dropdown-trigger]').click();
     const deleteButton = page.getByText('Delete').last();
     await deleteButton.click();
     await page.waitForTimeout(500);
