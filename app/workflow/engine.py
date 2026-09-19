@@ -107,9 +107,8 @@ def _validate_code_ast(node: ast.AST) -> None:
             raise ValueError(f"Access to attribute '{child.attr}' is not allowed")
         if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name.startswith("_"):
             raise ValueError(f"Private function definition not allowed: {child.name}")
-        if isinstance(child, (ast.Import, ast.ImportFrom)):
-            if child.module and child.module not in {"json", "math", "datetime", "re", "collections"}:
-                raise ValueError(f"Unsafe import: {child.module}")
+        if isinstance(child, (ast.Import, ast.ImportFrom)) and child.module and child.module not in {"json", "math", "datetime", "re", "collections"}:
+            raise ValueError(f"Unsafe import: {child.module}")
 
 
 def safe_exec(code: str, local_vars: dict[str, Any]) -> dict[str, Any]:

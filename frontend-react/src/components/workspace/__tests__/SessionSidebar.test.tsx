@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { act, render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { useWorkspaceStore } from '../../../store/workspace';
 
 vi.mock('../../../api', () => ({
@@ -102,5 +102,34 @@ describe('SessionSidebar with workspace store', () => {
 
     await waitFor(() => expect(api.deleteSession).toHaveBeenCalledWith('b1'));
     await waitFor(() => expect(useWorkspaceStore.getState().sessions).toHaveLength(0));
+  });
+
+  it('preserves the session and selection on delete failure, then allows retry', async () => {
+    vi.mocked(api.listSessions).mockResolvedValueOnce([
+      { id: 'b1', title: '会话 一', status: 'idle', created_at: null },
+    ] as any);
+    vi.mocked(api.deleteSession).mockRejectedValueOnce(new Error('Server unavailable'));
+    render(<SessionSidebar />);
+    fireEvent.click(await screen.findByText('会话 一'));
+    const sessions = useWorkspaceStore.getState().sessions;
+    fireEvent.click(screen.getByLabelText('删除会话 会话 一'));
+    await act(async () => {});
+
+    expect(useWorkspaceStore.getState().sessions).toEqual(sessions);
+    expect(useWorkspaceStore.getState().activeSessionId).toBe('b1');
+    expect(screen.getByRole('button', { name: /会话 一\s*idle/ })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('alert')).toHaveTextContent('删除会话失败，请重试');
+    expect(api.listSessions).toHaveBeenCalledTimes(1);
+
+    let resolveDelete!: (value: Awaited<ReturnType<typeof api.deleteSession>>) => void;
+    vi.mocked(api.deleteSession).mockReturnValueOnce(new Promise(resolve => { resolveDelete = resolve; }));
+    fireEvent.click(screen.getByLabelText('删除会话 会话 一'));
+    expect(useWorkspaceStore.getState().sessions).toEqual(sessions);
+    expect(useWorkspaceStore.getState().activeSessionId).toBe('b1');
+    await act(async () => resolveDelete({ ok: true } as any));
+    expect(useWorkspaceStore.getState().sessions).toEqual([]);
+    expect(useWorkspaceStore.getState().activeSessionId).toBeNull();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(api.listSessions).toHaveBeenCalledTimes(2);
   });
 });

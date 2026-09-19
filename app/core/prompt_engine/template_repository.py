@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import threading
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -11,6 +13,8 @@ from typing import Any
 from app.core.prompt_engine.models import PromptTemplate
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_TEMPLATE_REPOSITORY_PATH = os.environ.get("TEMPLATE_REPOSITORY_PATH", ".climber/templates.json")
 
 BUILTIN_TEMPLATES: list[PromptTemplate] = [
     PromptTemplate(
@@ -128,14 +132,52 @@ BUILTIN_TEMPLATES: list[PromptTemplate] = [
 class PromptTemplateRepository:
     """Repository for managing prompt templates with persistence."""
 
-    def __init__(self) -> None:
+    def __init__(self, path: str | os.PathLike | None = None) -> None:
+        self._lock = threading.RLock()
         self._templates: dict[str, PromptTemplate] = {}
+        self._path: str | None = os.fspath(path) if path is not None else DEFAULT_TEMPLATE_REPOSITORY_PATH
         self._load_builtins()
+        if self._path:
+            self._load_from_disk()
 
     def _load_builtins(self) -> None:
         """Load built-in templates."""
         for template in BUILTIN_TEMPLATES:
             self._templates[template.id] = template
+
+    def _load_from_disk(self) -> None:
+        """Load persisted custom templates from disk. Missing or corrupt files degrade silently."""
+        try:
+            with open(self._path, encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            return
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning("Failed to load template repository from %s: %s", self._path, e)
+            return
+        if not isinstance(data, list):
+            return
+        for item in data:
+            try:
+                template = PromptTemplate.from_dict(item)
+            except Exception:
+                continue
+            self._templates[template.id] = template
+
+    def _persist(self) -> None:
+        """Write custom templates to disk atomically. Failures degrade silently."""
+        if not self._path:
+            return
+        data = [t.to_dict() for t in self._templates.values() if not t.is_builtin]
+        try:
+            target = os.fspath(self._path)
+            os.makedirs(os.path.dirname(os.path.abspath(target)), exist_ok=True)
+            tmp = f"{target}.tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, target)
+        except OSError as e:
+            logger.warning("Failed to persist template repository to %s: %s", self._path, e)
 
     def create(
         self,
@@ -159,7 +201,9 @@ class PromptTemplateRepository:
             created_at=now,
             updated_at=now,
         )
-        self._templates[template.id] = template
+        with self._lock:
+            self._templates[template.id] = template
+            self._persist()
         return template
 
     def get(self, template_id: str) -> PromptTemplate | None:
@@ -188,30 +232,34 @@ class PromptTemplateRepository:
 
     def update(self, template_id: str, **kwargs: Any) -> PromptTemplate | None:
         """Update an existing template."""
-        template = self._templates.get(template_id)
-        if not template:
-            return None
-        if template.is_builtin:
-            logger.warning("Cannot update built-in template: %s", template_id)
-            return None
+        with self._lock:
+            template = self._templates.get(template_id)
+            if not template:
+                return None
+            if template.is_builtin:
+                logger.warning("Cannot update built-in template: %s", template_id)
+                return None
 
-        for key, value in kwargs.items():
-            if hasattr(template, key) and key != "id":
-                setattr(template, key, value)
+            for key, value in kwargs.items():
+                if hasattr(template, key) and key != "id":
+                    setattr(template, key, value)
 
-        template.updated_at = datetime.now(UTC).isoformat()
-        return template
+            template.updated_at = datetime.now(UTC).isoformat()
+            self._persist()
+            return template
 
     def delete(self, template_id: str) -> bool:
         """Delete a template. Built-in templates cannot be deleted."""
-        template = self._templates.get(template_id)
-        if not template:
-            return False
-        if template.is_builtin:
-            logger.warning("Cannot delete built-in template: %s", template_id)
-            return False
-        del self._templates[template_id]
-        return True
+        with self._lock:
+            template = self._templates.get(template_id)
+            if not template:
+                return False
+            if template.is_builtin:
+                logger.warning("Cannot delete built-in template: %s", template_id)
+                return False
+            del self._templates[template_id]
+            self._persist()
+            return True
 
     def duplicate(self, template_id: str, new_name: str | None = None) -> PromptTemplate | None:
         """Duplicate an existing template."""
@@ -231,7 +279,9 @@ class PromptTemplateRepository:
             created_at=now,
             updated_at=now,
         )
-        self._templates[new_template.id] = new_template
+        with self._lock:
+            self._templates[new_template.id] = new_template
+            self._persist()
         return new_template
 
     def export_template(self, template_id: str) -> str | None:
@@ -260,7 +310,9 @@ class PromptTemplateRepository:
             template.is_builtin = False
             template.created_at = datetime.now(UTC).isoformat()
             template.updated_at = template.created_at
-            self._templates[template.id] = template
+            with self._lock:
+                self._templates[template.id] = template
+                self._persist()
             return template
         except (json.JSONDecodeError, KeyError) as e:
             logger.error("Failed to import template: %s", e)
@@ -281,7 +333,9 @@ class PromptTemplateRepository:
                     template.is_builtin = False
                     template.created_at = datetime.now(UTC).isoformat()
                     template.updated_at = template.created_at
-                    self._templates[template.id] = template
+                    with self._lock:
+                        self._templates[template.id] = template
+                        self._persist()
                     imported.append(template)
                 except Exception as e:
                     logger.warning("Skipping invalid template: %s", e)

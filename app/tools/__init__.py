@@ -3,17 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import subprocess
-import textwrap
 from collections.abc import Callable
 from typing import Any
 
-import httpx
 import structlog
 from pydantic import BaseModel
-
-from app.config import settings
 
 logger = structlog.get_logger()
 
@@ -118,11 +112,11 @@ class ToolRegistry:
                     args = getattr(annot, "__args__", ())
                     if args:
                         annot = args[0]
-                if annot is int or annot == int:
+                if annot is int:
                     prop["type"] = "integer"
-                elif annot is float or annot == float:
+                elif annot is float:
                     prop["type"] = "number"
-                elif annot is bool or annot == bool:
+                elif annot is bool:
                     prop["type"] = "boolean"
                 else:
                     prop["type"] = "string"

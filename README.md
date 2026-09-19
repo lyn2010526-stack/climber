@@ -1,6 +1,6 @@
 # Climber — 本地优先 AI Agent 工作台
 
-[![Tests](https://img.shields.io/badge/tests-41%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-151%20passing-brightgreen)]()
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.88%2B-009688)]()
@@ -16,15 +16,15 @@ Climber 是一个生产级 AI Agent 工作台，支持自主软件开发、多 A
 
 | 能力 | 说明 |
 |------|------|
-| 分层记忆 | 短期/工作/长期三层记忆，支持上下文压缩和热冷分区 |
-| 多 Agent 协作 | Fork/Coordinator/Teams 三种模式，支持死锁检测和冲突仲裁 |
+| 分层记忆 | 记忆分块（核心/会话上下文/归档/实体/人格）+ 情节记忆衰减与自动归档，支持上下文压缩 |
+| 多 Agent 协作 | 顺序/层级/群聊三种协作流程，依赖图死锁检测与检查点/恢复 |
 | 工具系统 | 统一工具运行时，MCP 协议接入，安全沙箱隔离 |
-| 模型调度 | 智能模型选择（成本/速度/可用性三维评分）+ 熔断降级 |
-| 权限控制 | 7 级权限模式（Read-Only → Bypass），危险命令拦截 |
-| 会话持久化 | 检查点/恢复/分叉，断点续跑 |
-| 安全加固 | 路径穿越防护、Shell 风险分析、Prompt 注入检测 |
+| 模型调度 | 多模型注册（registry 按 `DEFAULT_MODEL_SPEC` 选择）+ 熔断/超时与降级回退 |
+| 权限控制 | 6 级权限模式（默认/接受编辑/计划/自动/严格/绕过），危险命令与 Shell 注入拦截 |
+| 会话持久化 | 检查点/恢复，断点续跑 |
+| 安全加固 | 路径穿越防护、Shell 注入风险拦截、系统提示词注入保护 |
 | 可观测性 | 结构化日志、JSON 指标、Token 用量追踪 |
-| 提示词管理 | 外部模板加载，AGENT_SPEC.md 支持 |
+| 提示词管理 | 外部模板仓库加载（`app/core/prompt_engine/`） |
 
 ## 快速开始
 
@@ -97,15 +97,15 @@ flowchart TB
 
     subgraph AgentEngine["Agent 引擎核心"]
         Engine["AgentEngine\n主调度器"]
-        SessionMgr["SessionManager\n会话/检查点/分叉"]
-        ContextMgr["ContextManager\n五层上下文管道"]
+        SessionMgr["SessionManager\n会话/检查点/恢复"]
+        PromptEngine["PromptEngine\n三层提示词引擎"]
         ReactLoop["ReActLoop\n执行循环"]
     end
 
     subgraph CoreServices["核心服务层"]
-        ModelSched["ModelScheduler\n智能模型选择"]
+        ModelReg["ModelRegistry\n多模型注册与回退"]
         ToolRT["ToolRuntime\n统一工具运行时"]
-        PermCtrl["PermissionController\n7 级权限控制"]
+        PermCfg["PermissionConfig\n6 级权限控制"]
         Memory["Memory\n分层记忆系统"]
         Safety["SafetyPipeline\n安全防护"]
     end
@@ -126,19 +126,19 @@ flowchart TB
     REST --> Engine
     WS --> Engine
     Engine --> SessionMgr
-    Engine --> ContextMgr
+    Engine --> PromptEngine
     Engine --> ReactLoop
-    ReactLoop --> ModelSched
+    ReactLoop --> ModelReg
     ReactLoop --> ToolRT
-    ReactLoop --> PermCtrl
+    ReactLoop --> PermCfg
     Engine --> Memory
     Engine --> Safety
-    ModelSched --> LLM
+    ModelReg --> LLM
     ToolRT --> MCP
     SessionMgr --> DB
     Memory --> Chroma
     Memory --> Redis
-    ContextMgr --> Memory
+    PromptEngine --> Memory
 ```
 
 ## 核心模块
@@ -147,20 +147,22 @@ flowchart TB
 |------|------|------|
 | Agent Engine | `app/core/agent_engine.py` | 主引擎，协调所有组件 |
 | 会话管理 | `app/core/engine/session.py` | 会话生命周期管理 |
-| 上下文管理 | `app/core/context_manager.py` | 五层上下文管道 |
-| 工具运行时 | `app/core/tool_runtime.py` | 统一工具执行 |
-| MCP 桥接 | `app/engine/mcp_bridge.py` | MCP 工具协议接入 |
-| 权限控制 | `app/core/permission_controller.py` | 权限规则引擎 |
-| 模型调度 | `app/core/model_scheduler.py` | 智能模型选择 |
-| 安全工具 | `app/core/security_utils.py` | 路径/Shell/Prompt 安全 |
-| 多 Agent | `app/engine/multi_agent.py` | 多 Agent 编排 |
+| 提示词引擎 | `app/core/prompt_engine/` | 三层提示词引擎（模板/注入/模型适配） |
+| 工具运行时 | `app/tools/` | 统一工具注册与执行 |
+| MCP 桥接 | `app/core/mcp_controller.py` | MCP 工具协议接入 |
+| 权限控制 | `app/core/permission_rules.py` | 权限规则引擎 |
+| 模型注册 | `app/models/registry.py` | 多模型注册与选择 |
+| 熔断降级 | `app/core/execution/circuit_breaker.py` | 超时管理、熔断与回退 |
+| 安全工具 | `app/core/security/` | 路径隔离、沙箱、资源配额 |
+| 多 Agent | `app/core/collaboration/` | 顺序/层级/群聊协作流程、死锁检测 |
+| Crew/Flow 编排 | `app/multi_agent/` | Crew 编排与事件驱动 Flow |
 
 ## 配置说明
 
 创建 `.env` 文件（参考 `.env.example`）：
 
 ```env
-# API Keys（至少配置一个）
+# API Keys（至少配置一个，通过环境变量读取）
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 
@@ -168,21 +170,21 @@ OPENAI_API_KEY=sk-...
 DATABASE_URL=sqlite+aiosqlite:///./data/climber.db
 
 # 日志
-LOG_LEVEL=INFO
-LOG_FORMAT=json
+APP_LOG_LEVEL=INFO
 
-# Token 保护
-MAX_TOKENS_PER_SESSION=100000
-MAX_COST_PER_DAY=10.0
+# 应用密钥（JWT 签名使用，必填且不可为空）
+APP_SECRET_KEY=change-me-in-production
 
-# 安全
-SANDBOX_MODE=false
-ALLOWED_PATHS=/workspace/projects
+# 模型（registry 按 DEFAULT_MODEL_SPEC 读取，默认 gpt-4o）
+DEFAULT_MODEL_SPEC=gpt-4o
 
-# 模型调度
-DEFAULT_MODEL=anthropic/claude-sonnet-4-20250514
-FALLBACK_CHAIN=anthropic/claude-sonnet-4-20250514,openai/gpt-4o,ollama/llama3.3
+# 向量库
+VECTOR_STORE_PATH=./data/chroma
 ```
+
+> 完整配置项见 `app/config.py` 的 `Settings` 类（`app_env`、`app_debug`、`trusted_proxies`、
+> `cors_origins`、`jwt_algorithm`、`jwt_expire_minutes`、`redis_url`、`sqlite_wal` 等）。
+> 未被 `Settings` 或代码中 `os.environ` 读取的变量会被 pydantic-settings 静默忽略。
 
 ## 文档
 

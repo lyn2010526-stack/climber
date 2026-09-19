@@ -298,3 +298,132 @@ class FlowExecutor:
                     triggered.append((name, method))
 
         return triggered
+
+
+# ── Named workflow runner ──
+
+
+_TEMPLATE_DEFAULTS: dict[str, dict[str, Any]] = {
+    "tool_use": {"tool_name": "list_files"},
+    "conditional_branch": {
+        "condition_var": "input",
+        "condition_value": "true",
+        "true_prompt": "Handle the true condition.",
+        "false_prompt": "Handle the false condition.",
+    },
+}
+
+
+class Flow:
+    """Named workflow runner backing the task_worker 'workflow' task type.
+
+    Flow(name=...) resolves a workflow definition by name — built-in
+    templates first, then user-defined workflows stored in the DB — and
+    execute() runs it through the real WorkflowEngine. It returns a
+    structured dict instead of raising for unknown or failed workflows.
+    """
+
+    def __init__(self, name: str, **kwargs: Any):
+        self.name = name
+        self._kwargs = kwargs
+
+    async def execute(
+        self,
+        params: dict[str, Any] | None = None,
+        on_progress=None,
+    ) -> dict[str, Any]:
+        from app.workflow.engine import WorkflowEngine
+
+        params = params or {}
+        try:
+            workflow = await self._resolve_workflow(params)
+        except Exception as exc:
+            logger.warning("flow_not_found", name=self.name, error=str(exc))
+            return {
+                "status": FlowStatus.FAILED.value,
+                "workflow": self.name,
+                "error": str(exc),
+            }
+
+        if on_progress:
+            await on_progress(0, 1, f"Starting workflow '{self.name}'")
+
+        from app.core.di import resolve as di_resolve
+
+        try:
+            agent_engine = di_resolve("AgentEngine")
+        except KeyError:
+            from app.core.agent_engine import AgentEngine
+
+            agent_engine = AgentEngine()
+
+        try:
+            result = await WorkflowEngine(engine=agent_engine).execute(
+                workflow,
+                user_inputs=params,
+                user_id=str(params.get("user_id", "system")),
+            )
+        except Exception as exc:
+            logger.error("flow_execution_failed", name=self.name, error=str(exc))
+            return {
+                "status": FlowStatus.FAILED.value,
+                "workflow": self.name,
+                "error": str(exc),
+            }
+
+        if on_progress:
+            await on_progress(1, 1, "Workflow complete")
+        return result.model_dump()
+
+    async def _resolve_workflow(self, params: dict[str, Any]) -> Any:
+        workflow = self._match_template(params)
+        if workflow is not None:
+            return workflow
+
+        from sqlalchemy import select
+
+        from app.storage import async_session
+        from app.storage.models_platform import Workflow as WorkflowModel
+        from app.workflow import Workflow, WorkflowEdge, WorkflowNode
+
+        async with async_session() as session:
+            stmt = select(WorkflowModel).where(WorkflowModel.name == self.name)
+            row = (await session.execute(stmt)).scalars().first()
+
+        if row is None:
+            raise ValueError(f"Workflow '{self.name}' not found")
+        return Workflow(
+            id=row.id,
+            name=row.name,
+            description=row.description,
+            nodes=[WorkflowNode(**node) for node in (row.nodes or [])],
+            edges=[WorkflowEdge(**edge) for edge in (row.edges or [])],
+        )
+
+    def _match_template(self, params: dict[str, Any]) -> Any:
+        from app.workflow.templates import WorkflowTemplates
+
+        normalized = self.name.strip().lower().replace("_", " ").replace("-", " ")
+        target = next(
+            (
+                tpl
+                for tpl in WorkflowTemplates.list_templates()
+                if tpl["id"] == self.name
+                or tpl["name"].lower() == normalized
+                or tpl["id"].replace("_", " ") == normalized
+            ),
+            None,
+        )
+        if target is None:
+            return None
+        builder = getattr(WorkflowTemplates, target["id"])
+        try:
+            return builder(
+                provider=str(params.get("provider", "openai")),
+                model_id=str(params.get("model", params.get("model_id", "gpt-4o"))),
+                api_key=str(params.get("api_key", "")),
+                **_TEMPLATE_DEFAULTS.get(target["id"], {}),
+            )
+        except TypeError as exc:
+            logger.warning("flow_template_invalid", template=target["id"], error=str(exc))
+            return None

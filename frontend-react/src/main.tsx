@@ -4,6 +4,8 @@ import App from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { ThemeProvider } from './hooks/useTheme.tsx'
 import { LanguageDetector } from './components/LanguageDetector'
+import '@fontsource-variable/inter'
+import '@fontsource/jetbrains-mono'
 import './index.css'
 import './i18n/config'
 

@@ -69,6 +69,30 @@ REHEARSAL_REPAIR_PROMPT = """The generated app failed its pre-grading startup re
 
 Fix the root cause by editing files in this workspace. Common causes: missing npm scripts, build script that does not produce frontend/dist, backend crash on startup, port/PORT handling. For your own checks run servers with PORT={smoke_port} only, then run the exact grading commands (npm install, npm run build in frontend/; PORT unset for `npm run start` reading process.env.PORT). Finish with a one-line summary."""
 
+ACCEPTANCE_REPAIR_PROMPT = """Independent GUI acceptance tests (the official grading spec corpus) are failing for requirement node {node_id}.
+
+Failing test cases attributed to this node:
+{failing_titles}
+
+Failure evidence from the acceptance run (tail):
+```
+{failure_output}
+```
+
+Target implementation lives in this workspace: {workspace_path}
+Inspect the failing tests FIRST, find the root cause in the implementation, and edit files to make those tests pass while keeping every already-passing path intact.
+
+Finish with a one-line summary of the fix."""
+
+QA_REVIEW_PROMPT = """Independent QA review of the deliverable against the official acceptance tests.
+
+{node_list}
+
+Act as a QA engineer checking the delivered app against the spec corpus: read the acceptance spec files and the current implementation, then fix any mismatch by editing files directly. Keep every passing path intact while repairing failing assertions. Run the frontend build once to confirm it exits 0.
+
+Finish with one line naming the file(s) you touched (or "no issues found").
+{port_safety}"""
+
 OFFICIAL_TESTS_HEADER = """OFFICIAL ACCEPTANCE TESTS take priority over your own interpretation.
 Directory: {tests_dir}
 Spec files:
@@ -90,6 +114,7 @@ def skeleton_prompt(smoke_port: int, web_port: int) -> str:
 def node_prompt(description: str, smoke_port: int, web_port: int) -> str:
     return NODE_PROMPT.format(
         description=description,
+        smoke_port=smoke_port,
         ui_contract=UI_CONTRACT,
         port_safety=PORT_SAFETY.format(web_port=web_port, smoke_port=smoke_port),
     )
@@ -108,6 +133,37 @@ def final_check_prompt(node_list: str, smoke_port: int, web_port: int) -> str:
 
 def repair_prompt(error: str, smoke_port: int) -> str:
     return REHEARSAL_REPAIR_PROMPT.format(error=error, smoke_port=smoke_port)
+
+
+def acceptance_repair_prompt(
+    node_id: str,
+    titles: list[str],
+    failure_output: str,
+    workspace_path: str,
+    specs_inject: str,
+    smoke_port: int | None = None,
+    web_port: int | None = None,
+) -> str:
+    body = ACCEPTANCE_REPAIR_PROMPT.format(
+        node_id=node_id,
+        failing_titles="\n".join(f"- {t}" for t in (titles or [node_id])),
+        failure_output=failure_output or "no failure text captured",
+        workspace_path=workspace_path,
+    )
+    parts = [body]
+    if specs_inject:
+        parts.append(specs_inject)
+    if smoke_port:
+        parts.append(UI_CONTRACT)
+        parts.append(PORT_SAFETY.format(web_port=web_port, smoke_port=smoke_port))
+    return "\n\n".join(parts)
+
+
+def qa_review_prompt(node_list: str, smoke_port: int, web_port: int) -> str:
+    return QA_REVIEW_PROMPT.format(
+        node_list=node_list,
+        port_safety=PORT_SAFETY.format(web_port=web_port, smoke_port=smoke_port),
+    )
 
 
 def official_tests_prompt(tests_dir, specs, extra_ports, smoke_port: int, web_port: int) -> str:

@@ -1,5 +1,10 @@
 # 20 开源 AI 项目特性集成 - 实施总结
 
+> 状态说明：本文件记录各开源项目特性的集成设计。除下文明确的死锁检测外，
+> 表中列出的模块路径与测试覆盖数代表设计目标，实际可用性请以当前代码树为准
+> （`app/core/collaboration/deadlock.py` 已实现依赖环（死锁）检测并接入
+> `GroupCollaborationEngine.run_group_tasks`）。
+
 ## 实施概览
 
 基于对 20 个开源 AI 项目的深度分析，成功提取 8 个核心特性模块并集成到 Climber 架构中。
@@ -31,9 +36,9 @@
 - 新增: 风险分级审批策略
 
 ### 3. CrewAI -> 多 Agent 协作增强
-- 现状: 已有 multi_agent.py 支持 fork/coordinate/team
+- 现状: 已有 `app/core/collaboration/` 支持 sequential/hierarchical/group_chat 流程，`app/multi_agent/` 提供 Crew 与事件驱动 Flow 编排
 - 集成: 通过 Role Play 协议增强角色交互
-- 新增: 角色扮演对话协议、共识检测
+- 新增: 角色扮演对话协议、共识检测、依赖环（死锁）检测（`app/core/collaboration/deadlock.py`）
 
 ### 4. AutoGen -> 对话协议
 - 现状: 已有 agent 间通信基础

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -18,7 +18,7 @@ router = APIRouter()
 
 def _budget_window_start(period: str) -> datetime:
     """Return the UTC datetime at which the given budget period started."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
     if period == "daily":
         return midnight

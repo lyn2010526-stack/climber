@@ -6,11 +6,14 @@ enabling dependency injection and testability.
 
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
+
+import structlog
 
 # ── Events ──
 
@@ -38,10 +41,6 @@ class EventBus:
                 logger = structlog.get_logger()
                 logger.warning("event_handler_failed", event=event.type, error=str(exc))
 
-
-import asyncio
-
-import structlog
 
 # ── Enums ──
 

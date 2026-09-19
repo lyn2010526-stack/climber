@@ -18,7 +18,6 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
   const keyboardIndexRef = useRef(0);
 
   const allItems = useMemo(() => ALL_NAV_ITEMS_BASE
-    .filter(item => item.id !== 'demo')
     .map(item => ({
       id: item.id,
       label: t(item.labelKey ?? item.label ?? item.id),

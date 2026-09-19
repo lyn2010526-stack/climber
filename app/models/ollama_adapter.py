@@ -98,27 +98,26 @@ class OllamaAdapter(ModelAdapter):
             return
 
         try:
-            async with httpx.AsyncClient(timeout=120) as client:
-                async with client.stream(
-                    "POST", f"{self._base_url}/api/chat", json=payload
-                ) as response:
-                    response.raise_for_status()
-                    async for line in response.aiter_lines():
-                        if not line.strip():
-                            continue
-                        try:
-                            chunk = json.loads(line)
-                        except json.JSONDecodeError:
-                            continue
-                        if chunk.get("done"):
-                            yield ChatResult(
-                                finish_reason="stop",
-                                tokens_used=chunk.get("eval_count", 0),
-                            )
-                            break
-                        content = chunk.get("message", {}).get("content")
-                        if content:
-                            yield ChatResult(content=content)
+            async with httpx.AsyncClient(timeout=120) as client, client.stream(
+                "POST", f"{self._base_url}/api/chat", json=payload
+            ) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.strip():
+                        continue
+                    try:
+                        chunk = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if chunk.get("done"):
+                        yield ChatResult(
+                            finish_reason="stop",
+                            tokens_used=chunk.get("eval_count", 0),
+                        )
+                        break
+                    content = chunk.get("message", {}).get("content")
+                    if content:
+                        yield ChatResult(content=content)
         except Exception as e:
             yield ChatResult(
                 content=f"\n[Error: {str(e)}]",

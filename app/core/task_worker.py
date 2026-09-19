@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-import traceback
 import uuid
 from collections import OrderedDict, defaultdict, deque
 from collections.abc import Callable, Coroutine
-from dataclasses import dataclass, field
+from contextlib import suppress
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -226,17 +226,24 @@ class TaskManager:
 
                 runtime_payload = {**payload, "_task_id": task_id}
                 result = await handler(payload=runtime_payload, on_progress=_progress_cb)
+                result_status = (
+                    TaskStatus.FAILED.value
+                    if isinstance(result, dict) and result.get("status") == TaskStatus.FAILED.value
+                    else TaskStatus.COMPLETED.value
+                )
 
                 async with async_session() as session:
                     record = await session.get(AutoLoopTask, task_id)
                     if record:
-                        record.status = TaskStatus.COMPLETED.value
+                        record.status = result_status
                         record.result = result if isinstance(result, dict) else {"output": str(result)}
+                        if result_status == TaskStatus.FAILED.value and isinstance(result, dict):
+                            record.error = str(result.get("error", ""))[:500]
                         record.finished_at = datetime.now(UTC)
                         record.current_step = record.max_steps
                         await session.commit()
 
-                await self._emit_progress(task_id, {"status": "completed", "result": result})
+                await self._emit_progress(task_id, {"status": result_status, "result": result})
 
             except asyncio.CancelledError:
                 async with async_session() as session:
@@ -260,10 +267,8 @@ class TaskManager:
 
     async def _emit_progress(self, task_id: str, data: dict) -> None:
         for cb in self._progress_callbacks:
-            try:
+            with suppress(Exception):
                 await cb(task_id, data)
-            except Exception:
-                pass
 
 
 async def handle_agent_run(payload: dict[str, Any], on_progress) -> dict[str, Any]:
@@ -430,7 +435,12 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
         await task_manager.emit_event(task_id, "plan_fallback", {"reason": str(exc)})
     await task_manager.emit_event(task_id, "plan", {
         "steps": [
-            {"step": step["step"], "action": step["action"], "status": "pending"}
+            {
+                "step": step["step"],
+                "action": step["action"],
+                "status": "pending",
+                **({"tool": step["tools"][0]} if step.get("tools") else {}),
+            }
             for step in plan
         ]
     })
@@ -453,10 +463,10 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
         last_error: Exception | None = None
         for attempt in range(1, 3):
             try:
-                async def _step_progress(current: int, total: int, message: str = "") -> None:
+                async def _step_progress(current: int, total: int, message: str = "", _step_id: str = step_id, _index: int = index) -> None:
                     await task_manager.emit_event(task_id, "progress", {
-                        "task_id": step_id,
-                        "step": index,
+                        "task_id": _step_id,
+                        "step": _index,
                         "current": current,
                         "total": total,
                         "message": message,

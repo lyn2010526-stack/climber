@@ -90,10 +90,8 @@ class PermissionConfig:
             if self._is_high_risk(tool_name, arguments):
                 return RuleDecision.ASK
             return RuleDecision.ALLOW
-        if self.mode == PermissionMode.ACCEPT_EDITS:
-            # 自动接受编辑和读取
-            if tool_name in ("read_file", "file_read", "write_file", "file_write", "edit", "list_dir"):
-                return RuleDecision.ALLOW
+        if self.mode == PermissionMode.ACCEPT_EDITS and tool_name in ("read_file", "file_read", "write_file", "file_write", "edit", "list_dir"):
+            return RuleDecision.ALLOW
         if self.mode == PermissionMode.PLAN:
             # 计划模式只允许读取
             if tool_name in ("read_file", "file_read", "list_dir", "search"):
@@ -224,7 +222,7 @@ class PermissionConfig:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "PermissionConfig":
+    def from_dict(cls, data: dict[str, Any]) -> PermissionConfig:
         """Reconstruct a PermissionConfig from a persisted dict."""
         try:
             mode = PermissionMode(data.get("mode", PermissionMode.DEFAULT.value))

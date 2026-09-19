@@ -14,10 +14,11 @@ os.environ["ENABLE_AUTH"] = "false"
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 
 from app.main import app
-from sqlalchemy import text
 from app.storage import Base, engine, init_db
+from app.storage.usage import usage_tracker
 
 
 @pytest.fixture(scope="session")
@@ -51,6 +52,8 @@ def cleanup_db():
     """Clean up database after each test by deleting data from tables."""
     yield
     import asyncio
+    import contextlib
+
     from sqlalchemy.exc import OperationalError
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -58,14 +61,19 @@ def cleanup_db():
         async def _cleanup():
             async with engine.begin() as conn:
                 for table in reversed(Base.metadata.sorted_tables):
-                    try:
+                    with contextlib.suppress(OperationalError):
                         await conn.execute(text(f"DELETE FROM {table.name}"))
-                    except OperationalError:
-                        pass  # Table may not exist
                 await conn.commit()
         loop.run_until_complete(_cleanup())
     finally:
         loop.close()
+
+
+@pytest.fixture(autouse=True)
+def reset_usage_tracker():
+    """Reset the in-process usage tracker so rate-limit counts do not leak across tests."""
+    yield
+    usage_tracker.reset()
 
 
 @pytest_asyncio.fixture

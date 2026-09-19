@@ -117,8 +117,9 @@ class GroupCollaborationEngine:
         ``MAX_RETRIES + 1`` calls to ``_run_agent_simple`` for the primary
         attempts, and one final fallback call before returning ``("", 0)``.
         """
-        from app.core.collaboration.constants import MAX_RETRIES as _MAX_RETRIES, TASK_TIMEOUT as _TASK_TIMEOUT
         from app.core.collaboration.agent_runner import _get_fallback_model
+        from app.core.collaboration.constants import MAX_RETRIES as _MAX_RETRIES
+        from app.core.collaboration.constants import TASK_TIMEOUT as _TASK_TIMEOUT
         from app.core.group_ws_hub import group_ws_hub as _hub
 
         last_error: Exception | None = None
@@ -263,24 +264,23 @@ class GroupCollaborationEngine:
         if not tasks:
             return {"status": "no_pending_tasks"}
 
-        from app.core.task_dag import TaskDAG, TaskNode
+        from app.core.collaboration.deadlock import deadlocked_task_ids, detect_deadlock, topological_order
 
-        dag = TaskDAG()
-        task_map: dict[str, AgentGroupTask] = {}
-        for t in tasks:
-            task_map[t.id] = t
-            dag.add_task(TaskNode(
-                task_id=t.id,
-                name=t.description[:50],
-                dependencies=t.dependencies or [],
-                payload={"description": t.description, "worker_id": t.worker_id, "reviewer_ids": t.reviewer_ids, "max_rounds": t.max_rounds},
-            ))
+        dependency_map = {t.id: list(t.dependencies or []) for t in tasks}
+        deadlock_cycles = detect_deadlock(dependency_map)
+        if deadlock_cycles:
+            logger.warning("deadlock_detected_in_group_tasks", group_id=group_id, cycles=deadlock_cycles)
+            blocked = deadlocked_task_ids(dependency_map)
+            if all(t.id in blocked for t in tasks):
+                return {
+                    "status": "deadlock",
+                    "error": f"Cycle detected in task dependencies: {deadlock_cycles}",
+                    "cycles": deadlock_cycles,
+                }
+            logger.warning("deadlock_skipping_blocked_tasks", group_id=group_id, blocked=sorted(blocked))
 
-        cycle = dag.detect_cycle()
-        if cycle:
-            return {"error": f"Cycle detected in task dependencies: {cycle}"}
-
-        execution_levels = dag.topological_order()
+        task_map: dict[str, AgentGroupTask] = {t.id: t for t in tasks}
+        execution_levels = topological_order(dependency_map)
         results: dict[str, Any] = {"status": "completed", "levels": []}
         completed_tasks: set[str] = set()
 

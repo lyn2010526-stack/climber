@@ -18,7 +18,7 @@ import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { useIsMobile } from './layout/breakpoints';
 import { useSidebarState } from './layout/useSidebarState';
 import { CORE_NAV_ITEMS_BASE, ALL_NAV_ITEMS_BASE, NAV_ITEM_IDS } from './navigation/navConfig';
-import type { Page } from './navigation/navConfig';
+import type { Page, NavGroup } from './navigation/navConfig';
 
 const WorkspaceLayout = lazy(() => import('./components/workspace/WorkspaceLayout').then(m => ({ default: m.WorkspaceLayout })));
 const AgentsPage = lazy(() => import('./pages/AgentsPage').then(m => ({ default: m.AgentsPage })));
@@ -43,11 +43,12 @@ const TaskHistoryPage = lazy(() => import('./pages/TaskHistoryPage').then(m => (
 const ReasoningPage = lazy(() => import('./pages/ReasoningPage').then(m => ({ default: m.ReasoningPage })));
 const ReasoningHistoryPage = lazy(() => import('./pages/ReasoningHistoryPage').then(m => ({ default: m.ReasoningHistoryPage })));
 const TerminalPage = lazy(() => import('./pages/TerminalPage'));
-const DemoVisualHierarchy = lazy(() => import('./pages/DemoVisualHierarchy'));
 const AuthApiKeysPage = lazy(() => import('./pages/AuthApiKeysPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 
-const VALID_PAGES = new Set([...NAV_ITEM_IDS, 'demo']);
+const VALID_PAGES = new Set(NAV_ITEM_IDS);
+
+const NAV_GROUPS: NavGroup[] = ['main', 'manage', 'config'];
 
 function getPageFromHash(): Page {
   const hash = window.location.hash.replace('#', '');
@@ -136,7 +137,6 @@ export default function App() {
       case 'task-history': return <TaskHistoryPage />;
       case 'reasoning': return <ReasoningPage />;
       case 'reasoning-history': return <ReasoningHistoryPage />;
-      case 'demo': return <DemoVisualHierarchy />;
     }
   };
 
@@ -202,39 +202,45 @@ export default function App() {
             </div>
 
             <nav className="flex-1 overflow-y-auto px-2.5 py-2" aria-label={t('sidebar.workspace')}>
-              <div className="space-y-0.5">
-                {CORE_NAV_ITEMS.map(({ id, icon: Icon, label }) => (
-                  <button
-                    key={id}
-                    onClick={() => navigate(id)}
-                    aria-label={label}
-                    aria-current={currentPage === id ? 'page' : undefined}
-                    title={sidebarOpen ? undefined : label}
-                    className="relative flex h-11 w-full items-center gap-3 rounded-lg border px-3 text-sm transition-colors"
-                    style={{
-                      color: currentPage === id ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                      backgroundColor: currentPage === id ? 'var(--color-accent-subtle)' : 'transparent',
-                      borderColor: currentPage === id ? 'var(--color-border-accent)' : 'transparent',
-                    }}
-                  >
-                    {currentPage === id && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full" style={{
-                        backgroundColor: 'var(--color-accent)',
-                        boxShadow: '0 0 8px var(--color-accent-glow)'
-                      }} />
-                    )}
-                    <div className="p-1.5 rounded-md transition-colors" style={{
-                      backgroundColor: currentPage === id ? 'var(--color-accent-subtle)' : 'transparent',
-                      color: currentPage === id ? 'var(--color-accent)' : 'var(--color-text-muted)',
-                    }}>
-                      <Icon size={14} />
-                    </div>
+              {NAV_GROUPS.map((group, groupIndex) => {
+                const items = CORE_NAV_ITEMS.filter(item => item.group === group);
+                if (items.length === 0) return null;
+                return (
+                  <div key={group} className={groupIndex > 0 ? 'mt-1' : ''}>
                     {sidebarOpen && (
-                      <span className="font-medium">{label}</span>
+                      <p className={`px-3 ${groupIndex === 0 ? 'pb-1 pt-2' : 'pb-1 pt-4'} text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]`}>
+                        {t(`nav_groups.${group}`)}
+                      </p>
                     )}
-                  </button>
-                ))}
-              </div>
+                    <div className="space-y-0.5">
+                      {items.map(({ id, icon: Icon, label }) => (
+                        <button
+                          key={id}
+                          onClick={() => navigate(id)}
+                          aria-label={label}
+                          aria-current={currentPage === id ? 'page' : undefined}
+                          title={sidebarOpen ? undefined : label}
+                          className={`relative flex h-11 w-full items-center gap-3 rounded-lg border px-3 text-sm transition-colors ${
+                            currentPage === id
+                              ? 'border-[var(--color-border-accent)] bg-[var(--color-accent-subtle)] text-[var(--color-text-primary)]'
+                              : 'border-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)]'
+                          }`}
+                        >
+                          {currentPage === id && (
+                            <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-[var(--color-accent)] shadow-[0_0_8px_var(--color-accent-glow)]" />
+                          )}
+                          <span className={`rounded-md p-1.5 transition-colors ${currentPage === id ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]' : 'bg-transparent text-[var(--color-text-muted)]'}`}>
+                            <Icon size={14} />
+                          </span>
+                          {sidebarOpen && (
+                            <span className="font-medium">{label}</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
 
               {sidebarOpen && <p className="px-3 pt-4 text-xs leading-5 text-[var(--color-text-muted)]">{t('common.command_hint')}</p>}
             </nav>

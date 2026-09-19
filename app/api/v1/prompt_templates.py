@@ -8,7 +8,6 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.auth_manager import require_scopes
-
 from app.core.prompt_engine.template_repository import PromptTemplateRepository
 
 logger = logging.getLogger(__name__)

@@ -7,10 +7,10 @@ and structured responses with validation.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, Field
-from pydantic_ai import Agent, RunContext
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class PydanticAIAgent:
     ):
         self._system_prompt = system_prompt
         self._model = model
-        self._agent: Agent | None = None
+        self._agent: Any | None = None
         self._tools: dict[str, Any] = {}
 
     def register_tool(
@@ -54,7 +54,7 @@ class PydanticAIAgent:
     ) -> None:
         """Register a tool function."""
         self._tools[name] = {"description": description, "func": func}
-        logger.debug("tool_registered", name=name)
+        logger.debug("tool registered: %s", name)
 
     async def run(
         self,
@@ -63,6 +63,7 @@ class PydanticAIAgent:
     ) -> AgentResponse:
         """Run the agent with a prompt."""
         try:
+            from pydantic_ai import Agent
             if self._agent is None:
                 self._agent = Agent(
                     self._model,
@@ -73,7 +74,7 @@ class PydanticAIAgent:
             result = await self._agent.run(prompt)
             return result.data if hasattr(result, "data") else AgentResponse(content=str(result))
         except Exception as exc:
-            logger.warning("agent_run_failed", error=str(exc))
+            logger.warning("agent run failed: %s", exc)
             return AgentResponse(
                 content=f"Error: {exc}",
                 confidence=0.0,
@@ -83,6 +84,7 @@ class PydanticAIAgent:
     async def run_stream(self, prompt: str):
         """Run the agent with streaming output."""
         try:
+            from pydantic_ai import Agent
             if self._agent is None:
                 self._agent = Agent(
                     self._model,
@@ -93,7 +95,7 @@ class PydanticAIAgent:
                 async for chunk in result.stream():
                     yield chunk
         except Exception as exc:
-            logger.warning("agent_stream_failed", error=str(exc))
+            logger.warning("agent stream failed: %s", exc)
             yield f"Error: {exc}"
 
 

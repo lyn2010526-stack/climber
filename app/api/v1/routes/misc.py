@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -11,7 +11,14 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
-from app.api.v1.common import DEFAULT_USER, current_user_id, get_or_404, mask_env_values, ok_response, parse_request_payload
+from app.api.v1.common import (
+    DEFAULT_USER,
+    current_user_id,
+    get_or_404,
+    mask_env_values,
+    ok_response,
+    parse_request_payload,
+)
 from app.core.auth_manager import require_admin, require_scopes
 from app.storage import async_session
 from app.storage.database import Document
@@ -25,7 +32,7 @@ router = APIRouter()
 
 def _budget_window_start(period: str) -> datetime:
     """Return the UTC datetime at which the given budget period started."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
     if period == "daily":
         return midnight

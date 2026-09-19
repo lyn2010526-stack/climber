@@ -23,7 +23,7 @@ export function AdaptiveMobileLayout({ children, currentPage, onNavigate }: {
     });
     return {
       primaryItems: CORE_NAV_ITEMS_BASE.filter(item => MOBILE_PRIMARY_IDS.has(item.id)).map(toEntry),
-      moreItems: ALL_NAV_ITEMS_BASE.filter(item => !MOBILE_PRIMARY_IDS.has(item.id) && item.id !== 'demo').map(toEntry),
+      moreItems: ALL_NAV_ITEMS_BASE.filter(item => !MOBILE_PRIMARY_IDS.has(item.id)).map(toEntry),
     };
   }, [t]);
 

@@ -331,9 +331,11 @@ def _message_dict(m: AgentGroupMessage) -> dict[str, Any]:
     Returns:
         A dictionary with message fields for API response.
     """
+    agent_id = getattr(m, "agent_id", None)
     return {
         "id": m.id,
-        "sender_id": m.sender_id,
+        "sender_id": agent_id,
+        "agent_id": agent_id,
         "sender_name": m.sender_name,
         "content": m.content,
         "message_type": m.message_type,

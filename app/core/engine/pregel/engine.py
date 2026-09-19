@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -38,6 +38,13 @@ from app.core.engine.pregel.state import GraphState
 from app.core.engine.pregel.streaming import StreamEvent, StreamEventType
 
 logger = structlog.get_logger(__name__)
+
+TERMINAL_NODES: frozenset[str] = frozenset({"__end__", "END"})
+
+
+def _drop_terminals(nodes: Iterable[str]) -> list[str]:
+    """Filter terminal sentinels so they never execute as nodes."""
+    return [n for n in nodes if n not in TERMINAL_NODES]
 
 
 @dataclass
@@ -128,7 +135,7 @@ class PregelEngine:
             state = GraphState(existing.values, schema=self._graph.schema)
             state.step = existing.step
             context.step = existing.step
-            context.active_nodes = list(existing.next_nodes)
+            context.active_nodes = _drop_terminals(existing.next_nodes)
             if resume_value is not None and existing.metadata.get("interrupt_type") == "before":
                 context.skip_interrupt_before.update(existing.next_nodes)
 
@@ -138,12 +145,12 @@ class PregelEngine:
             state["__interrupted__"] = False
 
         if resume_nodes:
-            context.active_nodes = resume_nodes
+            context.active_nodes = _drop_terminals(resume_nodes)
         elif not context.active_nodes:
             # Check if we're resuming from an interrupt
             interrupt_node = state.get("__interrupt_node__")
             if interrupt_node and state.get("__interrupted__"):
-                context.active_nodes = list(existing.next_nodes) if existing else []
+                context.active_nodes = _drop_terminals(existing.next_nodes) if existing else []
             else:
                 entry = self._graph._entry_point
                 if entry is None:
@@ -152,7 +159,7 @@ class PregelEngine:
                 if branch:
                     next_node = await self._resolve_router(branch.router, state)
                     entry = next_node
-                context.active_nodes = [entry] if entry else []
+                context.active_nodes = _drop_terminals([entry]) if entry else []
 
         async def execute() -> None:
             for _ in range(max_steps):
@@ -200,7 +207,7 @@ class PregelEngine:
             state = GraphState(existing.values, schema=self._graph.schema)
             state.step = existing.step
             context.step = existing.step
-            context.active_nodes = list(existing.next_nodes)
+            context.active_nodes = _drop_terminals(existing.next_nodes)
 
         if not context.active_nodes:
             entry = self._graph._entry_point
@@ -208,7 +215,7 @@ class PregelEngine:
                 branch = self._graph.get_conditional_edges("__start__")
                 if branch:
                     entry = await self._resolve_router(branch.router, state)
-            context.active_nodes = [entry] if entry else []
+            context.active_nodes = _drop_terminals([entry]) if entry else []
 
         yield state.clone()
 
@@ -251,7 +258,7 @@ class PregelEngine:
             state = GraphState(existing.values, schema=self._graph.schema)
             state.step = existing.step
             context.step = existing.step
-            context.active_nodes = list(existing.next_nodes)
+            context.active_nodes = _drop_terminals(existing.next_nodes)
 
         if not context.active_nodes:
             entry = self._graph._entry_point
@@ -259,7 +266,7 @@ class PregelEngine:
                 branch = self._graph.get_conditional_edges("__start__")
                 if branch:
                     entry = await self._resolve_router(branch.router, state)
-            context.active_nodes = [entry] if entry else []
+            context.active_nodes = _drop_terminals([entry]) if entry else []
 
         yield StreamEvent(type=StreamEventType.START, data={"input": dict(state)})
 
@@ -423,11 +430,11 @@ class PregelEngine:
                 all_interrupted = True
                 interrupt_node = node_name
 
-        # Remove duplicates while preserving order
+        # Remove duplicates and terminal sentinels while preserving order
         seen: set[str] = set()
         unique_next: list[str] = []
         for n in next_active:
-            if n not in seen and n != "__end__":
+            if n not in seen and n not in TERMINAL_NODES:
                 seen.add(n)
                 unique_next.append(n)
 
@@ -494,6 +501,9 @@ class PregelEngine:
         self, node_name: str, state: GraphState, config: dict, context: ExecutionContext
     ) -> Any:
         """Execute a single node with retry and timeout."""
+        if node_name in TERMINAL_NODES:
+            logger.info("terminal_node_skipped", node=node_name, step=context.step)
+            return None
         func = self._graph.get_node(node_name)
         if not func:
             raise ValueError(f"Node '{node_name}' not found in graph")
@@ -533,8 +543,8 @@ class PregelEngine:
         """Determine next nodes based on explicit goto or graph edges."""
         if goto is not None:
             if isinstance(goto, list):
-                return [g for g in goto if g in self._graph.nodes or g == "__end__"]
-            if goto in self._graph.nodes or goto == "__end__":
+                return [g for g in goto if g in self._graph.nodes or g in TERMINAL_NODES]
+            if goto in self._graph.nodes or goto in TERMINAL_NODES:
                 return [goto]
             return []
 
@@ -542,6 +552,8 @@ class PregelEngine:
         branch = self._graph.get_conditional_edges(current_node)
         if branch:
             next_node = await self._resolve_router(branch.router, state)
+            if next_node in TERMINAL_NODES:
+                return []
             if next_node in self._graph.nodes:
                 return [next_node]
             return []
@@ -556,6 +568,8 @@ class PregelEngine:
             result = router(state)
             if asyncio.iscoroutine(result) or asyncio.isfuture(result):
                 result = await result
+            if result is None:
+                return "__end__"
             return str(result)
         except Exception as e:
             logger.error("router_error", error=str(e))

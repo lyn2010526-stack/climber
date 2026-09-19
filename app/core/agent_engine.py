@@ -70,6 +70,7 @@ class AgentEngine:
         self._checkpoints = checkpoint_store or InMemoryCheckpointStore()
         self._sessions: dict[str, AgentSession] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
+        self._background_tasks: set[asyncio.Task] = set()
         self._shutdown_event = asyncio.Event()
         self.resource_tracker = ResourceTracker()
         self.memory_service = PersistentMemoryService()
@@ -90,12 +91,8 @@ class AgentEngine:
             self.reasoning = None
 
     def _init_debug_loop(self) -> None:
-        """Initialize the debug loop engine."""
-        try:
-            from app.core.debug_loop import DebugLoopEngine
-            self.debug_loop = DebugLoopEngine(model_registry=self.model_registry)
-        except Exception:
-            self.debug_loop = None
+        """Debug loop extension point; wired when a debug engine is installed."""
+        self.debug_loop = None
 
     def _init_sandbox(self) -> None:
         """Initialize the security sandbox."""
@@ -116,7 +113,7 @@ class AgentEngine:
     def _init_permissions(self) -> None:
         """Initialize default permission configuration, reloading any persisted config."""
         try:
-            from app.core.permission_rules import PermissionConfig, get_default_config
+            from app.core.permission_rules import get_default_config
             persisted = self._load_permission_config()
             self._default_permission_config = persisted or get_default_config()
         except Exception:
@@ -160,13 +157,12 @@ class AgentEngine:
             pass
 
     def _setup_default_permissions(self) -> None:
-        """Setup default three-layer permission rules."""
+        """Setup default permission overlay, mirroring permission_rules DEFAULT mode."""
         from app.core.security_sandbox import PermissionLevel, PermissionRule
         defaults = [
             PermissionRule(action="read", resource_pattern="*", level=PermissionLevel.ALLOW, description="Read any file"),
-            PermissionRule(action="write", resource_pattern="./data/*", level=PermissionLevel.ALLOW, description="Write to data dir"),
-            PermissionRule(action="write", resource_pattern="*", level=PermissionLevel.ALLOW, description="Write any file"),
-            PermissionRule(action="execute", resource_pattern="*", level=PermissionLevel.ALLOW, description="Execute any command"),
+            PermissionRule(action="write", resource_pattern="*", level=PermissionLevel.ASK, description="Write requires approval"),
+            PermissionRule(action="execute", resource_pattern="*", level=PermissionLevel.ASK, description="Execute requires approval"),
             PermissionRule(action="delete", resource_pattern="*", level=PermissionLevel.DENY, description="Delete forbidden"),
         ]
         self.permission_overlay.set_defaults(defaults)
@@ -286,7 +282,7 @@ class AgentEngine:
         session._run_status_override = None
         executor = ParallelToolExecutor(
             self.tool_registry,
-            validator=(lambda name, args: validate_tool_call(session, name, args, self.sandbox, self.permission_overlay, self.agent_mode, self.tool_registry)) if self.sandbox else None,
+            validator=(lambda name, args: validate_tool_call(session, name, args, self.sandbox, self.permission_overlay, self.agent_mode, self.tool_registry)),
             session=session,
         )
         compressor = ContextCompressor(session.context_config)
@@ -365,7 +361,7 @@ class AgentEngine:
                     elif getattr(chunk, "tokens_used", None):
                         result.tokens_used = chunk.tokens_used
                 if result is not None:
-                    result.finish_reason = "stop"
+                    result.finish_reason = "tool_calls" if result.tool_calls else "stop"
             else:
                 result = await self._call_llm_with_resilience(session, adapter, session.messages, iteration)
             if result is None:
@@ -500,17 +496,17 @@ class AgentEngine:
     async def _stream_accumulate(self, adapter: Any, messages: list[dict[str, Any]], tools: list) -> ChatResult:
         """Accumulate a streaming response into a single ChatResult.
 
-        Deduplicates a trailing full response chunk (whose content already
-        contains the accumulated deltas) to avoid content duplication.
+        When the adapter reports authoritative cumulative content
+        (accumulated_content), it is trusted as-is; otherwise per-chunk
+        deltas are appended. No prefix-based dedup heuristic is needed.
         """
         result = ChatResult()
         async for chunk in adapter.stream_chat(messages=messages, tools=tools or None):
-            content = chunk.content or ""
-            if content:
-                if content.startswith(result.content):
-                    result.content = content
-                else:
-                    result.content += content
+            full = getattr(chunk, "accumulated_content", "") or ""
+            if full:
+                result.content = full
+            elif chunk.content:
+                result.content += chunk.content
             if getattr(chunk, "tool_calls", None):
                 result.tool_calls.extend(chunk.tool_calls)
             if getattr(chunk, "finish_reason", None):
@@ -518,7 +514,7 @@ class AgentEngine:
             if getattr(chunk, "tokens_used", None):
                 result.tokens_used = chunk.tokens_used
         if result.finish_reason is None:
-            result.finish_reason = "stop"
+            result.finish_reason = "tool_calls" if result.tool_calls else "stop"
         return result
 
     def _validate_tool_call(self, session: AgentSession, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
@@ -634,7 +630,7 @@ class AgentEngine:
                 total_tokens = chunk.usage
             elif hasattr(chunk, "tokens_used") and chunk.tokens_used:
                 total_tokens = chunk.tokens_used
-        return ChatResult(content=full_content, tool_calls=accumulated_tool_calls, finish_reason="stop", tokens_used=total_tokens)
+        return ChatResult(content=full_content, tool_calls=accumulated_tool_calls, finish_reason="tool_calls" if accumulated_tool_calls else "stop", tokens_used=total_tokens)
 
     async def _handle_text_result(self, session: AgentSession, result: Any, adapter: Any) -> AsyncIterator[AgentEvent]:
         """Handle text content from LLM response.
@@ -805,7 +801,7 @@ class AgentEngine:
         """
         try:
             from app.services.notifications import notification_service
-            asyncio.create_task(notification_service.agent_message(session.agent_id or "Agent", "开始执行任务..."))
+            self._spawn(notification_service.agent_message(session.agent_id or "Agent", "开始执行任务..."))
         except Exception:
             pass
 
@@ -818,7 +814,7 @@ class AgentEngine:
         """
         try:
             from app.services.notifications import notification_service
-            asyncio.create_task(notification_service.task_complete(f"Agent {session.agent_id}", result.content[:100] if result and result.content else None))
+            self._spawn(notification_service.task_complete(f"Agent {session.agent_id}", result.content[:100] if result and result.content else None))
         except Exception:
             pass
 
@@ -831,7 +827,16 @@ class AgentEngine:
         """
         try:
             from app.services.notifications import notification_service
-            asyncio.create_task(notification_service.task_failed(f"Agent {session.agent_id}", error))
+            self._spawn(notification_service.task_failed(f"Agent {session.agent_id}", error))
+        except Exception:
+            pass
+
+    def _spawn(self, coro: Any) -> None:
+        """Run a fire-and-forget task while holding a reference until it finishes."""
+        try:
+            task = asyncio.create_task(coro)
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
         except Exception:
             pass
 
@@ -888,9 +893,7 @@ class AgentEngine:
             message: The user message.
         """
         try:
-            result = None
-            if hasattr(self, "_last_result"):
-                result = self._last_result
+            result = getattr(session, "_last_result", None)
             if result and result.content and len(result.content) > 10:
                 await self.memory_service.create_episodic_memory(
                     user_id=session.user_id,
@@ -910,7 +913,7 @@ class AgentEngine:
         """
         try:
             from app.core.memory_reflection import memory_reflection
-            asyncio.create_task(memory_reflection.maybe_reflect(session.user_id))
+            self._spawn(memory_reflection.maybe_reflect(session.user_id))
         except Exception:
             pass
 
@@ -948,8 +951,6 @@ class AgentEngine:
         """
         self._default_permission_config = config
         for session in list(self._sessions.values()):
-            try:
+            with contextlib.suppress(Exception):
                 session.permission_config = config
-            except Exception:
-                pass
         self._save_permission_config(config)

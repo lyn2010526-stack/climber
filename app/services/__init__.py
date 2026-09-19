@@ -1,6 +1,5 @@
 """Service layer."""
 from __future__ import annotations
-from typing import Any, Optional
 
 
 class BaseService:
@@ -8,7 +7,7 @@ class BaseService:
     def __init__(self, *args, **kwargs):
         pass
 
-    async def get(self, id: str) -> Optional[dict]:
+    async def get(self, id: str) -> dict | None:
         return None
 
     async def list(self, **filters) -> list[dict]:
@@ -17,7 +16,7 @@ class BaseService:
     async def create(self, data: dict) -> dict:
         return data
 
-    async def update(self, id: str, data: dict) -> Optional[dict]:
+    async def update(self, id: str, data: dict) -> dict | None:
         return None
 
     async def delete(self, id: str) -> bool:

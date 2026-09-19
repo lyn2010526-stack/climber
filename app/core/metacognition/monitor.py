@@ -155,8 +155,7 @@ class MetaCognitionMonitor:
         defects = []
         for i, call in enumerate(self._call_history):
             result = call.get("result", "")
-            if result.startswith("Error") or result.startswith("ERROR"):
-                if i > 0 and self._call_history[i - 1].get("tool") == call["tool"]:
+            if (result.startswith("Error") or result.startswith("ERROR")) and i > 0 and self._call_history[i - 1].get("tool") == call["tool"]:
                     defects.append(DefectReport(
                         type=DefectType.TOOL_MISUSE,
                         description=f"Repeated errors with '{call['tool']}': {result[:80]}",

@@ -148,7 +148,7 @@ class MCPClient:
             raise ImportError(
                 "SSE transport requires mcp[sse] extra. "
                 "Install with: pip install mcp[sse]"
-            )
+            ) from None
 
         if not self.url:
             raise ValueError("sse transport requires 'url' parameter")

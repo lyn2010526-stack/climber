@@ -114,7 +114,7 @@ class HeadlessRunner:
                     break
                 result.turns += 1
                 emit("model_request", turn=result.turns)
-                response = self.model.complete(messages, TOOLS, min(4096, budget.max_tokens - result.tokens), remaining)
+                response = self.model.complete(messages, tools, min(4096, budget.max_tokens - result.tokens), remaining)
                 usage = response.get("usage", {}).get("total_tokens")
                 if type(usage) is not int or usage < 0:
                     raise ModelError("Model response requires nonnegative usage.total_tokens")

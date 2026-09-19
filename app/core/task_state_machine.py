@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
+from contextlib import suppress
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -147,11 +148,8 @@ class TaskStateMachine:
 
         # Execute hook chain
         for _, hook in self._hooks:
-            try:
+            with suppress(Exception):
                 await hook(self, old_state, new_state)
-            except Exception:
-                # Log but don't block transition
-                pass
 
     def can_transition_to(self, new_state: TaskState) -> bool:
         """Check if transition to new_state is allowed."""

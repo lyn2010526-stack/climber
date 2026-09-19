@@ -27,12 +27,14 @@ export function useChat(sessionId: string | null) {
   const abortRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
+    let active = true;
+    setMessages([]);
     if (!sessionId) {
-      setMessages([]);
       return;
     }
 
     api.getSessionMessages(sessionId).then((data) => {
+      if (!active) return;
       const msgs: Message[] = data.map((m) => ({
         id: m.id,
         role: m.role,
@@ -49,8 +51,10 @@ export function useChat(sessionId: string | null) {
       }));
       setMessages(msgs);
     }).catch(() => {
-      setMessages([]);
+      if (active) setMessages([]);
     });
+
+    return () => { active = false; };
   }, [sessionId]);
 
   const sendMessage = useCallback(async (content: string) => {

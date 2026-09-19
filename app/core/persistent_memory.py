@@ -65,7 +65,20 @@ class PersistentMemoryService:
             db.add(memory)
             await db.commit()
             await db.refresh(memory)
-            return memory
+        try:
+            await vector_memory.add(
+                collection="episodic",
+                doc_id=str(memory.id),
+                text=memory.content,
+                metadata={
+                    "user_id": user_id,
+                    "memory_type": memory_type,
+                    "source_session_id": source_session_id or "",
+                },
+            )
+        except Exception as exc:
+            logger.warning("episodic_vector_write_failed", error=str(exc))
+        return memory
 
     async def retrieve_memories(
         self,
@@ -265,18 +278,6 @@ class PersistentMemoryService:
                         archive_id=archive_id,
                         tags=mem.tags,
                         metadata=mem.metadata_,
-                    )
-                    await vector_memory.add(
-                        collection="archival",
-                        doc_id=f"archival-{mem.id}",
-                        text=mem.content,
-                        metadata={
-                            "user_id": user_id,
-                            "archive_id": archive_id,
-                            "source": "auto_archive",
-                            "original_importance": mem.importance,
-                            "tags": mem.tags or [],
-                        },
                     )
                     await db.delete(mem)
                     stats["archived"] += 1
@@ -577,7 +578,20 @@ class PersistentMemoryService:
             db.add(passage)
             await db.commit()
             await db.refresh(passage)
-            return passage
+        try:
+            await vector_memory.add(
+                collection="archival",
+                doc_id=str(passage.id),
+                text=text,
+                metadata={
+                    "user_id": user_id,
+                    "archive_id": archive_id,
+                    "tags": tags or [],
+                },
+            )
+        except Exception as exc:
+            logger.warning("archival_vector_write_failed", error=str(exc))
+        return passage
 
     async def search_archival_memories(
         self,
@@ -591,6 +605,7 @@ class PersistentMemoryService:
         Uses vector search when available, falls back to LIKE search.
         """
         async with async_session() as db:
+            vector_passages: list[ArchivalPassage] = []
             if query:
                 try:
                     vector_results = await vector_memory.search(
@@ -604,27 +619,22 @@ class PersistentMemoryService:
 
                 if vector_results:
                     vector_ids = [r["id"] for r in vector_results]
-                    base_query = select(ArchivalPassage).where(
+                    vector_query = select(ArchivalPassage).where(
                         ArchivalPassage.user_id == user_id,
                         ArchivalPassage.id.in_(vector_ids),
                     )
                     if archive_id:
-                        base_query = base_query.where(ArchivalPassage.archive_id == archive_id)
-                    result = await db.execute(base_query)
+                        vector_query = vector_query.where(ArchivalPassage.archive_id == archive_id)
+                    result = await db.execute(vector_query)
                     passage_map = {p.id: p for p in result.scalars().all()}
-                    ordered = []
                     for vid in vector_ids:
-                        if vid in passage_map:
-                            passage = passage_map[vid]
+                        passage = passage_map.get(vid)
+                        if passage:
                             passage.access_count += 1
                             passage.last_accessed_at = datetime.now(UTC)
-                            ordered.append(passage)
-                    for p in ordered:
-                        await vector_memory.update_access("archival", p.id)
-                    await db.commit()
-                    return ordered[:limit]
+                            vector_passages.append(passage)
 
-            # Fallback: LIKE search
+            # Fallback: LIKE search (always run, merged with vector hits)
             base_query = select(ArchivalPassage).where(ArchivalPassage.user_id == user_id)
             if archive_id:
                 base_query = base_query.where(ArchivalPassage.archive_id == archive_id)
@@ -632,7 +642,22 @@ class PersistentMemoryService:
                 base_query = base_query.where(ArchivalPassage.text.ilike(f"%{query}%"))
             base_query = base_query.order_by(ArchivalPassage.access_count.desc(), ArchivalPassage.created_at.desc()).limit(limit)
             result = await db.execute(base_query)
-            return list(result.scalars().all())
+            like_passages = list(result.scalars().all())
+
+            seen: set[str] = set()
+            merged: list[ArchivalPassage] = []
+            for passage in [*vector_passages, *like_passages]:
+                if passage.id in seen:
+                    continue
+                seen.add(passage.id)
+                merged.append(passage)
+            merged = merged[:limit]
+
+            if vector_passages:
+                for p in vector_passages:
+                    await vector_memory.update_access("archival", p.id)
+            await db.commit()
+            return merged
 
     async def get_archival_by_tags(
         self,

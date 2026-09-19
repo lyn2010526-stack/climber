@@ -66,8 +66,15 @@ class SkillRegistry:
     def get_handler(self, skill_id: str) -> Callable | None:
         return self._handlers.get(skill_id)
 
-    def list_skills(self) -> list[dict[str, Any]]:
-        return [skill.model_dump() for skill in self._skills.values()]
+    def list_skills(self, category: str | None = None) -> list[dict[str, Any]]:
+        """List skills as dicts, optionally filtered by category."""
+        skills = list(self._skills.values())
+        if category is not None:
+            skills = [
+                s for s in skills
+                if (s.category.value if hasattr(s.category, "value") else str(s.category)) == category
+            ]
+        return [skill.model_dump() for skill in skills]
 
     def list_by_category(self, category: SkillCategory) -> list[SkillInfo]:
         return [s for s in self._skills.values() if s.category == category]
@@ -112,15 +119,6 @@ class SkillRegistry:
                 result[cat_val] = []
             result[cat_val].append(skill)
         return result
-
-    def list_skills(self, category: str | None = None) -> list[SkillInfo]:
-        """List skills, optionally filtered by category."""
-        if category is None:
-            return list(self._skills.values())
-        return [
-            s for s in self._skills.values()
-            if (s.category.value if hasattr(s.category, "value") else str(s.category)) == category
-        ]
 
 
 # Legacy compatibility: keep the old interface working

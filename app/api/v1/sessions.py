@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,8 +12,28 @@ from sqlalchemy import select
 
 from app.core.auth import get_current_user
 from app.storage import async_session
+from app.storage.database import Agent as AgentModel
 from app.storage.database import Message as MessageModel
 from app.storage.database import Session as SessionModel
+
+_CHECKPOINT_KEY = "_checkpoints"
+
+
+def _clean_model_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
+    if not settings:
+        return {}
+    return {k: settings[k] for k in ("provider", "model_id", "base_url") if settings.get(k)}
+
+
+def _session_effective_model(row: SessionModel, agent: AgentModel | None) -> dict[str, Any]:
+    settings = row.model_settings or {}
+    provider = settings.get("provider")
+    model_id = settings.get("model_id")
+    if (not provider or not model_id) and agent is not None:
+        provider = provider or agent.provider
+        model_id = model_id or agent.model_id
+    return {"provider": provider, "model_id": model_id}
+
 
 router = APIRouter()
 
@@ -28,6 +50,8 @@ class SessionOut(BaseModel):
     status: str
     created_at: str
     updated_at: str
+    provider: str | None = None
+    model_id: str | None = None
 
 
 class SessionPage(BaseModel):
@@ -56,6 +80,13 @@ async def list_sessions_with_slash(user_id: str = Depends(get_current_user)) -> 
             .order_by(SessionModel.created_at.desc())
         )
         rows = result.scalars().all()
+        agent_ids = {r.agent_id for r in rows if r.agent_id}
+        agents: dict[str, AgentModel] = {}
+        if agent_ids:
+            agent_result = await session.execute(
+                select(AgentModel).where(AgentModel.id.in_(agent_ids))
+            )
+            agents = {a.id: a for a in agent_result.scalars().all()}
         return [
             SessionOut(
                 id=r.id,
@@ -63,6 +94,7 @@ async def list_sessions_with_slash(user_id: str = Depends(get_current_user)) -> 
                 status=r.status,
                 created_at=r.created_at.isoformat() if r.created_at else "",
                 updated_at=r.updated_at.isoformat() if r.updated_at else "",
+                **_session_effective_model(r, agents.get(r.agent_id or "")),
             )
             for r in rows
         ]
@@ -79,16 +111,28 @@ async def create_session_with_slash(
     user_id: str = Depends(get_current_user),
 ) -> dict:
     async with async_session() as session:
+        agent = None
+        if payload.agent_id:
+            agent = (
+                await session.execute(select(AgentModel).where(AgentModel.id == payload.agent_id))
+            ).scalar_one_or_none()
         row = SessionModel(
             title=payload.title or "New Session",
             status="idle",
             agent_id=payload.agent_id or None,
             user_id=user_id,
+            model_settings=_clean_model_settings(payload.model_settings),
         )
         session.add(row)
         await session.commit()
         await session.refresh(row)
-        return {"id": row.id, "session_id": row.id, "title": row.title, "status": row.status}
+        return {
+            "id": row.id,
+            "session_id": row.id,
+            "title": row.title,
+            "status": row.status,
+            **_session_effective_model(row, agent),
+        }
 
 
 
@@ -106,16 +150,22 @@ async def create_session_legacy(
     user_id: str = Depends(get_current_user),
 ) -> dict:
     async with async_session() as session:
+        agent = None
+        if payload.agent_id:
+            agent = (
+                await session.execute(select(AgentModel).where(AgentModel.id == payload.agent_id))
+            ).scalar_one_or_none()
         row = SessionModel(
             title=payload.title or "New Session",
             status="idle",
-            agent_id=payload.agent_id or "",
+            agent_id=payload.agent_id or None,
             user_id=user_id,
+            model_settings=_clean_model_settings(payload.model_settings),
         )
         session.add(row)
         await session.commit()
         await session.refresh(row)
-        return {"id": row.id, "session_id": row.id}
+        return {"id": row.id, "session_id": row.id, **_session_effective_model(row, agent)}
 
 
 class MessagesResponse(BaseModel):
@@ -179,6 +229,14 @@ async def get_session(session_id: str, user_id: str = Depends(get_current_user))
             "agent_id": row.agent_id,
             "created_at": row.created_at.isoformat() if row.created_at else "",
             "updated_at": row.updated_at.isoformat() if row.updated_at else "",
+            **_session_effective_model(
+                row,
+                (
+                    await session.execute(select(AgentModel).where(AgentModel.id == row.agent_id))
+                ).scalar_one_or_none()
+                if row.agent_id
+                else None,
+            ),
         }
 
 
@@ -215,63 +273,157 @@ async def _ensure_owned_session(session_id: str, user_id: str) -> None:
             raise HTTPException(status_code=404, detail="Session not found")
 
 
+async def _load_owned_session(db: Any, session_id: str, user_id: str) -> SessionModel:
+    """Fetch an owned session row within the given session or raise 404."""
+    row = (
+        await db.execute(select(SessionModel).where(SessionModel.id == session_id))
+    ).scalar_one_or_none()
+    if not row or (row.user_id and row.user_id != user_id):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return row
+
+
+def _load_checkpoints(row: SessionModel) -> list[dict[str, Any]]:
+    data = row.context_data or {}
+    return list(data.get(_CHECKPOINT_KEY, []))
+
+
+def _save_checkpoints(row: SessionModel, checkpoints: list[dict[str, Any]]) -> None:
+    data = dict(row.context_data or {})
+    data[_CHECKPOINT_KEY] = checkpoints
+    row.context_data = data
+
+
 @router.post("/{session_id}/checkpoint")
 async def save_checkpoint(
     session_id: str,
     body: CheckpointRequest,
     user_id: str = Depends(get_current_user),
 ) -> dict:
-    await _ensure_owned_session(session_id, user_id)
-    from app.core.session_manager import SessionManager
-    mgr = SessionManager()
-    mgr.save_checkpoint(
-        session_id=session_id,
-        messages=body.messages,
-        iteration=body.iteration,
-        status=body.status,
-        metadata=body.metadata,
-    )
-    return {"status": "saved", "session_id": session_id}
+    async with async_session() as session:
+        row = await _load_owned_session(session, session_id, user_id)
+        checkpoints = _load_checkpoints(row)
+        checkpoint = {
+            "id": str(uuid.uuid4()),
+            "session_id": session_id,
+            "iteration": body.iteration,
+            "status": body.status,
+            "messages": body.messages or [],
+            "metadata": body.metadata or {},
+            "created_at": datetime.now(UTC).isoformat(),
+        }
+        checkpoints.append(checkpoint)
+        _save_checkpoints(row, checkpoints[-50:])
+        await session.commit()
+    return {
+        "status": "saved",
+        "session_id": session_id,
+        "checkpoint_id": checkpoint["id"],
+        "total": len(checkpoints[-50:]),
+    }
 
 
 @router.get("/{session_id}/checkpoint")
 async def get_latest_checkpoint(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    await _ensure_owned_session(session_id, user_id)
-    from app.core.session_manager import SessionManager
-    mgr = SessionManager()
-    checkpoint = mgr.get_latest_checkpoint(session_id)
-    if not checkpoint:
+    async with async_session() as session:
+        row = await _load_owned_session(session, session_id, user_id)
+        checkpoints = _load_checkpoints(row)
+    if not checkpoints:
         raise HTTPException(status_code=404, detail="No checkpoints found")
-    return checkpoint
+    return checkpoints[-1]
 
 
 @router.get("/{session_id}/history")
 async def get_checkpoint_history(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    await _ensure_owned_session(session_id, user_id)
-    from app.core.session_manager import SessionManager
-    mgr = SessionManager()
-    history = mgr.get_checkpoint_history(session_id)
-    return {"session_id": session_id, "checkpoints": history}
+    async with async_session() as session:
+        row = await _load_owned_session(session, session_id, user_id)
+        checkpoints = _load_checkpoints(row)
+    return {"session_id": session_id, "checkpoints": checkpoints}
 
 
 @router.post("/{session_id}/fork")
 async def fork_session(session_id: str, body: ForkRequest, user_id: str = Depends(get_current_user)) -> dict:
-    await _ensure_owned_session(session_id, user_id)
-    from app.core.session_manager import SessionManager
-    mgr = SessionManager()
-    try:
-        new_id = mgr.fork_session(session_id, body.new_session_id)
-        return {"session_id": new_id, "status": "forked"}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    async with async_session() as session:
+        source = await _load_owned_session(session, session_id, user_id)
+        new_id = body.new_session_id or str(uuid.uuid4())
+        existing = (
+            await session.execute(select(SessionModel).where(SessionModel.id == new_id))
+        ).scalar_one_or_none()
+        if existing is not None:
+            raise HTTPException(status_code=409, detail="Target session id already exists")
+        snapshot = SessionModel(
+            id=new_id,
+            title=f"{source.title} (fork)" if source.title else "Forked Session",
+            agent_id=source.agent_id,
+            user_id=user_id,
+            status=source.status,
+            model_settings=dict(source.model_settings or {}),
+            context_data=dict(source.context_data or {}),
+            iteration_count=source.iteration_count,
+            total_tokens=source.total_tokens,
+            working_memory=dict(source.working_memory or {}),
+        )
+        session.add(snapshot)
+        rows = (
+            await session.execute(
+                select(MessageModel)
+                .where(MessageModel.session_id == session_id)
+                .order_by(MessageModel.created_at.asc())
+            )
+        ).scalars().all()
+        for msg in rows:
+            session.add(
+                MessageModel(
+                    session_id=new_id,
+                    role=msg.role,
+                    content=msg.content,
+                    tool_call_id=msg.tool_call_id,
+                    tool_calls=msg.tool_calls or [],
+                    tool_name=msg.tool_name,
+                    tokens=msg.tokens,
+                    parent_id=None,
+                    branch_id=msg.branch_id or "main",
+                    children_count=0,
+                )
+            )
+        await session.commit()
+    return {"session_id": new_id, "status": "forked"}
 
 
 @router.post("/{session_id}/resume")
 async def resume_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    await _ensure_owned_session(session_id, user_id)
-    from app.core.session_manager import SessionManager
-    mgr = SessionManager()
-    state = mgr.resume_session(session_id)
-    if not state:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return state
+    async with async_session() as session:
+        row = await _load_owned_session(session, session_id, user_id)
+        checkpoints = _load_checkpoints(row)
+        messages = [
+            {
+                "role": m.role,
+                "content": m.content,
+                "tool_call_id": m.tool_call_id,
+                "tool_calls": m.tool_calls or [],
+                "tool_name": m.tool_name,
+                "created_at": m.created_at.isoformat() if m.created_at else "",
+            }
+            for m in (
+                await session.execute(
+                    select(MessageModel)
+                    .where(MessageModel.session_id == session_id)
+                    .order_by(MessageModel.created_at.asc())
+                )
+            )
+            .scalars()
+            .all()
+        ]
+    if not checkpoints:
+        raise HTTPException(
+            status_code=404,
+            detail="No checkpoint found to resume from",
+        )
+    return {
+        "session_id": session_id,
+        "status": row.status,
+        "checkpoint": checkpoints[-1],
+        "messages": messages,
+        "iteration_count": row.iteration_count,
+        "total_tokens": row.total_tokens,
+    }

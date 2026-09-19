@@ -24,4 +24,5 @@ __all__ = [
     "GoalDynamicAdjuster",
     "SubAgentOrchestrator",
     "LongTermMemoryPruner",
+    "ExecutionContext",
 ]

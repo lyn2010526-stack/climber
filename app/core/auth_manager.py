@@ -1,6 +1,7 @@
 """Authentication manager — handles user auth, tokens, and password hashing."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
@@ -9,11 +10,17 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException, Request
+
 from app.config import settings
+
+_LOCAL_FALLBACK_SECRET = "agent-engine-local-persistent-development-key"
 
 
 def _secret() -> str:
-    return getattr(settings, "APP_SECRET_KEY", "dev-secret-key-change-in-production")
+    key = settings.app_secret_key
+    if not key:
+        key = _LOCAL_FALLBACK_SECRET
+    return key
 
 
 def hash_password(password: str) -> str:
@@ -30,23 +37,35 @@ def verify_password(password: str, hashed: str) -> bool:
     return hmac.compare_digest(h.hex(), stored_hash)
 
 
-def create_access_token(user_id: str, scopes: list[str] | None = None) -> str:
-    import json
-    import base64
-    payload = {
-        "sub": user_id,
-        "scopes": scopes or [],
-        "iat": datetime.now(UTC).isoformat(),
-        "exp": (datetime.now(UTC) + timedelta(hours=24)).isoformat(),
-    }
+def _encode_token(payload: dict[str, Any]) -> str:
     payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
     sig = hmac.new(_secret().encode(), payload_b64.encode(), "sha256").hexdigest()[:16]
     return f"{payload_b64}.{sig}"
 
 
+def create_access_token(user_id: str, scopes: list[str] | None = None) -> str:
+    payload = {
+        "sub": user_id,
+        "type": "access",
+        "scopes": scopes or [],
+        "iat": datetime.now(UTC).isoformat(),
+        "exp": (datetime.now(UTC) + timedelta(hours=24)).isoformat(),
+    }
+    return _encode_token(payload)
+
+
+def create_refresh_token(user_id: str, scopes: list[str] | None = None, lifetime: timedelta | None = None) -> str:
+    payload = {
+        "sub": user_id,
+        "type": "refresh",
+        "scopes": scopes or [],
+        "iat": datetime.now(UTC).isoformat(),
+        "exp": (datetime.now(UTC) + (lifetime or timedelta(days=7))).isoformat(),
+    }
+    return _encode_token(payload)
+
+
 def verify_token(token: str, expected_type: str = "access") -> dict[str, Any]:
-    import json
-    import base64
     if "." not in token:
         raise HTTPException(401, "Invalid token")
     payload_b64, sig = token.rsplit(".", 1)
@@ -56,17 +75,19 @@ def verify_token(token: str, expected_type: str = "access") -> dict[str, Any]:
     try:
         payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode()))
     except Exception:
-        raise HTTPException(401, "Malformed token")
+        raise HTTPException(401, "Malformed token") from None
     exp = payload.get("exp")
     if exp:
         try:
             expires_at = datetime.fromisoformat(str(exp))
         except ValueError:
-            raise HTTPException(401, "Malformed token expiry")
+            raise HTTPException(401, "Malformed token expiry") from None
         if expires_at.tzinfo is None:
             expires_at = expires_at.replace(tzinfo=UTC)
         if datetime.now(UTC) >= expires_at:
             raise HTTPException(401, "Token expired")
+    if payload.get("type") != expected_type:
+        raise HTTPException(401, "Token type mismatch")
     return payload
 
 
@@ -80,6 +101,9 @@ class AuthManager:
     def create_access_token(self, user_id: str, scopes: list[str] | None = None) -> str:
         return create_access_token(user_id, scopes)
 
+    def create_refresh_token(self, user_id: str, scopes: list[str] | None = None, lifetime: timedelta | None = None) -> str:
+        return create_refresh_token(user_id, scopes, lifetime)
+
     def verify_token(self, token: str, expected_type: str = "access") -> dict[str, Any]:
         return verify_token(token, expected_type)
 
@@ -89,9 +113,10 @@ auth_manager = AuthManager()
 
 async def authenticate_user(username: str, password: str) -> dict[str, Any]:
     """Authenticate user credentials."""
-    from app.storage import async_session
-    from app.models.users import User, UserStatus
     from sqlalchemy import select
+
+    from app.models.users import User, UserStatus
+    from app.storage import async_session
     async with async_session() as session:
         result = await session.execute(
             select(User).where(User.username == username, User.status == UserStatus.ACTIVE.value)
@@ -207,14 +232,15 @@ async def validate_api_key(raw_key: str) -> dict[str, Any]:
 
 async def initialize_auth_system() -> dict[str, Any] | None:
     """Initialize auth system — create default admin user if none exists."""
-    from app.storage import async_session
+    from sqlalchemy import func, select
+
     from app.models.users import User, UserRole, UserStatus
-    from sqlalchemy import select, func
-    
+    from app.storage import async_session
+
     async with async_session() as session:
         result = await session.execute(select(func.count()).select_from(User))
         count = result.scalar()
-        
+
         if count == 0:
             admin = User(
                 username="admin",
@@ -226,5 +252,5 @@ async def initialize_auth_system() -> dict[str, Any] | None:
             session.add(admin)
             await session.commit()
             return {"username": "admin", "password_set": True}
-    
+
     return None
