@@ -7,15 +7,14 @@ enabling access to LangGraph's checkpointing, streaming, and tool calling.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
-from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
 
 from app.core.engine.pregel import (
-    PregelEngine,
     GraphState,
-    Command,
 )
 
 logger = logging.getLogger(__name__)

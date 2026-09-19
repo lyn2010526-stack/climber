@@ -36,6 +36,7 @@ export function SessionSidebar() {
   const [selectedAgent, setSelectedAgent] = useState('');
   const [selectedModelId, setSelectedModelId] = useState('');
   const [creating, setCreating] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('manual');
   const [showCheckpoints, setShowCheckpoints] = useState(false);
 
@@ -122,10 +123,12 @@ export function SessionSidebar() {
   ]);
 
   const handleDelete = useCallback(async (id: string) => {
+    setDeleteError(null);
     try {
       await api.deleteSession(id);
     } catch {
-      // fallthrough: still remove locally to keep UI consistent with server list next time
+      setDeleteError('删除会话失败，请重试');
+      return;
     }
     deleteSession(id);
     await refreshSessions();
@@ -175,6 +178,12 @@ export function SessionSidebar() {
           ))}
         </select>
       </div>
+
+      {deleteError && (
+        <p role="alert" className="px-3 py-2 text-xs text-[var(--color-error)]">
+          {deleteError}
+        </p>
+      )}
 
       <div className="flex-1 space-y-0.5 overflow-y-auto p-2" aria-live="polite" aria-busy={loadingSessions}>
         {loadingSessions && (

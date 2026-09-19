@@ -58,11 +58,19 @@ class SkillComposerExecutorAdapter:
         if composition is None:
             return ExecutionResult(status=ExecutionStatus.FAILED, error="composition is required")
         try:
-            result = await self._composer.execute(composition, context=context.variables)
+            result = await self._composer.execute_composition(composition, context=context.variables)
+            if isinstance(result, dict):
+                ok = result.get("status") in ("completed", "partial")
+                return ExecutionResult(
+                    status=ExecutionStatus.COMPLETED if ok else ExecutionStatus.FAILED,
+                    output=result,
+                    error=None if ok else str(result.get("error") or result.get("status")),
+                )
+            success = bool(getattr(result, "success", True))
             return ExecutionResult(
-                status=ExecutionStatus.COMPLETED if result.success else ExecutionStatus.FAILED,
-                output=result.data,
-                error=result.error if hasattr(result, "error") else None,
+                status=ExecutionStatus.COMPLETED if success else ExecutionStatus.FAILED,
+                output=getattr(result, "data", None),
+                error=getattr(result, "error", None),
             )
         except Exception as exc:
             logger.error("skill_composition_failed", error=str(exc))

@@ -28,22 +28,22 @@ export function RightPanel() {
   ];
 
   return (
-    <div className="flex w-full min-w-0 flex-col border-l border-white/10 bg-[#0F0F14]/80 shadow-sm shadow-white/5 backdrop-blur-2xl">
-      <div className="flex border-b border-white/10">
+    <div className="flex w-full min-w-0 flex-col border-l border-[var(--color-border-subtle)] bg-[var(--color-glass-bg)] shadow-sm shadow-[var(--color-border-subtle)] backdrop-blur-2xl">
+      <div className="flex border-b border-[var(--color-border-subtle)]">
         {tabs.map(({ id, icon: Icon, label }) => (
           <button
             key={id}
             onClick={() => setRightPanelTab(id)}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-all relative ${
               rightPanelTab === id
-                ? 'text-white'
+                ? 'text-[var(--color-text-primary)]'
                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
             }`}
           >
             <Icon size={13} />
             <span>{label}</span>
             {rightPanelTab === id && (
-              <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-[#007AFF] rounded-full shadow-sm shadow-blue-500/30" />
+              <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-[var(--color-accent)] rounded-full shadow-sm shadow-[var(--color-accent-glow)]" />
             )}
           </button>
         ))}
@@ -90,7 +90,7 @@ function ConfigPanel({ session }: { session: any }) {
         <div className="flex flex-wrap gap-1.5">
           {(session?.activeSkills && session.activeSkills.length > 0)
             ? session.activeSkills.map((skill: string) => (
-              <span key={skill} className="px-2.5 py-1 bg-purple-500/10 text-purple-400 rounded-xl text-xs font-medium">
+              <span key={skill} className="px-2.5 py-1 bg-[var(--color-accent-secondary-glow)] text-[var(--color-accent-secondary)] rounded-xl text-xs font-medium">
                 {skill}
               </span>
             ))
@@ -103,7 +103,7 @@ function ConfigPanel({ session }: { session: any }) {
         <div className="flex flex-wrap gap-1.5">
           {(session?.activeTools && session.activeTools.length > 0)
             ? session.activeTools.map((tool: string) => (
-              <span key={tool} className="px-2.5 py-1 bg-white/5 text-[var(--color-text-secondary)] rounded-xl text-xs font-medium border border-white/10">
+              <span key={tool} className="px-2.5 py-1 bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)] rounded-xl text-xs font-medium border border-[var(--color-border-subtle)]">
                 {tool}
               </span>
             ))
@@ -118,9 +118,9 @@ function ConfigPanel({ session }: { session: any }) {
             <span className="text-[var(--color-text-muted)]">已用</span>
             <span className="text-[var(--color-text-secondary)] font-medium">{session?.tokenUsage?.used || 0} / {session?.tokenUsage?.limit || 128000}</span>
           </div>
-          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-[var(--color-bg-surface-3)] rounded-full overflow-hidden">
             <div
-              className="h-full bg-[#007AFF] rounded-full transition-all"
+              className="h-full bg-[var(--color-accent)] rounded-full transition-all"
               style={{ width: `${Math.min(((session?.tokenUsage?.used || 0) / (session?.tokenUsage?.limit || 128000)) * 100, 100)}%` }}
             />
           </div>
@@ -131,7 +131,7 @@ function ConfigPanel({ session }: { session: any }) {
         <div className="space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="text-xs text-[var(--color-text-secondary)]">沙箱模式</span>
-            <span className="text-xs text-green-400 font-medium">运行中</span>
+            <span className="text-xs text-[var(--color-success)] font-medium">运行中</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs text-[var(--color-text-secondary)]">会话状态</span>
@@ -139,7 +139,7 @@ function ConfigPanel({ session }: { session: any }) {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-xs text-[var(--color-text-secondary)]">文件隔离</span>
-            <span className="text-xs text-green-400 font-medium">仅项目内</span>
+            <span className="text-xs text-[var(--color-success)] font-medium">仅项目内</span>
           </div>
         </div>
       </Section>
@@ -176,8 +176,8 @@ function DAGPanel() {
         <div className="space-y-2">
           {[1, 2, 3].map(i => (
             <div key={i} className="flex items-center gap-2 animate-pulse">
-              <div className="w-3 h-3 rounded-full bg-white/10" />
-              <div className="h-3 w-32 bg-white/5 rounded-xl" />
+              <div className="w-3 h-3 rounded-full bg-[var(--color-bg-surface-3)]" />
+              <div className="h-3 w-32 bg-[var(--color-bg-surface-2)] rounded-xl" />
             </div>
           ))}
         </div>
@@ -206,15 +206,15 @@ function DAGPanel() {
           <div key={node.id} className="flex items-center gap-2">
             <div className="flex flex-col items-center">
               <div className={`w-3 h-3 rounded-full border-2 ${
-                node.status === 'completed' ? 'bg-green-500 border-green-500' :
-                node.status === 'running' ? 'bg-[#007AFF] border-[#007AFF] animate-pulse' :
+                node.status === 'completed' ? 'bg-[var(--color-success)] border-[var(--color-success)]' :
+                node.status === 'running' ? 'bg-[var(--color-accent)] border-[var(--color-accent)] animate-pulse' :
                 'border-[var(--color-border-subtle)]'
               }`} />
-              {i < nodes.length - 1 && <div className="w-0.5 h-4 bg-white/10" />}
+              {i < nodes.length - 1 && <div className="w-0.5 h-4 bg-[var(--color-border-subtle)]" />}
             </div>
             <span className={`text-xs ${
-              node.status === 'completed' ? 'text-green-400' :
-              node.status === 'running' ? 'text-blue-400 font-medium' :
+              node.status === 'completed' ? 'text-[var(--color-success)]' :
+              node.status === 'running' ? 'text-[var(--color-accent)] font-medium' :
               'text-[var(--color-text-muted)]'
             }`}>
               {node.label}
@@ -248,8 +248,8 @@ function TracePanel() {
          <p className="text-xs text-[var(--color-text-muted)]">加载追踪中...</p>
         <div className="space-y-1.5">
           {[1, 2].map(i => (
-            <div key={i} className="p-2 bg-white/5 rounded-xl animate-pulse">
-              <div className="h-3 w-24 bg-white/10 rounded-xl" />
+            <div key={i} className="p-2 bg-[var(--color-bg-surface-2)] rounded-xl animate-pulse">
+              <div className="h-3 w-24 bg-[var(--color-bg-surface-3)] rounded-xl" />
             </div>
           ))}
         </div>
@@ -275,11 +275,11 @@ function TracePanel() {
        <p className="text-xs text-[var(--color-text-muted)]">完整执行追踪 — 包含每次 LLM 调用和工具调用</p>
       <div className="space-y-1.5">
         {traces.map(t => (
-          <div key={t.id} className="p-2 bg-white/5 rounded-xl">
+          <div key={t.id} className="p-2 bg-[var(--color-bg-surface-2)] rounded-xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className={`px-1.5 py-0.5 rounded-xl text-[10px] font-medium ${
-                  t.type === 'LLM' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'
+                  t.type === 'LLM' ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]' : 'bg-[var(--color-success-subtle)] text-[var(--color-success)]'
                 }`}>
                   {t.type}
                 </span>
@@ -320,7 +320,7 @@ function FilesPanel() {
          <p className="text-xs text-[var(--color-text-muted)]">加载文档中...</p>
         <div className="space-y-1">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-6 bg-white/5 rounded-xl animate-pulse" />
+            <div key={i} className="h-6 bg-[var(--color-bg-surface-2)] rounded-xl animate-pulse" />
           ))}
         </div>
       </div>
@@ -343,9 +343,9 @@ function FilesPanel() {
   return (
     <div className="space-y-2">
        <p className="text-xs text-[var(--color-text-muted)]">已上传文档 ({documents.length})</p>
-      <div className="bg-white/5 rounded-2xl p-1.5 space-y-0.5 border border-white/10">
+      <div className="bg-[var(--color-bg-surface-2)] rounded-2xl p-1.5 space-y-0.5 border border-[var(--color-border-subtle)]">
         {documents.map(doc => (
-          <div key={doc.id} className="flex items-center gap-2 py-1.5 px-2 rounded-xl hover:bg-white/5 text-xs text-[var(--color-text-secondary)] transition-colors">
+          <div key={doc.id} className="flex items-center gap-2 py-1.5 px-2 rounded-xl hover:bg-[var(--color-bg-surface-3)] text-xs text-[var(--color-text-secondary)] transition-colors">
             <FolderTree size={12} className="text-[var(--color-text-muted)]" />
             <span className="truncate flex-1">{doc.filename || doc.name}</span>
             {doc.chunks && <span className="text-[10px] text-[var(--color-text-muted)]">{doc.chunks} chunks</span>}
@@ -382,7 +382,7 @@ function DiffPanelTab({ sessionId }: { sessionId: string | null }) {
         <p className="text-xs text-[var(--color-text-muted)]">加载变更中...</p>
         <div className="space-y-1.5">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-6 bg-white/5 rounded-xl animate-pulse" />
+            <div key={i} className="h-6 bg-[var(--color-bg-surface-2)] rounded-xl animate-pulse" />
           ))}
         </div>
       </div>
@@ -452,8 +452,8 @@ function ToolCallsTab({ sessionId }: { sessionId: string | null }) {
         <p className="text-xs text-[var(--color-text-muted)]">加载工具调用中...</p>
         <div className="space-y-1.5">
           {[1, 2].map(i => (
-            <div key={i} className="p-2 bg-white/5 rounded-xl animate-pulse">
-              <div className="h-3 w-24 bg-white/10 rounded-xl" />
+            <div key={i} className="p-2 bg-[var(--color-bg-surface-2)] rounded-xl animate-pulse">
+              <div className="h-3 w-24 bg-[var(--color-bg-surface-3)] rounded-xl" />
             </div>
           ))}
         </div>
@@ -486,12 +486,12 @@ function Section({ title, icon: Icon, children }: { title: string; icon: any; ch
   const [expanded, setExpanded] = useState(true);
 
   return (
-    <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl overflow-hidden backdrop-blur-sm">
+    <div className="bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl overflow-hidden backdrop-blur-sm">
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
       >
-        <div className="p-1 rounded-lg bg-blue-500/10 text-blue-400">
+        <div className="p-1 rounded-lg bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
           <Icon size={11} />
         </div>
         <span className="flex-1 text-left">{title}</span>

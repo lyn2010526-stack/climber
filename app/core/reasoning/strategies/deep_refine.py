@@ -196,13 +196,14 @@ class DeepRefineStrategy:
             if improved:
                 current = improved
                 snapshots.append(Snapshot(current, confidence, round_num))
+                if confidence >= best_confidence:
+                    best_confidence = confidence
+                    best_content = current
+                    best_critique = critique
             else:
                 break
 
-        if best_content == current and best_critique:
-            final_critique = best_critique
-        else:
-            final_critique = critique if "critique" in dir() else CritiqueResult(scores={})
+        final_critique = best_critique if best_critique is not None else CritiqueResult(scores={})
 
         elapsed = (time.monotonic() - start) * 1000
 

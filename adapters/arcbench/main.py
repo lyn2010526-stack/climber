@@ -44,6 +44,8 @@ except ImportError:
     except ImportError:  # pragma: no cover
         RuntimeModules = None
 
+import acceptance  # noqa: E402
+import memory  # noqa: E402
 import prompts  # noqa: E402
 
 DEFAULT_TIME_BUDGET = 2700.0
@@ -51,6 +53,10 @@ DEFAULT_NODE_TIMEOUT = 1200.0
 DEFAULT_SKELETON_ATTEMPTS = 4
 DEFAULT_NUDGES = 2
 DEFAULT_REHEARSALS = 3
+DEFAULT_ACCEPTANCE_TIMEOUT = 900.0
+ACCEPTANCE_REPAIR_MIN_REMAINING = 120.0
+ACCEPTANCE_REPAIR_ROUND_TIMEOUT = 600.0
+QA_REVIEW_MIN_REMAINING = 60.0
 
 _spec_port_re = re.compile(r"(?:localhost:|127\.0\.0\.1:|:)(\d{2,5})(?![\d/])")
 
@@ -493,9 +499,7 @@ def _rehearse_once(output_dir: Path, smoke_port: int) -> str | None:
 
     if (frontend / "package.json").is_file():
         rc, out = _npm(frontend, ["install"], dict(os.environ), 300)
-        if rc != 0 and not (frontend / "node_modules").is_dir():
-            if (frontend / "node_modules").is_dir() or (frontend / "build") and False:
-                pass
+        if rc != 0:
             return "frontend npm install failed: " + _tail(out)
         rc, out = _npm(frontend, ["run", "build"], dict(os.environ), 300)
         if rc != 0:
@@ -506,9 +510,10 @@ def _rehearse_once(output_dir: Path, smoke_port: int) -> str | None:
     if not (backend / "package.json").is_file():
         return "backend/package.json missing"
     rc, out = _npm(backend, ["install"], dict(os.environ), 300)
-    if rc != 0 and not (backend / "node_modules").is_dir():
+    if rc != 0:
         return "backend npm install failed: " + _tail(out)
 
+    _free_web_port(smoke_port)
     env = dict(os.environ, PORT=str(smoke_port))
     proc = subprocess.Popen(
         ["npm", "run", "start"],
@@ -522,7 +527,6 @@ def _rehearse_once(output_dir: Path, smoke_port: int) -> str | None:
     )
     registry.add(proc.pid)
     try:
-        _free_web_port(smoke_port)
         deadline = time.time() + 45
         while time.time() < deadline:
             if proc.poll() is not None:
@@ -572,28 +576,213 @@ def rehearse_startup(output_dir: Path, smoke_port: int, max_rehearsals: int = DE
 # ---------------------------------------------------------------------------
 
 
-def run_turn(driver, session, prompt: str, deadline: float, timeout: float, label: str) -> tuple[bool, str]:
+def run_turn(driver, session, prompt: str, deadline: float, timeout: float, label: str, stats: dict | None = None) -> tuple[bool, str]:
     wall = min(deadline, time.monotonic() + timeout)
     started = time.monotonic()
+    before_tokens = getattr(session, "result_tokens", 0)
+    before_turns = getattr(session, "result_turns", 0)
+    before_tools = getattr(session, "result_tool_calls", 0)
     last_ok, text = session.run_turn(prompt, wall_deadline=wall)
-    log(f"{label}: ok={last_ok} in {time.monotonic() - started:.1f}s text={_tail(text, 200)!r}")
+    elapsed_turn = time.monotonic() - started
+    if stats is not None:
+        stats["tokens"] += getattr(session, "result_tokens", 0) - before_tokens
+        stats["turns"] += getattr(session, "result_turns", 0) - before_turns
+        stats["tool_calls"] += getattr(session, "result_tool_calls", 0) - before_tools
+        stats["seconds"] += elapsed_turn
+    log(f"{label}: ok={last_ok} in {elapsed_turn:.1f}s text={_tail(text, 200)!r}")
     return last_ok, text
 
 
-def run_prompt_with_retries(driver, prompt: str, ok_text, label: str, deadline: float, timeout: float, attempts: int = 2):
+def run_prompt_with_retries(driver, prompt: str, ok_text, label: str, deadline: float, timeout: float, attempts: int = 2, stats: dict | None = None):
     """Run a prompt on a fresh session; retry once on transport failure."""
 
     last_error = ""
     for i in range(attempts):
         session = driver.new_session()
-        ok, text = run_turn(driver, session, prompt, deadline, timeout, f"{label}[{i}]")
+        ok, text = run_turn(driver, session, prompt, deadline, timeout, f"{label}[{i}]", stats=stats)
         if ok and ok_text(text):
             return True, text
         last_error = text
     return False, last_error
 
 
-def finalize_preview(output_dir: Path, web_port: int, smoke_port: int) -> None:
+# ---------------------------------------------------------------------------
+# Acceptance repair loop / QA review / evidence & memory persistence
+# ---------------------------------------------------------------------------
+
+
+def acceptance_repair_passes() -> int:
+    """Max acceptance repair rounds (env override, capped defensively at 2; 0 disables)."""
+
+    raw = os.environ.get("CLIMBER_ARC_ACCEPTANCE_REPAIR_PASSES", "").strip()
+    if not raw:
+        return 1
+    try:
+        return max(0, min(int(raw), 2))
+    except ValueError:
+        return 1
+
+
+def acceptance_qa_enabled() -> bool:
+    return os.environ.get("CLIMBER_ARC_ACCEPTANCE_QA", "").strip() != "0"
+
+
+def _acceptance_failure_context(acc: dict, node_id: str, out_dir: Path) -> dict:
+    detail = acc.get("specs_detail") or []
+    titles = []
+    for res in detail:
+        if not isinstance(res, dict) or res.get("passed"):
+            continue
+        haystack = " ".join([res.get("file", ""), *res.get("titles", [])])
+        if node_id in haystack:
+            titles.extend(res.get("titles") or [])
+    return {
+        "node_id": node_id,
+        "titles": titles[:6] or [node_id],
+        "message": _tail(acc.get("message", ""), 400),
+        "workspace_path": str(out_dir),
+    }
+
+
+def _acceptance_repair_loop(  # noqa: PLR0913 - bounded wiring of existing helpers
+    acc: dict, out_dir: Path, tests_dir: Path, *,
+    web_port: int, smoke_port: int, extra_ports, node_ids, free_port, log_fn, tail_fn,
+    deadline: float, driver, specs_inject: str, stats: dict | None = None,
+    qa_review_text: str = "",
+) -> tuple[dict, int]:
+    """Acceptance -> attribute failures -> repair prompt -> re-run, deadline-bounded.
+
+    Returns ``(final_acc, rounds_run)``. When no repair is possible the first
+    acc is returned unchanged, so passing nodes are never downgraded and
+    failing nodes are never hidden by a skipped or crashed repair round.
+    """
+
+    passes = acceptance_repair_passes()
+    if passes <= 0 or not acc.get("evidence_failed"):
+        return acc, 0
+    remaining = deadline - time.monotonic()
+    if remaining < ACCEPTANCE_REPAIR_MIN_REMAINING:
+        log_fn(f"acceptance repair skipped ({int(remaining)}s < {int(ACCEPTANCE_REPAIR_MIN_REMAINING)}s budget reserved)")
+        return acc, 0
+    current = acc
+    rounds = 0
+    for pass_idx in range(1, passes + 1):
+        remaining = deadline - time.monotonic()
+        if remaining < ACCEPTANCE_REPAIR_MIN_REMAINING:
+            log_fn(f"acceptance repair aborted after {rounds} round(s): budget low ({int(remaining)}s left)")
+            break
+        failed = current.get("evidence_failed") or []
+        if not failed:
+            break
+        log_fn(f"acceptance repair pass {pass_idx}/{passes} targeting {failed}")
+        repaired_any = False
+        for node_id in failed:
+            ctx = _acceptance_failure_context(current, node_id, out_dir)
+            prompt_repair = prompts.acceptance_repair_prompt(
+                ctx["node_id"], ctx["titles"], ctx["message"], ctx["workspace_path"],
+                specs_inject, smoke_port=smoke_port, web_port=web_port,
+            )
+            if qa_review_text:
+                prompt_repair = prompt_repair + "\n\nQA review process noted: " + tail_fn(qa_review_text, 600)
+            repair_timeout = min(ACCEPTANCE_REPAIR_ROUND_TIMEOUT, max(120.0, remaining))
+            ok, text = run_prompt_with_retries(
+                driver, prompt_repair, lambda t: True,
+                f"acceptance-repair-pass-{pass_idx}", deadline, repair_timeout,
+                attempts=2, stats=stats,
+            )
+            repaired_any = repaired_any or ok
+            log_fn(f"acceptance repair pass {pass_idx} node {node_id}: ok={ok} text={tail_fn(text, 120)!r}")
+        if not repaired_any or time.monotonic() >= deadline:
+            break
+        remaining = max(0.0, deadline - time.monotonic())
+        rerun_deadline = time.time() + min(max(remaining * 0.6, 60.0), DEFAULT_ACCEPTANCE_TIMEOUT)
+        try:
+            refreshed = acceptance.run_acceptance(
+                out_dir, tests_dir,
+                web_port=web_port, extra_ports=extra_ports, node_ids=node_ids,
+                free_port=free_port, log=log_fn, tail=tail_fn, deadline=rerun_deadline,
+            )
+        except Exception as exc:  # noqa: BLE001 - a crashed re-run keeps the previous result
+            log_fn(f"acceptance re-run crashed (non-fatal): {type(exc).__name__}: {exc}")
+            break
+        if refreshed is None:
+            break
+        current = refreshed
+        rounds += 1
+        log_fn(f"acceptance repair re-run {rounds}: "
+               f"passed={current.get('passed')} evidence_failed={current.get('evidence_failed')}")
+    return current, rounds
+
+
+def write_acceptance_evidence(out_dir: Path, acc: dict) -> Path | None:
+    """Persist per-spec GUI acceptance evidence under out_dir/.arc/traceability."""
+
+    try:
+        specs = acc.get("specs_detail") or []
+        passed = sum(1 for r in specs if isinstance(r, dict) and r.get("passed"))
+        failed = sum(1 for r in specs if isinstance(r, dict) and not r.get("passed"))
+        payload = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "ran": bool(acc.get("ran")),
+            "fallback": bool(acc.get("fallback")),
+            "note": _tail(acc.get("message", ""), 500),
+            "passed_nodes": acc.get("passed_nodes") or [],
+            "evidence_failed": acc.get("evidence_failed") or [],
+            "unknown": acc.get("unknown") or [],
+            "sum": {"passed": passed, "failed": failed, "unknown": len(acc.get("unknown") or [])},
+            "specs": specs,
+        }
+        trace_dir = out_dir / ".arc" / "traceability"
+        trace_dir.mkdir(parents=True, exist_ok=True)
+        target = trace_dir / "acceptance-evidence.json"
+        if target.exists():
+            stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+            target = trace_dir / f"acceptance-evidence-{stamp}.json"
+        target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return target
+    except (OSError, ValueError, TypeError) as exc:
+        log(f"acceptance evidence write failed (non-fatal): {exc}")
+        return None
+
+
+def run_qa_review(driver, node_names, smoke_port: int, web_port: int, specs_inject: str,
+                  deadline: float, stats: dict | None = None, final_check_text: str = "") -> str:
+    """Budget-bounded independent review of the final check; returns review text."""
+
+    if not acceptance_qa_enabled():
+        return ""
+    if not node_names or time.monotonic() >= deadline:
+        return ""
+    remaining = deadline - time.monotonic()
+    if remaining < QA_REVIEW_MIN_REMAINING:
+        log(f"qa review skipped ({int(remaining)}s < {int(QA_REVIEW_MIN_REMAINING)}s left)")
+        return ""
+    prompt = prompts.qa_review_prompt(
+        "\n".join(f"- {n}" for n in node_names[:80]), smoke_port, web_port
+    )
+    if specs_inject:
+        prompt = specs_inject + "\n\n" + prompt
+    if final_check_text:
+        prompt = (f"Model final-check output to review:\n```\n{_tail(final_check_text, 800)}\n```\n\n"
+                  + prompt)
+    session = driver.new_session()
+    ok, text = run_turn(driver, session, prompt, deadline,
+                        min(300.0, max(60.0, remaining)), "qa-review", stats=stats)
+    return text or ""
+
+
+def _write_run_summary(output_dir: Path, summary: dict) -> None:
+    """Persist run metrics (token efficiency + timing feed the scorecard)."""
+
+    try:
+        (output_dir / "run_summary.json").write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except OSError as exc:
+        log(f"run_summary.json write failed: {exc}")
+
+
+def finalize_preview(output_dir: Path, web_port: int, smoke_port: int, *, ready: bool = False) -> None:
     artifacts = os.environ.get("ARCBENCH_ARTIFACTS_DIR", "").strip()
     if not artifacts:
         return
@@ -601,7 +790,7 @@ def finalize_preview(output_dir: Path, web_port: int, smoke_port: int) -> None:
         path = Path(artifacts)
         path.mkdir(parents=True, exist_ok=True)
         payload = {
-            "ready": deliverable_ok(output_dir),
+            "ready": ready and deliverable_ok(output_dir),
             "output_dir": str(output_dir),
             "web_port": web_port,
             "smoke_port": smoke_port,
@@ -701,6 +890,9 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
         return 0
 
     nodes = flatten_atomic(tree)
+    if not nodes:
+        runtime.events.mark_run_failed("no atomic requirement nodes found")
+        return 0
     node_names = [f"{n.get('id')}" for n in nodes]
     log(f"planned {len(node_names)} atomic nodes; output={out_dir} web={web_port} smoke={smoke_port}")
 
@@ -721,6 +913,10 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
         )
 
     driver = make_driver()
+    # Scoring telemetry: GOSIM/factory26 grades on GUI pass-rate, token
+    # efficiency and wall-clock completion time. Track all three here.
+    run_stats = {"tokens": 0, "turns": 0, "tool_calls": 0}
+    perf_started = time.perf_counter()
 
     # ------------------------------------------------------------ traceability
     try:
@@ -765,12 +961,12 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
                 break
             session = driver.new_session()
             base = prompts.skeleton_prompt(smoke_port, web_port) + ("\n\n" + specs_inject if specs_inject else "")
-            ok, text = run_turn(driver, session, base, deadline, min(node_timeout * 2, max(60.0, deadline - time.monotonic())), f"skeleton[{attempt}]")
+            ok, text = run_turn(driver, session, base, deadline, min(node_timeout * 2, max(60.0, deadline - time.monotonic())), f"skeleton[{attempt}]", stats=run_stats)
             for nudge in range(DEFAULT_NUDGES):
                 if skeleton_present():
                     break
                 log(f"skeleton nudge {nudge + 1} (files still missing)")
-                run_turn(driver, session, prompts.nudge_prompt() + "\n" + skeleton_retry_files_prompt(out_dir), deadline, 180.0, f"skeleton[{attempt}]nudge{nudge}")
+                run_turn(driver, session, prompts.nudge_prompt() + "\n" + skeleton_retry_files_prompt(out_dir), deadline, 180.0, f"skeleton[{attempt}]nudge{nudge}", stats=run_stats)
             if skeleton_present():
                 skeleton_ok = True
                 break
@@ -785,9 +981,13 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
         git_commit("chore: scaffold web application skeleton")
 
         # ------------------------------------------------------------ nodes
-        for node in nodes:
+        for index, node in enumerate(nodes):
             if time.monotonic() >= deadline:
                 log("time budget exhausted; remaining nodes recorded as skipped")
+                for skipped in nodes[index:]:
+                    skipped_id = str(skipped.get("id"))
+                    failed_nodes.append(skipped_id)
+                    runtime.events.mark_implementation_failed(skipped_id, "time budget exhausted")
                 break
             node_id = str(node.get("id"))
             node_name = str(node.get("name") or "")
@@ -804,11 +1004,14 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
             )
             if specs_inject:
                 node_prompt = specs_inject + "\n\n" + node_prompt
+            memory_block = memory.acceptance_memory_inject(node_id, out_dir)
+            if memory_block:
+                node_prompt = memory_block + "\n\n" + node_prompt
             remaining = max(60.0, deadline - time.monotonic())
             turn_timeout = min(node_timeout, remaining)
             session = driver.new_session()
-            ok, text = run_turn(driver, session, node_prompt, deadline, turn_timeout, f"node {node_id}")
-            if deliverable_ok(out_dir):
+            ok, text = run_turn(driver, session, node_prompt, deadline, turn_timeout, f"node {node_id}", stats=run_stats)
+            if ok and deliverable_ok(out_dir):
                 git_commit(f"{node_id} (implement): {node_name}")
                 try:
                     runtime.events.mark_implementation_done(node_id)
@@ -823,17 +1026,24 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
                 failed_nodes.append(node_id)
 
         # ----------------------------------------------------- final check
+        final_check_text = ""
         if node_names:
             node_list = "\n".join(f"- {n}" for n in node_names[:80])
             prompt_final = prompts.final_check_prompt(node_list, smoke_port, web_port)
             if specs_inject:
                 prompt_final = specs_inject + "\n\n" + prompt_final
+            memory_blocks = [memory.acceptance_memory_inject(nid, out_dir) for nid in node_names]
+            memory_blocks = [b for b in memory_blocks if b]
+            if memory_blocks:
+                prompt_final = "\n\n".join(memory_blocks) + "\n\n" + prompt_final
             ok, text = run_prompt_with_retries(
                 driver, prompt_final,
                 lambda t: True,
                 "finalcheck", deadline, min(900.0, max(120.0, deadline - time.monotonic())),
+                stats=run_stats,
             )
-            final_pass = "VERDICT: PASS" in (text or "")
+            final_check_text = text or ""
+            final_pass = ok and "VERDICT: PASS" in (text or "")
             if not final_pass:
                 log(f"final check verdict not PASS: {_tail(text, 200)!r}")
                 try:
@@ -849,29 +1059,117 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
                     if node_id not in failed_nodes:
                         failed_nodes.append(node_id)
             else:
-                git_commit("chore: final verification pass")
-                for node in nodes:
-                    node_id = str(node.get("id"))
-                    if node_id in failed_nodes:
-                        continue
-                    try:
-                        runtime.events.mark_test_passed(node_id)
-                    except Exception:  # noqa: BLE001
-                        pass
+                log("model final check completed; independent acceptance tests remain unverified")
         else:
             log("no atomic nodes found; nothing to test")
 
     finally:
         watchdog.stop()
 
+    # ------------------------------------------------------------- qa review
+    try:
+        qa_review_text = run_qa_review(
+            driver, node_names, smoke_port, web_port, specs_inject, deadline,
+            stats=run_stats, final_check_text=final_check_text,
+        )
+    except Exception as exc:  # noqa: BLE001 - review is best-effort
+        log(f"qa review crashed (non-fatal): {type(exc).__name__}: {exc}")
+        qa_review_text = ""
+
     # -------------------------------------------------------------- rehearsal
     rehearsal_error, rehearsal_count = rehearse_best_effort(
         out_dir, smoke_port, web_port, node_timeout, deadline, driver, make_driver, specs_inject,
+        stats=run_stats,
     )
     if rehearsal_error:
         log(f"rehearsal still failing after {rehearsal_count} attempts; submitting as-is")
     else:
         log(f"rehearsal passed after {rehearsal_count} attempt(s)")
+
+    # ------------------------------------------------------- GUI acceptance
+    acceptance_ran = False
+    acceptance_note = "acceptance tests not run"
+    acc_result = None
+    if not rehearsal_error and deliverable_ok(out_dir):
+        entries = find_spec_files()
+
+        acc_cap = float(os.environ.get("CLIMBER_ARC_ACCEPTANCE_TIMEOUT", "").strip()
+                        or DEFAULT_ACCEPTANCE_TIMEOUT)
+        remaining = max(0.0, deadline - time.monotonic())
+        acc_deadline = time.time() + min(max(remaining * 0.6, 60.0), acc_cap)
+        if entries and deadline - time.monotonic() > 90.0:
+            log("running independent GUI acceptance suite")
+            try:
+                acc = acceptance.run_acceptance(
+                    out_dir, entries[0][0],
+                    web_port=web_port,
+                    extra_ports=extra_ports,
+                    node_ids=node_names,
+                    free_port=_free_web_port,
+                    log=log,
+                    tail=_tail,
+                    deadline=acc_deadline,
+                )
+            except Exception as exc:  # noqa: BLE001 - acceptance must never crash the run
+                log(f"acceptance runner crashed (non-fatal): {type(exc).__name__}: {exc}")
+                acc = None
+            if acc is not None:
+                final_acc, repair_rounds = _acceptance_repair_loop(
+                    acc, out_dir, entries[0][0],
+                    web_port=web_port, smoke_port=smoke_port,
+                    extra_ports=extra_ports, node_ids=node_names,
+                    free_port=_free_web_port, log_fn=log, tail_fn=_tail,
+                    deadline=deadline, driver=driver,
+                    specs_inject=specs_inject, stats=run_stats,
+                    qa_review_text=qa_review_text,
+                )
+                if repair_rounds:
+                    log(f"acceptance repair loop completed {repair_rounds} re-run(s)")
+                acc_result = final_acc
+                acceptance_ran = bool(final_acc.get("ran"))
+                if acceptance_ran:
+                    evidence_path = write_acceptance_evidence(out_dir, final_acc)
+                    if evidence_path is not None:
+                        log(f"acceptance evidence written to {evidence_path.relative_to(out_dir)}")
+                fallback_note = " (exit-code attribution)" if final_acc.get("fallback") else ""
+                for node_id in final_acc.get("passed_nodes") or []:
+                    try:
+                        runtime.events.mark_test_passed(
+                            node_id, "independent acceptance spec passed" + fallback_note
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        log(f"event error for {node_id}: {exc}")
+                for node_id in final_acc.get("evidence_failed") or []:
+                    try:
+                        runtime.events.mark_test_failed(
+                            node_id, "independent acceptance spec failed" + fallback_note
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        log(f"event error for {node_id}: {exc}")
+                    if node_id not in failed_nodes:
+                        failed_nodes.append(node_id)
+                if final_acc.get("passed"):
+                    acceptance_note = "independent acceptance tests passed" + fallback_note
+                elif not final_acc.get("available"):
+                    acceptance_note = f"acceptance infra unavailable: {_tail(final_acc.get('message', ''), 200)}"
+                elif final_acc.get("all_specs_green"):
+                    acceptance_note = (
+                        "all acceptance specs green with unverified nodes: "
+                        + ",".join(final_acc.get("unknown") or [])
+                    )
+                else:
+                    acceptance_note = f"independent acceptance tests failed: {_tail(final_acc.get('message', ''), 240)}"
+        elif entries:
+            acceptance_note = "acceptance skipped: under 90s of budget left"
+        # else: no official specs present; nothing to verify against
+        if acceptance_ran:
+            log(f"acceptance outcome: {acceptance_note}")
+
+    # -------------------------------------------- failure memory persistence
+    try:
+        memory.record_failed_nodes(out_dir, failed_nodes, acc_result)
+    except Exception as exc:  # noqa: BLE001 - memory persistence is best-effort
+        log(f"failure memory write crashed (non-fatal): {type(exc).__name__}: {exc}")
 
     # ------------------------------------------------------------ postflight
     try:
@@ -879,20 +1177,37 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
     except Exception as exc:  # noqa: BLE001
         log(f"postflight failed (non-fatal): {exc}")
 
-    finalize_preview(out_dir, web_port, smoke_port)
+    finalize_preview(out_dir, web_port, smoke_port, ready=not rehearsal_error and deliverable_ok(out_dir))
     _free_web_port(web_port)
 
-    msg = f"completed {len(nodes) - len(set(failed_nodes))}/{len(nodes)} nodes (smoke={smoke_port})"
+    tokens_used = run_stats.get("tokens", 0)
+    seconds_used = time.perf_counter() - perf_started
+    _write_run_summary(out_dir, {
+        "nodes_completed": len(nodes) - len(set(failed_nodes)),
+        "nodes_total": len(nodes),
+        "tokens": tokens_used,
+        "turns": run_stats.get("turns", 0),
+        "tool_calls": run_stats.get("tool_calls", 0),
+        "elapsed_seconds": round(seconds_used, 1),
+        "acceptance": acceptance_note,
+        "rehearsal_error": bool(rehearsal_error),
+        "failed_nodes": sorted(set(failed_nodes)),
+    })
+
+    msg = (f"completed {len(nodes) - len(set(failed_nodes))}/{len(nodes)} nodes "
+           f"(smoke={smoke_port}) tokens={tokens_used} elapsed={seconds_used:.0f}s")
     if rehearsal_error:
         msg += f"; rehearsal error: {_tail(rehearsal_error, 120)}"
     if failed_nodes:
         msg += f"; failed_nodes={sorted(set(failed_nodes))}"
-    else:
-        try:
+    msg += f"; {acceptance_note}"
+    try:
+        if failed_nodes or rehearsal_error or not skeleton_ok or not deliverable_ok(out_dir):
+            runtime.events.mark_run_failed(msg)
+        else:
             runtime.events.mark_run_completed(msg)
-        except Exception:  # noqa: BLE001
-            pass
-        log("run completed")
+    except Exception:  # noqa: BLE001
+        pass
     if git_ensure_error:
         log(f"git was unavailable: {git_ensure_error}")
     return 0
@@ -916,7 +1231,7 @@ def skeleton_retry_files_prompt(out_dir: Path) -> str:
 
 def rehearse_best_effort(
     out_dir: Path, smoke_port: int, web_port: int, node_timeout: float,
-    deadline: float, driver, make_driver, specs_inject: str,
+    deadline: float, driver, make_driver, specs_inject: str, stats: dict | None = None,
 ):
     error, attempts = rehearse_startup(out_dir, smoke_port)
     for round_idx in range(DEFAULT_REHEARSALS - 1):
@@ -927,7 +1242,7 @@ def rehearse_best_effort(
         if specs_inject:
             prompt_repair = specs_inject + "\n\n" + prompt_repair
         session = driver.new_session()
-        run_turn(driver, session, prompt_repair, deadline, min(600.0, max(120.0, deadline - time.monotonic())), f"repair[{round_idx}]")
+        run_turn(driver, session, prompt_repair, deadline, min(600.0, max(120.0, deadline - time.monotonic())), f"repair[{round_idx}]", stats=stats)
         error, extra = rehearse_startup(out_dir, smoke_port)
         attempts += extra
     return error, attempts

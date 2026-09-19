@@ -26,8 +26,8 @@
   --color-accent-glow: rgba(94, 106, 210, 0.15);
   --color-accent-text: #FFFFFF;
 
-  --color-accent-secondary: #6366F1;
-  --color-accent-secondary-glow: rgba(99, 102, 241, 0.12);
+  --color-accent-secondary: #22D3EE;
+  --color-accent-secondary-glow: rgba(34, 211, 238, 0.12);
 
   /* Semantic Colors */
   --color-success: #10B981;
@@ -55,13 +55,12 @@
   --color-code-border: rgba(255, 255, 255, 0.06);
 
   /* Typography */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-sans: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
   --content-max: 1120px;
   --page-gutter: clamp(16px, 3vw, 32px);
   --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.16);
   --mobile-nav-height: 64px;
-  --z-overlay: 300;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -90,8 +89,8 @@
   --shadow-elevated: 0 8px 32px rgb(0 0 0 / 0.4);
 
   /* Gradients */
-  --gradient-accent: linear-gradient(135deg, #5E6AD2, #6366F1);
-  --gradient-accent-subtle: linear-gradient(135deg, rgba(94, 106, 210, 0.1), rgba(99, 102, 241, 0.05));
+  --gradient-accent: linear-gradient(135deg, #5E6AD2, #6E7AE3);
+  --gradient-accent-subtle: linear-gradient(135deg, rgba(94, 106, 210, 0.1), rgba(110, 122, 227, 0.05));
   --gradient-surface: linear-gradient(180deg, var(--color-bg-surface-1), var(--color-bg-page));
 
   /* Motion */
@@ -107,13 +106,6 @@
   /* Focus */
   --focus-ring: 0 0 0 2px var(--color-bg-page), 0 0 0 4px var(--color-accent);
   --focus-ring-offset: 2px;
-
-  /* Glass */
-  --glass-blur: 24px;
-  --glass-saturate: 180%;
-  --glass-bg: rgba(15, 15, 20, 0.8);
-  --glass-border: rgba(255, 255, 255, 0.06);
-  --glass-highlight: rgba(255, 255, 255, 0.04);
 
   /* Typography Scale */
   --text-xs: 0.75rem;

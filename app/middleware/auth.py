@@ -9,16 +9,12 @@ Principal via contextvars so downstream code always sees a consistent identity.
 
 from __future__ import annotations
 
-import asyncio
-import os
-from collections.abc import Mapping
-from datetime import UTC, datetime, timedelta
-
 import hashlib
 import json
 import secrets
+from collections.abc import Mapping
+from datetime import datetime, timedelta
 
-import jwt
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import create_engine, select
@@ -187,31 +183,20 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 
 def create_jwt_token(subject: str, scopes: list[str] | None = None, expires_minutes: int | None = None) -> str:
-    """Create a JWT token for the given subject."""
-    now = datetime.now(UTC)
-    exp_min = expires_minutes if expires_minutes is not None else settings.jwt_expire_minutes
-    payload = {
-        "sub": subject,
-        "type": "access",
-        "scopes": scopes or ["read", "write"],
-        "iat": now,
-        "exp": now + timedelta(minutes=exp_min),
-    }
-    return jwt.encode(payload, settings.app_secret_key, algorithm=settings.jwt_algorithm)
+    """Create an access token through the shared auth_manager signing path."""
+    del expires_minutes
+    from app.core.auth_manager import auth_manager
+
+    return auth_manager.create_access_token(subject, scopes)
 
 
 def _verify_jwt_token(token: str) -> dict | None:
-    """Verify a JWT token and return its payload, or None if invalid."""
+    """Verify a token using the shared auth_manager verification path."""
+    from app.core.auth_manager import auth_manager
+
     try:
-        payload = jwt.decode(
-            token,
-            settings.app_secret_key,
-            algorithms=[settings.jwt_algorithm],
-        )
-        if payload.get("type") != "access":
-            return None
-        return payload
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return auth_manager.verify_token(token, "access")
+    except HTTPException:
         return None
 
 

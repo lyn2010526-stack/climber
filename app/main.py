@@ -23,6 +23,7 @@ from app.core.di import resolve as di_resolve
 from app.core.interfaces import IExecutor, IModelAdapter, ISkillRegistry, IToolRegistry
 from app.core.logging_setup import configure_logging, get_recent_logs, write_crash_dump
 from app.core.memory_guardian import get_memory_guardian
+from app.core.observability.api import router as observability_router
 from app.core.watchdog import get_watchdog
 from app.middleware.auth import AuthMiddleware
 from app.middleware.metrics import APP_INFO, MetricsMiddleware, metrics_endpoint
@@ -231,11 +232,10 @@ app.add_middleware(
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin", "Cache-Control", "X-Request-Id"],
 )
 
 app.include_router(api_router, prefix="/api/v1")
-from app.core.observability.api import router as observability_router
 
 app.include_router(observability_router)
 for websocket_route in websocket_router.routes:

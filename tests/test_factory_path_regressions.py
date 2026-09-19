@@ -226,8 +226,8 @@ async def test_factory_run_streams_agent_output(client, monkeypatch: pytest.Monk
         await on_progress(2, 2, "done")
         return {"output": f"finished: {payload['objective']}"}
 
-    from app.core.task_worker import task_manager
     from app.api.v1 import skills_router
+    from app.core.task_worker import task_manager
 
     async def _factory_payload(user_id, data):
         return {
@@ -279,8 +279,8 @@ async def test_factory_retries_failed_step(client, monkeypatch: pytest.MonkeyPat
             raise RuntimeError("temporary model failure")
         return {"output": "recovered"}
 
-    from app.core.task_worker import task_manager
     from app.api.v1 import skills_router
+    from app.core.task_worker import task_manager
 
     async def _factory_payload(user_id, data):
         return {
@@ -313,10 +313,9 @@ async def test_factory_run_rejects_empty_goal(client) -> None:
 
 
 async def test_agent_run_handler_consumes_engine_events(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.core.di as di_module
     from app.core import AgentEvent, AgentEventType
     from app.core import agent_engine as agent_engine_module
-    from app.core.di import resolve as real_resolve
-    import app.core.di as di_module
     from app.core.task_worker import handle_agent_run
 
     class _Metrics:
@@ -657,7 +656,6 @@ async def test_require_scopes_admin_bypass_and_enforcement(monkeypatch: pytest.M
 
 def test_verify_token_rejects_expired_without_secret_leak() -> None:
     import base64
-    import hashlib
     import hmac
     import json
     from datetime import UTC, datetime, timedelta
@@ -674,7 +672,7 @@ def test_verify_token_rejects_expired_without_secret_leak() -> None:
         "exp": (datetime.now(UTC) - timedelta(hours=24)).isoformat(),
     }
     pb = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
-    secret = getattr(settings, "APP_SECRET_KEY", "dev-secret-key-change-in-production")
+    secret = settings.app_secret_key
     sig = hmac.new(secret.encode(), pb.encode(), "sha256").hexdigest()[:16]
     with pytest.raises(HTTPException) as exc_info:
         verify_token(f"{pb}.{sig}")

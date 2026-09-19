@@ -71,6 +71,19 @@ async def chat(
                     base_url = agent_row.base_url
                     system_prompt = agent_row.system_prompt or ""
                     api_key = decrypt_api_key(agent_row.api_key_encrypted or "")
+                tool_ids = list(getattr(agent_row, "tool_ids", None) or [])
+                settings = dict(getattr(row, "model_settings", None) or {})
+                override_provider = settings.get("provider")
+                override_model = settings.get("model_id")
+                if override_provider and override_provider != provider:
+                    # Agent credentials belong to the agent's provider; a
+                    # different session provider must resolve its own key.
+                    api_key = ""
+                    base_url = settings.get("base_url")
+                provider = override_provider or provider
+                model_id = override_model or model_id
+                if settings.get("base_url"):
+                    base_url = settings["base_url"]
                 if not api_key:
                     key_result = await db.execute(
                         select(ApiKeyModel)
@@ -80,9 +93,8 @@ async def chat(
                     key_row = key_result.scalar_one_or_none()
                     if key_row:
                         api_key = decrypt_api_key(key_row.api_key_encrypted or "")
-                        if key_row.base_url:
+                        if key_row.base_url and not settings.get("base_url"):
                             base_url = key_row.base_url
-                tool_ids = list(getattr(agent_row, "tool_ids", None) or [])
         except HTTPException:
             raise
         except Exception as e:

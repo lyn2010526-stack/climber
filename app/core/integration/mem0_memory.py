@@ -7,7 +7,7 @@ seamlessly integrating with the existing memory subsystem.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from mem0 import Memory
 
@@ -20,7 +20,7 @@ class Mem0MemoryService:
     def __init__(
         self,
         collection_name: str = "agent_memory",
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
     ):
         self._collection = collection_name
         self._user_id = user_id

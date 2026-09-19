@@ -71,6 +71,8 @@ async def run_agent_simple(
     tools: list[str],
     base_url: str | None = None,
     principal: Principal | None = None,
+    group_id: str | None = None,
+    role: str = "worker",
 ) -> tuple[str, int]:
     """Run a single agent turn and return (output, tokens_used).
 
@@ -83,10 +85,14 @@ async def run_agent_simple(
         user_message: The user message.
         tools: List of tool names.
         base_url: Optional base URL.
+        principal: Optional principal for scoping.
+        group_id: Optional group ID (accepted for call-site compatibility).
+        role: The agent role label (accepted for call-site compatibility).
 
     Returns:
         A tuple of (output_text, tokens_used).
     """
+    del group_id, role
     output = ""
     total_tokens = 0
     principal = principal or get_context_principal()

@@ -7,10 +7,9 @@
 
 from __future__ import annotations
 
-import re
-
 import asyncio
 import functools
+import re
 from datetime import UTC, datetime
 from typing import Any
 

@@ -76,7 +76,8 @@ class DebateAgent:
                 max_tokens=max_tokens,
             )
             response = result.content
-            self.total_tokens += getattr(result, "usage", {}).get("total_tokens", 0)
+            usage = getattr(result, "usage", None) or {}
+            self.total_tokens += getattr(result, "tokens_used", 0) or usage.get("total_tokens", 0)
         except Exception as exc:
             logger.error("debate_agent_chat_failed", role=self.role, error=str(exc))
             response = f"[{self.role} encountered an error: {type(exc).__name__}]"
@@ -156,7 +157,7 @@ class DebateStrategy:
         for round_num in range(1, request.max_refine_rounds + 1):
             round_start = time.monotonic()
 
-            proponent_history = opponent.get_context_summary(last_n=4)
+            proponent_history = proponent.get_context_summary(last_n=4)
             new_proponent = await proponent.chat(
                 REBUTTAL_PROMPT.format(
                     task=request.task,
@@ -167,7 +168,7 @@ class DebateStrategy:
             )
             proponent_position = new_proponent
 
-            opponent_history = proponent.get_context_summary(last_n=4)
+            opponent_history = opponent.get_context_summary(last_n=4)
             new_opponent = await opponent.chat(
                 REBUTTAL_PROMPT.format(
                     task=request.task,
@@ -222,6 +223,23 @@ class DebateStrategy:
 
         elapsed = (time.monotonic() - start) * 1000
 
+        summary = f"Debate {'converged' if consensus_reached else 'max rounds'} — winner: {winner}"
+        confidence = 0.9 if consensus_reached else 0.7
+        final_critique = CritiqueResult(passed=consensus_reached, summary=summary)
+        try:
+            quality = float(judge_result.get("quality_score", 3))
+            final_critique = CritiqueResult(
+                passed=consensus_reached,
+                summary=summary,
+                scores={
+                    dim: quality
+                    for dim in ("correctness", "completeness", "clarity", "safety", "actionability")
+                },
+            )
+            confidence = self._scorer.score_from_critique(final_critique)
+        except Exception as exc:
+            logger.error("debate_scoring_failed", error=str(exc))
+
         total_tokens = proponent.total_tokens + opponent.total_tokens + judge.total_tokens
 
         logger.info(
@@ -239,11 +257,8 @@ class DebateStrategy:
             path_type=f"debate_{winner}",
             content=final_solution,
             reasoning_chain=[rt.output_summary for rt in traces],
-            confidence=0.9 if consensus_reached else 0.7,
-            critique=CritiqueResult(
-                passed=consensus_reached,
-                summary=f"Debate {'converged' if consensus_reached else 'max rounds'} — winner: {winner}",
-            ),
+            confidence=confidence,
+            critique=final_critique,
             round_created=len(traces),
             duration_ms=round(elapsed, 1),
             token_usage={"total_tokens": total_tokens},

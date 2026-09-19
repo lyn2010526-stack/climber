@@ -1,5 +1,6 @@
 """Improvement advisor."""
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
 
@@ -13,9 +14,9 @@ class ImprovementSuggestion:
 
 class ImprovementAdvisor:
     """Provides improvement suggestions."""
-    
+
     def analyze(self, data: dict[str, Any]) -> list[ImprovementSuggestion]:
         return []
-    
+
     def add_suggestion(self, area: str, suggestion: str, priority: int = 1) -> None:
         pass

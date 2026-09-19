@@ -52,8 +52,8 @@ export default function CostPage() {
     setError(null);
     try {
       const [usageData, budgetData] = await Promise.all([
-        api.getCostUsage(),
-        api.getCostBudget(),
+        api.getCostUsage().catch(() => null),
+        api.getCostBudget().catch(() => null),
       ]);
       setCostData(usageData);
       setBudget(budgetData);

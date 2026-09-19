@@ -6,12 +6,11 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-
-from app.core.auth_manager import require_scopes as _require_scopes
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.v1.common import current_user_id
+from app.core.auth_manager import require_scopes as _require_scopes
 from app.core.reasoning import (
     ReasoningRequest,
     ReasoningResult,
@@ -74,9 +73,9 @@ async def reason_with_slash(
 
         return result
     except NotImplementedError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Reasoning failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Reasoning failed: {str(e)}") from e
 
 
 @router.post("")

@@ -42,6 +42,31 @@ export interface SessionMessage {
   created_at: string;
 }
 
+export interface ArcBenchStatus {
+  available: boolean;
+  message: string;
+  output_dir?: string | null;
+  phase: string;
+  phase_detail: string;
+  trace_path?: string | null;
+  trace_exists: boolean;
+  acceptance?: {
+    ran: boolean;
+    passed: number;
+    failed: number;
+    unverified: number;
+    note: string;
+  } | null;
+  last_events?: Array<{
+    type: string;
+    timestamp?: string | null;
+    data: Record<string, unknown>;
+  }>;
+  pack_artifact?: string | null;
+  pack_exists: boolean;
+  updated_at?: string | null;
+}
+
 class ApiClient {
   private getAuthHeaders(): Record<string, string> {
     const token = localStorage.getItem('auth_token');
@@ -579,6 +604,78 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  runAutonomousSkillStream(
+    data: { goal: string; skills: string[]; prompt_template: string },
+    onEvent: (event: { type: string; data: any }) => void,
+    onClose?: () => void,
+  ): () => void {
+    const url = `${BASE_URL}/skills/autonomous/run`;
+    const abortController = new AbortController();
+
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() },
+      body: JSON.stringify(data),
+      signal: abortController.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ detail: response.statusText }));
+          throw new Error(error.detail || `HTTP ${response.status}`);
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) return;
+
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const blocks = buffer.split('\n\n');
+          buffer = blocks.pop() || '';
+
+          for (const block of blocks) {
+            let eventName = '';
+            let dataStr = '';
+
+            for (const line of block.split('\n')) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('event:')) {
+                eventName = trimmed.slice(6).trim();
+              } else if (trimmed.startsWith('data:')) {
+                dataStr += trimmed.slice(5).trim();
+              }
+            }
+
+            if (!dataStr || dataStr === '[DONE]') continue;
+
+            try {
+              const payload = JSON.parse(dataStr) as { type?: string; data?: any };
+              onEvent({ type: payload.type || eventName || 'message', data: payload.data });
+            } catch {
+              onEvent({ type: eventName || 'message', data: dataStr });
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        if (err.name !== 'AbortError') {
+          onEvent({ type: 'error', data: { detail: err.message } });
+        }
+      })
+      .finally(() => onClose?.());
+
+    return () => abortController.abort();
+  }
+
+  async getArcbenchStatus(): Promise<ArcBenchStatus> {
+    return this.request<ArcBenchStatus>('/arcbench/status');
   }
 
   // MCP

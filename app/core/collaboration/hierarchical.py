@@ -11,7 +11,12 @@ from sqlalchemy import select
 from app.core.collaboration.agent_runner import run_agent_simple, run_agent_with_retry
 from app.core.collaboration.callbacks import invoke_step_callback, invoke_task_callback
 from app.core.collaboration.memory import store_memory
-from app.core.collaboration.prompts import build_manager_prompt, build_manager_planning_prompt, build_manager_validation_prompt, build_worker_prompt
+from app.core.collaboration.prompts import (
+    build_manager_planning_prompt,
+    build_manager_prompt,
+    build_manager_validation_prompt,
+    build_worker_prompt,
+)
 from app.core.collaboration.resolver import resolve_api_key, resolve_base_url
 from app.core.group_ws_hub import group_ws_hub
 from app.storage import async_session

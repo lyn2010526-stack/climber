@@ -176,7 +176,7 @@ export function SkillsPage() {
                             <div className="flex items-center gap-3 text-[11px] text-[var(--color-text-muted)]">
                               <span>使用 {skill.use_count} 次</span>
                               {skill.tools.length > 0 && <span>{skill.tools.length} 工具</span>}
-                              <span className="truncate">{skill.path.split('/').pop()}</span>
+                              <span className="truncate">{(skill.path || '').split('/').pop()}</span>
                             </div>
                           </div>
                           <button

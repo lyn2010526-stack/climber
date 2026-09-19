@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -17,12 +17,7 @@ from app.core.auth_manager import (
     auth_manager,
     authenticate_user,
     get_current_user,
-    require_admin,
     require_scopes,
-)
-from app.middleware.auth import (
-    API_KEY_HEADER,
-    _verify_jwt_token,
 )
 from app.models.users import ApiKey, User, UserRole, UserStatus
 from app.storage import async_session
@@ -101,7 +96,15 @@ async def login(payload: LoginRequest) -> LoginResponse:
     if not result:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    return LoginResponse(**result)
+    access_token = auth_manager.create_access_token(result["user_id"], result["scopes"])
+    refresh_token_value = auth_manager.create_refresh_token(result["user_id"], result["scopes"])
+
+    return LoginResponse(
+        access_token=access_token,
+        refresh_token=refresh_token_value,
+        expires_in=60 * 60 * 24,
+        user=result,
+    )
 
 
 @router.post("/refresh", response_model=RefreshTokenResponse)

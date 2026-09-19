@@ -101,6 +101,16 @@ class UsageTracker:
             ]
             return record
 
+    async def record_request(self, user_id: str) -> None:
+        """Record a request for rate-limit counting. Concurrency-safe via the tracker lock."""
+        async with self._lock:
+            self._request_timestamps[user_id].append(time.time())
+            # Cleanup old timestamps (keep last 24h)
+            cutoff = time.time() - 86400
+            self._request_timestamps[user_id] = [
+                t for t in self._request_timestamps[user_id] if t > cutoff
+            ]
+
     async def check_rate_limit(self, user_id: str) -> tuple[bool, str | None]:
         """Check if user has exceeded rate limits. Returns (allowed, reason)."""
         async with self._lock:
@@ -190,6 +200,11 @@ class UsageTracker:
         if removed > 0:
             logger.info("Cleaned up old usage records", count=removed)
         return removed
+
+    def reset(self) -> None:
+        """Clear recorded usage data. Used by tests to isolate rate-limit state."""
+        self._records = []
+        self._request_timestamps.clear()
 
 
 # Global singleton

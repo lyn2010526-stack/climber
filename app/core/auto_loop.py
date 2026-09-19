@@ -21,6 +21,13 @@ from app.core.task_state_machine import TaskState, TaskStateMachine
 from app.storage import async_session
 from app.storage.models_platform import AutoLoopTask
 
+
+def _to_utc(ts: float | None) -> datetime | None:
+    """Convert a unix timestamp to an *aware* UTC datetime (or None)."""
+    if ts is None:
+        return None
+    return datetime.fromtimestamp(ts, tz=UTC)
+
 logger = structlog.get_logger()
 
 
@@ -131,6 +138,14 @@ class AutoLoopEngine:
         record.asyncio_task = asyncio.create_task(
             self._execute_task(record), name=f"auto-loop:{task_id}"
         )
+        # Best-effort immediate persistence so a crash before the first
+        # internal status write cannot lose the task. `_execute_task` also
+        # persists RUNNING promptly; this closes the gap for the brief
+        # window before the coroutine body runs.
+        with contextlib.suppress(RuntimeError):
+            asyncio.get_running_loop().create_task(
+                self._persist_status(record, AutoLoopTaskStatus.PENDING)
+            )
         logger.info(
             "auto_loop_task_started",
             task_id=task_id,
@@ -253,12 +268,28 @@ class AutoLoopEngine:
 
             runner = self._runners.get("autonomous")
             if runner is not None:
+                real_runner = True
                 await runner(record)
             else:
+                real_runner = False
                 await self._default_runner(record)
 
             if record.status == AutoLoopTaskStatus.RUNNING:
-                if record.current_step >= record.max_steps - 1:
+                if not real_runner:
+                    # No real "autonomous" runner is registered. Do NOT
+                    # fabricate completion from the simulation placeholder —
+                    # keep the task pending so it can be executed when a
+                    # runner is wired up, and surface the misconfiguration.
+                    record.status = AutoLoopTaskStatus.PENDING
+                    await self._persist_status(
+                        record, AutoLoopTaskStatus.PENDING
+                    )
+                    logger.warning(
+                        "auto_loop_no_runner_registered",
+                        task_id=record.task_id,
+                        objective=record.objective[:120],
+                    )
+                elif record.current_step >= record.max_steps - 1:
                     record.status = AutoLoopTaskStatus.COMPLETED
                     record.finished_at = time.time()
                     await record.state_machine.transition(
@@ -318,15 +349,14 @@ class AutoLoopEngine:
             record.asyncio_task = None
 
     async def _default_runner(self, record: AutoLoopRecord) -> None:
-        """Default runner that simulates autonomous task execution."""
-        for step in range(record.current_step, record.max_steps):
-            if record.status != AutoLoopTaskStatus.RUNNING:
-                break
-            record.current_step = step
-            record.heartbeat_at = time.time()
-            await self._persist_status(record, AutoLoopTaskStatus.RUNNING)
-            await asyncio.sleep(0.1)
-            record.heartbeat_at = time.time()
+        """Placeholder when no real 'autonomous' runner is registered.
+
+        Only refreshes the heartbeat so the task is not misclassified as
+        stalled. It deliberately does NOT advance steps or mark the task
+        completed — fabricated completion is handled in ``_execute_task``
+        by keeping the task pending instead.
+        """
+        record.heartbeat_at = time.time()
 
     async def _monitor_loop(self) -> None:
         """Monitor loop for stalled task detection."""
@@ -397,13 +427,9 @@ class AutoLoopEngine:
                     if record.result:
                         existing.result = record.result
                     if record.finished_at:
-                        existing.finished_at = datetime.utcfromtimestamp(
-                            record.finished_at
-                        )
+                        existing.finished_at = _to_utc(record.finished_at)
                     if record.started_at:
-                        existing.started_at = datetime.utcfromtimestamp(
-                            record.started_at
-                        )
+                        existing.started_at = _to_utc(record.started_at)
                 else:
                     task = AutoLoopTask(
                         id=record.task_id,
@@ -413,15 +439,9 @@ class AutoLoopEngine:
                         current_step=record.current_step,
                         result=record.result,
                         error=record.error,
-                        created_at=datetime.utcfromtimestamp(
-                            record.created_at
-                        ),
-                        started_at=datetime.utcfromtimestamp(record.started_at)
-                        if record.started_at
-                        else None,
-                        finished_at=datetime.utcfromtimestamp(record.finished_at)
-                        if record.finished_at
-                        else None,
+                        created_at=_to_utc(record.created_at),
+                        started_at=_to_utc(record.started_at),
+                        finished_at=_to_utc(record.finished_at),
                         heartbeat_at=now
                         if status == AutoLoopTaskStatus.RUNNING
                         else None,

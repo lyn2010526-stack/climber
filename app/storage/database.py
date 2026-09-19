@@ -79,6 +79,9 @@ class Session(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")
     title: Mapped[str] = mapped_column(String(255), nullable=True)
 
+    # Per-session model override (provider/model_id/base_url), takes priority over the agent's model
+    model_settings: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+
     # Context snapshot
     context_data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     iteration_count: Mapped[int] = mapped_column(Integer, default=0)

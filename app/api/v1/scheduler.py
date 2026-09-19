@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from app.core.auth_manager import require_scopes
 from sqlalchemy import select
 
 from app.api.v1.common import current_user_id
 from app.api.v1.helpers import payload as _payload
+from app.core.auth_manager import require_scopes
 from app.storage import async_session
 from app.storage.models_platform import Workflow
 

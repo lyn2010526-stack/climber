@@ -12,6 +12,7 @@ from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.core.principal import get_context_principal
 from app.storage.usage import usage_tracker
 
 logger = structlog.get_logger(__name__)
@@ -218,13 +219,24 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return direct_ip
         return "unknown"
 
+    def _rate_limit_key(self, request: Request) -> str:
+        """Resolve the rate-limit key from the authenticated principal or client IP.
+
+        Uses the same principal identity as the ``RateLimit`` dependency so both
+        enforcement points count against one shared counter.
+        """
+        try:
+            return get_context_principal().identity_key
+        except RuntimeError:
+            return self._get_client_ip(request)
+
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.method == "OPTIONS" or request.url.path in self.SKIP_PATHS:
             return await call_next(request)
 
-        user_id = self._get_client_ip(request)
+        key = self._rate_limit_key(request)
 
-        allowed, reason = await usage_tracker.check_rate_limit(user_id)
+        allowed, reason = await usage_tracker.check_rate_limit(key)
         if not allowed:
             from fastapi.responses import JSONResponse
             return JSONResponse(
@@ -232,4 +244,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 content={"detail": reason, "type": "rate_limit_exceeded"},
             )
 
-        return await call_next(request)
+        try:
+            return await call_next(request)
+        finally:
+            await usage_tracker.record_request(key)

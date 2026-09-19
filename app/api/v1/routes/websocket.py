@@ -27,9 +27,18 @@ websocket_router = APIRouter()
 router = websocket_router
 
 _heartbeat_interval = 30
+_MAX_WS_STATES = 1000
+_MAX_WS_STATE_MESSAGES = 200
 
 _session_states: dict[str, dict[str, Any]] = {}
 _agent_states: dict[str, dict[str, Any]] = {}
+
+
+def _store_state(states: dict[str, dict[str, Any]], key: str, state: dict[str, Any]) -> None:
+    """Store a connection state, evicting the oldest entry when over the cap."""
+    if len(states) >= _MAX_WS_STATES:
+        states.pop(next(iter(states)))
+    states[key] = state
 
 
 async def _websocket_heartbeat(websocket: WebSocket, session_id: str) -> None:
@@ -91,7 +100,7 @@ async def _authenticate_websocket(
                     select(resource_model.user_id).where(resource_model.id == resource_id)
                 )
             ).scalar_one_or_none()
-        if owner_id is not None and str(owner_id) != str(user_id):
+        if owner_id is None or str(owner_id) != str(user_id):
             await websocket.close(code=1008)
             return None
 
@@ -116,7 +125,7 @@ async def ws_endpoint(websocket: WebSocket, session_id: str) -> None:
         state = _session_states.get(session_id, {"messages": [], "connected_at": time.time()})
         state["last_active"] = time.time()
         state["connected"] = True
-        _session_states[session_id] = state
+        _store_state(_session_states, session_id, state)
 
         await websocket.send_json({
             "type": "connected",
@@ -148,6 +157,7 @@ async def ws_endpoint(websocket: WebSocket, session_id: str) -> None:
                     continue
 
                 state.setdefault("messages", []).append(payload)
+                state["messages"] = state["messages"][-_MAX_WS_STATE_MESSAGES:]
                 state["last_active"] = time.time()
 
                 await websocket.send_json({"type": "echo", "data": payload, "session_id": session_id})
@@ -278,7 +288,7 @@ async def ws_agent_endpoint(websocket: WebSocket, agent_id: str) -> None:
         state = _agent_states.get(agent_id, {"messages": [], "connected_at": time.time()})
         state["last_active"] = time.time()
         state["connected"] = True
-        _agent_states[agent_id] = state
+        _store_state(_agent_states, agent_id, state)
 
         await websocket.send_json({
             "type": "connected",
@@ -311,6 +321,7 @@ async def ws_agent_endpoint(websocket: WebSocket, agent_id: str) -> None:
                     continue
 
                 state.setdefault("messages", []).append(payload)
+                state["messages"] = state["messages"][-_MAX_WS_STATE_MESSAGES:]
                 state["last_active"] = time.time()
 
                 await websocket.send_json({

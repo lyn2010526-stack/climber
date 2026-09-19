@@ -674,7 +674,7 @@ async def skill_data_analyst(data: str, question: str = "") -> str:
     analysis = {
         "total_lines": len(lines),
         "total_chars": len(data),
-        "non_empty": len([l for l in lines if l.strip()]),
+        "non_empty": len([line for line in lines if line.strip()]),
     }
 
     # Detect format

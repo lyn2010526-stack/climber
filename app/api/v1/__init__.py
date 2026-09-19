@@ -21,6 +21,8 @@ from app.api.v1 import sessions as sessions_router
 from app.api.v1 import settings as settings_router
 from app.api.v1 import skills_router as skills_router_module
 from app.api.v1 import workflows as workflows_router
+from app.api.v1.routes.arcbench import router as arcbench_router
+from app.api.v1.routes.research import router as research_router
 from app.core.reasoning import api as reasoning_router
 
 router = APIRouter()
@@ -38,6 +40,8 @@ router.include_router(notifications_router.router, prefix="/notifications", tags
 router.include_router(doctor_router.router, prefix="/doctor", tags=["doctor"])
 router.include_router(reasoning_router.router, prefix="/reason", tags=["reasoning"])
 router.include_router(permissions_router.router, prefix="/permissions", tags=["permissions"])
+router.include_router(arcbench_router, tags=["arcbench"])
+router.include_router(research_router, tags=["research"])
 
 
 def _include_extension_routes(source: APIRouter, prefixes: tuple[str, ...]) -> None:

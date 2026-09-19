@@ -193,7 +193,7 @@ class OpenAIAdapter(ModelAdapter):
 
                     if line == "data: [DONE]":
                         yield ChatResult(
-                            finish_reason=finish_reason or "stop",
+                            finish_reason=finish_reason or ("tool_calls" if accumulated_tool_calls else "stop"),
                             tokens_used=tokens_used,
                             accumulated_content=accumulated_content,
                         )

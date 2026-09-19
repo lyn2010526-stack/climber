@@ -347,7 +347,7 @@ class GitHubClient:
             title=data["title"],
             body=data.get("body", ""),
             state=data.get("state", "open"),
-            labels=[l["name"] for l in data.get("labels", [])],
+            labels=[label["name"] for label in data.get("labels", [])],
             author=data["user"]["login"] if data.get("user") else "",
             url=data.get("html_url", ""),
         )
@@ -397,7 +397,7 @@ class GitHubClient:
                 title=item["title"],
                 body=item.get("body", ""),
                 state=item.get("state", "open"),
-                labels=[l["name"] for l in item.get("labels", [])],
+                labels=[label["name"] for label in item.get("labels", [])],
                 author=item["user"]["login"] if item.get("user") else "",
                 url=item.get("html_url", ""),
             ))

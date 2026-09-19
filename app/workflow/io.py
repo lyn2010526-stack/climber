@@ -118,7 +118,7 @@ class WorkflowIO:
                 import yaml  # type: ignore[import-untyped]
                 content = yaml.dump(data, allow_unicode=True, sort_keys=False)
             except ImportError:
-                raise RuntimeError("PyYAML is required for YAML export. Install it with: pip install pyyaml")
+                raise RuntimeError("PyYAML is required for YAML export. Install it with: pip install pyyaml") from None
         else:
             content = json.dumps(data, indent=2, ensure_ascii=False)
         path.write_text(content, encoding="utf-8")

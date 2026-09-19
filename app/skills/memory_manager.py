@@ -1,7 +1,6 @@
 """Memory manager for skills — provides persistent memory storage."""
 from __future__ import annotations
 
-import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime

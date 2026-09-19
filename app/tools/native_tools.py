@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import shlex
 import subprocess
 
@@ -267,8 +268,6 @@ async def download_file(url: str, output_path: str) -> str:
 
 
 # ─── Security validation helpers ──────────────────────────────────────────
-
-import re
 
 # Dangerous shell patterns that indicate command injection
 _DANGEROUS_SHELL_PATTERNS = [

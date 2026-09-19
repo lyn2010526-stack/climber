@@ -11,7 +11,7 @@ export type Page =
   | 'dashboard' | 'chat' | 'agents' | 'workflows' | 'crews' | 'apikeys' | 'authapikeys'
   | 'skills' | 'notifications' | 'doctor' | 'mcp' | 'stats' | 'factory' | 'plugins'
   | 'scheduler' | 'cluster' | 'traces' | 'eval' | 'cost' | 'plugin-manage' | 'settings'
-  | 'tasks' | 'task-history' | 'reasoning' | 'reasoning-history' | 'terminal' | 'demo';
+  | 'tasks' | 'task-history' | 'reasoning' | 'reasoning-history' | 'terminal';
 
 export interface NavItem {
   id: Page;
@@ -58,7 +58,6 @@ export const ALL_NAV_ITEMS_BASE: NavItem[] = [
   { id: 'cost', icon: DollarSign, labelKey: 'navigation.costs', group: 'config', keywords: 'cost billing token 成本' },
   { id: 'settings', icon: Settings, labelKey: 'navigation.settings', group: 'config', keywords: 'settings config preference 设置' },
   { id: 'terminal', icon: Terminal, labelKey: 'navigation.terminal', group: 'config', keywords: 'terminal shell 终端' },
-  { id: 'demo', icon: Sparkles, labelKey: 'navigation.demo', group: 'config', keywords: 'demo visual design 演示' },
 ];
 
 export const NAV_ITEM_IDS = new Set(ALL_NAV_ITEMS_BASE.map(item => item.id));

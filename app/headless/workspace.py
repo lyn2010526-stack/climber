@@ -7,10 +7,30 @@ Resolve checks cannot prevent a concurrent symlink replacement race.
 import os
 import signal
 import subprocess
+from contextlib import suppress
 from pathlib import Path
 
-
 COMMAND_OUTPUT_LIMIT = 8000
+
+_ENV_ALLOWLIST = (
+    "PATH",
+    "HOME",
+    "SHELL",
+    "USER",
+    "LOGNAME",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LC_MESSAGES",
+    "LC_COLLATE",
+    "LC_NUMERIC",
+    "LC_TIME",
+    "TMPDIR",
+    "TEMP",
+    "TERM",
+    "TZ",
+    "NODE_ENV",
+)
 
 
 class WorkspaceSandbox:
@@ -80,14 +100,24 @@ class WorkspaceSandbox:
         path.write_text(content, encoding="utf-8")
         return {"written_bytes": len(content.encode("utf-8"))}
 
+    def _sandbox_env(self) -> dict:
+        env = {}
+        for key in _ENV_ALLOWLIST:
+            if key in os.environ:
+                env[key] = os.environ[key]
+        for key, value in os.environ.items():
+            if key.startswith("npm_config_") and "auth" not in key.lower():
+                env[key] = value
+        env.update(self.command_env)
+        return env
+
     def _run_command(self, arguments: dict) -> dict:
         if set(arguments) != {"command"}:
             raise ValueError("Invalid tool arguments")
         command = arguments["command"]
         if not isinstance(command, str) or not command.strip() or len(command) > 8000:
             raise ValueError("Command must be nonempty text within 8000 characters")
-        env = dict(os.environ)
-        env.update(self.command_env)
+        env = self._sandbox_env()
         process = subprocess.Popen(
             command,
             shell=True,
@@ -105,10 +135,8 @@ class WorkspaceSandbox:
             output, _ = process.communicate(timeout=self.command_timeout)
         except subprocess.TimeoutExpired:
             timed_out = True
-            try:
+            with suppress(ProcessLookupError):
                 os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
             output, _ = process.communicate()
         output = output or ""
         if len(output) > COMMAND_OUTPUT_LIMIT:

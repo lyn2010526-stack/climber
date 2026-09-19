@@ -133,4 +133,5 @@ def _skill_dict(s: Skill) -> dict[str, Any]:
         "tools": s.tools or [],
         "is_enabled": s.is_enabled,
         "use_count": s.use_count,
+        "path": f"skills/{s.category}/{s.name}.yaml",
     }
