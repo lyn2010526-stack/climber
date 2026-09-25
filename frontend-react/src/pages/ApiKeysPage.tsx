@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Key, Plus, Trash2, Copy, Check, RefreshCw, AlertCircle } from 'lucide-react';
+import { Key, Plus, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
 import { api } from '../api';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardContent } from '../components/ui/Card';
@@ -11,13 +11,12 @@ import { SkeletonList } from '../components/ui/Skeleton';
 
 const PROVIDERS = ['openai', 'anthropic', 'google', 'ollama', 'stepfun'];
 
-export function ApiKeysPage() {
+export function ApiKeysPage({ embedded = false }: { embedded?: boolean } = {}) {
   const [keys, setKeys] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ provider: 'openai', name: '', api_key: '', base_url: '' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const loadKeys = useCallback(async () => {
     setLoading(true);
@@ -34,6 +33,10 @@ export function ApiKeysPage() {
   useEffect(() => { loadKeys(); }, [loadKeys]);
 
   const addKey = async () => {
+    if (!form.name.trim() || (form.provider !== 'ollama' && !form.api_key.trim())) {
+      setError(form.provider === 'ollama' ? '请输入凭据名称' : '请输入凭据名称和 API Key');
+      return;
+    }
     try {
       await api.addApiKey(form);
       setShowForm(false);
@@ -44,6 +47,10 @@ export function ApiKeysPage() {
     }
   };
 
+  const canSave = Boolean(
+    form.name.trim() && (form.provider === 'ollama' || form.api_key.trim())
+  );
+
   const deleteKey = async (id: string) => {
     try {
       await api.deleteApiKey(id);
@@ -53,18 +60,12 @@ export function ApiKeysPage() {
     }
   };
 
-  const copyKey = (id: string, key: string) => {
-    navigator.clipboard.writeText(key);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
   return (
-    <div className="h-full overflow-y-auto p-4 md:p-6 lg:p-8 page-transition">
+    <div className={embedded ? undefined : 'h-full overflow-y-auto p-4 md:p-6 lg:p-8 page-transition'}>
       <div className="max-w-4xl mx-auto">
         <PageHeader
-          title="API Keys"
-          description="Manage model provider credentials"
+          title="模型凭据"
+          description="管理模型供应商 API Key，供模型调用与智能体工厂使用。Climber API 访问权限请在平台访问令牌中管理。"
           icon={<Key size={20} className="text-[var(--color-accent)]" />}
           actions={
             <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setShowForm(!showForm)}>
@@ -106,8 +107,10 @@ export function ApiKeysPage() {
                     <Input placeholder="Key name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">API Key</label>
-                    <Input placeholder="sk-..." type="password" value={form.api_key} onChange={(e) => setForm({ ...form, api_key: e.target.value })} />
+                    <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">
+                      API Key{form.provider === 'ollama' ? ' (optional)' : ''}
+                    </label>
+                    <Input placeholder={form.provider === 'ollama' ? '本地模型无需填写' : 'sk-...'} type="password" value={form.api_key} onChange={(e) => setForm({ ...form, api_key: e.target.value })} />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Base URL (optional)</label>
@@ -115,7 +118,7 @@ export function ApiKeysPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-4">
-                  <Button variant="primary" size="sm" onClick={addKey} disabled={!form.name || !form.api_key}>
+                  <Button variant="primary" size="sm" onClick={addKey} disabled={!canSave}>
                     Save Key
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
@@ -155,17 +158,12 @@ export function ApiKeysPage() {
                         <Badge variant="primary" size="xs">{key.provider}</Badge>
                       </div>
                       <p className="text-xs text-[var(--color-text-muted)] mt-0.5 font-mono truncate">
-                        {key.api_key_preview || '••••••••••••'}
+                        凭据已保存，密钥内容不回显
                       </p>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <button
-                        onClick={() => copyKey(key.id, key.api_key || '')}
-                        className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)] transition-all duration-200 focus-ring"
-                      >
-                        {copiedId === key.id ? <Check size={14} className="text-[var(--color-success)]" /> : <Copy size={14} />}
-                      </button>
-                      <button
+                        aria-label={`删除模型凭据 ${key.name}`}
                         onClick={() => deleteKey(key.id)}
                         className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-subtle)] transition-all duration-200 focus-ring"
                       >
