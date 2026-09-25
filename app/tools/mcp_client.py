@@ -295,7 +295,7 @@ class MCPClient:
         except Exception as e:
             logger.error("Tool call failed", tool=name, server=self.name, error=str(e))
             return MCPToolResult(
-                content=[MCPContent(type="text", text=f"Error: {str(e)}")],
+                content=[MCPContent(type="text", text=f"Error: {e!s}")],
                 isError=True,
             )
 

@@ -37,10 +37,10 @@ export function EmptyState({
       <div className="text-center max-w-lg">
         {/* Logo */}
         <div
-          className="w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6"
+          className="w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6 border"
           style={{
-            background: 'linear-gradient(135deg, var(--color-accent-glow), rgba(139, 92, 246, 0.1))',
-            boxShadow: '0 0 40px var(--color-accent-glow)',
+            backgroundColor: 'var(--color-bg-surface-1)',
+            borderColor: 'var(--color-border-default)',
           }}
         >
           <Bot size={36} className="text-[var(--color-accent)]" />
@@ -64,8 +64,8 @@ export function EmptyState({
                 onClick={() => onSelectSuggestion?.(suggestion.prompt)}
                 className={cn(
                   'flex items-center gap-3 px-4 py-3 rounded-2xl text-sm text-left',
-                  'border transition-all duration-200',
-                  'hover:scale-[1.02] active:scale-[0.98]',
+                  'border transition-colors duration-150',
+                  'hover:bg-[var(--color-bg-surface-2)]',
                 )}
                 style={{
                   backgroundColor: 'var(--color-bg-surface-1)',

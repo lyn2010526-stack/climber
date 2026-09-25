@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import time
 import uuid
 from collections.abc import Callable, Coroutine
@@ -15,7 +16,7 @@ from enum import StrEnum
 from typing import Any
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.core.task_state_machine import TaskState, TaskStateMachine
 from app.storage import async_session
@@ -48,6 +49,7 @@ class AutoLoopRecord:
 
     task_id: str
     objective: str
+    owner_id: str | None = field(default=None, kw_only=True)
     max_steps: int = 10
     current_step: int = 0
     status: AutoLoopTaskStatus = AutoLoopTaskStatus.PENDING
@@ -112,7 +114,7 @@ class AutoLoopEngine:
                 await self._monitor
             self._monitor = None
 
-        for record in self._tasks.values():
+        for record in list(self._tasks.values()):
             if record.asyncio_task is not None and not record.asyncio_task.done():
                 record.asyncio_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError, Exception):
@@ -126,26 +128,27 @@ class AutoLoopEngine:
                 await self._persist_status(record, AutoLoopTaskStatus.CANCELLED)
         logger.info("auto_loop_engine_stopped")
 
-    def start_task(self, objective: str, max_steps: int = 10) -> str:
+    def start_task(self, objective: str, max_steps: int = 10, *, owner_id: str) -> str:
         """Start a new autonomous task, returns task_id."""
+        if not owner_id or not owner_id.strip():
+            raise ValueError("Task owner is required")
+        try:
+            envelope = json.loads(objective)
+        except (TypeError, ValueError):
+            envelope = None
+        if isinstance(envelope, dict) and "type" in envelope:
+            raise ValueError("JSON objectives with type are reserved for TaskManager")
         task_id = str(uuid.uuid4())
         record = AutoLoopRecord(
             task_id=task_id,
             objective=objective,
+            owner_id=owner_id,
             max_steps=max_steps,
         )
         self._tasks[task_id] = record
         record.asyncio_task = asyncio.create_task(
             self._execute_task(record), name=f"auto-loop:{task_id}"
         )
-        # Best-effort immediate persistence so a crash before the first
-        # internal status write cannot lose the task. `_execute_task` also
-        # persists RUNNING promptly; this closes the gap for the brief
-        # window before the coroutine body runs.
-        with contextlib.suppress(RuntimeError):
-            asyncio.get_running_loop().create_task(
-                self._persist_status(record, AutoLoopTaskStatus.PENDING)
-            )
         logger.info(
             "auto_loop_task_started",
             task_id=task_id,
@@ -155,8 +158,14 @@ class AutoLoopEngine:
         return task_id
 
     async def recover_interrupted_sessions(self) -> int:
-        """Recover tasks from DB on startup, returns count of recovered tasks."""
+        """Startup-only recovery; resume never-started pending rows under the same ID.
+
+        Interrupted runs have no durable execution checkpoint. Mark them failed
+        for manual review; replaying their tools could repeat side effects.
+        Deploy one recovery coordinator; this is not a distributed lease.
+        """
         count = 0
+        pending_records = []
         try:
             async with async_session() as db:
                 result = await db.execute(
@@ -174,17 +183,34 @@ class AutoLoopEngine:
 
                 for row in rows:
                     task_id = row.id
-                    if row.status in (
-                        AutoLoopTaskStatus.RUNNING,
-                        AutoLoopTaskStatus.RETRYING,
-                    ):
-                        new_status = AutoLoopTaskStatus.PENDING
-                    else:
-                        new_status = AutoLoopTaskStatus(row.status)
+                    previous_status = row.status
+                    if task_id in self._tasks:
+                        continue
+                    # Tasks persisted by TaskManager (task_worker) use a
+                    # JSON-serialized objective envelope with a "type" key.
+                    # Skip them so AutoLoopEngine does not double-claim rows
+                    # owned by the task worker path.
+                    try:
+                        envelope = json.loads(row.objective or "")
+                    except (TypeError, ValueError):
+                        envelope = None
+                    if isinstance(envelope, dict) and "type" in envelope:
+                        continue
+
+                    new_status = AutoLoopTaskStatus.PENDING
+                    if (row.status != AutoLoopTaskStatus.PENDING or row.started_at
+                            or row.current_step or row.finished_at or row.result is not None or row.error
+                            or not row.owner_id or not row.owner_id.strip()):
+                        new_status = AutoLoopTaskStatus.FAILED
+                        row.status = new_status.value
+                        row.error = "Automatic recovery refused: missing owner or prior execution; manual review required"
+                        row.finished_at = datetime.now(UTC)
+                        row.heartbeat_at = None
 
                     record = AutoLoopRecord(
                         task_id=task_id,
                         objective=row.objective,
+                        owner_id=row.owner_id,
                         max_steps=row.max_steps or 10,
                         current_step=row.current_step or 0,
                         status=new_status,
@@ -203,21 +229,23 @@ class AutoLoopEngine:
                     self._tasks[task_id] = record
 
                     if new_status == AutoLoopTaskStatus.PENDING:
-                        record.asyncio_task = asyncio.create_task(
-                            self._execute_task(record),
-                            name=f"auto-loop:{task_id}",
-                        )
+                        pending_records.append(record)
 
                     count += 1
                     logger.info(
                         "auto_loop_task_recovered",
                         task_id=task_id,
-                        previous_status=row.status,
+                        previous_status=previous_status,
                         new_status=new_status,
+                    )
+                await db.commit()
+                for record in pending_records:
+                    record.asyncio_task = asyncio.create_task(
+                        self._execute_task(record), name=f"auto-loop:{record.task_id}"
                     )
         except Exception as exc:
             logger.error(
-                "auto_loop_recovery_failed", error=str(exc), exc_info=True
+                "auto_loop_recovery_failed", error=type(exc).__name__
             )
         return count
 
@@ -240,6 +268,7 @@ class AutoLoopEngine:
             return None
         return {
             "task_id": record.task_id,
+            "owner_id": record.owner_id,
             "objective": record.objective,
             "status": record.status.value,
             "current_step": record.current_step,
@@ -257,55 +286,38 @@ class AutoLoopEngine:
 
     async def _execute_task(self, record: AutoLoopRecord) -> None:
         """Execute an autonomous task."""
+        record.started_at = time.time()
+        record.heartbeat_at = record.started_at
+        try:
+            claimed = await self._persist_status(record, AutoLoopTaskStatus.RUNNING, claim=True)
+        except Exception as exc:
+            record.status = AutoLoopTaskStatus.FAILED
+            record.error = f"Task claim failed ({type(exc).__name__})"
+            record.asyncio_task = None
+            logger.error("auto_loop_claim_failed", task_id=record.task_id, error=record.error)
+            return
+        if not claimed:
+            record.asyncio_task = None
+            if self._tasks.get(record.task_id) is record:
+                self._tasks.pop(record.task_id)
+            return
         try:
             await record.state_machine.transition(
                 TaskState.PROCESSING, trigger="auto_loop_start"
             )
             record.status = AutoLoopTaskStatus.RUNNING
-            record.started_at = time.time()
-            record.heartbeat_at = time.time()
-            await self._persist_status(record, AutoLoopTaskStatus.RUNNING)
-
             runner = self._runners.get("autonomous")
-            if runner is not None:
-                real_runner = True
-                await runner(record)
-            else:
-                real_runner = False
-                await self._default_runner(record)
+            if runner is None:
+                raise RuntimeError("Autonomous runner is not configured")
+            await runner(record)
 
             if record.status == AutoLoopTaskStatus.RUNNING:
-                if not real_runner:
-                    # No real "autonomous" runner is registered. Do NOT
-                    # fabricate completion from the simulation placeholder —
-                    # keep the task pending so it can be executed when a
-                    # runner is wired up, and surface the misconfiguration.
-                    record.status = AutoLoopTaskStatus.PENDING
-                    await self._persist_status(
-                        record, AutoLoopTaskStatus.PENDING
-                    )
-                    logger.warning(
-                        "auto_loop_no_runner_registered",
-                        task_id=record.task_id,
-                        objective=record.objective[:120],
-                    )
-                elif record.current_step >= record.max_steps - 1:
-                    record.status = AutoLoopTaskStatus.COMPLETED
-                    record.finished_at = time.time()
-                    await record.state_machine.transition(
-                        TaskState.COMPLETED, trigger="auto_loop_complete"
-                    )
-                    await self._persist_status(
-                        record, AutoLoopTaskStatus.COMPLETED
-                    )
-                    logger.info(
-                        "auto_loop_task_completed", task_id=record.task_id
-                    )
-                else:
-                    record.status = AutoLoopTaskStatus.PENDING
-                    await self._persist_status(
-                        record, AutoLoopTaskStatus.PENDING
-                    )
+                if not isinstance(record.result, dict) or record.result.get("status") != "completed":
+                    raise RuntimeError("Runner returned without successful completion")
+                record.status = AutoLoopTaskStatus.COMPLETED
+                record.finished_at = time.time()
+                await record.state_machine.transition(TaskState.COMPLETED, trigger="auto_loop_complete")
+                await self._persist_status(record, AutoLoopTaskStatus.COMPLETED)
         except asyncio.CancelledError:
             record.status = AutoLoopTaskStatus.CANCELLED
             record.finished_at = time.time()
@@ -315,48 +327,14 @@ class AutoLoopEngine:
             await self._persist_status(record, AutoLoopTaskStatus.CANCELLED)
             logger.info("auto_loop_task_cancelled", task_id=record.task_id)
         except Exception as exc:
-            record.error = str(exc)
-            is_transient = self._is_transient_error(exc)
-            if is_transient:
-                record.status = AutoLoopTaskStatus.RETRYING
-                await record.state_machine.transition(
-                    TaskState.FAILED, trigger="auto_loop_retry"
-                )
-                await self._persist_status(
-                    record, AutoLoopTaskStatus.RETRYING
-                )
-                logger.warning(
-                    "auto_loop_task_retrying",
-                    task_id=record.task_id,
-                    error=str(exc),
-                )
-            else:
-                record.status = AutoLoopTaskStatus.FAILED
-                record.finished_at = time.time()
-                await record.state_machine.transition(
-                    TaskState.FAILED, trigger="auto_loop_error"
-                )
-                await self._persist_status(
-                    record, AutoLoopTaskStatus.FAILED
-                )
-                logger.error(
-                    "auto_loop_task_failed",
-                    task_id=record.task_id,
-                    error=str(exc),
-                    exc_info=True,
-                )
+            record.error = f"Task execution failed ({type(exc).__name__}); manual review required before resubmission"
+            record.status = AutoLoopTaskStatus.FAILED
+            record.finished_at = time.time()
+            await record.state_machine.transition(TaskState.FAILED, trigger="auto_loop_error")
+            await self._persist_status(record, AutoLoopTaskStatus.FAILED)
+            logger.error("auto_loop_task_failed", task_id=record.task_id, error=record.error)
         finally:
             record.asyncio_task = None
-
-    async def _default_runner(self, record: AutoLoopRecord) -> None:
-        """Placeholder when no real 'autonomous' runner is registered.
-
-        Only refreshes the heartbeat so the task is not misclassified as
-        stalled. It deliberately does NOT advance steps or mark the task
-        completed — fabricated completion is handled in ``_execute_task``
-        by keeping the task pending instead.
-        """
-        record.heartbeat_at = time.time()
 
     async def _monitor_loop(self) -> None:
         """Monitor loop for stalled task detection."""
@@ -403,8 +381,12 @@ class AutoLoopEngine:
         self,
         record: AutoLoopRecord,
         status: AutoLoopTaskStatus,
-    ) -> None:
+        *,
+        claim: bool = False,
+    ) -> bool:
         """Persist task status to database."""
+        if not record.owner_id:
+            raise ValueError("Task owner is required")
         try:
             async with async_session() as db:
                 result = await db.execute(
@@ -416,6 +398,22 @@ class AutoLoopEngine:
 
                 now = datetime.now(UTC)
                 if existing:
+                    if existing.owner_id != record.owner_id or existing.objective != record.objective:
+                        raise ValueError("Task ownership or objective mismatch")
+                    if claim:
+                        claimed = await db.execute(
+                            update(AutoLoopTask).where(
+                                AutoLoopTask.id == record.task_id,
+                                AutoLoopTask.owner_id == record.owner_id,
+                                AutoLoopTask.objective == record.objective,
+                                AutoLoopTask.status == AutoLoopTaskStatus.PENDING,
+                                AutoLoopTask.started_at.is_(None),
+                                AutoLoopTask.finished_at.is_(None),
+                                AutoLoopTask.current_step == 0,
+                            ).values(status=status.value, started_at=_to_utc(record.started_at), heartbeat_at=now)
+                        )
+                        await db.commit()
+                        return claimed.rowcount == 1
                     existing.status = status.value
                     existing.current_step = record.current_step
                     existing.updated_at = now
@@ -424,7 +422,7 @@ class AutoLoopEngine:
                     )
                     if record.error:
                         existing.error = record.error
-                    if record.result:
+                    if record.result is not None:
                         existing.result = record.result
                     if record.finished_at:
                         existing.finished_at = _to_utc(record.finished_at)
@@ -433,6 +431,7 @@ class AutoLoopEngine:
                 else:
                     task = AutoLoopTask(
                         id=record.task_id,
+                        owner_id=record.owner_id,
                         objective=record.objective,
                         status=status.value,
                         max_steps=record.max_steps,
@@ -448,30 +447,13 @@ class AutoLoopEngine:
                     )
                     db.add(task)
                 await db.commit()
+                return True
         except Exception as exc:
             logger.error(
                 "auto_loop_persist_failed",
                 task_id=record.task_id,
-                error=str(exc),
-                exc_info=True,
+                error=type(exc).__name__,
             )
-
-    @staticmethod
-    def _is_transient_error(exc: Exception) -> bool:
-        """Check if error is transient (retryable)."""
-        transient_messages = [
-            "timeout",
-            "temporarily unavailable",
-            "rate limit",
-            "429",
-            "500",
-            "502",
-            "503",
-            "504",
-            "connection",
-        ]
-        msg = str(exc).lower()
-        return any(t in msg for t in transient_messages)
-
+            raise
 
 auto_loop_engine = AutoLoopEngine()

@@ -90,7 +90,12 @@ async def run_agent_simple(
         role: The agent role label (accepted for call-site compatibility).
 
     Returns:
-        A tuple of (output_text, tokens_used).
+        A tuple of (output_text, tokens_used) on DONE, including empty text
+        for successful tool-only runs.
+
+    Raises:
+        RuntimeError: If the event stream ends without DONE.
+        Exception: If the agent emits ERROR or raises during execution.
     """
     del group_id, role
     output = ""
@@ -113,10 +118,10 @@ async def run_agent_simple(
             pass
         elif event.type == AgentEventType.DONE:
             total_tokens += event.data.get("tokens_used", 0)
-            break
+            return output, total_tokens
         elif event.type == AgentEventType.ERROR:
             raise Exception(event.data.get("error", "unknown_error"))
-    return output, total_tokens
+    raise RuntimeError("Agent event stream ended without DONE")
 
 
 async def run_agent_with_retry(
@@ -147,7 +152,12 @@ async def run_agent_with_retry(
         base_url: Optional base URL.
 
     Returns:
-        A tuple of (output_text, tokens_used), or ("", 0) on failure.
+        A tuple of (output_text, tokens_used) after a successful DONE event,
+        including empty text for tool-only runs.
+
+    Raises:
+        RuntimeError: If all attempts fail, chained from the last error.
+        asyncio.CancelledError: If execution is cancelled; never retried.
     """
     last_error: Exception | None = None
     principal = principal or get_context_principal()
@@ -166,8 +176,7 @@ async def run_agent_with_retry(
                     base_url=base_url,
                     principal=principal,
                 )
-            if output or not last_error:
-                return output, total_tokens
+            return output, total_tokens
         except TimeoutError as e:
             last_error = e
         except Exception as e:
@@ -225,7 +234,13 @@ async def _try_fallback_model(
         last_error: The last error from primary attempts.
 
     Returns:
-        A tuple of (output_text, tokens_used), or ("", 0) on failure.
+        A tuple of (output_text, tokens_used) after a successful DONE event,
+        including empty text for tool-only runs.
+
+    Raises:
+        RuntimeError: If fallback fails or is unavailable, chained from the
+            last fallback or primary error.
+        asyncio.CancelledError: If fallback execution is cancelled.
     """
     fallback = _get_fallback_model(provider, model_id)
     if fallback:
@@ -247,13 +262,12 @@ async def _try_fallback_model(
                     base_url=base_url,
                     principal=principal,
                 )
-            if output:
-                return output, total_tokens
-        except Exception:
-            pass
+            return output, total_tokens
+        except Exception as e:
+            last_error = e
 
     logger.error(f"{role}_failed_after_retry", agent_id=agent_id, error=str(last_error) if last_error else "unknown")
-    return "", 0
+    raise RuntimeError(f"{role} failed after retry") from last_error
 
 
 def _get_fallback_model(provider: str, model_id: str) -> tuple[str, str] | None:

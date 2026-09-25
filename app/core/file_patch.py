@@ -91,7 +91,7 @@ class FilePatchService:
             return True, f"Patch applied successfully to {file_path}"
         except Exception as e:
             logger.error("patch_apply_failed", file_path=file_path, error=str(e))
-            return False, f"Error applying patch: {str(e)}"
+            return False, f"Error applying patch: {e!s}"
 
     @staticmethod
     def preview_edit(file_path: str, old_string: str, new_string: str) -> tuple[str, str]:
@@ -110,7 +110,7 @@ class FilePatchService:
             diff = FilePatchService.create_patch(content, new_content, file_path)
             return diff, "Preview generated"
         except Exception as e:
-            return "", f"Error previewing edit: {str(e)}"
+            return "", f"Error previewing edit: {e!s}"
 
     @staticmethod
     def validate_edit(file_path: str, old_string: str, new_string: str) -> tuple[bool, str]:
@@ -153,7 +153,7 @@ class FilePatchService:
 
             return True, "Edit is valid"
         except Exception as e:
-            return False, f"Error validating edit: {str(e)}"
+            return False, f"Error validating edit: {e!s}"
 
     @staticmethod
     def _apply_unified_diff(old_content: str, patch: str) -> str | None:

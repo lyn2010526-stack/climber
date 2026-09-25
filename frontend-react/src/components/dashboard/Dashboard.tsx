@@ -1,17 +1,17 @@
 import React from 'react';
-import { Activity, Cpu, MemoryStick, Zap, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Card } from '../ui/Card';
 import { cn } from '../../lib/utils';
 import { cva } from 'class-variance-authority';
 
 /* Reference: Lobe UI `dashboard/StatCard/StatCard.tsx` */
 const statCardVariants = cva(
-  'flex flex-col gap-3 transition-all duration-200 hover:scale-[1.02]',
+  'flex flex-col gap-3 transition-colors duration-150',
   {
     variants: {
       variant: {
         default: '',
-        bordered: 'border border-white/10 bg-white/[0.02]',
+        bordered: 'border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)]',
         elevated: 'shadow-lg shadow-black/20',
       },
     },
@@ -52,7 +52,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   const trendColors = {
     up: 'text-emerald-400 bg-emerald-500/10',
     down: 'text-rose-400 bg-rose-500/10',
-    neutral: 'text-[var(--color-text-secondary)] bg-white/5',
+    neutral: 'text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-2)]',
   };
 
   return (
@@ -60,13 +60,13 @@ export const StatCard: React.FC<StatCardProps> = ({
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wider">{title}</span>
         {icon && (
-          <div className="p-2 rounded-xl bg-white/5 text-[var(--color-text-secondary)]">
+          <div className="p-2 rounded-xl bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)]">
             {icon}
           </div>
         )}
       </div>
       <div className="flex items-baseline gap-3">
-        <span className="text-3xl font-bold text-white tracking-tight">{value}</span>
+        <span className="text-3xl font-bold text-[var(--color-text-primary)] tracking-tight">{value}</span>
         {change && (
           <span className={cn('text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1', trendColors[change.trend])}>
             <TrendIcon trend={change.trend} />
@@ -91,21 +91,20 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ stats, className }) => {
-  const defaultStats = [
-    { title: '活跃会话', value: '12', icon: <Activity className="h-5 w-5" />, change: { value: 12, trend: 'up' } as const },
-    { title: 'Token 消耗', value: '45.2K', icon: <Zap className="h-5 w-5" />, change: { value: 8, trend: 'up' } as const },
-    { title: '内存使用', value: '1.2GB', icon: <MemoryStick className="h-5 w-5" />, change: { value: 3, trend: 'down' } as const },
-    { title: 'CPU 负载', value: '34%', icon: <Cpu className="h-5 w-5" />, change: { value: 5, trend: 'neutral' } as const },
-  ];
-
-  const displayStats = stats || defaultStats;
+  if (!stats || stats.length === 0) {
+    return (
+      <Card className={className}>
+        <p role="status" className="text-sm text-[var(--color-text-muted)]">
+          {stats ? '暂无统计数据' : '统计数据未加载'}
+        </p>
+      </Card>
+    );
+  }
 
   return (
     <div className={cn('grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4', className)}>
-      {displayStats.map((stat, index) => (
-        <div key={index} className="animate-in fade-in duration-500" style={{ animationDelay: `${index * 100}ms` }}>
-          <StatCard {...stat} />
-        </div>
+      {stats.map((stat, index) => (
+        <StatCard key={index} {...stat} />
       ))}
     </div>
   );

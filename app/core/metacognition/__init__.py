@@ -14,15 +14,15 @@ from app.core.metacognition.self_refactor import SelfModuleRefactor
 from app.core.metacognition.sub_agent import SubAgentOrchestrator
 
 __all__ = [
-    "MetaCognitionMonitor",
-    "HypothesisSimulator",
-    "CausalAttribution",
-    "ResourceOrchestrator",
-    "MetacognitionOrchestrator",
     "CapabilityDiscovery",
-    "SelfModuleRefactor",
-    "GoalDynamicAdjuster",
-    "SubAgentOrchestrator",
-    "LongTermMemoryPruner",
+    "CausalAttribution",
     "ExecutionContext",
+    "GoalDynamicAdjuster",
+    "HypothesisSimulator",
+    "LongTermMemoryPruner",
+    "MetaCognitionMonitor",
+    "MetacognitionOrchestrator",
+    "ResourceOrchestrator",
+    "SelfModuleRefactor",
+    "SubAgentOrchestrator",
 ]

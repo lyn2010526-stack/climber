@@ -10,8 +10,8 @@ const bubbleVariants = cva(
   {
     variants: {
       role: {
-        user: 'bg-[#007AFF] text-white rounded-3xl rounded-br-xl',
-        assistant: 'bg-white/[0.04] border border-white/[0.08] text-[var(--color-text-primary)] rounded-3xl rounded-tl-xl backdrop-blur-sm',
+        user: 'bg-[var(--color-accent)] text-white rounded-3xl rounded-br-xl',
+        assistant: 'bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)] text-[var(--color-text-primary)] rounded-3xl rounded-tl-xl',
         system: 'bg-amber-500/10 border border-amber-500/20 text-amber-200 rounded-2xl',
         tool: 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-200 rounded-2xl',
       },
@@ -29,7 +29,7 @@ function Avatar({ role }: { role: string }) {
     <div className={cn(
       'flex items-center justify-center rounded-2xl text-xs font-bold shrink-0',
       'w-9 h-9',
-      isUser ? 'bg-[#007AFF] text-white' : 'bg-gradient-to-br from-purple-500 to-blue-500 text-white'
+      isUser ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-bg-surface-3)] text-[var(--color-text-primary)]'
     )}>
       {isUser ? <User size={16} /> : <Bot size={16} />}
     </div>
@@ -112,7 +112,7 @@ interface ToolCallCardProps {
 }
 
 const statusConfig = {
-  running: { color: '#5E6AD2', bg: 'rgba(94,106,210,0.12)', label: '执行中', pulse: true },
+  running: { color: 'var(--color-accent-foreground)', bg: 'var(--color-accent-subtle)', label: '执行中', pulse: true },
   success: { color: '#10B981', bg: 'rgba(16,185,129,0.12)', label: '成功', pulse: false },
   error: { color: '#EF4444', bg: 'rgba(239,68,68,0.12)', label: 'error', pulse: false },
 };

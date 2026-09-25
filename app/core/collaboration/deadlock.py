@@ -106,7 +106,7 @@ def topological_order(dependencies: Any) -> list[list[str]]:
     """
     deps = _normalize(dependencies)
     nodes = {str(node) for node in dependencies if node is not None} if isinstance(dependencies, dict) else set(deps)
-    indegree: dict[str, int] = {node: 0 for node in deps}
+    indegree: dict[str, int] = dict.fromkeys(deps, 0)
     dependents: dict[str, list[str]] = {node: [] for node in deps}
     for node, dep_list in deps.items():
         if node not in nodes:

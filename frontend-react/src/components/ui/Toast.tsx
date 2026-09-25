@@ -50,9 +50,9 @@ const typeStyles = {
   },
   info: {
     bg: 'bg-[var(--color-accent-subtle)]',
-    border: 'border-[rgba(94,106,210,0.2)]',
+    border: 'border-[var(--color-border-accent)]',
     iconBg: 'bg-[var(--color-accent)]',
-    text: 'text-[var(--color-accent)]',
+    text: 'text-[var(--color-accent-foreground)]',
   },
   loading: {
     bg: 'bg-[var(--color-bg-surface-2)]',

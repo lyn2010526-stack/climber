@@ -13,6 +13,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from croniter import croniter
+
 
 @dataclass
 class ScheduledTask:
@@ -88,23 +90,12 @@ class TaskScheduler:
             task.next_run = self._calc_next_run(task.cron_expression)
 
     def _calc_next_run(self, cron: str) -> float:
-        """Calculate next run time from simplified cron expression.
-
-        Supports:
-        - "*/N * * * *" = every N minutes
-        - "0 * * * *" = every hour
-        - "0 0 * * *" = daily at midnight
-        """
-        parts = cron.split()
-        if len(parts) >= 2 and parts[0].startswith("*/"):
-            interval_min = int(parts[0][2:])
-            return time.time() + interval_min * 60
-        elif cron == "0 * * * *":
-            return time.time() + 3600
-        elif cron == "0 0 * * *":
-            return time.time() + 86400
-        else:
-            return time.time() + 300  # default 5 min
+        """Calculate the next run time for a standard five-field cron expression."""
+        now = time.time()
+        try:
+            return float(croniter(cron, now).get_next())
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f"Invalid cron expression: {cron}") from exc
 
 
 # ─── Built-in Scheduled Task Definitions ────────────────────────────────────

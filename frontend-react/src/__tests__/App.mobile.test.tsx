@@ -174,6 +174,17 @@ describe('Desktop-first shell contract', () => {
     expect(screen.queryByTestId('desktop-workspace')).toBeNull();
   });
 
+  it('falls back to mobile chat for non-adapted pages on mobile', async () => {
+    window.location.hash = 'traces';
+    setViewport(375);
+    renderApp();
+    await waitFor(() => {
+      expect(screen.getByText('Mobile Chat')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Traces Page')).toBeNull();
+    expect(screen.queryByTestId('desktop-workspace')).toBeNull();
+  });
+
   it('collapses the sidebar automatically on compact desktop (768px)', async () => {
     setViewport(768);
     renderApp();

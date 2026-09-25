@@ -8,21 +8,12 @@ import {
   type ApiSession,
 } from '../../store/workspace';
 import { api } from '../../api';
+import { apiClient } from '../../lib/api-client';
+import { ModelConfig } from '../chat/ModelConfig';
+import type { ModelSelection } from '../chat/ModelSelector';
 import { UserSwitcher } from './UserSwitcher';
 import { PermissionModes } from '../agent/PermissionModes';
 import type { PermissionMode } from '../agent/PermissionModes';
-
-interface ModelOption {
-  id: string;
-  name?: string;
-  label?: string;
-  model_id?: string;
-  provider?: string;
-}
-
-function pickModelName(model: ModelOption): string {
-  return model.label || model.name || model.model_id || model.id;
-}
 
 export function SessionSidebar() {
   const {
@@ -32,11 +23,15 @@ export function SessionSidebar() {
   } = useWorkspaceStore();
 
   const [agents, setAgents] = useState<any[]>([]);
-  const [models, setModels] = useState<ModelOption[]>([]);
   const [selectedAgent, setSelectedAgent] = useState('');
-  const [selectedModelId, setSelectedModelId] = useState('');
+  const [ownerKey, setOwnerKey] = useState<string | null>(null);
+  const [identityError, setIdentityError] = useState(false);
+  const [useAgentModel, setUseAgentModel] = useState(true);
+  const [selection, setSelection] = useState<{ owner: string; model: ModelSelection | null } | null>(null);
+  const selectedModel = selection?.owner === ownerKey ? selection.model : null;
   const [creating, setCreating] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('manual');
   const [showCheckpoints, setShowCheckpoints] = useState(false);
 
@@ -51,22 +46,49 @@ export function SessionSidebar() {
   }, [loadSessions, setSessionsLoading]);
 
   useEffect(() => {
-    api.listAgents().then((data) => {
-      setAgents(data);
-      if (data.length > 0) setSelectedAgent(data[0].id);
-    }).catch(() => {});
+    let active = true;
+    let controller: AbortController | undefined;
+    const refreshOwner = () => {
+      controller?.abort();
+      controller = new AbortController();
+      const signal = controller.signal;
+      apiClient.get<{ id: string }>('/auth/me', { signal }).then((user) => {
+        if (!active || signal.aborted) return;
+        if (!user.id) throw new Error('Missing user identity');
+        setOwnerKey(user.id);
+        setIdentityError(false);
+      }).catch(() => {
+        if (!active || signal.aborted) return;
+        setOwnerKey(null);
+        setSelection(null);
+        setIdentityError(true);
+      });
+    };
+    refreshOwner();
+    window.addEventListener('storage', refreshOwner);
+    window.addEventListener('focus', refreshOwner);
+    return () => {
+      active = false;
+      controller?.abort();
+      window.removeEventListener('storage', refreshOwner);
+      window.removeEventListener('focus', refreshOwner);
+    };
   }, []);
 
   useEffect(() => {
-    api.listModels().then((data: any[]) => {
-      const list: ModelOption[] = Array.isArray(data) ? data : [];
-      setModels(list);
-      if (list.length > 0) {
-        const first = list[0];
-        setSelectedModelId(first ? (first.model_id || first.id) : '');
-      }
+    let active = true;
+    setAgents([]);
+    setSelectedAgent('');
+    setSelection(null);
+    setUseAgentModel(true);
+    if (!ownerKey) return;
+    api.listAgents().then((data) => {
+      if (!active) return;
+      setAgents(data);
+      if (data.length > 0) setSelectedAgent(data[0].id);
     }).catch(() => {});
-  }, []);
+    return () => { active = false; };
+  }, [ownerKey]);
 
   useEffect(() => {
     if (!sessionsLoaded) {
@@ -75,22 +97,27 @@ export function SessionSidebar() {
   }, [sessionsLoaded, refreshSessions]);
 
   const handleCreate = useCallback(async () => {
-    if (!selectedAgent || creating) return;
+    if (!selectedAgent || !ownerKey || creating || (!useAgentModel && !selectedModel)) return;
     setCreating(true);
+    setCreateError(null);
     try {
-      const chosen = models.find((m) => (m.model_id || m.id) === selectedModelId);
+      const user = await apiClient.get<{ id: string }>('/auth/me');
+      if (user.id !== ownerKey) {
+        setOwnerKey(user.id || null);
+        setSelection(null);
+        throw new Error('当前用户已变更，请重新选择智能体和模型');
+      }
+      const chosen = useAgentModel ? null : selectedModel;
       const title = `会话 ${sessions.length + 1}`;
       const created = await api.createSession({
         title,
         agent_id: selectedAgent,
-        model_settings: chosen
-          ? { model_id: chosen.model_id || chosen.id, provider: chosen.provider ?? null }
-          : null,
+        model_settings: chosen,
       });
       const newId: string = created?.id || created?.session_id || '';
       const modelConfig: Session['modelConfig'] = {
-        provider: chosen?.provider || 'unknown',
-        modelId: chosen?.model_id || chosen?.id || '',
+        provider: created?.provider || chosen?.provider || agents.find((a) => a.id === selectedAgent)?.provider || 'unknown',
+        modelId: created?.model_id || chosen?.model_id || agents.find((a) => a.id === selectedAgent)?.model_id || '',
         temperature: 0.7,
         maxTokens: 4096,
       };
@@ -114,11 +141,13 @@ export function SessionSidebar() {
         }
         setActiveSession(newId);
       }
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : '创建会话失败，请重试');
     } finally {
       setCreating(false);
     }
   }, [
-    selectedAgent, selectedModelId, creating, sessions.length, models,
+    selectedAgent, selectedModel, useAgentModel, ownerKey, creating, sessions.length, agents,
     refreshSessions, createSessionLocal, updateSession, setActiveSession,
   ]);
 
@@ -148,7 +177,7 @@ export function SessionSidebar() {
       <div className="space-y-2 border-b border-[var(--color-border-subtle)] p-3">
         <button
           onClick={handleCreate}
-          disabled={creating}
+          disabled={creating || !ownerKey || !selectedAgent || (!useAgentModel && !selectedModel)}
           className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-accent)] px-3 text-xs font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus size={14} strokeWidth={2.5} /> {creating ? '创建中...' : '新建会话'}
@@ -165,23 +194,30 @@ export function SessionSidebar() {
           ))}
         </select>
         <select
-          value={selectedModelId}
-          onChange={(e) => setSelectedModelId(e.target.value)}
-          aria-label="选择模型"
+          value={useAgentModel ? 'agent' : 'credential'}
+          onChange={(e) => { setUseAgentModel(e.target.value === 'agent'); setSelection(null); }}
+          aria-label="模型来源"
+          disabled={creating || !ownerKey}
           className="h-11 w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] px-3 text-xs text-[var(--color-text-primary)] transition-colors hover:border-[var(--color-border-default)] focus:border-[var(--color-accent)] focus:outline-none"
         >
-          {models.length === 0 && <option value="">暂无可用模型</option>}
-          {models.map(m => (
-            <option key={m.id || m.model_id} value={m.model_id || m.id}>
-              {pickModelName(m)}
-            </option>
-          ))}
+          <option value="agent">使用智能体默认模型</option>
+          <option value="credential">使用已存凭据选择模型</option>
         </select>
+        {!useAgentModel && ownerKey && (
+          <ModelConfig ownerKey={ownerKey} value={selectedModel} disabled={creating}
+            onChange={(model) => setSelection({ owner: ownerKey, model })} />
+        )}
+        {identityError && <p role="alert">无法确认当前用户，请刷新页面重试</p>}
       </div>
 
       {deleteError && (
         <p role="alert" className="px-3 py-2 text-xs text-[var(--color-error)]">
           {deleteError}
+        </p>
+      )}
+      {createError && (
+        <p role="alert" className="px-3 py-2 text-xs text-[var(--color-error)]">
+          {createError}
         </p>
       )}
 

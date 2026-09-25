@@ -17,7 +17,7 @@ import { useI18n } from './i18n';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { useIsMobile } from './layout/breakpoints';
 import { useSidebarState } from './layout/useSidebarState';
-import { CORE_NAV_ITEMS_BASE, ALL_NAV_ITEMS_BASE, NAV_ITEM_IDS } from './navigation/navConfig';
+import { CORE_NAV_ITEMS_BASE, ALL_NAV_ITEMS_BASE, NAV_ITEM_IDS, MOBILE_ADAPTED_PAGE_IDS } from './navigation/navConfig';
 import type { Page, NavGroup } from './navigation/navConfig';
 
 const WorkspaceLayout = lazy(() => import('./components/workspace/WorkspaceLayout').then(m => ({ default: m.WorkspaceLayout })));
@@ -100,6 +100,7 @@ export default function App() {
 
   const renderPage = () => {
     if (isMobile) {
+      if (!MOBILE_ADAPTED_PAGE_IDS.has(currentPage)) return <MobileChatPage />;
       switch (currentPage) {
         case 'dashboard': return <DashboardPage />;
         case 'chat': return <MobileChatPage />;
@@ -107,6 +108,7 @@ export default function App() {
         case 'cluster': return <MobileClusterPage />;
         case 'tasks': return <MobileTasksPage />;
         case 'agents': return <AgentsPage />;
+        case 'apikeys': return <ApiKeysPage />;
         case 'settings': return <SettingsPage />;
       }
     }
@@ -227,9 +229,9 @@ export default function App() {
                           }`}
                         >
                           {currentPage === id && (
-                            <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-[var(--color-accent)] shadow-[0_0_8px_var(--color-accent-glow)]" />
+                            <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-[var(--color-accent)]" />
                           )}
-                          <span className={`rounded-md p-1.5 transition-colors ${currentPage === id ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]' : 'bg-transparent text-[var(--color-text-muted)]'}`}>
+                          <span className={`rounded-md p-1.5 transition-colors ${currentPage === id ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent-foreground)]' : 'bg-transparent text-[var(--color-text-muted)]'}`}>
                             <Icon size={14} />
                           </span>
                           {sidebarOpen && (
@@ -259,11 +261,11 @@ export default function App() {
           <main id="main-content" className="min-w-0 flex-1 overflow-hidden flex flex-col relative" style={{ backgroundColor: 'var(--color-bg-page)' }}>
             <header className="desktop-context-bar">
               <div className="min-w-0">
-                <p className="workspace-eyebrow">Workspace</p>
+                 <p className="workspace-eyebrow">{t('sidebar.workspace')}</p>
                 <p className="truncate text-sm font-semibold text-[var(--color-text-primary)]">{ALL_NAV_ITEMS.find(item => item.id === currentPage)?.label ?? currentPage}</p>
               </div>
               <button className="context-command" onClick={() => setActiveOverlay('commands')} aria-label={t('sidebar.command_menu')}>
-                <Search size={14} /><span>Command menu</span><kbd>⌘K</kbd>
+                 <Search size={14} /><span>{t('sidebar.command_menu')}</span><kbd>⌘K</kbd>
               </button>
             </header>
 

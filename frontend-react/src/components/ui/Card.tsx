@@ -13,7 +13,7 @@ const cardVariants = cva(
         glass: 'border-[var(--color-glass-border)] bg-[var(--color-glass-bg)] backdrop-blur-xl shadow-[0_4px_6px_rgba(0,0,0,0.07)]',
         outline: 'border-[var(--color-border-default)] bg-transparent hover:border-[var(--color-border-strong)] hover:bg-[var(--color-bg-surface-2)]/50',
         filled: 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)]',
-        gradient: 'border-[var(--color-border-subtle)] bg-gradient-to-br from-[var(--color-bg-surface-1)] to-[var(--color-bg-surface-2)] shadow-[0_1px_2px_rgba(0,0,0,0.05)] hover:shadow-[0_4px_6px_rgba(0,0,0,0.07)]',
+        gradient: 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] shadow-sm',
         interactive: 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] shadow-[var(--shadow-panel)] cursor-pointer hover:border-[var(--color-border-default)] hover:bg-[var(--color-bg-surface-2)] active:bg-[var(--color-bg-surface-3)]',
       },
       padding: {

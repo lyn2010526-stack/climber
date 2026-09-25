@@ -311,6 +311,25 @@ _TEMPLATE_DEFAULTS: dict[str, dict[str, Any]] = {
         "true_prompt": "Handle the true condition.",
         "false_prompt": "Handle the false condition.",
     },
+    "simulation_experiment": {
+        "tool_name": "simulate_experiment",
+        "schema": {
+            "objective": "minimize temperature overshoot",
+            "sweep": {
+                "dt": {"values": [1e-4, 2e-4, 5e-4]},
+                "alpha": {"values": [1e-4, 5e-4, 1e-3]},
+            },
+            "base": {
+                "model": "heat",
+                "dx": 0.02,
+                "t_final": 10.0,
+                "n_points": 51,
+                "source_temp": 100.0,
+                "ambient_temp": 0.0,
+            },
+        },
+        "max_rounds": 4,
+    },
 }
 
 

@@ -27,7 +27,11 @@ from app.core.observability.api import router as observability_router
 from app.core.watchdog import get_watchdog
 from app.middleware.auth import AuthMiddleware
 from app.middleware.metrics import APP_INFO, MetricsMiddleware, metrics_endpoint
-from app.middleware.security import RateLimitMiddleware, RequestValidationMiddleware, SecurityHeadersMiddleware
+from app.middleware.security import (
+    RateLimitMiddleware,
+    RequestValidationMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.storage import db_health, init_db
 from app.storage.cache import close_redis, get_redis
 from app.tools import register_builtins
@@ -133,6 +137,7 @@ async def lifespan(app: FastAPI):
                     "Auth system initialized",
                     admin_username=admin_creds["username"],
                     admin_password_set=True,
+                    bootstrap_password_generated=admin_creds.get("bootstrap_generated", False),
                 )
         except Exception as e:
             logger.warning("Database initialization failed", error=str(e))
@@ -146,6 +151,7 @@ async def lifespan(app: FastAPI):
         register_builtins()
 
         auto_loop_engine = di_resolve("AutoLoopEngine")
+        _wire_auto_loop_runner(auto_loop_engine)
         recovered = await auto_loop_engine.recover_interrupted_sessions()
         if recovered:
             logger.info("Recovered interrupted sessions", count=recovered)
@@ -212,6 +218,35 @@ async def _run_scheduler(scheduler):
     while True:
         await scheduler.run_pending()
         await asyncio.sleep(30)
+
+
+def _wire_auto_loop_runner(auto_loop_engine) -> None:
+    """Wire owner-configured agent execution and persist reported progress."""
+    from app.core.auto_loop import AutoLoopRecord
+    from app.core.task_worker import handle_agent_run, resolve_owner_agent_payload
+
+    async def autonomous_runner(record: AutoLoopRecord) -> None:
+        payload = await resolve_owner_agent_payload(record.owner_id)
+
+        async def on_progress(step: int, total: int, message: str = "") -> None:
+            import time
+            from app.core.auto_loop import AutoLoopTaskStatus
+
+            record.current_step = step
+            record.heartbeat_at = time.time()
+            await auto_loop_engine._persist_status(record, AutoLoopTaskStatus.RUNNING)
+
+        result = await handle_agent_run(
+            payload={
+                **payload,
+                "objective": record.objective,
+                "max_steps": record.max_steps,
+            },
+            on_progress=on_progress,
+        )
+        record.result = result
+
+    auto_loop_engine.register_runner("autonomous", autonomous_runner)
 
 
 app = FastAPI(

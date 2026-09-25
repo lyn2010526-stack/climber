@@ -34,6 +34,7 @@ vi.mock('../../../store/workspace', () => ({
 
 vi.mock('../../../layout/breakpoints', () => ({
   useIsFullDesktop: () => true,
+  useIsWideDesktop: () => true,
   useIsMobile: () => false,
   useIsCompactDesktop: () => false,
 }));

@@ -44,7 +44,7 @@ export interface ChartProps {
   colors?: string[];
 }
 
-const DEFAULT_COLORS = ['#5E6AD2', '#6366F1', '#8B5CF6', '#A78BFA', '#C4B5FD', '#10B981', '#34D399', '#F59E0B', '#EF4444', '#EC4899'];
+const DEFAULT_COLORS = ['#64748B', '#94A3B8', '#475569', '#CBD5E1', '#334155', '#10B981', '#34D399', '#F59E0B', '#EF4444', '#EC4899'];
 
 function Chart({
   type,

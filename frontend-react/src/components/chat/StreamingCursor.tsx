@@ -3,7 +3,7 @@ export function StreamingCursor() {
     <span
       className="inline-block w-[2px] h-[1.1em] ml-0.5 rounded-full align-middle"
       style={{
-        background: 'linear-gradient(180deg, var(--color-accent) 0%, #8B5CF6 100%)',
+        backgroundColor: 'var(--color-accent-foreground)',
         animation: 'cursorBlink 1s step-end infinite',
       }}
     />

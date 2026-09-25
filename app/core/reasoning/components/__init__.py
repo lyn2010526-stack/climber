@@ -6,8 +6,8 @@ from app.core.reasoning.components.self_refine import SelfRefineLoop
 from app.core.reasoning.components.trace import ReasoningTracer
 
 __all__ = [
-    "CoverageChecker",
     "CandidateScorer",
-    "SelfRefineLoop",
+    "CoverageChecker",
     "ReasoningTracer",
+    "SelfRefineLoop",
 ]

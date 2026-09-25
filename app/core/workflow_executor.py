@@ -41,6 +41,7 @@ def build_workflow_from_graph(
         "llm": NodeType.LLM,
         "tool": NodeType.TOOL,
         "condition": NodeType.CONDITION,
+        "simulation": NodeType.SIMULATION,
         "output": NodeType.END,
     }
 
@@ -76,6 +77,16 @@ def build_workflow_from_graph(
                 "variable": data.get("variable", ""),
                 "operator": data.get("operator", "equals"),
                 "value": data.get("expected_value", ""),
+            }
+        elif node_type == NodeType.SIMULATION:
+            config = {
+                "label": data.get("label", "Simulation"),
+                "tool_name": data.get("tool_name", "simulate_experiment"),
+                "goal": data.get("goal", ""),
+                "schema": _parse_json_safe(data.get("schema_(json)", data.get("schema", ""))),
+                "max_rounds": int(data.get("max_rounds", 8) or 8),
+                "plan_rounds": int(data.get("plan_rounds", 3) or 3),
+                "policy": _parse_json_safe(data.get("policy_(json)", data.get("policy", ""))),
             }
         elif node_type == NodeType.END:
             config = {

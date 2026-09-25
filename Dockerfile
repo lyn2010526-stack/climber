@@ -6,6 +6,13 @@ RUN npm ci
 COPY frontend-react/ ./
 RUN npm run build
 
+FROM nginx:stable-alpine AS web
+
+COPY --from=frontend-builder /frontend/dist /usr/share/nginx/html
+COPY nginx.production.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
 FROM python:3.11-slim AS builder
 
 WORKDIR /app
@@ -17,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
-FROM python:3.11-slim
+FROM python:3.11-slim AS api
 
 WORKDIR /app
 
@@ -31,8 +38,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/venv /opt/venv
-COPY --from=frontend-builder /frontend/dist /app/frontend-react/dist
 COPY . .
+COPY --from=frontend-builder /frontend/dist /app/frontend-react/dist
 
 ENV PATH=/opt/venv/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \

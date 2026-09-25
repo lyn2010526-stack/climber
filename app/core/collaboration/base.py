@@ -264,7 +264,11 @@ class GroupCollaborationEngine:
         if not tasks:
             return {"status": "no_pending_tasks"}
 
-        from app.core.collaboration.deadlock import deadlocked_task_ids, detect_deadlock, topological_order
+        from app.core.collaboration.deadlock import (
+            deadlocked_task_ids,
+            detect_deadlock,
+            topological_order,
+        )
 
         dependency_map = {t.id: list(t.dependencies or []) for t in tasks}
         deadlock_cycles = detect_deadlock(dependency_map)
@@ -405,7 +409,7 @@ class GroupCollaborationEngine:
         Returns:
             A dictionary with handoff details.
         """
-        from app.core.task_dag import HandoffMessage
+        from app.core.collaboration.handoff import HandoffMessage
 
         async with async_session() as db:
             task = await db.get(AgentGroupTask, task_id)

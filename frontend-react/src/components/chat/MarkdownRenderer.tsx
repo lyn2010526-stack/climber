@@ -111,7 +111,7 @@ function CodeBlock({ children, className: codeClassName }: { children?: React.Re
       </div>
       <pre className="code-block text-xs p-4 pt-10 rounded-xl overflow-x-auto" style={{
         border: '1px solid var(--color-border-subtle)',
-        boxShadow: '0 0 0 1px rgba(94,106,210,0.05)',
+        boxShadow: 'var(--shadow-panel)',
       }}>
         <code className={cn('text-xs', codeClassName)}>
           {showLineNumbers ? (
@@ -148,9 +148,9 @@ function InlineCode({ children }: { children?: React.ReactNode }) {
 function ThinkDetails({ children, open: defaultOpen }: { children?: React.ReactNode; open?: boolean | undefined }) {
   return (
     <details open={defaultOpen} className="group my-3 rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden message-enter" style={{
-      boxShadow: '0 0 0 1px rgba(94,106,210,0.05)',
+      boxShadow: 'var(--shadow-panel)',
     }}>
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-medium text-[#5E6AD2] select-none hover:bg-white/[0.03] transition-colors">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-medium text-[var(--color-accent-foreground)] select-none hover:bg-[var(--color-bg-surface-2)] transition-colors">
         <span className="transition-transform duration-300 group-open:rotate-90 text-[10px]">▶</span>
         <span>Thinking</span>
       </summary>
@@ -200,7 +200,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
           },
           a({ href, children }) {
             return (
-              <a href={href} className="text-[#5E6AD2] hover:underline underline-offset-4 decoration-[#5E6AD2]/30 hover:decoration-[#5E6AD2] transition-all duration-200" target="_blank" rel="noopener noreferrer">
+              <a href={href} className="text-[var(--color-accent-foreground)] underline underline-offset-4 decoration-[var(--color-border-accent)] hover:decoration-current transition-colors" target="_blank" rel="noopener noreferrer">
                 {children}
               </a>
             );
@@ -234,31 +234,31 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
           },
           blockquote({ children }) {
             return (
-              <blockquote className="border-l-2 border-[#5E6AD2]/40 pl-4 py-2 my-4 bg-[#5E6AD2]/[0.03] rounded-r-xl text-[var(--color-text-secondary)] italic">
+              <blockquote className="border-l-2 border-[var(--color-border-accent)] pl-4 py-2 my-4 bg-[var(--color-accent-subtle)] rounded-r-xl text-[var(--color-text-secondary)] italic">
                 {children}
               </blockquote>
             );
           },
           ul({ children }) {
-            return <ul className="list-disc list-inside my-3 space-y-1.5 text-[var(--color-text-secondary)] marker:text-[#5E6AD2]">{children}</ul>;
+            return <ul className="list-disc list-inside my-3 space-y-1.5 text-[var(--color-text-secondary)] marker:text-[var(--color-accent-foreground)]">{children}</ul>;
           },
           ol({ children }) {
-            return <ol className="list-decimal list-inside my-3 space-y-1.5 text-[var(--color-text-secondary)] marker:text-[#5E6AD2]">{children}</ol>;
+            return <ol className="list-decimal list-inside my-3 space-y-1.5 text-[var(--color-text-secondary)] marker:text-[var(--color-accent-foreground)]">{children}</ol>;
           },
           h1({ children }) {
-            return <h1 className="text-xl font-bold text-white mt-6 mb-3 tracking-tight">{children}</h1>;
+            return <h1 className="text-xl font-bold text-[var(--color-text-primary)] mt-6 mb-3 tracking-tight">{children}</h1>;
           },
           h2({ children }) {
-            return <h2 className="text-lg font-semibold text-white mt-5 mb-2 tracking-tight">{children}</h2>;
+            return <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mt-5 mb-2 tracking-tight">{children}</h2>;
           },
           h3({ children }) {
-            return <h3 className="text-base font-semibold text-white mt-4 mb-2 tracking-tight">{children}</h3>;
+            return <h3 className="text-base font-semibold text-[var(--color-text-primary)] mt-4 mb-2 tracking-tight">{children}</h3>;
           },
           p({ children }) {
             return <p className="my-2.5 text-[var(--color-text-secondary)] leading-relaxed">{children}</p>;
           },
           strong({ children }) {
-            return <strong className="font-semibold text-white">{children}</strong>;
+            return <strong className="font-semibold text-[var(--color-text-primary)]">{children}</strong>;
           },
           em({ children }) {
             return <em className="italic text-[var(--color-text-secondary)]">{children}</em>;

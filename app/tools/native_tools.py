@@ -78,7 +78,7 @@ async def native_run(command: str, timeout: int = 120, cwd: str | None = None) -
     except TimeoutError:
         return f"TIMEOUT: Command exceeded {timeout}s limit"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool(description="Read any file from the system. Returns file content as text.")
@@ -92,7 +92,7 @@ async def native_read_file(path: str) -> str:
             content = f.read()
         return content[:50000]
     except Exception as e:
-        return f"Error reading {path}: {str(e)}"
+        return f"Error reading {path}: {e!s}"
 
 
 @tool(description="Write content to any file path. Creates directories if needed.")
@@ -109,7 +109,7 @@ async def native_write_file(path: str, content: str) -> str:
             f.write(content)
         return f"Written {len(content)} chars to {path}"
     except Exception as e:
-        return f"Error writing {path}: {str(e)}"
+        return f"Error writing {path}: {e!s}"
 
 
 @tool(description="List files and directories at a given path.")
@@ -126,7 +126,7 @@ async def native_list_dir(path: str = ".") -> str:
             entries.append(f"{prefix}{item}{suffix}")
         return "\n".join(entries) if entries else "(empty directory)"
     except Exception as e:
-        return f"Error listing {path}: {str(e)}"
+        return f"Error listing {path}: {e!s}"
 
 
 @tool(description="Open a URL in the default web browser.")
@@ -137,7 +137,7 @@ async def open_browser(url: str) -> str:
         webbrowser.open(url)
         return f"Opened {url} in browser"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool(description="Take a screenshot of the screen. Returns the saved file path.")
@@ -154,7 +154,7 @@ async def take_screenshot(output_path: str = "/tmp/screenshot.png") -> str:
         subprocess.run(["screencapture", output_path], check=True, timeout=10)
         return output_path
     except Exception as e:
-        return f"Error taking screenshot: {str(e)}"
+        return f"Error taking screenshot: {e!s}"
 
 
 @tool(description="Click at x,y coordinates on screen.")
@@ -167,7 +167,7 @@ async def click_mouse(x: int, y: int, button: str = "left") -> str:
     except ImportError:
         return "pyautogui not installed. Install with: pip install pyautogui"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool(description="Type text at the current cursor position.")
@@ -180,7 +180,7 @@ async def type_text(text: str, interval: float = 0.02) -> str:
     except ImportError:
         return "pyautogui not installed. Install with: pip install pyautogui"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool(description="Process video with ffmpeg. Example: cut segment, convert format, extract audio.")
@@ -201,7 +201,7 @@ async def process_video(command: str) -> str:
     except TimeoutError:
         return "TIMEOUT: Video processing exceeded 5 minutes"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool(description="Process image with ImageMagick convert command.")
@@ -225,7 +225,7 @@ async def process_image(command: str) -> str:
     except TimeoutError:
         return "TIMEOUT: Image processing exceeded 60s"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool(description="Search the web using a search engine. Returns top results (native mode — enhanced with num_results).")
@@ -246,25 +246,46 @@ async def native_web_search(query: str, num_results: int = 10) -> str:
             formatted.append(f"- {title.strip()}\n  {href}")
         return "\n".join(formatted) if formatted else "No results found"
     except Exception as e:
-        return f"Error searching: {str(e)}"
+        return f"Error searching: {e!s}"
 
 
 @tool(description="Download a file from URL to a local path.")
 async def download_file(url: str, output_path: str) -> str:
     """Download file from URL."""
     try:
+        from app.utils.ssrf import blocked_reason
+
+        reason = blocked_reason(url)
+        if reason:
+            return f"Error downloading: blocked ({reason})"
+
         import httpx
-        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            dir_name = os.path.dirname(output_path)
-            if dir_name:
-                os.makedirs(dir_name, exist_ok=True)
-            with open(output_path, "wb") as f:
-                f.write(resp.content)
-        return f"Downloaded {len(resp.content):,} bytes to {output_path}"
+        # Disable automatic redirects: each hop must be independently
+        # validated against the SSRF policy before being followed.
+        async with httpx.AsyncClient(timeout=60, follow_redirects=False) as client:
+            current_url = url
+            for _hop in range(5):
+                resp = await client.get(current_url)
+                if resp.is_redirect and resp.headers.get("location"):
+                    next_url = str(resp.headers["location"])
+                    if not next_url.startswith(("http://", "https://")):
+                        import urllib.parse
+                        next_url = urllib.parse.urljoin(current_url, next_url)
+                    next_reason = blocked_reason(next_url)
+                    if next_reason:
+                        return f"Error downloading: blocked redirect ({next_reason})"
+                    current_url = next_url
+                    continue
+                resp.raise_for_status()
+                dir_name = os.path.dirname(output_path)
+                if dir_name:
+                    os.makedirs(dir_name, exist_ok=True)
+                with open(output_path, "wb") as f:
+                    f.write(resp.content)
+                return f"Downloaded {len(resp.content):,} bytes to {output_path}"
+            return "Error downloading: too many redirects"
     except Exception as e:
-        return f"Error downloading: {str(e)}"
+        return f"Error downloading: {e!s}"
 
 
 # ─── Security validation helpers ──────────────────────────────────────────

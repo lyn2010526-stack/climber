@@ -33,7 +33,11 @@ export function RightPanel() {
         {tabs.map(({ id, icon: Icon, label }) => (
           <button
             key={id}
+            type="button"
             onClick={() => setRightPanelTab(id)}
+            role="tab"
+            aria-selected={rightPanelTab === id}
+            aria-label={`${label}面板`}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-all relative ${
               rightPanelTab === id
                 ? 'text-[var(--color-text-primary)]'
@@ -43,7 +47,7 @@ export function RightPanel() {
             <Icon size={13} />
             <span>{label}</span>
             {rightPanelTab === id && (
-              <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-[var(--color-accent)] rounded-full shadow-sm shadow-[var(--color-accent-glow)]" />
+              <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-[var(--color-accent)] rounded-full" />
             )}
           </button>
         ))}
@@ -90,7 +94,7 @@ function ConfigPanel({ session }: { session: any }) {
         <div className="flex flex-wrap gap-1.5">
           {(session?.activeSkills && session.activeSkills.length > 0)
             ? session.activeSkills.map((skill: string) => (
-              <span key={skill} className="px-2.5 py-1 bg-[var(--color-accent-secondary-glow)] text-[var(--color-accent-secondary)] rounded-xl text-xs font-medium">
+              <span key={skill} className="px-2.5 py-1 bg-[var(--color-accent-subtle)] text-[var(--color-accent-secondary)] rounded-xl text-xs font-medium">
                 {skill}
               </span>
             ))

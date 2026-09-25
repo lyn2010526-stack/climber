@@ -17,7 +17,7 @@ from typing import Any
 
 import structlog
 
-from app.core.safety_pipeline import ExecutionResult
+from app.core.interfaces import ExecutionResult, ExecutionStatus
 
 logger = structlog.get_logger()
 
@@ -129,7 +129,11 @@ class DockerSandbox:
         """Wait for container execution and return result."""
         container = self._active_containers.get(container_id)
         if not container:
-            return ExecutionResult(error=f"Container {container_id} not found", returncode=-1)
+            return ExecutionResult(
+                status=ExecutionStatus.FAILED,
+                error=f"Container {container_id} not found",
+                metrics={"returncode": -1, "timed_out": False},
+            )
 
         timeout = timeout or self.config.timeout_seconds
 
@@ -143,11 +147,11 @@ class DockerSandbox:
             except Exception as e:
                 logger.warning("security_docker_sandbox.logs_decode", error=str(e))
 
+            returncode = result.get("StatusCode", 0)
             return ExecutionResult(
-                stdout=stdout,
-                stderr="",
-                returncode=result.get("StatusCode", 0),
-                timed_out=False,
+                status=ExecutionStatus.COMPLETED if returncode == 0 else ExecutionStatus.FAILED,
+                output=stdout,
+                metrics={"returncode": returncode, "timed_out": False},
             )
         except Exception as e:
             try:
@@ -156,9 +160,9 @@ class DockerSandbox:
                 logger.warning("security_docker_sandbox.container_kill_timeout", error=str(e))
             logger.warning("docker_execution_timeout", error=str(e))
             return ExecutionResult(
+                status=ExecutionStatus.FAILED,
                 error=f"Docker execution timeout/error: {e}",
-                returncode=-1,
-                timed_out=True,
+                metrics={"returncode": -1, "timed_out": True},
             )
 
     def destroy_container(self, container_id: str) -> bool:
@@ -193,8 +197,9 @@ class DockerSandbox:
         """Execute command in an ephemeral Docker container."""
         if not self.available:
             return ExecutionResult(
-                error="Docker not available, falling back to L2",
-                returncode=-1,
+                status=ExecutionStatus.FAILED,
+                error="Docker not available",
+                metrics={"returncode": -1, "timed_out": False},
             )
 
         container_id = None
@@ -204,7 +209,11 @@ class DockerSandbox:
             return result
         except Exception as e:
             logger.error("docker_execution_error", error=str(e))
-            return ExecutionResult(error=f"Docker error: {e}", returncode=-1)
+            return ExecutionResult(
+                status=ExecutionStatus.FAILED,
+                error=f"Docker error: {e}",
+                metrics={"returncode": -1, "timed_out": False},
+            )
         finally:
             if container_id and self.config.ephemeral:
                 self.destroy_container(container_id)

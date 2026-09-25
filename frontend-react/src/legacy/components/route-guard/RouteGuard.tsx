@@ -58,7 +58,6 @@ function LoginRedirect() {
           style={{
             backgroundColor: 'var(--color-accent)',
             color: 'white',
-            boxShadow: '0 4px 16px var(--color-accent-glow)',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = 'var(--color-accent-hover)';

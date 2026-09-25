@@ -21,11 +21,11 @@ from app.core.group_ws_hub import group_ws_hub
 
 # Re-export for backward compatibility
 __all__ = [
+    "CALLBACK_REGISTRY",
     "GroupCollaborationEngine",
     "get_group_collaboration_engine",
-    "CALLBACK_REGISTRY",
-    "register_callback",
     "group_ws_hub",
+    "register_callback",
 ]
 
 # Module-level singleton for direct import (lazy initialization)

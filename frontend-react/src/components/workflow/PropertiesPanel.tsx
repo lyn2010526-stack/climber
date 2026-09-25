@@ -27,6 +27,13 @@ const FIELD_CONFIG: Record<string, { label: string; type: 'text' | 'select' | 't
     { label: 'Tool Name', type: 'select', options: ['web_search', 'calculator', 'file_reader', 'code_executor', 'http_request'] },
     { label: 'Parameters (JSON)', type: 'textarea' },
   ],
+  simulation: [
+    { label: 'Label', type: 'text' },
+    { label: 'Tool Name', type: 'select', options: ['simulate_experiment', 'simulate'] },
+    { label: 'Goal', type: 'textarea' },
+    { label: 'Schema (JSON)', type: 'textarea' },
+    { label: 'Max Rounds', type: 'text' },
+  ],
   condition: [
     { label: 'Label', type: 'text' },
     { label: 'Variable', type: 'text' },

@@ -77,7 +77,7 @@ class MCPRouter:
                 error=str(e),
             )
             return MCPToolResult(
-                content=[{"type": "text", "text": f"Error: {str(e)}"}],
+                content=[{"type": "text", "text": f"Error: {e!s}"}],
                 isError=True,
             )
 

@@ -120,7 +120,7 @@ class OllamaAdapter(ModelAdapter):
                         yield ChatResult(content=content)
         except Exception as e:
             yield ChatResult(
-                content=f"\n[Error: {str(e)}]",
+                content=f"\n[Error: {e!s}]",
                 tool_calls=[],
                 finish_reason="error",
             )
@@ -177,7 +177,7 @@ class OllamaAdapter(ModelAdapter):
             )
         except Exception as e:
             return ChatResult(
-                content=f"Error: {str(e)}",
+                content=f"Error: {e!s}",
                 tool_calls=[],
                 finish_reason="error",
             )

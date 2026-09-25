@@ -20,7 +20,11 @@ class Settings(BaseSettings):
     app_secret_key: str = Field(default="")
 
     # Authentication settings
-    enable_auth: bool = Field(default=False)
+    # Authentication settings. Leave unset to auto-derive from APP_ENV:
+    # dev/test default to disabled, production and staging default to enabled
+    # and refuse to boot with auth off.
+    enable_auth: bool | None = Field(default=None)
+    initial_admin_password: str = Field(default="")
     auth_public_endpoints: list[str] = Field(
         default_factory=lambda: [
             "/health",
@@ -134,14 +138,19 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _require_stable_secret(self) -> Settings:
+        environment = self.app_env.strip().lower()
+        is_deployed = environment in {"production", "prod", "staging"}
+        if self.enable_auth is None:
+            self.enable_auth = is_deployed
+        if is_deployed and not self.enable_auth:
+            raise ValueError("ENABLE_AUTH must be true in production and staging environments")
         if self.app_secret_key:
             return self
-        environment = self.app_env.strip().lower()
-        if self.enable_auth:
-            raise ValueError("APP_SECRET_KEY must be configured when authentication is enabled")
         if self.app_testing or environment in {"local", "development", "test", "testing"}:
             self.app_secret_key = "agent-engine-local-persistent-development-key"
             return self
+        if self.enable_auth:
+            raise ValueError("APP_SECRET_KEY must be configured when authentication is enabled")
         if environment in {"production", "prod", "staging"}:
             raise ValueError("APP_SECRET_KEY must be configured for authentication or production")
         raise ValueError("APP_SECRET_KEY must be configured outside local/test environments")

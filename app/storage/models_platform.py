@@ -36,6 +36,7 @@ class UserSettings(Base):
     autonomous_agent_mode: Mapped[bool] = mapped_column(Boolean, default=False)
     token_throttle_mcp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     mcp_status: Mapped[str] = mapped_column(String(20), default="disconnected")
+    notifications: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -193,6 +194,7 @@ class AutoLoopTask(Base):
     __tablename__ = "auto_loop_tasks"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    owner_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True, default="default-user")
     objective: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     max_steps: Mapped[int] = mapped_column(Integer, default=10)

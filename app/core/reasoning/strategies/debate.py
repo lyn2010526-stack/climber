@@ -231,10 +231,7 @@ class DebateStrategy:
             final_critique = CritiqueResult(
                 passed=consensus_reached,
                 summary=summary,
-                scores={
-                    dim: quality
-                    for dim in ("correctness", "completeness", "clarity", "safety", "actionability")
-                },
+                scores=dict.fromkeys(("correctness", "completeness", "clarity", "safety", "actionability"), quality),
             )
             confidence = self._scorer.score_from_critique(final_critique)
         except Exception as exc:

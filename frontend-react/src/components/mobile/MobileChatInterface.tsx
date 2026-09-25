@@ -14,10 +14,14 @@ interface MobileChatInterfaceProps {
   onStop?: () => void;
   isLoading?: boolean;
   isRefreshing?: boolean;
+  onRefresh?: () => void | Promise<void>;
   emptyStateTitle?: string;
   emptyStateDescription?: string;
   suggestions?: string[];
 }
+
+const PULL_THRESHOLD = 70;
+const PULL_MAX = 120;
 
 export function MobileChatInterface({
   messages,
@@ -25,15 +29,18 @@ export function MobileChatInterface({
   onStop,
   isLoading,
   isRefreshing,
+  onRefresh,
   emptyStateTitle = '开始新的对话',
   emptyStateDescription = '输入任何问题或任务，Climber 将为你自主执行。',
   suggestions = ['帮我分析代码', '写一个 Python 脚本', '解释这个错误'],
 }: MobileChatInterfaceProps) {
   const [input, setInput] = useState('');
+  const [pullDistance, setPullDistance] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const isScrolling = useRef(false);
   const scrollTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const touchStartY = useRef<number | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -56,6 +63,47 @@ export function MobileChatInterface({
       setTimeout(smoothScroll, 50);
     }
   }, [messages, isLoading]);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    isScrolling.current = true;
+    const el = scrollRef.current;
+    const touch = e.touches[0];
+    if (el && touch && el.scrollTop <= 0 && !isRefreshing) {
+      touchStartY.current = touch.clientY;
+    } else {
+      touchStartY.current = null;
+    }
+  }, [isRefreshing]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartY.current === null || !onRefresh) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const delta = touch.clientY - touchStartY.current;
+    if (delta > 0) {
+      setPullDistance(Math.min(delta, PULL_MAX));
+    }
+  }, [onRefresh]);
+
+  const handleTouchEnd = useCallback(async (e: React.TouchEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+    clearTimeout(scrollTimeout.current);
+    scrollTimeout.current = setTimeout(() => {
+      isScrolling.current = false;
+      if (nearBottom && !isScrolling.current) {
+        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+      }
+    }, 100);
+
+    if (touchStartY.current === null || !onRefresh) return;
+    const shouldRefresh = pullDistance >= PULL_THRESHOLD;
+    touchStartY.current = null;
+    setPullDistance(0);
+    if (shouldRefresh) {
+      await onRefresh();
+    }
+  }, [pullDistance, onRefresh]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -89,6 +137,28 @@ export function MobileChatInterface({
 
   return (
     <div className="flex flex-col h-full bg-page">
+      {/* Pull-to-refresh indicator */}
+      {onRefresh && (
+        <div
+          className="flex items-center justify-center overflow-hidden transition-all"
+          style={{ height: (isRefreshing || pullDistance > 0) ? `${Math.max(pullDistance, isRefreshing ? 40 : 0)}px` : 0 }}
+          aria-hidden={!isRefreshing && pullDistance === 0}
+        >
+          <Loader2
+            size={18}
+            className={isRefreshing ? 'animate-spin' : ''}
+            style={{
+              color: 'var(--color-accent)',
+              transform: isRefreshing ? undefined : `rotate(${(pullDistance / PULL_THRESHOLD) * 360}deg)`,
+              transition: 'transform 100ms',
+            }}
+          />
+          <span className="ml-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            {isRefreshing ? '刷新中...' : pullDistance >= PULL_THRESHOLD ? '松开刷新' : '下拉刷新'}
+          </span>
+        </div>
+      )}
+
       {/* Messages Container */}
       <div
         ref={scrollRef}
@@ -97,33 +167,18 @@ export function MobileChatInterface({
           padding: '16px',
           paddingBottom: '80px',
         }}
-        onTouchStart={() => { isScrolling.current = true; }}
-        onTouchEnd={(e) => {
-          // Auto-scroll if user released at bottom
-          const scrollTop = e.currentTarget.scrollTop;
-          const scrollHeight = e.currentTarget.scrollHeight;
-          const clientHeight = e.currentTarget.clientHeight;
-          
-          if (scrollHeight - scrollTop - clientHeight < 100) {
-            setTimeout(() => {
-              if (!isScrolling.current) {
-                e.currentTarget.scrollTo({
-                  top: e.currentTarget.scrollHeight,
-                  behavior: 'smooth'
-                });
-              }
-            }, 100);
-          }
-        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onScroll={(e) => { if (e.currentTarget.scrollTop > 0) { touchStartY.current = null; setPullDistance(0); } }}
       >
         <div className="space-y-4">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full min-h-[60vh] px-4 text-center">
-              <div className="w-16 h-16 rounded-3xl mb-4 flex items-center justify-center" style={{
-                background: 'linear-gradient(135deg, var(--color-accent), #8B5CF6)',
-                boxShadow: '0 0 30px var(--color-accent-glow)'
+              <div className="w-16 h-16 rounded-3xl mb-4 flex items-center justify-center border bg-[var(--color-bg-surface-1)]" style={{
+                borderColor: 'var(--color-border-default)',
               }}>
-                <Bot size={32} className="text-white" />
+                <Bot size={32} className="text-[var(--color-text-primary)]" />
               </div>
               <h2 className="text-xl font-semibold mb-2" style={{ color: 'var(--color-text-primary)' }}>
                 {emptyStateTitle}
@@ -138,7 +193,7 @@ export function MobileChatInterface({
                     <button
                       key={index}
                       onClick={() => handleSuggestionClick(suggestion)}
-                      className="mobile-touch-target flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 active:scale-[0.98]"
+                      className="mobile-touch-target flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors duration-150 active:opacity-80"
                       style={{
                         backgroundColor: 'var(--color-bg-surface-1)',
                         border: '1px solid var(--color-border-subtle)',
@@ -233,7 +288,7 @@ export function MobileChatInterface({
           <button
             type="submit"
             disabled={!input.trim() || isLoading}
-            className="mobile-icon-button rounded-full transition-all duration-200 active:scale-[0.92]"
+            className="mobile-icon-button rounded-full transition-colors duration-150 active:opacity-80"
             style={{
               backgroundColor: !input.trim() || isLoading
                 ? 'var(--color-bg-surface-2)'
@@ -255,7 +310,7 @@ export function MobileChatInterface({
             <button
               type="button"
               onClick={onStop}
-              className="mobile-icon-button rounded-full transition-all duration-200 active:scale-[0.92]"
+              className="mobile-icon-button rounded-full transition-colors duration-150 active:opacity-80"
               style={{
                 backgroundColor: 'var(--color-bg-surface-2)',
                 color: 'var(--color-error)',

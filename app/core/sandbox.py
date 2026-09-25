@@ -75,6 +75,16 @@ class SandboxExecutor:
 
     def _is_command_safe(self, command: str, workdir: str) -> tuple[bool, str]:
         """Check if command passes safety rules."""
+        try:
+            args = shlex.split(command)
+        except ValueError as exc:
+            return False, f"Blocked: invalid command syntax ({exc})"
+        if not args:
+            return False, "Blocked: empty command"
+        executable = os.path.basename(args[0])
+        allowed = {os.path.basename(item) for item in self.config.allowed_commands}
+        if executable not in allowed:
+            return False, f"Blocked: command '{executable}' is not allowed"
         for pattern in self.config.blocked_patterns:
             if re.search(pattern, command, re.IGNORECASE):
                 return False, f"Blocked by security rule: pattern '{pattern}'"
@@ -122,17 +132,14 @@ class SandboxExecutor:
         effective_timeout = timeout if timeout is not None else self.config.timeout_seconds
 
         try:
-            env = os.environ.copy()
-            if not self.config.enable_network:
-                env.pop("HTTP_PROXY", None)
-                env.pop("HTTPS_PROXY", None)
-                env.pop("http_proxy", None)
-                env.pop("https_proxy", None)
+            allowed_env = {"PATH", "HOME", "LANG", "LC_ALL", "PYTHONPATH"}
+            env = {key: value for key, value in os.environ.items() if key in allowed_env}
+            if self.config.enable_network:
+                for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "NO_PROXY", "no_proxy"):
+                    if key in os.environ:
+                        env[key] = os.environ[key]
 
             args = shlex.split(command)
-            if not args:
-                return "BLOCKED: empty command"
-
             proc = await asyncio.create_subprocess_exec(
                 *args,
                 stdout=asyncio.subprocess.PIPE,

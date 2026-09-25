@@ -92,4 +92,25 @@ describe('useChat history lifecycle', () => {
     unmount();
     await act(async () => old.reject(new Error('History failed')));
   });
+
+  it('refetches history when refresh is invoked', async () => {
+    vi.mocked(api.getSessionMessages)
+      .mockResolvedValueOnce(history('v1'))
+      .mockResolvedValueOnce(history('v2'));
+    const { result } = renderHook(() => useChat('a'));
+    await act(async () => {});
+    expect(result.current.messages[0].id).toBe('v1');
+    await act(async () => { result.current.refresh(); });
+    await act(async () => {});
+    expect(result.current.messages[0].id).toBe('v2');
+    expect(api.getSessionMessages).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not refetch when refresh fires without a session', async () => {
+    const { result } = renderHook(() => useChat(null));
+    await act(async () => { result.current.refresh(); });
+    await act(async () => {});
+    expect(api.getSessionMessages).not.toHaveBeenCalled();
+    expect(result.current.messages).toEqual([]);
+  });
 });

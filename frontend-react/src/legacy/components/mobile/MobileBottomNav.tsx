@@ -1,22 +1,24 @@
 import { useState } from 'react';
-import { MessageSquare, Sparkles, Network, Cpu, Bot, Settings, MoreHorizontal } from 'lucide-react';
+import { MessageSquare, Factory, Network, Cpu, Bot, Key, Settings, MoreHorizontal } from 'lucide-react';
 import { useWorkspaceStore } from '../../../store/workspace';
 
 const MOBILE_TABS: { id: string; icon: typeof MessageSquare; label: string }[] = [
   { id: 'chat', icon: MessageSquare, label: '工作台' },
-  { id: 'factory', icon: Sparkles, label: '执行' },
+  { id: 'factory', icon: Factory, label: '执行' },
   { id: 'cluster', icon: Network, label: '集群' },
   { id: 'tasks', icon: Cpu, label: '任务' },
   { id: 'agents', icon: Bot, label: '智能体' },
 ];
 
 const MORE_ITEMS: { id: string; icon: typeof Settings; label: string }[] = [
+  { id: 'apikeys', icon: Key, label: 'API 密钥' },
   { id: 'settings', icon: Settings, label: '系统设置' },
 ];
 
 export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: string; onNavigate: (page: string) => void }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const { sessions } = useWorkspaceStore();
+  const moreActive = MORE_ITEMS.some(item => item.id === currentPage);
 
   return (
     <>
@@ -39,9 +41,9 @@ export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: stri
               <button
                 key={id}
                 onClick={() => onNavigate(id)}
-                className="mobile-touch-target relative flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all duration-200 active:scale-[0.92] hover:active:scale-[0.94]"
+                className="mobile-touch-target relative flex flex-col items-center justify-center gap-0.5 rounded-xl transition-colors duration-150 active:opacity-80"
                 style={{
-                  color: isActive ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                  color: isActive ? 'var(--color-accent-foreground)' : 'var(--color-text-muted)',
                   backgroundColor: isActive ? 'var(--color-accent-subtle)' : 'transparent',
                 }}
                 aria-label={label}
@@ -52,7 +54,6 @@ export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: stri
                     className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2px] rounded-full"
                     style={{
                       backgroundColor: 'var(--color-accent)',
-                      boxShadow: '0 0 8px var(--color-accent-glow)',
                     }}
                   />
                 )}
@@ -67,7 +68,7 @@ export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: stri
                 </div>
                 <span
                   className="text-[10px] font-medium truncate max-w-full"
-                  style={{ color: isActive ? 'var(--color-accent)' : 'var(--color-text-muted)' }}
+                  style={{ color: isActive ? 'var(--color-accent-foreground)' : 'var(--color-text-muted)' }}
                 >
                   {label}
                 </span>
@@ -77,23 +78,24 @@ export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: stri
 
           <button
             onClick={() => setMoreOpen(true)}
-            className="mobile-touch-target relative flex flex-col items-center justify-center gap-0.5 rounded-xl transition-all duration-200 active:scale-[0.92] hover:active:scale-[0.94]"
+            className="mobile-touch-target relative flex flex-col items-center justify-center gap-0.5 rounded-xl transition-colors duration-150 active:opacity-80"
             style={{
-              color: currentPage === 'settings' ? 'var(--color-accent)' : 'var(--color-text-muted)',
-              backgroundColor: currentPage === 'settings' ? 'var(--color-accent-subtle)' : 'transparent',
+              color: moreActive ? 'var(--color-accent-foreground)' : 'var(--color-text-muted)',
+              backgroundColor: moreActive ? 'var(--color-accent-subtle)' : 'transparent',
             }}
             aria-label="更多"
+            aria-current={moreActive ? 'page' : undefined}
+            aria-expanded={moreOpen}
           >
-            {currentPage === 'settings' && (
+            {moreActive && (
               <div
                 className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2px] rounded-full"
                 style={{
                   backgroundColor: 'var(--color-accent)',
-                  boxShadow: '0 0 8px var(--color-accent-glow)',
                 }}
               />
             )}
-            <MoreHorizontal size={20} strokeWidth={currentPage === 'settings' ? 2.5 : 2} />
+            <MoreHorizontal size={20} strokeWidth={moreActive ? 2.5 : 2} />
             <span className="text-[10px] font-medium" style={{ color: 'var(--color-text-muted)' }}>
               更多
             </span>
@@ -119,9 +121,10 @@ export function MobileBottomNav({ currentPage, onNavigate }: { currentPage: stri
                     onNavigate(id);
                     setMoreOpen(false);
                   }}
-                  className="w-full mobile-text-button flex items-center gap-3 rounded-2xl transition-all duration-200 active:scale-[0.98]"
+                  aria-current={currentPage === id ? 'page' : undefined}
+                  className="w-full mobile-text-button flex items-center gap-3 rounded-2xl transition-colors duration-150 active:opacity-80"
                   style={{
-                    color: currentPage === id ? 'var(--color-accent)' : 'var(--color-text-primary)',
+                    color: currentPage === id ? 'var(--color-accent-foreground)' : 'var(--color-text-primary)',
                     backgroundColor: currentPage === id ? 'var(--color-accent-subtle)' : 'var(--color-bg-surface-2)',
                   }}
                 >

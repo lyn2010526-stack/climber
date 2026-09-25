@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-COMMAND_TOOLS = {"run_command", "shell", "execute_command", "bash"}
+COMMAND_TOOLS = {
+    "run_command", "shell", "execute_command", "bash",
+    "stream_command", "container_exec",
+}
 
 FILE_TOOLS: dict[str, tuple[str, str]] = {
     "read_file": ("path", "read"),

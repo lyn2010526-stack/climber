@@ -240,7 +240,7 @@ class AnthropicAdapter(ModelAdapter):
         except Exception as e:
             logger.error("Anthropic streaming error", error=str(e))
             yield ChatResult(
-                content=f"\n[Error: {str(e)}]",
+                content=f"\n[Error: {e!s}]",
                 tool_calls=[],
                 finish_reason="error",
                 tokens_used=tokens_used,

@@ -30,21 +30,19 @@ async def run_hierarchical_process(task: Any, group: Any) -> None:
     manager_member = await _find_manager(group)
     if not manager_member:
         logger.error("no_manager_found", group_id=group.id)
-        return
+        raise RuntimeError("No manager found for hierarchical task")
 
     workers = [m for m in group.members if m.id != manager_member.id and m.role in ("worker", "participant")]
     if not workers:
         logger.error("no_workers_found", group_id=group.id)
-        return
+        raise RuntimeError("No workers found for hierarchical task")
 
     await group_ws_hub.broadcast(task.group_id, {
         "type": "manager_start",
         "data": {"member_id": manager_member.id, "member_name": manager_member.agent_id},
     })
 
-    manager_plan = await _plan_subtasks(task, manager_member)
-    if not manager_plan:
-        return
+    manager_plan = await _plan_subtasks(task, manager_member, group.members)
 
     await group_ws_hub.broadcast(task.group_id, {
         "type": "hierarchical_plan",
@@ -102,11 +100,12 @@ async def _find_manager(group: Any) -> AgentGroupMember | None:
         return candidates[0] if candidates else None
 
 
-async def _plan_subtasks(task: Any, manager: Any) -> str:
+async def _plan_subtasks(task: Any, manager: Any, members: list[Any]) -> str:
     """Have the manager plan subtasks."""
     from app.core.collaboration.constants import TASK_TIMEOUT
 
-    subtask_prompt = build_manager_planning_prompt(task.description, [m for m in task.group_members or [] if m.id != manager.id])
+    other_members = [m for m in members or [] if m.id != manager.id]
+    subtask_prompt = build_manager_planning_prompt(task.description, other_members)
     try:
         async with __import__("asyncio").timeout(TASK_TIMEOUT):
             manager_plan, _ = await run_agent_simple(
@@ -119,14 +118,12 @@ async def _plan_subtasks(task: Any, manager: Any) -> str:
                 user_message=subtask_prompt,
                 tools=manager.tools or [],
             )
+        if not manager_plan.strip():
+            raise ValueError("Manager returned an empty plan")
         return manager_plan
     except Exception as e:
         logger.error("manager_failed", task_id=task.id, error=str(e))
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "task_failed",
-            "data": {"task_id": task.id, "error": f"Manager planning failed: {e}"},
-        })
-        return ""
+        raise RuntimeError(f"Manager planning failed: {e}") from e
 
 
 async def _delegate_subtasks(task: Any, workers: list[Any], manager_plan: str) -> dict[str, str]:
@@ -186,8 +183,4 @@ async def _validate_output(task: Any, manager: Any, plan: str, subtask_outputs: 
         return manager_validation
     except Exception as e:
         logger.error("manager_validation_failed", task_id=task.id, error=str(e))
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "hierarchical_validate",
-            "data": {"content": f"Validation error: {e}", "tokens_used": 0},
-        })
-        return f"Validation error: {e}"
+        raise RuntimeError(f"Manager validation failed: {e}") from e

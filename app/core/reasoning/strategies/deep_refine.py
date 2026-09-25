@@ -271,7 +271,7 @@ class DeepRefineStrategy:
             return _parse_critique_response(result.content)
         except Exception as exc:
             logger.error("deep_refine_critique_error", error=str(exc))
-            return CritiqueResult(passed=False, scores={d: 1.0 for d in ("correctness", "completeness", "clarity", "safety", "actionability")})
+            return CritiqueResult(passed=False, scores=dict.fromkeys(("correctness", "completeness", "clarity", "safety", "actionability"), 1.0))
 
     async def _generate_reflection(
         self,

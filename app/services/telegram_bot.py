@@ -23,6 +23,11 @@ _tool_registry = None  # ToolRegistry
 _user_sessions: dict[int, dict[str, Any]] = {}  # tg_user_id -> session state
 
 
+def _allowed_chat_ids() -> set[int]:
+    raw = os.environ.get("TELEGRAM_ALLOWED_CHAT_IDS", "")
+    return {int(value.strip()) for value in raw.split(",") if value.strip().lstrip("-").isdigit()}
+
+
 def configure_bot(model_registry, tool_registry) -> None:
     """Configure the bot with engine dependencies."""
     global _registry, _tool_registry
@@ -43,6 +48,10 @@ async def start_telegram_bot() -> bool:
     if _bot_app is not None:
         logger.warning("Telegram bot already running")
         return True
+    allowed_chat_ids = _allowed_chat_ids()
+    if not allowed_chat_ids:
+        logger.error("Telegram bot refused to start: TELEGRAM_ALLOWED_CHAT_IDS is empty")
+        return False
 
     try:
         from telegram import Update
@@ -60,20 +69,20 @@ async def start_telegram_bot() -> bool:
     application = ApplicationBuilder().token(token).build()
 
     async def cmd_start(update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        if update.effective_chat:
+        if update.effective_chat and update.effective_chat.id in allowed_chat_ids:
             await update.effective_chat.send_message(
                 "Climber Agent 已就绪。\n直接发消息即可与 Agent 对话；\n/list — 列出可用工具；/models — 可用模型。"
             )
 
     async def cmd_list_tools(update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        if not _tool_registry or not update.effective_chat:
+        if not _tool_registry or not update.effective_chat or update.effective_chat.id not in allowed_chat_ids:
             return
         tools = _tool_registry.list_tools()
         names = "\n".join(f"- {t.name}: {t.description[:40]}" for t in tools[:20])
         await update.effective_chat.send_message(f"可用工具 ({len(tools)}):\n{names}")
 
     async def cmd_list_models(update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        if not _registry or not update.effective_chat:
+        if not _registry or not update.effective_chat or update.effective_chat.id not in allowed_chat_ids:
             return
         providers = list(_registry.PROVIDERS.keys()) if hasattr(_registry, "PROVIDERS") else []
         await update.effective_chat.send_message(f"已注册 Provider: {', '.join(providers) or '(none)'}")
@@ -82,6 +91,9 @@ async def start_telegram_bot() -> bool:
         if not update.effective_chat or not update.message or not update.message.text:
             return
         tg_user_id = update.effective_chat.id
+        if tg_user_id not in allowed_chat_ids:
+            logger.warning("Rejected Telegram chat", chat_id=tg_user_id)
+            return
         user_text = update.message.text
 
         # Load or create a session for this Telegram user
@@ -141,7 +153,7 @@ async def start_telegram_bot() -> bool:
             state["messages"] = session.messages[-20:]
         except Exception as e:
             logger.error("Telegram handler error", error=str(e))
-            await update.effective_chat.send_message(f"[内部错误] {str(e)}")
+            await update.effective_chat.send_message(f"[内部错误] {e!s}")
 
     application.add_handler(CommandHandler("start", cmd_start))
     application.add_handler(CommandHandler("list", cmd_list_tools))

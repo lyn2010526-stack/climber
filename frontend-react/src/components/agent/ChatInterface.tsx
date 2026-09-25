@@ -12,7 +12,7 @@ import type { PermissionRequest } from './FloatingPermissionDialog';
 
   /* Streaming cursor - Reference: Claude / Vercel AI streaming */
   const StreamingCursor = () => (
-    <span className="inline-block w-[2px] h-4 ml-0.5 rounded-full bg-gradient-to-b from-[#5E6AD2] to-[#8B5CF6] animate-pulse" />
+    <span className="inline-block w-[2px] h-4 ml-0.5 rounded-full bg-[var(--color-accent)] animate-pulse" />
   );
 
 interface ToolCall {

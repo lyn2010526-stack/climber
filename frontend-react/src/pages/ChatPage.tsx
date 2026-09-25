@@ -1,19 +1,16 @@
 import { useCallback } from 'react';
 import { ChatInterface } from '../components/agent/ChatInterface';
 import { useChat, type Message } from '../useChat';
-import { useWorkspaceStore } from '../store/workspace';
+import { useDefaultSession } from '../hooks/useDefaultSession';
 
 export function ChatPage() {
-  const { activeSessionId } = useWorkspaceStore();
-  const { messages, isStreaming, error, sendMessage, stopStreaming } = useChat(activeSessionId);
+  const { sessionId, creationError } = useDefaultSession();
+  const { messages, isStreaming, error, sendMessage, stopStreaming } = useChat(sessionId);
 
   const handleSend = useCallback(async (message: string) => {
-    if (!activeSessionId) {
-      alert('请先创建或选择一个会话');
-      return;
-    }
+    if (!sessionId) return;
     await sendMessage(message);
-  }, [activeSessionId, sendMessage]);
+  }, [sessionId, sendMessage]);
 
   const handleStop = useCallback(() => {
     stopStreaming();
@@ -29,10 +26,10 @@ export function ChatPage() {
         emptyStateTitle="开始新的对话"
         emptyStateDescription="输入任何问题或任务，Climber 将为你自主执行。"
       />
-      {error && (
+      {(error || creationError) && (
         <div role="alert" className="absolute bottom-24 left-1/2 z-20 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-lg border border-[var(--color-error)]/30 bg-[var(--color-bg-surface-1)] px-4 py-3 text-sm text-[var(--color-error)] shadow-lg">
-          <span className="min-w-0">{error}</span>
-          <button type="button" onClick={() => window.location.reload()} className="min-h-11 shrink-0 px-3 font-medium">重试</button>
+          <span className="min-w-0">{error || creationError}</span>
+          {error && <button type="button" onClick={() => window.location.reload()} className="min-h-11 shrink-0 px-3 font-medium">重试</button>}
         </div>
       )}
     </section>

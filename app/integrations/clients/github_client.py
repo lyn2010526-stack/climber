@@ -609,13 +609,13 @@ class GitHubClient:
 
 
 __all__ = [
+    "GitHubAuthError",
     "GitHubClient",
     "GitHubConfig",
-    "GitHubRepo",
+    "GitHubError",
     "GitHubIssue",
     "GitHubPullRequest",
-    "GitHubWebhookEvent",
-    "GitHubError",
     "GitHubRateLimitError",
-    "GitHubAuthError",
+    "GitHubRepo",
+    "GitHubWebhookEvent",
 ]
