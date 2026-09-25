@@ -76,13 +76,13 @@ export function MessageBubble({
             'flex items-center justify-center w-8 h-8 rounded-xl',
             isUser
               ? 'bg-[var(--color-accent)]'
-              : 'bg-gradient-to-br from-[#5E6AD2] to-[#8B5CF6]',
+              : 'bg-[var(--color-bg-surface-3)]',
           )}
         >
           {isUser ? (
             <User size={15} className="text-white" />
           ) : (
-            <Bot size={15} className="text-white" />
+            <Bot size={15} className="text-[var(--color-text-primary)]" />
           )}
         </div>
       </div>
@@ -98,9 +98,7 @@ export function MessageBubble({
               : 'bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] text-[var(--color-text-primary)] rounded-2xl rounded-tl-lg',
           )}
           style={{
-            boxShadow: isUser
-              ? '0 2px 12px rgba(94, 106, 210, 0.2), 0 1px 3px rgba(0, 0, 0, 0.1)'
-              : '0 1px 4px rgba(0, 0, 0, 0.15), 0 1px 2px rgba(0, 0, 0, 0.1)',
+            boxShadow: 'var(--shadow-panel)',
           }}
         >
           {isUser ? (

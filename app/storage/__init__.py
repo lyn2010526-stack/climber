@@ -74,7 +74,7 @@ engine = _build_engine()
 if _is_sqlite:
 
     @event.listens_for(engine.sync_engine, "connect")
-    def _apply_sqlite_pragmas(dbapi_connection, connection_record):  # noqa: ANN001
+    def _apply_sqlite_pragmas(dbapi_connection, connection_record):
         """WAL + tuning pragmas, applied per connection."""
         cursor = dbapi_connection.cursor()
         try:

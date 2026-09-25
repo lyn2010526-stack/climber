@@ -10,6 +10,7 @@ Implements:
 from __future__ import annotations
 
 import asyncio
+import fnmatch
 import os
 import re
 import time
@@ -136,15 +137,15 @@ def validate_tool_input(schema: dict[str, Any], arguments: dict[str, Any]) -> No
         expected = prop.get("type")
         if expected == "string" and not isinstance(value, str):
             raise SchemaValidationError(f"Field '{key}' must be a string")
-        elif expected == "integer" and not isinstance(value, int):
+        if expected == "integer" and not isinstance(value, int):
             raise SchemaValidationError(f"Field '{key}' must be an integer")
-        elif expected == "number" and not isinstance(value, (int, float)):
+        if expected == "number" and not isinstance(value, (int, float)):
             raise SchemaValidationError(f"Field '{key}' must be a number")
-        elif expected == "boolean" and not isinstance(value, bool):
+        if expected == "boolean" and not isinstance(value, bool):
             raise SchemaValidationError(f"Field '{key}' must be a boolean")
-        elif expected == "array" and not isinstance(value, list):
+        if expected == "array" and not isinstance(value, list):
             raise SchemaValidationError(f"Field '{key}' must be an array")
-        elif expected == "object" and not isinstance(value, dict):
+        if expected == "object" and not isinstance(value, dict):
             raise SchemaValidationError(f"Field '{key}' must be an object")
 
 
@@ -223,16 +224,21 @@ class SecuritySandbox:
 
     def validate_file_access(self, path: str, mode: str = 'read') -> tuple[bool, str]:
         """Validate if a file can be accessed."""
-        abs_path = os.path.abspath(path)
+        abs_path = os.path.realpath(path)
 
         # Check blocked paths
         for blocked in self.config.blocked_paths:
-            if abs_path.startswith(blocked) or abs_path == blocked:
+            blocked_path = os.path.realpath(blocked.rstrip("/*"))
+            if (
+                self._is_within(abs_path, blocked_path)
+                or fnmatch.fnmatch(abs_path, blocked)
+                or fnmatch.fnmatch(abs_path, f"{blocked.rstrip('/')}/*")
+            ):
                 return False, f"Access denied: path '{abs_path}' is in blocked list"
 
         # Check allowed paths
         allowed = [self.config.workdir] + self.config.allowed_paths
-        is_allowed = any(abs_path.startswith(p) for p in allowed)
+        is_allowed = any(self._is_within(abs_path, p) for p in allowed)
 
         if not is_allowed:
             return False, f"Access denied: path '{abs_path}' is outside allowed directories"
@@ -244,6 +250,14 @@ class SecuritySandbox:
                 return False, f"File too large: {size_mb:.1f}MB (max {self.config.max_file_size_mb}MB)"
 
         return True, "OK"
+
+    @staticmethod
+    def _is_within(path: str, root: str) -> bool:
+        try:
+            resolved_root = os.path.realpath(root)
+            return os.path.commonpath((path, resolved_root)) == resolved_root
+        except ValueError:
+            return False
 
     def validate_command(self, command: str) -> tuple[bool, str]:
         """Validate a shell command against hazard list and allowlist."""

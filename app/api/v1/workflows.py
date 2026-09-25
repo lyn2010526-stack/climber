@@ -78,6 +78,29 @@ async def list_workflow_templates() -> list[dict[str, Any]]:
                         true_prompt="Handle true case",
                         false_prompt="Handle false case",
                     )
+                elif tpl["id"] == "simulation_experiment":
+                    workflow = template_fn(
+                        provider="openai",
+                        model_id="gpt-4o",
+                        api_key="",
+                        tool_name="simulate_experiment",
+                        schema={
+                            "objective": "minimize temperature overshoot",
+                            "sweep": {
+                                "dt": {"values": [1e-4, 2e-4, 5e-4]},
+                                "alpha": {"values": [1e-4, 5e-4, 1e-3]},
+                            },
+                            "base": {
+                                "model": "heat",
+                                "dx": 0.02,
+                                "t_final": 10.0,
+                                "n_points": 51,
+                                "source_temp": 100.0,
+                                "ambient_temp": 0.0,
+                            },
+                        },
+                        max_rounds=4,
+                    )
                 else:
                     continue
                 builtin.append({

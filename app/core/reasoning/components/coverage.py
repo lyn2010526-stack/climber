@@ -123,7 +123,7 @@ class CoverageChecker:
     ) -> CoverageReport:
         start = time.monotonic()
         checklist_items = _TASK_TYPE_CHECKLISTS.get(task_type, _DEFAULT_CHECKLIST)
-        checklist: dict[str, bool] = {item: False for item in checklist_items}
+        checklist: dict[str, bool] = dict.fromkeys(checklist_items, False)
 
         combined_content = self._combine_candidates(candidates)
 

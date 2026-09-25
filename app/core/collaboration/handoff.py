@@ -21,6 +21,17 @@ class HandoffStatus(StrEnum):
 
 
 @dataclass
+class HandoffMessage:
+    """Task transfer with group-member IDs and a textual task context."""
+
+    source_agent: str = ""
+    target_agent: str = ""
+    task_id: str = ""
+    context: str = ""
+    reason: str = ""
+
+
+@dataclass
 class HandoffRequest:
     """Represents a handoff request between agents."""
 

@@ -24,6 +24,7 @@ Climber 是一个生产级 AI Agent 工作台，支持自主软件开发、多 A
 | 会话持久化 | 检查点/恢复，断点续跑 |
 | 安全加固 | 路径穿越防护、Shell 注入风险拦截、系统提示词注入保护 |
 | 可观测性 | 结构化日志、JSON 指标、Token 用量追踪 |
+| 科学仿真 Agent | 自然语言实验需求 → 仿真工具调度 → 收敛探针 + LLM 评审 → 自动调参/重规划 → JSONL 全链路账本；内置 heat/oscillator/logistic 数值实验后端开箱可跑，工业级求解器经 MCP 接入，不自研求解器 |
 | 提示词管理 | 外部模板仓库加载（`app/core/prompt_engine/`） |
 
 ## 快速开始
@@ -195,6 +196,7 @@ VECTOR_STORE_PATH=./data/chroma
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | 部署指南（Docker、本地、云） |
 | [DEVELOPMENT.md](docs/DEVELOPMENT.md) | 开发指南、代码规范、测试方法 |
 | [SECURITY.md](docs/SECURITY.md) | 安全策略、已知风险、防护措施 |
+| [SCIENCE_AGENT_REFERENCES.md](docs/SCIENCE_AGENT_REFERENCES.md) | 科学仿真 Agent 的 5 个开源参考实现与借鉴点 |
 
 ## 测试
 

@@ -84,6 +84,16 @@ class ParallelToolExecutor:
                 timeout=self._timeout,
             )
             duration = (asyncio.get_event_loop().time() - start) * 1000
+            if isinstance(result, str) and result.startswith("Error executing "):
+                return ToolExecutionResult(
+                    tool_name=name,
+                    result=result,
+                    error=result,
+                    success=False,
+                    duration_ms=duration,
+                    arguments=arguments,
+                    tool_call_id=tool_call_id,
+                )
             return ToolExecutionResult(tool_name=name, result=result, duration_ms=duration, arguments=arguments, tool_call_id=tool_call_id)
         except TimeoutError:
             return ToolExecutionResult(tool_name=name, error="timeout", success=False, arguments=arguments, tool_call_id=tool_call_id)

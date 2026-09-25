@@ -4,11 +4,11 @@ from app.reflection.reflection_engine import ReflectionEngine, ReflectionResult
 from app.reflection.self_evaluation import EvaluationResult, QualityScore, SelfEvaluator
 
 __all__ = [
+    "EvaluationResult",
     "ImprovementAdvisor",
     "ImprovementSuggestion",
+    "QualityScore",
     "ReflectionEngine",
     "ReflectionResult",
-    "EvaluationResult",
-    "QualityScore",
     "SelfEvaluator",
 ]

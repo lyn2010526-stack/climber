@@ -9,10 +9,19 @@ from typing import Any
 import structlog
 
 from app.core.collaboration.agent_runner import run_agent_with_retry
-from app.core.collaboration.callbacks import invoke_step_callback, invoke_task_callback, wait_for_human_review
+from app.core.collaboration.callbacks import (
+    invoke_step_callback,
+    invoke_task_callback,
+    wait_for_human_review,
+)
 from app.core.collaboration.checkpoint import save_checkpoint
 from app.core.collaboration.guardrails import run_guardrails
-from app.core.collaboration.memory import build_context_from_dependencies, inject_memory, merge_context, store_memory
+from app.core.collaboration.memory import (
+    build_context_from_dependencies,
+    inject_memory,
+    merge_context,
+    store_memory,
+)
 from app.core.collaboration.prompts import (
     build_initial_prompt,
     build_review_prompt,

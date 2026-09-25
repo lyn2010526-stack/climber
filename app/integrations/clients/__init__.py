@@ -13,14 +13,14 @@ from app.integrations.clients.notion_client import NotionClient, NotionConfig
 from app.integrations.clients.slack_client import SlackClient, SlackConfig
 
 __all__ = [
-    "GitHubClient",
-    "GitHubConfig",
-    "SlackClient",
-    "SlackConfig",
     "DiscordClient",
     "DiscordConfig",
+    "GitHubClient",
+    "GitHubConfig",
     "JiraClient",
     "JiraConfig",
     "NotionClient",
     "NotionConfig",
+    "SlackClient",
+    "SlackConfig",
 ]

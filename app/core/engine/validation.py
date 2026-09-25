@@ -7,7 +7,10 @@ from typing import Any
 from app.core.session import AgentSession
 
 # Tool names that accept a shell command under a "command" parameter
-_COMMAND_TOOLS: set[str] = {"run_command", "shell", "execute_command", "bash"}
+_COMMAND_TOOLS: set[str] = {
+    "run_command", "shell", "execute_command", "bash",
+    "stream_command", "container_exec",
+}
 
 # Tool names that perform file IO under path/file parameters
 _FILE_TOOLS: dict[str, tuple[str, str]] = {

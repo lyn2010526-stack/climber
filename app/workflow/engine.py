@@ -29,97 +29,12 @@ from app.workflow import (
     WorkflowNode,
     WorkflowResult,
 )
-
-_SAFE_EVAL_BUILTINS = {
-    "len": len, "str": str, "int": int, "float": float,
-    "bool": bool, "list": list, "dict": dict, "range": range,
-    "enumerate": enumerate, "abs": abs, "round": round,
-    "isinstance": isinstance, "min": min, "max": max,
-    "sum": sum, "sorted": sorted, "zip": zip, "map": map,
-    "filter": filter, "True": True, "False": False, "None": None,
-    "json": json,
-}
-
-_SAFE_NODES = (
-    ast.Expression, ast.BinOp, ast.UnaryOp, ast.BoolOp, ast.Compare,
-    ast.Call, ast.Constant, ast.Name, ast.Load, ast.Store, ast.Attribute,
-    ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod, ast.Pow,
-    ast.USub, ast.UAdd, ast.Not, ast.And, ast.Or,
-    ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE,
-    ast.Is, ast.IsNot, ast.In, ast.NotIn,
-    ast.List, ast.Tuple, ast.Dict, ast.Subscript, ast.Slice,
-    ast.IfExp, ast.Index, ast.FormattedValue, ast.JoinedStr,
-    ast.DictComp, ast.ListComp, ast.SetComp, ast.GeneratorExp,
-    ast.comprehension,
+from app.workflow.code_sandbox import run_code_sandboxed
+from app.workflow.safe_code import (
+    safe_eval,
+    safe_exec,
+    validate_code_ast as _validate_code_ast,
 )
-
-
-def _is_dangerous_attr(attr: str) -> bool:
-    """Reject dunder and private attributes to prevent sandbox escapes.
-
-    Blocks __class__, __bases__, __subclasses__, __globals__, __builtins__,
-    __import__, __code__ and any other underscore-prefixed attribute that
-    could traverse the Python object graph.
-    """
-    return attr.startswith("_")
-
-
-def _validate_ast(node: ast.AST) -> None:
-    for child in ast.walk(node):
-        if not isinstance(child, _SAFE_NODES):
-            raise ValueError(f"Unsafe expression node: {type(child).__name__}")
-        if isinstance(child, ast.Attribute) and _is_dangerous_attr(child.attr):
-            raise ValueError(f"Access to attribute '{child.attr}' is not allowed")
-
-
-def safe_eval(expression: str, local_vars: dict[str, Any]) -> Any:
-    """Safely evaluate a Python expression using AST validation.
-
-    Note: This is designed for a sandboxed workflow environment where
-    only pre-validated AST nodes are permitted. The eval() call is
-    restricted to a controlled builtin set and should not be used
-    with untrusted input in production.
-    """
-    try:
-        tree = ast.parse(expression, mode="eval")
-        _validate_ast(tree)
-        return eval(compile(tree, "<workflow>", "eval"), {"__builtins__": _SAFE_EVAL_BUILTINS}, local_vars)
-    except Exception:
-        raise
-
-
-def _validate_code_ast(node: ast.AST) -> None:
-    allowed_nodes = _SAFE_NODES + (
-        ast.Module,
-        ast.Assign, ast.AugAssign, ast.AnnAssign,
-        ast.For, ast.While, ast.If, ast.Return,
-        ast.Break, ast.Continue,
-        ast.FunctionDef, ast.AsyncFunctionDef,
-        ast.arg, ast.arguments, ast.Return,
-        ast.Pass, ast.Assert, ast.Raise,
-        ast.Import, ast.ImportFrom,
-        ast.Expr, ast.Store, ast.NameConstant,
-    )
-    for child in ast.walk(node):
-        if not isinstance(child, allowed_nodes):
-            raise ValueError(f"Unsafe code node: {type(child).__name__}")
-        if isinstance(child, ast.Attribute) and _is_dangerous_attr(child.attr):
-            raise ValueError(f"Access to attribute '{child.attr}' is not allowed")
-        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and child.name.startswith("_"):
-            raise ValueError(f"Private function definition not allowed: {child.name}")
-        if isinstance(child, (ast.Import, ast.ImportFrom)) and child.module and child.module not in {"json", "math", "datetime", "re", "collections"}:
-            raise ValueError(f"Unsafe import: {child.module}")
-
-
-def safe_exec(code: str, local_vars: dict[str, Any]) -> dict[str, Any]:
-    try:
-        tree = ast.parse(code, mode="exec")
-        _validate_code_ast(tree)
-        exec_globals: dict[str, Any] = {"__builtins__": _SAFE_EVAL_BUILTINS}
-        exec(compile(tree, "<workflow>", "exec"), exec_globals, local_vars)
-        return local_vars
-    except Exception:
-        raise
 
 logger = structlog.get_logger()
 
@@ -136,6 +51,31 @@ class WorkflowEngine:
         self.agent_engine = engine
         self.model_registry = model_registry
         self.tool_registry = tool_registry
+
+    def _resolve_registry(self) -> ToolRegistry:
+        """Return the tool registry used for dispatch.
+
+        Prefers an explicitly injected registry, then the application DI
+        global (which main.py fills via register_builtins), then the
+        module-level global registry, and finally a fresh empty registry.
+        This keeps real tools (e.g. simulate_experiment) available to
+        Flow and API workflow runs that do not pass a registry directly.
+        """
+        if self.tool_registry is not None:
+            return self.tool_registry
+        try:
+            from app.core.di import resolve as di_resolve
+
+            return di_resolve("ToolRegistry")
+        except KeyError:
+            pass
+        try:
+            from app.tools import tool_registry as module_global
+
+            return module_global
+        except Exception:
+            pass
+        return ToolRegistry()
 
     async def execute(
         self,
@@ -241,7 +181,9 @@ class WorkflowEngine:
                     node, resolved_inputs, user_id, skipped_nodes,
                 )
             elif node.type == NodeType.CODE:
-                output = self._execute_code_node(node, resolved_inputs)
+                output = await self._execute_code_node(node, resolved_inputs)
+            elif node.type == NodeType.SIMULATION:
+                output = await self._execute_simulation_node(node, resolved_inputs)
             elif node.type == NodeType.END:
                 output = resolved_inputs
             else:
@@ -358,8 +300,19 @@ class WorkflowEngine:
                 resolved_tool_inputs[k] = v
 
         from app.core.parallel import ParallelToolExecutor
-        registry = self.tool_registry or ToolRegistry()
-        executor = ParallelToolExecutor(registry)
+        registry = self._resolve_registry()
+        sandbox = getattr(self.agent_engine, "sandbox", None)
+        permission_overlay = getattr(self.agent_engine, "permission_overlay", None)
+        capabilities = node.config.get("tool_capabilities")
+
+        from app.core.engine.tool_capabilities import build_workflow_tool_validator
+        validator = build_workflow_tool_validator(
+            registry,
+            sandbox=sandbox,
+            permission_overlay=permission_overlay,
+            capabilities=capabilities,
+        )
+        executor = ParallelToolExecutor(registry, validator=validator)
         tool_result = await executor.execute_all([{
             "id": f"wf-{node.id}",
             "function": {
@@ -368,6 +321,9 @@ class WorkflowEngine:
             },
         }])
         tool_result = tool_result[0]
+
+        if not tool_result.success:
+            raise RuntimeError(tool_result.error or f"Tool '{tool_name}' execution failed")
 
         return {
             "result": tool_result.result,
@@ -418,7 +374,7 @@ class WorkflowEngine:
 
         for edge in edges:
             edge_condition = edge.condition
-            if edge_condition == "true" and not condition_result or edge_condition == "false" and condition_result:
+            if (edge_condition == "true" and not condition_result) or (edge_condition == "false" and condition_result):
                 skip_targets.append(edge.target)
 
         return {
@@ -439,21 +395,21 @@ class WorkflowEngine:
 
         if operator == "equals":
             return actual_str == expected
-        elif operator == "not_equals":
+        if operator == "not_equals":
             return actual_str != expected
-        elif operator == "contains":
+        if operator == "contains":
             return expected in actual_str
-        elif operator == "not_contains":
+        if operator == "not_contains":
             return expected not in actual_str
-        elif operator == "starts_with":
+        if operator == "starts_with":
             return actual_str.startswith(expected)
-        elif operator == "ends_with":
+        if operator == "ends_with":
             return actual_str.endswith(expected)
-        elif operator == "not_empty":
+        if operator == "not_empty":
             return bool(actual_str.strip())
-        elif operator == "empty":
+        if operator == "empty":
             return not actual_str.strip()
-        elif operator == "greater_than":
+        if operator == "greater_than":
             try:
                 return float(actual_str) > float(expected)
             except (ValueError, TypeError):
@@ -524,12 +480,12 @@ class WorkflowEngine:
             "node_name": node.name,
         }
 
-    def _execute_code_node(
+    async def _execute_code_node(
         self,
         node: WorkflowNode,
         inputs: dict[str, Any],
     ) -> dict[str, Any]:
-        """Execute a code node with sandboxed Python."""
+        """Execute a code node in a resource-limited subprocess sandbox."""
         code = node.config.get("code", "")
 
         # Validate the author's static code BEFORE any substitution
@@ -557,22 +513,154 @@ class WorkflowEngine:
                 "node_name": node.name,
             }
 
-        # Sandboxed execution — expose both individual vars and "inputs" dict
-        local_vars: dict[str, Any] = {"inputs": inputs, **inputs}
-        try:
-            safe_exec(rendered_code, local_vars)
-        except Exception as e:
+        timeout = node.config.get("timeout_seconds", 5)
+        outcome = await run_code_sandboxed(rendered_code, inputs, timeout_seconds=timeout)
+        if not outcome.get("ok"):
             return {
-                "result": f"Error: {e}",
+                "result": f"Error: {outcome.get('error', 'Code node failed')}",
                 "node_id": node.id,
                 "node_name": node.name,
             }
 
-        # Extract result
-        result = local_vars.get("result", local_vars)
+        return {
+            "result": outcome.get("result"),
+            "node_id": node.id,
+            "node_name": node.name,
+        }
+
+    async def _execute_simulation_node(
+        self,
+        node: WorkflowNode,
+        inputs: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute a simulation-experiment node via the SimulationHarness.
+
+        Config:
+        - tool_name: the (MCP or native) simulation tool to dispatch
+        - schema: optional plan schema (sweep/base/objective). When an
+          ``llm_mode`` is enabled and the tool schema is available, the
+          goal is planned by an LLM sub-agent instead.
+        - goal: the natural-language engineering requirement
+        - max_rounds: per-experiment retry budget
+        - policy: optional ParameterPolicy dict for pre-dispatch allowlist
+        - ledger_dir: optional directory for the reproducible JSONL ledger
+        - orchestrator_mode: when true, run the full 总指挥 close-loop
+          (ScienceSimulationAgent) — select tool, plan, run, aggregate
+          review, refine and repeat up to ``plan_rounds``.
+        - plan_rounds: max aggregate loop iterations (default 3).
+        """
+        from app.simulation.harness import HarnessOptions, SimulationHarness
+        from app.simulation.review import HarnessReviewer, ParameterPolicy
+
+        tool_name = node.config.get("tool_name", "")
+        schema = node.config.get("schema", {})
+        if isinstance(schema, str):
+            schema = json.loads(schema) if schema.strip() else {}
+        max_rounds = int(node.config.get("max_rounds", 8))
+        ledger_dir = node.config.get("ledger_dir") or None
+        goal = str(inputs.get("goal", node.config.get("goal", "")))
+        plan_rounds = int(node.config.get("plan_rounds", 3))
+        orchestrator_mode = bool(node.config.get("orchestrator_mode", False))
+
+        registry = self._resolve_registry()
+        sandbox = getattr(self.agent_engine, "sandbox", None)
+        permission_overlay = getattr(self.agent_engine, "permission_overlay", None)
+        capabilities = node.config.get("tool_capabilities")
+
+        from app.core.engine.tool_capabilities import build_workflow_tool_validator
+        validator = build_workflow_tool_validator(
+            registry,
+            sandbox=sandbox,
+            permission_overlay=permission_overlay,
+            capabilities=capabilities,
+        )
+
+        policy = None
+        policy_cfg = node.config.get("policy")
+        if policy_cfg:
+            policy = ParameterPolicy(
+                allowed=policy_cfg.get("allowed"),
+                ranges=policy_cfg.get("ranges", {}),
+                disallowed_values=policy_cfg.get("disallowed_values", {}),
+                require=policy_cfg.get("require", []),
+            )
+
+        ledger = None
+        if ledger_dir:
+            from app.simulation.ledger import ExperimentLedger
+            ledger = ExperimentLedger(ledger_dir)
+
+        llm_call = None
+        if node.config.get("llm_mode") or orchestrator_mode:
+            provider = node.config.get("provider", "openai")
+            model_id = node.config.get("model_id", "gpt-4")
+            import os as _os
+            api_key_env = node.config.get("api_key_env", "")
+            api_key = _os.environ.get(api_key_env, "") if api_key_env else node.config.get("api_key", "")
+
+            async def _llm_call(prompt: str, system_prompt: str):
+                from app.core.engine.session_runner import run_llm_single
+                return await run_llm_single(
+                    self.agent_engine, provider, model_id, api_key,
+                    system_prompt, prompt,
+                )
+
+        if orchestrator_mode:
+            from app.simulation.orchestrator import (
+                OrchestratorOptions,
+                ScienceSimulationAgent,
+            )
+
+            agent = ScienceSimulationAgent(
+                registry,
+                options=OrchestratorOptions(
+                    max_plan_rounds=plan_rounds,
+                    harness_options=HarnessOptions(
+                        max_rounds=max_rounds, policy=policy,
+                    ),
+                    default_tool=tool_name,
+                ),
+                llm_call=_llm_call,
+                ledger=ledger,
+                validate_tool_call=validator,
+            )
+            result = await agent.run(goal)
+            return {
+                "accepted": result.accepted,
+                "rejected": result.rejected,
+                "satisfied": result.satisfied,
+                "rounds": len(result.rounds),
+                "final_report": result.final_report,
+                "ledger_path": result.ledger_path,
+                "node_id": node.id,
+                "node_name": node.name,
+            }
+
+        harness = SimulationHarness(
+            registry,
+            reviewer=HarnessReviewer(),
+            options=HarnessOptions(max_rounds=max_rounds, policy=policy),
+            ledger=ledger,
+            validate_tool_call=validator,
+        )
+
+        llm_planner = None
+        if node.config.get("llm_mode"):
+            tool_def = registry.get_tool(tool_name) if registry else None
+            from app.simulation.llm_planner import LLMExperimentPlanner
+            llm_planner = LLMExperimentPlanner(
+                llm_call=_llm_call,
+                tool_name=tool_name,
+                tool_def=tool_def,
+            )
+
+        result = await harness.run_requirement(goal, tool_name, schema, llm_planner=llm_planner)
 
         return {
-            "result": result,
+            "accepted": result.accepted,
+            "rejected": result.rejected,
+            "reports": [r.model_dump() for r in result.reports],
+            "ledger_path": result.ledger_path,
             "node_id": node.id,
             "node_name": node.name,
         }

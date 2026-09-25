@@ -95,8 +95,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 <Card variant="elevated" padding="none" className="overflow-hidden shadow-[var(--shadow-xl)]">
                     <CardContent className="p-6 md:p-8">
                         <div className="text-center mb-6 md:mb-8">
-                            <div className="h-14 w-14 rounded-[var(--radius-lg)] flex items-center justify-center mx-auto mb-4"
-                                style={{ background: 'var(--gradient-accent)', boxShadow: 'var(--shadow-glow)' }}>
+                            <div className="h-14 w-14 rounded-[var(--radius-lg)] flex items-center justify-center mx-auto mb-4 bg-[var(--color-accent)]">
                                 <Key size={24} className="text-white" />
                             </div>
                             <h1 className="text-xl md:text-2xl font-bold text-[var(--color-text-primary)]">Welcome Back</h1>

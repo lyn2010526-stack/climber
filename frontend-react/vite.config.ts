@@ -22,6 +22,11 @@ export default defineConfig({
       '/api': {
         target: apiTarget,
         changeOrigin: true,
+        ws: true,
+      },
+      '/health': {
+        target: apiTarget,
+        changeOrigin: true,
       },
       '/ws': {
         target: apiTarget.replace('http', 'ws'),
@@ -34,16 +39,16 @@ export default defineConfig({
     rollupOptions: {
       output: {
       manualChunks: (id) => {
-        if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+        if (id.includes('/node_modules/react/') || id.includes('/node_modules/react-dom/') || id.includes('/node_modules/react-router')) {
           return 'react-vendor';
         }
         if (id.includes('node_modules/lucide-react') || id.includes('node_modules/@xyflow/react')) {
           return 'ui-vendor';
         }
-        if (id.includes('node_modules/@monaco-editor') || id.includes('node_modules/xterm')) {
+        if (id.includes('/node_modules/@monaco-editor/') || id.includes('/node_modules/@xterm/')) {
           return 'editor-vendor';
         }
-        if (id.includes('node_modules/react-markdown') || id.includes('node_modules/remark-gfm')) {
+        if (id.includes('/node_modules/react-markdown/') || id.includes('/node_modules/remark-gfm/')) {
           return 'markdown-vendor';
         }
         return undefined;

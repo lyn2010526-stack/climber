@@ -9,13 +9,13 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary: 'bg-[var(--color-accent)] text-white shadow-sm hover:bg-[var(--color-accent-hover)] active:bg-[var(--color-accent)] disabled:bg-[var(--color-text-disabled)] disabled:shadow-none',
-        secondary: 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-primary)] border border-[var(--color-border-default)] hover:bg-[var(--color-bg-surface-3)] hover:border-[var(--color-border-strong)] hover:shadow-sm active:scale-[0.97]',
-        outline: 'border border-[var(--color-border-default)] bg-transparent text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)] hover:border-[var(--color-border-strong)] active:scale-[0.97]',
-        ghost: 'bg-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)] active:scale-[0.97]',
-        subtle: 'bg-[var(--color-bg-surface-2)]/50 text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)] active:scale-[0.97]',
+        secondary: 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-primary)] border border-[var(--color-border-default)] hover:bg-[var(--color-bg-surface-3)] hover:border-[var(--color-border-strong)] hover:shadow-sm active:bg-[var(--color-bg-surface-3)]',
+        outline: 'border border-[var(--color-border-default)] bg-transparent text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)] hover:border-[var(--color-border-strong)] active:bg-[var(--color-bg-surface-3)]',
+        ghost: 'bg-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)] active:bg-[var(--color-bg-surface-3)]',
+        subtle: 'bg-[var(--color-bg-surface-2)]/50 text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)] active:bg-[var(--color-bg-surface-3)]',
         destructive: 'bg-[var(--color-error)] text-white shadow-sm hover:brightness-110 active:brightness-95 disabled:bg-[var(--color-text-disabled)] disabled:shadow-none',
         success: 'bg-[var(--color-success)] text-white shadow-sm hover:brightness-110 active:brightness-95 disabled:bg-[var(--color-text-disabled)] disabled:shadow-none',
-        link: 'text-[var(--color-accent)] underline-offset-4 hover:underline hover:text-[var(--color-accent-hover)] bg-transparent',
+        link: 'text-[var(--color-accent-foreground)] underline-offset-4 hover:underline bg-transparent',
       },
       size: {
         xs: 'h-8 px-2.5 text-xs rounded-md',

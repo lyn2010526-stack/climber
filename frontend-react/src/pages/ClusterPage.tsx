@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   Network, Play, CheckCircle2, Clock, Loader2,
   Bot, Shield, Search, Wrench, Plus, ArrowLeft, Hash, Users, X,
@@ -6,6 +6,7 @@ import {
 import { GroupRoom } from '../components/group/GroupRoom';
 import { CollaborationConsole } from '../components/collaboration/CollaborationConsole';
 import { api } from '../api';
+import { getClusterMembers, type ClusterMember } from '../services/cluster-service';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -184,7 +185,10 @@ export function ClusterPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('cluster');
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [managingGroupId, setManagingGroupId] = useState<string | null>(null);
-  const [members, setMembers] = useState<any[]>([]);
+  const [members, setMembers] = useState<ClusterMember[]>([]);
+  const [membersError, setMembersError] = useState<string | null>(null);
+  const membersRequest = useRef(0);
+  useEffect(() => () => { membersRequest.current += 1; }, []);
   const [showAddMember, setShowAddMember] = useState(false);
   const [memberForm, setMemberForm] = useState({ agent_id: '', role: 'participant', model_provider: '', model_id: '', tools: [] as string[] });
   const [loadingMembers, setLoadingMembers] = useState(false);
@@ -312,6 +316,7 @@ export function ClusterPage() {
   };
 
   const leaveGroup = () => {
+    membersRequest.current += 1;
     setActiveGroupId(null);
     setManagingGroupId(null);
     setViewMode('groups');
@@ -319,28 +324,54 @@ export function ClusterPage() {
   };
 
   const openManageMembers = async (groupId: string) => {
+    const requestId = ++membersRequest.current;
     setManagingGroupId(groupId);
     setLoadingMembers(true);
+    setMembersError(null);
     setMembers([]);
-    setLoadingMembers(false);
+    setShowAddMember(false);
+    try {
+      const result = await getClusterMembers(groupId);
+      if (requestId === membersRequest.current) setMembers(result);
+    } catch (error) {
+      if (requestId === membersRequest.current) {
+        setMembersError(error instanceof Error ? error.message : '加载成员失败，请重试。');
+      }
+    } finally {
+      if (requestId === membersRequest.current) setLoadingMembers(false);
+    }
   };
 
   const addMember = async () => {
     if (!managingGroupId || !memberForm.agent_id.trim()) return;
+    const requestId = membersRequest.current;
+    setMembersError(null);
     try {
       await api.addGroupMember(managingGroupId, memberForm);
+      if (requestId !== membersRequest.current) return;
       setMemberForm({ agent_id: '', role: 'participant', model_provider: '', model_id: '', tools: [] });
       setShowAddMember(false);
       openManageMembers(managingGroupId);
-    } catch { /* skip */ }
+    } catch (error) {
+      if (requestId === membersRequest.current) {
+        setMembersError(error instanceof Error ? error.message : '添加成员失败，请重试。');
+      }
+    }
   };
 
   const removeMember = async (memberId: string) => {
     if (!managingGroupId) return;
+    const requestId = membersRequest.current;
+    setMembersError(null);
     try {
       await api.removeGroupMember(managingGroupId, memberId);
+      if (requestId !== membersRequest.current) return;
       openManageMembers(managingGroupId);
-    } catch { /* skip */ }
+    } catch (error) {
+      if (requestId === membersRequest.current) {
+        setMembersError(error instanceof Error ? error.message : '移除成员失败，请重试。');
+      }
+    }
   };
 
   if (viewMode === 'collab-console' && activeGroupId) {
@@ -448,13 +479,13 @@ export function ClusterPage() {
               <CardContent className="p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">群组成员</h3>
-                  <Button variant="ghost" size="icon" onClick={() => setManagingGroupId(null)}>
+                  <Button variant="ghost" size="icon" aria-label="关闭成员面板" onClick={() => { membersRequest.current += 1; setManagingGroupId(null); }}>
                     <X size={16} />
                   </Button>
                 </div>
 
                 {loadingMembers ? (
-                  <SkeletonList count={2} />
+                  <div role="status" aria-label="正在加载成员"><SkeletonList count={2} /></div>
                 ) : (
                   <>
                     {showAddMember ? (
@@ -487,6 +518,12 @@ export function ClusterPage() {
                       </Button>
                     )}
 
+                    {membersError && (
+                      <div role="alert" className="text-xs text-[var(--color-error)] mb-3">
+                        <p>{membersError}</p>
+                        <Button variant="ghost" size="sm" onClick={() => openManageMembers(managingGroupId)}>重新加载成员</Button>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       {members.map((member) => (
                         <div key={member.id} className="flex items-center justify-between p-3 bg-[var(--color-bg-surface-2)] rounded-xl border border-[var(--color-border-subtle)]">
@@ -499,7 +536,7 @@ export function ClusterPage() {
                           </Button>
                         </div>
                       ))}
-                      {members.length === 0 && (
+                      {!membersError && members.length === 0 && (
                         <p className="text-xs text-[var(--color-text-muted)] text-center py-4">暂无成员</p>
                       )}
                     </div>

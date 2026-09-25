@@ -3,14 +3,14 @@ import {
   Position,
   Handle,
 } from '@xyflow/react';
-import { Bot, Wrench, GitBranch, FileInput, FileOutput, AlertTriangle } from 'lucide-react';
+import { Bot, Wrench, GitBranch, FileInput, FileOutput, AlertTriangle, FlaskConical } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 // ─── Custom Node Components ───
 
 /* Reference: Flowise `CanvasNode.jsx` - border colors, selected states, version warnings */
 const nodeStyles: Record<
-  'input' | 'llm' | 'tool' | 'condition' | 'output',
+  'input' | 'llm' | 'tool' | 'simulation' | 'condition' | 'output',
   {
     icon: any;
     color: string;
@@ -39,6 +39,13 @@ const nodeStyles: Record<
     bg: 'bg-green-500/10',
     borderHover: 'hover:border-green-500/40',
     borderSelected: 'border-green-500',
+  },
+  simulation: {
+    icon: FlaskConical,
+    color: 'text-cyan-400',
+    bg: 'bg-cyan-500/10',
+    borderHover: 'hover:border-cyan-500/40',
+    borderSelected: 'border-cyan-500',
   },
   condition: {
     icon: GitBranch,
@@ -73,6 +80,7 @@ function NodeMeta({ nodeData, type }: any) {
   let meta = '';
   if (type === 'llm') meta = nodeData['model'] || 'GPT-4';
   else if (type === 'tool') meta = nodeData['tool_name'] || 'Select tool...';
+  else if (type === 'simulation') meta = nodeData['tool_name'] || 'simulate_experiment';
   else if (type === 'input') meta = nodeData['description'] || 'Workflow input';
   else if (type === 'output') meta = nodeData['description'] || 'Workflow output';
 
@@ -178,6 +186,38 @@ export function ConditionNode({ data, selected }: NodeProps) {
   );
 }
 
+export function SimulationNode({ data, selected }: NodeProps) {
+  const style = nodeStyles.simulation;
+  const Icon = style.icon;
+  const nodeData = data as Record<string, any>;
+
+  return (
+    <div
+      className={cn(
+        'px-4 py-3 rounded-xl border min-w-[170px] transition-all duration-200',
+        style.bg,
+        selected ? style.borderSelected : 'border-white/10',
+        style.borderHover
+      )}
+    >
+      <Handle type="target" position={Position.Left} className="!bg-cyan-500 !w-2 !h-2" />
+      <Handle type="source" position={Position.Right} className="!bg-cyan-500 !w-2 !h-2" />
+      <NodeHeader style={style} nodeData={nodeData} icon={Icon} />
+      <NodeMeta nodeData={nodeData} type="simulation" />
+      {(nodeData['schema'] || nodeData['max_rounds']) && (
+        <div className="flex items-center gap-2 mt-2 text-[9px]">
+          {nodeData['schema'] && (
+            <span className="px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 rounded">Schema</span>
+          )}
+          {nodeData['max_rounds'] && (
+            <span className="px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 rounded">R{nodeData['max_rounds']}</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function OutputNode({ data, selected }: NodeProps) {
   const style = nodeStyles.output;
   const Icon = style.icon;
@@ -203,6 +243,7 @@ export const nodeTypes = {
   input: InputNode,
   llm: LLMNode,
   tool: ToolNode,
+  simulation: SimulationNode,
   condition: ConditionNode,
   output: OutputNode,
 };

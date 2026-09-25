@@ -7,8 +7,10 @@
 from __future__ import annotations
 
 import json
-import time
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from uuid import uuid4
 from typing import TYPE_CHECKING, Any
 
 from app.storage import async_session
@@ -42,6 +44,26 @@ class PendingWrite:
     status: str = "pending"  # pending / committed / rolled_back
 
 
+def sanitize_checkpoint(checkpoint: CheckpointData, secrets: tuple[str, ...] = ()) -> CheckpointData:
+    """Copy payloads and redact credential fields and explicitly supplied keys."""
+    secret_fields = {"api_key", "apikey", "authorization", "password",
+                     "access_token", "refresh_token", "client_secret"}
+
+    def clean(value):
+        if isinstance(value, dict):
+            return {key: "[REDACTED]" if str(key).lower().replace("-", "_") in secret_fields
+                    else clean(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [clean(item) for item in value]
+        if isinstance(value, str):
+            for secret in secrets:
+                if secret:
+                    value = value.replace(secret, "[REDACTED]")
+        return value
+
+    return CheckpointData(**clean(asdict(checkpoint)))
+
+
 class InMemoryCheckpointStore:
     """Simple in-memory checkpoint store with LangGraph-style enhancements."""
 
@@ -58,24 +80,26 @@ class InMemoryCheckpointStore:
         checkpoint_id: str = "",
         parent_id: str | None = None,
     ) -> str:
-        cid = checkpoint_id or f"cp-{int(time.time()*1000)}"
+        cid = checkpoint_id or str(uuid4())
+        checkpoint = sanitize_checkpoint(checkpoint)
+        checkpoint.metadata["thread_id"] = thread_id or checkpoint.metadata.get("thread_id", "")
+        self._store.pop(cid, None)
         self._store[cid] = checkpoint
         self._parents[cid] = parent_id
         return cid
 
     async def get(self, _thread_id: str | None, checkpoint_id: str) -> CheckpointData | None:
-        return self._store.get(checkpoint_id)
+        return deepcopy(self._store.get(checkpoint_id))
 
     async def get_latest(self, _thread_id: str | None, session_id: str, thread_id: str = "") -> tuple[CheckpointData, str] | None:
         candidates = [
             (cid, cp) for cid, cp in self._store.items()
-            if cp.session_id == session_id
+            if cp.session_id == session_id and (not thread_id or cp.metadata.get("thread_id") == thread_id)
         ]
         if not candidates:
             return None
-        candidates.sort(key=lambda x: x[1].iteration)
         cid, cp = candidates[-1]
-        return cp, cid
+        return deepcopy(cp), cid
 
     async def list_for_session(self, _thread_id: str | None, session_id: str) -> list[str]:
         return [cid for cid, cp in self._store.items() if cp.session_id == session_id]
@@ -116,7 +140,9 @@ class SQLiteCheckpointStore:
         from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
 
         await ensure_checkpoint_schema()
-        cid = checkpoint_id or f"cp-{int(time.time()*1000)}"
+        checkpoint = sanitize_checkpoint(checkpoint)
+        cid = checkpoint_id or str(uuid4())
+        saved_at = datetime.now(timezone.utc).replace(tzinfo=None)
         metadata_payload = {
             **checkpoint.metadata,
             "parent_id": parent_id,
@@ -141,6 +167,7 @@ class SQLiteCheckpointStore:
                 versions_seen=json.dumps(checkpoint.versions_seen, ensure_ascii=False),
                 pending_writes=json.dumps(pending_writes, ensure_ascii=False),
                 parent_id=parent_id,
+                created_at=saved_at,
             )
             stmt = stmt.on_conflict_do_update(
                 index_elements=["id"],
@@ -157,6 +184,7 @@ class SQLiteCheckpointStore:
                     "versions_seen": json.dumps(checkpoint.versions_seen, ensure_ascii=False),
                     "pending_writes": json.dumps(pending_writes, ensure_ascii=False),
                     "parent_id": parent_id,
+                    "created_at": saved_at,
                 },
             )
             await db.execute(stmt)
@@ -210,8 +238,8 @@ class SQLiteCheckpointStore:
             record = (
                 await db.execute(
                     query.order_by(
-                        CheckpointRecord.iteration.desc(),
                         CheckpointRecord.created_at.desc(),
+                        CheckpointRecord.id.desc(),
                     ).limit(1)
                 )
             ).scalar_one_or_none()

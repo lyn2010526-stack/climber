@@ -189,6 +189,66 @@ class WorkflowTemplates:
         )
 
     @staticmethod
+    def simulation_experiment(
+        provider: str, model_id: str, api_key: str,
+        tool_name: str, schema: dict | None = None, max_rounds: int = 8,
+    ) -> Workflow:
+        """Run a simulation-experiment sweep through the SimulationHarness.
+
+        The harness plans a parameter sweep, dispatches each candidate to
+        an external simulation/MCP tool, probes convergence, rejects bad
+        results, auto-adjusts parameters and retries up to max_rounds.
+        """
+        nodes = [
+            WorkflowNode(id="start", type=NodeType.START, name="Start"),
+            WorkflowNode(
+                id="simulate", type=NodeType.SIMULATION, name="Simulate",
+                config={
+                    "tool_name": tool_name,
+                    "schema": schema or {},
+                    "max_rounds": max_rounds,
+                    "goal": "{{goal}}",
+                },
+                inputs={"goal": "start.goal"},
+            ),
+            WorkflowNode(
+                id="summarize", type=NodeType.LLM, name="Summarize",
+                config={
+                    "provider": provider,
+                    "model_id": model_id,
+                    "api_key": api_key,
+                    "prompt": (
+                        "Summarize the simulation experiment results:\n"
+                        "{{reports}}\n\n"
+                        "accepted={{accepted}}, rejected={{rejected}}"
+                    ),
+                    "system_prompt": (
+                        "You are a research reviewer. Summarize which "
+                        "parameter sets accepted, which were rejected and why, "
+                        "and recommend the best configuration."
+                    ),
+                },
+                inputs={
+                    "reports": "simulate.reports",
+                    "accepted": "simulate.accepted",
+                    "rejected": "simulate.rejected",
+                },
+            ),
+            WorkflowNode(id="end", type=NodeType.END, name="End", inputs={"output": "summarize.response"}),
+        ]
+        edges = [
+            WorkflowEdge(source="start", target="simulate"),
+            WorkflowEdge(source="simulate", target="summarize"),
+            WorkflowEdge(source="summarize", target="end"),
+        ]
+        return Workflow(
+            name="Simulation Experiment",
+            description="Run a parameter sweep on an external simulator with review-retry loop",
+            nodes=nodes,
+            edges=edges,
+        )
+
+    @staticmethod
     def conditional_branch(
         provider: str, model_id: str, api_key: str,
         condition_var: str, condition_value: str,
@@ -250,4 +310,5 @@ class WorkflowTemplates:
             {"id": "chain_of_thought", "name": "Chain of Thought", "description": "Multi-step reasoning"},
             {"id": "map_reduce", "name": "Map Reduce", "description": "Parallel processing + aggregation"},
             {"id": "conditional_branch", "name": "Conditional Branch", "description": "If-else branching"},
+            {"id": "simulation_experiment", "name": "Simulation Experiment", "description": "Parameter sweep on external simulator with review-retry loop"},
         ]

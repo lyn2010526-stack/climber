@@ -29,6 +29,7 @@ import structlog
 from app.core.enhanced_rag import compute_bm25
 from app.core.web_content_cleaner import clean_web_content
 from app.tools.rag import chunk_text
+from app.utils.ssrf import blocked_reason
 
 logger = structlog.get_logger(__name__)
 
@@ -215,6 +216,9 @@ def _topic_from_query(query: str) -> str:
 
 def _fetch_url_sync(url: str, timeout_s: int) -> str:
     """Fetch a URL with urllib (standard library only). Raises on failure."""
+    reason = blocked_reason(url)
+    if reason:
+        raise ValueError(f"Blocked request: {reason}")
     request = Request(url, headers={"User-Agent": _USER_AGENT, "Accept-Language": "en,en-US;q=0.9"})
     with urlopen(request, timeout=timeout_s) as response:
         charset = response.headers.get_content_charset() or "utf-8"

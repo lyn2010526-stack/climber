@@ -250,8 +250,7 @@ class SubagentManager:
 
         if task in done:
             return task.result()
-        else:
-            raise asyncio.CancelledError()
+        raise asyncio.CancelledError()
 
     def cancel(self, task_id: str) -> bool:
         """Cancel a running sub-agent and optionally cascade to children."""
@@ -334,9 +333,7 @@ class SubagentManager:
 
 class DepthLimitExceeded(Exception):
     """Raised when sub-agent depth limit is exceeded."""
-    pass
 
 
 class ConcurrencyLimitExceeded(Exception):
     """Raised when concurrency limit is reached."""
-    pass

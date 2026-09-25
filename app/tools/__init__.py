@@ -155,7 +155,7 @@ class ToolRegistry:
             return str(result)
         except Exception as e:
             logger.error("Tool execution failed", tool=name, error=str(e))
-            return f"Error executing {name}: {str(e)}"
+            return f"Error executing {name}: {e!s}"
 
     def get_openai_tools(self) -> list[dict[str, Any]]:
         """Return tools in OpenAI function calling format."""

@@ -24,14 +24,16 @@ export function useChat(sessionId: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const abortRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let active = true;
-    setMessages([]);
     if (!sessionId) {
+      setMessages([]);
       return;
     }
+    setMessages([]);
 
     api.getSessionMessages(sessionId).then((data) => {
       if (!active) return;
@@ -55,7 +57,7 @@ export function useChat(sessionId: string | null) {
     });
 
     return () => { active = false; };
-  }, [sessionId]);
+  }, [sessionId, refreshKey]);
 
   const sendMessage = useCallback(async (content: string) => {
     if (!sessionId || isStreaming) return;
@@ -174,5 +176,9 @@ export function useChat(sessionId: string | null) {
     setError(null);
   }, []);
 
-  return { messages, isStreaming, error, sendMessage, stopStreaming, clear };
+  const refresh = useCallback(() => {
+    setRefreshKey((key) => key + 1);
+  }, []);
+
+  return { messages, isStreaming, error, sendMessage, stopStreaming, clear, refresh };
 }

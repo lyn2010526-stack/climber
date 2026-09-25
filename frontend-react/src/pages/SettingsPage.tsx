@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   User, Cpu, Key, Bell, Shield, Info,
   Mail,
-   Trash2, Plus, Copy, Check,
    ChevronRight, AlertCircle, RefreshCw, Loader2,
   Sparkles, MessageSquare, Database, ExternalLink,
 } from 'lucide-react';
@@ -16,8 +15,10 @@ import { Badge } from '../components/ui/Badge';
 import { SkeletonList } from '../components/ui/Skeleton';
 import { useI18n } from '../i18n';
 import { api } from '../api';
+import { ApiKeysPage } from './ApiKeysPage';
+import { AuthApiKeysPage } from './AuthApiKeysPage';
 
-type SettingsSection = 'profile' | 'models' | 'apikeys' | 'notifications' | 'security' | 'about';
+type SettingsSection = 'profile' | 'models' | 'apikeys' | 'accessTokens' | 'notifications' | 'security' | 'about';
 
 interface NavItem {
   id: SettingsSection;
@@ -29,7 +30,8 @@ interface NavItem {
 const getNavItems = (t: (key: string) => string): NavItem[] => [
   { id: 'profile', label: t('settings.general'), icon: User, description: t('settings.account_settings') },
   { id: 'models', label: t('settings.api_settings'), icon: Cpu, description: t('settings.api_settings') },
-  { id: 'apikeys', label: t('navigation.api_keys'), icon: Key, description: t('navigation.api_keys') },
+  { id: 'apikeys', label: '模型凭据', icon: Key, description: '模型供应商 API Key' },
+  { id: 'accessTokens', label: '平台访问令牌', icon: Shield, description: 'Climber API 访问权限' },
   { id: 'notifications', label: t('settings.notifications'), icon: Bell, description: t('settings.notifications') },
   { id: 'security', label: t('settings.security'), icon: Shield, description: t('settings.security') },
   { id: 'about', label: t('settings.advanced'), icon: Info, description: t('settings.advanced') },
@@ -95,6 +97,7 @@ export function SettingsPage() {
           {activeSection === 'profile' && <ProfileSection />}
           {activeSection === 'models' && <ModelsSection />}
           {activeSection === 'apikeys' && <ApiKeysSection />}
+          {activeSection === 'accessTokens' && <AuthApiKeysPage embedded />}
           {activeSection === 'notifications' && <NotificationsSection />}
           {activeSection === 'security' && <SecuritySection />}
           {activeSection === 'about' && <AboutSection />}
@@ -394,230 +397,12 @@ function ModelsSection() {
   );
 }
 
-interface AuthApiKey {
-  id: string;
-  name: string;
-  owner: string;
-  scopes: string[];
-  is_active: boolean;
-  expires_at: string | null;
-  last_used_at: string | null;
-  created_at: string | null;
-}
-
-interface CreatedKey extends AuthApiKey {
-  raw_key: string;
-}
-
 function ApiKeysSection() {
-  const { t } = useI18n();
-  const [keys, setKeys] = useState<AuthApiKey[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', owner: '', scopes: 'read,write', ttl_days: '' });
-  const [creating, setCreating] = useState(false);
-  const [newlyCreated, setNewlyCreated] = useState<CreatedKey | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [revokingId, setRevokingId] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api.listAuthApiKeys();
-      const list = (data?.keys ?? []) as AuthApiKey[];
-      setKeys(list);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load API keys');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  const handleCreate = async () => {
-    setCreating(true);
-    setError(null);
-    try {
-      const scopes = form.scopes.split(',').map(s => s.trim()).filter(Boolean);
-      const ttl = form.ttl_days ? Number(form.ttl_days) : null;
-      const created = await api.createAuthApiKey({
-        name: form.name,
-        owner: form.owner,
-        scopes,
-        ttl_days: ttl,
-      });
-      setNewlyCreated(created as CreatedKey);
-      setShowForm(false);
-      setForm({ name: '', owner: '', scopes: 'read,write', ttl_days: '' });
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create API key');
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleRevoke = async (id: string) => {
-    setRevokingId(id);
-    setError(null);
-    try {
-      await api.revokeAuthApiKey(id);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to revoke key');
-    } finally {
-      setRevokingId(null);
-    }
-  };
-
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  const formatDate = (s: string | null) => {
-    if (!s) return '-';
-    try {
-      return new Date(s).toLocaleString();
-    } catch {
-      return s;
-    }
-  };
-
-  return (
-    <div>
-      <SectionHeader title={t('navigation.api_keys')} description={t('navigation.api_keys')} />
-
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-[var(--color-text-muted)]">共 {keys.length} 个密钥</p>
-        <Button size="sm" icon={<Plus size={14} />} onClick={() => setShowForm(!showForm)}>
-          创建新密钥
-        </Button>
-      </div>
-
-      {error && <ErrorBanner message={error} onRetry={load} />}
-
-      {newlyCreated && (
-        <Card variant="default" padding="md" className="mb-4 border-[var(--color-success)]/30 bg-[var(--color-success-subtle)]">
-          <div className="flex items-start gap-3">
-            <Check size={16} className="text-[var(--color-success)] shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-medium text-[var(--color-success)]">密钥已创建</h4>
-              <p className="text-xs text-[var(--color-text-muted)] mt-1">
-                请立即复制保存，此密钥仅显示一次：
-              </p>
-              <div className="flex items-center gap-2 mt-2">
-                <code className="text-xs font-mono text-[var(--color-text-primary)] bg-[var(--color-bg-surface-2)] px-2 py-0.5 rounded break-all">
-                  {newlyCreated.raw_key}
-                </code>
-                <button
-                  onClick={() => handleCopy(newlyCreated.raw_key, 'new')}
-                  className="p-1 rounded hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] shrink-0"
-                >
-                  {copiedId === 'new' ? <Check size={12} className="text-[var(--color-success)]" /> : <Copy size={12} />}
-                </button>
-              </div>
-              <Button size="sm" variant="ghost" className="mt-2" onClick={() => setNewlyCreated(null)}>
-                {t('common.close')}
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {showForm && (
-        <Card variant="default" padding="md" className="mb-4">
-          <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">创建新密钥</h3>
-          <div className="space-y-3">
-            <FormField label="名称" required>
-              <Input placeholder="例如：生产环境" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            </FormField>
-            <FormField label="所有者" required>
-              <Input placeholder="owner 标识" value={form.owner} onChange={(e) => setForm({ ...form, owner: e.target.value })} />
-            </FormField>
-            <FormField label="权限范围" description="逗号分隔，如 read,write">
-              <Input placeholder="read,write" value={form.scopes} onChange={(e) => setForm({ ...form, scopes: e.target.value })} />
-            </FormField>
-            <FormField label="有效期（天）" description="留空表示永久">
-              <Input
-                type="number"
-                placeholder="例如：30"
-                value={form.ttl_days}
-                onChange={(e) => setForm({ ...form, ttl_days: e.target.value })}
-              />
-            </FormField>
-            <div className="flex items-center gap-2">
-              <Button size="sm" onClick={handleCreate} loading={creating} disabled={!form.name || !form.owner || creating}>
-                创建
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setShowForm(false)}>
-                {t('common.cancel')}
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {loading && <SkeletonList count={2} />}
-
-      {!loading && keys.length === 0 && !showForm && (
-        <Card variant="default" padding="md">
-          <div className="text-center py-6">
-            <Key size={28} className="text-[var(--color-text-muted)] mx-auto mb-2" />
-            <p className="text-sm text-[var(--color-text-muted)]">暂无 API 密钥</p>
-            <Button size="sm" className="mt-3" icon={<Plus size={14} />} onClick={() => setShowForm(true)}>
-              创建第一个密钥
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      {!loading && keys.length > 0 && (
-        <div className="space-y-3">
-          {keys.map(item => (
-            <Card key={item.id} variant="default" padding="md" className="hover:border-[var(--color-border-default)] transition-colors">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <h4 className="text-sm font-medium text-[var(--color-text-primary)]">{item.name || '(未命名)'}</h4>
-                    <Badge variant={item.is_active ? 'success' : 'destructive'} size="xs">
-                      {item.is_active ? 'active' : 'revoked'}
-                    </Badge>
-                    <div className="flex gap-1 flex-wrap">
-                      {item.scopes.map(p => (
-                        <Badge key={p} variant="secondary" size="xs">{p}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="text-xs text-[var(--color-text-muted)] mb-1">所有者: {item.owner || '-'}</div>
-                  <div className="flex items-center gap-4 text-[10px] text-[var(--color-text-muted)] flex-wrap">
-                    <span>创建于 {formatDate(item.created_at)}</span>
-                    <span>最后使用: {formatDate(item.last_used_at)}</span>
-                    <span>过期: {formatDate(item.expires_at)}</span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleRevoke(item.id)}
-                  disabled={!item.is_active || revokingId === item.id}
-                  className="p-2 rounded-lg hover:bg-[var(--color-error-subtle)] text-[var(--color-text-muted)] hover:text-[var(--color-error)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  title={item.is_active ? '撤销密钥' : '已撤销'}
-                >
-                  {revokingId === item.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                </button>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  return <ApiKeysPage embedded />;
 }
 
 interface NotificationSettings {
+  email_address: string;
   email_system: boolean;
   email_task_done: boolean;
   email_weekly: boolean;
@@ -628,6 +413,7 @@ interface NotificationSettings {
 }
 
 const DEFAULT_NOTIFICATIONS: NotificationSettings = {
+  email_address: '',
   email_system: false,
   email_task_done: false,
   email_weekly: false,
@@ -637,36 +423,48 @@ const DEFAULT_NOTIFICATIONS: NotificationSettings = {
   webhook_task_failed: false,
 };
 
-function NotificationsSection() {
+export function NotificationsSection() {
   const { t } = useI18n();
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATIONS);
+  const [webhookConfigured, setWebhookConfigured] = useState(false);
+  const [webhookAction, setWebhookAction] = useState<'keep' | 'replace' | 'clear'>('keep');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
 
+  const applySaved = useCallback((data: { notifications?: Partial<NotificationSettings> & { webhook_configured?: boolean } }) => {
+    const n = data.notifications;
+    if (!n) throw new Error('服务器未返回通知配置，请重新加载。');
+    setSettings({
+      email_address: n.email_address ?? '',
+      email_system: n.email_system ?? false,
+      email_task_done: n.email_task_done ?? false,
+      email_weekly: n.email_weekly ?? false,
+      email_marketing: n.email_marketing ?? false,
+      webhook_url: '',
+      webhook_task_done: n.webhook_task_done ?? false,
+      webhook_task_failed: n.webhook_task_failed ?? false,
+    });
+    setWebhookConfigured(n.webhook_configured === true);
+    setWebhookAction('keep');
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setSaveError(null);
+    setSaveOk(false);
     try {
       const data = await api.getSettings();
-      const n = (data.notifications ?? {}) as Partial<NotificationSettings>;
-      setSettings({
-        email_system: n.email_system ?? false,
-        email_task_done: n.email_task_done ?? false,
-        email_weekly: n.email_weekly ?? false,
-        email_marketing: n.email_marketing ?? false,
-        webhook_url: n.webhook_url ?? '',
-        webhook_task_done: n.webhook_task_done ?? false,
-        webhook_task_failed: n.webhook_task_failed ?? false,
-      });
+      applySaved(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load notification settings');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applySaved]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -675,9 +473,13 @@ function NotificationsSection() {
     setSaveError(null);
     setSaveOk(false);
     try {
-      await api.updateSettings({ notifications: settings });
+      const { webhook_url, ...notifications } = settings;
+      const data = await api.updateSettings({ notifications: {
+        ...notifications,
+        ...(webhookAction === 'keep' ? {} : { webhook_url: webhookAction === 'clear' ? '' : webhook_url }),
+      } });
+      applySaved(data);
       setSaveOk(true);
-      setTimeout(() => setSaveOk(false), 2000);
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Failed to save notification settings');
     } finally {
@@ -686,6 +488,7 @@ function NotificationsSection() {
   };
 
   const toggle = (key: keyof NotificationSettings, value: boolean) => {
+    setSaveOk(false);
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 
@@ -711,8 +514,19 @@ function NotificationsSection() {
     <div>
       <SectionHeader title={t('settings.notifications')} description={t('settings.notifications')} />
 
-      <SectionCard title="邮件通知" description="通过邮件接收重要更新">
+      <p role="note" className="text-sm text-[var(--color-text-muted)] mb-4">
+        此处仅保存通知配置。邮件与 Webhook 投递能力尚未接通，保存不会发送通知。
+      </p>
+      <SectionCard title="邮件通知" description="保存邮件接收地址和事件偏好">
         <div className="space-y-4">
+          <FormField label="通知邮件地址" description="启用邮件事件时必填">
+            <Input
+              aria-label="通知邮件地址" type="email" autoComplete="email"
+              value={settings.email_address}
+              onChange={(e) => { setSaveOk(false); setSettings(prev => ({ ...prev, email_address: e.target.value })); }}
+              disabled={saving}
+            />
+          </FormField>
           <Switch label="系统通知" description="接收系统更新、维护公告和安全警报" checked={settings.email_system} onChange={(v) => toggle('email_system', v)} disabled={saving} />
           <Switch label="任务完成" description="当 Agent 任务执行完成时通知我" checked={settings.email_task_done} onChange={(v) => toggle('email_task_done', v)} disabled={saving} />
           <Switch label="周报摘要" description="每周一发送使用统计和摘要" checked={settings.email_weekly} onChange={(v) => toggle('email_weekly', v)} disabled={saving} />
@@ -720,15 +534,33 @@ function NotificationsSection() {
         </div>
       </SectionCard>
 
-      <SectionCard title="Webhook" description="通过 Webhook 将事件推送到外部系统">
+      <SectionCard title="Webhook" description="保存接收地址和事件偏好；投递能力尚未接通">
         <div className="space-y-4">
-          <FormField label="Webhook URL" description="接收事件推送的 URL 地址">
+          <FormField label="Webhook URL" description="支持 HTTP/HTTPS。地址按凭据保护；留空保留现有地址，清除请使用下方按钮。">
             <Input
-              placeholder="https://your-webhook-url.com/endpoint"
+              aria-label="Webhook URL" type="password" autoComplete="new-password"
+              placeholder={webhookConfigured ? '已配置，输入新地址以替换' : 'https://your-webhook-url.com/endpoint'}
               value={settings.webhook_url}
-              onChange={(e) => setSettings(prev => ({ ...prev, webhook_url: e.target.value }))}
+              onChange={(e) => {
+                const value = e.target.value;
+                setSaveOk(false);
+                setSettings(prev => ({ ...prev, webhook_url: value }));
+                setWebhookAction(value.trim() ? 'replace' : 'keep');
+              }}
               disabled={saving}
             />
+            <p className="text-xs text-[var(--color-text-muted)] mt-2">
+              {webhookAction === 'clear' ? '保存后清除 Webhook 地址和事件开关' : webhookConfigured ? 'Webhook 已配置，地址不回显' : 'Webhook 尚未配置'}
+            </p>
+            {webhookConfigured && (
+              <Button variant="ghost" size="sm" disabled={saving} onClick={() => {
+                setSaveOk(false);
+                setWebhookAction(webhookAction === 'clear' ? 'keep' : 'clear');
+                setSettings(prev => ({ ...prev, webhook_url: '', webhook_task_done: false, webhook_task_failed: false }));
+              }}>
+                {webhookAction === 'clear' ? '保留现有 Webhook' : '清除已保存 Webhook'}
+              </Button>
+            )}
           </FormField>
           <FormField label="触发事件">
             <div className="space-y-2 mt-1">
@@ -740,6 +572,7 @@ function NotificationsSection() {
       </SectionCard>
 
       {saveError && <ErrorBanner message={saveError} />}
+      {saveOk && <p role="status" className="text-sm text-[var(--color-success)]">配置已保存；投递能力尚未接通。</p>}
 
       <div className="flex justify-end gap-3 mt-6">
         <Button variant="outline" onClick={load} disabled={saving}>{t('common.reset')}</Button>

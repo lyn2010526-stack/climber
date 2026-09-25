@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 export const DESKTOP_MIN = 768;
 export const COMPACT_DESKTOP_MAX = 1023;
 export const FULL_DESKTOP = 1024;
-export const WIDE_DESKTOP = 1536;
+export const WIDE_DESKTOP = 1280;
 
 export function useMediaQuery(query: string): boolean {
   const read = () => window.matchMedia(query).matches;
@@ -30,4 +30,8 @@ export function useIsCompactDesktop(): boolean {
 
 export function useIsFullDesktop(): boolean {
   return useMediaQuery(`(min-width: ${FULL_DESKTOP}px)`);
+}
+
+export function useIsWideDesktop(): boolean {
+  return useMediaQuery(`(min-width: ${WIDE_DESKTOP}px)`);
 }

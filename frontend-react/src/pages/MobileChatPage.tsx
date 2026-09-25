@@ -1,44 +1,38 @@
 import { useCallback, useState } from 'react';
 import { MobileChatInterface } from '../components/mobile/MobileChatInterface';
 import { useChat, type Message } from '../useChat';
-import { useWorkspaceStore } from '../store/workspace';
+import { useDefaultSession } from '../hooks/useDefaultSession';
 import { cacheManager } from '../components/mobile/LazyImage';
 
 export function MobileChatPage() {
-  const { activeSessionId } = useWorkspaceStore();
-  const { messages, isStreaming, error, sendMessage, stopStreaming } = useChat(activeSessionId);
+  const { sessionId } = useDefaultSession();
+  const { messages, isStreaming, error, sendMessage, stopStreaming, refresh } = useChat(sessionId);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleSend = useCallback(async (message: string) => {
-    if (!activeSessionId) {
-      alert('请先创建或选择一个会话');
-      return;
-    }
-    
+    if (!sessionId) return;
     await sendMessage(message);
-    
-    // Cache the last message for offline support
-    await cacheManager.set(`last_message_${activeSessionId}`, {
+    await cacheManager.set(`last_message_${sessionId}`, {
       text: message,
       timestamp: Date.now(),
-      sessionId: activeSessionId
+      sessionId,
     });
-  }, [activeSessionId, sendMessage]);
+  }, [sessionId, sendMessage]);
 
   const handleStop = useCallback(() => {
     stopStreaming();
   }, [stopStreaming]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      // Simulate refresh delay with smooth animation
-      await new Promise(resolve => setTimeout(resolve, 800));
-      // Refresh messages could be implemented here
+      refresh();
+      // Give the refreshed message list time to settle before hiding the spinner.
+      await new Promise((resolve) => setTimeout(resolve, 400));
     } finally {
       setIsRefreshing(false);
     }
-  };
+  }, [refresh]);
 
   return (
     <div className="flex flex-col h-full mobile-touch-feedback">
@@ -48,6 +42,7 @@ export function MobileChatPage() {
         onStop={handleStop}
         isLoading={isStreaming}
         isRefreshing={isRefreshing}
+        onRefresh={handleRefresh}
       />
       {error && (
         <div className="absolute bottom-20 left-4 right-4 bg-red-500/10 border border-red-500/30 rounded-2xl px-5 py-3 text-sm text-red-400 backdrop-blur-xl animate-fadeIn">

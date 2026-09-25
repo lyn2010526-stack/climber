@@ -13,6 +13,7 @@ from app.api.v1 import documents as documents_router
 from app.api.v1 import feedback as feedback_router
 from app.api.v1 import generic as generic_router
 from app.api.v1 import mcp as mcp_router
+from app.api.v1 import model_discovery as model_discovery_router
 from app.api.v1 import notifications as notifications_router
 from app.api.v1 import permissions as permissions_router
 from app.api.v1 import prompt_templates as prompt_templates_router
@@ -34,6 +35,7 @@ router.include_router(workflows_router.router, prefix="/workflows", tags=["workf
 router.include_router(prompt_templates_router.router, prefix="/prompt-templates", tags=["prompt-templates"])
 router.include_router(generic_router.router, tags=["generic"])
 router.include_router(api_keys_router.router, prefix="/api-keys", tags=["api-keys"])
+router.include_router(model_discovery_router.router)
 router.include_router(documents_router.router, prefix="/documents", tags=["documents"])
 router.include_router(feedback_router.router, prefix="/feedback", tags=["feedback"])
 router.include_router(notifications_router.router, prefix="/notifications", tags=["notifications"])

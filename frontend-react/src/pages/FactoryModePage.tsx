@@ -24,7 +24,15 @@ interface PlanStep {
   status: 'pending' | 'running' | 'done' | 'error';
 }
 
-type RunPhase = 'idle' | 'planning' | 'running' | 'synthesizing' | 'done' | 'failed';
+type RunPhase = 'idle' | 'planning' | 'running' | 'synthesizing' | 'done' | 'failed' | 'cancelling' | 'cancelled' | 'interrupted';
+
+interface FactoryAgent {
+  id: string;
+  name: string;
+  provider: string;
+  model_id: string;
+  is_active: boolean;
+}
 
 const SKILLS = [
   { id: 'code_executor', name: 'Code Executor', icon: '⚙️' },
@@ -111,10 +119,35 @@ export function FactoryModePage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [recentRuns, setRecentRuns] = useState<TaskSummary[]>([]);
   const [arcbench, setArcbench] = useState<ArcBenchStatus | null>(null);
+  const [agents, setAgents] = useState<FactoryAgent[]>([]);
+  const [providers, setProviders] = useState<string[]>([]);
+  const [configChoice, setConfigChoice] = useState('auto');
+  const [provider, setProvider] = useState('');
+  const [model, setModel] = useState('');
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configError, setConfigError] = useState('');
+  const [resolvedModel, setResolvedModel] = useState('');
 
   const stopStreamRef = useRef<(() => void) | null>(null);
   const taskIdRef = useRef<string | null>(null);
   const startedAtRef = useRef<number | null>(null);
+  const runIdRef = useRef(0);
+  const terminalRef = useRef<RunPhase | null>(null);
+
+  const loadConfiguration = useCallback(async () => {
+    setConfigLoading(true);
+    setConfigError('');
+    try {
+      const [savedAgents, keys] = await Promise.all([api.listAgents(), api.listApiKeys()]);
+      setAgents(savedAgents.filter((agent: FactoryAgent) => agent.is_active));
+      setProviders([...new Set<string>(keys.filter((key: { is_active: boolean }) => key.is_active)
+        .map((key: { provider: string }) => key.provider))]);
+    } catch (error) {
+      setConfigError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setConfigLoading(false);
+    }
+  }, []);
 
   const loadRecentRuns = useCallback(async () => {
     try {
@@ -132,7 +165,12 @@ export function FactoryModePage() {
   useEffect(() => {
     loadRecentRuns();
     loadArcbenchStatus();
-  }, [loadRecentRuns, loadArcbenchStatus]);
+    loadConfiguration();
+    return () => {
+      runIdRef.current += 1;
+      stopStreamRef.current?.();
+    };
+  }, [loadRecentRuns, loadArcbenchStatus, loadConfiguration]);
 
   useEffect(() => {
     if (!isRunning || !startedAtRef.current) return;
@@ -148,6 +186,9 @@ export function FactoryModePage() {
 
   const startExecution = async () => {
     if (!goal.trim() || isRunning) return;
+    if (configChoice === 'provider' && (!provider || !model.trim())) return;
+    const runId = ++runIdRef.current;
+    terminalRef.current = null;
     taskIdRef.current = null;
     setPhase('planning');
     setIsRunning(true);
@@ -158,17 +199,27 @@ export function FactoryModePage() {
     setFellBackToAutoPlan(false);
     setProgressLines([]);
     setElapsedSeconds(0);
+    setResolvedModel('');
     startedAtRef.current = Date.now();
 
+    const payload = {
+      goal, skills: selectedSkills, prompt_template: selectedPrompt,
+      ...(configChoice === 'provider' ? { provider, model: model.trim() }
+        : configChoice !== 'auto' ? { agent_id: configChoice } : {}),
+    };
     stopStreamRef.current = api.runAutonomousSkillStream(
-      { goal, skills: selectedSkills, prompt_template: selectedPrompt },
-      handleEvent,
-      handleClose,
+      payload,
+      event => { if (runIdRef.current === runId) handleEvent(event); },
+      () => { if (runIdRef.current === runId) handleClose(); },
     );
   };
 
   const handleEvent = (event: { type: string; data: any }) => {
     switch (event.type) {
+      case 'factory_config':
+        taskIdRef.current = event.data.task_id || null;
+        setResolvedModel(`${event.data.provider} / ${event.data.model}`);
+        break;
       case 'planning':
         setPhase('planning');
         break;
@@ -217,6 +268,9 @@ export function FactoryModePage() {
         ));
         break;
       case 'task_failed':
+        terminalRef.current = 'failed';
+        setPhase('failed');
+        setErrorMessage(event.data.error || 'Factory step failed');
         setPlan(prev => prev.map(step =>
           step.step === event.data.step ? { ...step, status: 'error' } : step
         ));
@@ -225,19 +279,35 @@ export function FactoryModePage() {
         ));
         break;
       case 'factory_failed':
+        if (event.data.status === 'cancelled') {
+          terminalRef.current = 'cancelled';
+          setPhase('cancelled');
+          setErrorMessage(event.data.error || '任务已取消');
+          break;
+        }
+        terminalRef.current = 'failed';
         setPhase('failed');
+        setErrorMessage(event.data.error || 'Factory execution failed');
         setTasks(prev => [...prev, {
           id: event.data.task_id || `error-${Date.now()}`,
           description: event.data.error || 'Factory execution failed',
           status: 'failed',
         }]);
         break;
+      case 'factory_completed':
+        if (!terminalRef.current) {
+          terminalRef.current = 'done';
+          setPhase('done');
+        }
+        break;
       case 'synthesize':
+        if (terminalRef.current) break;
         setPhase('synthesizing');
         setFinalReport(event.data.report || '');
         break;
       case 'error':
-        setErrorMessage(event.data?.detail || '执行失败');
+        terminalRef.current = 'failed';
+        setErrorMessage(event.data?.detail || event.data?.error || '执行失败');
         setPhase('failed');
         break;
     }
@@ -247,26 +317,42 @@ export function FactoryModePage() {
     stopStreamRef.current = null;
     startedAtRef.current = null;
     setIsRunning(false);
-    setPhase(prev => {
-      if (prev === 'synthesizing') return 'done';
-      if (prev === 'running' || prev === 'planning') return 'done';
-      return prev;
-    });
+    if (terminalRef.current) {
+      setPhase(terminalRef.current);
+    } else {
+      setPhase('interrupted');
+      setErrorMessage('事件流已结束，尚未收到任务终态。请在最近运行中确认后台状态。');
+    }
     loadRecentRuns();
   };
 
   const stopExecution = async () => {
-    stopStreamRef.current?.();
-    stopStreamRef.current = null;
-    if (taskIdRef.current) {
-      try {
-        await api.stopTask(taskIdRef.current);
-      } catch {
-        // stream cancellation already stops the local request; server cancel is best-effort
+    const runId = ++runIdRef.current;
+    const stopStream = stopStreamRef.current;
+    setPhase('cancelling');
+    try {
+      const result = taskIdRef.current ? await api.stopTask(taskIdRef.current) : null;
+      if (runIdRef.current !== runId) return;
+      if (result?.cancelled) {
+        terminalRef.current = 'cancelled';
+        setPhase('cancelled');
+      } else {
+        setPhase('interrupted');
+        setErrorMessage('已停止接收事件；后台取消状态尚未确认，请刷新最近运行。');
+      }
+    } catch (error) {
+      if (runIdRef.current !== runId) return;
+      setPhase('interrupted');
+      setErrorMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      stopStream?.();
+      if (runIdRef.current === runId) {
+        stopStreamRef.current = null;
+        setIsRunning(false);
+        startedAtRef.current = null;
+        loadRecentRuns();
       }
     }
-    setIsRunning(false);
-    startedAtRef.current = null;
   };
 
   const doneSteps = plan.filter(step => step.status === 'done').length;
@@ -343,6 +429,42 @@ export function FactoryModePage() {
 
         <Card variant="default" className="mb-6">
           <CardContent className="p-6">
+            <div className="mb-5 space-y-3 text-sm text-[var(--color-text-secondary)]">
+              <label htmlFor="factory-config" className="block font-medium">模型配置来源</label>
+              <select id="factory-config" value={configChoice} onChange={e => setConfigChoice(e.target.value)} disabled={isRunning}
+                className="w-full rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-3">
+                <option value="auto">自动选择当前 owner 最近配置完整的 Agent</option>
+                {agents.map(agent => <option key={agent.id} value={agent.id}>{agent.name} · {agent.provider} / {agent.model_id}</option>)}
+                <option value="provider">使用已保存的供应商凭据并指定模型</option>
+              </select>
+              {configChoice === 'provider' && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label>供应商
+                    <select aria-label="供应商" value={provider} onChange={e => { setProvider(e.target.value); setModel(''); }} disabled={isRunning}
+                      className="mt-1 w-full rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-3">
+                      <option value="">请选择已保存凭据的供应商</option>
+                      {providers.map(value => <option key={value} value={value}>{value}</option>)}
+                    </select>
+                  </label>
+                  <label>模型 ID
+                    <input aria-label="模型 ID" value={model} onChange={e => setModel(e.target.value)} disabled={isRunning}
+                      placeholder="填写该供应商账户可用的模型 ID"
+                      className="mt-1 w-full rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-3" />
+                  </label>
+                </div>
+              )}
+              <p>在 API Keys 保存并启用模型供应商凭据；在 Agent 配置中保存对应供应商和模型，或在此指定模型 ID。凭据按当前 owner 匹配。</p>
+              <p>配置记录与连接验证分别展示。服务可达、凭据有效、模型可用均待实际调用验证；Ollama 免 Key 仍需服务运行并已安装所选模型。</p>
+              <div className="flex flex-wrap items-center gap-4">
+                <a href="#apikeys" className="text-[var(--color-accent)] underline">配置模型 API Keys</a>
+                <a href="#agents" className="text-[var(--color-accent)] underline">配置 Agent 模型</a>
+                <Button variant="ghost" size="sm" onClick={loadConfiguration} disabled={isRunning || configLoading}>刷新配置</Button>
+              </div>
+              {configLoading && <p role="status">正在读取配置记录...</p>}
+              {configError && <p role="alert">配置读取失败：{configError}</p>}
+              {!configLoading && !configError && <p>已读取 {agents.length} 个启用 Agent、{providers.length} 个供应商凭据配置；运行时由后端校验 owner 和配置完整性。</p>}
+              {resolvedModel && <p>本次后端选择：{resolvedModel}</p>}
+            </div>
             <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">目标</label>
             <textarea
               value={goal}
@@ -390,7 +512,7 @@ export function FactoryModePage() {
                   variant="primary"
                   icon={<Play size={16} />}
                   onClick={startExecution}
-                  disabled={!goal.trim()}
+                  disabled={!goal.trim() || (configChoice === 'provider' && (!provider || !model.trim()))}
                 >
                   开始执行
                 </Button>
@@ -399,6 +521,7 @@ export function FactoryModePage() {
                   variant="destructive"
                   icon={<Square size={16} />}
                   onClick={stopExecution}
+                  disabled={phase === 'cancelling'}
                 >
                   停止
                 </Button>
@@ -408,6 +531,9 @@ export function FactoryModePage() {
                   <Clock size={14} /> 已运行 {formatDuration(elapsedSeconds)}
                 </span>
               )}
+              <span role="status" className="text-xs text-[var(--color-text-secondary)]">
+                {({ idle: '尚未运行', planning: '规划中', running: '执行中', synthesizing: '综合中', done: '已完成', failed: '执行失败', cancelling: '正在请求取消', cancelled: '已取消', interrupted: '执行状态待确认' })[phase]}
+              </span>
             </div>
           </CardContent>
         </Card>

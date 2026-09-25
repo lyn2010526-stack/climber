@@ -62,7 +62,7 @@
   },
   "devDependencies": {
     "@capacitor/android": "^8.5.0",
-    "@capacitor/cli": "^7.6.8",
+    "@capacitor/cli": "^8.5.0",
     "@capacitor/core": "^8.5.0",
     "@playwright/test": "^1.48.0",
     "@testing-library/jest-dom": "^6.9.1",

@@ -183,7 +183,9 @@ async def terminal_execute(
     effective_timeout = min(body.timeout or 30, 120)
     output = await sandbox.execute(command, timeout=effective_timeout)
     logger.info("terminal_command_executed", command=command, user_id=current_user_id(request), timeout=effective_timeout)
-    return {"command": command, "output": output, "success": not (output.startswith("TIMEOUT") or output.startswith("Error"))}
+    blocked = output.startswith("BLOCKED:")
+    failed = blocked or output.startswith("TIMEOUT:") or output.startswith("Error:")
+    return {"command": command, "output": output, "success": not failed}
 
 
 # ─── Cluster ────────────────────────────────────────────────────────────────

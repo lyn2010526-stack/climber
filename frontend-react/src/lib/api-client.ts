@@ -1,13 +1,21 @@
-const BASE_URL = '';
+export const API_BASE_URL = '/api/v1';
+
+function normalizePath(url: string): string {
+  const path = url.startsWith('/') ? url : `/${url}`;
+  return path.replace(/^\/api(?:\/v1)?(?=\/|[?#]|$)/, '');
+}
 
 function getToken(): string | null {
   try {
-    return localStorage.getItem('climber-auth')
-      ? JSON.parse(localStorage.getItem('climber-auth') || '{}')?.state?.token ?? null
-      : null;
+    return localStorage.getItem('auth_token');
   } catch {
     return null;
   }
+}
+
+export function getAuthHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 export class ApiError extends Error {
@@ -37,13 +45,10 @@ async function request<T>(method: string, url: string, body?: unknown, config: R
   };
 
   if (!skipAuth) {
-    const token = getToken();
-    if (token) {
-      finalHeaders['Authorization'] = `Bearer ${token}`;
-    }
+    Object.assign(finalHeaders, getAuthHeaders());
   }
 
-  const res = await fetch(`${BASE_URL}${url}`, {
+  const res = await fetch(`${API_BASE_URL}${normalizePath(url)}`, {
     method,
     headers: finalHeaders,
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -53,7 +58,7 @@ async function request<T>(method: string, url: string, body?: unknown, config: R
   if (!res.ok) {
     let errorData: unknown;
     try {
-      errorData = await res.json();
+      errorData = await res.clone().json();
     } catch {
       errorData = await res.text();
     }
@@ -97,15 +102,12 @@ export const apiClient = {
     body: unknown,
     signal?: AbortSignal
   ): Promise<Response> {
-    const token = getToken();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      ...getAuthHeaders(),
     };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
 
-    return fetch(`${BASE_URL}${url}`, {
+    return fetch(`${API_BASE_URL}${normalizePath(url)}`, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),

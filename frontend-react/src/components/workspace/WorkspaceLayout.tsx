@@ -4,7 +4,7 @@ import { SessionSidebar } from './SessionSidebar';
 import { ControlBar } from './ControlBar';
 import { RightPanel } from './RightPanel';
 import { useI18n } from '../../i18n';
-import { useIsFullDesktop } from '../../layout/breakpoints';
+import { useIsWideDesktop } from '../../layout/breakpoints';
 import { useWorkspaceStore } from '../../store/workspace';
 import { ChatPage } from '../../pages/ChatPage';
 
@@ -15,9 +15,9 @@ const RIGHT_PANEL_MAX = 460;
 export function WorkspaceLayout() {
   const { t } = useI18n();
   const { rightPanelOpen, focusMode, toggleFocusMode } = useWorkspaceStore();
-  const isFullDesktop = useIsFullDesktop();
+  const isWideDesktop = useIsWideDesktop();
 
-  const showRightPanel = rightPanelOpen && isFullDesktop && !focusMode;
+  const showRightPanel = rightPanelOpen && isWideDesktop && !focusMode;
 
   useEffect(() => {
     if (!focusMode) return;

@@ -11,11 +11,11 @@ from app.api.v1.routes.workflows import router as workflows_router
 
 __all__ = [
     "agents_router",
-    "workflows_router",
     "crews_router",
-    "skills_router",
     "groups_router",
-    "tasks_router",
     "misc_router",
+    "skills_router",
+    "tasks_router",
     "websocket_router",
+    "workflows_router",
 ]

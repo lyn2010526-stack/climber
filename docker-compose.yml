@@ -1,15 +1,36 @@
-version: '3.8'
-
+# Production: Nginx serves the built SPA and forwards same-origin /api requests.
+# Only web publishes a host port; api and dependencies stay on the Compose network.
+# See .monkeycode/docs/PRODUCTION_COMPOSE.md for credential preflight and startup.
 services:
-  api:
-    build: .
+  web:
+    build:
+      context: .
+      target: web
     ports:
-      - "8000:8000"
+      - "8000:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  api:
+    build:
+      context: .
+      target: api
+    expose:
+      - "8000"
     environment:
       - DATABASE_URL=postgresql+asyncpg://climber:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/climber
       - REDIS_URL=redis://redis:6379/0
       - APP_ENV=production
       - APP_DEBUG=false
+      - APP_SECRET_KEY=${APP_SECRET_KEY:?APP_SECRET_KEY is required in production}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
     volumes:
       - ./data:/app/data
     depends_on:
@@ -23,22 +44,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
-  frontend:
-    image: node:20-alpine
-    working_dir: /app/frontend-react
-    command: sh -c "npm install && npx vite --host 0.0.0.0"
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend-react:/app/frontend-react
-      - /app/frontend-react/node_modules
-    environment:
-      - VITE_API_URL=/api
-      - VITE_PROXY_TARGET=http://api:8000
-    depends_on:
-      - api
-    restart: unless-stopped
 
   postgres:
     image: postgres:15-alpine

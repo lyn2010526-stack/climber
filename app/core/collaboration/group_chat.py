@@ -11,7 +11,11 @@ import structlog
 from app.core.collaboration.agent_runner import run_agent_simple
 from app.core.collaboration.callbacks import invoke_step_callback, invoke_task_callback
 from app.core.collaboration.memory import store_memory
-from app.core.collaboration.prompts import build_group_chat_context, build_group_chat_prompt, summarize_group_chat
+from app.core.collaboration.prompts import (
+    build_group_chat_context,
+    build_group_chat_prompt,
+    summarize_group_chat,
+)
 from app.core.collaboration.resolver import resolve_api_key, resolve_base_url
 from app.core.group_ws_hub import group_ws_hub
 from app.storage import async_session

@@ -198,7 +198,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               'h-10 px-4 text-sm font-medium rounded-xl text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed',
               confirmVariant === 'danger' && 'bg-[#EF4444] hover:bg-[#DC2626]',
               confirmVariant === 'warning' && 'bg-[#F59E0B] hover:bg-[#D97706]',
-              confirmVariant === 'primary' && 'bg-[#5E6AD2] hover:bg-[#6E7AE3]'
+              confirmVariant === 'primary' && 'bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)]'
             )}
           >
             {loading ? 'Loading...' : confirmText}

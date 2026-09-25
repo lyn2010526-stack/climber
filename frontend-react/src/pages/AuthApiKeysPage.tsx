@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Key, Copy, Check, Shield, Clock, AlertTriangle } from 'lucide-react';
+import { api } from '../api';
 
 interface ApiKeyItem {
     id: string;
@@ -12,13 +13,13 @@ interface ApiKeyItem {
     created_at: string | null;
 }
 
-export function AuthApiKeysPage() {
+export function AuthApiKeysPage({ embedded = false }: { embedded?: boolean } = {}) {
     const [keys, setKeys] = useState<ApiKeyItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isAdmin, setIsAdmin] = useState(false);
     const [showForm, setShowForm] = useState(false);
-    const [newKey, setNewKey] = useState<{ name: string; owner: string; scopes: string[]; ttl_days: number | null }>({
+    const [newKey, setNewKey] = useState<{ name: string; scopes: string[]; ttl_days: number | null }>({
         name: '',
-        owner: 'admin',
         scopes: ['read', 'write'],
         ttl_days: null,
     });
@@ -28,19 +29,10 @@ export function AuthApiKeysPage() {
 
     const loadKeys = useCallback(async () => {
         try {
-            const token = localStorage.getItem('auth_token');
-            const response = await fetch('/api/v1/auth/keys', {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setKeys(data.keys || []);
-            }
+            const data = await api.listAuthApiKeys();
+            setKeys(data.keys || []);
         } catch (err) {
-            console.error('Failed to load API keys:', err);
+            setError(err instanceof Error ? err.message : 'Failed to load platform access tokens');
         } finally {
             setLoading(false);
         }
@@ -48,30 +40,22 @@ export function AuthApiKeysPage() {
 
     useEffect(() => {
         loadKeys();
+        api.getCurrentUser().then((user) => {
+            setIsAdmin(user?.role === 'admin' || (user?.scopes || []).includes('admin'));
+        }).catch(() => undefined);
     }, [loadKeys]);
 
     const createKey = async () => {
         setError(null);
         try {
-            const token = localStorage.getItem('auth_token');
-            const response = await fetch('/api/v1/auth/keys', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`,
-                },
-                body: JSON.stringify(newKey),
+            const data = await api.createAuthApiKey({
+                name: newKey.name,
+                scopes: newKey.scopes,
+                ttl_days: newKey.ttl_days,
             });
-
-            if (!response.ok) {
-                const data = await response.json().catch(() => ({}));
-                throw new Error(data.detail || 'Failed to create API key');
-            }
-
-            const data = await response.json();
             setCreatedKey({ id: data.id, raw_key: data.raw_key });
             setShowForm(false);
-            setNewKey({ name: '', owner: 'admin', scopes: ['read', 'write'], ttl_days: null });
+            setNewKey({ name: '', scopes: ['read', 'write'], ttl_days: null });
             loadKeys();
         } catch (err: any) {
             setError(err.message);
@@ -84,16 +68,10 @@ export function AuthApiKeysPage() {
         }
 
         try {
-            const token = localStorage.getItem('auth_token');
-            await fetch(`/api/v1/auth/keys/${keyId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
-            });
+            await api.revokeAuthApiKey(keyId);
             loadKeys();
         } catch (err) {
-            console.error('Failed to revoke key:', err);
+            setError(err instanceof Error ? err.message : 'Failed to revoke platform access token');
         }
     };
 
@@ -112,14 +90,16 @@ export function AuthApiKeysPage() {
         }));
     };
 
+    const scopeOptions = isAdmin ? ['read', 'write', 'admin'] : ['read', 'write'];
+
     return (
-        <div className="h-full overflow-y-auto p-8">
+        <div className={embedded ? undefined : 'h-full overflow-y-auto p-8'}>
             <div className="max-w-4xl mx-auto">
                 <div className="flex items-center justify-between mb-8">
                     <div>
-                        <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">API Keys</h2>
+                        <h2 className="text-2xl font-bold text-[var(--color-text-primary)]">平台访问令牌</h2>
                         <p className="text-[var(--color-text-secondary)] text-sm mt-1.5">
-                            Manage programmatic access keys for authentication
+                            管理程序调用 Climber API 的访问权限与有效期。模型供应商 API Key 请在模型凭据中配置。
                         </p>
                     </div>
                     <button
@@ -175,18 +155,21 @@ export function AuthApiKeysPage() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium mb-1.5 text-[var(--color-text-secondary)]">Owner</label>
+                                <label className="block text-xs font-medium mb-1.5 text-[var(--color-text-secondary)]">Expires In (days)</label>
                                 <input
-                                    placeholder="Owner identifier"
-                                    value={newKey.owner}
-                                    onChange={e => setNewKey({ ...newKey, owner: e.target.value })}
+                                    type="number"
+                                    min={1}
+                                    max={365}
+                                    placeholder="No expiration"
+                                    value={newKey.ttl_days || ''}
+                                    onChange={e => setNewKey({ ...newKey, ttl_days: e.target.value ? parseInt(e.target.value) : null })}
                                     className="w-full px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
                                 />
                             </div>
                             <div>
                                 <label className="block text-xs font-medium mb-1.5 text-[var(--color-text-secondary)]">Scopes</label>
                                 <div className="flex gap-2">
-                                    {['read', 'write', 'admin'].map(scope => (
+                                    {scopeOptions.map(scope => (
                                         <button
                                             key={scope}
                                             type="button"
@@ -202,16 +185,6 @@ export function AuthApiKeysPage() {
                                     ))}
                                 </div>
                             </div>
-                            <div>
-                                <label className="block text-xs font-medium mb-1.5 text-[var(--color-text-secondary)]">Expires In (days)</label>
-                                <input
-                                    type="number"
-                                    placeholder="No expiration"
-                                    value={newKey.ttl_days || ''}
-                                    onChange={e => setNewKey({ ...newKey, ttl_days: e.target.value ? parseInt(e.target.value) : null })}
-                                    className="w-full px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
-                                />
-                            </div>
                         </div>
                         <div className="flex justify-end gap-3 mt-4">
                             <button
@@ -222,7 +195,7 @@ export function AuthApiKeysPage() {
                             </button>
                             <button
                                 onClick={createKey}
-                                disabled={!newKey.owner || newKey.scopes.length === 0}
+                                disabled={newKey.scopes.length === 0}
                                 className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold disabled:opacity-40 transition-all duration-200 active:scale-[0.97]"
                             >
                                 Create

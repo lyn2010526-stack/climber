@@ -219,7 +219,7 @@ class GoalTracker:
     def _generate_notes(self, score: float) -> str:
         if score >= self._alignment_threshold:
             return "aligned"
-        elif score >= self._alignment_threshold * 0.5:
+        if score >= self._alignment_threshold * 0.5:
             return "partial_alignment"
         return "drift_detected"
 

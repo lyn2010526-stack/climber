@@ -22,14 +22,6 @@ from app.storage.models_platform import Skill
 
 router = APIRouter()
 
-_DEFAULT_MODELS = {
-    "anthropic": "claude-3-5-sonnet-20240620",
-    "google": "gemini-1.5-flash",
-    "ollama": "llama3",
-    "openai": "gpt-4o-mini",
-    "stepfun": "step-3.5-flash",
-}
-
 _FACTORY_TOOLS = {
     "code_executor": ["run_command"],
     "web_search": ["web_search"],
@@ -54,31 +46,73 @@ def _sse(event_type: str, data: dict[str, Any]) -> str:
 
 
 async def _factory_agent_payload(user_id: str, data: dict[str, Any]) -> dict[str, Any]:
+    agent_id = str(data.get("agent_id") or "").strip()
+    requested_provider = str(data.get("provider") or "").strip()
+    requested_model = str(data.get("model") or "").strip()
+    if bool(requested_provider) != bool(requested_model):
+        raise HTTPException(status_code=422, detail="provider and model must be selected together")
+    if agent_id and requested_provider:
+        raise HTTPException(status_code=422, detail="Select either an agent or a provider/model pair")
+
     async with async_session() as db:
-        agent = await db.scalar(
+        agent_query = (
             select(Agent)
             .where(Agent.user_id == user_id, Agent.is_active)
-            .order_by(Agent.created_at.desc())
+            .order_by(Agent.created_at.desc(), Agent.id.desc())
         )
-        provider = agent.provider if agent else "openai"
-        model = agent.model_id if agent else _DEFAULT_MODELS[provider]
-        api_key = decrypt_api_key(agent.api_key_encrypted or "") if agent else ""
-        base_url = agent.base_url if agent else None
-        agent_tools = list(agent.tool_ids or []) if agent else []
-
-        if not api_key:
-            key = await db.scalar(
+        if agent_id:
+            agent_query = agent_query.where(Agent.id == agent_id)
+        agents = (await db.scalars(agent_query)).all()
+        if agent_id and not agents:
+            raise HTTPException(status_code=404, detail="Active agent not found for current owner")
+        keys = (
+            await db.scalars(
                 select(ApiKey)
-                .where(
-                    ApiKey.user_id == user_id,
-                    ApiKey.provider == provider,
-                    ApiKey.is_active,
-                )
-                .order_by(ApiKey.created_at.desc())
+                .where(ApiKey.user_id == user_id, ApiKey.is_active)
+                .order_by(ApiKey.created_at.desc(), ApiKey.id.desc())
             )
-            if key:
-                api_key = decrypt_api_key(key.api_key_encrypted)
-                base_url = key.base_url or base_url
+        ).all()
+
+        # A newer incomplete agent must not hide an older configured agent.
+        candidates = [None] if requested_provider else agents
+        credential_error = ""
+        for agent in candidates:
+            provider = (agent.provider if agent else requested_provider).strip()
+            model = (agent.model_id if agent else requested_model).strip()
+            if not provider or not model:
+                continue
+            try:
+                api_key = decrypt_api_key(agent.api_key_encrypted or "").strip() if agent else ""
+            except ValueError as exc:
+                credential_error = str(exc)
+                api_key = ""
+            base_url = agent.base_url if agent else None
+            if not api_key:
+                for key in keys:
+                    if key.provider != provider:
+                        continue
+                    try:
+                        api_key = decrypt_api_key(key.api_key_encrypted or "").strip()
+                    except ValueError as exc:
+                        credential_error = str(exc)
+                        continue
+                    if api_key or provider == "ollama":
+                        base_url = base_url or key.base_url
+                        break
+            # Keyless Ollama is a configuration option, not a health check.
+            if api_key or provider == "ollama":
+                break
+        else:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Configure an active agent with a model and matching provider API key "
+                    "for the current owner, or select a provider and model using a saved API key. "
+                    "Open API Keys (apikeys) to configure credentials."
+                    + (f" {credential_error}" if credential_error else "")
+                ),
+            )
+        agent_tools = list(agent.tool_ids or []) if agent else []
 
     requested_tools = [
         tool
@@ -94,6 +128,7 @@ async def _factory_agent_payload(user_id: str, data: dict[str, Any]) -> dict[str
     return {
         "objective": str(data.get("goal", "")).strip(),
         "user_id": user_id,
+        "agent_id": agent.id if agent else None,
         "provider": provider,
         "model": model,
         "api_key": api_key,
@@ -220,18 +255,21 @@ async def run_autonomous_skill(request: Request) -> StreamingResponse:
     if not goal:
         raise HTTPException(status_code=422, detail="goal is required")
 
-    task_payload = await _factory_agent_payload(current_user_id(request), data)
-    provider = str(task_payload["provider"])
-    if provider != "ollama" and not task_payload["api_key"]:
-        raise HTTPException(
-            status_code=409,
-            detail="Configure an active model API key before starting Agent Factory",
-        )
-    task_id = await task_manager.submit("factory_run", task_payload)
+    owner_id = current_user_id(request)
+    task_payload = await _factory_agent_payload(owner_id, data)
+    task_id = await task_manager.submit(
+        "factory_run", task_payload, owner_id=owner_id
+    )
 
     async def stream() -> AsyncIterator[str]:
         queue = task_manager.subscribe(task_id)
         try:
+            yield _sse("factory_config", {
+                "task_id": task_id,
+                "agent_id": task_payload["agent_id"],
+                "provider": task_payload["provider"],
+                "model": task_payload["model"],
+            })
             while True:
                 if await request.is_disconnected():
                     await task_manager.cancel(task_id)
@@ -241,7 +279,9 @@ async def run_autonomous_skill(request: Request) -> StreamingResponse:
                     yield _sse(event["type"], event["data"])
                 except TimeoutError:
                     pass
-                status = await task_manager.get_status(task_id)
+                status = await task_manager.get_status(
+                    task_id, owner_id=owner_id
+                )
                 if status is None or status["status"] in {
                     TaskStatus.COMPLETED.value,
                     TaskStatus.FAILED.value,
@@ -250,11 +290,19 @@ async def run_autonomous_skill(request: Request) -> StreamingResponse:
                     while not queue.empty():
                         event = queue.get_nowait()
                         yield _sse(event["type"], event["data"])
-                    if status and status["status"] in {TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}:
+                    if status is None:
                         yield _sse("factory_failed", {
                             "task_id": task_id,
+                            "error": "Factory task status is unavailable",
+                        })
+                    elif status["status"] in {TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}:
+                        yield _sse("factory_failed", {
+                            "task_id": task_id,
+                            "status": status["status"],
                             "error": status.get("error") or status["status"],
                         })
+                    else:
+                        yield _sse("factory_completed", {"task_id": task_id})
                     break
         except asyncio.CancelledError:
             await task_manager.cancel(task_id)

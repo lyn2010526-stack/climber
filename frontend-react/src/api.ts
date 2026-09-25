@@ -1,6 +1,4 @@
-// API client for backend communication
-
-const BASE_URL = '/api/v1';
+import { API_BASE_URL as BASE_URL, getAuthHeaders } from './lib/api-client';
 
 export interface ApiError {
   detail: string;
@@ -68,13 +66,36 @@ export interface ArcBenchStatus {
 }
 
 class ApiClient {
+  private readStorage(key: string): string | null {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  private writeStorage(key: string, value: string): void {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Authentication can continue for the current request when storage is unavailable.
+    }
+  }
+
+  private removeStorage(key: string): void {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // Ignore storage failures during cleanup.
+    }
+  }
+
   private getAuthHeaders(): Record<string, string> {
-    const token = localStorage.getItem('auth_token');
-    return token ? { Authorization: `Bearer ${token}` } : {};
+    return getAuthHeaders();
   }
 
   private async refreshToken(): Promise<string | null> {
-    const refreshToken = localStorage.getItem('refresh_token');
+    const refreshToken = this.readStorage('refresh_token');
     if (!refreshToken) return null;
 
     try {
@@ -87,7 +108,8 @@ class ApiClient {
       if (!response.ok) return null;
 
       const data = await response.json();
-      localStorage.setItem('auth_token', data.access_token);
+      if (!data.access_token) return null;
+      this.writeStorage('auth_token', data.access_token);
       return data.access_token;
     } catch {
       return null;
@@ -115,9 +137,9 @@ class ApiClient {
           headers,
         });
       } else {
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user_info');
+        this.removeStorage('auth_token');
+        this.removeStorage('refresh_token');
+        this.removeStorage('user_info');
         throw new Error('Authentication required');
       }
     }
@@ -133,7 +155,7 @@ class ApiClient {
   // Agents
   async listAgents() {
     const response = await this.request<any[] | { items: any[] }>('/agents');
-    return Array.isArray(response) ? response : response.items;
+    return Array.isArray(response) ? response : response.items ?? [];
   }
 
   async createAgent(data: any) {
@@ -150,10 +172,14 @@ class ApiClient {
   // Sessions
   async listSessions() {
     const response = await this.request<any[] | { items: any[] }>('/sessions');
-    return Array.isArray(response) ? response : response.items;
+    return Array.isArray(response) ? response : response.items ?? [];
   }
 
-  async createSession(data: any) {
+  async createSession(data: {
+    title?: string;
+    agent_id?: string;
+    model_settings?: { provider?: string | null; model_id?: string; base_url?: string; credential_id?: string } | null;
+  }) {
     return this.request<any>('/sessions', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -264,7 +290,7 @@ class ApiClient {
   async runWorkflow(id: string, inputs?: Record<string, string>) {
     return this.request<any>(`/workflows/${id}/run`, {
       method: 'POST',
-      body: JSON.stringify(inputs || {}),
+      body: JSON.stringify({ inputs: inputs || {} }),
     });
   }
 
@@ -283,13 +309,14 @@ class ApiClient {
   async runCrew(id: string, inputs?: Record<string, string>) {
     return this.request<any>(`/crews/${id}/run`, {
       method: 'POST',
-      body: JSON.stringify(inputs || {}),
+      body: JSON.stringify({ inputs: inputs || {} }),
     });
   }
 
-  // API Keys
+  // API Keys (model-provider credentials for agent factory; reads the
+  // api_keys table that _factory_agent_payload queries)
   async listApiKeys() {
-    return this.request<any[]>('/api-keys');
+    return this.request<any>('/api-keys');
   }
 
   async addApiKey(data: any) {
@@ -780,7 +807,7 @@ class ApiClient {
     return this.request<any>('/auth/keys');
   }
 
-  async createAuthApiKey(data: { name: string; owner: string; scopes: string[]; ttl_days: number | null }) {
+  async createAuthApiKey(data: { name: string; owner?: string; scopes: string[]; ttl_days: number | null }) {
     return this.request<any>('/auth/keys', {
       method: 'POST',
       body: JSON.stringify(data),

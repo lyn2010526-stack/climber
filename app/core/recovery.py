@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.core.checkpoint import CheckpointData, SQLiteCheckpointStore
+from app.core.checkpoint import CheckpointData, InMemoryCheckpointStore, SQLiteCheckpointStore
 from app.core.session import AgentSession
 
 
 class RecoveryManager:
     """Manages recovery of agent sessions from checkpoints."""
 
-    def __init__(self, checkpoint_store: SQLiteCheckpointStore | None = None):
-        self._store = checkpoint_store or SQLiteCheckpointStore()
+    def __init__(self, checkpoint_store: SQLiteCheckpointStore | InMemoryCheckpointStore | None = None):
+        self._store = checkpoint_store if checkpoint_store is not None else SQLiteCheckpointStore()
 
     async def recover_session(self, session_id: str) -> dict[str, Any] | None:
         """Recover a session from its latest checkpoint."""
@@ -42,10 +42,15 @@ class RecoveryManager:
         recovered = await self.recover_session(session.session_id)
         if recovered is None:
             return False
+        if recovered["pending_writes"]:
+            raise ValueError("Checkpoint has pending writes; automatic replay is unsafe")
         session.restore_checkpoint(
             recovered["checkpoint"],
             interrupted=recovered["interrupted"],
         )
+        session._last_checkpoint_id = recovered["checkpoint_id"]
+        if not recovered["interrupted"] and recovered["status"] in {"failed", "cancelled", "stopped"}:
+            session._restore_status(recovered["status"])
         return True
 
     @staticmethod
@@ -74,34 +79,14 @@ class RecoveryManager:
             ]
 
     async def auto_recover(self) -> list[dict[str, Any]]:
-        """Auto-recover all sessions that have recoverable checkpoints."""
-        from sqlalchemy import select
-
-        from app.storage import async_session
-        from app.storage.database import CheckpointRecord, Turn
-
-        async with async_session() as session:
-            result = await session.execute(
-                select(CheckpointRecord.session_id)
-                .distinct()
-                .where(CheckpointRecord.status == "failed")
-            )
-            session_ids = [row[0] for row in result.all()]
-
-            recovered = []
-            for sid in session_ids:
-                turn_result = await session.execute(
-                    select(Turn)
-                    .where(Turn.session_id == sid, Turn.status == "failed")
-                )
-                if turn_result.scalar_one_or_none():
-                    checkpoint_result = await self._store.get_latest(None, sid)
-                    if checkpoint_result:
-                        checkpoint, cid = checkpoint_result
-                        recovered.append({
-                            "session_id": sid,
-                            "status": "recovered",
-                            "iteration": checkpoint.iteration,
-                            "checkpoint_id": cid,
-                        })
-            return recovered
+        """Discover resumable state; this does not run a model or replay tools."""
+        candidates = []
+        for item in await self.list_recoverable_sessions():
+            recovered = await self.recover_session(item["session_id"])
+            if recovered and recovered["interrupted"] and not recovered["pending_writes"]:
+                candidates.append({
+                    "session_id": recovered["session_id"], "status": "recoverable",
+                    "iteration": recovered["iteration"],
+                    "checkpoint_id": recovered["checkpoint_id"],
+                })
+        return candidates

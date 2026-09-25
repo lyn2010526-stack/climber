@@ -107,8 +107,19 @@ class AuthManager:
     def verify_token(self, token: str, expected_type: str = "access") -> dict[str, Any]:
         return verify_token(token, expected_type)
 
+    @staticmethod
+    def scopes_for_role(role: str | None) -> list[str]:
+        return scopes_for_role(role)
+
 
 auth_manager = AuthManager()
+
+
+def scopes_for_role(role: str | None) -> list[str]:
+    """Map a user role to the concrete authorization scopes it grants."""
+    if role == "admin":
+        return ["read", "write", "admin"]
+    return ["read", "write"]
 
 
 async def authenticate_user(username: str, password: str) -> dict[str, Any]:
@@ -126,8 +137,7 @@ async def authenticate_user(username: str, password: str) -> dict[str, Any]:
             from datetime import datetime
             user.last_login_at = datetime.utcnow()
             await session.commit()
-            scopes = ["admin"] if user.role == "admin" else ["user"]
-            return {"user_id": str(user.id), "username": user.username, "scopes": scopes}
+            return {"user_id": str(user.id), "username": user.username, "role": user.role, "scopes": scopes_for_role(user.role)}
     raise HTTPException(401, "Invalid credentials")
 
 
@@ -231,7 +241,7 @@ async def validate_api_key(raw_key: str) -> dict[str, Any]:
 
 
 async def initialize_auth_system() -> dict[str, Any] | None:
-    """Initialize auth system — create default admin user if none exists."""
+    """Initialize auth system with an operator-supplied bootstrap password."""
     from sqlalchemy import func, select
 
     from app.models.users import User, UserRole, UserStatus
@@ -242,15 +252,21 @@ async def initialize_auth_system() -> dict[str, Any] | None:
         count = result.scalar()
 
         if count == 0:
+            bootstrap_password = settings.initial_admin_password
+            if not bootstrap_password:
+                environment = settings.app_env.strip().lower()
+                if environment in {"production", "prod", "staging"}:
+                    raise RuntimeError("INITIAL_ADMIN_PASSWORD must be configured before first startup")
+                bootstrap_password = secrets.token_urlsafe(24)
             admin = User(
                 username="admin",
                 email="admin@localhost",
-                hashed_password=hash_password("admin123"),
+                hashed_password=hash_password(bootstrap_password),
                 role=UserRole.ADMIN.value,
                 status=UserStatus.ACTIVE.value,
             )
             session.add(admin)
             await session.commit()
-            return {"username": "admin", "password_set": True}
+            return {"username": "admin", "password_set": True, "bootstrap_generated": not settings.initial_admin_password}
 
     return None

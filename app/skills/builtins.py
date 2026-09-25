@@ -947,17 +947,16 @@ async def skill_memory_action(action: str = "recall", query: str = "", content: 
         for e in entries:
             results.append(f"- [{e.type.value}] {e.content} (importance: {e.importance}, accessed: {e.access_count}x)")
         return "# Memory Recall Results\n\n" + "\n".join(results)
-    elif action == "store":
+    if action == "store":
         mt = MemoryType.FACT
         with contextlib.suppress(ValueError):
             mt = MemoryType(memory_type)
         entry = persistent_memory.store(content, memory_type=mt, source="agent")
         return f"Memory stored: {entry.id}"
-    elif action == "stats":
+    if action == "stats":
         stats = persistent_memory.get_stats()
         return f"# Memory Statistics\n\n- Total: {stats['total_memories']}\n- By type: {stats['by_type']}\n- Storage: {stats['storage_path']}"
-    else:
-        return f"Unknown action: {action}. Use: recall, store, stats"
+    return f"Unknown action: {action}. Use: recall, store, stats"
 
 
 async def skill_dependency_auditor(project_path: str = ".") -> str:

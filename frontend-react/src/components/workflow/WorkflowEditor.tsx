@@ -13,7 +13,7 @@ import type { Connection, Edge, Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
   Play, Save,
-  FileInput, Bot, Wrench, GitBranch, FileOutput,
+  FileInput, Bot, Wrench, GitBranch, FileOutput, FlaskConical,
 } from 'lucide-react';
 import { nodeTypes, createWorkflowNode } from './WorkflowNodes';
 import { PropertiesPanel } from './PropertiesPanel';
@@ -31,6 +31,7 @@ const NODE_PALETTE = [
   { type: 'input', label: 'Input', icon: FileInput, description: 'User input variables' },
   { type: 'llm', label: 'LLM', icon: Bot, description: 'Call a language model' },
   { type: 'tool', label: 'Tool', icon: Wrench, description: 'Execute a tool' },
+  { type: 'simulation', label: 'Simulation', icon: FlaskConical, description: 'Run a scientific experiment' },
   { type: 'condition', label: 'Condition', icon: GitBranch, description: 'Branch by condition' },
   { type: 'output', label: 'Output', icon: FileOutput, description: 'Return results' },
 ];

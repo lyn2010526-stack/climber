@@ -82,7 +82,7 @@ class ResourceOrchestrator:
 
         if score >= 5:
             return TaskComplexity.COMPLEX
-        elif score >= 2:
+        if score >= 2:
             return TaskComplexity.MODERATE
         return TaskComplexity.SIMPLE
 

@@ -102,8 +102,7 @@ export function MobileLayout({ children, currentPage, onNavigate }: {
             <div
               className="w-8 h-8 rounded-xl flex items-center justify-center"
               style={{
-                background: 'linear-gradient(135deg, #5E6AD2, #6366F1)',
-                boxShadow: '0 0 12px rgba(94, 106, 210, 0.3)',
+                backgroundColor: 'var(--color-accent)',
               }}
             >
               <Sparkles size={16} className="text-white" />

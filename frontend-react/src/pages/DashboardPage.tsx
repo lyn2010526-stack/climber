@@ -13,7 +13,7 @@ export function DashboardPage() {
   const checkHealth = useCallback(async () => {
     setHealth('loading');
     try {
-      const response = await fetch('/health');
+      const response = await fetch('/health', { headers: { Accept: 'application/json' } });
       setHealth(response.ok ? 'online' : 'offline');
     } catch {
       setHealth('offline');
@@ -47,7 +47,7 @@ export function DashboardPage() {
                   <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">API service</h3>
                   <p className="mt-1 text-xs text-[var(--color-text-muted)]">后端运行时实时健康检查</p>
                 </div>
-                <button onClick={checkHealth} className="icon-button" aria-label="刷新 API 状态"><RefreshCw size={16} /></button>
+                 <button type="button" onClick={checkHealth} className="icon-button" aria-label="刷新 API 状态"><RefreshCw size={16} /></button>
               </div>
               <div className="mt-4 flex min-h-20 items-center gap-3 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] px-4" role="status" aria-live="polite">
                 {health === 'loading' && <RefreshCw size={18} className="animate-spin text-[var(--color-text-muted)]" />}
