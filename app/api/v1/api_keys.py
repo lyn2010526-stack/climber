@@ -55,15 +55,22 @@ async def list_api_keys(request: Request) -> list[ApiKeyOut]:
 @router.post("", response_model=ApiKeyOut)
 @router.post("/", response_model=ApiKeyOut)
 async def add_api_key(payload: ApiKeyCreate, request: Request) -> ApiKeyOut:
-    encrypted = encrypt_api_key(payload.api_key)
+    provider = payload.provider.strip().lower()
+    name = payload.name.strip()
+    api_key = payload.api_key.strip()
+    if not provider or not name:
+        raise HTTPException(status_code=422, detail="provider and name are required")
+    if provider != "ollama" and not api_key:
+        raise HTTPException(status_code=422, detail="api_key is required for this provider")
+    encrypted = encrypt_api_key(api_key) if api_key else ""
     user_id = current_user_id(request)
     async with async_session() as session:
         row = ApiKeyModel(
             user_id=user_id,
-            provider=payload.provider,
-            name=payload.name,
+            provider=provider,
+            name=name,
             api_key_encrypted=encrypted,
-            base_url=payload.base_url,
+            base_url=payload.base_url.strip() if payload.base_url else None,
         )
         session.add(row)
         await session.commit()
