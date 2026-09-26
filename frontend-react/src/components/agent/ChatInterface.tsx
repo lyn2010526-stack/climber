@@ -8,6 +8,7 @@ import { ThinkingDetails } from '../chat/ThinkingDetails';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { FloatingPermissionDialog } from './FloatingPermissionDialog';
 import type { PermissionRequest } from './FloatingPermissionDialog';
+import { useI18n } from '../../i18n';
 
 
   /* Streaming cursor - Reference: Claude / Vercel AI streaming */
@@ -53,11 +54,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onStop,
   isLoading,
   className,
-  placeholder = '输入消息...（Enter 发送）',
-  emptyStateTitle = '开始新的对话',
-  emptyStateDescription = '输入任何问题或任务，Climber 将为你自主执行。',
-  suggestions = ['帮我分析代码', '写一个 Python 脚本', '解释这个错误'],
+  placeholder,
+  emptyStateTitle,
+  emptyStateDescription,
+  suggestions,
 }) => {
+  const { t } = useI18n();
+  /* Defaults are keyed so the empty state follows the active locale. */
+  const resolvedPlaceholder = placeholder ?? t('chat.input_placeholder');
+  const resolvedEmptyStateTitle = emptyStateTitle ?? t('chat.empty_state_title');
+  const resolvedEmptyStateDescription = emptyStateDescription ?? t('chat.empty_state_description');
+  const resolvedSuggestions = suggestions ?? [
+    t('chat.suggestion_1'),
+    t('chat.suggestion_2'),
+    t('chat.suggestion_3'),
+  ];
   const [input, setInput] = useState('');
   const [editState, setEditState] = useState<EditState>(null);
   const [editContent, setEditContent] = useState('');
@@ -146,11 +157,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     if (isEditing && (editState.mode === 'edit' || editState.mode === 'modal')) {
       return (
         <div className={cn('flex gap-3 max-w-[85%]', msg.role === 'user' ? 'flex-row-reverse ml-auto' : '')}>
-          <div className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-blue-500 text-white w-9 h-9 shrink-0">
+          <div className="flex items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] w-9 h-9 shrink-0">
             <Edit3 size={16} />
           </div>
           <div className={cn('flex flex-col gap-2 min-w-0 flex-1')}>
-            <div className="px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-2xl focus-within:border-[#3B82F6]/40 transition-colors duration-200">
+            <div className="px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-[var(--radius-md)] focus-within:border-[var(--color-border-accent)] transition-colors duration-200">
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
@@ -191,7 +202,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     if (msg.toolCalls && msg.toolCalls.length > 0) {
       return (
         <div className="flex gap-3 max-w-[85%] message-enter">
-          <div className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-blue-500 text-white w-9 h-9 shrink-0">
+          <div className="flex items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] w-9 h-9 shrink-0">
             <Bot size={16} />
           </div>
           <div className="flex flex-col gap-2 min-w-0 flex-1">
@@ -248,22 +259,22 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-8 py-6 chat-container">
         {messages.length === 0 && (
-         <div className="flex items-center justify-center h-full">
-            <div className="text-center max-w-lg">
-              <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-[#5E6AD2]/20 to-[#8B5CF6]/20 flex items-center justify-center mx-auto mb-6 p-5" style={{ boxShadow: '0 0 40px rgba(94,106,210,0.15)' }}>
-                <Bot size={36} className="text-[#8B5CF6]" />
+         <div className="chat-empty flex items-center justify-center h-full">
+            <div className="chat-empty-content text-center">
+              <div className="chat-empty-icon flex items-center justify-center mx-auto text-[var(--color-text-secondary)]">
+                <Bot size={36} />
               </div>
-              <h3 className="text-2xl font-bold text-white mb-3 tracking-tight">{emptyStateTitle}</h3>
-              <p className="text-[var(--color-text-secondary)] text-sm mb-8 leading-relaxed max-w-sm mx-auto">{emptyStateDescription}</p>
+              <h3 className="chat-empty-title tracking-tight">{resolvedEmptyStateTitle}</h3>
+              <p className="text-[var(--color-text-secondary)] text-sm mb-8 leading-relaxed max-w-sm mx-auto">{resolvedEmptyStateDescription}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md mx-auto">
-                {suggestions.map((suggestion, idx) => (
+                {resolvedSuggestions.map((suggestion, idx) => (
                   <button type="button"
                     key={idx}
                     onClick={() => onSend(suggestion)}
-                    className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl text-sm text-[var(--color-text-secondary)] hover:border-[#5E6AD2]/40 hover:text-[var(--color-text-primary)] hover:bg-white/[0.06] transition-all duration-200 active:scale-[0.97] text-left flex items-center gap-3"
+                    className="chat-empty-suggestion px-4 py-3 border border-white/[0.06] text-sm text-[var(--color-text-secondary)] hover:border-[var(--color-border-accent)] hover:text-[var(--color-text-primary)] hover:bg-white/[0.06] transition-colors duration-200 active:scale-[0.97] text-left flex items-center gap-3"
                   >
-                     <span className="w-6 h-6 rounded-lg bg-[#5E6AD2]/10 flex items-center justify-center shrink-0">
-                       <span className="text-[10px] text-[#5E6AD2] font-bold">{idx + 1}</span>
+                     <span className="w-6 h-6 rounded-lg bg-[var(--color-accent-subtle)] flex items-center justify-center shrink-0">
+                       <span className="text-[10px] text-[var(--color-accent-foreground)] font-bold">{idx + 1}</span>
                     </span>
                     {suggestion}
                   </button>
@@ -276,7 +287,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
           {messages.map(renderMessageContent)}
           {isLoading && (
             <div className="flex gap-3 w-full max-w-[85%]">
-              <div className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500/50 to-blue-500/50 text-white/70 w-9 h-9 shrink-0">
+              <div className="flex items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] w-9 h-9 shrink-0">
                 <Bot size={16} />
               </div>
               <div className="flex-1">
@@ -288,15 +299,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       </div>
 
        {/* Input Area */}
-       <form onSubmit={handleSubmit} className="border-t border-white/[0.04] p-4 md:p-5 bg-[#0F0F14]/90 backdrop-blur-xl">
+       <form onSubmit={handleSubmit} aria-busy={!!isLoading} className="border-t border-white/[0.04] p-4 md:p-5 bg-[#0F0F14]/90 backdrop-blur-xl">
          <div className="flex gap-2.5 max-w-4xl mx-auto">
            {isLoading ? (
-              <Button type="button" variant="destructive" size="icon" onClick={onStop} className="rounded-2xl">
+              <Button type="button" variant="destructive" size="icon" onClick={onStop} aria-label={t('chat.stop_generation')} className="rounded-[var(--radius-md)]">
                <Square size={16} />
              </Button>
            ) : (
              <>
-                <Button type="button" variant="ghost" size="icon" className="rounded-2xl text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">
+                <Button type="button" variant="ghost" size="icon" className="rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">
                  <span className="text-base leading-none">+</span>
                </Button>
                <div className="flex-1 flex flex-col">
@@ -306,9 +317,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                      value={input}
                      onChange={(e) => { setInput(e.target.value); autoGrow(e); }}
                      onKeyDown={handleKeyDown}
-                     placeholder={placeholder}
+                     placeholder={resolvedPlaceholder}
                      disabled={isLoading}
-                     className="flex-1 px-5 py-3 bg-white/[0.04] border border-white/[0.08] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[#5E6AD2]/40 focus:bg-white/[0.06] transition-all duration-200 resize-none min-h-[44px]"
+                     className="flex-1 px-5 py-3 bg-white/[0.04] border border-white/[0.08] rounded-[var(--radius-lg)] text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-border-accent)] focus:bg-[var(--color-bg-surface-2)] transition-colors duration-200 resize-none min-h-[44px]"
                      rows={1}
                    />
                  </div>
@@ -328,7 +339,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                    )}
                  </div>
                </div>
-                <Button type="submit" size="icon" disabled={!input.trim()} className="rounded-2xl shadow-lg shadow-[#5E6AD2]/20 hover:shadow-[#5E6AD2]/30">
+                 <Button type="submit" size="icon" disabled={!input.trim()} aria-label={t('chat.send')} className="rounded-[var(--radius-md)]">
                  <Send size={16} />
                </Button>
              </>
@@ -339,7 +350,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       {/* Edit Modal */}
       {editState?.mode === 'modal' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-black/80 backdrop-blur-md fade-enter">
-          <div className="bg-[#121218] border border-white/[0.08] rounded-3xl w-full h-full max-w-7xl max-h-[90vh] flex flex-col shadow-2xl shadow-black/50">
+          <div className="bg-[#121218] border border-white/[0.08] rounded-[var(--radius-xl)] w-full h-full max-w-7xl max-h-[90vh] flex flex-col shadow-2xl shadow-black/50">
             <div className="flex items-center justify-between p-5 border-b border-white/[0.06]">
               <h3 className="text-lg font-semibold text-white tracking-tight">编辑消息</h3>
               <div className="flex items-center gap-2">

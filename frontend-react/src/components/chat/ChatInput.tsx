@@ -134,6 +134,7 @@ export function ChatInput({
         >
           <span className="text-[var(--color-text-muted)] truncate flex-1">{quotedMessage}</span>
           <button
+            type="button"
             onClick={onCancelQuote}
             className="p-0.5 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
           >
@@ -164,6 +165,7 @@ export function ChatInput({
               </span>
               <span className="text-[var(--color-text-muted)]">{formatSize(att.size)}</span>
               <button
+                type="button"
                 onClick={() => removeAttachment(att.id)}
                 className="p-0.5 rounded text-[var(--color-text-muted)] hover:text-[var(--color-error)] transition-colors"
               >

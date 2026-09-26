@@ -76,17 +76,19 @@ Updated: 2026-09-25
 
 - [x] 6.1 全量 typecheck + vitest + build（见 5.4）
 - [x] 6.2 更新 tasklist（阶段 1/3/4/5 全部完成；阶段 2 死代码待用户确认后删除）
-- [ ] 6.3 提交并推送 checkpoint
+- [x] 6.3 本地提交 checkpoint（`b6cb04ce`，未推送）
 
-## 待用户确认的删除清单（遵守 no-delete-operations.md）
+## 阶段 7 —— 性能与无障碍（并行子任务，已完成）
 
-以下文件已核实零引用，删除前需用户明确确认：
+- [x] 7.1 ThinkingIndicator：4 个 setInterval 收敛为 1 个 tick interval；ThinkingDots 改为 CSS 动画
+- [x] 7.2 LazyImage：三套懒加载收敛为单一 IntersectionObserver；移除 DOM 直改 src
+- [x] 7.3 SessionSidebar focus 刷新：保留（多标签账号同步，有测试覆盖，成本低）
+- [x] 7.4 无障碍：模态背景层补 Escape 关闭；剩余 button type 人工判断后补齐
+- [x] 7.5 验证：typecheck exit 0、vitest 25 files / 210 tests 全绿、vite build 成功
 
-- `src/forms/`（30 个空壳文件）
-- `src/components/full/`（4 文件）
-- `src/components/a11y/`
-- `src/dashboard/Dashboard.tsx` 及测试（孤儿）
-- `src/components/index.ts`、`src/components/ui/index.ts`（空 barrel）
-- `src/components/Sidebar.tsx`
-- `src/pages/TasksPage.tsx`
-- `src/components/chat/PermissionModes.tsx`（或 `src/components/workspace/PermissionModes.tsx`，以实际路径为准）
+## 阶段 8 —— 待推进（结构性改动，需确认）
+
+- [ ] 8.1 token 双 key 收敛（`auth_token` vs `climber-auth`，方案见 `design-code-refactor.md`）
+- [ ] 8.2 三套数据层收敛（api.ts / api-client.ts / services/，方案见 `design-code-refactor.md`）
+- [ ] 8.3 巨型文件拆分（api.ts 830 / SettingsPage 780 / FactoryModePage 704）
+- [ ] 8.4 视觉 P0 实施（方案见 `design-visual-upgrade.md`）

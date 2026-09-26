@@ -29,42 +29,24 @@ export function ThinkingIndicator({
   sparkle = false,
   className,
 }: ThinkingIndicatorProps) {
-  const [dots, setDots] = useState('');
-  const [currentStage, setCurrentStage] = useState(0);
-  const [showSparkle, setShowSparkle] = useState(false);
+  // One 200ms tick drives dots (400ms), stage rotation (3s) and sparkle (4s on / 1s off).
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     if (!isActive) return;
 
-    const dotInterval = setInterval(() => {
-      setDots(prev => prev.length >= 3 ? '' : prev + '.');
-    }, 400);
+    const tickInterval = setInterval(() => {
+      setTick(prev => prev + 1);
+    }, 200);
 
-    return () => clearInterval(dotInterval);
+    return () => clearInterval(tickInterval);
   }, [isActive]);
 
-  useEffect(() => {
-    if (!isActive || stage) return;
-
-    const stageInterval = setInterval(() => {
-      setCurrentStage(prev => (prev + 1) % thinkingStages.length);
-    }, 3000);
-
-    return () => clearInterval(stageInterval);
-  }, [isActive, stage]);
-
-  useEffect(() => {
-    if (!sparkle || !isActive) return;
-
-    const sparkleInterval = setInterval(() => {
-      setShowSparkle(true);
-      setTimeout(() => setShowSparkle(false), 1000);
-    }, 4000);
-
-    return () => clearInterval(sparkleInterval);
-  }, [sparkle, isActive]);
-
   if (!isActive) return null;
+
+  const dots = '.'.repeat(Math.floor(tick / 2) % 4);
+  const currentStage = Math.floor(tick / 15) % thinkingStages.length;
+  const showSparkle = tick >= 20 && tick % 20 < 5;
 
   const displayText = stage || thinkingStages[currentStage];
 
@@ -157,19 +139,27 @@ export function ThinkingIndicator({
 
 /** Minimal inline "thinking..." indicator for message bubbles */
 export function ThinkingDots({ text }: { text?: string }) {
-  const [dots, setDots] = useState('');
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setDots(prev => prev.length >= 3 ? '' : prev + '.');
-    }, 400);
-    return () => clearInterval(interval);
-  }, []);
-
   return (
     <span className="inline-flex items-center gap-1 text-sm text-[var(--color-text-secondary)]">
       <Brain size={13} className="text-blue-400/70" />
-      {text || '思考中'}{dots}
+      {text || '思考中'}
+      {/* CSS-driven dots avoid a setInterval per mounted bubble. */}
+      <span className="thinking-dots" aria-hidden="true" />
+      <style>{`
+        @keyframes thinkingDots {
+          0%, 24.99% { content: ''; }
+          25%, 49.99% { content: '.'; }
+          50%, 74.99% { content: '..'; }
+          75%, 100% { content: '...'; }
+        }
+        .thinking-dots::after {
+          content: '';
+          display: inline-block;
+          min-width: 1.2em;
+          text-align: left;
+          animation: thinkingDots 1.6s infinite;
+        }
+      `}</style>
     </span>
   );
 }

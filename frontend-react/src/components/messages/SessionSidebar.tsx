@@ -261,6 +261,13 @@ function SessionItem({
           : 'hover:bg-[var(--color-bg-surface-2)] border border-transparent'
       )}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        // Activate only when the row itself is focused, not nested controls.
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       role="button"
       aria-current={isActive ? 'true' : undefined}
       tabIndex={0}

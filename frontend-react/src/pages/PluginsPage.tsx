@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Search, Download, Trash2, Power, PowerOff, Package, Brain,
   Server, FileText, Star, ChevronRight, X,
@@ -43,6 +43,23 @@ export function PluginsPage() {
   const [importName, setImportName] = useState('');
   const [importType, setImportType] = useState('mcp');
   const [expandedPlugin, setExpandedPlugin] = useState<string | null>(null);
+  const importTriggerRef = useRef<HTMLButtonElement>(null);
+  const importUrlInputRef = useRef<HTMLInputElement>(null);
+
+  // Import modal: Escape to close, focus moves into the dialog on open
+  // and back to the trigger button on close.
+  useEffect(() => {
+    if (!importModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setImportModalOpen(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    importUrlInputRef.current?.focus();
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      importTriggerRef.current?.focus();
+    };
+  }, [importModalOpen]);
 
   const fetchPlugins = useCallback(async () => {
     try {
@@ -146,6 +163,7 @@ export function PluginsPage() {
              </p>
           </div>
           <button type="button"
+            ref={importTriggerRef}
             onClick={() => setImportModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold transition-all duration-200 active:scale-[0.97]"
           >
@@ -254,13 +272,13 @@ export function PluginsPage() {
       </div>
 
       {importModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setImportModalOpen(false)}>
-          <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-6 w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" role="presentation" onClick={() => setImportModalOpen(false)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="import-plugin-title" className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-6 w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
+              <h3 id="import-plugin-title" className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
                  <Download size={18} className="text-[var(--color-accent)]" /> 导入插件
                </h3>
-               <button type="button" onClick={() => setImportModalOpen(false)} className="p-1 rounded-xl hover:bg-white/[0.06] text-[var(--color-text-muted)]">
+               <button type="button" onClick={() => setImportModalOpen(false)} aria-label="Close dialog" className="p-1 rounded-xl hover:bg-white/[0.06] text-[var(--color-text-muted)]">
                  <X size={18} />
                </button>
             </div>
@@ -269,10 +287,11 @@ export function PluginsPage() {
               <div>
                  <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1.5">源地址</label>
                  <input
-                   type="url"
-                   value={importUrl}
-                   onChange={(e) => setImportUrl(e.target.value)}
-                   placeholder="https://github.com/user/mcp-server 或原始 JSON URL"
+                    ref={importUrlInputRef}
+                    type="url"
+                    value={importUrl}
+                    onChange={(e) => setImportUrl(e.target.value)}
+                    placeholder="https://github.com/user/mcp-server 或原始 JSON URL"
                   className="w-full px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
                  />
                </div>

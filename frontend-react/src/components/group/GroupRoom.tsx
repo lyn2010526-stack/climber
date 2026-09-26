@@ -53,6 +53,23 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const sidebarToggleRef = useRef<HTMLButtonElement>(null);
+  const sidebarCloseRef = useRef<HTMLButtonElement>(null);
+
+  // Mobile member sidebar: Escape to close, focus stays trapped logically
+  // by moving into the sidebar on open and back to the trigger on close.
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSidebarOpen(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    sidebarCloseRef.current?.focus();
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      sidebarToggleRef.current?.focus();
+    };
+  }, [sidebarOpen]);
 
   useEffect(() => {
     // Fetch initial messages
@@ -137,7 +154,10 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
         {/* Header */}
         <div className="h-10 flex items-center px-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-elevated)]/50">
           <button type="button"
+            ref={sidebarToggleRef}
             onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label="Toggle members sidebar"
+            aria-expanded={sidebarOpen}
             className="mr-2 p-1 rounded hover:bg-[var(--color-bg-surface-elevated)] text-[var(--color-text-secondary)] lg:hidden"
           >
             <PanelLeft size={14} />
@@ -206,7 +226,7 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
       {/* Member Sidebar */}
       {/* Mobile overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" aria-hidden="true" onClick={() => setSidebarOpen(false)} />
       )}
       <div className={`fixed inset-y-0 right-0 w-56 border-l border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-elevated)]/30 flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 z-50 ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="h-10 flex items-center px-3 border-b border-[var(--color-border-subtle)]">
@@ -215,7 +235,9 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
              成员 ({members.length})
           </span>
           <button type="button"
+            ref={sidebarCloseRef}
             onClick={() => setSidebarOpen(false)}
+            aria-label="Close members sidebar"
             className="ml-auto p-1 rounded hover:bg-[var(--color-bg-surface-elevated)] text-[var(--color-text-secondary)] lg:hidden"
           >
             <X size={12} />
