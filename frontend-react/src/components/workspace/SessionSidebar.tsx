@@ -12,8 +12,6 @@ import { apiClient } from '../../lib/api-client';
 import { ModelConfig } from '../chat/ModelConfig';
 import type { ModelSelection } from '../chat/ModelSelector';
 import { UserSwitcher } from './UserSwitcher';
-import { PermissionModes } from '../agent/PermissionModes';
-import type { PermissionMode } from '../agent/PermissionModes';
 
 export function SessionSidebar() {
   const {
@@ -32,7 +30,7 @@ export function SessionSidebar() {
   const [creating, setCreating] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [permissionMode, setPermissionMode] = useState<PermissionMode>('manual');
+  
   const [showCheckpoints, setShowCheckpoints] = useState(false);
 
   const refreshSessions = useCallback(async () => {
@@ -167,15 +165,8 @@ export function SessionSidebar() {
 
   return (
     <aside className="session-sidebar" aria-label="会话">
-      <div className="border-b border-[var(--color-border-subtle)] p-3">
-        <PermissionModes
-          currentMode={permissionMode}
-          onModeChange={setPermissionMode}
-        />
-      </div>
-
       <div className="space-y-2 border-b border-[var(--color-border-subtle)] p-3">
-        <button
+        <button type="button"
           onClick={handleCreate}
           disabled={creating || !ownerKey || !selectedAgent || (!useAgentModel && !selectedModel)}
           className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-accent)] px-3 text-xs font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
@@ -250,7 +241,7 @@ export function SessionSidebar() {
                  <span className="block text-[10px] font-medium text-[var(--color-text-muted)]">{s.status || 'idle'}</span>
                </span>
              </button>
-            <button
+            <button type="button"
               onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}
                aria-label={`删除会话 ${s.title || 'Untitled'}`}
                 className="flex h-11 w-11 items-center justify-center rounded-md text-[var(--color-text-muted)] opacity-0 transition-colors hover:bg-[var(--color-error-subtle)] hover:text-[var(--color-error)] group-hover:opacity-100 group-focus-within:opacity-100"
@@ -286,7 +277,7 @@ export function SessionSidebar() {
 
       <div className="border-t border-[var(--color-border-subtle)] p-3">
         <div className="flex items-center gap-2 mb-2">
-          <button
+          <button type="button"
             onClick={() => setShowCheckpoints(!showCheckpoints)}
             className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors ${
               showCheckpoints

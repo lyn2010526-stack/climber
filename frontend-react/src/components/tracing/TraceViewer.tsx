@@ -114,7 +114,7 @@ export default function TraceViewer({ traceId }: TraceViewerProps) {
       <div className="w-72 border border-[var(--color-border-subtle)] rounded-lg overflow-y-auto">
         <div className="p-3 border-b border-[var(--color-border-subtle)] flex items-center justify-between">
            <h3 className="font-semibold text-sm">追踪记录</h3>
-          <button onClick={fetchTraces} className="text-xs px-2 py-1 bg-[var(--color-bg-surface-elevated)] hover:bg-[var(--color-bg-surface-hover)] rounded">
+          <button type="button" onClick={fetchTraces} className="text-xs px-2 py-1 bg-[var(--color-bg-surface-elevated)] hover:bg-[var(--color-bg-surface-hover)] rounded">
             Refresh
           </button>
         </div>

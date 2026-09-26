@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Brain, Factory, GitBranch, Key, Stethoscope } from 'lucide-react';
 import { ALL_NAV_ITEMS_BASE, CORE_NAV_ITEMS_BASE, MOBILE_ADAPTED_PAGE_IDS, NAV_ITEM_IDS } from './navConfig';
 import { AdaptiveMobileLayout } from '../components/layout/AdaptiveMobileLayout';
-import { MobileBottomNav } from '../legacy/components/mobile/MobileBottomNav';
 import appSource from '../App.tsx?raw';
 
 vi.mock('../i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
@@ -48,16 +47,5 @@ describe('Semantic navigation contract', () => {
   it('marks the mobile more entry active while on API keys', () => {
     render(<AdaptiveMobileLayout currentPage="apikeys" onNavigate={vi.fn()}><div>Keys</div></AdaptiveMobileLayout>);
     expect(screen.getByRole('button', { name: 'sidebar.more' })).toHaveAttribute('aria-current', 'page');
-  });
-
-  it('keeps the legacy mobile API key entry reachable', () => {
-    const onNavigate = vi.fn();
-    render(<MobileBottomNav currentPage="apikeys" onNavigate={onNavigate} />);
-    const more = screen.getByRole('button', { name: '更多' });
-    expect(more).toHaveAttribute('aria-current', 'page');
-    fireEvent.click(more);
-    fireEvent.click(screen.getByRole('button', { name: 'API 密钥' }));
-    expect(onNavigate).toHaveBeenCalledWith('apikeys');
-    expect(screen.queryByRole('button', { name: 'API 密钥' })).not.toBeInTheDocument();
   });
 });

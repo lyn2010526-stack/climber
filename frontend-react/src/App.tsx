@@ -17,7 +17,7 @@ import { useI18n } from './i18n';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { useIsMobile } from './layout/breakpoints';
 import { useSidebarState } from './layout/useSidebarState';
-import { CORE_NAV_ITEMS_BASE, ALL_NAV_ITEMS_BASE, NAV_ITEM_IDS, MOBILE_ADAPTED_PAGE_IDS } from './navigation/navConfig';
+import { ALL_NAV_ITEMS_BASE, NAV_ITEM_IDS, MOBILE_ADAPTED_PAGE_IDS } from './navigation/navConfig';
 import type { Page, NavGroup } from './navigation/navConfig';
 
 const WorkspaceLayout = lazy(() => import('./components/workspace/WorkspaceLayout').then(m => ({ default: m.WorkspaceLayout })));
@@ -51,7 +51,10 @@ const VALID_PAGES = new Set(NAV_ITEM_IDS);
 const NAV_GROUPS: NavGroup[] = ['main', 'manage', 'config'];
 
 function getPageFromHash(): Page {
-  const hash = window.location.hash.replace('#', '');
+  const hash = window.location.hash
+    .replace(/^#/, '')
+    .replace(/^\/+/, '')
+    .replace(/\/+$/, '');
   return VALID_PAGES.has(hash as Page) ? (hash as Page) : 'chat';
 }
 
@@ -69,7 +72,6 @@ function PageFallback() {
 
 export default function App() {
   const { t } = useI18n();
-  const CORE_NAV_ITEMS = CORE_NAV_ITEMS_BASE.map(item => ({ ...item, label: item.label ?? t(item.labelKey!) }));
   const ALL_NAV_ITEMS = ALL_NAV_ITEMS_BASE.map(item => ({ ...item, label: item.label ?? t(item.labelKey!) }));
   const [currentPage, setCurrentPage] = useState<Page>(getPageFromHash);
   const { open: sidebarOpen, toggle: toggleSidebar } = useSidebarState();
@@ -173,7 +175,7 @@ export default function App() {
                   <span className="text-sm font-bold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>Climber</span>
                 </div>
               )}
-              <button
+              <button type="button"
                 onClick={toggleSidebar}
                 aria-label={sidebarOpen ? t('sidebar.collapse') : t('sidebar.expand')}
                 aria-expanded={sidebarOpen}
@@ -184,7 +186,7 @@ export default function App() {
             </div>
 
             <div className="p-3">
-              <button
+              <button type="button"
                 onClick={() => setActiveOverlay('search')}
                 aria-label={t('sidebar.global_search')}
                 className="flex h-11 w-full items-center gap-3 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] px-3 text-sm text-[var(--color-text-muted)] transition-colors hover:border-[var(--color-border-default)] hover:text-[var(--color-text-secondary)]"
@@ -205,7 +207,7 @@ export default function App() {
 
             <nav className="flex-1 overflow-y-auto px-2.5 py-2" aria-label={t('sidebar.workspace')}>
               {NAV_GROUPS.map((group, groupIndex) => {
-                const items = CORE_NAV_ITEMS.filter(item => item.group === group);
+                const items = ALL_NAV_ITEMS.filter(item => item.group === group);
                 if (items.length === 0) return null;
                 return (
                   <div key={group} className={groupIndex > 0 ? 'mt-1' : ''}>
@@ -216,7 +218,7 @@ export default function App() {
                     )}
                     <div className="space-y-0.5">
                       {items.map(({ id, icon: Icon, label }) => (
-                        <button
+                        <button type="button"
                           key={id}
                           onClick={() => navigate(id)}
                           aria-label={label}
@@ -264,7 +266,7 @@ export default function App() {
                  <p className="workspace-eyebrow">{t('sidebar.workspace')}</p>
                 <p className="truncate text-sm font-semibold text-[var(--color-text-primary)]">{ALL_NAV_ITEMS.find(item => item.id === currentPage)?.label ?? currentPage}</p>
               </div>
-              <button className="context-command" onClick={() => setActiveOverlay('commands')} aria-label={t('sidebar.command_menu')}>
+              <button type="button" className="context-command" onClick={() => setActiveOverlay('commands')} aria-label={t('sidebar.command_menu')}>
                  <Search size={14} /><span>{t('sidebar.command_menu')}</span><kbd>⌘K</kbd>
               </button>
             </header>

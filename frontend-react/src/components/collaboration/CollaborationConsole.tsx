@@ -483,7 +483,7 @@ export function CollaborationConsole({ groupId, availableTasks = [] }: Collabora
               placeholder="输入消息..."
               className="flex-1 px-3 py-2 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded-lg text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-blue-500/50"
             />
-            <button
+            <button type="button"
               onClick={sendMessage}
               disabled={!inputMessage.trim()}
               className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"

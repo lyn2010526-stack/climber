@@ -83,7 +83,7 @@ export function ReasoningPanel() {
     if (modes.length === 0) await loadModes();
 
     try {
-      const data = await api.reasonStream(task, mode, maxPaths, maxRounds, coverageEnabled, () => {});
+      const data = await api.reasonStream(task, mode, maxPaths, maxRounds, coverageEnabled);
       setResult(data);
     } catch (err: any) {
       setError(err.message || 'Reasoning failed');
@@ -186,7 +186,7 @@ export function ReasoningPanel() {
              覆盖率检查
           </label>
 
-          <button
+          <button type="button"
             onClick={handleReason}
             disabled={isRunning || !task.trim()}
             className="flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-[var(--color-bg-surface-2)] disabled:text-[var(--color-text-muted)] text-white rounded-lg text-xs font-medium transition-all"
@@ -286,7 +286,7 @@ export function ReasoningPanel() {
                 </div>
                 {result.trace.path_traces.map((path) => (
                   <div key={path.candidate_id} className="bg-[var(--color-bg-surface-1)] rounded-lg border border-[var(--color-border-subtle)] overflow-hidden">
-                    <button
+                    <button type="button"
                       onClick={() => togglePathExpand(path.candidate_id)}
                       className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-[var(--color-bg-surface-2)]"
                     >
@@ -329,7 +329,7 @@ export function ReasoningPanel() {
                 <div className="flex items-center gap-3">
                   <div className="flex gap-1">
                     {[1, 2, 3, 4, 5].map((star) => (
-                      <button
+                      <button type="button"
                         key={star}
                         onClick={() => setFeedbackRating(star)}
                         className={`p-1 rounded ${feedbackRating >= star ? 'text-yellow-400' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}`}
@@ -339,13 +339,13 @@ export function ReasoningPanel() {
                     ))}
                   </div>
                   <div className="flex gap-2">
-                    <button
+                    <button type="button"
                       onClick={() => setFeedbackThumbs(feedbackThumbs === 'up' ? null : 'up')}
                       className={`p-1 rounded ${feedbackThumbs === 'up' ? 'text-green-400 bg-green-400/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}`}
                     >
                       <ThumbsUp size={14} />
                     </button>
-                    <button
+                    <button type="button"
                       onClick={() => setFeedbackThumbs(feedbackThumbs === 'down' ? null : 'down')}
                       className={`p-1 rounded ${feedbackThumbs === 'down' ? 'text-red-400 bg-red-400/10' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'}`}
                     >
@@ -360,7 +360,7 @@ export function ReasoningPanel() {
                   className="w-full px-2 py-1 bg-[var(--color-bg-base)] border border-[var(--color-border-subtle)] rounded text-xs text-[var(--color-text-secondary)] placeholder:text-[var(--color-text-muted)] focus:outline-none resize-none"
                   rows={2}
                 />
-                <button
+                <button type="button"
                   onClick={handleFeedback}
                   disabled={feedbackRating === 0}
                   className="px-3 py-1 bg-purple-600 hover:bg-purple-500 disabled:bg-[var(--color-bg-surface-2)] disabled:text-[var(--color-text-muted)] text-white text-xs rounded transition-colors"

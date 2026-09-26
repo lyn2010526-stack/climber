@@ -1,32 +1,12 @@
 /**
- * Type-safe translation utilities
+ * Type-safe translation utilities.
+ *
+ * Thin alias over `useI18n` (./utils) so the app has a single implementation.
+ * Kept so existing "typed" naming / imports stay valid.
  */
-import { useTranslation as useBaseT } from 'react-i18next';
-import type { SupportedLanguageCode } from './config';
+export { useI18n as useTypedTranslation } from './utils';
 
-export type TFunction = ReturnType<typeof useBaseT>['t'];
-
-/**
- * Typed translation hook
- */
-export function useTypedTranslation<TNamespace extends string = 'translation'>(
-  ns?: TNamespace
-) {
-  const { t, i18n, ready } = useBaseT(ns);
-
-  const changeLanguage = async (lng: SupportedLanguageCode | string) => {
-    await i18n.changeLanguage(lng);
-    localStorage.setItem('i18next_lng', lng);
-  };
-
-  return {
-    t: t as TFunction,
-    i18n,
-    ready,
-    changeLanguage,
-    currentLanguage: i18n.language,
-  };
-}
+export type TFunction = ReturnType<typeof import('react-i18next').useTranslation>['t'];
 
 // Helper to define translation namespace types
 export type TranslationNamespace = 'translation';

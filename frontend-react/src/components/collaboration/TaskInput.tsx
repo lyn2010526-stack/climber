@@ -77,7 +77,7 @@ export function TaskInput({ onStart, onPause, onStop, status, disabled, availabl
                className="flex-1 px-3 py-2 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded-lg text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50"
               disabled={disabled}
             />
-            <button
+            <button type="button"
               onClick={() => handleStart()}
               disabled={!task.trim() || disabled}
               className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 text-xs"
@@ -231,21 +231,21 @@ export function TaskInput({ onStart, onPause, onStop, status, disabled, availabl
           </div>
           <div className="ml-auto flex items-center gap-1.5">
             {status === 'running' ? (
-              <button
+              <button type="button"
                 onClick={onPause}
                 className="p-1.5 bg-amber-500/10 text-amber-400 rounded hover:bg-amber-500/20 transition-colors"
               >
                 <Pause size={12} />
               </button>
             ) : (
-              <button
+              <button type="button"
                 onClick={() => {}}
                 className="p-1.5 bg-green-500/10 text-green-400 rounded hover:bg-green-500/20 transition-colors"
               >
                 <Play size={12} />
               </button>
             )}
-            <button
+            <button type="button"
               onClick={onStop}
               className="p-1.5 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 transition-colors"
             >

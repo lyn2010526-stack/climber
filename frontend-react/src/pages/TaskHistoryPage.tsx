@@ -83,7 +83,7 @@ export function TaskHistoryPage() {
     return (
       <div className="h-full flex flex-col">
         <div className="flex items-center gap-2 p-3 border-b border-[var(--color-border-subtle)]">
-          <button
+          <button type="button"
             onClick={() => setSelectedTask(null)}
             className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
           >
@@ -111,13 +111,13 @@ export function TaskHistoryPage() {
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-medium text-[var(--color-text-secondary)]">最终产出</h4>
                 <div className="flex items-center gap-2">
-                  <button
+                  <button type="button"
                     onClick={() => copyOutput(output)}
                     className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] flex items-center gap-1 transition-colors"
                   >
                     <Copy size={10} /> 复制
                   </button>
-                  <button
+                  <button type="button"
                     onClick={() => downloadOutput(selectedTask)}
                     className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] flex items-center gap-1 transition-colors"
                   >

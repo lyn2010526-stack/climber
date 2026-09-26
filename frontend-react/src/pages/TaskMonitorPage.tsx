@@ -18,7 +18,7 @@ function statusColor(status: string) {
 
 function TaskListItem({ task, isSelected, onClick }: { task: TaskSummary; isSelected: boolean; onClick: () => void }) {
   return (
-    <button
+    <button type="button"
       onClick={onClick}
       className={`w-full text-left px-4 py-3 border-b border-[var(--color-border-subtle)] transition-all duration-200 border-l-2 ${
         isSelected

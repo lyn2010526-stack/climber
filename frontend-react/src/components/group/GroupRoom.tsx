@@ -136,7 +136,7 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <div className="h-10 flex items-center px-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-elevated)]/50">
-          <button
+          <button type="button"
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="mr-2 p-1 rounded hover:bg-[var(--color-bg-surface-elevated)] text-[var(--color-text-secondary)] lg:hidden"
           >
@@ -192,7 +192,7 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
                placeholder="输入消息..."
               className="flex-1 px-3 py-2 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded-lg text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-blue-500/50"
             />
-            <button
+            <button type="button"
               onClick={sendMessage}
               disabled={!input.trim() || sending || !connected}
               className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -214,7 +214,7 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
           <span className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
              成员 ({members.length})
           </span>
-          <button
+          <button type="button"
             onClick={() => setSidebarOpen(false)}
             className="ml-auto p-1 rounded hover:bg-[var(--color-bg-surface-elevated)] text-[var(--color-text-secondary)] lg:hidden"
           >
@@ -252,7 +252,7 @@ export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
           })}
         </div>
         <div className="p-2 border-t border-[var(--color-border-subtle)]">
-          <button
+          <button type="button"
             onClick={onLeave}
             className="w-full py-1.5 text-[10px] text-[var(--color-text-muted)] hover:text-red-400 transition-colors"
           >

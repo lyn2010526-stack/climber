@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, Key, Copy, Check, Shield, Clock, AlertTriangle } from 'lucide-react';
 import { api } from '../api';
+import { useTranslation } from '../i18n';
 
 interface ApiKeyItem {
     id: string;
@@ -14,6 +15,7 @@ interface ApiKeyItem {
 }
 
 export function AuthApiKeysPage({ embedded = false }: { embedded?: boolean } = {}) {
+    const { t } = useTranslation();
     const [keys, setKeys] = useState<ApiKeyItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAdmin, setIsAdmin] = useState(false);
@@ -32,11 +34,11 @@ export function AuthApiKeysPage({ embedded = false }: { embedded?: boolean } = {
             const data = await api.listAuthApiKeys();
             setKeys(data.keys || []);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load platform access tokens');
+            setError(err instanceof Error ? err.message : t('apiKeys.authApiKeys.failed_load'));
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [t]);
 
     useEffect(() => {
         loadKeys();
@@ -63,7 +65,7 @@ export function AuthApiKeysPage({ embedded = false }: { embedded?: boolean } = {
     };
 
     const revokeKey = async (keyId: string) => {
-        if (!confirm('Are you sure you want to revoke this API key? This action cannot be undone.')) {
+        if (!confirm(t('apiKeys.authApiKeys.revoke_confirm'))) {
             return;
         }
 
@@ -71,7 +73,7 @@ export function AuthApiKeysPage({ embedded = false }: { embedded?: boolean } = {
             await api.revokeAuthApiKey(keyId);
             loadKeys();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to revoke platform access token');
+            setError(err instanceof Error ? err.message : t('apiKeys.authApiKeys.failed_revoke'));
         }
     };
 
@@ -102,11 +104,11 @@ export function AuthApiKeysPage({ embedded = false }: { embedded?: boolean } = {
                             管理程序调用 Climber API 的访问权限与有效期。模型供应商 API Key 请在模型凭据中配置。
                         </p>
                     </div>
-                    <button
+                    <button type="button"
                         onClick={() => { setShowForm(!showForm); setCreatedKey(null); }}
                         className="flex items-center gap-2 px-5 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold transition-all duration-200 shadow-lg shadow-[var(--color-accent)]/20 active:scale-[0.97]"
                     >
-                        <Plus size={16} /> Create Key
+                        <Plus size={16} /> {t('apiKeys.authApiKeys.create_key')}
                     </button>
                 </div>
 
@@ -121,16 +123,16 @@ export function AuthApiKeysPage({ embedded = false }: { embedded?: boolean } = {
                     <div className="mb-6 p-6 bg-[var(--color-success)]/10 border border-[var(--color-success)]/20 rounded-2xl">
                         <div className="flex items-center gap-3 mb-3">
                             <Shield size={20} className="text-[var(--color-success)]" />
-                            <h3 className="font-semibold text-[var(--color-success)]">API Key Created</h3>
+                            <h3 className="font-semibold text-[var(--color-success)]">{t('apiKeys.authApiKeys.created_title')}</h3>
                         </div>
                         <p className="text-sm mb-3 text-[var(--color-text-secondary)]">
-                            Copy this key now. You won't be able to see it again!
+                            {t('apiKeys.authApiKeys.copy_hint')}
                         </p>
                         <div className="flex items-center gap-2 p-3 bg-[var(--color-bg-surface-2)] rounded-xl">
                             <code className="flex-1 text-sm font-mono text-[var(--color-text-primary)] break-all">
                                 {createdKey.raw_key}
                             </code>
-                            <button
+                            <button type="button"
                                 onClick={() => copyToClipboard(createdKey.raw_key)}
                                 className="p-2 hover:bg-[var(--color-bg-surface-3)] rounded-lg transition-colors"
                                 style={{ color: 'var(--color-text-muted)' }}
@@ -143,31 +145,31 @@ export function AuthApiKeysPage({ embedded = false }: { embedded?: boolean } = {
 
                 {showForm && (
                     <div className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-3xl p-6 mb-6">
-                        <h3 className="font-semibold text-[var(--color-text-primary)] mb-4">Create New API Key</h3>
+                        <h3 className="font-semibold text-[var(--color-text-primary)] mb-4">{t('apiKeys.authApiKeys.create_new')}</h3>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-medium mb-1.5 text-[var(--color-text-secondary)]">Name</label>
+                                <label className="block text-xs font-medium mb-1.5 text-[var(--color-text-secondary)]">{t('apiKeys.authApiKeys.name')}</label>
                                 <input
-                                    placeholder="Key name (optional)"
+                                    placeholder={t('apiKeys.authApiKeys.name_placeholder')}
                                     value={newKey.name}
                                     onChange={e => setNewKey({ ...newKey, name: e.target.value })}
                                     className="w-full px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium mb-1.5 text-[var(--color-text-secondary)]">Expires In (days)</label>
+                                <label className="block text-xs font-medium mb-1.5 text-[var(--color-text-secondary)]">{t('apiKeys.authApiKeys.expires_in')}</label>
                                 <input
                                     type="number"
                                     min={1}
                                     max={365}
-                                    placeholder="No expiration"
+                                    placeholder={t('apiKeys.authApiKeys.no_expiration')}
                                     value={newKey.ttl_days || ''}
                                     onChange={e => setNewKey({ ...newKey, ttl_days: e.target.value ? parseInt(e.target.value) : null })}
                                     className="w-full px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium mb-1.5 text-[var(--color-text-secondary)]">Scopes</label>
+                                <label className="block text-xs font-medium mb-1.5 text-[var(--color-text-secondary)]">{t('apiKeys.authApiKeys.scopes_label')}</label>
                                 <div className="flex gap-2">
                                     {scopeOptions.map(scope => (
                                         <button
@@ -187,18 +189,18 @@ export function AuthApiKeysPage({ embedded = false }: { embedded?: boolean } = {
                             </div>
                         </div>
                         <div className="flex justify-end gap-3 mt-4">
-                            <button
+                            <button type="button"
                                 onClick={() => setShowForm(false)}
                                 className="px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
                             >
-                                Cancel
+                                {t('apiKeys.cancel')}
                             </button>
-                            <button
+                            <button type="button"
                                 onClick={createKey}
                                 disabled={newKey.scopes.length === 0}
                                 className="px-6 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold disabled:opacity-40 transition-all duration-200 active:scale-[0.97]"
                             >
-                                Create
+                                {t('apiKeys.authApiKeys.create')}
                             </button>
                         </div>
                     </div>
@@ -208,14 +210,14 @@ export function AuthApiKeysPage({ embedded = false }: { embedded?: boolean } = {
                     {loading ? (
                         <div className="text-center py-16">
                             <div className="w-5 h-5 border-2 rounded-full animate-spin mx-auto mb-4" style={{ borderColor: 'var(--color-accent)', borderTopColor: 'transparent' }} />
-                            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Loading...</p>
+                            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{t('apiKeys.authApiKeys.loading')}</p>
                         </div>
                     ) : keys.length === 0 ? (
                         <div className="text-center py-16">
                             <div className="w-16 h-16 rounded-3xl bg-white/5 border border-[var(--color-border-subtle)] flex items-center justify-center mx-auto mb-4">
                                 <Key size={28} className="text-[var(--color-text-muted)]" />
                             </div>
-                            <p className="text-[var(--color-text-muted)] text-sm">No API keys yet. Create one to enable programmatic access.</p>
+                            <p className="text-[var(--color-text-muted)] text-sm">{t('apiKeys.authApiKeys.empty_desc')}</p>
                         </div>
                     ) : (
                         keys.map(key => (
@@ -237,30 +239,30 @@ export function AuthApiKeysPage({ embedded = false }: { embedded?: boolean } = {
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-1">
                                         <h3 className="font-semibold text-[var(--color-text-primary)] truncate">
-                                            {key.name || 'Unnamed Key'}
+                                            {key.name || t('apiKeys.authApiKeys.unnamed_key')}
                                         </h3>
                                         {!key.is_active && (
                                             <span className="px-2 py-0.5 text-[10px] font-medium bg-[var(--color-error)]/10 text-[var(--color-error)] rounded-lg">
-                                                REVOKED
+                                                {t('apiKeys.authApiKeys.revoked')}
                                             </span>
                                         )}
                                     </div>
                                     <div className="flex items-center gap-3 text-xs text-[var(--color-text-muted)]">
-                                        <span>Owner: {key.owner}</span>
-                                        <span>Scopes: {key.scopes.join(', ')}</span>
+                                        <span>{t('apiKeys.authApiKeys.owner')}: {key.owner}</span>
+                                        <span>{t('apiKeys.authApiKeys.scopes_label')}: {key.scopes.join(', ')}</span>
                                         {key.expires_at && (
                                             <span className="flex items-center gap-1">
                                                 <Clock size={12} />
-                                                Expires: {new Date(key.expires_at).toLocaleDateString()}
+                                                {t('apiKeys.authApiKeys.expires_label')}: {new Date(key.expires_at).toLocaleDateString()}
                                             </span>
                                         )}
                                     </div>
                                 </div>
                                 {key.is_active && (
-                                    <button
+                                    <button type="button"
                                         onClick={() => revokeKey(key.id)}
                                         className="p-2 hover:bg-[var(--color-error)]/10 rounded-xl text-[var(--color-text-muted)] hover:text-[var(--color-error)] transition-all duration-200"
-                                        title="Revoke key"
+                                        title={t('apiKeys.authApiKeys.revoke_key')}
                                     >
                                         <Trash2 size={16} />
                                     </button>

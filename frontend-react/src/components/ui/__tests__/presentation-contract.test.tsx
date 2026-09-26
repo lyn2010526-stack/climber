@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Button } from '../Button';
 import { Badge } from '../Badge';
 import { ConfirmDialog } from '../Modal';
 import { StreamingCursor } from '../../chat/StreamingCursor';
-import css from '../../../index.css?raw';
 import markdown from '../../chat/MarkdownRenderer.tsx?raw';
 import bubble from '../../chat/MessageBubble.tsx?raw';
 import content from '../../chat/MessageContent.tsx?raw';
@@ -13,6 +14,11 @@ import card from '../Card.tsx?raw';
 import mobile from '../../mobile/MobileChatInterface.tsx?raw';
 import chart from '../Chart.tsx?raw';
 import toast from '../Toast.tsx?raw';
+
+// `import ... from '*.css?raw'` returns an empty string under Vite 8 (the
+// Tailwind plugin consumes .css before the raw loader runs), so read the file
+// from disk instead — `*Raw` globals below still work for .tsx.
+const css = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf-8');
 
 afterEach(cleanup);
 

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import { supportedLanguages, SupportedLanguageCode } from '../i18n/config';
+import { useI18n } from '../i18n';
 import { cn } from '../lib/utils';
 
 interface LanguageSwitcherProps {
@@ -14,7 +14,7 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
   showFlag = false,
   compact = false 
 }) => {
-  const { i18n, t } = useTranslation();
+  const { i18n, t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -43,10 +43,10 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
 
   return (
     <div ref={dropdownRef} className={cn('relative inline-block', className)}>
-      <button
+      <button type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          'flex items-center gap-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors',
+          'flex items-center gap-2 rounded-lg bg-[var(--color-bg-surface-2)] hover:bg-[var(--color-bg-surface-3)] text-[var(--color-text-primary)] transition-colors',
           compact ? 'px-2 py-1' : 'px-3 py-2'
         )}
         aria-haspopup="true"
@@ -83,28 +83,28 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
       {isOpen && (
         <div 
           className={cn(
-            'absolute mt-2 rounded-lg shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 z-50 overflow-hidden',
+            'absolute mt-2 rounded-lg shadow-lg bg-[var(--color-bg-surface-1)] border border-[var(--color-border-default)] z-50 overflow-hidden',
             compact ? 'right-0 w-36' : 'right-0 w-48'
           )}
         >
           <div className="py-1">
             <div className={cn(
-              'font-semibold text-gray-500 dark:text-gray-400 uppercase',
+              'font-semibold text-[var(--color-text-muted)] uppercase',
               compact ? 'px-3 py-1.5 text-[10px]' : 'px-4 py-2 text-xs'
             )}>
               {t('user_menu.language_settings')}
             </div>
             {supportedLanguages.map((lang) => (
-              <button
+              <button type="button"
                 key={lang.code}
                 onClick={() => handleLanguageChange(lang.code)}
                 className={cn(
                   'w-full text-left flex items-center justify-between transition-colors',
                   compact ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm',
-                  'hover:bg-gray-100 dark:hover:bg-gray-700',
+                  'hover:bg-[var(--color-bg-surface-2)]',
                   currentLang.code === lang.code 
-                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' 
-                    : 'text-gray-700 dark:text-gray-300'
+                    ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent-foreground)]' 
+                    : 'text-[var(--color-text-secondary)]'
                 )}
               >
                 <span className="flex items-center gap-2">

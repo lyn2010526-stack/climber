@@ -59,7 +59,7 @@ export function EmptyState({
           {suggestions.map((suggestion, idx) => {
             const Icon = iconMap[suggestion.icon];
             return (
-              <button
+              <button type="button"
                 key={idx}
                 onClick={() => onSelectSuggestion?.(suggestion.prompt)}
                 className={cn(

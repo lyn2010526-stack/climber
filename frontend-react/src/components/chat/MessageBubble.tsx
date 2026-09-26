@@ -128,7 +128,7 @@ export function MessageBubble({
               'flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200',
             )}
           >
-            <button
+            <button type="button"
               onClick={handleCopy}
               className="p-1 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-3)] transition-colors"
               title="复制"
@@ -137,7 +137,7 @@ export function MessageBubble({
             </button>
 
             {isAssistant && onRegenerate && (
-              <button
+              <button type="button"
                 onClick={() => onRegenerate(message.id)}
                 className="p-1 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-3)] transition-colors"
                 title="重新生成"
@@ -147,7 +147,7 @@ export function MessageBubble({
             )}
 
             {isUser && onEdit && (
-              <button
+              <button type="button"
                 onClick={() => onEdit(message.id, message.content)}
                 className="p-1 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-3)] transition-colors"
                 title="编辑"
@@ -157,7 +157,7 @@ export function MessageBubble({
             )}
 
             {onQuote && (
-              <button
+              <button type="button"
                 onClick={() => onQuote(message.content)}
                 className="p-1 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-3)] transition-colors"
                 title="引用"
@@ -168,7 +168,7 @@ export function MessageBubble({
 
             {isAssistant && onFeedback && (
               <>
-                <button
+                <button type="button"
                   onClick={() => handleFeedback('up')}
                   className={cn(
                     'p-1 rounded-md hover:bg-[var(--color-bg-surface-3)] transition-colors',
@@ -178,7 +178,7 @@ export function MessageBubble({
                 >
                   <ThumbsUp size={12} />
                 </button>
-                <button
+                <button type="button"
                   onClick={() => handleFeedback('down')}
                   className={cn(
                     'p-1 rounded-md hover:bg-[var(--color-bg-surface-3)] transition-colors',
@@ -192,7 +192,7 @@ export function MessageBubble({
             )}
 
             {onDelete && (
-              <button
+              <button type="button"
                 onClick={() => onDelete(message.id)}
                 className="p-1 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-subtle)] transition-colors"
                 title="删除"

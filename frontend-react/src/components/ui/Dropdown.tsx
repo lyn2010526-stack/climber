@@ -124,7 +124,7 @@ export interface DropdownItemProps extends React.HTMLAttributes<HTMLButtonElemen
 
 const DropdownItem = React.forwardRef<HTMLButtonElement, DropdownItemProps>(
   ({ icon, danger, disabled, shortcut, children, className, ...props }, ref) => (
-    <button
+    <button type="button"
       ref={ref}
       role="menuitem"
       data-disabled={disabled || undefined}
@@ -162,7 +162,7 @@ const DropdownSubMenu: React.FC<DropdownSubMenuProps> = ({ trigger, children, ic
 
   return (
     <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <button
+      <button type="button"
         role="menuitem"
         aria-haspopup="menu"
         aria-expanded={open}

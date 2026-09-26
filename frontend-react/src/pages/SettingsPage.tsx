@@ -58,7 +58,7 @@ export function SettingsPage() {
               const Icon = item.icon;
               const isActive = activeSection === item.id;
               return (
-                <button
+                <button type="button"
                   key={item.id}
                   onClick={() => handleSectionChange(item.id)}
                   className={cn(

@@ -94,7 +94,7 @@ export function FloatingPermissionDialog({
                   全部允许
                 </Button>
               )}
-              <button
+              <button type="button"
                 onClick={() => { setVisible(false); }}
                 className="p-1 rounded-lg hover:bg-white/[0.06] text-[var(--color-text-secondary)] transition-colors"
               >

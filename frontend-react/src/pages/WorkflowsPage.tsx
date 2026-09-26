@@ -8,8 +8,10 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { SkeletonList } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
+import { useTranslation } from '../i18n';
 
 export function WorkflowsPage() {
+  const { t } = useTranslation();
   const [workflows, setWorkflows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,22 +72,22 @@ export function WorkflowsPage() {
     <div className="page-scroll page-transition">
       <div className="page-container">
         <PageHeader
-          title="Workflows"
-          description="DAG-based workflow automation"
+          title={t('workflows.title')}
+          description={t('workflows.description')}
           icon={<FileCode size={20} className="text-[var(--color-accent)]" />}
           actions={
             <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={openNewEditor}>
-              New Workflow
+              {t('workflows.new_workflow')}
             </Button>
           }
         />
 
         <div className="mt-4 flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-3 md:mt-6">
           <div className="flex items-center gap-1" role="tablist" aria-label="工作流视图">
-            <button role="tab" aria-selected="true" className="view-tab is-active"><List size={14} />列表</button>
-            <button role="tab" aria-selected="false" className="view-tab" onClick={openNewEditor}><GitBranch size={14} />画布</button>
+            <button type="button" role="tab" aria-selected="true" className="view-tab is-active"><List size={14} />列表</button>
+            <button type="button" role="tab" aria-selected="false" className="view-tab" onClick={openNewEditor}><GitBranch size={14} />画布</button>
           </div>
-          {!loading && !error && <p className="text-xs text-[var(--color-text-muted)]">{workflows.length} workflows</p>}
+          {!loading && !error && <p className="text-xs text-[var(--color-text-muted)]">{t('workflows.count', { count: workflows.length })}</p>}
         </div>
 
         <div className="mt-3">
@@ -95,7 +97,7 @@ export function WorkflowsPage() {
                 <AlertCircle size={18} className="text-[var(--color-error)] shrink-0" />
                 <p className="text-sm text-[var(--color-error)] flex-1">{error}</p>
                 <Button variant="outline" size="sm" onClick={loadWorkflows} icon={<RefreshCw size={14} />}>
-                  Retry
+                  {t('workflows.retry')}
                 </Button>
               </CardContent>
             </Card>
@@ -106,8 +108,8 @@ export function WorkflowsPage() {
           {!loading && !error && workflows.length === 0 && (
             <EmptyState
               icon="file"
-              title="No workflows"
-              description="Create your first workflow from a template"
+              title={t('workflows.empty_title')}
+              description={t('workflows.empty_description')}
               action={
                 <Button variant="primary" size="sm" onClick={openNewEditor} icon={<Plus size={14} />}>
                   Create Workflow
@@ -175,7 +177,7 @@ export function WorkflowsPage() {
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 backdrop-blur-sm md:p-8"
             role="dialog"
             aria-modal="true"
-            aria-label={editingWorkflow ? 'Edit Workflow' : 'New Workflow'}
+            aria-label={editingWorkflow ? t('workflows.edit_workflow') : t('workflows.new_workflow')}
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
                 setEditingWorkflow(null);

@@ -2,7 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SettingsPage } from '../SettingsPage';
 
-vi.mock('../../i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+const t = (key: string) => ({
+  'apiKeys.add_key': 'Add Key',
+  'apiKeys.name_placeholder': 'Key name',
+  'apiKeys.save_key': 'Save Key',
+  'apiKeys.authApiKeys.create_key': 'Create Key',
+  'apiKeys.authApiKeys.create': 'Create',
+  'apiKeys.authApiKeys.revoke_key': 'Revoke key',
+} as Record<string, string>)[key] ?? key;
+vi.mock('../../i18n', () => ({
+  useI18n: () => ({ t }),
+  useTranslation: () => ({ t }),
+}));
 
 const modelKey = {
   id: 'model-test', name: 'Temporary model', provider: 'openai',

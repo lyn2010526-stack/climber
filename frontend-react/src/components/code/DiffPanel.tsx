@@ -237,7 +237,7 @@ function DiffFileView({ file, defaultExpanded = true, showLineNumbers = true }: 
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
       {/* File header */}
-      <button
+      <button type="button"
         className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/[0.02] transition-colors"
         onClick={() => setExpanded(!expanded)}
       >
@@ -265,7 +265,7 @@ function DiffFileView({ file, defaultExpanded = true, showLineNumbers = true }: 
           {file.deletions > 0 && (
             <span className="text-[10px] text-red-400 font-mono">-{file.deletions}</span>
           )}
-          <button
+          <button type="button"
             onClick={(e) => { e.stopPropagation(); handleCopy(); }}
             className="p-1 rounded hover:bg-white/[0.06] text-[var(--color-text-muted)] transition-colors"
           >

@@ -7,7 +7,7 @@ export const ThemeToggle: React.FC<{ className?: string }> = ({ className }) => 
   const { theme, toggleTheme, isLoading } = useTheme();
 
   return (
-    <button
+    <button type="button"
       onClick={toggleTheme}
       disabled={isLoading}
       className={cn(

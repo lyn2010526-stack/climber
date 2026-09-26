@@ -102,7 +102,7 @@ export function ProgressHeader({ status, currentRound, maxRounds, activeMember, 
       {status === 'running' && (
         <div className="flex items-center gap-1 ml-auto">
           {onPause && (
-            <button
+            <button type="button"
               onClick={onPause}
               className="p-1 rounded hover:bg-[var(--color-bg-surface-elevated)] text-[var(--color-text-secondary)] hover:text-white transition-colors"
               title="暂停"
@@ -111,7 +111,7 @@ export function ProgressHeader({ status, currentRound, maxRounds, activeMember, 
             </button>
           )}
           {onStop && (
-            <button
+            <button type="button"
               onClick={onStop}
               className="p-1 rounded hover:bg-[var(--color-bg-surface-elevated)] text-[var(--color-text-secondary)] hover:text-red-400 transition-colors"
                title="停止"

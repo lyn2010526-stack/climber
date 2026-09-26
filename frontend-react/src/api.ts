@@ -65,6 +65,51 @@ export interface ArcBenchStatus {
   updated_at?: string | null;
 }
 
+interface SSEMessage {
+  event: string;
+  data: any;
+}
+
+async function readSSEStream(
+  body: ReadableStream<Uint8Array>,
+  onMessage: (message: SSEMessage) => void,
+): Promise<void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split('\n\n');
+    buffer = blocks.pop() || '';
+
+    for (const block of blocks) {
+      let eventName = '';
+      let dataStr = '';
+
+      for (const line of block.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('event:')) {
+          eventName = trimmed.slice(6).trim();
+        } else if (trimmed.startsWith('data:')) {
+          dataStr += trimmed.slice(5).trim();
+        }
+      }
+
+      if (!dataStr || dataStr === '[DONE]') continue;
+
+      try {
+        onMessage({ event: eventName, data: JSON.parse(dataStr) });
+      } catch {
+        onMessage({ event: eventName, data: dataStr });
+      }
+    }
+  }
+}
+
 class ApiClient {
   private readStorage(key: string): string | null {
     try {
@@ -211,44 +256,11 @@ class ApiClient {
         throw new Error(error.detail || `HTTP ${response.status}`);
       }
 
-      const reader = response.body?.getReader();
-      if (!reader) return;
+      if (!response.body) return;
 
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split('\n\n');
-        buffer = events.pop() || '';
-
-        for (const eventBlock of events) {
-          const lines = eventBlock.split('\n');
-          let eventName = '';
-          let dataStr = '';
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('event:')) {
-              eventName = trimmed.slice(6).trim();
-            } else if (trimmed.startsWith('data:')) {
-              dataStr += trimmed.slice(5).trim();
-            }
-          }
-
-          if (!dataStr) continue;
-
-          try {
-            const data = JSON.parse(dataStr);
-            onEvent({ event: eventName || 'text', data });
-          } catch {
-            onEvent({ event: eventName || 'text', data: dataStr });
-          }
-        }
-      }
+      await readSSEStream(response.body, ({ event, data }) => {
+        onEvent({ event: event || 'text', data });
+      });
     }).catch((err) => {
       if (err.name !== 'AbortError') {
         onEvent({ event: 'error', data: JSON.stringify({ detail: err.message }) });
@@ -496,7 +508,6 @@ class ApiClient {
     maxPaths: number,
     maxRefineRounds: number,
     coverageEnabled: boolean,
-    _onEvent: (event: any) => void,
   ): Promise<any> {
     const body = { task, mode, max_paths: maxPaths, max_refine_rounds: maxRefineRounds, coverage_enabled: coverageEnabled };
 
@@ -653,43 +664,16 @@ class ApiClient {
           throw new Error(error.detail || `HTTP ${response.status}`);
         }
 
-        const reader = response.body?.getReader();
-        if (!reader) return;
+        if (!response.body) return;
 
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const blocks = buffer.split('\n\n');
-          buffer = blocks.pop() || '';
-
-          for (const block of blocks) {
-            let eventName = '';
-            let dataStr = '';
-
-            for (const line of block.split('\n')) {
-              const trimmed = line.trim();
-              if (trimmed.startsWith('event:')) {
-                eventName = trimmed.slice(6).trim();
-              } else if (trimmed.startsWith('data:')) {
-                dataStr += trimmed.slice(5).trim();
-              }
-            }
-
-            if (!dataStr || dataStr === '[DONE]') continue;
-
-            try {
-              const payload = JSON.parse(dataStr) as { type?: string; data?: any };
-              onEvent({ type: payload.type || eventName || 'message', data: payload.data });
-            } catch {
-              onEvent({ type: eventName || 'message', data: dataStr });
-            }
+        await readSSEStream(response.body, ({ event, data }) => {
+          const payload = data as { type?: string; data?: any };
+          if (payload && typeof payload === 'object' && 'type' in payload) {
+            onEvent({ type: payload.type || event || 'message', data: payload.data });
+          } else {
+            onEvent({ type: event || 'message', data });
           }
-        }
+        });
       })
       .catch((err) => {
         if (err.name !== 'AbortError') {
@@ -801,6 +785,15 @@ class ApiClient {
       return response.json();
     }
     return { authentication_enabled: false };
+  }
+
+  async checkHealth(): Promise<boolean> {
+    try {
+      const response = await fetch(`${BASE_URL}/health`, { headers: { Accept: 'application/json' } });
+      return response.ok;
+    } catch {
+      return false;
+    }
   }
 
   async listAuthApiKeys() {

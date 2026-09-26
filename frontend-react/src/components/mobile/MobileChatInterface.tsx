@@ -190,7 +190,7 @@ export function MobileChatInterface({
               {suggestions && suggestions.length > 0 && (
                 <div className="grid grid-cols-1 gap-2 w-full max-w-md">
                   {suggestions.map((suggestion, index) => (
-                    <button
+                    <button type="button"
                       key={index}
                       onClick={() => handleSuggestionClick(suggestion)}
                       className="mobile-touch-target flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors duration-150 active:opacity-80"

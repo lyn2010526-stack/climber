@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Bind Tailwind's `dark:` variant to the app's data-theme switch instead of
+   prefers-color-scheme, otherwise utilities like `dark:bg-gray-800` stay dark
+   when the user forces light mode. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme {
   /* Surface Layers (Premium Light/Dark) */
   --color-bg-page: #0d0e11;
@@ -149,6 +154,33 @@
   --header-height: 52px;
   --max-width: 1440px;
   --content-max-width: 896px;
+}
+
+/* Legacy token aliases. Older ui/ components referenced unprefixed variables
+   (--text-primary, --surface-bg, --accent, ...). They were never defined, so
+   those declarations silently resolved to nothing. Map each onto the canonical
+   token; because the targets are re-declared under [data-theme="light"], the
+   aliases follow the active theme automatically. */
+:root {
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-muted: var(--color-text-muted);
+  --surface-bg: var(--color-bg-surface-1);
+  --surface-bg-hover: var(--color-bg-surface-2);
+  --surface-bg-subtle: var(--color-bg-surface-2);
+  --surface-elevated: var(--color-bg-surface-3);
+  --border-subtle: var(--color-border-subtle);
+  --border-default: var(--color-border-default);
+  --accent: var(--color-accent);
+  --accent-hover: var(--color-accent-hover);
+  --accent-subtle: var(--color-accent-subtle);
+  --font-size-xs: var(--text-xs);
+  --font-size-sm: var(--text-sm);
+  --font-size-lg: var(--text-lg);
+  --line-height-relaxed: var(--leading-relaxed);
+  --size-md: 2.25rem;
+  --color-danger: var(--color-error);
+  --color-danger-subtle: var(--color-error-subtle);
 }
 
 /* Light Mode */
@@ -1306,8 +1338,7 @@ select:-webkit-autofill:focus {
 
 @media (min-width: 1536px) {
   .chat-container {
-    max-width: 900px;
-    margin: 0 auto;
+    padding-inline: 3rem;
   }
 }
 @tailwind utilities;

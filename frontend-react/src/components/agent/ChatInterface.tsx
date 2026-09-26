@@ -257,7 +257,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               <p className="text-[var(--color-text-secondary)] text-sm mb-8 leading-relaxed max-w-sm mx-auto">{emptyStateDescription}</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md mx-auto">
                 {suggestions.map((suggestion, idx) => (
-                  <button
+                  <button type="button"
                     key={idx}
                     onClick={() => onSend(suggestion)}
                     className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-2xl text-sm text-[var(--color-text-secondary)] hover:border-[#5E6AD2]/40 hover:text-[var(--color-text-primary)] hover:bg-white/[0.06] transition-all duration-200 active:scale-[0.97] text-left flex items-center gap-3"
@@ -272,10 +272,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             </div>
           </div>
         )}
-        <div className="space-y-5">
+        <div className="space-y-5 mx-auto w-full max-w-4xl">
           {messages.map(renderMessageContent)}
           {isLoading && (
-            <div className="flex gap-3 max-w-[85%]">
+            <div className="flex gap-3 w-full max-w-[85%]">
               <div className="flex items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500/50 to-blue-500/50 text-white/70 w-9 h-9 shrink-0">
                 <Bot size={16} />
               </div>
