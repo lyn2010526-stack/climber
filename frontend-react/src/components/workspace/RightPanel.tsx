@@ -491,7 +491,7 @@ function Section({ title, icon: Icon, children }: { title: string; icon: any; ch
 
   return (
     <div className="bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl overflow-hidden backdrop-blur-sm">
-      <button
+      <button type="button"
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
       >

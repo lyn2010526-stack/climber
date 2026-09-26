@@ -96,7 +96,7 @@ export function SkillsPage() {
             />
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button
+            <button type="button"
               onClick={() => setSelectedCategory('')}
               className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 border ${
                 !selectedCategory
@@ -107,7 +107,7 @@ export function SkillsPage() {
               全部
             </button>
             {categories.map(cat => (
-              <button
+              <button type="button"
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 border ${
@@ -179,7 +179,7 @@ export function SkillsPage() {
                               <span className="truncate">{(skill.path || '').split('/').pop()}</span>
                             </div>
                           </div>
-                          <button
+                          <button type="button"
                             onClick={() => toggleSkill(skill)}
                             disabled={toggling === `skill-${skill.id}`}
                             className={`shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-200 border ${

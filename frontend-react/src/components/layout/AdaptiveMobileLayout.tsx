@@ -51,13 +51,13 @@ export function AdaptiveMobileLayout({ children, currentPage, onNavigate }: {
         {primaryItems.map(({ id, label, icon: Icon }) => {
           const active = currentPage === id;
           return (
-            <button key={id} onClick={() => navigate(id)} aria-current={active ? 'page' : undefined} className="mobile-nav-item">
+            <button type="button" key={id} onClick={() => navigate(id)} aria-current={active ? 'page' : undefined} className="mobile-nav-item">
               <Icon size={19} strokeWidth={active ? 2.4 : 1.8} />
               <span>{label}</span>
             </button>
           );
         })}
-        <button onClick={() => setMoreOpen(true)} aria-expanded={moreOpen} aria-current={moreActive ? 'page' : undefined} className="mobile-nav-item" data-active={moreActive || undefined}>
+        <button type="button" onClick={() => setMoreOpen(true)} aria-expanded={moreOpen} aria-current={moreActive ? 'page' : undefined} className="mobile-nav-item" data-active={moreActive || undefined}>
           <MoreHorizontal size={19} />
           <span>{t('sidebar.more')}</span>
         </button>
@@ -71,11 +71,11 @@ export function AdaptiveMobileLayout({ children, currentPage, onNavigate }: {
                  <p className="workspace-eyebrow">{t('sidebar.workspace')}</p>
                 <h2 className="text-base font-semibold">{t('sidebar.all_entries')}</h2>
               </div>
-              <button className="icon-button" onClick={() => setMoreOpen(false)} aria-label={t('common.close')}><X size={18} /></button>
+              <button type="button" className="icon-button" onClick={() => setMoreOpen(false)} aria-label={t('common.close')}><X size={18} /></button>
             </div>
             <div className="mobile-more-grid">
               {moreItems.map(({ id, label, icon: Icon }) => (
-                <button key={id} onClick={() => navigate(id)} aria-current={currentPage === id ? 'page' : undefined}>
+                <button type="button" key={id} onClick={() => navigate(id)} aria-current={currentPage === id ? 'page' : undefined}>
                   <Icon size={18} />
                   <span>{label}</span>
                   <ChevronUp size={14} className="rotate-90 text-[var(--color-text-muted)]" />

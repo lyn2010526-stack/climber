@@ -478,7 +478,7 @@ export function FactoryModePage() {
               <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">技能</label>
               <div className="flex flex-wrap gap-2">
                 {SKILLS.map(s => (
-                  <button
+                  <button type="button"
                     key={s.id}
                     onClick={() => toggleSkill(s.id)}
                     disabled={isRunning}

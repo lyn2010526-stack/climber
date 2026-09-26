@@ -87,20 +87,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode; defaultTheme?:
     const handler = (e: MediaQueryListEvent) => {
       // Only auto-switch if no manual preference exists
       if (!storage.get('climber-theme')) {
-        setThemeState(e.matches ? 'light' : defaultTheme);
+        setThemeState(e.matches ? 'light' : 'dark');
       }
     };
 
-    // Support both old and new API
-    const listener = mediaQuery.addEventListener 
-      ? () => mediaQuery.addEventListener('change', handler)
-      : () => mediaQuery.addListener(handler);
-    
-    listener();
-
-    return () => {
-      mediaQuery.removeEventListener('change', handler);
-    };
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handler);
+      return () => mediaQuery.removeEventListener('change', handler);
+    }
+    mediaQuery.addListener(handler);
+    return () => mediaQuery.removeListener(handler);
   }, [defaultTheme]);
 
   const toggleTheme = useCallback(() => {

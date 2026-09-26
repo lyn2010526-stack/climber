@@ -79,21 +79,21 @@ export const MessageActions: React.FC<MessageActionsProps> = ({ onCopy, onFeedba
   return (
     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
       {onEdit && (
-        <button onClick={onEdit} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors" title="编辑">
+        <button type="button" onClick={onEdit} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors" title="编辑">
           <Edit3 size={12} />
         </button>
       )}
       {onCopy && (
-        <button onClick={onCopy} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors" title="复制">
+        <button type="button" onClick={onCopy} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors" title="复制">
           <Copy size={12} />
         </button>
       )}
       {onFeedback && (
         <>
-          <button onClick={() => onFeedback('up')} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-emerald-400 transition-colors" title="有用">
+          <button type="button" onClick={() => onFeedback('up')} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-emerald-400 transition-colors" title="有用">
             <ThumbsUp size={12} />
           </button>
-          <button onClick={() => onFeedback('down')} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-rose-400 transition-colors" title="无用">
+          <button type="button" onClick={() => onFeedback('down')} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-rose-400 transition-colors" title="无用">
             <ThumbsDown size={12} />
           </button>
         </>
@@ -132,7 +132,7 @@ export const ToolCallCard: React.FC<ToolCallCardProps> = ({ name, arguments: arg
           boxShadow: expanded ? '0 4px 20px rgba(0,0,0,0.2)' : 'none',
         }}
       >
-        <button
+        <button type="button"
           onClick={() => setExpanded(!expanded)}
           className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors cursor-pointer group"
           style={{ borderBottom: expanded ? '1px solid var(--color-border-subtle)' : 'none' }}

@@ -13,7 +13,7 @@ export function ToolCallCard({ toolName, args, result, success }: ToolCallCardPr
 
   return (
     <div className="mt-1.5 rounded-lg border border-blue-500/20 bg-blue-600/5 overflow-hidden">
-      <button
+      <button type="button"
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-1.5 px-2 py-1.5 text-left hover:bg-blue-600/5 transition-colors"
       >

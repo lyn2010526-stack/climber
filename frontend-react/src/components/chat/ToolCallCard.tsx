@@ -65,7 +65,7 @@ export function ToolCallCard({
       }}
     >
       {/* Header */}
-      <button
+      <button type="button"
         onClick={() => hasOutput && setExpanded(!expanded)}
         className={cn(
           'w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors',
@@ -105,7 +105,7 @@ export function ToolCallCard({
         </span>
 
         {error && onRetry && (
-          <button
+          <button type="button"
             onClick={(e) => {
               e.stopPropagation();
               onRetry();

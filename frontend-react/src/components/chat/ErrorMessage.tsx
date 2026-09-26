@@ -34,7 +34,7 @@ export function ErrorMessage({
 
         <div className="flex items-center gap-2 mt-2.5">
           {canRetry && onRetry && (
-            <button
+            <button type="button"
               onClick={onRetry}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
               style={{
@@ -54,7 +54,7 @@ export function ErrorMessage({
           )}
 
           {onDismiss && (
-            <button
+            <button type="button"
               onClick={onDismiss}
               className="px-3 py-1.5 rounded-lg text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
             >
@@ -65,7 +65,7 @@ export function ErrorMessage({
       </div>
 
       {onDismiss && (
-        <button
+        <button type="button"
           onClick={onDismiss}
           className="p-1 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors shrink-0"
         >

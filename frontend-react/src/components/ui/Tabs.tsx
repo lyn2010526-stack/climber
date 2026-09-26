@@ -60,7 +60,7 @@ export const TabsTrigger: React.FC<TabsTriggerProps> = ({ value, children, class
   const isActive = context.activeTab === value;
 
   return (
-    <button
+    <button type="button"
       onClick={() => context.setActiveTab(value)}
       className={cn(
         'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200',

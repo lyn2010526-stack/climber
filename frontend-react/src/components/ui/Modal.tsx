@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '../../lib/utils';
+import { useTranslation } from '../../i18n';
 import { X } from 'lucide-react';
 
 export interface ModalProps {
@@ -43,6 +44,7 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(({
   showClose = true,
 }, ref) => {
   void ref;
+  const { t } = useTranslation();
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -121,10 +123,10 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(({
         )}
       >
         {showClose && (
-          <button
+          <button type="button"
             onClick={onClose}
             className="absolute top-3 right-3 z-10 p-2 rounded-xl text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)] transition-colors"
-            aria-label="Close dialog"
+            aria-label={t('common.close_dialog')}
           >
             <X size={16} />
           </button>
@@ -184,14 +186,14 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       onClose={onClose}
       footer={
         <div className="flex items-center justify-end gap-2">
-          <button
+          <button type="button"
             onClick={onClose}
             disabled={loading}
             className="h-10 px-4 text-sm font-medium rounded-xl border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {cancelText}
           </button>
-          <button
+          <button type="button"
             onClick={onConfirm}
             disabled={loading}
             className={cn(

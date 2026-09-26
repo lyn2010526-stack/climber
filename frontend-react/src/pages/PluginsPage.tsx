@@ -145,7 +145,7 @@ export function PluginsPage() {
                共 {totalCount} 个插件，{enabledCount} 个已启用 — 技能、MCP 服务器、提示词模板
              </p>
           </div>
-          <button
+          <button type="button"
             onClick={() => setImportModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold transition-all duration-200 active:scale-[0.97]"
           >
@@ -166,7 +166,7 @@ export function PluginsPage() {
           </div>
           <div className="flex gap-2">
             {(['', 'skill', 'mcp', 'prompt'] as const).map(type => (
-              <button
+              <button type="button"
                 key={type || 'all'}
                 onClick={() => setSelectedType(type)}
                 className={`px-4 py-2 rounded-2xl text-sm font-medium border transition-all duration-200 ${
@@ -182,7 +182,7 @@ export function PluginsPage() {
         </div>
 
         <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
-          <button
+          <button type="button"
             onClick={() => setSelectedCategory(CATEGORY_ALL)}
             className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap border transition-all duration-200 ${
               selectedCategory === CATEGORY_ALL
@@ -192,7 +192,7 @@ export function PluginsPage() {
           >
               全部 ({totalCount})
           </button>
-          <button
+          <button type="button"
             onClick={() => setSelectedCategory(CATEGORY_INSTALLED)}
             className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap border transition-all duration-200 ${
               selectedCategory === CATEGORY_INSTALLED
@@ -205,7 +205,7 @@ export function PluginsPage() {
           {categories.map(cat => {
             const count = plugins.filter(p => p.category === cat).length;
             return (
-              <button
+              <button type="button"
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap capitalize border transition-all duration-200 ${
@@ -260,7 +260,7 @@ export function PluginsPage() {
               <h3 className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
                  <Download size={18} className="text-[var(--color-accent)]" /> 导入插件
                </h3>
-               <button onClick={() => setImportModalOpen(false)} className="p-1 rounded-xl hover:bg-white/[0.06] text-[var(--color-text-muted)]">
+               <button type="button" onClick={() => setImportModalOpen(false)} className="p-1 rounded-xl hover:bg-white/[0.06] text-[var(--color-text-muted)]">
                  <X size={18} />
                </button>
             </div>
@@ -301,13 +301,13 @@ export function PluginsPage() {
              </div>
 
             <div className="flex justify-end gap-3 mt-6">
-              <button
+              <button type="button"
                 onClick={() => setImportModalOpen(false)}
                 className="px-4 py-2 rounded-xl text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
               >
                   取消
               </button>
-              <button
+              <button type="button"
                 onClick={handleImport}
                 disabled={!importUrl.trim()}
                 className="px-5 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold disabled:opacity-50 transition-all duration-200 active:scale-[0.97]"
@@ -425,7 +425,7 @@ function PluginCard({
       )}
 
       <div className="flex items-center justify-between mt-4 pt-3 border-t border-[var(--color-border-subtle)]">
-        <button
+        <button type="button"
           onClick={onExpand}
           className="flex items-center gap-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
         >
@@ -437,7 +437,7 @@ function PluginCard({
             <LoaderSize16 />
           ) : isInstalled ? (
             <>
-              <button
+              <button type="button"
                 onClick={onToggle}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-200 border ${
                   isEnabled
@@ -449,7 +449,7 @@ function PluginCard({
                 {isEnabled ? '已启用' : '启用'}
               </button>
               {plugin.source !== 'builtin' && (
-                <button
+                <button type="button"
                   onClick={onUninstall}
                   className="p-1.5 rounded-xl text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/10 transition-all duration-200"
                 >
@@ -458,7 +458,7 @@ function PluginCard({
               )}
             </>
           ) : (
-            <button
+            <button type="button"
               onClick={onInstall}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-xl text-xs font-semibold transition-all duration-200 active:scale-[0.97]"
             >

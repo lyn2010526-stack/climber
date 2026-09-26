@@ -166,3 +166,9 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 前端任务契约以 `app/api/v1/routes/tasks.py` 为准（`task_id`/TaskSubmitRequest），`api.ts` 中 `/tasks/{id}/run|pause|resume` 是后端不存在的幻影端点，调用方应改接 submit/cancel/getStatus
   - docker-compose 启动需要环境变量 `POSTGRES_PASSWORD`（compose 用 `${POSTGRES_PASSWORD:?}`），不再提供明文默认凭证
   - 平台 Git 凭证助手（/app/agent/bin/agent git-credential-helper）会间歇性返回 500 导致 push 失败；git 提交需在仓库级先 `git config user.name/user.email`，否则容器内无法自动探测身份
+
+[用户指令摘要]
+- Date: 2026-09-26
+- Context: 多轮英文回复后用户纠正
+- Instructions:
+  - 与用户对话一律使用中文（含推理过程与工具调用标题）

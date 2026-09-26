@@ -5,6 +5,7 @@ import {
 } from '@xyflow/react';
 import { Bot, Wrench, GitBranch, FileInput, FileOutput, AlertTriangle, FlaskConical } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useTranslation } from '../../i18n';
 
 // ─── Custom Node Components ───
 
@@ -111,6 +112,7 @@ export function InputNode({ data, selected }: NodeProps) {
 }
 
 export function LLMNode({ data, selected }: NodeProps) {
+  const { t } = useTranslation();
   const style = nodeStyles.llm;
   const Icon = style.icon;
   const nodeData = data as Record<string, any>;
@@ -131,7 +133,7 @@ export function LLMNode({ data, selected }: NodeProps) {
       {nodeData['version_warning'] && (
         <div className="flex items-center gap-1 mt-2 text-[9px] text-amber-400">
           <AlertTriangle size={10} />
-          <span>Version outdated</span>
+          <span>{t('common.version_outdated')}</span>
         </div>
       )}
     </div>

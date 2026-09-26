@@ -7,6 +7,7 @@ import { GroupRoom } from '../components/group/GroupRoom';
 import { CollaborationConsole } from '../components/collaboration/CollaborationConsole';
 import { api } from '../api';
 import { getClusterMembers, type ClusterMember } from '../services/cluster-service';
+import { useTranslation } from '../i18n';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -87,7 +88,7 @@ function TaskCard({ task, isSelected, onClick, loading }: { task: ClusterTask; i
   const statusColor = STATUS_COLORS[task.status] || 'text-[var(--color-text-muted)]';
 
   return (
-    <button
+    <button type="button"
       onClick={onClick}
       className={`w-full text-left p-4 rounded-xl border transition-all duration-200 group ${
         isSelected
@@ -182,6 +183,7 @@ function ProgressBar({ progress }: { progress: { total: number; completed: numbe
 }
 
 export function ClusterPage() {
+  const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<ViewMode>('cluster');
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [managingGroupId, setManagingGroupId] = useState<string | null>(null);
@@ -378,7 +380,7 @@ export function ClusterPage() {
     return (
       <div className="h-full flex flex-col">
         <div className="h-12 flex items-center px-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] shrink-0">
-          <button
+          <button type="button"
             onClick={leaveGroup}
             className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
           >
@@ -398,14 +400,14 @@ export function ClusterPage() {
     return (
       <div className="h-full flex flex-col">
         <div className="h-12 flex items-center px-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] shrink-0">
-          <button
+          <button type="button"
             onClick={leaveGroup}
             className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
           >
             <ArrowLeft size={14} />
             返回群组列表
           </button>
-          <button
+          <button type="button"
             onClick={() => setViewMode('collab-console')}
             className="ml-3 flex items-center gap-1.5 text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors"
           >
@@ -493,19 +495,19 @@ export function ClusterPage() {
                         <Input
                           value={memberForm.agent_id}
                           onChange={(e) => setMemberForm({ ...memberForm, agent_id: e.target.value })}
-                          placeholder="Agent ID"
+                          placeholder={t('workflows.member_agent_id')}
                         />
                         <select
                           value={memberForm.role}
                           onChange={(e) => setMemberForm({ ...memberForm, role: e.target.value })}
                           className="w-full px-3 py-2 bg-[var(--color-bg-surface-3)] border border-[var(--color-border-subtle)] rounded-xl text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/50"
                         >
-                          <option value="planner">Planner</option>
-                          <option value="researcher">Researcher</option>
-                          <option value="executor">Executor</option>
-                          <option value="auditor">Auditor</option>
-                          <option value="participant">Participant</option>
-                          <option value="observer">Observer</option>
+                          <option value="planner">{t('workflows.role_planner')}</option>
+                          <option value="researcher">{t('workflows.role_researcher')}</option>
+                          <option value="executor">{t('workflows.role_executor')}</option>
+                          <option value="auditor">{t('workflows.role_auditor')}</option>
+                          <option value="participant">{t('workflows.role_participant')}</option>
+                          <option value="observer">{t('workflows.role_observer')}</option>
                         </select>
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="sm" onClick={() => setShowAddMember(false)}>取消</Button>

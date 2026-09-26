@@ -138,7 +138,7 @@ export function ReasoningHistoryPage() {
         {!loading && history.length > 0 && (
           <div className="space-y-3 stagger-children">
             {history.map((item, idx) => (
-              <button
+              <button type="button"
                 key={item.trace_id || idx}
                 onClick={() => setSelected(item)}
                 className="w-full text-left p-4 bg-[var(--color-bg-surface-1)] hover:bg-[var(--color-bg-surface-2)] rounded-xl border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/30 transition-all duration-200 group"

@@ -65,7 +65,7 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: PropertiesPanelPro
           Node Properties
         </h3>
         <div className="flex items-center gap-1">
-          <button
+          <button type="button"
             onClick={() => setShowDeleteConfirm(true)}
             className="p-1 rounded hover:bg-red-500/10 text-[var(--color-text-muted)] hover:text-red-400 transition-colors"
           >
@@ -138,13 +138,13 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: PropertiesPanelPro
               This will remove the node and all its connections.
             </p>
             <div className="flex items-center gap-2">
-              <button
+              <button type="button"
                 onClick={() => setShowDeleteConfirm(false)}
                 className="flex-1 px-3 py-1.5 text-[11px] text-[var(--color-text-secondary)] bg-[var(--color-bg-surface-elevated)] rounded-lg hover:bg-[var(--color-bg-surface-elevated)]/50 transition-colors"
               >
                 Cancel
               </button>
-              <button
+              <button type="button"
                 onClick={() => {
                   onDelete();
                   setShowDeleteConfirm(false);

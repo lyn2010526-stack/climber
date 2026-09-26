@@ -131,7 +131,7 @@ export function EvalDashboard() {
 
       {/* Run button */}
       {selectedDataset && selectedAgent && (
-        <button
+        <button type="button"
           onClick={runEval}
           disabled={loading}
           className="mb-6 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium disabled:opacity-50"

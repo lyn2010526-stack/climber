@@ -64,20 +64,20 @@ export function AgentCard({ agent, onDelete }: AgentCardProps) {
         <Dropdown
           align="right"
           trigger={
-            <button aria-label={t('agents.menu_aria_label', { name: agent.name })} className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-text-muted)] opacity-100 transition-colors hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)] md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+            <button type="button" aria-label={t('agents.menu_aria_label', { name: agent.name })} className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-text-muted)] opacity-100 transition-colors hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)] md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
               <MoreVertical size={16} />
             </button>
           }
         >
           <div className="w-36 p-1">
-            <button
+            <button type="button"
               disabled
               title={t('agents.coming_soon_title')}
               className="flex w-full cursor-not-allowed items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-xs text-[var(--color-text-muted)] opacity-60"
             >
               <Copy size={13} /> Copy Config
             </button>
-            <button
+            <button type="button"
               disabled
               title={t('agents.coming_soon_title')}
               className="flex w-full cursor-not-allowed items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-xs text-[var(--color-text-muted)] opacity-60"
@@ -85,7 +85,7 @@ export function AgentCard({ agent, onDelete }: AgentCardProps) {
               <Settings size={13} /> Edit Settings
             </button>
             <div className="my-1 h-px bg-[var(--color-border-subtle)]" />
-            <button
+            <button type="button"
               role="menuitem"
               className="flex w-full items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-xs text-[var(--color-error)] hover:bg-[var(--color-error-subtle)] transition-colors"
               onClick={() => onDelete(agent.id)}
@@ -162,10 +162,10 @@ function CreateAgentForm({ onClose, onSuccess }: CreateAgentFormProps) {
       <div className="p-4 md:p-6 border-b border-[var(--color-border-subtle)]">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-base font-semibold text-[var(--color-text-primary)]">Create Agent</h3>
-            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">Configure model, skills and tools</p>
+            <h3 className="text-base font-semibold text-[var(--color-text-primary)]">{t('agents.form_title')}</h3>
+            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{t('agents.form_subtitle')}</p>
           </div>
-          <button
+          <button type="button"
             onClick={onClose}
             aria-label={t('agents.close_form_aria_label')}
             className="flex h-9 w-9 items-center justify-center rounded-lg text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)]"
@@ -185,7 +185,7 @@ function CreateAgentForm({ onClose, onSuccess }: CreateAgentFormProps) {
                 {step > s ? <Check size={12} /> : s}
               </div>
               <span className={`text-xs font-medium hidden sm:inline ${step >= s ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-muted)]'}`}>
-                {s === 1 ? 'Model' : s === 2 ? 'Skills' : 'Tools'}
+                {s === 1 ? t('agents.step_model') : s === 2 ? t('agents.step_skills') : t('agents.step_tools')}
               </span>
             </div>
           ))}
@@ -197,11 +197,11 @@ function CreateAgentForm({ onClose, onSuccess }: CreateAgentFormProps) {
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
               <div>
-                <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Agent Name</label>
-                <Input placeholder="My Agent" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">{t('agents.field_name')}</label>
+                <Input placeholder={t('agents.field_name_placeholder')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Provider</label>
+                <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">{t('agents.field_provider')}</label>
                 <select
                   value={form.provider}
                   onChange={(e) => {
@@ -214,7 +214,7 @@ function CreateAgentForm({ onClose, onSuccess }: CreateAgentFormProps) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Model</label>
+                <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">{t('agents.field_model')}</label>
                 <select
                   value={form.model_id}
                   onChange={(e) => setForm({ ...form, model_id: e.target.value })}
@@ -224,17 +224,17 @@ function CreateAgentForm({ onClose, onSuccess }: CreateAgentFormProps) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">API Key</label>
+                <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">{t('agents.field_api_key')}</label>
                 <Input placeholder="sk-..." type="password" value={form.api_key} onChange={(e) => setForm({ ...form, api_key: e.target.value })} />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Base URL (optional)</label>
-                <Input placeholder="Custom endpoint URL" value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })} />
+                <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">{t('agents.field_base_url')}</label>
+                <Input placeholder={t('agents.field_base_url_placeholder')} value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })} />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">System Prompt (optional)</label>
+                <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">{t('agents.field_system_prompt')}</label>
                 <textarea
-                  placeholder="You are a helpful assistant..."
+                  placeholder={t('agents.field_system_prompt_placeholder')}
                   value={form.system_prompt}
                   onChange={(e) => setForm({ ...form, system_prompt: e.target.value })}
                   className="w-full px-3 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)] rounded-[var(--radius-md)] text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)] transition-all duration-200 resize-none h-20"
@@ -246,13 +246,13 @@ function CreateAgentForm({ onClose, onSuccess }: CreateAgentFormProps) {
 
         {step === 2 && (
           <div>
-            <p className="text-sm text-[var(--color-text-muted)] mb-4">Select skills to enhance this agent</p>
+            <p className="text-sm text-[var(--color-text-muted)] mb-4">{t('agents.select_skills')}</p>
             {skillCategories.map(cat => (
               <div key={cat} className="mb-5">
                 <h4 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">{cat}</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
                   {skills.filter(s => s.category === cat).map(skill => (
-                    <button
+                    <button type="button"
                       key={skill.id}
                       onClick={() => toggleSkill(skill.id)}
                       className={`p-3 md:p-4 rounded-[var(--radius-md)] border text-left transition-all duration-200 focus-ring ${
@@ -277,10 +277,10 @@ function CreateAgentForm({ onClose, onSuccess }: CreateAgentFormProps) {
 
         {step === 3 && (
           <div>
-            <p className="text-sm text-[var(--color-text-secondary)] mb-3">Select additional tools</p>
+            <p className="text-sm text-[var(--color-text-secondary)] mb-3">{t('agents.select_tools')}</p>
             <div className="flex flex-wrap gap-2">
               {tools.map(tool => (
-                <button
+                <button type="button"
                   key={tool.name}
                   onClick={() => toggleTool(tool.name)}
                   className={`px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium transition-all duration-200 focus-ring ${
@@ -305,7 +305,7 @@ function CreateAgentForm({ onClose, onSuccess }: CreateAgentFormProps) {
       <div className="flex justify-between p-4 md:p-6 pt-3 md:pt-4 border-t border-[var(--color-border-subtle)]">
         {step > 1 ? (
           <Button variant="ghost" size="sm" onClick={() => setStep(step - 1)}>
-            <ChevronLeft size={14} /> Previous
+            <ChevronLeft size={14} /> {t('agents.previous')}
           </Button>
         ) : <div />}
         {step < 3 ? (
@@ -313,13 +313,13 @@ function CreateAgentForm({ onClose, onSuccess }: CreateAgentFormProps) {
             variant="primary"
             size="sm"
             onClick={() => setStep(step + 1)}
-            disabled={step === 1 && (!form.name || !form.api_key)}
+            disabled={step === 1 && (!form.name || (form.provider !== 'ollama' && !form.api_key))}
           >
-            Next <ChevronRight size={14} />
+            {t('agents.next')} <ChevronRight size={14} />
           </Button>
         ) : (
           <Button variant="primary" size="sm" loading={creating} onClick={handleCreate}>
-            Create Agent
+            {t('agents.create_agent')}
           </Button>
         )}
       </div>
@@ -366,12 +366,12 @@ export function AgentsPage() {
     <div className="page-scroll page-transition">
       <div className="page-container">
         <PageHeader
-          title="Agents"
-          description="Create and manage AI agents with custom models and skills"
+          title={t('agents.title')}
+          description={t('agents.page_description')}
           icon={<Bot size={20} className="text-[var(--color-accent)]" />}
           actions={
             <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setShowForm(!showForm)}>
-              New Agent
+              {t('agents.new_agent')}
             </Button>
           }
         />
@@ -387,7 +387,7 @@ export function AgentsPage() {
             <AlertCircle size={18} className="text-[var(--color-error)] shrink-0" />
             <p className="text-sm text-[var(--color-error)] flex-1">{error}</p>
             <Button variant="ghost" size="sm" onClick={loadAgents} icon={<RefreshCw size={14} />}>
-              Retry
+              {t('agents.retry')}
             </Button>
           </div>
         )}
@@ -395,7 +395,7 @@ export function AgentsPage() {
         {!loading && !error && agents.length > 0 && (
           <div className="mt-4 max-w-md md:mt-6">
             <Input
-              placeholder="Search agents..."
+              placeholder={t('agents.search_placeholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               leftIcon={<Search size={14} />}
@@ -425,8 +425,8 @@ export function AgentsPage() {
               <EmptyState
                 className="w-full"
                 icon={searchQuery ? 'search' : <Sparkles size={22} className="text-[var(--color-text-muted)]" />}
-                title={searchQuery ? 'No matching agents' : 'No agents yet'}
-                description={searchQuery ? 'Try another name or provider.' : 'Create your first agent to get started.'}
+                title={searchQuery ? t('agents.no_matching') : t('agents.no_agents')}
+                description={searchQuery ? t('agents.try_another') : t('agents.create_first')}
                 action={
                   <Button
                     variant={searchQuery ? 'outline' : 'primary'}
@@ -434,7 +434,7 @@ export function AgentsPage() {
                     onClick={() => searchQuery ? setSearchQuery('') : setShowForm(true)}
                     icon={searchQuery ? <Search size={14} /> : <Plus size={14} />}
                   >
-                    {searchQuery ? 'Clear search' : 'New Agent'}
+                    {searchQuery ? t('agents.clear_search') : t('agents.new_agent')}
                   </Button>
                 }
               />

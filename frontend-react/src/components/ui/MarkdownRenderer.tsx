@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '../../lib/utils';
+import { useTranslation } from '../../i18n';
 import { Copy, Check, List } from 'lucide-react';
 
 export interface TocItem {
@@ -25,6 +26,7 @@ function slugify(text: string): string {
 }
 
 function CodeBlock({ children, className: codeClassName }: { children?: React.ReactNode; className?: string | undefined }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = React.useState(false);
   const match = /language-(\w+)/.exec(codeClassName || '');
   const language = match ? match[1] : undefined;
@@ -45,10 +47,10 @@ function CodeBlock({ children, className: codeClassName }: { children?: React.Re
           </span>
         </div>
       )}
-      <button
+      <button type="button"
         onClick={handleCopy}
         className="absolute top-3 right-3 z-10 p-1.5 rounded-lg bg-[var(--surface-bg)]/5 text-[var(--text-muted)] hover:bg-[var(--surface-bg)] hover:text-[var(--text-primary)] backdrop-blur-sm border border-white/5 opacity-0 group-hover/code:opacity-100 transition-all"
-        aria-label="Copy code"
+        aria-label={t('common.copy_code')}
       >
         {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
       </button>

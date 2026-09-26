@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <p className="text-sm text-[var(--color-text-secondary)] mb-4 max-w-md">
             {this.state.error?.message || 'An unexpected error occurred'}
           </p>
-          <button
+          <button type="button"
             onClick={() => this.setState({ hasError: false, error: null })}
             className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded transition-colors"
           >

@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { Activity, Bot, Workflow, Cpu, MessageSquare, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardContent } from '../components/ui/Card';
+import { api } from '../api';
 import { useI18n } from '../i18n/utils';
 
 type HealthState = 'loading' | 'online' | 'offline';
@@ -13,8 +14,8 @@ export function DashboardPage() {
   const checkHealth = useCallback(async () => {
     setHealth('loading');
     try {
-      const response = await fetch('/health', { headers: { Accept: 'application/json' } });
-      setHealth(response.ok ? 'online' : 'offline');
+      const ok = await api.checkHealth();
+      setHealth(ok ? 'online' : 'offline');
     } catch {
       setHealth('offline');
     }
@@ -66,7 +67,7 @@ export function DashboardPage() {
               <h3 className="text-base font-semibold text-[var(--color-text-primary)]">{t('home.quick_actions')}</h3>
               <p className="text-sm text-[var(--color-text-muted)] mt-1">{t('home.quick_actions_desc')}</p>
               <div className="mt-4 grid gap-2">
-                <button
+                <button type="button"
                   onClick={handleCreateAgent}
                    className="group flex min-h-14 w-full items-center gap-3 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-3 text-left transition-colors hover:border-[var(--color-border-default)] hover:bg-[var(--color-bg-surface-3)]"
                 >
@@ -78,7 +79,7 @@ export function DashboardPage() {
                     <p className="text-xs text-[var(--color-text-muted)]">{t('home.create_agent_desc')}</p>
                   </div>
                 </button>
-                <button
+                <button type="button"
                   onClick={handleStartTask}
                    className="group flex min-h-14 w-full items-center gap-3 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-3 text-left transition-colors hover:border-[var(--color-border-default)] hover:bg-[var(--color-bg-surface-3)]"
                 >
@@ -90,11 +91,11 @@ export function DashboardPage() {
                     <p className="text-xs text-[var(--color-text-muted)]">{t('home.start_task_desc')}</p>
                   </div>
                 </button>
-                <button onClick={() => { window.location.hash = 'chat'; }} className="group flex min-h-14 w-full items-center gap-3 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-3 text-left transition-colors hover:border-[var(--color-border-default)] hover:bg-[var(--color-bg-surface-3)]">
+                <button type="button" onClick={() => { window.location.hash = 'chat'; }} className="group flex min-h-14 w-full items-center gap-3 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-3 text-left transition-colors hover:border-[var(--color-border-default)] hover:bg-[var(--color-bg-surface-3)]">
                   <MessageSquare size={16} className="text-[var(--color-text-muted)]" />
                   <span className="text-sm font-medium text-[var(--color-text-primary)]">打开对话工作区</span>
                 </button>
-                <button onClick={() => { window.location.hash = 'workflows'; }} className="group flex min-h-14 w-full items-center gap-3 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-3 text-left transition-colors hover:border-[var(--color-border-default)] hover:bg-[var(--color-bg-surface-3)]">
+                <button type="button" onClick={() => { window.location.hash = 'workflows'; }} className="group flex min-h-14 w-full items-center gap-3 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-3 text-left transition-colors hover:border-[var(--color-border-default)] hover:bg-[var(--color-bg-surface-3)]">
                   <Workflow size={16} className="text-[var(--color-text-muted)]" />
                   <span className="text-sm font-medium text-[var(--color-text-primary)]">查看工作流</span>
                 </button>

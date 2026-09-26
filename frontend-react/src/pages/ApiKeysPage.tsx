@@ -8,10 +8,12 @@ import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { SkeletonList } from '../components/ui/Skeleton';
+import { useTranslation } from '../i18n';
 
 const PROVIDERS = ['openai', 'anthropic', 'google', 'ollama', 'stepfun'];
 
 export function ApiKeysPage({ embedded = false }: { embedded?: boolean } = {}) {
+  const { t } = useTranslation();
   const [keys, setKeys] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ provider: 'openai', name: '', api_key: '', base_url: '' });
@@ -90,10 +92,10 @@ export function ApiKeysPage({ embedded = false }: { embedded?: boolean } = {}) {
           {showForm && (
             <Card variant="default" className="mb-4">
               <CardContent className="p-4 md:p-5">
-                <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">Add New Key</h3>
+                <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">{t('apiKeys.add_key')}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Provider</label>
+                    <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">{t('apiKeys.provider')}</label>
                     <select
                       value={form.provider}
                       onChange={(e) => setForm({ ...form, provider: e.target.value })}
@@ -103,26 +105,26 @@ export function ApiKeysPage({ embedded = false }: { embedded?: boolean } = {}) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Name</label>
-                    <Input placeholder="Key name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                    <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">{t('apiKeys.name')}</label>
+                    <Input placeholder={t('apiKeys.name_placeholder')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">
-                      API Key{form.provider === 'ollama' ? ' (optional)' : ''}
+                      {t('apiKeys.field_api_key')}{form.provider === 'ollama' ? t('apiKeys.api_key_optional') : ''}
                     </label>
-                    <Input placeholder={form.provider === 'ollama' ? '本地模型无需填写' : 'sk-...'} type="password" value={form.api_key} onChange={(e) => setForm({ ...form, api_key: e.target.value })} />
+                    <Input placeholder={form.provider === 'ollama' ? t('apiKeys.api_key_ollama_hint') : 'sk-...'} type="password" value={form.api_key} onChange={(e) => setForm({ ...form, api_key: e.target.value })} />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">Base URL (optional)</label>
-                    <Input placeholder="https://..." value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })} />
+                    <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">{t('apiKeys.base_url')}</label>
+                    <Input placeholder={t('apiKeys.base_url_placeholder')} value={form.base_url} onChange={(e) => setForm({ ...form, base_url: e.target.value })} />
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-4">
                   <Button variant="primary" size="sm" onClick={addKey} disabled={!canSave}>
-                    Save Key
+                    {t('apiKeys.save_key')}
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>
-                    Cancel
+                    {t('apiKeys.cancel')}
                   </Button>
                 </div>
               </CardContent>
@@ -134,8 +136,8 @@ export function ApiKeysPage({ embedded = false }: { embedded?: boolean } = {}) {
           {!loading && !error && keys.length === 0 && !showForm && (
             <EmptyState
               icon={<Key size={28} className="text-[var(--color-text-muted)]" />}
-              title="No API keys"
-              description="Add your first API key to connect to model providers"
+              title={t('apiKeys.empty_title')}
+              description={t('apiKeys.empty_description')}
               action={
                 <Button variant="primary" size="sm" onClick={() => setShowForm(true)} icon={<Plus size={14} />}>
                   Add Key
@@ -162,7 +164,7 @@ export function ApiKeysPage({ embedded = false }: { embedded?: boolean } = {}) {
                       </p>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      <button
+                      <button type="button"
                         aria-label={`删除模型凭据 ${key.name}`}
                         onClick={() => deleteKey(key.id)}
                         className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-subtle)] transition-all duration-200 focus-ring"

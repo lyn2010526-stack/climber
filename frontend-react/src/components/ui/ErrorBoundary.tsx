@@ -62,7 +62,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
               {error?.message || 'An unexpected error occurred. Please try again.'}
             </p>
             <div className="flex items-center justify-center gap-[var(--space-2)]">
-              <button
+              <button type="button"
                 onClick={this.handleRetry}
                 className={cn(
                   'inline-flex items-center gap-[var(--space-2)] h-[var(--size-md)] px-[var(--space-4)] text-[var(--font-size-sm)] font-medium rounded-[var(--radius-lg)]',
@@ -72,7 +72,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                 <RefreshCw className="w-[var(--icon-sm)] h-[var(--icon-sm)]" />
                 Try Again
               </button>
-              <button
+              <button type="button"
                 onClick={() => window.location.reload()}
                 className={cn(
                   'inline-flex items-center gap-[var(--space-2)] h-[var(--size-md)] px-[var(--space-4)] text-[var(--font-size-sm)] font-medium rounded-[var(--radius-lg)]',
@@ -84,7 +84,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             </div>
             {shouldShowDetails && errorInfo && (
               <div className="mt-[var(--space-6)] text-left">
-                <button
+                <button type="button"
                   onClick={this.toggleDetails}
                   className="flex items-center gap-[var(--space-1)] text-[var(--font-size-xs)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors mx-auto"
                   aria-expanded={showDetails}

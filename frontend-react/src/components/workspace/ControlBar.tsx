@@ -52,7 +52,7 @@ export function ControlBar() {
   return (
     <div className="workspace-control-bar">
       <div className="flex items-center gap-1">
-         <button
+         <button type="button"
           onClick={handlePause}
           disabled={!activeSession || (!isRunning && !isPaused)}
            className="icon-button text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] disabled:opacity-30"
@@ -61,7 +61,7 @@ export function ControlBar() {
         >
           {isPaused ? <Play size={14} /> : <Pause size={14} />}
         </button>
-        <button
+        <button type="button"
           onClick={handleStop}
           disabled={!activeSession}
             className="icon-button text-[var(--color-text-secondary)] hover:bg-[var(--color-error-subtle)] hover:text-[var(--color-error)] disabled:opacity-30"
@@ -70,7 +70,7 @@ export function ControlBar() {
         >
           <Square size={14} />
         </button>
-        <button
+        <button type="button"
           onClick={handleSnapshot}
           disabled={!activeSession}
             className="icon-button text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] disabled:opacity-30"
@@ -79,7 +79,7 @@ export function ControlBar() {
         >
           <Camera size={14} />
         </button>
-         <button
+         <button type="button"
             disabled={!activeSession || snapshots.filter(snapshot => snapshot.sessionId === activeSessionId).length === 0}
             className="icon-button text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] disabled:opacity-30"
            title="回滚到快照"
@@ -104,7 +104,7 @@ export function ControlBar() {
           const isActive = rightPanelTab === id && rightPanelOpen;
           const isDisabled = requiresSession && !activeSession;
           return (
-            <button
+            <button type="button"
               key={id}
               onClick={() => rightPanelTab === id && rightPanelOpen ? toggleRightPanel() : setRightPanelTab(id)}
               disabled={isDisabled}
@@ -175,7 +175,7 @@ export function ControlBar() {
         />
       </div>
 
-      <button
+      <button type="button"
         onClick={toggleExpertMode}
         className={`icon-button ${
           expertMode ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)]'
@@ -186,7 +186,7 @@ export function ControlBar() {
         {expertMode ? <Eye size={14} /> : <EyeOff size={14} />}
       </button>
 
-      <button
+      <button type="button"
         onClick={toggleFocusMode}
         className={`icon-button ${
           focusMode ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)]'

@@ -85,10 +85,10 @@ export function SessionSidebar({
   if (collapsed) {
     return (
       <div className="flex flex-col items-center py-3 gap-2">
-        <button onClick={onCreateSession} className="p-2.5 rounded-xl hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors" aria-label="新建会话" title="新建会话">
+        <button type="button" onClick={onCreateSession} className="p-2.5 rounded-xl hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors" aria-label="新建会话" title="新建会话">
           <Plus size={18} />
         </button>
-        <button className="p-2.5 rounded-xl hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors" aria-label="搜索会话" title="搜索会话">
+        <button type="button" className="p-2.5 rounded-xl hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors" aria-label="搜索会话" title="搜索会话">
           <Search size={18} />
         </button>
       </div>
@@ -98,7 +98,7 @@ export function SessionSidebar({
   return (
     <div className="flex flex-col h-full">
       <div className="p-3 space-y-2">
-        <button
+        <button type="button"
           onClick={onCreateSession}
           className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border"
           style={{ backgroundColor: 'var(--color-accent-subtle)', borderColor: 'var(--color-accent)/20', color: 'var(--color-accent)' }}
@@ -118,7 +118,7 @@ export function SessionSidebar({
             aria-label="搜索会话"
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]" aria-label="清除搜索">
+            <button type="button" onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]" aria-label="清除搜索">
               <X size={12} />
             </button>
           )}
@@ -130,7 +130,7 @@ export function SessionSidebar({
             { id: 'pinned', label: '置顶', icon: Pin },
             { id: 'archived', label: '归档', icon: Archive },
           ] as const).map(({ id, label, icon: Icon }) => (
-            <button
+            <button type="button"
               key={id}
               onClick={() => setViewMode(id)}
               className={cn(
@@ -221,7 +221,7 @@ export function SessionSidebar({
           <span className="text-[10px] text-[var(--color-text-muted)]">
             {filteredSessions.length} 个会话
           </span>
-          <button className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] transition-colors" aria-label="导出全部" title="导出全部">
+          <button type="button" className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] transition-colors" aria-label="导出全部" title="导出全部">
             <Download size={14} />
           </button>
         </div>
@@ -280,10 +280,10 @@ function SessionItem({
               autoFocus
               aria-label="编辑会话名称"
             />
-            <button onClick={onRenameSave} className="p-0.5 rounded text-[var(--color-success)] hover:bg-[var(--color-success-subtle)]">
+            <button type="button" onClick={onRenameSave} className="p-0.5 rounded text-[var(--color-success)] hover:bg-[var(--color-success-subtle)]">
               <Check size={12} />
             </button>
-            <button onClick={onRenameCancel} className="p-0.5 rounded text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-3)]">
+            <button type="button" onClick={onRenameCancel} className="p-0.5 rounded text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-3)]">
               <X size={12} />
             </button>
           </div>
@@ -315,7 +315,7 @@ function SessionItem({
         <div className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onClick={(e) => e.stopPropagation()}>
           <Dropdown
             trigger={
-              <button className="p-1 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-3)] transition-colors" aria-label="会话选项">
+              <button type="button" className="p-1 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-3)] transition-colors" aria-label="会话选项">
                 <MoreHorizontal size={14} />
               </button>
             }

@@ -73,7 +73,7 @@ function ToolCallCard({ call, defaultExpanded }: { call: ToolCall; defaultExpand
       )}
     >
       {/* Main row */}
-      <button
+      <button type="button"
         className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-white/[0.02] transition-colors rounded-xl"
         onClick={() => setIsExpanded(!isExpanded)}
       >
@@ -121,7 +121,7 @@ function ToolCallCard({ call, defaultExpanded }: { call: ToolCall; defaultExpand
           {/* Arguments */}
           {Object.keys(call.arguments).length > 0 && (
             <div>
-              <button
+              <button type="button"
                 className="flex items-center gap-1.5 text-[10px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
                 onClick={() => setShowArgs(!showArgs)}
               >
@@ -139,7 +139,7 @@ function ToolCallCard({ call, defaultExpanded }: { call: ToolCall; defaultExpand
           {/* Result */}
           {call.result && (
             <div>
-              <button
+              <button type="button"
                 className="flex items-center gap-1.5 text-[10px] font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
                 onClick={() => setShowResult(!showResult)}
               >
@@ -209,7 +209,7 @@ export function ToolCallVisualization({
             </span>
           )}
         </div>
-        <button
+        <button type="button"
           className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
           onClick={() => setAllExpanded(!allExpanded)}
         >

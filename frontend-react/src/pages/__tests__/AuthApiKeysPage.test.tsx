@@ -3,6 +3,16 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { api } from '../../api';
 import { AuthApiKeysPage } from '../../pages/AuthApiKeysPage';
 
+vi.mock('../../i18n', () => ({
+  useTranslation: () => ({
+    t: (key: string) => ({
+      'apiKeys.authApiKeys.create_key': 'Create Key',
+      'apiKeys.authApiKeys.create': 'Create',
+      'apiKeys.authApiKeys.revoke_key': 'Revoke key',
+    } as Record<string, string>)[key] ?? key,
+  }),
+}));
+
 vi.mock('../../api', () => ({
   api: {
     listAuthApiKeys: vi.fn(),

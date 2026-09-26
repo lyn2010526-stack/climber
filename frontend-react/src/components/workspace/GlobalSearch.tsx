@@ -114,7 +114,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
                 : f === 'memory' ? t('global_search.memory')
                 : t('global_search.group');
               return (
-                <button
+                <button type="button"
                   key={f || 'all'}
                   onClick={() => setFilter(f)}
                   className={`px-2.5 py-1 rounded-xl text-[10px] font-semibold transition-all duration-200 ${
@@ -128,7 +128,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
               );
             })}
           </div>
-          <button onClick={onClose} aria-label={t('common.close')} className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] rounded-xl hover:bg-white/5 transition-all duration-200">
+          <button type="button" onClick={onClose} aria-label={t('common.close')} className="p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] rounded-xl hover:bg-white/5 transition-all duration-200">
             <X size={16} />
           </button>
         </div>
@@ -151,7 +151,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
           {!loading && !error && filtered.map(result => {
             const Icon = typeIcon(result.type);
             return (
-              <button
+              <button type="button"
                 key={result.id}
                 className="w-full flex items-start gap-3 px-5 py-3 text-left hover:bg-white/5 transition-colors border-b border-white/5 last:border-0"
               >

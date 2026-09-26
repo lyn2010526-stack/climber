@@ -2,6 +2,7 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '../../lib/utils';
+import { useTranslation } from '../../i18n';
 import { Copy, Check } from 'lucide-react';
 
 interface MarkdownRendererProps {
@@ -94,14 +95,14 @@ function CodeBlock({ children, className: codeClassName }: { children?: React.Re
         </div>
       )}
       <div className="absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 group-hover/code:opacity-100 transition-all duration-200">
-        <button
+        <button type="button"
           onClick={() => setShowLineNumbers(!showLineNumbers)}
           className="p-1.5 rounded-lg bg-white/5 text-[var(--color-text-muted)] hover:bg-white/10 hover:text-white backdrop-blur-sm border border-white/5 transition-all duration-150"
           title="行号"
         >
           <span className="text-[10px] font-mono">#</span>
         </button>
-        <button
+        <button type="button"
           onClick={handleCopy}
           className="p-1.5 rounded-lg bg-white/5 text-[var(--color-text-muted)] hover:bg-white/10 hover:text-white backdrop-blur-sm border border-white/5 transition-all duration-150"
           title="复制代码"
@@ -146,13 +147,14 @@ function InlineCode({ children }: { children?: React.ReactNode }) {
 
 /* Reference: Dify `markdown-blocks/thinking-details.tsx` + Vercel */
 function ThinkDetails({ children, open: defaultOpen }: { children?: React.ReactNode; open?: boolean | undefined }) {
+  const { t } = useTranslation();
   return (
     <details open={defaultOpen} className="group my-3 rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden message-enter" style={{
       boxShadow: 'var(--shadow-panel)',
     }}>
       <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-medium text-[var(--color-accent-foreground)] select-none hover:bg-[var(--color-bg-surface-2)] transition-colors">
         <span className="transition-transform duration-300 group-open:rotate-90 text-[10px]">▶</span>
-        <span>Thinking</span>
+        <span>{t('common.thinking')}</span>
       </summary>
       <div className="border-t border-white/[0.06] px-4 py-3">
         <div className="text-sm text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap font-mono text-xs">

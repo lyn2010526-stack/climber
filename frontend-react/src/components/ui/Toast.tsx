@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { cn } from '../../lib/utils';
+import { useTranslation } from '../../i18n';
 import { X, AlertCircle, CheckCircle2, Info, AlertTriangle, Loader2, XCircle } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info' | 'loading';
@@ -63,6 +64,7 @@ const typeStyles = {
 };
 
 function Toast({ toast, onClose }: ToastProps) {
+  const { t } = useTranslation();
   const [isVisible, setIsVisible] = useState(true);
   const [isClosing, setIsClosing] = useState(false);
 
@@ -122,7 +124,7 @@ function Toast({ toast, onClose }: ToastProps) {
       </div>
 
       {toast.action && (
-        <button
+        <button type="button"
           onClick={toast.action.onClick}
           className={cn(
             'px-3 py-1.5 text-xs font-medium rounded-lg whitespace-nowrap',
@@ -134,7 +136,7 @@ function Toast({ toast, onClose }: ToastProps) {
         </button>
       )}
 
-      <button
+      <button type="button"
         onClick={handleClose}
         className={cn(
           'flex-shrink-0 ml-2 p-1.5 rounded-lg opacity-0 group-hover:opacity-100',
@@ -142,7 +144,7 @@ function Toast({ toast, onClose }: ToastProps) {
           'hover:bg-[var(--color-bg-surface-2)]',
           colors.text
         )}
-        aria-label="Close notification"
+        aria-label={t('common.close_notification')}
       >
         <X className="w-4 h-4" />
       </button>

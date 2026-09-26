@@ -45,7 +45,7 @@ export function ThinkingBlock({
         maxWidth: '85%',
       }}
     >
-      <button
+      <button type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-[var(--color-bg-surface-2)]/50"
       >

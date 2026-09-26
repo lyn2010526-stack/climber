@@ -163,7 +163,7 @@ export function WorkflowEditor({
             className="text-xs font-medium text-[var(--color-text-primary)] bg-transparent border-none focus:outline-none"
           />
           <div className="ml-auto flex items-center gap-1">
-            <button
+            <button type="button"
               onClick={handleSave}
               disabled={saving}
                className="flex items-center gap-1 px-2 py-1 text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] bg-[var(--color-bg-surface-elevated)] rounded transition-colors disabled:opacity-50"
@@ -171,7 +171,7 @@ export function WorkflowEditor({
               <Save size={11} />
               {saving ? '保存中...' : 'Save'}
             </button>
-            <button
+            <button type="button"
               onClick={handleRun}
               disabled={running || !workflowId}
               className="flex items-center gap-1 px-2 py-1 text-[10px] text-white bg-blue-600 rounded hover:bg-blue-600/90 transition-colors disabled:opacity-50"
