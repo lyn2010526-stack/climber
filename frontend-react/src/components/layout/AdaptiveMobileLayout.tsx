@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { MoreHorizontal, X, ChevronUp } from 'lucide-react';
 import { ClimberMark } from '../brand/ClimberMark';
 import { CORE_NAV_ITEMS_BASE, ALL_NAV_ITEMS_BASE, MOBILE_ADAPTED_PAGE_IDS } from '../../navigation/navConfig';
@@ -14,6 +14,22 @@ export function AdaptiveMobileLayout({ children, currentPage, onNavigate }: {
 }) {
   const { t } = useI18n();
   const [moreOpen, setMoreOpen] = useState(false);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const sheetCloseRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMoreOpen(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    sheetCloseRef.current?.focus();
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      // Restore focus to the trigger so keyboard users keep their place.
+      moreButtonRef.current?.focus();
+    };
+  }, [moreOpen]);
 
   const { primaryItems, moreItems } = useMemo(() => {
     const toEntry = (item: NavItem) => ({
@@ -57,7 +73,7 @@ export function AdaptiveMobileLayout({ children, currentPage, onNavigate }: {
             </button>
           );
         })}
-        <button type="button" onClick={() => setMoreOpen(true)} aria-expanded={moreOpen} aria-current={moreActive ? 'page' : undefined} className="mobile-nav-item" data-active={moreActive || undefined}>
+        <button type="button" ref={moreButtonRef} onClick={() => setMoreOpen(true)} aria-expanded={moreOpen} aria-current={moreActive ? 'page' : undefined} className="mobile-nav-item" data-active={moreActive || undefined}>
           <MoreHorizontal size={19} />
           <span>{t('sidebar.more')}</span>
         </button>
@@ -71,7 +87,7 @@ export function AdaptiveMobileLayout({ children, currentPage, onNavigate }: {
                  <p className="workspace-eyebrow">{t('sidebar.workspace')}</p>
                 <h2 className="text-base font-semibold">{t('sidebar.all_entries')}</h2>
               </div>
-              <button type="button" className="icon-button" onClick={() => setMoreOpen(false)} aria-label={t('common.close')}><X size={18} /></button>
+              <button type="button" ref={sheetCloseRef} className="icon-button" onClick={() => setMoreOpen(false)} aria-label={t('common.close')}><X size={18} /></button>
             </div>
             <div className="mobile-more-grid">
               {moreItems.map(({ id, label, icon: Icon }) => (
