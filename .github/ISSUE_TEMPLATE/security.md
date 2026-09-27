@@ -1,38 +1,11 @@
 ---
 name: Security Vulnerability
-about: Report a security vulnerability (private)
-title: "[SECURITY] "
-labels: security, confidential
+about: Read the private vulnerability reporting instructions
+title: ""
+labels: ""
 assignees: ''
-
-## Vulnerability Description
-
-<!-- Describe the vulnerability in detail -->
-
-## Impact
-
-<!-- Describe the potential impact -->
-
-## Steps to Reproduce
-
-<!-- Provide steps to reproduce the issue -->
-
-1.
-2.
-3.
-
-## Affected Versions
-
-<!-- Which versions are affected -->
-
-## Suggested Fix
-
-<!-- If you have suggestions for fixing the vulnerability -->
-
-## Contact
-
-<!-- How should we reach you for follow-up -->
-
 ---
 
-**Note**: For critical security issues, please consider emailing security@climber.dev directly instead of using a public issue.
+Security reports require a private channel. Please use [GitHub Security Advisories](https://github.com/lyn2010526-stack/climber/security/advisories/new).
+
+Do not include vulnerability details, reproduction steps, credentials or private data in a public issue.
