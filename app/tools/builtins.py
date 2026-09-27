@@ -882,3 +882,106 @@ async def core_memory_replace(label: str, old_text: str, new_text: str) -> str:
         return f"Updated core memory block '{label}' (now {len(block.value)} chars)"
     except Exception as e:
         return f"Error editing core memory: {redact_error_text(e)}"
+
+
+@tool(
+    description="Run a real numerical experiment (1-D heat conduction, damped driven "
+    "oscillator, or logistic growth) and return the measured outcome as JSON. Use it "
+    "to test a physical or dynamical hypothesis numerically before committing to it.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "model": {
+                "type": "string",
+                "description": "Which model to run: heat, oscillator, or logistic",
+            },
+            "alpha": {"type": "number", "description": "Heat: thermal diffusivity"},
+            "dx": {"type": "number", "description": "Heat: grid spacing"},
+            "dt": {"type": "number", "description": "Time step (all models)"},
+            "t_final": {"type": "number", "description": "Final simulated time"},
+            "n_points": {"type": "number", "description": "Heat: grid points"},
+            "source_temp": {"type": "number", "description": "Heat: source temperature"},
+            "ambient_temp": {"type": "number", "description": "Heat: ambient temperature"},
+            "mass": {"type": "number", "description": "Oscillator: mass"},
+            "stiffness": {"type": "number", "description": "Oscillator: stiffness"},
+            "damping": {"type": "number", "description": "Oscillator: damping coefficient"},
+            "drive_force": {"type": "number", "description": "Oscillator: driving force"},
+            "drive_freq": {"type": "number", "description": "Oscillator: driving frequency"},
+            "growth_rate": {"type": "number", "description": "Logistic: intrinsic growth rate"},
+            "initial_population": {"type": "number", "description": "Logistic: starting population"},
+            "carrying_capacity": {"type": "number", "description": "Logistic: carrying capacity"},
+        },
+        "required": ["model"],
+    },
+)
+async def simulate_experiment(
+    model: str,
+    alpha: float = 1e-4,
+    dx: float = 0.02,
+    dt: float = 1e-4,
+    t_final: float = 5.0,
+    n_points: int | None = None,
+    source_temp: float | None = None,
+    ambient_temp: float | None = None,
+    mass: float = 1.0,
+    stiffness: float = 1.0,
+    damping: float = 0.1,
+    drive_force: float = 0.5,
+    drive_freq: float = 1.0,
+    growth_rate: float = 0.5,
+    initial_population: float = 10.0,
+    carrying_capacity: float = 100.0,
+) -> str:
+    """Run a numerical experiment and return its JSON result.
+
+    Args:
+        model: One of heat, oscillator, logistic.
+        alpha: Thermal diffusivity for the heat model.
+        dx: Grid spacing for the heat model.
+        dt: Time step shared by all models.
+        t_final: Final simulated time.
+        n_points: Grid point count for the heat model.
+        source_temp: Source temperature for the heat model.
+        ambient_temp: Ambient temperature for the heat model.
+        mass: Mass for the oscillator model.
+        stiffness: Stiffness for the oscillator model.
+        damping: Damping coefficient for the oscillator model.
+        drive_force: Driving force for the oscillator model.
+        drive_freq: Driving frequency for the oscillator model.
+        growth_rate: Intrinsic growth rate for the logistic model.
+        initial_population: Starting population for the logistic model.
+        carrying_capacity: Carrying capacity for the logistic model.
+
+    Returns:
+        A JSON string with the model, whether it converged, and the measured
+        quantities that model reports.
+    """
+    params: dict[str, Any] = {"dt": dt, "t_final": t_final}
+    if model == "heat":
+        params.update({
+            "alpha": alpha,
+            "dx": dx,
+            "n_points": int(n_points) if n_points else 200,
+            "source_temp": 100.0 if source_temp is None else source_temp,
+            "ambient_temp": 20.0 if ambient_temp is None else ambient_temp,
+        })
+    elif model == "oscillator":
+        params.update({
+            "mass": mass,
+            "stiffness": stiffness,
+            "damping": damping,
+            "drive_force": drive_force,
+            "drive_freq": drive_freq,
+        })
+    elif model == "logistic":
+        params.update({
+            "growth_rate": growth_rate,
+            "initial_population": initial_population,
+            "carrying_capacity": carrying_capacity,
+        })
+    try:
+        from app.simulation.experiments import run_experiment
+
+        return run_experiment(model, **params)
+    except Exception as e:
+        return f"Error running experiment: {redact_error_text(e)}"

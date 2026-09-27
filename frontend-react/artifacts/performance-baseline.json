@@ -1,0 +1,7751 @@
+{
+  "schema": "climber.frontend.performance-baseline/1",
+  "generatedAt": "2026-09-26T14:49:01.504Z",
+  "runtime": {
+    "node": "v22.22.0",
+    "platform": "linux x64"
+  },
+  "methodology": {
+    "target": "production build served from dist/ (no StrictMode double-mount)",
+    "browser": "chromium via playwright",
+    "hostBefore": {
+      "model": "Intel(R) Xeon(R) Processor",
+      "logicalCpus": 2,
+      "memTotalBytes": 8352858112,
+      "loadAverage": [
+        6.67,
+        7.63,
+        8.3
+      ],
+      "cpuUtilizationPct": 8.63,
+      "capturedAt": "2026-09-26T14:49:01.357Z"
+    },
+    "notes": [
+      "Each measurement pairs a host block with the raw sample arrays it was derived from.",
+      "React commits are counted through the React DevTools global hook in the production bundle, so the count is finished commits, including the app's per-commit scroll and follow-output effects.",
+      "Heap readings are taken through CDP after HeapProfiler.collectGarbage, so growth is retained memory rather than uncollected garbage.",
+      "Long tasks are PerformanceObserver longtask entries (>50ms) recorded inside the measured window.",
+      "Frame pacing is rAF inter-frame delta; the idle control (streaming scenario) establishes this host's rAF cadence so a streaming gap can be attributed to main-thread blocking."
+    ],
+    "hostAfter": {
+      "model": "Intel(R) Xeon(R) Processor",
+      "logicalCpus": 2,
+      "memTotalBytes": 8352858112,
+      "loadAverage": [
+        8.59,
+        8.07,
+        8.34
+      ],
+      "cpuUtilizationPct": 8.73,
+      "capturedAt": "2026-09-26T14:52:29.017Z"
+    },
+    "host": {
+      "before": {
+        "model": "Intel(R) Xeon(R) Processor",
+        "logicalCpus": 2,
+        "memTotalBytes": 8352858112,
+        "loadAverage": [
+          6.67,
+          7.63,
+          8.3
+        ],
+        "cpuUtilizationPct": 8.63,
+        "capturedAt": "2026-09-26T14:49:01.357Z"
+      },
+      "after": {
+        "model": "Intel(R) Xeon(R) Processor",
+        "logicalCpus": 2,
+        "memTotalBytes": 8352858112,
+        "loadAverage": [
+          8.59,
+          8.07,
+          8.34
+        ],
+        "cpuUtilizationPct": 8.73,
+        "capturedAt": "2026-09-26T14:52:29.017Z"
+      },
+      "logicalCpus": 2,
+      "cpuModel": "Intel(R) Xeon(R) Processor",
+      "memTotalBytes": 8352858112,
+      "memTotalGiB": 7.78,
+      "loadAverageBefore": [
+        6.67,
+        7.63,
+        8.3
+      ],
+      "loadAverageAfter": [
+        8.59,
+        8.07,
+        8.34
+      ],
+      "loadAverage1mDelta": 1.92,
+      "cpuUtilizationPct": {
+        "before": 8.63,
+        "after": 8.73,
+        "mean": 8.68
+      },
+      "platform": "linux 6.6.116 x64"
+    }
+  },
+  "longListP95": {
+    "description": "Cost of a long conversation as a function of message count.",
+    "repeats": 3,
+    "host": {
+      "before": {
+        "model": "Intel(R) Xeon(R) Processor",
+        "logicalCpus": 2,
+        "memTotalBytes": 8352858112,
+        "loadAverage": [
+          6.67,
+          7.63,
+          8.3
+        ],
+        "cpuUtilizationPct": 8.63,
+        "capturedAt": "2026-09-26T14:49:01.357Z"
+      },
+      "after": {
+        "model": "Intel(R) Xeon(R) Processor",
+        "logicalCpus": 2,
+        "memTotalBytes": 8352858112,
+        "loadAverage": [
+          8.59,
+          8.07,
+          8.34
+        ],
+        "cpuUtilizationPct": 8.73,
+        "capturedAt": "2026-09-26T14:52:29.017Z"
+      },
+      "logicalCpus": 2,
+      "cpuModel": "Intel(R) Xeon(R) Processor",
+      "memTotalBytes": 8352858112,
+      "memTotalGiB": 7.78,
+      "loadAverageBefore": [
+        6.67,
+        7.63,
+        8.3
+      ],
+      "loadAverageAfter": [
+        8.59,
+        8.07,
+        8.34
+      ],
+      "loadAverage1mDelta": 1.92,
+      "cpuUtilizationPct": {
+        "before": 8.63,
+        "after": 8.73,
+        "mean": 8.68
+      },
+      "platform": "linux 6.6.116 x64"
+    },
+    "samples": [
+      {
+        "messageCount": 200,
+        "firstInteractiveMs": 2813,
+        "domContentLoadedMs": 196.09999999403954,
+        "loadEventMs": 196.69999998807907,
+        "fcpMs": 2404,
+        "lcpMs": null,
+        "mountCommits": 13,
+        "scrollCommits": 3,
+        "longTaskCount": 5,
+        "longTaskTotalMs": 2522,
+        "longTaskMaxMs": 2122,
+        "totalDomNodes": 5564,
+        "transcriptDescendants": 5067,
+        "messageRows": 200,
+        "domNodesPerMessage": 25.3,
+        "heapAfterMountBytes": 10600000,
+        "scrollFrameGaps": [
+          3.9,
+          16.7,
+          150,
+          33.3,
+          16.7,
+          16.7,
+          16.7,
+          16.6,
+          16.6,
+          16.7,
+          16.6,
+          16.8,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.6,
+          16.7,
+          16.6,
+          16.8,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.6,
+          16.6,
+          16.7,
+          16.7,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.6,
+          16.7,
+          16.7
+        ],
+        "scrollFrameP50": 16.7,
+        "scrollFrameP95": 16.8,
+        "scrollJankFrames": 2,
+        "scrollFinalDistanceFromBottom": 0,
+        "raw": {
+          "navigationTiming": {
+            "responseStart": 23.69999998807907,
+            "domContentLoadedEventEnd": 196.09999999403954,
+            "loadEventEnd": 196.69999998807907,
+            "domInteractive": 122.5,
+            "transferSize": 4077,
+            "encodedBodySize": 3777,
+            "decodedBodySize": 3777
+          },
+          "paintTiming": {
+            "paints": [
+              {
+                "name": "first-paint",
+                "startTime": 132
+              },
+              {
+                "name": "first-contentful-paint",
+                "startTime": 2404
+              }
+            ],
+            "lcp": null
+          },
+          "longTasks": [
+            {
+              "start": 197,
+              "duration": 61,
+              "name": "self"
+            },
+            {
+              "start": 258.7,
+              "duration": 2122,
+              "name": "self"
+            },
+            {
+              "start": 2439,
+              "duration": 54,
+              "name": "self"
+            },
+            {
+              "start": 2603.8,
+              "duration": 202,
+              "name": "self"
+            },
+            {
+              "start": 2806.6,
+              "duration": 83,
+              "name": "self"
+            }
+          ],
+          "frameIntervals": [
+            16.6,
+            16.7,
+            150,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.6,
+            16.7,
+            16.6,
+            16.8,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.8,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            133.3,
+            16.6,
+            16.7
+          ],
+          "commitTimes": [
+            253.3,
+            258.1,
+            2413.2,
+            2464.1,
+            2493,
+            2493.3,
+            2504.4,
+            2516.6,
+            2543.7,
+            2561.6,
+            2594.8,
+            2806.5,
+            2894.7
+          ],
+          "heapSamples": [
+            {
+              "t": 2918.2,
+              "usedJSHeapSize": 10600000,
+              "totalJSHeapSize": 20500000
+            }
+          ],
+          "domNodeSamples": [
+            {
+              "t": 2918.4,
+              "nodes": 5564
+            }
+          ],
+          "scrollFrameGaps": [
+            3.9,
+            16.7,
+            150,
+            33.3,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.6,
+            16.7,
+            16.6,
+            16.8,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.8,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            }
+          ]
+        },
+        "run": 0
+      },
+      {
+        "messageCount": 200,
+        "firstInteractiveMs": 868,
+        "domContentLoadedMs": 92.7999999821186,
+        "loadEventMs": 95.2999999821186,
+        "fcpMs": 780,
+        "lcpMs": null,
+        "mountCommits": 10,
+        "scrollCommits": 3,
+        "longTaskCount": 4,
+        "longTaskTotalMs": 608,
+        "longTaskMaxMs": 322,
+        "totalDomNodes": 5564,
+        "transcriptDescendants": 5067,
+        "messageRows": 200,
+        "domNodesPerMessage": 25.3,
+        "heapAfterMountBytes": 16100000,
+        "scrollFrameGaps": [
+          33.3,
+          700.1,
+          33.3,
+          16.6,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          33.3,
+          16.7,
+          16.7,
+          33.3,
+          33.3,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          33.4,
+          33.3,
+          33.4,
+          16.6,
+          16.7,
+          33.3,
+          16.7,
+          16.6,
+          16.7,
+          33.3,
+          16.7,
+          16.7,
+          16.6,
+          33.4,
+          16.6,
+          16.7,
+          33.3,
+          33.4,
+          16.7,
+          16.6,
+          16.7,
+          16.6
+        ],
+        "scrollFrameP50": 16.7,
+        "scrollFrameP95": 33.4,
+        "scrollJankFrames": 14,
+        "scrollFinalDistanceFromBottom": 0,
+        "raw": {
+          "navigationTiming": {
+            "responseStart": 3,
+            "domContentLoadedEventEnd": 92.7999999821186,
+            "loadEventEnd": 95.2999999821186,
+            "domInteractive": 48.599999994039536,
+            "transferSize": 4077,
+            "encodedBodySize": 3777,
+            "decodedBodySize": 3777
+          },
+          "paintTiming": {
+            "paints": [
+              {
+                "name": "first-paint",
+                "startTime": 780
+              },
+              {
+                "name": "first-contentful-paint",
+                "startTime": 780
+              }
+            ],
+            "lcp": null
+          },
+          "longTasks": [
+            {
+              "start": 436.8,
+              "duration": 62,
+              "name": "self"
+            },
+            {
+              "start": 541.1,
+              "duration": 322,
+              "name": "self"
+            },
+            {
+              "start": 863.7,
+              "duration": 158,
+              "name": "self"
+            },
+            {
+              "start": 1101.6,
+              "duration": 66,
+              "name": "self"
+            }
+          ],
+          "frameIntervals": [
+            16.6,
+            33.3,
+            233.4,
+            466.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            166.7,
+            16.6,
+            16.7,
+            16.7
+          ],
+          "commitTimes": [
+            137.9,
+            141,
+            453.4,
+            498.8,
+            499.2,
+            507.7,
+            520.7,
+            527,
+            863.7,
+            1064.2
+          ],
+          "heapSamples": [
+            {
+              "t": 1189.2,
+              "usedJSHeapSize": 16100000,
+              "totalJSHeapSize": 23100000
+            }
+          ],
+          "domNodeSamples": [
+            {
+              "t": 1190.1,
+              "nodes": 5564
+            }
+          ],
+          "scrollFrameGaps": [
+            33.3,
+            700.1,
+            33.3,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            33.3,
+            16.7,
+            16.7,
+            33.3,
+            33.3,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            33.4,
+            33.3,
+            33.4,
+            16.6,
+            16.7,
+            33.3,
+            16.7,
+            16.6,
+            16.7,
+            33.3,
+            16.7,
+            16.7,
+            16.6,
+            33.4,
+            16.6,
+            16.7,
+            33.3,
+            33.4,
+            16.7,
+            16.6,
+            16.7,
+            16.6
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            }
+          ]
+        },
+        "run": 1
+      },
+      {
+        "messageCount": 200,
+        "firstInteractiveMs": 1427,
+        "domContentLoadedMs": 89.40000000596046,
+        "loadEventMs": 90.09999999403954,
+        "fcpMs": 1348,
+        "lcpMs": null,
+        "mountCommits": 13,
+        "scrollCommits": 3,
+        "longTaskCount": 2,
+        "longTaskTotalMs": 212,
+        "longTaskMaxMs": 159,
+        "totalDomNodes": 5589,
+        "transcriptDescendants": 5067,
+        "messageRows": 200,
+        "domNodesPerMessage": 25.3,
+        "heapAfterMountBytes": 10600000,
+        "scrollFrameGaps": [
+          16.6,
+          216.7,
+          33.3,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          33.4,
+          16.6,
+          16.7,
+          16.6,
+          33.4,
+          16.6,
+          16.7,
+          16.6,
+          16.8,
+          33.3,
+          33.3,
+          16.7,
+          16.6,
+          33.4,
+          16.7,
+          33.2,
+          16.7,
+          33.4,
+          16.6,
+          33.4,
+          33.3,
+          16.7,
+          16.6,
+          33.4,
+          33.3,
+          33.3,
+          16.6,
+          33.4,
+          16.7,
+          33.3,
+          33.3,
+          33.3,
+          16.7
+        ],
+        "scrollFrameP50": 16.7,
+        "scrollFrameP95": 33.4,
+        "scrollJankFrames": 18,
+        "scrollFinalDistanceFromBottom": 0,
+        "raw": {
+          "navigationTiming": {
+            "responseStart": 2.5,
+            "domContentLoadedEventEnd": 89.40000000596046,
+            "loadEventEnd": 90.09999999403954,
+            "domInteractive": 33.400000005960464,
+            "transferSize": 4077,
+            "encodedBodySize": 3777,
+            "decodedBodySize": 3777
+          },
+          "paintTiming": {
+            "paints": [
+              {
+                "name": "first-paint",
+                "startTime": 40
+              },
+              {
+                "name": "first-contentful-paint",
+                "startTime": 1348
+              }
+            ],
+            "lcp": null
+          },
+          "longTasks": [
+            {
+              "start": 90.5,
+              "duration": 53,
+              "name": "self"
+            },
+            {
+              "start": 529,
+              "duration": 159,
+              "name": "self"
+            }
+          ],
+          "frameIntervals": [
+            16.7,
+            16.6,
+            216.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.8,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.6,
+            16.8,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            166.7,
+            16.6,
+            16.7,
+            16.6
+          ],
+          "commitTimes": [
+            140.8,
+            143.9,
+            462.2,
+            474.5,
+            474.9,
+            485.5,
+            501.7,
+            511.1,
+            519.4,
+            525.5,
+            527.2,
+            687.9,
+            1366
+          ],
+          "heapSamples": [
+            {
+              "t": 1473.1,
+              "usedJSHeapSize": 10600000,
+              "totalJSHeapSize": 23100000
+            }
+          ],
+          "domNodeSamples": [
+            {
+              "t": 1473.2,
+              "nodes": 5589
+            }
+          ],
+          "scrollFrameGaps": [
+            16.6,
+            216.7,
+            33.3,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            33.4,
+            16.6,
+            16.7,
+            16.6,
+            33.4,
+            16.6,
+            16.7,
+            16.6,
+            16.8,
+            33.3,
+            33.3,
+            16.7,
+            16.6,
+            33.4,
+            16.7,
+            33.2,
+            16.7,
+            33.4,
+            16.6,
+            33.4,
+            33.3,
+            16.7,
+            16.6,
+            33.4,
+            33.3,
+            33.3,
+            16.6,
+            33.4,
+            16.7,
+            33.3,
+            33.3,
+            33.3,
+            16.7
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            }
+          ]
+        },
+        "run": 2
+      },
+      {
+        "messageCount": 1000,
+        "firstInteractiveMs": 1579,
+        "domContentLoadedMs": 108.09999999403954,
+        "loadEventMs": 109.59999999403954,
+        "fcpMs": 1396,
+        "lcpMs": null,
+        "mountCommits": 13,
+        "scrollCommits": 3,
+        "longTaskCount": 2,
+        "longTaskTotalMs": 958,
+        "longTaskMaxMs": 603,
+        "totalDomNodes": 25863,
+        "transcriptDescendants": 25341,
+        "messageRows": 1000,
+        "domNodesPerMessage": 25.3,
+        "heapAfterMountBytes": 20500000,
+        "scrollFrameGaps": [
+          16.7,
+          1216.6,
+          33.3,
+          33.4,
+          33.3,
+          16.7,
+          33.2,
+          33.4,
+          33.4,
+          33.3,
+          33.3,
+          16.7,
+          16.6,
+          16.8,
+          16.6,
+          33.3,
+          33.3,
+          33.4,
+          33.3,
+          33.3,
+          16.8,
+          16.5,
+          16.8,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          33.3,
+          33.4,
+          33.2,
+          16.7,
+          33.4,
+          16.7,
+          33.3,
+          16.6,
+          16.7,
+          16.7,
+          16.7,
+          16.5
+        ],
+        "scrollFrameP50": 16.8,
+        "scrollFrameP95": 33.4,
+        "scrollJankFrames": 19,
+        "scrollFinalDistanceFromBottom": 0,
+        "raw": {
+          "navigationTiming": {
+            "responseStart": 3.5,
+            "domContentLoadedEventEnd": 108.09999999403954,
+            "loadEventEnd": 109.59999999403954,
+            "domInteractive": 48.099999994039536,
+            "transferSize": 4077,
+            "encodedBodySize": 3777,
+            "decodedBodySize": 3777
+          },
+          "paintTiming": {
+            "paints": [
+              {
+                "name": "first-paint",
+                "startTime": 52
+              },
+              {
+                "name": "first-contentful-paint",
+                "startTime": 1396
+              }
+            ],
+            "lcp": null
+          },
+          "longTasks": [
+            {
+              "start": 519,
+              "duration": 603,
+              "name": "self"
+            },
+            {
+              "start": 1122,
+              "duration": 355,
+              "name": "self"
+            }
+          ],
+          "frameIntervals": [
+            16.7,
+            16.7,
+            1166.6,
+            50,
+            33.3,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.6,
+            16.8,
+            16.6,
+            16.6,
+            16.8,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.8,
+            16.6,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            33.4,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.8,
+            16.5,
+            16.8,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.6,
+            16.8,
+            16.6,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.5,
+            16.8,
+            866.6,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7
+          ],
+          "commitTimes": [
+            148.1,
+            152,
+            463.3,
+            478.2,
+            478.9,
+            486.5,
+            488,
+            489,
+            496.4,
+            501.1,
+            510,
+            1121.9,
+            1536.2
+          ],
+          "heapSamples": [
+            {
+              "t": 1606.9,
+              "usedJSHeapSize": 20500000,
+              "totalJSHeapSize": 56800000
+            }
+          ],
+          "domNodeSamples": [
+            {
+              "t": 1607.7,
+              "nodes": 25863
+            }
+          ],
+          "scrollFrameGaps": [
+            16.7,
+            1216.6,
+            33.3,
+            33.4,
+            33.3,
+            16.7,
+            33.2,
+            33.4,
+            33.4,
+            33.3,
+            33.3,
+            16.7,
+            16.6,
+            16.8,
+            16.6,
+            33.3,
+            33.3,
+            33.4,
+            33.3,
+            33.3,
+            16.8,
+            16.5,
+            16.8,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            33.3,
+            33.4,
+            33.2,
+            16.7,
+            33.4,
+            16.7,
+            33.3,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.5
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            }
+          ]
+        },
+        "run": 0
+      },
+      {
+        "messageCount": 1000,
+        "firstInteractiveMs": 1305,
+        "domContentLoadedMs": 89.5,
+        "loadEventMs": 92.7000000178814,
+        "fcpMs": 348,
+        "lcpMs": null,
+        "mountCommits": 11,
+        "scrollCommits": 3,
+        "longTaskCount": 3,
+        "longTaskTotalMs": 1164,
+        "longTaskMaxMs": 781,
+        "totalDomNodes": 25863,
+        "transcriptDescendants": 25341,
+        "messageRows": 1000,
+        "domNodesPerMessage": 25.3,
+        "heapAfterMountBytes": 21700000,
+        "scrollFrameGaps": [
+          16.8,
+          799.9,
+          33.3,
+          16.7,
+          33.3,
+          33.4,
+          33.3,
+          33.3,
+          16.7,
+          33.3,
+          16.7,
+          33.3,
+          16.7,
+          33.3,
+          16.7,
+          16.6,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          33.3,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          33.3,
+          33.4,
+          33.4,
+          16.6,
+          33.4,
+          16.6,
+          16.7,
+          33.3,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          33.3
+        ],
+        "scrollFrameP50": 16.7,
+        "scrollFrameP95": 33.4,
+        "scrollJankFrames": 16,
+        "scrollFinalDistanceFromBottom": 0,
+        "raw": {
+          "navigationTiming": {
+            "responseStart": 6.9000000059604645,
+            "domContentLoadedEventEnd": 89.5,
+            "loadEventEnd": 92.7000000178814,
+            "domInteractive": 38.099999994039536,
+            "transferSize": 4077,
+            "encodedBodySize": 3777,
+            "decodedBodySize": 3777
+          },
+          "paintTiming": {
+            "paints": [
+              {
+                "name": "first-paint",
+                "startTime": 48
+              },
+              {
+                "name": "first-contentful-paint",
+                "startTime": 348
+              }
+            ],
+            "lcp": null
+          },
+          "longTasks": [
+            {
+              "start": 135.9,
+              "duration": 52,
+              "name": "self"
+            },
+            {
+              "start": 520.3,
+              "duration": 781,
+              "name": "self"
+            },
+            {
+              "start": 1301.9,
+              "duration": 331,
+              "name": "self"
+            }
+          ],
+          "frameIntervals": [
+            16.6,
+            16.8,
+            766.5,
+            33.4,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.8,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.8,
+            16.6,
+            16.6,
+            16.8,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            983.3,
+            33.4,
+            16.6,
+            16.7
+          ],
+          "commitTimes": [
+            131.1,
+            134.5,
+            446.8,
+            464.8,
+            465.2,
+            472.3,
+            481.6,
+            491.6,
+            508.2,
+            516.2,
+            1301.8
+          ],
+          "heapSamples": [
+            {
+              "t": 1691.5,
+              "usedJSHeapSize": 21700000,
+              "totalJSHeapSize": 56800000
+            }
+          ],
+          "domNodeSamples": [
+            {
+              "t": 1692.3,
+              "nodes": 25863
+            }
+          ],
+          "scrollFrameGaps": [
+            16.8,
+            799.9,
+            33.3,
+            16.7,
+            33.3,
+            33.4,
+            33.3,
+            33.3,
+            16.7,
+            33.3,
+            16.7,
+            33.3,
+            16.7,
+            33.3,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            33.3,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            33.3,
+            33.4,
+            33.4,
+            16.6,
+            33.4,
+            16.6,
+            16.7,
+            33.3,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            33.3
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            }
+          ]
+        },
+        "run": 1
+      },
+      {
+        "messageCount": 1000,
+        "firstInteractiveMs": 1838,
+        "domContentLoadedMs": 104.09999999403954,
+        "loadEventMs": 104.90000000596046,
+        "fcpMs": 196,
+        "lcpMs": null,
+        "mountCommits": 11,
+        "scrollCommits": 3,
+        "longTaskCount": 4,
+        "longTaskTotalMs": 1849,
+        "longTaskMaxMs": 1232,
+        "totalDomNodes": 25863,
+        "transcriptDescendants": 25341,
+        "messageRows": 1000,
+        "domNodesPerMessage": 25.3,
+        "heapAfterMountBytes": 21700000,
+        "scrollFrameGaps": [
+          1.4,
+          16.7,
+          1116.6,
+          50,
+          33.4,
+          33.3,
+          16.6,
+          16.7,
+          16.7,
+          33.3,
+          16.7,
+          16.7,
+          16.6,
+          16.6,
+          16.7,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.6,
+          16.7
+        ],
+        "scrollFrameP50": 16.7,
+        "scrollFrameP95": 33.4,
+        "scrollJankFrames": 5,
+        "scrollFinalDistanceFromBottom": 0,
+        "raw": {
+          "navigationTiming": {
+            "responseStart": 2,
+            "domContentLoadedEventEnd": 104.09999999403954,
+            "loadEventEnd": 104.90000000596046,
+            "domInteractive": 43.30000001192093,
+            "transferSize": 4077,
+            "encodedBodySize": 3777,
+            "decodedBodySize": 3777
+          },
+          "paintTiming": {
+            "paints": [
+              {
+                "name": "first-paint",
+                "startTime": 44
+              },
+              {
+                "name": "first-contentful-paint",
+                "startTime": 196
+              }
+            ],
+            "lcp": null
+          },
+          "longTasks": [
+            {
+              "start": 105.2,
+              "duration": 59,
+              "name": "self"
+            },
+            {
+              "start": 455.8,
+              "duration": 56,
+              "name": "self"
+            },
+            {
+              "start": 601.8,
+              "duration": 1232,
+              "name": "self"
+            },
+            {
+              "start": 1834.1,
+              "duration": 502,
+              "name": "self"
+            }
+          ],
+          "frameIntervals": [
+            16.7,
+            16.6,
+            16.7,
+            1100,
+            16.6,
+            16.6,
+            16.8,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            733.4,
+            33.3,
+            16.7,
+            16.6
+          ],
+          "commitTimes": [
+            156.7,
+            164.5,
+            476.2,
+            508,
+            511.5,
+            522.4,
+            533.5,
+            543.9,
+            580.3,
+            595.3,
+            1834
+          ],
+          "heapSamples": [
+            {
+              "t": 2418,
+              "usedJSHeapSize": 21700000,
+              "totalJSHeapSize": 56800000
+            }
+          ],
+          "domNodeSamples": [
+            {
+              "t": 2418.7,
+              "nodes": 25863
+            }
+          ],
+          "scrollFrameGaps": [
+            1.4,
+            16.7,
+            1116.6,
+            50,
+            33.4,
+            33.3,
+            16.6,
+            16.7,
+            16.7,
+            33.3,
+            16.7,
+            16.7,
+            16.6,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            }
+          ]
+        },
+        "run": 2
+      },
+      {
+        "messageCount": 5000,
+        "firstInteractiveMs": 7186,
+        "domContentLoadedMs": 90.59999999403954,
+        "loadEventMs": 93.19999998807907,
+        "fcpMs": 2244,
+        "lcpMs": null,
+        "mountCommits": 11,
+        "scrollCommits": 3,
+        "longTaskCount": 3,
+        "longTaskTotalMs": 6542,
+        "longTaskMaxMs": 3962,
+        "totalDomNodes": 127266,
+        "transcriptDescendants": 126744,
+        "messageRows": 5000,
+        "domNodesPerMessage": 25.3,
+        "heapAfterMountBytes": 72200000,
+        "scrollFrameGaps": [
+          116.7,
+          4966.5,
+          66.5,
+          66.8,
+          33.2,
+          50.1,
+          33.3,
+          50,
+          33.3,
+          33.4,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          33.4,
+          33.2,
+          16.7,
+          33.3,
+          16.7,
+          16.7,
+          33.4,
+          16.6,
+          16.7,
+          33.3,
+          33.4,
+          16.6,
+          33.3,
+          16.7,
+          16.7,
+          33.3,
+          33.3,
+          16.7,
+          33.4,
+          16.6,
+          33.3,
+          50.1,
+          33.3,
+          33.3,
+          33.3
+        ],
+        "scrollFrameP50": 33.3,
+        "scrollFrameP95": 66.8,
+        "scrollJankFrames": 25,
+        "scrollFinalDistanceFromBottom": 0,
+        "raw": {
+          "navigationTiming": {
+            "responseStart": 2.4000000059604645,
+            "domContentLoadedEventEnd": 90.59999999403954,
+            "loadEventEnd": 93.19999998807907,
+            "domInteractive": 45.79999998211861,
+            "transferSize": 4077,
+            "encodedBodySize": 3777,
+            "decodedBodySize": 3777
+          },
+          "paintTiming": {
+            "paints": [
+              {
+                "name": "first-paint",
+                "startTime": 44
+              },
+              {
+                "name": "first-contentful-paint",
+                "startTime": 2244
+              }
+            ],
+            "lcp": null
+          },
+          "longTasks": [
+            {
+              "start": 507.1,
+              "duration": 3962,
+              "name": "self"
+            },
+            {
+              "start": 4469.9,
+              "duration": 2445,
+              "name": "self"
+            },
+            {
+              "start": 7225.2,
+              "duration": 135,
+              "name": "self"
+            }
+          ],
+          "frameIntervals": [
+            16.6,
+            116.7,
+            4883.1,
+            83.4,
+            49.9,
+            16.6,
+            50.1,
+            16.7,
+            33.2,
+            33.4,
+            16.7,
+            16.6,
+            16.7,
+            33.4,
+            16.6,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            33.4,
+            16.7,
+            16.5,
+            16.7,
+            16.8,
+            16.5,
+            16.7,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            33.3,
+            16.7,
+            16.7,
+            16.6,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.8,
+            16.6,
+            33.3,
+            33.4,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            5966.4,
+            116.7,
+            183.3,
+            100,
+            16.7,
+            16.6
+          ],
+          "commitTimes": [
+            127.1,
+            131.4,
+            443.3,
+            454.3,
+            454.8,
+            463.2,
+            473.9,
+            486.2,
+            488.5,
+            4469.8,
+            7166.3
+          ],
+          "heapSamples": [
+            {
+              "t": 7389.3,
+              "usedJSHeapSize": 72200000,
+              "totalJSHeapSize": 148000000
+            }
+          ],
+          "domNodeSamples": [
+            {
+              "t": 7402.2,
+              "nodes": 127266
+            }
+          ],
+          "scrollFrameGaps": [
+            116.7,
+            4966.5,
+            66.5,
+            66.8,
+            33.2,
+            50.1,
+            33.3,
+            50,
+            33.3,
+            33.4,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            33.4,
+            33.2,
+            16.7,
+            33.3,
+            16.7,
+            16.7,
+            33.4,
+            16.6,
+            16.7,
+            33.3,
+            33.4,
+            16.6,
+            33.3,
+            16.7,
+            16.7,
+            33.3,
+            33.3,
+            16.7,
+            33.4,
+            16.6,
+            33.3,
+            50.1,
+            33.3,
+            33.3,
+            33.3
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            }
+          ]
+        },
+        "run": 0
+      },
+      {
+        "messageCount": 5000,
+        "firstInteractiveMs": 4806,
+        "domContentLoadedMs": 448.40000000596046,
+        "loadEventMs": 452.2000000178814,
+        "fcpMs": 576,
+        "lcpMs": null,
+        "mountCommits": 11,
+        "scrollCommits": 3,
+        "longTaskCount": 7,
+        "longTaskTotalMs": 7200,
+        "longTaskMaxMs": 3567,
+        "totalDomNodes": 127241,
+        "transcriptDescendants": 126744,
+        "messageRows": 5000,
+        "domNodesPerMessage": 25.3,
+        "heapAfterMountBytes": 72200000,
+        "scrollFrameGaps": [
+          83.4,
+          6416.3,
+          33.4,
+          16.7,
+          16.7,
+          33.2,
+          16.8,
+          16.5,
+          33.4,
+          16.7,
+          33.3,
+          16.6,
+          33.4,
+          16.7,
+          33.3,
+          16.6,
+          33.4,
+          16.7,
+          33.3,
+          16.7,
+          16.7,
+          33.3,
+          16.6,
+          16.7,
+          16.7,
+          33.3,
+          16.6,
+          33.4,
+          16.6,
+          16.7,
+          16.7,
+          33.3,
+          16.7,
+          33.3,
+          33.4,
+          16.7,
+          33.3,
+          16.6,
+          16.6,
+          16.7
+        ],
+        "scrollFrameP50": 16.7,
+        "scrollFrameP95": 33.4,
+        "scrollJankFrames": 17,
+        "scrollFinalDistanceFromBottom": 0,
+        "raw": {
+          "navigationTiming": {
+            "responseStart": 102.5,
+            "domContentLoadedEventEnd": 448.40000000596046,
+            "loadEventEnd": 452.2000000178814,
+            "domInteractive": 131.60000002384186,
+            "transferSize": 4077,
+            "encodedBodySize": 3777,
+            "decodedBodySize": 3777
+          },
+          "paintTiming": {
+            "paints": [
+              {
+                "name": "first-paint",
+                "startTime": 144
+              },
+              {
+                "name": "first-contentful-paint",
+                "startTime": 576
+              }
+            ],
+            "lcp": null
+          },
+          "longTasks": [
+            {
+              "start": 146.5,
+              "duration": 59,
+              "name": "self"
+            },
+            {
+              "start": 220.9,
+              "duration": 227,
+              "name": "self"
+            },
+            {
+              "start": 452.4,
+              "duration": 88,
+              "name": "self"
+            },
+            {
+              "start": 823.2,
+              "duration": 184,
+              "name": "self"
+            },
+            {
+              "start": 1142,
+              "duration": 3567,
+              "name": "self"
+            },
+            {
+              "start": 4709.1,
+              "duration": 2817,
+              "name": "self"
+            },
+            {
+              "start": 9430.2,
+              "duration": 258,
+              "name": "self"
+            }
+          ],
+          "frameIntervals": [
+            16.7,
+            83.4,
+            6366.4,
+            49.9,
+            16.7,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.6,
+            16.8,
+            16.5,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.8,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.6,
+            16.7,
+            16.7,
+            4066.6,
+            83.3,
+            16.6,
+            16.6,
+            16.8,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            1000,
+            516.6,
+            16.7
+          ],
+          "commitTimes": [
+            524.2,
+            540.2,
+            972.3,
+            1006.8,
+            1007.2,
+            1016.3,
+            1036.9,
+            1051.1,
+            1066.1,
+            1085.6,
+            4709.1
+          ],
+          "heapSamples": [
+            {
+              "t": 9703.2,
+              "usedJSHeapSize": 72200000,
+              "totalJSHeapSize": 148000000
+            }
+          ],
+          "domNodeSamples": [
+            {
+              "t": 9710.1,
+              "nodes": 127241
+            }
+          ],
+          "scrollFrameGaps": [
+            83.4,
+            6416.3,
+            33.4,
+            16.7,
+            16.7,
+            33.2,
+            16.8,
+            16.5,
+            33.4,
+            16.7,
+            33.3,
+            16.6,
+            33.4,
+            16.7,
+            33.3,
+            16.6,
+            33.4,
+            16.7,
+            33.3,
+            16.7,
+            16.7,
+            33.3,
+            16.6,
+            16.7,
+            16.7,
+            33.3,
+            16.6,
+            33.4,
+            16.6,
+            16.7,
+            16.7,
+            33.3,
+            16.7,
+            33.3,
+            33.4,
+            16.7,
+            33.3,
+            16.6,
+            16.6,
+            16.7
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            }
+          ]
+        },
+        "run": 1
+      },
+      {
+        "messageCount": 5000,
+        "firstInteractiveMs": 10008,
+        "domContentLoadedMs": 199.80000001192093,
+        "loadEventMs": 201.90000000596046,
+        "fcpMs": 1844,
+        "lcpMs": null,
+        "mountCommits": 13,
+        "scrollCommits": 3,
+        "longTaskCount": 4,
+        "longTaskTotalMs": 8549,
+        "longTaskMaxMs": 5793,
+        "totalDomNodes": 127241,
+        "transcriptDescendants": 126744,
+        "messageRows": 5000,
+        "domNodesPerMessage": 25.3,
+        "heapAfterMountBytes": 72200000,
+        "scrollFrameGaps": [
+          83.2,
+          4799.9,
+          283.3,
+          283.3,
+          283.3,
+          100.1,
+          166.6,
+          133.4,
+          33.3,
+          50,
+          83.3,
+          33.3,
+          50,
+          116.7,
+          50,
+          33.3,
+          83.3,
+          150.1,
+          66.6,
+          383.3,
+          66.7,
+          33.3,
+          50,
+          83.3,
+          50.1,
+          66.6,
+          50,
+          83.3,
+          216.6,
+          116.7,
+          83.3,
+          100.1,
+          99.9,
+          66.8,
+          33.2,
+          16.7,
+          16.7,
+          33.3,
+          16.7,
+          33.3
+        ],
+        "scrollFrameP50": 66.8,
+        "scrollFrameP95": 283.3,
+        "scrollJankFrames": 37,
+        "scrollFinalDistanceFromBottom": 0,
+        "raw": {
+          "navigationTiming": {
+            "responseStart": 9.400000005960464,
+            "domContentLoadedEventEnd": 199.80000001192093,
+            "loadEventEnd": 201.90000000596046,
+            "domInteractive": 134.09999999403954,
+            "transferSize": 4077,
+            "encodedBodySize": 3777,
+            "decodedBodySize": 3777
+          },
+          "paintTiming": {
+            "paints": [
+              {
+                "name": "first-paint",
+                "startTime": 124
+              },
+              {
+                "name": "first-contentful-paint",
+                "startTime": 1844
+              }
+            ],
+            "lcp": null
+          },
+          "longTasks": [
+            {
+              "start": 134.1,
+              "duration": 67,
+              "name": "self"
+            },
+            {
+              "start": 1326.8,
+              "duration": 58,
+              "name": "self"
+            },
+            {
+              "start": 1446.1,
+              "duration": 5793,
+              "name": "self"
+            },
+            {
+              "start": 7239.5,
+              "duration": 2631,
+              "name": "self"
+            }
+          ],
+          "frameIntervals": [
+            16.7,
+            83.2,
+            4666.6,
+            133.3,
+            266.6,
+            16.7,
+            200,
+            83.3,
+            250,
+            33.3,
+            66.8,
+            33.3,
+            166.6,
+            100,
+            33.4,
+            16.6,
+            16.7,
+            33.3,
+            16.7,
+            66.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            33.3,
+            100,
+            16.7,
+            33.3,
+            16.7,
+            16.6,
+            16.7,
+            66.6,
+            16.7,
+            116.7,
+            33.4,
+            50,
+            16.6,
+            366.7,
+            16.6,
+            50,
+            16.7,
+            16.6,
+            16.7,
+            33.4,
+            16.6,
+            66.7,
+            16.6,
+            33.4,
+            16.7,
+            33.3,
+            33.3,
+            33.4,
+            16.6,
+            33.3,
+            50,
+            200,
+            16.6,
+            100.1,
+            16.6,
+            66.7,
+            16.6,
+            83.4,
+            16.7,
+            83.3,
+            16.6,
+            33.4,
+            33.4,
+            33.2,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            3583.1,
+            50.1,
+            16.7,
+            133.2,
+            16.8,
+            16.6
+          ],
+          "commitTimes": [
+            237,
+            240.1,
+            1235.1,
+            1359.8,
+            1382.1,
+            1385.1,
+            1395.5,
+            1400.2,
+            1406.2,
+            1420.1,
+            7239.5,
+            9997.5,
+            10002.1
+          ],
+          "heapSamples": [
+            {
+              "t": 10111.9,
+              "usedJSHeapSize": 72200000,
+              "totalJSHeapSize": 148000000
+            }
+          ],
+          "domNodeSamples": [
+            {
+              "t": 10136.3,
+              "nodes": 127241
+            }
+          ],
+          "scrollFrameGaps": [
+            83.2,
+            4799.9,
+            283.3,
+            283.3,
+            283.3,
+            100.1,
+            166.6,
+            133.4,
+            33.3,
+            50,
+            83.3,
+            33.3,
+            50,
+            116.7,
+            50,
+            33.3,
+            83.3,
+            150.1,
+            66.6,
+            383.3,
+            66.7,
+            33.3,
+            50,
+            83.3,
+            50.1,
+            66.6,
+            50,
+            83.3,
+            216.6,
+            116.7,
+            83.3,
+            100.1,
+            99.9,
+            66.8,
+            33.2,
+            16.7,
+            16.7,
+            33.3,
+            16.7,
+            33.3
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            }
+          ]
+        },
+        "run": 2
+      }
+    ],
+    "summaryBySize": [
+      {
+        "messageCount": 200,
+        "runs": 3,
+        "firstInteractiveMs": {
+          "count": 3,
+          "min": 868,
+          "max": 2813,
+          "mean": 1702.67,
+          "p50": 1427,
+          "p95": 2813,
+          "p99": 2813,
+          "stdev": 817.62,
+          "raw": [
+            2813,
+            868,
+            1427
+          ]
+        },
+        "firstInteractiveP95": 2813,
+        "mountCommits": {
+          "count": 3,
+          "min": 10,
+          "max": 13,
+          "mean": 12,
+          "p50": 13,
+          "p95": 13,
+          "p99": 13,
+          "stdev": 1.41,
+          "raw": [
+            13,
+            10,
+            13
+          ]
+        },
+        "longTaskCount": {
+          "count": 3,
+          "min": 2,
+          "max": 5,
+          "mean": 3.67,
+          "p50": 4,
+          "p95": 5,
+          "p99": 5,
+          "stdev": 1.25,
+          "raw": [
+            5,
+            4,
+            2
+          ]
+        },
+        "longTaskTotalMs": {
+          "count": 3,
+          "min": 212,
+          "max": 2522,
+          "mean": 1114,
+          "p50": 608,
+          "p95": 2522,
+          "p99": 2522,
+          "stdev": 1008.65,
+          "raw": [
+            2522,
+            608,
+            212
+          ]
+        },
+        "longTaskMaxMs": [
+          2122,
+          322,
+          159
+        ],
+        "totalDomNodes": 5564,
+        "domNodesPerMessage": 25.3,
+        "scrollFrameP95": {
+          "count": 3,
+          "min": 16.8,
+          "max": 33.4,
+          "mean": 27.87,
+          "p50": 33.4,
+          "p95": 33.4,
+          "p99": 33.4,
+          "stdev": 7.83,
+          "raw": [
+            16.8,
+            33.4,
+            33.4
+          ]
+        },
+        "scrollJankFrames": [
+          2,
+          14,
+          18
+        ],
+        "heapAfterMountBytes": [
+          10600000,
+          16100000,
+          10600000
+        ]
+      },
+      {
+        "messageCount": 1000,
+        "runs": 3,
+        "firstInteractiveMs": {
+          "count": 3,
+          "min": 1305,
+          "max": 1838,
+          "mean": 1574,
+          "p50": 1579,
+          "p95": 1838,
+          "p99": 1838,
+          "stdev": 217.63,
+          "raw": [
+            1579,
+            1305,
+            1838
+          ]
+        },
+        "firstInteractiveP95": 1838,
+        "mountCommits": {
+          "count": 3,
+          "min": 11,
+          "max": 13,
+          "mean": 11.67,
+          "p50": 11,
+          "p95": 13,
+          "p99": 13,
+          "stdev": 0.94,
+          "raw": [
+            13,
+            11,
+            11
+          ]
+        },
+        "longTaskCount": {
+          "count": 3,
+          "min": 2,
+          "max": 4,
+          "mean": 3,
+          "p50": 3,
+          "p95": 4,
+          "p99": 4,
+          "stdev": 0.82,
+          "raw": [
+            2,
+            3,
+            4
+          ]
+        },
+        "longTaskTotalMs": {
+          "count": 3,
+          "min": 958,
+          "max": 1849,
+          "mean": 1323.67,
+          "p50": 1164,
+          "p95": 1849,
+          "p99": 1849,
+          "stdev": 380.87,
+          "raw": [
+            958,
+            1164,
+            1849
+          ]
+        },
+        "longTaskMaxMs": [
+          603,
+          781,
+          1232
+        ],
+        "totalDomNodes": 25863,
+        "domNodesPerMessage": 25.3,
+        "scrollFrameP95": {
+          "count": 3,
+          "min": 33.4,
+          "max": 33.4,
+          "mean": 33.4,
+          "p50": 33.4,
+          "p95": 33.4,
+          "p99": 33.4,
+          "stdev": 0,
+          "raw": [
+            33.4,
+            33.4,
+            33.4
+          ]
+        },
+        "scrollJankFrames": [
+          19,
+          16,
+          5
+        ],
+        "heapAfterMountBytes": [
+          20500000,
+          21700000,
+          21700000
+        ]
+      },
+      {
+        "messageCount": 5000,
+        "runs": 3,
+        "firstInteractiveMs": {
+          "count": 3,
+          "min": 4806,
+          "max": 10008,
+          "mean": 7333.33,
+          "p50": 7186,
+          "p95": 10008,
+          "p99": 10008,
+          "stdev": 2126.26,
+          "raw": [
+            7186,
+            4806,
+            10008
+          ]
+        },
+        "firstInteractiveP95": 10008,
+        "mountCommits": {
+          "count": 3,
+          "min": 11,
+          "max": 13,
+          "mean": 11.67,
+          "p50": 11,
+          "p95": 13,
+          "p99": 13,
+          "stdev": 0.94,
+          "raw": [
+            11,
+            11,
+            13
+          ]
+        },
+        "longTaskCount": {
+          "count": 3,
+          "min": 3,
+          "max": 7,
+          "mean": 4.67,
+          "p50": 4,
+          "p95": 7,
+          "p99": 7,
+          "stdev": 1.7,
+          "raw": [
+            3,
+            7,
+            4
+          ]
+        },
+        "longTaskTotalMs": {
+          "count": 3,
+          "min": 6542,
+          "max": 8549,
+          "mean": 7430.33,
+          "p50": 7200,
+          "p95": 8549,
+          "p99": 8549,
+          "stdev": 835.39,
+          "raw": [
+            6542,
+            7200,
+            8549
+          ]
+        },
+        "longTaskMaxMs": [
+          3962,
+          3567,
+          5793
+        ],
+        "totalDomNodes": 127266,
+        "domNodesPerMessage": 25.3,
+        "scrollFrameP95": {
+          "count": 3,
+          "min": 33.4,
+          "max": 283.3,
+          "mean": 127.83,
+          "p50": 66.8,
+          "p95": 283.3,
+          "p99": 283.3,
+          "stdev": 110.77,
+          "raw": [
+            66.8,
+            33.4,
+            283.3
+          ]
+        },
+        "scrollJankFrames": [
+          25,
+          17,
+          37
+        ],
+        "heapAfterMountBytes": [
+          72200000,
+          72200000,
+          72200000
+        ]
+      }
+    ]
+  },
+  "streamingRenderBound": {
+    "description": "Hard requirement: React commits during a stream must stay below chunks/4.",
+    "boundRule": "streamCommits < chunks / 4",
+    "repeats": 3,
+    "host": {
+      "before": {
+        "model": "Intel(R) Xeon(R) Processor",
+        "logicalCpus": 2,
+        "memTotalBytes": 8352858112,
+        "loadAverage": [
+          6.67,
+          7.63,
+          8.3
+        ],
+        "cpuUtilizationPct": 8.63,
+        "capturedAt": "2026-09-26T14:49:01.357Z"
+      },
+      "after": {
+        "model": "Intel(R) Xeon(R) Processor",
+        "logicalCpus": 2,
+        "memTotalBytes": 8352858112,
+        "loadAverage": [
+          8.59,
+          8.07,
+          8.34
+        ],
+        "cpuUtilizationPct": 8.73,
+        "capturedAt": "2026-09-26T14:52:29.017Z"
+      },
+      "logicalCpus": 2,
+      "cpuModel": "Intel(R) Xeon(R) Processor",
+      "memTotalBytes": 8352858112,
+      "memTotalGiB": 7.78,
+      "loadAverageBefore": [
+        6.67,
+        7.63,
+        8.3
+      ],
+      "loadAverageAfter": [
+        8.59,
+        8.07,
+        8.34
+      ],
+      "loadAverage1mDelta": 1.92,
+      "cpuUtilizationPct": {
+        "before": 8.63,
+        "after": 8.73,
+        "mean": 8.68
+      },
+      "platform": "linux 6.6.116 x64"
+    },
+    "samples": [
+      {
+        "chunks": 60,
+        "delayMs": 50,
+        "framesWritten": 63,
+        "streamCommits": 23,
+        "requiredUpperBound": 15,
+        "passesBound": false,
+        "commitsPerChunk": 0.383,
+        "streamDurationMs": 3653,
+        "commitIntervals": [
+          62.3,
+          165.7,
+          47.8,
+          139,
+          149.2,
+          147.4,
+          137.4,
+          133.7,
+          189.8,
+          258.2,
+          322.8,
+          231,
+          170.7,
+          149.6,
+          175.2,
+          171.2,
+          202.3,
+          132.5,
+          128.7,
+          134.2,
+          154,
+          9.6
+        ],
+        "commitIntervalP50": 149.2,
+        "commitIntervalP95": 258.2,
+        "longTaskCount": 22,
+        "longTaskTotalMs": 2943,
+        "frameIntervals": [
+          16.7,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          300,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          166.8,
+          183.2,
+          150,
+          133.4,
+          133.4,
+          133.2,
+          200.1,
+          250,
+          349.9,
+          216.6,
+          150.1,
+          149.9,
+          200,
+          150,
+          50.1,
+          150,
+          133.2,
+          133.4,
+          133.3,
+          116.7,
+          33.3,
+          16.7,
+          33.3
+        ],
+        "frameP95": 300,
+        "idleFrameP50": 16.7,
+        "idleFrameP95": 16.7,
+        "heapAfterStreamBytes": 13400000,
+        "finalMessageRows": 202,
+        "streamTextRendered": true,
+        "raw": {
+          "commitTimes": [
+            1657.4,
+            1719.7,
+            1885.4,
+            1933.2,
+            2072.2,
+            2221.4,
+            2368.8,
+            2506.2,
+            2639.9,
+            2829.7,
+            3087.9,
+            3410.7,
+            3641.7,
+            3812.4,
+            3962,
+            4137.2,
+            4308.4,
+            4510.7,
+            4643.2,
+            4771.9,
+            4906.1,
+            5060.1,
+            5069.7
+          ],
+          "longTasks": [
+            {
+              "start": 1400.6,
+              "duration": 310,
+              "name": "self"
+            },
+            {
+              "start": 1759.8,
+              "duration": 166,
+              "name": "self"
+            },
+            {
+              "start": 1934.6,
+              "duration": 137,
+              "name": "self"
+            },
+            {
+              "start": 2114.1,
+              "duration": 107,
+              "name": "self"
+            },
+            {
+              "start": 2257.5,
+              "duration": 111,
+              "name": "self"
+            },
+            {
+              "start": 2404.7,
+              "duration": 101,
+              "name": "self"
+            },
+            {
+              "start": 2540.3,
+              "duration": 99,
+              "name": "self"
+            },
+            {
+              "start": 2673.7,
+              "duration": 156,
+              "name": "self"
+            },
+            {
+              "start": 2829.7,
+              "duration": 58,
+              "name": "self"
+            },
+            {
+              "start": 2888.7,
+              "duration": 199,
+              "name": "self"
+            },
+            {
+              "start": 3156.6,
+              "duration": 254,
+              "name": "self"
+            },
+            {
+              "start": 3410.7,
+              "duration": 69,
+              "name": "self"
+            },
+            {
+              "start": 3492.6,
+              "duration": 149,
+              "name": "self"
+            },
+            {
+              "start": 3694.6,
+              "duration": 117,
+              "name": "self"
+            },
+            {
+              "start": 3852.1,
+              "duration": 110,
+              "name": "self"
+            },
+            {
+              "start": 3999.7,
+              "duration": 137,
+              "name": "self"
+            },
+            {
+              "start": 4187.3,
+              "duration": 121,
+              "name": "self"
+            },
+            {
+              "start": 4376.4,
+              "duration": 134,
+              "name": "self"
+            },
+            {
+              "start": 4546.8,
+              "duration": 96,
+              "name": "self"
+            },
+            {
+              "start": 4677.1,
+              "duration": 94,
+              "name": "self"
+            },
+            {
+              "start": 4805.2,
+              "duration": 100,
+              "name": "self"
+            },
+            {
+              "start": 4941.3,
+              "duration": 118,
+              "name": "self"
+            }
+          ],
+          "frameIntervals": [
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            300,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            166.8,
+            183.2,
+            150,
+            133.4,
+            133.4,
+            133.2,
+            200.1,
+            250,
+            349.9,
+            216.6,
+            150.1,
+            149.9,
+            200,
+            150,
+            50.1,
+            150,
+            133.2,
+            133.4,
+            133.3,
+            116.7,
+            33.3,
+            16.7,
+            33.3
+          ],
+          "heapSamples": [
+            {
+              "t": 5139.2,
+              "usedJSHeapSize": 13400000,
+              "totalJSHeapSize": 103000000
+            }
+          ],
+          "domNodeSamples": [
+            {
+              "t": 5139.5,
+              "nodes": 5632
+            }
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions/perf-session-1/chat"
+            }
+          ]
+        },
+        "run": 0
+      },
+      {
+        "chunks": 60,
+        "delayMs": 50,
+        "framesWritten": 63,
+        "streamCommits": 20,
+        "requiredUpperBound": 15,
+        "passesBound": false,
+        "commitsPerChunk": 0.333,
+        "streamDurationMs": 3697,
+        "commitIntervals": [
+          45,
+          202,
+          47.2,
+          224.8,
+          382.3,
+          327.6,
+          241.6,
+          332,
+          216.6,
+          193.6,
+          146,
+          198.2,
+          190.9,
+          173.5,
+          146.6,
+          154.5,
+          183.2,
+          200.3,
+          9.6
+        ],
+        "commitIntervalP50": 193.6,
+        "commitIntervalP95": 382.3,
+        "longTaskCount": 23,
+        "longTaskTotalMs": 3388,
+        "frameIntervals": [
+          16.6,
+          16.7,
+          16.6,
+          16.8,
+          16.6,
+          16.6,
+          16.7,
+          233.3,
+          16.8,
+          16.6,
+          16.6,
+          16.7,
+          200,
+          416.6,
+          300.1,
+          249.9,
+          266.7,
+          333.4,
+          199.9,
+          166.7,
+          149.9,
+          216.7,
+          166.7,
+          183.4,
+          133.2,
+          183.3,
+          166.7,
+          166.7,
+          16.7,
+          16.6
+        ],
+        "frameP95": 333.4,
+        "idleFrameP50": 16.7,
+        "idleFrameP95": 16.8,
+        "heapAfterStreamBytes": 53500000,
+        "finalMessageRows": 202,
+        "streamTextRendered": true,
+        "raw": {
+          "commitTimes": [
+            1521.7,
+            1566.7,
+            1768.7,
+            1815.9,
+            2040.7,
+            2423,
+            2750.6,
+            2992.2,
+            3324.2,
+            3540.8,
+            3734.4,
+            3880.4,
+            4078.6,
+            4269.5,
+            4443,
+            4589.6,
+            4744.1,
+            4927.3,
+            5127.6,
+            5137.2
+          ],
+          "longTasks": [
+            {
+              "start": 1315.4,
+              "duration": 243,
+              "name": "self"
+            },
+            {
+              "start": 1614.6,
+              "duration": 194,
+              "name": "self"
+            },
+            {
+              "start": 1818.6,
+              "duration": 222,
+              "name": "self"
+            },
+            {
+              "start": 2084.8,
+              "duration": 338,
+              "name": "self"
+            },
+            {
+              "start": 2423.2,
+              "duration": 112,
+              "name": "self"
+            },
+            {
+              "start": 2537.1,
+              "duration": 213,
+              "name": "self"
+            },
+            {
+              "start": 2750.7,
+              "duration": 58,
+              "name": "self"
+            },
+            {
+              "start": 2810.1,
+              "duration": 182,
+              "name": "self"
+            },
+            {
+              "start": 2992.3,
+              "duration": 100,
+              "name": "self"
+            },
+            {
+              "start": 3093.6,
+              "duration": 230,
+              "name": "self"
+            },
+            {
+              "start": 3324.2,
+              "duration": 88,
+              "name": "self"
+            },
+            {
+              "start": 3413.9,
+              "duration": 127,
+              "name": "self"
+            },
+            {
+              "start": 3540.9,
+              "duration": 55,
+              "name": "self"
+            },
+            {
+              "start": 3596.8,
+              "duration": 137,
+              "name": "self"
+            },
+            {
+              "start": 3767.2,
+              "duration": 113,
+              "name": "self"
+            },
+            {
+              "start": 3927.8,
+              "duration": 150,
+              "name": "self"
+            },
+            {
+              "start": 4128.4,
+              "duration": 141,
+              "name": "self"
+            },
+            {
+              "start": 4307.7,
+              "duration": 135,
+              "name": "self"
+            },
+            {
+              "start": 4487.5,
+              "duration": 102,
+              "name": "self"
+            },
+            {
+              "start": 4625.3,
+              "duration": 118,
+              "name": "self"
+            },
+            {
+              "start": 4744.1,
+              "duration": 55,
+              "name": "self"
+            },
+            {
+              "start": 4800,
+              "duration": 127,
+              "name": "self"
+            },
+            {
+              "start": 4979,
+              "duration": 148,
+              "name": "self"
+            }
+          ],
+          "frameIntervals": [
+            16.6,
+            16.7,
+            16.6,
+            16.8,
+            16.6,
+            16.6,
+            16.7,
+            233.3,
+            16.8,
+            16.6,
+            16.6,
+            16.7,
+            200,
+            416.6,
+            300.1,
+            249.9,
+            266.7,
+            333.4,
+            199.9,
+            166.7,
+            149.9,
+            216.7,
+            166.7,
+            183.4,
+            133.2,
+            183.3,
+            166.7,
+            166.7,
+            16.7,
+            16.6
+          ],
+          "heapSamples": [
+            {
+              "t": 5161.7,
+              "usedJSHeapSize": 53500000,
+              "totalJSHeapSize": 103000000
+            }
+          ],
+          "domNodeSamples": [
+            {
+              "t": 5161.9,
+              "nodes": 5607
+            }
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions/perf-session-1/chat"
+            }
+          ]
+        },
+        "run": 1
+      },
+      {
+        "chunks": 60,
+        "delayMs": 50,
+        "framesWritten": 63,
+        "streamCommits": 19,
+        "requiredUpperBound": 15,
+        "passesBound": false,
+        "commitsPerChunk": 0.317,
+        "streamDurationMs": 3662,
+        "commitIntervals": [
+          53.4,
+          266.3,
+          106.4,
+          343.9,
+          471.7,
+          350.1,
+          137,
+          139.9,
+          218.7,
+          201.2,
+          261.2,
+          159.9,
+          170,
+          151,
+          131.7,
+          141.9,
+          168.1,
+          10.7
+        ],
+        "commitIntervalP50": 159.9,
+        "commitIntervalP95": 471.7,
+        "longTaskCount": 21,
+        "longTaskTotalMs": 3272,
+        "frameIntervals": [
+          16.7,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          283.3,
+          16.6,
+          16.7,
+          16.7,
+          16.7,
+          316.6,
+          483.3,
+          16.7,
+          450,
+          250,
+          133.3,
+          150,
+          233.4,
+          199.9,
+          16.7,
+          233.4,
+          149.9,
+          183.3,
+          133.3,
+          133.4,
+          150,
+          133.3,
+          16.7,
+          16.7
+        ],
+        "frameP95": 450,
+        "idleFrameP50": 16.7,
+        "idleFrameP95": 16.7,
+        "heapAfterStreamBytes": 47400000,
+        "finalMessageRows": 202,
+        "streamTextRendered": true,
+        "raw": {
+          "commitTimes": [
+            1375.7,
+            1429.1,
+            1695.4,
+            1801.8,
+            2145.7,
+            2617.4,
+            2967.5,
+            3104.5,
+            3244.4,
+            3463.1,
+            3664.3,
+            3925.5,
+            4085.4,
+            4255.4,
+            4406.4,
+            4538.1,
+            4680,
+            4848.1,
+            4858.8
+          ],
+          "longTasks": [
+            {
+              "start": 1121.4,
+              "duration": 296,
+              "name": "self"
+            },
+            {
+              "start": 1472.8,
+              "duration": 290,
+              "name": "self"
+            },
+            {
+              "start": 1802.5,
+              "duration": 343,
+              "name": "self"
+            },
+            {
+              "start": 2145.8,
+              "duration": 131,
+              "name": "self"
+            },
+            {
+              "start": 2295.3,
+              "duration": 322,
+              "name": "self"
+            },
+            {
+              "start": 2617.5,
+              "duration": 136,
+              "name": "self"
+            },
+            {
+              "start": 2755.1,
+              "duration": 212,
+              "name": "self"
+            },
+            {
+              "start": 3003.2,
+              "duration": 101,
+              "name": "self"
+            },
+            {
+              "start": 3138.1,
+              "duration": 106,
+              "name": "self"
+            },
+            {
+              "start": 3289.3,
+              "duration": 173,
+              "name": "self"
+            },
+            {
+              "start": 3463.2,
+              "duration": 60,
+              "name": "self"
+            },
+            {
+              "start": 3524.1,
+              "duration": 140,
+              "name": "self"
+            },
+            {
+              "start": 3664.4,
+              "duration": 57,
+              "name": "self"
+            },
+            {
+              "start": 3744.2,
+              "duration": 181,
+              "name": "self"
+            },
+            {
+              "start": 3925.5,
+              "duration": 51,
+              "name": "self"
+            },
+            {
+              "start": 3976.9,
+              "duration": 108,
+              "name": "self"
+            },
+            {
+              "start": 4121.7,
+              "duration": 133,
+              "name": "self"
+            },
+            {
+              "start": 4302.3,
+              "duration": 104,
+              "name": "self"
+            },
+            {
+              "start": 4441.8,
+              "duration": 96,
+              "name": "self"
+            },
+            {
+              "start": 4574.3,
+              "duration": 105,
+              "name": "self"
+            },
+            {
+              "start": 4721.2,
+              "duration": 127,
+              "name": "self"
+            }
+          ],
+          "frameIntervals": [
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            283.3,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            316.6,
+            483.3,
+            16.7,
+            450,
+            250,
+            133.3,
+            150,
+            233.4,
+            199.9,
+            16.7,
+            233.4,
+            149.9,
+            183.3,
+            133.3,
+            133.4,
+            150,
+            133.3,
+            16.7,
+            16.7
+          ],
+          "heapSamples": [
+            {
+              "t": 4886.9,
+              "usedJSHeapSize": 47400000,
+              "totalJSHeapSize": 103000000
+            }
+          ],
+          "domNodeSamples": [
+            {
+              "t": 4887.1,
+              "nodes": 5632
+            }
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions/perf-session-1/chat"
+            }
+          ]
+        },
+        "run": 2
+      },
+      {
+        "chunks": 200,
+        "delayMs": 16,
+        "framesWritten": 203,
+        "streamCommits": 22,
+        "requiredUpperBound": 50,
+        "passesBound": true,
+        "commitsPerChunk": 0.11,
+        "streamDurationMs": 4380,
+        "commitIntervals": [
+          164.6,
+          46.1,
+          336.5,
+          70.3,
+          371.7,
+          304.7,
+          267.8,
+          255.8,
+          175.9,
+          214.4,
+          227.5,
+          141,
+          141.1,
+          127.9,
+          135.5,
+          134.3,
+          131.7,
+          155.8,
+          157.4,
+          151.3,
+          185.1
+        ],
+        "commitIntervalP50": 157.4,
+        "commitIntervalP95": 336.5,
+        "longTaskCount": 26,
+        "longTaskTotalMs": 3400,
+        "frameIntervals": [
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          16.6,
+          16.7,
+          16.7,
+          16.7,
+          166.6,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          16.7,
+          16.6,
+          183.3,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          366.7,
+          416.6,
+          316.6,
+          16.6,
+          233.4,
+          250,
+          166.7,
+          250,
+          183.3,
+          133.3,
+          133.3,
+          133.4,
+          150,
+          116.6,
+          133.4,
+          166.6,
+          150,
+          150,
+          166.6,
+          16.7,
+          16.6,
+          16.7,
+          83.4
+        ],
+        "frameP95": 316.6,
+        "idleFrameP50": 16.7,
+        "idleFrameP95": 16.7,
+        "heapAfterStreamBytes": 13400000,
+        "finalMessageRows": 202,
+        "streamTextRendered": true,
+        "raw": {
+          "commitTimes": [
+            2013,
+            2177.6,
+            2223.7,
+            2560.2,
+            2630.5,
+            3002.2,
+            3306.9,
+            3574.7,
+            3830.5,
+            4006.4,
+            4220.8,
+            4448.3,
+            4589.3,
+            4730.4,
+            4858.3,
+            4993.8,
+            5128.1,
+            5259.8,
+            5415.6,
+            5573,
+            5724.3,
+            5909.4
+          ],
+          "longTasks": [
+            {
+              "start": 2034.3,
+              "duration": 173,
+              "name": "self"
+            },
+            {
+              "start": 2272.1,
+              "duration": 342,
+              "name": "self"
+            },
+            {
+              "start": 2631.3,
+              "duration": 370,
+              "name": "self"
+            },
+            {
+              "start": 3002.2,
+              "duration": 54,
+              "name": "self"
+            },
+            {
+              "start": 3061.5,
+              "duration": 245,
+              "name": "self"
+            },
+            {
+              "start": 3307,
+              "duration": 69,
+              "name": "self"
+            },
+            {
+              "start": 3396.1,
+              "duration": 178,
+              "name": "self"
+            },
+            {
+              "start": 3574.9,
+              "duration": 68,
+              "name": "self"
+            },
+            {
+              "start": 3643.7,
+              "duration": 55,
+              "name": "self"
+            },
+            {
+              "start": 3699.7,
+              "duration": 130,
+              "name": "self"
+            },
+            {
+              "start": 3830.6,
+              "duration": 54,
+              "name": "self"
+            },
+            {
+              "start": 3885.8,
+              "duration": 120,
+              "name": "self"
+            },
+            {
+              "start": 4006.5,
+              "duration": 62,
+              "name": "self"
+            },
+            {
+              "start": 4069.1,
+              "duration": 151,
+              "name": "self"
+            },
+            {
+              "start": 4220.9,
+              "duration": 84,
+              "name": "self"
+            },
+            {
+              "start": 4305.9,
+              "duration": 142,
+              "name": "self"
+            },
+            {
+              "start": 4481.6,
+              "duration": 107,
+              "name": "self"
+            },
+            {
+              "start": 4627.7,
+              "duration": 102,
+              "name": "self"
+            },
+            {
+              "start": 4761.7,
+              "duration": 96,
+              "name": "self"
+            },
+            {
+              "start": 4893.3,
+              "duration": 100,
+              "name": "self"
+            },
+            {
+              "start": 5029.1,
+              "duration": 99,
+              "name": "self"
+            },
+            {
+              "start": 5161.9,
+              "duration": 97,
+              "name": "self"
+            },
+            {
+              "start": 5293.9,
+              "duration": 121,
+              "name": "self"
+            },
+            {
+              "start": 5454.1,
+              "duration": 119,
+              "name": "self"
+            },
+            {
+              "start": 5610.6,
+              "duration": 113,
+              "name": "self"
+            },
+            {
+              "start": 5759.8,
+              "duration": 149,
+              "name": "self"
+            }
+          ],
+          "frameIntervals": [
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            166.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            183.3,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            366.7,
+            416.6,
+            316.6,
+            16.6,
+            233.4,
+            250,
+            166.7,
+            250,
+            183.3,
+            133.3,
+            133.3,
+            133.4,
+            150,
+            116.6,
+            133.4,
+            166.6,
+            150,
+            150,
+            166.6,
+            16.7,
+            16.6,
+            16.7,
+            83.4
+          ],
+          "heapSamples": [
+            {
+              "t": 6058.4,
+              "usedJSHeapSize": 13400000,
+              "totalJSHeapSize": 103000000
+            }
+          ],
+          "domNodeSamples": [
+            {
+              "t": 6058.7,
+              "nodes": 5632
+            }
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions/perf-session-1/chat"
+            }
+          ]
+        },
+        "run": 0
+      },
+      {
+        "chunks": 200,
+        "delayMs": 16,
+        "framesWritten": 203,
+        "streamCommits": 23,
+        "requiredUpperBound": 50,
+        "passesBound": true,
+        "commitsPerChunk": 0.115,
+        "streamDurationMs": 3918,
+        "commitIntervals": [
+          76.5,
+          350.2,
+          47.2,
+          243.9,
+          193.1,
+          540.2,
+          198.5,
+          224.3,
+          144.8,
+          200.3,
+          144,
+          139.6,
+          130.3,
+          130,
+          126.9,
+          130,
+          197,
+          136.4,
+          133,
+          226.5,
+          232.7,
+          12
+        ],
+        "commitIntervalP50": 144,
+        "commitIntervalP95": 350.2,
+        "longTaskCount": 24,
+        "longTaskTotalMs": 3539,
+        "frameIntervals": [
+          16.8,
+          16.6,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          283.3,
+          83.3,
+          16.6,
+          16.7,
+          16.7,
+          16.7,
+          266.7,
+          299.9,
+          466.6,
+          266.7,
+          166.7,
+          233.3,
+          166.7,
+          166.6,
+          150,
+          133.4,
+          133.3,
+          133.3,
+          116.7,
+          133.3,
+          200,
+          133.3,
+          133.4,
+          249.9,
+          183.3,
+          16.7,
+          16.7,
+          16.6
+        ],
+        "frameP95": 299.9,
+        "idleFrameP50": 16.7,
+        "idleFrameP95": 16.7,
+        "heapAfterStreamBytes": 13400000,
+        "finalMessageRows": 202,
+        "streamTextRendered": true,
+        "raw": {
+          "commitTimes": [
+            1163.5,
+            1240,
+            1590.2,
+            1637.4,
+            1881.3,
+            2074.4,
+            2614.6,
+            2813.1,
+            3037.4,
+            3182.2,
+            3382.5,
+            3526.5,
+            3666.1,
+            3796.4,
+            3926.4,
+            4053.3,
+            4183.3,
+            4380.3,
+            4516.7,
+            4649.7,
+            4876.2,
+            5108.9,
+            5120.9
+          ],
+          "longTasks": [
+            {
+              "start": 930,
+              "duration": 290,
+              "name": "self"
+            },
+            {
+              "start": 1366.2,
+              "duration": 266,
+              "name": "self"
+            },
+            {
+              "start": 1638.3,
+              "duration": 243,
+              "name": "self"
+            },
+            {
+              "start": 1928.9,
+              "duration": 145,
+              "name": "self"
+            },
+            {
+              "start": 2074.6,
+              "duration": 54,
+              "name": "self"
+            },
+            {
+              "start": 2129.9,
+              "duration": 484,
+              "name": "self"
+            },
+            {
+              "start": 2614.7,
+              "duration": 62,
+              "name": "self"
+            },
+            {
+              "start": 2678,
+              "duration": 135,
+              "name": "self"
+            },
+            {
+              "start": 2851.2,
+              "duration": 186,
+              "name": "self"
+            },
+            {
+              "start": 3073.8,
+              "duration": 108,
+              "name": "self"
+            },
+            {
+              "start": 3182.2,
+              "duration": 64,
+              "name": "self"
+            },
+            {
+              "start": 3247.5,
+              "duration": 135,
+              "name": "self"
+            },
+            {
+              "start": 3416,
+              "duration": 110,
+              "name": "self"
+            },
+            {
+              "start": 3564.4,
+              "duration": 101,
+              "name": "self"
+            },
+            {
+              "start": 3698.3,
+              "duration": 98,
+              "name": "self"
+            },
+            {
+              "start": 3831.8,
+              "duration": 94,
+              "name": "self"
+            },
+            {
+              "start": 3959.5,
+              "duration": 93,
+              "name": "self"
+            },
+            {
+              "start": 4085.4,
+              "duration": 98,
+              "name": "self"
+            },
+            {
+              "start": 4221.7,
+              "duration": 158,
+              "name": "self"
+            },
+            {
+              "start": 4416.1,
+              "duration": 100,
+              "name": "self"
+            },
+            {
+              "start": 4555.4,
+              "duration": 94,
+              "name": "self"
+            },
+            {
+              "start": 4684.4,
+              "duration": 191,
+              "name": "self"
+            },
+            {
+              "start": 4876.2,
+              "duration": 53,
+              "name": "self"
+            },
+            {
+              "start": 4931.6,
+              "duration": 177,
+              "name": "self"
+            }
+          ],
+          "frameIntervals": [
+            16.8,
+            16.6,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            283.3,
+            83.3,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            266.7,
+            299.9,
+            466.6,
+            266.7,
+            166.7,
+            233.3,
+            166.7,
+            166.6,
+            150,
+            133.4,
+            133.3,
+            133.3,
+            116.7,
+            133.3,
+            200,
+            133.3,
+            133.4,
+            249.9,
+            183.3,
+            16.7,
+            16.7,
+            16.6
+          ],
+          "heapSamples": [
+            {
+              "t": 5162.4,
+              "usedJSHeapSize": 13400000,
+              "totalJSHeapSize": 103000000
+            }
+          ],
+          "domNodeSamples": [
+            {
+              "t": 5162.6,
+              "nodes": 5632
+            }
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions/perf-session-1/chat"
+            }
+          ]
+        },
+        "run": 1
+      },
+      {
+        "chunks": 200,
+        "delayMs": 16,
+        "framesWritten": 203,
+        "streamCommits": 21,
+        "requiredUpperBound": 50,
+        "passesBound": true,
+        "commitsPerChunk": 0.105,
+        "streamDurationMs": 4491,
+        "commitIntervals": [
+          269.6,
+          46.8,
+          192.1,
+          39.4,
+          217.9,
+          160.4,
+          245.7,
+          229.8,
+          468.3,
+          263.1,
+          295.5,
+          214.1,
+          277.3,
+          401.1,
+          161,
+          195,
+          251.6,
+          221.4,
+          303.7,
+          43.9
+        ],
+        "commitIntervalP50": 221.4,
+        "commitIntervalP95": 401.1,
+        "longTaskCount": 22,
+        "longTaskTotalMs": 3862,
+        "frameIntervals": [
+          50,
+          33.3,
+          16.6,
+          16.7,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          33.3,
+          16.7,
+          16.7,
+          16.6,
+          16.7,
+          16.6,
+          16.7,
+          16.6,
+          266.7,
+          16.7,
+          16.6,
+          16.7,
+          16.7,
+          200,
+          16.6,
+          16.7,
+          16.7,
+          183.3,
+          166.6,
+          233.3,
+          283.4,
+          466.6,
+          283.4,
+          216.6,
+          233.3,
+          300,
+          366.7,
+          149.9,
+          200.1,
+          250,
+          266.6,
+          233.4,
+          50,
+          16.6
+        ],
+        "frameP95": 300,
+        "idleFrameP50": 16.7,
+        "idleFrameP95": 16.7,
+        "heapAfterStreamBytes": 56800000,
+        "finalMessageRows": 202,
+        "streamTextRendered": true,
+        "raw": {
+          "commitTimes": [
+            1238.6,
+            1508.2,
+            1555,
+            1747.1,
+            1786.5,
+            2004.4,
+            2164.8,
+            2410.5,
+            2640.3,
+            3108.6,
+            3371.7,
+            3667.2,
+            3881.3,
+            4158.6,
+            4559.7,
+            4720.7,
+            4915.7,
+            5167.3,
+            5388.7,
+            5692.4,
+            5736.3
+          ],
+          "longTasks": [
+            {
+              "start": 1268.8,
+              "duration": 275,
+              "name": "self"
+            },
+            {
+              "start": 1605.4,
+              "duration": 176,
+              "name": "self"
+            },
+            {
+              "start": 1847.8,
+              "duration": 156,
+              "name": "self"
+            },
+            {
+              "start": 2042.4,
+              "duration": 122,
+              "name": "self"
+            },
+            {
+              "start": 2210.1,
+              "duration": 200,
+              "name": "self"
+            },
+            {
+              "start": 2457.6,
+              "duration": 182,
+              "name": "self"
+            },
+            {
+              "start": 2640.4,
+              "duration": 92,
+              "name": "self"
+            },
+            {
+              "start": 2733.4,
+              "duration": 375,
+              "name": "self"
+            },
+            {
+              "start": 3108.7,
+              "duration": 97,
+              "name": "self"
+            },
+            {
+              "start": 3206.2,
+              "duration": 165,
+              "name": "self"
+            },
+            {
+              "start": 3371.8,
+              "duration": 113,
+              "name": "self"
+            },
+            {
+              "start": 3486.1,
+              "duration": 181,
+              "name": "self"
+            },
+            {
+              "start": 3713.7,
+              "duration": 167,
+              "name": "self"
+            },
+            {
+              "start": 3938.3,
+              "duration": 220,
+              "name": "self"
+            },
+            {
+              "start": 4158.7,
+              "duration": 84,
+              "name": "self"
+            },
+            {
+              "start": 4259.5,
+              "duration": 300,
+              "name": "self"
+            },
+            {
+              "start": 4602.4,
+              "duration": 118,
+              "name": "self"
+            },
+            {
+              "start": 4759.9,
+              "duration": 155,
+              "name": "self"
+            },
+            {
+              "start": 4954.8,
+              "duration": 212,
+              "name": "self"
+            },
+            {
+              "start": 5217.5,
+              "duration": 171,
+              "name": "self"
+            },
+            {
+              "start": 5388.8,
+              "duration": 82,
+              "name": "self"
+            },
+            {
+              "start": 5473.1,
+              "duration": 219,
+              "name": "self"
+            }
+          ],
+          "frameIntervals": [
+            50,
+            33.3,
+            16.6,
+            16.7,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            33.3,
+            16.7,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            16.7,
+            16.6,
+            266.7,
+            16.7,
+            16.6,
+            16.7,
+            16.7,
+            200,
+            16.6,
+            16.7,
+            16.7,
+            183.3,
+            166.6,
+            233.3,
+            283.4,
+            466.6,
+            283.4,
+            216.6,
+            233.3,
+            300,
+            366.7,
+            149.9,
+            200.1,
+            250,
+            266.6,
+            233.4,
+            50,
+            16.6
+          ],
+          "heapSamples": [
+            {
+              "t": 5770.9,
+              "usedJSHeapSize": 56800000,
+              "totalJSHeapSize": 103000000
+            }
+          ],
+          "domNodeSamples": [
+            {
+              "t": 5771.1,
+              "nodes": 5632
+            }
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions/perf-session-1/chat"
+            }
+          ]
+        },
+        "run": 2
+      }
+    ],
+    "verdict": [
+      {
+        "chunks": 60,
+        "delayMs": 50,
+        "runs": 3,
+        "streamCommits": {
+          "count": 3,
+          "min": 19,
+          "max": 23,
+          "mean": 20.67,
+          "p50": 20,
+          "p95": 23,
+          "p99": 23,
+          "stdev": 1.7,
+          "raw": [
+            23,
+            20,
+            19
+          ]
+        },
+        "requiredUpperBound": 15,
+        "passes": false,
+        "worstCommitsPerChunk": 0.383,
+        "commitsPerChunk": {
+          "count": 3,
+          "min": 19,
+          "max": 23,
+          "mean": 20.67,
+          "p50": 20,
+          "p95": 23,
+          "p99": 23,
+          "stdev": 1.7,
+          "raw": [
+            0.383,
+            0.333,
+            0.317
+          ]
+        },
+        "marginToBound": -8,
+        "longTaskTotalMs": [
+          2943,
+          3388,
+          3272
+        ],
+        "streamDurationMs": [
+          3653,
+          3697,
+          3662
+        ],
+        "frameP95": [
+          300,
+          333.4,
+          450
+        ],
+        "idleFrameP95": [
+          16.7,
+          16.8,
+          16.7
+        ],
+        "streamTextRendered": true
+      },
+      {
+        "chunks": 200,
+        "delayMs": 16,
+        "runs": 3,
+        "streamCommits": {
+          "count": 3,
+          "min": 21,
+          "max": 23,
+          "mean": 22,
+          "p50": 22,
+          "p95": 23,
+          "p99": 23,
+          "stdev": 0.82,
+          "raw": [
+            22,
+            23,
+            21
+          ]
+        },
+        "requiredUpperBound": 50,
+        "passes": true,
+        "worstCommitsPerChunk": 0.115,
+        "commitsPerChunk": {
+          "count": 3,
+          "min": 21,
+          "max": 23,
+          "mean": 22,
+          "p50": 22,
+          "p95": 23,
+          "p99": 23,
+          "stdev": 0.82,
+          "raw": [
+            0.11,
+            0.115,
+            0.105
+          ]
+        },
+        "marginToBound": 27,
+        "longTaskTotalMs": [
+          3400,
+          3539,
+          3862
+        ],
+        "streamDurationMs": [
+          4380,
+          3918,
+          4491
+        ],
+        "frameP95": [
+          316.6,
+          299.9,
+          300
+        ],
+        "idleFrameP95": [
+          16.7,
+          16.7,
+          16.7
+        ],
+        "streamTextRendered": true
+      }
+    ],
+    "allPass": false
+  },
+  "memoryAndLeak": {
+    "description": "Retained heap, DOM release and listener balance across mount/unmount cycles.",
+    "host": {
+      "before": {
+        "model": "Intel(R) Xeon(R) Processor",
+        "logicalCpus": 2,
+        "memTotalBytes": 8352858112,
+        "loadAverage": [
+          6.67,
+          7.63,
+          8.3
+        ],
+        "cpuUtilizationPct": 8.63,
+        "capturedAt": "2026-09-26T14:49:01.357Z"
+      },
+      "after": {
+        "model": "Intel(R) Xeon(R) Processor",
+        "logicalCpus": 2,
+        "memTotalBytes": 8352858112,
+        "loadAverage": [
+          8.59,
+          8.07,
+          8.34
+        ],
+        "cpuUtilizationPct": 8.73,
+        "capturedAt": "2026-09-26T14:52:29.017Z"
+      },
+      "logicalCpus": 2,
+      "cpuModel": "Intel(R) Xeon(R) Processor",
+      "memTotalBytes": 8352858112,
+      "memTotalGiB": 7.78,
+      "loadAverageBefore": [
+        6.67,
+        7.63,
+        8.3
+      ],
+      "loadAverageAfter": [
+        8.59,
+        8.07,
+        8.34
+      ],
+      "loadAverage1mDelta": 1.92,
+      "cpuUtilizationPct": {
+        "before": 8.63,
+        "after": 8.73,
+        "mean": 8.68
+      },
+      "platform": "linux 6.6.116 x64"
+    },
+    "sample": {
+      "historySize": 1000,
+      "cycleCount": 5,
+      "heapAfterMountBytes": [
+        19850544,
+        20086192,
+        20185788,
+        20346048,
+        20400928
+      ],
+      "domNodesAfterMount": [
+        25847,
+        25847,
+        25847,
+        25847,
+        25847
+      ],
+      "domNodesWhileUnmounted": [
+        430,
+        411,
+        430,
+        430,
+        411
+      ],
+      "heapRetainedGrowthBytes": 550384,
+      "heapRetainedGrowthMiB": 0.52,
+      "heapBytesPerMessage": 19851,
+      "watchedLiveListenerKeys": [
+        "window|resize",
+        "document|keydown",
+        "window|storage",
+        "window|focus",
+        "window|hashchange"
+      ],
+      "allLiveListenerKeys": [
+        "document|contextmenu",
+        "document|dblclick",
+        "document|keydown",
+        "document|mousedown",
+        "document|pointerdown",
+        "document|pointerleave",
+        "document|pointermove",
+        "document|pointerout",
+        "document|pointerup",
+        "document|selectionchange",
+        "dom:div|abort",
+        "dom:div|animationend",
+        "dom:div|animationiteration",
+        "dom:div|animationstart",
+        "dom:div|auxclick",
+        "dom:div|beforetoggle",
+        "dom:div|cancel",
+        "dom:div|canplay",
+        "dom:div|canplaythrough",
+        "dom:div|change",
+        "dom:div|click",
+        "dom:div|close",
+        "dom:div|compositionend",
+        "dom:div|compositionstart",
+        "dom:div|compositionupdate",
+        "dom:div|contextmenu",
+        "dom:div|copy",
+        "dom:div|cut",
+        "dom:div|dblclick",
+        "dom:div|drag",
+        "dom:div|dragend",
+        "dom:div|dragenter",
+        "dom:div|dragexit",
+        "dom:div|dragleave",
+        "dom:div|dragover",
+        "dom:div|dragstart",
+        "dom:div|drop",
+        "dom:div|durationchange",
+        "dom:div|emptied",
+        "dom:div|encrypted",
+        "dom:div|ended",
+        "dom:div|error",
+        "dom:div|focusin",
+        "dom:div|focusout",
+        "dom:div|gotpointercapture",
+        "dom:div|input",
+        "dom:div|invalid",
+        "dom:div|keydown",
+        "dom:div|keypress",
+        "dom:div|keyup",
+        "dom:div|load",
+        "dom:div|loadeddata",
+        "dom:div|loadedmetadata",
+        "dom:div|loadstart",
+        "dom:div|lostpointercapture",
+        "dom:div|mousedown",
+        "dom:div|mousemove",
+        "dom:div|mouseout",
+        "dom:div|mouseover",
+        "dom:div|mouseup",
+        "dom:div|paste",
+        "dom:div|pause",
+        "dom:div|play",
+        "dom:div|playing",
+        "dom:div|pointercancel",
+        "dom:div|pointerdown",
+        "dom:div|pointermove",
+        "dom:div|pointerout",
+        "dom:div|pointerover",
+        "dom:div|pointerup",
+        "dom:div|progress",
+        "dom:div|ratechange",
+        "dom:div|reset",
+        "dom:div|resize",
+        "dom:div|scroll",
+        "dom:div|scrollend",
+        "dom:div|seeked",
+        "dom:div|seeking",
+        "dom:div|stalled",
+        "dom:div|submit",
+        "dom:div|suspend",
+        "dom:div|textInput",
+        "dom:div|timeupdate",
+        "dom:div|toggle",
+        "dom:div|touchcancel",
+        "dom:div|touchend",
+        "dom:div|touchmove",
+        "dom:div|touchmove|capture",
+        "dom:div|touchstart",
+        "dom:div|touchstart|capture",
+        "dom:div|transitioncancel",
+        "dom:div|transitionend",
+        "dom:div|transitionrun",
+        "dom:div|transitionstart",
+        "dom:div|volumechange",
+        "dom:div|waiting",
+        "dom:div|wheel",
+        "dom:div|wheel|capture",
+        "dom:input|invalid",
+        "dom:select|invalid",
+        "dom:textarea|invalid",
+        "obj:MediaQueryList|change",
+        "window|__playwright_global_listeners_check__",
+        "window|auxclick|capture",
+        "window|click|capture",
+        "window|contextmenu|capture",
+        "window|dblclick|capture",
+        "window|focus",
+        "window|hashchange",
+        "window|load",
+        "window|mousedown|capture",
+        "window|mousemove|capture",
+        "window|mouseup|capture",
+        "window|pointerdown|capture",
+        "window|pointerup|capture",
+        "window|resize",
+        "window|storage",
+        "window|touchcancel|capture",
+        "window|touchend|capture",
+        "window|touchstart|capture"
+      ],
+      "listenerBalance": {
+        "window|load": 1,
+        "window|resize": 2,
+        "window|test": 0,
+        "dom:div|abort": 1,
+        "dom:div|auxclick": 4,
+        "dom:div|beforetoggle": 2,
+        "dom:div|cancel": 2,
+        "dom:div|canplay": 2,
+        "dom:div|canplaythrough": 2,
+        "dom:div|click": 4,
+        "dom:div|close": 2,
+        "dom:div|contextmenu": 4,
+        "dom:div|copy": 4,
+        "dom:div|cut": 4,
+        "dom:div|drag": 4,
+        "dom:div|dragend": 4,
+        "dom:div|dragenter": 4,
+        "dom:div|dragexit": 4,
+        "dom:div|dragleave": 4,
+        "dom:div|dragover": 4,
+        "dom:div|dragstart": 4,
+        "dom:div|drop": 4,
+        "dom:div|durationchange": 2,
+        "dom:div|emptied": 2,
+        "dom:div|encrypted": 2,
+        "dom:div|ended": 2,
+        "dom:div|error": 2,
+        "dom:div|gotpointercapture": 4,
+        "dom:div|input": 4,
+        "dom:div|invalid": 2,
+        "dom:div|keydown": 2,
+        "dom:div|keypress": 4,
+        "dom:div|keyup": 4,
+        "dom:div|load": 2,
+        "dom:div|loadeddata": 2,
+        "dom:div|loadedmetadata": 2,
+        "dom:div|loadstart": 2,
+        "dom:div|lostpointercapture": 4,
+        "dom:div|mousedown": 4,
+        "dom:div|mousemove": 4,
+        "dom:div|mouseout": 4,
+        "dom:div|mouseover": 4,
+        "dom:div|mouseup": 4,
+        "dom:div|paste": 4,
+        "dom:div|pause": 2,
+        "dom:div|play": 2,
+        "dom:div|playing": 2,
+        "dom:div|pointercancel": 4,
+        "dom:div|pointerdown": 4,
+        "dom:div|pointermove": 4,
+        "dom:div|pointerout": 4,
+        "dom:div|pointerover": 4,
+        "dom:div|pointerup": 4,
+        "dom:div|progress": 2,
+        "dom:div|ratechange": 2,
+        "dom:div|reset": 4,
+        "dom:div|resize": 2,
+        "dom:div|seeked": 2,
+        "dom:div|seeking": 2,
+        "dom:div|stalled": 2,
+        "dom:div|submit": 4,
+        "dom:div|suspend": 2,
+        "dom:div|timeupdate": 2,
+        "dom:div|touchcancel": 4,
+        "dom:div|touchend": 4,
+        "dom:div|touchstart": 2,
+        "dom:div|touchstart|capture": 2,
+        "dom:div|volumechange": 2,
+        "dom:div|scroll": 9,
+        "dom:div|toggle": 2,
+        "dom:div|touchmove": 2,
+        "dom:div|touchmove|capture": 2,
+        "dom:div|waiting": 2,
+        "dom:div|wheel": 2,
+        "dom:div|wheel|capture": 2,
+        "dom:div|scrollend": 2,
+        "dom:div|animationend": 4,
+        "dom:div|animationiteration": 4,
+        "dom:div|animationstart": 4,
+        "dom:div|dblclick": 4,
+        "dom:div|focusin": 4,
+        "dom:div|focusout": 4,
+        "dom:div|transitionrun": 4,
+        "dom:div|transitionstart": 4,
+        "dom:div|transitioncancel": 4,
+        "dom:div|transitionend": 4,
+        "dom:div|change": 4,
+        "dom:div|compositionend": 4,
+        "dom:div|textInput": 4,
+        "dom:div|compositionstart": 4,
+        "dom:div|compositionupdate": 4,
+        "document|selectionchange": 1,
+        "document|mousedown": 1,
+        "obj:MediaQueryList|change": 1,
+        "document|keydown": 2,
+        "window|hashchange": 1,
+        "window|__playwright_global_listeners_check__": 1,
+        "window|mousemove|capture": 1,
+        "window|pointerdown|capture": 1,
+        "window|pointerup|capture": 1,
+        "window|touchstart|capture": 1,
+        "window|touchend|capture": 1,
+        "window|touchcancel|capture": 1,
+        "window|mousedown|capture": 1,
+        "window|mouseup|capture": 1,
+        "window|click|capture": 1,
+        "window|auxclick|capture": 1,
+        "window|dblclick|capture": 1,
+        "window|contextmenu|capture": 1,
+        "dom:select|invalid": 14,
+        "dom:textarea|invalid": 7,
+        "document|contextmenu": 1,
+        "document|dblclick": 1,
+        "document|pointerdown": 1,
+        "document|pointerleave": 1,
+        "document|pointermove": 1,
+        "document|pointerout": 1,
+        "document|pointerup": 1,
+        "window|storage": 1,
+        "window|focus": 1,
+        "dom:input|invalid": 15
+      },
+      "resizeObserversCreated": 12,
+      "resizeObserverCallbacks": 6,
+      "visualViewportInitial": {
+        "width": 1440,
+        "height": 900,
+        "offsetTop": 0,
+        "pageTop": 0
+      },
+      "longTaskCount": 18,
+      "heapUnavailable": null,
+      "raw": {
+        "heapSamples": [
+          {
+            "t": 6318.3,
+            "usedJSHeapSize": 21700000,
+            "totalJSHeapSize": 56800000
+          },
+          {
+            "t": 9331.1,
+            "usedJSHeapSize": 21700000,
+            "totalJSHeapSize": 56800000
+          },
+          {
+            "t": 11628.1,
+            "usedJSHeapSize": 21700000,
+            "totalJSHeapSize": 56800000
+          },
+          {
+            "t": 15819.3,
+            "usedJSHeapSize": 21700000,
+            "totalJSHeapSize": 56800000
+          },
+          {
+            "t": 18747.6,
+            "usedJSHeapSize": 21700000,
+            "totalJSHeapSize": 56800000
+          }
+        ],
+        "domNodeSamples": [
+          {
+            "t": 6318.9,
+            "nodes": 25847
+          },
+          {
+            "t": 9331.7,
+            "nodes": 25847
+          },
+          {
+            "t": 11628.8,
+            "nodes": 25847
+          },
+          {
+            "t": 15820.3,
+            "nodes": 25847
+          },
+          {
+            "t": 18748.1,
+            "nodes": 25847
+          }
+        ],
+        "longTasks": [
+          {
+            "start": 3532.3,
+            "duration": 50,
+            "name": "self"
+          },
+          {
+            "start": 3834.5,
+            "duration": 254,
+            "name": "self"
+          },
+          {
+            "start": 4088.8,
+            "duration": 59,
+            "name": "self"
+          },
+          {
+            "start": 5151.7,
+            "duration": 664,
+            "name": "self"
+          },
+          {
+            "start": 5815.8,
+            "duration": 443,
+            "name": "self"
+          },
+          {
+            "start": 6849,
+            "duration": 70,
+            "name": "self"
+          },
+          {
+            "start": 7322.4,
+            "duration": 1534,
+            "name": "self"
+          },
+          {
+            "start": 8856.7,
+            "duration": 397,
+            "name": "self"
+          },
+          {
+            "start": 10199.1,
+            "duration": 917,
+            "name": "self"
+          },
+          {
+            "start": 11116.2,
+            "duration": 359,
+            "name": "self"
+          },
+          {
+            "start": 11974.8,
+            "duration": 160,
+            "name": "self"
+          },
+          {
+            "start": 12389.5,
+            "duration": 181,
+            "name": "self"
+          },
+          {
+            "start": 14479.9,
+            "duration": 607,
+            "name": "self"
+          },
+          {
+            "start": 15087,
+            "duration": 289,
+            "name": "self"
+          },
+          {
+            "start": 16271.8,
+            "duration": 216,
+            "name": "self"
+          },
+          {
+            "start": 17714.4,
+            "duration": 606,
+            "name": "self"
+          },
+          {
+            "start": 18321,
+            "duration": 287,
+            "name": "self"
+          },
+          {
+            "start": 18611.4,
+            "duration": 88,
+            "name": "self"
+          }
+        ],
+        "commitTimes": [
+          3144.4,
+          3158.2,
+          3518.4,
+          3527.4,
+          3834.5,
+          4181.4,
+          4509.8,
+          4980.7,
+          5001.6,
+          5001.8,
+          5005.2,
+          5008.2,
+          5009.4,
+          5011.1,
+          5815.8,
+          6315.2,
+          6523.9,
+          6900.5,
+          6919.1,
+          7029.1,
+          7223.5,
+          7270.9,
+          7288,
+          7290,
+          7293.4,
+          7298.6,
+          7299.7,
+          7300.7,
+          8856.6,
+          9297.7,
+          9494.8,
+          9765.9,
+          9778.3,
+          9787.5,
+          9886,
+          10122.1,
+          10133.8,
+          10134,
+          10137.8,
+          10153.8,
+          10163.2,
+          10164.5,
+          10174.3,
+          10195.4,
+          11116.1,
+          12135.4,
+          12557.3,
+          12570.7,
+          12654.8,
+          12779.9,
+          13564.6,
+          13573,
+          13573.2,
+          13585.3,
+          14467.8,
+          14470.8,
+          14471.7,
+          14472.8,
+          15087,
+          16024,
+          16295.4,
+          16488.4,
+          16697.6,
+          16781.5,
+          17035.9,
+          17043.3,
+          17043.5,
+          17706,
+          17708.7,
+          17712.1,
+          18320.9,
+          18719.3
+        ],
+        "listenerCounts": {
+          "window|load": 1,
+          "window|resize": 2,
+          "window|test": 0,
+          "dom:div|abort": 1,
+          "dom:div|auxclick": 4,
+          "dom:div|beforetoggle": 2,
+          "dom:div|cancel": 2,
+          "dom:div|canplay": 2,
+          "dom:div|canplaythrough": 2,
+          "dom:div|click": 4,
+          "dom:div|close": 2,
+          "dom:div|contextmenu": 4,
+          "dom:div|copy": 4,
+          "dom:div|cut": 4,
+          "dom:div|drag": 4,
+          "dom:div|dragend": 4,
+          "dom:div|dragenter": 4,
+          "dom:div|dragexit": 4,
+          "dom:div|dragleave": 4,
+          "dom:div|dragover": 4,
+          "dom:div|dragstart": 4,
+          "dom:div|drop": 4,
+          "dom:div|durationchange": 2,
+          "dom:div|emptied": 2,
+          "dom:div|encrypted": 2,
+          "dom:div|ended": 2,
+          "dom:div|error": 2,
+          "dom:div|gotpointercapture": 4,
+          "dom:div|input": 4,
+          "dom:div|invalid": 2,
+          "dom:div|keydown": 2,
+          "dom:div|keypress": 4,
+          "dom:div|keyup": 4,
+          "dom:div|load": 2,
+          "dom:div|loadeddata": 2,
+          "dom:div|loadedmetadata": 2,
+          "dom:div|loadstart": 2,
+          "dom:div|lostpointercapture": 4,
+          "dom:div|mousedown": 4,
+          "dom:div|mousemove": 4,
+          "dom:div|mouseout": 4,
+          "dom:div|mouseover": 4,
+          "dom:div|mouseup": 4,
+          "dom:div|paste": 4,
+          "dom:div|pause": 2,
+          "dom:div|play": 2,
+          "dom:div|playing": 2,
+          "dom:div|pointercancel": 4,
+          "dom:div|pointerdown": 4,
+          "dom:div|pointermove": 4,
+          "dom:div|pointerout": 4,
+          "dom:div|pointerover": 4,
+          "dom:div|pointerup": 4,
+          "dom:div|progress": 2,
+          "dom:div|ratechange": 2,
+          "dom:div|reset": 4,
+          "dom:div|resize": 2,
+          "dom:div|seeked": 2,
+          "dom:div|seeking": 2,
+          "dom:div|stalled": 2,
+          "dom:div|submit": 4,
+          "dom:div|suspend": 2,
+          "dom:div|timeupdate": 2,
+          "dom:div|touchcancel": 4,
+          "dom:div|touchend": 4,
+          "dom:div|touchstart": 2,
+          "dom:div|touchstart|capture": 2,
+          "dom:div|volumechange": 2,
+          "dom:div|scroll": 9,
+          "dom:div|toggle": 2,
+          "dom:div|touchmove": 2,
+          "dom:div|touchmove|capture": 2,
+          "dom:div|waiting": 2,
+          "dom:div|wheel": 2,
+          "dom:div|wheel|capture": 2,
+          "dom:div|scrollend": 2,
+          "dom:div|animationend": 4,
+          "dom:div|animationiteration": 4,
+          "dom:div|animationstart": 4,
+          "dom:div|dblclick": 4,
+          "dom:div|focusin": 4,
+          "dom:div|focusout": 4,
+          "dom:div|transitionrun": 4,
+          "dom:div|transitionstart": 4,
+          "dom:div|transitioncancel": 4,
+          "dom:div|transitionend": 4,
+          "dom:div|change": 4,
+          "dom:div|compositionend": 4,
+          "dom:div|textInput": 4,
+          "dom:div|compositionstart": 4,
+          "dom:div|compositionupdate": 4,
+          "document|selectionchange": 1,
+          "document|mousedown": 1,
+          "obj:MediaQueryList|change": 1,
+          "document|keydown": 2,
+          "window|hashchange": 1,
+          "window|__playwright_global_listeners_check__": 1,
+          "window|mousemove|capture": 1,
+          "window|pointerdown|capture": 1,
+          "window|pointerup|capture": 1,
+          "window|touchstart|capture": 1,
+          "window|touchend|capture": 1,
+          "window|touchcancel|capture": 1,
+          "window|mousedown|capture": 1,
+          "window|mouseup|capture": 1,
+          "window|click|capture": 1,
+          "window|auxclick|capture": 1,
+          "window|dblclick|capture": 1,
+          "window|contextmenu|capture": 1,
+          "dom:select|invalid": 14,
+          "dom:textarea|invalid": 7,
+          "document|contextmenu": 1,
+          "document|dblclick": 1,
+          "document|pointerdown": 1,
+          "document|pointerleave": 1,
+          "document|pointermove": 1,
+          "document|pointerout": 1,
+          "document|pointerup": 1,
+          "window|storage": 1,
+          "window|focus": 1,
+          "dom:input|invalid": 15
+        },
+        "listenerBalance": {
+          "window|load": 1,
+          "window|resize": 2,
+          "window|test": 0,
+          "dom:div|abort": 1,
+          "dom:div|auxclick": 4,
+          "dom:div|beforetoggle": 2,
+          "dom:div|cancel": 2,
+          "dom:div|canplay": 2,
+          "dom:div|canplaythrough": 2,
+          "dom:div|click": 4,
+          "dom:div|close": 2,
+          "dom:div|contextmenu": 4,
+          "dom:div|copy": 4,
+          "dom:div|cut": 4,
+          "dom:div|drag": 4,
+          "dom:div|dragend": 4,
+          "dom:div|dragenter": 4,
+          "dom:div|dragexit": 4,
+          "dom:div|dragleave": 4,
+          "dom:div|dragover": 4,
+          "dom:div|dragstart": 4,
+          "dom:div|drop": 4,
+          "dom:div|durationchange": 2,
+          "dom:div|emptied": 2,
+          "dom:div|encrypted": 2,
+          "dom:div|ended": 2,
+          "dom:div|error": 2,
+          "dom:div|gotpointercapture": 4,
+          "dom:div|input": 4,
+          "dom:div|invalid": 2,
+          "dom:div|keydown": 2,
+          "dom:div|keypress": 4,
+          "dom:div|keyup": 4,
+          "dom:div|load": 2,
+          "dom:div|loadeddata": 2,
+          "dom:div|loadedmetadata": 2,
+          "dom:div|loadstart": 2,
+          "dom:div|lostpointercapture": 4,
+          "dom:div|mousedown": 4,
+          "dom:div|mousemove": 4,
+          "dom:div|mouseout": 4,
+          "dom:div|mouseover": 4,
+          "dom:div|mouseup": 4,
+          "dom:div|paste": 4,
+          "dom:div|pause": 2,
+          "dom:div|play": 2,
+          "dom:div|playing": 2,
+          "dom:div|pointercancel": 4,
+          "dom:div|pointerdown": 4,
+          "dom:div|pointermove": 4,
+          "dom:div|pointerout": 4,
+          "dom:div|pointerover": 4,
+          "dom:div|pointerup": 4,
+          "dom:div|progress": 2,
+          "dom:div|ratechange": 2,
+          "dom:div|reset": 4,
+          "dom:div|resize": 2,
+          "dom:div|seeked": 2,
+          "dom:div|seeking": 2,
+          "dom:div|stalled": 2,
+          "dom:div|submit": 4,
+          "dom:div|suspend": 2,
+          "dom:div|timeupdate": 2,
+          "dom:div|touchcancel": 4,
+          "dom:div|touchend": 4,
+          "dom:div|touchstart": 2,
+          "dom:div|touchstart|capture": 2,
+          "dom:div|volumechange": 2,
+          "dom:div|scroll": 9,
+          "dom:div|toggle": 2,
+          "dom:div|touchmove": 2,
+          "dom:div|touchmove|capture": 2,
+          "dom:div|waiting": 2,
+          "dom:div|wheel": 2,
+          "dom:div|wheel|capture": 2,
+          "dom:div|scrollend": 2,
+          "dom:div|animationend": 4,
+          "dom:div|animationiteration": 4,
+          "dom:div|animationstart": 4,
+          "dom:div|dblclick": 4,
+          "dom:div|focusin": 4,
+          "dom:div|focusout": 4,
+          "dom:div|transitionrun": 4,
+          "dom:div|transitionstart": 4,
+          "dom:div|transitioncancel": 4,
+          "dom:div|transitionend": 4,
+          "dom:div|change": 4,
+          "dom:div|compositionend": 4,
+          "dom:div|textInput": 4,
+          "dom:div|compositionstart": 4,
+          "dom:div|compositionupdate": 4,
+          "document|selectionchange": 1,
+          "document|mousedown": 1,
+          "obj:MediaQueryList|change": 1,
+          "document|keydown": 2,
+          "window|hashchange": 1,
+          "window|__playwright_global_listeners_check__": 1,
+          "window|mousemove|capture": 1,
+          "window|pointerdown|capture": 1,
+          "window|pointerup|capture": 1,
+          "window|touchstart|capture": 1,
+          "window|touchend|capture": 1,
+          "window|touchcancel|capture": 1,
+          "window|mousedown|capture": 1,
+          "window|mouseup|capture": 1,
+          "window|click|capture": 1,
+          "window|auxclick|capture": 1,
+          "window|dblclick|capture": 1,
+          "window|contextmenu|capture": 1,
+          "dom:select|invalid": 14,
+          "dom:textarea|invalid": 7,
+          "document|contextmenu": 1,
+          "document|dblclick": 1,
+          "document|pointerdown": 1,
+          "document|pointerleave": 1,
+          "document|pointermove": 1,
+          "document|pointerout": 1,
+          "document|pointerup": 1,
+          "window|storage": 1,
+          "window|focus": 1,
+          "dom:input|invalid": 15
+        }
+      }
+    }
+  },
+  "scrollStability": {
+    "description": "Jump-to-bottom exactness and streaming follow/hold behaviour.",
+    "repeats": 3,
+    "host": {
+      "before": {
+        "model": "Intel(R) Xeon(R) Processor",
+        "logicalCpus": 2,
+        "memTotalBytes": 8352858112,
+        "loadAverage": [
+          6.67,
+          7.63,
+          8.3
+        ],
+        "cpuUtilizationPct": 8.63,
+        "capturedAt": "2026-09-26T14:49:01.357Z"
+      },
+      "after": {
+        "model": "Intel(R) Xeon(R) Processor",
+        "logicalCpus": 2,
+        "memTotalBytes": 8352858112,
+        "loadAverage": [
+          8.59,
+          8.07,
+          8.34
+        ],
+        "cpuUtilizationPct": 8.73,
+        "capturedAt": "2026-09-26T14:52:29.017Z"
+      },
+      "logicalCpus": 2,
+      "cpuModel": "Intel(R) Xeon(R) Processor",
+      "memTotalBytes": 8352858112,
+      "memTotalGiB": 7.78,
+      "loadAverageBefore": [
+        6.67,
+        7.63,
+        8.3
+      ],
+      "loadAverageAfter": [
+        8.59,
+        8.07,
+        8.34
+      ],
+      "loadAverage1mDelta": 1.92,
+      "cpuUtilizationPct": {
+        "before": 8.63,
+        "after": 8.73,
+        "mean": 8.68
+      },
+      "platform": "linux 6.6.116 x64"
+    },
+    "runs": [
+      {
+        "historySize": 1000,
+        "jumpToBottomOffsets": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "jumpToBottomExact": true,
+        "roundTripOffsetAfterReturn": 0,
+        "followFrames": [
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242457,
+            "scrollHeight": 243182
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242457,
+            "scrollHeight": 243182
+          },
+          {
+            "distance": 90,
+            "scrollTop": 242457,
+            "scrollHeight": 243272
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242547,
+            "scrollHeight": 243272
+          },
+          {
+            "distance": 49,
+            "scrollTop": 242547,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 25,
+            "scrollTop": 242596,
+            "scrollHeight": 243346
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          }
+        ],
+        "followMaxDistanceFromBottom": 90,
+        "followStayedAtBottom": false,
+        "followStreamCommits": 9,
+        "holdFrames": [
+          {
+            "distance": 1200,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242819,
+            "scrollHeight": 243484
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242759,
+            "scrollHeight": 243484
+          },
+          {
+            "distance": 79,
+            "scrollTop": 242819,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          }
+        ],
+        "holdMaxViewportShiftPx": 1502,
+        "holdStayedPut": false,
+        "holdStreamCommits": 8,
+        "raw": {
+          "followFrames": [
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242457,
+              "scrollHeight": 243182
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242457,
+              "scrollHeight": 243182
+            },
+            {
+              "distance": 90,
+              "scrollTop": 242457,
+              "scrollHeight": 243272
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242547,
+              "scrollHeight": 243272
+            },
+            {
+              "distance": 49,
+              "scrollTop": 242547,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 25,
+              "scrollTop": 242596,
+              "scrollHeight": 243346
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            }
+          ],
+          "holdFrames": [
+            {
+              "distance": 1200,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242819,
+              "scrollHeight": 243484
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242759,
+              "scrollHeight": 243484
+            },
+            {
+              "distance": 79,
+              "scrollTop": 242819,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            }
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions/perf-session-1/chat"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions/perf-session-1/chat"
+            }
+          ]
+        },
+        "run": 0
+      },
+      {
+        "historySize": 1000,
+        "jumpToBottomOffsets": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "jumpToBottomExact": true,
+        "roundTripOffsetAfterReturn": 0,
+        "followFrames": [
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242457,
+            "scrollHeight": 243182
+          },
+          {
+            "distance": 90,
+            "scrollTop": 242457,
+            "scrollHeight": 243272
+          },
+          {
+            "distance": 25,
+            "scrollTop": 242547,
+            "scrollHeight": 243297
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242572,
+            "scrollHeight": 243297
+          },
+          {
+            "distance": 49,
+            "scrollTop": 242572,
+            "scrollHeight": 243346
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          }
+        ],
+        "followMaxDistanceFromBottom": 90,
+        "followStayedAtBottom": false,
+        "followStreamCommits": 9,
+        "holdFrames": [
+          {
+            "distance": 1200,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242819,
+            "scrollHeight": 243484
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242759,
+            "scrollHeight": 243484
+          },
+          {
+            "distance": 79,
+            "scrollTop": 242819,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          }
+        ],
+        "holdMaxViewportShiftPx": 1502,
+        "holdStayedPut": false,
+        "holdStreamCommits": 8,
+        "raw": {
+          "followFrames": [
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242457,
+              "scrollHeight": 243182
+            },
+            {
+              "distance": 90,
+              "scrollTop": 242457,
+              "scrollHeight": 243272
+            },
+            {
+              "distance": 25,
+              "scrollTop": 242547,
+              "scrollHeight": 243297
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242572,
+              "scrollHeight": 243297
+            },
+            {
+              "distance": 49,
+              "scrollTop": 242572,
+              "scrollHeight": 243346
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            }
+          ],
+          "holdFrames": [
+            {
+              "distance": 1200,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242819,
+              "scrollHeight": 243484
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242759,
+              "scrollHeight": 243484
+            },
+            {
+              "distance": 79,
+              "scrollTop": 242819,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            }
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions/perf-session-1/chat"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions/perf-session-1/chat"
+            }
+          ]
+        },
+        "run": 1
+      },
+      {
+        "historySize": 1000,
+        "jumpToBottomOffsets": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "jumpToBottomExact": true,
+        "roundTripOffsetAfterReturn": 0,
+        "followFrames": [
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242457,
+            "scrollHeight": 243182
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242457,
+            "scrollHeight": 243182
+          },
+          {
+            "distance": 90,
+            "scrollTop": 242457,
+            "scrollHeight": 243272
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242547,
+            "scrollHeight": 243272
+          },
+          {
+            "distance": 49,
+            "scrollTop": 242547,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          }
+        ],
+        "followMaxDistanceFromBottom": 90,
+        "followStayedAtBottom": false,
+        "followStreamCommits": 8,
+        "holdFrames": [
+          {
+            "distance": 1200,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242819,
+            "scrollHeight": 243484
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242759,
+            "scrollHeight": 243484
+          },
+          {
+            "distance": 79,
+            "scrollTop": 242819,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          }
+        ],
+        "holdMaxViewportShiftPx": 1502,
+        "holdStayedPut": false,
+        "holdStreamCommits": 8,
+        "raw": {
+          "followFrames": [
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242294,
+              "scrollHeight": 243019
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242457,
+              "scrollHeight": 243182
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242457,
+              "scrollHeight": 243182
+            },
+            {
+              "distance": 90,
+              "scrollTop": 242457,
+              "scrollHeight": 243272
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242547,
+              "scrollHeight": 243272
+            },
+            {
+              "distance": 49,
+              "scrollTop": 242547,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242596,
+              "scrollHeight": 243321
+            }
+          ],
+          "holdFrames": [
+            {
+              "distance": 1200,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 1260,
+              "scrollTop": 241396,
+              "scrollHeight": 243321
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242819,
+              "scrollHeight": 243484
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242759,
+              "scrollHeight": 243484
+            },
+            {
+              "distance": 79,
+              "scrollTop": 242819,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            },
+            {
+              "distance": 0,
+              "scrollTop": 242898,
+              "scrollHeight": 243623
+            }
+          ],
+          "apiRequests": [
+            {
+              "method": "GET",
+              "path": "/api/v1/permissions/config"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/auth/me"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/agents"
+            },
+            {
+              "method": "GET",
+              "path": "/api/v1/sessions/perf-session-1/messages"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions/perf-session-1/chat"
+            },
+            {
+              "method": "POST",
+              "path": "/api/v1/sessions/perf-session-1/chat"
+            }
+          ]
+        },
+        "run": 2
+      }
+    ],
+    "sample": {
+      "historySize": 1000,
+      "jumpToBottomOffsets": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "jumpToBottomExact": true,
+      "roundTripOffsetAfterReturn": 0,
+      "followFrames": [
+        {
+          "distance": 0,
+          "scrollTop": 242294,
+          "scrollHeight": 243019
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242294,
+          "scrollHeight": 243019
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242294,
+          "scrollHeight": 243019
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242457,
+          "scrollHeight": 243182
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242457,
+          "scrollHeight": 243182
+        },
+        {
+          "distance": 90,
+          "scrollTop": 242457,
+          "scrollHeight": 243272
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242547,
+          "scrollHeight": 243272
+        },
+        {
+          "distance": 49,
+          "scrollTop": 242547,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 25,
+          "scrollTop": 242596,
+          "scrollHeight": 243346
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242596,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242596,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242596,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242596,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242596,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242596,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242596,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242596,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242596,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242596,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242596,
+          "scrollHeight": 243321
+        }
+      ],
+      "followMaxDistanceFromBottom": 90,
+      "followStayedAtBottom": false,
+      "followStreamCommits": 9,
+      "holdFrames": [
+        {
+          "distance": 1200,
+          "scrollTop": 241396,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 1260,
+          "scrollTop": 241396,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 1260,
+          "scrollTop": 241396,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 1260,
+          "scrollTop": 241396,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 1260,
+          "scrollTop": 241396,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 1260,
+          "scrollTop": 241396,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 1260,
+          "scrollTop": 241396,
+          "scrollHeight": 243321
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242819,
+          "scrollHeight": 243484
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242759,
+          "scrollHeight": 243484
+        },
+        {
+          "distance": 79,
+          "scrollTop": 242819,
+          "scrollHeight": 243623
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242898,
+          "scrollHeight": 243623
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242898,
+          "scrollHeight": 243623
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242898,
+          "scrollHeight": 243623
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242898,
+          "scrollHeight": 243623
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242898,
+          "scrollHeight": 243623
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242898,
+          "scrollHeight": 243623
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242898,
+          "scrollHeight": 243623
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242898,
+          "scrollHeight": 243623
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242898,
+          "scrollHeight": 243623
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242898,
+          "scrollHeight": 243623
+        },
+        {
+          "distance": 0,
+          "scrollTop": 242898,
+          "scrollHeight": 243623
+        }
+      ],
+      "holdMaxViewportShiftPx": 1502,
+      "holdStayedPut": false,
+      "holdStreamCommits": 8,
+      "raw": {
+        "followFrames": [
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242294,
+            "scrollHeight": 243019
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242457,
+            "scrollHeight": 243182
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242457,
+            "scrollHeight": 243182
+          },
+          {
+            "distance": 90,
+            "scrollTop": 242457,
+            "scrollHeight": 243272
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242547,
+            "scrollHeight": 243272
+          },
+          {
+            "distance": 49,
+            "scrollTop": 242547,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 25,
+            "scrollTop": 242596,
+            "scrollHeight": 243346
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242596,
+            "scrollHeight": 243321
+          }
+        ],
+        "holdFrames": [
+          {
+            "distance": 1200,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 1260,
+            "scrollTop": 241396,
+            "scrollHeight": 243321
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242819,
+            "scrollHeight": 243484
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242759,
+            "scrollHeight": 243484
+          },
+          {
+            "distance": 79,
+            "scrollTop": 242819,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          },
+          {
+            "distance": 0,
+            "scrollTop": 242898,
+            "scrollHeight": 243623
+          }
+        ],
+        "apiRequests": [
+          {
+            "method": "GET",
+            "path": "/api/v1/permissions/config"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/auth/me"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/sessions"
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/sessions"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/agents"
+          },
+          {
+            "method": "GET",
+            "path": "/api/v1/sessions/perf-session-1/messages"
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/sessions/perf-session-1/chat"
+          },
+          {
+            "method": "POST",
+            "path": "/api/v1/sessions/perf-session-1/chat"
+          }
+        ]
+      },
+      "run": 0
+    },
+    "summary": {
+      "jumpToBottomExact": true,
+      "roundTripOffsets": [
+        0,
+        0,
+        0
+      ],
+      "followMaxDistanceFromBottom": [
+        90,
+        90,
+        90
+      ],
+      "followStayedAtBottom": false,
+      "holdMaxViewportShiftPx": {
+        "count": 3,
+        "min": 1502,
+        "max": 1502,
+        "mean": 1502,
+        "p50": 1502,
+        "p95": 1502,
+        "p99": 1502,
+        "stdev": 0,
+        "raw": [
+          1502,
+          1502,
+          1502
+        ]
+      },
+      "holdStayedPut": false
+    }
+  },
+  "completedAt": "2026-09-26T14:52:29.018Z"
+}
