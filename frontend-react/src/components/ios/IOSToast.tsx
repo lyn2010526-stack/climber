@@ -5,7 +5,7 @@ interface ToasterProps {
   theme?: 'light' | 'dark' | 'system';
 }
 
-export function IOsToaster({ position = 'top-center', theme = 'dark' }: ToasterProps) {
+export function IOsToaster({ position = 'top-center', theme = 'system' }: ToasterProps) {
   return (
     <SonnerToaster
       position={position}
@@ -15,11 +15,11 @@ export function IOsToaster({ position = 'top-center', theme = 'dark' }: ToasterP
           background: 'var(--color-bg-surface-2)',
           color: 'var(--color-text-primary)',
           border: '0.5px solid var(--color-border-default)',
-          borderRadius: '12px',
-          fontSize: '15px',
+          borderRadius: 'var(--radius-lg)',
+          fontSize: 'var(--text-sm)',
           fontWeight: 500,
-          padding: '14px 16px',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+          padding: 'var(--space-3) var(--space-4)',
+          boxShadow: 'var(--shadow-lg)',
         },
         duration: 3000,
       }}
@@ -30,33 +30,3 @@ export function IOsToaster({ position = 'top-center', theme = 'dark' }: ToasterP
 }
 
 export { toast };
-
-/* ─── iOS Skeleton Loader ─── */
-
-interface IOSSkeletonProps {
-  className?: string;
-  height?: number;
-  width?: number | string;
-  rounded?: 'sm' | 'md' | 'lg' | 'full';
-}
-
-const radiusMap = { sm: '4px', md: '8px', lg: '12px', full: '9999px' };
-
-export function IOSSkeleton({ className, height = 16, width = '100%', rounded = 'md' }: IOSSkeletonProps) {
-  return (
-    <div
-      className={`ios-skeleton ${className || ''}`}
-      style={{ height, width: typeof width === 'number' ? `${width}px` : width, borderRadius: radiusMap[rounded] }}
-    />
-  );
-}
-
-export function IOSSkeletonGroup({ count = 3, className }: { count?: number; className?: string }) {
-  return (
-    <div className={`space-y-3 ${className || ''}`}>
-      {Array.from({ length: count }, (_, i) => (
-        <IOSSkeleton key={i} height={20} width={i === count - 1 ? '70%' : '100%'} />
-      ))}
-    </div>
-  );
-}

@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, AlertTriangle, Activity, BarChart3, RefreshCw } from 'lucide-react';
+import { DollarSign, AlertTriangle, RefreshCw } from 'lucide-react';
 import { api } from '../api';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { Progress } from '../components/ui/Progress';
-import { SkeletonCard } from '../components/ui/Skeleton';
-import { EmptyState } from '../components/ui/EmptyState';
+import { useI18n } from '../i18n/utils';
+import { formatNumber } from '../i18n/utils';
 
 interface CostData {
   total_cost: number;
@@ -42,6 +41,7 @@ function BudgetBar({ label, current, limit, percent }: { label: string; current:
 }
 
 export default function CostPage() {
+  const { t } = useI18n();
   const [costData, setCostData] = useState<CostData | null>(null);
   const [budget, setBudget] = useState<BudgetData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,14 +51,19 @@ export default function CostPage() {
     setLoading(true);
     setError(null);
     try {
-      const [usageData, budgetData] = await Promise.all([
-        api.getCostUsage().catch(() => null),
-        api.getCostBudget().catch(() => null),
+      const [usageData, budgetData] = await Promise.allSettled([
+        api.getCostUsage(),
+        api.getCostBudget(),
       ]);
-      setCostData(usageData);
-      setBudget(budgetData);
-    } catch (e) {
-      setError('加载成本数据失败');
+      setCostData(usageData.status === 'fulfilled' ? usageData.value : null);
+      setBudget(budgetData.status === 'fulfilled' ? budgetData.value : null);
+      const failed = [
+        usageData.status === 'rejected' && t('cost.parts.usage'),
+        budgetData.status === 'rejected' && t('cost.parts.budget'),
+      ].filter(Boolean);
+      // One message naming every part that failed, so a half-loaded page never
+      // looks like a page that simply has no data for the missing half.
+      if (failed.length) setError(t('cost.load_failed', { parts: failed.join(t('cost.parts_separator')) }));
     } finally {
       setLoading(false);
     }
@@ -68,19 +73,19 @@ export default function CostPage() {
     fetchData();
   }, []);
 
-  const periodLabel = budget?.period === 'daily' ? '每日' : budget?.period === 'weekly' ? '每周' : '每月';
+  const periodKey = budget?.period === 'daily' ? 'daily' : budget?.period === 'weekly' ? 'weekly' : 'monthly';
+  const periodLabel = t(`cost.period.${periodKey}`);
   const budgetPercent = budget && budget.amount ? Math.min((budget.current_spend / budget.amount) * 100, 100) : 0;
 
   return (
     <div className="h-full overflow-y-auto page-transition">
-      <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto">
+      <div className="p-4 md:p-6 max-w-6xl mx-auto">
         <PageHeader
-          title="成本概览"
-          description="追踪 LLM 使用量和支出"
+          title={t('cost.title')}
           icon={<DollarSign size={20} />}
           actions={
-            <Button variant="ghost" size="icon" onClick={fetchData} loading={loading}>
-              <RefreshCw size={16} />
+            <Button variant="secondary" size="sm" onClick={fetchData} loading={loading} icon={<RefreshCw size={14} />}>
+              {t('common.refresh')}
             </Button>
           }
         />
@@ -90,111 +95,64 @@ export default function CostPage() {
             <CardContent className="p-4 flex items-center gap-3">
               <AlertTriangle size={18} className="text-[var(--color-warning)] shrink-0" />
               <p className="text-sm text-[var(--color-text-secondary)] flex-1">{error}</p>
-              <Button variant="outline" size="sm" onClick={fetchData}>重试</Button>
+              <Button variant="outline" size="sm" onClick={fetchData}>{t('common.retry')}</Button>
             </CardContent>
           </Card>
         )}
 
         {loading ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}
-            </div>
-            <SkeletonCard />
-          </div>
+          <p role="status" className="py-4 text-sm text-[var(--color-text-muted)]">{t('common.loading_data')}</p>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 stagger-children">
-              <Card variant="default" className="hover-lift">
-                <CardContent className="p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="p-2 rounded-lg bg-[var(--color-success)]/10 border border-[var(--color-success)]/20">
-                      <DollarSign size={16} className="text-[var(--color-success)]" />
-                    </div>
-                    <span className="text-xs text-[var(--color-text-muted)]">总成本</span>
-                  </div>
-                  <p className="text-2xl font-bold text-[var(--color-text-primary)]">
-                    ${costData?.total_cost?.toFixed(4) || '0.0000'}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card variant="default" className="hover-lift">
-                <CardContent className="p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="p-2 rounded-lg bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20">
-                      <Activity size={16} className="text-[var(--color-accent)]" />
-                    </div>
-                    <span className="text-xs text-[var(--color-text-muted)]">总 Token</span>
-                  </div>
-                  <p className="text-2xl font-bold text-[var(--color-text-primary)]">
-                    {costData?.total_tokens?.toLocaleString() || '0'}
-                  </p>
-                </CardContent>
-              </Card>
-              <Card variant="default" className="hover-lift">
-                <CardContent className="p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="p-2 rounded-lg bg-[var(--color-accent-secondary)]/10 border border-[var(--color-accent-secondary)]/20">
-                      <TrendingUp size={16} className="text-[var(--color-accent-secondary)]" />
-                    </div>
-                    <span className="text-xs text-[var(--color-text-muted)]">API 调用</span>
-                  </div>
-                  <p className="text-2xl font-bold text-[var(--color-text-primary)]">
-                    {costData?.total_calls?.toLocaleString() || '0'}
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
+            <dl className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-px overflow-hidden rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-border-subtle)]">
+              {[
+                [t('cost.totals.total_cost'), costData?.total_cost != null ? `$${costData.total_cost.toFixed(4)}` : '—'],
+                [t('cost.totals.total_tokens'), costData?.total_tokens != null ? formatNumber(costData.total_tokens) : '—'],
+                [t('cost.totals.total_calls'), costData?.total_calls != null ? formatNumber(costData.total_calls) : '—'],
+              ].map(([label, value]) => <div key={label} className="bg-[var(--color-bg-surface-1)] p-4"><dt className="text-xs text-[var(--color-text-muted)]">{label}</dt><dd className="mt-2 text-2xl font-semibold tabular-nums text-[var(--color-text-primary)]">{value}</dd></div>)}
+            </dl>
 
             {budget && (
-              <Card variant="default" className="mb-6">
-                <CardContent className="p-6">
+              <Card variant="default" className="mb-4">
+                <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">预算使用</h3>
-                    <Badge variant={budget.is_active ? 'success' : 'secondary'}>{budget.is_active ? '已启用' : '未启用'}</Badge>
+                    <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{t('cost.budget.usage')}</h3>
+                    <Badge variant={budget.is_active ? 'success' : 'secondary'}>
+                      {budget.is_active ? t('cost.budget.enabled') : t('cost.budget.not_enabled')}
+                    </Badge>
                   </div>
                   {budget.is_active ? (
                     <div className="space-y-4">
                       <BudgetBar label={periodLabel} current={budget.current_spend} limit={budget.amount} percent={budgetPercent} />
                       {(budget.per_session_limit != null || budget.per_request_limit != null) && (
                         <div className="flex flex-wrap gap-6 text-xs text-[var(--color-text-muted)] pt-1">
-                          {budget.per_session_limit != null && <span>单会话上限 ${budget.per_session_limit.toFixed(2)}</span>}
-                          {budget.per_request_limit != null && <span>单次请求上限 ${budget.per_request_limit.toFixed(2)}</span>}
+                          {budget.per_session_limit != null && <span>{t('cost.budget.per_session_limit', { amount: budget.per_session_limit.toFixed(2) })}</span>}
+                          {budget.per_request_limit != null && <span>{t('cost.budget.per_request_limit', { amount: budget.per_request_limit.toFixed(2) })}</span>}
                         </div>
                       )}
                     </div>
                   ) : (
-                    <p className="text-sm text-[var(--color-text-muted)]">未配置预算限制，可在设置中启用。</p>
+                    <p className="text-sm text-[var(--color-text-muted)]">{t('cost.budget.none_configured')}</p>
                   )}
                 </CardContent>
               </Card>
             )}
 
             {costData?.by_model && costData.by_model.length > 0 ? (
-              <Card variant="default">
-                <CardContent className="p-6">
-                  <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">模型成本</h3>
-                  <div className="space-y-1">
+              <section className="overflow-hidden rounded-lg border border-[var(--color-border-subtle)]">
+                  <h3 className="px-3 py-3 text-sm font-semibold text-[var(--color-text-primary)]">{t('cost.by_model')}</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[480px] text-left text-sm text-[var(--color-text-primary)]">
+                      <thead className="bg-[var(--color-bg-surface-2)] text-xs text-[var(--color-text-muted)]"><tr><th scope="col" className="px-3 py-2 font-medium">{t('cost.by_model_model')}</th><th scope="col" className="px-3 py-2 text-right font-medium">{t('cost.by_model_calls')}</th><th scope="col" className="px-3 py-2 text-right font-medium">{t('cost.by_model_tokens')}</th><th scope="col" className="px-3 py-2 text-right font-medium">{t('cost.by_model_cost')}</th></tr></thead>
+                      <tbody className="divide-y divide-[var(--color-border-subtle)]">
                     {costData.by_model.map((m) => (
-                      <div key={m.model} className="flex items-center justify-between py-3 border-b border-[var(--color-border-subtle)] last:border-0">
-                        <div className="flex items-center gap-3">
-                          <div className="p-1.5 rounded-lg bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)]">
-                            <BarChart3 size={14} className="text-[var(--color-text-muted)]" />
-                          </div>
-                          <div>
-                            <span className="text-sm text-[var(--color-text-primary)] font-medium">{m.model}</span>
-                            <span className="text-xs text-[var(--color-text-muted)] ml-2">{m.calls} 次调用</span>
-                          </div>
-                        </div>
-                        <span className="text-sm font-semibold text-[var(--color-text-primary)]">${m.cost.toFixed(4)}</span>
-                      </div>
+                      <tr key={m.model} className="hover:bg-[var(--color-bg-surface-2)]"><th scope="row" className="px-3 py-2.5 font-medium break-all">{m.model}</th><td className="px-3 py-2.5 text-right tabular-nums">{formatNumber(m.calls)}</td><td className="px-3 py-2.5 text-right tabular-nums">{formatNumber(m.tokens)}</td><td className="px-3 py-2.5 text-right tabular-nums">${m.cost.toFixed(4)}</td></tr>
                     ))}
+                      </tbody>
+                    </table>
                   </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <EmptyState icon="file" title="暂无成本数据" description="运行智能体后将在此显示成本统计" />
-            )}
+              </section>
+            ) : costData ? <p className="py-4 text-sm text-[var(--color-text-muted)]">{t('cost.no_model_usage')}</p> : null}
           </>
         )}
       </div>

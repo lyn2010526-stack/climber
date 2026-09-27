@@ -1,15 +1,5 @@
-import { lazy, Suspense } from 'react';
-
-const ClusterPage = lazy(() => import('../ClusterPage').then(m => ({ default: m.ClusterPage })));
+import { MobileDesktopFallback } from './MobileDesktopFallback';
 
 export function MobileClusterPage() {
-  return (
-    <div className="mobile-page-container mobile-touch-feedback">
-      <div className="px-4 mobile-content-shift-fix">
-        <Suspense fallback={null}>
-          <ClusterPage />
-        </Suspense>
-      </div>
-    </div>
-  );
+  return <MobileDesktopFallback title="集群" description="集群管理依赖宽屏表格和多栏详情，移动端提供稳定回退，避免出现横向滚动和遮挡。" />;
 }

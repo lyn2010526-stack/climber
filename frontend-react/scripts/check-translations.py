@@ -3,6 +3,12 @@
 Translation completeness check script.
 Compares all locale files against the English reference (en.json).
 Reports missing keys, extra keys, and translation coverage statistics.
+
+The checked directory is the one the app actually bundles: `src/locales` is
+statically imported by `src/i18n/config.ts`, so it is the only place where a
+missing key turns into a raw `some.key.name` leaking into the UI. The legacy
+`public/locales` copy is not loaded at runtime, so it is reported as a drift
+warning instead of gating the exit code.
 """
 
 import json
@@ -10,7 +16,13 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
-LOCALES_DIR = Path(__file__).parent.parent / "public" / "locales"
+PROJECT_ROOT = Path(__file__).parent.parent
+
+# Statically imported by src/i18n/config.ts -- the runtime source of truth.
+LOCALES_DIR = PROJECT_ROOT / "src" / "locales"
+# Served as static assets but never imported by the app. Reference only.
+LEGACY_LOCALES_DIR = PROJECT_ROOT / "public" / "locales"
+
 REFERENCE_LANG = "en"
 
 def load_json(filepath: Path) -> dict:
@@ -68,6 +80,9 @@ def check_translations() -> Tuple[bool, Dict]:
     }
     
     locale_files = sorted(LOCALES_DIR.glob("*.json"))
+    if not locale_files:
+        print(f"Error: No locale files found in {LOCALES_DIR}")
+        return False, {}
     
     for locale_file in locale_files:
         lang = locale_file.stem
@@ -114,12 +129,52 @@ def check_translations() -> Tuple[bool, Dict]:
     is_ok = len(results["summary"]["incomplete"]) == 0 and results["summary"]["total_missing"] == 0
     return is_ok, results
 
+def report_legacy_drift() -> Dict:
+    """Compare the legacy public/locales copy against the runtime src/locales.
+
+    This never affects the exit code: the legacy tree is dead weight at runtime,
+    so the actionable signal is that the two trees have drifted apart.
+    """
+    print("-" * 70)
+    print(f"LEGACY DRIFT ({LEGACY_LOCALES_DIR.relative_to(PROJECT_ROOT)} vs {LOCALES_DIR.relative_to(PROJECT_ROOT)})")
+    print("-" * 70)
+
+    if not LEGACY_LOCALES_DIR.exists():
+        print("Legacy locale directory not present -- nothing to compare.")
+        return {"present": False, "languages": {}}
+
+    runtime = load_json(LOCALES_DIR / f"{REFERENCE_LANG}.json")
+    runtime_keys = get_nested_keys(runtime)
+    languages = {}
+    drifted = False
+
+    for legacy_file in sorted(LEGACY_LOCALES_DIR.glob("*.json")):
+        lang = legacy_file.stem
+        legacy_keys = get_nested_keys(load_json(legacy_file))
+        missing = sorted(runtime_keys - legacy_keys)
+        if missing:
+            drifted = True
+        languages[lang] = missing
+
+    if not drifted:
+        print("Legacy copy is in sync with the runtime locales.")
+    else:
+        print("Legacy copy has drifted. It is not loaded at runtime, so this is a warning only.")
+        print(f"Total keys missing from the legacy copy: {sum(len(v) for v in languages.values())}")
+        for lang, missing in sorted(languages.items()):
+            if missing:
+                print(f"  {lang:8} | missing {len(missing):3} runtime keys, e.g.: {', '.join(missing[:3])}")
+
+    print()
+    return {"present": True, "languages": languages}
+
 def print_report(results: Dict):
     """Print a formatted report of translation completeness."""
     print("=" * 70)
     print("TRANSLATION COMPLETENESS REPORT")
     print("=" * 70)
-    print(f"\nReference: {results['reference']} ({results['reference_key_count']} keys)\n")
+    print(f"\nRuntime locales: {LOCALES_DIR.relative_to(PROJECT_ROOT)}")
+    print(f"Reference: {results['reference']} ({results['reference_key_count']} keys)\n")
     
     for lang, data in sorted(results["languages"].items()):
         status = "✓ COMPLETE" if data["is_complete"] else "✗ INCOMPLETE"
@@ -172,6 +227,7 @@ def main():
         sys.exit(1)
     
     print_report(results)
+    report_legacy_drift()
     
     if not is_complete:
         print("\n⚠ Some translations are incomplete!")

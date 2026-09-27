@@ -1,14 +1,17 @@
-import { useState, useMemo } from 'react';
-import {
-  Plus, Minus, FileText, ChevronDown, ChevronRight,
-  Copy, Check,
-} from 'lucide-react';
+import { useState, useMemo, useEffect, useRef, useId, type ReactNode } from 'react';
+import { Plus, Minus, FileText, ChevronDown, ChevronRight, Copy, FileDiff } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { StatusIcon } from '../ui/StatusIcon';
 
 /**
  * Diff 面板组件
  * 参考 MonkeyCode desktop/ui/src/diffView.tsx
  * 统一 diff 解析器 + 行号 + CSS 变量主题
+ *
+ * 配色只有 diff 专用角色：新增、删除、hunk 头各自一套前景与底色
+ * (`--color-diff-*`)，语义色 success/error 不参与，因为它们是为正文调的，
+ * 在密集的代码行上不成立。行内的关键字、字符串、数字、函数名走
+ * `--color-syntax-*`，与代码块共用一套色。
  */
 
 interface DiffRow {
@@ -85,10 +88,10 @@ export function parseDiff(diffText: string): DiffFile[] {
         oldN++;
         newN++;
       } else if (marker === '\\') {
-        // "\ No newline at end of file" — skip
+        // "\ No newline at end of file" — 跳过
       }
     } else if (line.startsWith('+++ ') || line.startsWith('--- ')) {
-      // File header markers — skip
+      // 文件头标记 — 跳过
     }
   }
 
@@ -100,26 +103,68 @@ export function parseDiff(diffText: string): DiffFile[] {
   return files;
 }
 
+type SyntaxKind = 'comment' | 'string' | 'number' | 'keyword' | 'function' | 'punctuation' | 'plain';
+
+/**
+ * 语法 token 角色。每个取值都是 `--color-syntax-*`，与代码块高亮里
+ * `.code-block .token-*` 解析到的是同一套色板，因此 diff 与代码块读起来是
+ * 一个界面，而不是两块调色板。
+ */
+const SYNTAX_TEXT: Record<SyntaxKind, string> = {
+  comment: 'text-[var(--color-syntax-comment)] italic',
+  string: 'text-[var(--color-syntax-string)]',
+  number: 'text-[var(--color-syntax-number)]',
+  keyword: 'text-[var(--color-syntax-keyword)]',
+  function: 'text-[var(--color-syntax-function)]',
+  punctuation: 'text-[var(--color-text-muted)]',
+  plain: '',
+};
+
+const KEYWORDS = new Set([
+  'as', 'async', 'await', 'break', 'case', 'catch', 'class', 'const', 'continue',
+  'def', 'default', 'delete', 'do', 'elif', 'else', 'export', 'extends', 'finally',
+  'for', 'from', 'function', 'if', 'import', 'in', 'instanceof', 'interface', 'let',
+  'new', 'of', 'return', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'while',
+  'with', 'yield',
+]);
+
+/** 单趟扫描一行：注释、字符串、数字、单词、空白、标点。 */
+const TOKEN_PATTERN = /\/\/.*$|#[^\s].*$|"(?:[^"\\]|\\.)*"?|'(?:[^'\\]|\\.)*'?|`(?:[^`\\]|\\.)*`?|\b\d+(?:\.\d+)?\b|[A-Za-z_$][\w$]*|\s+|[^\s\w]/;
+
+function classifyToken(token: string, rest: string): SyntaxKind {
+  if (token.startsWith('//') || (token.startsWith('#') && !/^#\d/.test(token))) return 'comment';
+  if (/^["'`]/.test(token)) return 'string';
+  if (/^\d/.test(token)) return 'number';
+  if (/^[A-Za-z_$]/.test(token)) {
+    if (KEYWORDS.has(token)) return 'keyword';
+    // 紧跟调用括号的单词是可调用名。
+    return /^\s*\(/.test(rest) ? 'function' : 'plain';
+  }
+  if (/^\s+$/.test(token)) return 'plain';
+  return 'punctuation';
+}
+
 /** 行内高亮组件 */
 function HighlightedLine({ line }: { line: string }) {
-  // 简单的语法高亮：关键字、字符串、注释
-  const parts = line.split(/(\s+|[{}()\[\];,.:=<>!+\-*/]|"[^"]*"|'[^']*'|`[^`]*`)/g);
-  return (
-    <>
-      {parts.map((part, i) => {
-        if (/^(import|from|def|class|return|if|else|elif|for|while|try|except|with|as|async|await|function|const|let|var|export|default|new|this|return)$/.test(part)) {
-          return <span key={i} className="text-violet-400">{part}</span>;
-        }
-        if (/^["'`]/.test(part)) {
-          return <span key={i} className="text-green-300">{part}</span>;
-        }
-        if (/^[{}()\[\];,.:=<>!+\-*/]$/.test(part)) {
-          return <span key={i} className="text-[var(--color-text-muted)]">{part}</span>;
-        }
-        return <span key={i}>{part}</span>;
-      })}
-    </>
-  );
+  const parts: ReactNode[] = [];
+  let rest = line;
+  let index = 0;
+  while (rest.length > 0) {
+    const match = TOKEN_PATTERN.exec(rest);
+    if (!match || match.index === undefined) {
+      parts.push(rest);
+      break;
+    }
+    if (match.index > 0) parts.push(rest.slice(0, match.index));
+    const token = match[0];
+    const kind = classifyToken(token, rest.slice(match.index + token.length));
+    const className = SYNTAX_TEXT[kind];
+    parts.push(className
+      ? <span key={index++} className={className}>{token}</span>
+      : <span key={index++}>{token}</span>);
+    rest = rest.slice(match.index + token.length);
+  }
+  return <>{parts}</>;
 }
 
 interface DiffLineProps {
@@ -127,77 +172,43 @@ interface DiffLineProps {
   showLineNumbers: boolean;
 }
 
+/**
+ * 行类型到 diff 角色类，就是 `index.css` 为这件事发布的三个类。用类而不是
+ * 工具类，是因为一行同时带前景与底色，一个类保证两者不会走散。这里自身不画
+ * 任何颜色。
+ */
+const ROW_ROLE: Record<DiffRow['kind'], string> = {
+  add: 'diff-line-added',
+  del: 'diff-line-removed',
+  ctx: '',
+  h: 'diff-hunk-header',
+};
+
+const PREFIX: Record<DiffRow['kind'], string> = { add: '+', del: '-', ctx: ' ', h: ' ' };
+
 function DiffLine({ row, showLineNumbers }: DiffLineProps) {
-  const bgColor = {
-    add: 'bg-green-500/[0.06]',
-    del: 'bg-red-500/[0.06]',
-    ctx: 'bg-transparent',
-    h: 'bg-[var(--codeBg,#1a1a2e)]',
-  }[row.kind];
-
-  const gutterBg = {
-    add: 'bg-green-500/[0.12]',
-    del: 'bg-red-500/[0.12]',
-    ctx: 'bg-transparent',
-    h: 'bg-[var(--codeBg,#1a1a2e)]',
-  }[row.kind];
-
-  const prefix = {
-    add: '+',
-    del: '-',
-    ctx: ' ',
-    h: ' ',
-  }[row.kind];
-
-  const prefixColor = {
-    add: 'text-green-500/70',
-    del: 'text-red-500/70',
-    ctx: 'text-[var(--color-text-muted)]',
-    h: 'text-[var(--color-text-muted)]',
-  }[row.kind];
-
-  const textColor = {
-    add: 'text-green-200/90',
-    del: 'text-red-200/90',
-    ctx: 'text-[var(--color-text-secondary)]',
-    h: 'text-blue-300/70',
-  }[row.kind];
-
   if (row.kind === 'h') {
     return (
-      <div className={cn('flex items-center px-2 py-1', bgColor)}>
-        <span className="text-[11px] font-mono italic truncate">
-          {row.content || '@@'}
-        </span>
+      <div className={cn('flex items-center px-[var(--space-2)] py-[var(--space-1)]', ROW_ROLE.h, 'bg-[var(--color-bg-surface-2)]')}>
+        <span className="truncate font-mono text-[length:var(--text-2xs)] italic">{row.content || '@@'}</span>
       </div>
     );
   }
 
   return (
-    <div className={cn('flex items-start', bgColor)}>
-      {showLineNumbers && (
-        <div className={cn(
-          'flex items-center justify-end gap-1 shrink-0 select-none',
-          'w-[72px] px-2 py-0.5 font-mono text-[11px]',
-          gutterBg
-        )}>
-          <span className="w-6 text-right text-[var(--color-text-muted)]">
-            {row.oldN ?? ''}
-          </span>
-          <span className="w-6 text-right text-[var(--color-text-muted)]">
-            {row.newN ?? ''}
-          </span>
-          <span className={cn('w-3 text-center', prefixColor)}>
-            {prefix}
-          </span>
-        </div>
-      )}
-      {!showLineNumbers && (
-        <span className={cn('w-4 text-center text-[11px] font-mono shrink-0 py-0.5', prefixColor)}>
-          {prefix}
+    <div className={cn('flex items-start font-mono text-[length:var(--text-2xs)] leading-normal', ROW_ROLE[row.kind], row.kind === 'ctx' && 'text-[var(--color-text-secondary)]')}>
+      {showLineNumbers ? (
+        <span className="flex shrink-0 select-none items-stretch py-[var(--space-0-5)] pe-[var(--space-2)]">
+          <span className="w-[var(--space-8)] pe-[var(--space-1)] text-end tabular-nums text-[var(--color-text-muted)]">{row.oldN ?? ''}</span>
+          <span className="w-[var(--space-8)] pe-[var(--space-1)] text-end tabular-nums text-[var(--color-text-muted)]">{row.newN ?? ''}</span>
+          <span className={cn('w-[var(--space-4)] text-center', row.kind === 'ctx' && 'text-[var(--color-text-muted)]')}>{PREFIX[row.kind]}</span>
+        </span>
+      ) : (
+        <span className={cn('w-[var(--space-4)] shrink-0 py-[var(--space-0-5)] text-center', row.kind === 'ctx' && 'text-[var(--color-text-muted)]')}>
+          {PREFIX[row.kind]}
         </span>
       )}
-      <pre className={cn('flex-1 text-[11px] font-mono py-0.5 px-2 overflow-x-auto', textColor)}>
+      <pre className="min-w-0 flex-1 whitespace-pre py-[var(--space-0-5)] pe-[var(--space-2)]">
         <HighlightedLine line={row.content} />
       </pre>
     </div>
@@ -213,20 +224,33 @@ interface DiffFileViewProps {
 function DiffFileView({ file, defaultExpanded = true, showLineNumbers = true }: DiffFileViewProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const contentId = useId();
+  useEffect(() => () => clearTimeout(copyTimer.current), []);
 
+  // 文件级状态是 diff 事实，因此取 diff 角色：新增与删除借行的颜色，修改借
+  // hunk 的颜色，因为 hunk 头已经在用那个强调色。
   const statusIcon = {
-    added: <Plus size={12} className="text-green-400" />,
-    modified: <FileText size={12} className="text-amber-400" />,
-    deleted: <Minus size={12} className="text-red-400" />,
+    added: <Plus size={12} className="text-[var(--color-diff-added)]" />,
+    modified: <FileText size={12} className="text-[var(--color-diff-hunk)]" />,
+    deleted: <Minus size={12} className="text-[var(--color-diff-removed)]" />,
   }[file.status];
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     const diffText = file.hunks
       .flatMap(h => [h.header, ...h.rows.map(r => `${r.kind === 'add' ? '+' : r.kind === 'del' ? '-' : ' '}${r.content}`)])
       .join('\n');
-    navigator.clipboard.writeText(diffText);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopyError(false);
+    setCopied(false);
+    try {
+      await navigator.clipboard.writeText(diffText);
+      setCopied(true);
+      clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopyError(true);
+    }
   };
 
   const fileName = file.path.split('/').pop() || file.path;
@@ -235,59 +259,59 @@ function DiffFileView({ file, defaultExpanded = true, showLineNumbers = true }: 
   const totalLines = file.hunks.reduce((sum, h) => sum + h.rows.length, 0);
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
-      {/* File header */}
+    <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)]">
+      <div className="flex items-center border-b border-[var(--color-border-subtle)] pr-[var(--space-1)]">
       <button type="button"
-        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/[0.02] transition-colors"
+        aria-expanded={expanded} aria-controls={contentId} title={file.path}
+        className="flex min-w-0 flex-1 items-center gap-[var(--space-2)] px-[var(--space-3)] py-[var(--space-2)] text-start transition-colors hover:bg-[var(--color-bg-surface-2)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] motion-reduce:transition-none"
         onClick={() => setExpanded(!expanded)}
       >
-        <div className="shrink-0">
-          {expanded ? (
-            <ChevronDown size={14} className="text-[var(--color-text-muted)]" />
-          ) : (
-            <ChevronRight size={14} className="text-[var(--color-text-muted)]" />
-          )}
-        </div>
+        <span className="shrink-0 text-[var(--color-text-muted)]">
+          {expanded
+            ? <ChevronDown size={14} aria-hidden="true" />
+            : <ChevronRight size={14} aria-hidden="true" />}
+        </span>
         {statusIcon}
-        <div className="flex-1 min-w-0">
-          <span className="text-xs font-medium text-[var(--color-text-secondary)]">{fileName}</span>
-          {dirPath && (
-            <span className="text-[10px] text-[var(--color-text-muted)] ml-2">{dirPath}/</span>
-          )}
-        </div>
+        {/* The whole path, in the typeface a path belongs in, with the leaf
+            picked out so a long directory does not hide which file this is. */}
+        <span className="min-w-0 flex-1 truncate font-mono text-[length:var(--text-xs)]">
+          {dirPath && <span className="text-[var(--color-text-muted)]">{dirPath}/</span>}
+          <span className="text-[var(--color-text-primary)]">{fileName}</span>
+        </span>
 
-        {/* Stats */}
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[10px] text-[var(--color-text-muted)] font-mono">{totalLines} 行</span>
-          {file.additions > 0 && (
-            <span className="text-[10px] text-green-400 font-mono">+{file.additions}</span>
-          )}
-          {file.deletions > 0 && (
-            <span className="text-[10px] text-red-400 font-mono">-{file.deletions}</span>
-          )}
-          <button type="button"
-            onClick={(e) => { e.stopPropagation(); handleCopy(); }}
-            className="p-1 rounded hover:bg-white/[0.06] text-[var(--color-text-muted)] transition-colors"
-          >
-            {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
-          </button>
-        </div>
+        <span className="flex shrink-0 items-center gap-[var(--space-2)] font-mono text-[length:var(--text-2xs)] tabular-nums">
+          <span className="text-[var(--color-text-muted)]">{totalLines} 行</span>
+          {file.additions > 0 && <span className="text-[var(--color-diff-added)]">+{file.additions}</span>}
+          {file.deletions > 0 && <span className="text-[var(--color-diff-removed)]">-{file.deletions}</span>}
+        </span>
       </button>
-
-      {/* Diff content */}
+      <button type="button" onClick={handleCopy} aria-label={copied ? '已复制' : `复制 ${file.path} 的差异`} title={copied ? '已复制' : '复制差异'}
+        className="flex size-[var(--control-height-sm)] shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-surface-2)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
+        {copied ? <StatusIcon tone="success" size="sm" /> : <Copy size={14} aria-hidden="true" />}
+      </button>
+      </div>
+      {copyError && (
+        <p role="alert" className="flex items-center gap-[var(--space-2)] border-b border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] px-[var(--space-3)] py-[var(--space-2)] text-[length:var(--text-xs)] text-[var(--color-error)]">
+          <StatusIcon tone="error" size="xs" />
+          复制失败，请检查剪贴板权限后重试。
+        </p>
+      )}
       {expanded && (
-        <div className="border-t border-white/[0.04] overflow-x-auto">
-          {file.hunks.map((hunk, hi) => (
-            <div key={hi}>
-              <DiffLine
-                row={{ kind: 'h', content: hunk.header, oldN: null, newN: null }}
-                showLineNumbers={showLineNumbers}
-              />
-              {hunk.rows.map((row, ri) => (
-                <DiffLine key={ri} row={row} showLineNumbers={showLineNumbers} />
-              ))}
-            </div>
-          ))}
+        <div id={contentId} className="overflow-x-auto">
+          <div className="w-max min-w-full">
+            {file.hunks.length === 0 && <p className="px-[var(--space-3)] py-[var(--space-4)] text-[length:var(--text-xs)] text-[var(--color-text-muted)]">此文件没有可显示的文本差异。</p>}
+            {file.hunks.map((hunk, hi) => (
+              <div key={hi}>
+                <DiffLine
+                  row={{ kind: 'h', content: hunk.header, oldN: null, newN: null }}
+                  showLineNumbers={showLineNumbers}
+                />
+                {hunk.rows.map((row, ri) => (
+                  <DiffLine key={ri} row={row} showLineNumbers={showLineNumbers} />
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -324,25 +348,31 @@ export function DiffPanel({
     return [];
   }, [diffText, propFiles]);
 
-  if (files.length === 0) return null;
+  if (files.length === 0) return (
+    <section className={cn('rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] p-[var(--space-4)]', className)} aria-label={title}>
+      <div className="flex items-center gap-[var(--space-2)] text-[length:var(--text-xs)] font-medium text-[var(--color-text-primary)]"><FileDiff size={15} aria-hidden="true" />{title}</div>
+      <p role="status" className="mt-[var(--space-3)] text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">{diffText?.trim() ? '无法显示此差异格式' : '暂无文件变更'}</p>
+      <p className="mt-[var(--space-1)] text-[length:var(--text-xs)] text-[var(--color-text-muted)]">{diffText?.trim() ? '请提供包含文件头的 unified diff。' : '文件修改后，差异将在此显示。'}</p>
+    </section>
+  );
 
   const totalAdditions = files.reduce((sum, f) => sum + f.additions, 0);
   const totalDeletions = files.reduce((sum, f) => sum + f.deletions, 0);
 
   return (
-    <div className={cn('space-y-2', className)}>
+    <div className={cn('space-y-[var(--space-2)]', className)}>
       {/* Summary */}
-      <div className="flex items-center justify-between px-1 mb-2">
-        <div className="flex items-center gap-2">
-          <FileText size={13} className="text-[var(--color-text-muted)]" />
-          <span className="text-[11px] font-medium text-[var(--color-text-muted)]">{title}</span>
-          <span className="text-[10px] text-[var(--color-text-muted)]">
+      <div className="mb-[var(--space-2)] flex items-center justify-between px-[var(--space-1)]">
+        <div className="flex items-center gap-[var(--space-2)]">
+          <FileText size={13} className="text-[var(--color-text-muted)]" aria-hidden="true" />
+          <span className="text-[length:var(--text-2xs)] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{title}</span>
+          <span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-[var(--color-text-disabled)]">
             {files.length} 个文件
           </span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-green-400 font-mono">+{totalAdditions}</span>
-          <span className="text-[10px] text-red-400 font-mono">-{totalDeletions}</span>
+        <div className="flex items-center gap-[var(--space-1-5)] font-mono text-[length:var(--text-2xs)] tabular-nums">
+          <span className="text-[var(--color-diff-added)]">+{totalAdditions}</span>
+          <span className="text-[var(--color-diff-removed)]">-{totalDeletions}</span>
         </div>
       </div>
 

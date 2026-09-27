@@ -1,15 +1,5 @@
-import { lazy, Suspense } from 'react';
-
-const TaskMonitorPage = lazy(() => import('../TaskMonitorPage'));
+import { MobileDesktopFallback } from './MobileDesktopFallback';
 
 export function MobileTasksPage() {
-  return (
-    <div className="mobile-page-container mobile-touch-feedback">
-      <div className="px-4 mobile-content-shift-fix">
-        <Suspense fallback={null}>
-          <TaskMonitorPage />
-        </Suspense>
-      </div>
-    </div>
-  );
+  return <MobileDesktopFallback title="任务监控" description="任务监控需要更宽的工作区，移动端保留清晰入口并避免压缩桌面控制台。" />;
 }

@@ -1,6 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '../../api';
+import { useI18n } from '../../i18n';
 
+/**
+ * `POST /eval/run` records a run summary; it does not execute the dataset. The
+ * caller supplies every counter, so a run whose `total_cases` is 0 reports
+ * "nothing was evaluated" — the UI must not present that as a 0% pass rate.
+ */
 interface EvalDataset {
   id: string;
   name: string;
@@ -25,7 +31,12 @@ interface EvalRun {
   failed_cases: number;
   average_score: number;
   pass_rate: number;
-  results: EvalRunResult[];
+  /**
+   * The backend stores per-case detail in `results_json` and omits it from the
+   * response, so this is usually absent. Absent means "the API returned no
+   * per-case detail", which is not the same as "no cases failed".
+   */
+  results?: EvalRunResult[];
   created_at: string;
 }
 
@@ -34,37 +45,50 @@ interface EvalAgent {
   name: string;
 }
 
+function errorMessage(e: unknown, fallback: string): string {
+  return e instanceof Error && e.message ? e.message : fallback;
+}
+
 export function EvalDashboard() {
+  const { t } = useI18n();
   const [datasets, setDatasets] = useState<EvalDataset[]>([]);
   const [agents, setAgents] = useState<EvalAgent[]>([]);
   const [runs, setRuns] = useState<EvalRun[]>([]);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Datasets and agents are two independent requests; one failing must not
+   *  blank the other or leave an empty list reading as "none exist". */
+  const [datasetsError, setDatasetsError] = useState<string | null>(null);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
   const [selectedDataset, setSelectedDataset] = useState<string>('');
   const [selectedAgent, setSelectedAgent] = useState<string>('');
 
   const fetchDatasets = useCallback(async () => {
+    setDatasetsError(null);
     try {
-      const data = await api.listEvalDatasets();
-      setDatasets(data);
-    } catch {
-      // ignore
+      setDatasets(await api.listEvalDatasets());
+    } catch (e) {
+      setDatasets([]);
+      setDatasetsError(errorMessage(e, t('eval.errors.load_datasets')));
     }
-  }, []);
+  }, [t]);
 
   const fetchAgents = useCallback(async () => {
+    setAgentsError(null);
     try {
       const data = await api.listAgents();
       setAgents(data);
       if (data.length > 0) setSelectedAgent(current => current || data[0].id);
-    } catch {
-      // ignore
+    } catch (e) {
+      setAgents([]);
+      setAgentsError(errorMessage(e, t('eval.errors.load_agents')));
     }
-  }, []);
+  }, [t]);
 
   const runEval = async () => {
     if (!selectedDataset || !selectedAgent) {
-      setError('请选择数据集和智能体');
+      setError(t('eval.errors.select_both'));
       return;
     }
     setLoading(true);
@@ -72,30 +96,38 @@ export function EvalDashboard() {
     try {
       const result = await api.runEvaluation(selectedDataset, selectedAgent);
       setRuns(current => [result, ...current]);
-    } catch {
-      setError('Network error');
+    } catch (e) {
+      setError(errorMessage(e, t('eval.errors.run_failed')));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
     fetchDatasets();
     fetchAgents();
+    setInitialLoading(false);
   }, [fetchAgents, fetchDatasets]);
 
   return (
-    <div className="p-6 bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] min-h-full">
+    <div className="p-6 bg-[var(--color-bg-page)] text-[var(--color-text-primary)] min-h-full">
       <div className="flex items-center justify-between mb-6">
-         <h2 className="text-xl font-bold">评估仪表板</h2>
+         <h2 className="text-xl font-bold">{t('eval.title')}</h2>
       </div>
 
-      {error && <div className="text-red-400 text-sm mb-4">{error}</div>}
+      {error && <div className="text-[var(--color-error)] text-sm mb-4">{error}</div>}
 
       {/* Datasets */}
       <div className="mb-6">
-           <h3 className="text-sm font-semibold text-[var(--color-text-muted)] mb-2">数据集</h3>
-         {datasets.length === 0 ? (
-            <div className="text-[var(--color-text-muted)] text-sm">暂无数据集</div>
+           <h3 className="text-sm font-semibold text-[var(--color-text-muted)] mb-2">{t('eval.datasets')}</h3>
+         {initialLoading ? (
+            <div role="status" className="text-[var(--color-text-muted)] text-sm">{t('common.loading')}</div>
+        ) : datasetsError ? (
+            <div role="alert" className="text-[var(--color-error)] text-sm">
+              {t('eval.datasets_not_reported', { detail: datasetsError })}
+            </div>
+        ) : datasets.length === 0 ? (
+            <div className="text-[var(--color-text-muted)] text-sm">{t('eval.datasets_empty')}</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {datasets.map((ds) => (
@@ -104,13 +136,17 @@ export function EvalDashboard() {
                 onClick={() => setSelectedDataset(ds.id)}
                 className={`p-3 rounded-lg border cursor-pointer transition ${
                   selectedDataset === ds.id
-                    ? 'border-blue-500 bg-blue-900/20'
+                    ? 'border-[var(--color-info)] bg-[var(--color-info)]'
                     : 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] hover:border-[var(--color-border-default)]'
                 }`}
               >
                 <div className="font-medium text-sm">{ds.name}</div>
                 <div className="text-xs text-[var(--color-text-muted)] mt-1">{ds.description}</div>
-                 <div className="text-xs text-[var(--color-text-muted)] mt-2">{ds.case_count} 条用例</div>
+                 <div className="text-xs text-[var(--color-text-muted)] mt-2">
+                   {typeof ds.case_count === 'number'
+                     ? t('eval.dataset_case_count', { count: ds.case_count })
+                     : t('common.not_reported')}
+                 </div>
               </div>
             ))}
           </div>
@@ -118,72 +154,101 @@ export function EvalDashboard() {
       </div>
 
       <div className="mb-6">
-        <h3 className="text-sm font-semibold text-[var(--color-text-muted)] mb-2">智能体</h3>
-        <select
-          value={selectedAgent}
-          onChange={(event) => setSelectedAgent(event.target.value)}
-          className="w-full max-w-sm px-3 py-2 rounded border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] text-sm"
-        >
-          <option value="">请选择智能体</option>
-          {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
-        </select>
+        <h3 className="text-sm font-semibold text-[var(--color-text-muted)] mb-2">{t('eval.agents')}</h3>
+        {agentsError ? (
+          <div role="alert" className="text-[var(--color-error)] text-sm">{t('eval.agents_not_reported', { detail: agentsError })}</div>
+        ) : (
+          <select
+            value={selectedAgent}
+            onChange={(event) => setSelectedAgent(event.target.value)}
+            className="w-full max-w-sm px-3 py-2 rounded border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] text-sm"
+          >
+            <option value="">{t('eval.select_agent')}</option>
+            {agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+          </select>
+        )}
       </div>
 
-      {/* Run button */}
       {selectedDataset && selectedAgent && (
         <button type="button"
           onClick={runEval}
           disabled={loading}
-          className="mb-6 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium disabled:opacity-50"
+           className="mb-6 px-4 py-2 bg-[var(--color-info)] text-[var(--color-text-inverse)] hover:bg-[var(--color-info)] rounded text-sm font-medium disabled:bg-[var(--color-bg-disabled)] disabled:text-[var(--color-text-secondary)]"
         >
-           {loading ? '运行中...' : '运行评估'}
+           {loading ? t('eval.running') : t('eval.run')}
         </button>
       )}
 
       {/* Results */}
       {runs.length > 0 && (
          <div>
-           <h3 className="text-sm font-semibold text-[var(--color-text-muted)] mb-2">评估结果</h3>
+           <h3 className="text-sm font-semibold text-[var(--color-text-muted)] mb-2">{t('eval.results')}</h3>
           <div className="space-y-3">
-            {runs.map((run) => (
+            {runs.map((run) => {
+              // A run that reports zero cases executed has no pass rate, no
+              // pass count and no average to show. Rendering 0 and 0% would
+              // report a clean failure that the backend never evaluated.
+              const executed = typeof run.total_cases === 'number' && run.total_cases > 0;
+              const passRate = typeof run.pass_rate === 'number' ? run.pass_rate : null;
+              const average = typeof run.average_score === 'number' ? run.average_score : null;
+              return (
                <div key={run.id} className="p-4 bg-[var(--color-bg-surface)] rounded-lg border border-[var(--color-border-subtle)]">
                 <div className="flex items-center justify-between mb-2">
-                   <span className="text-sm font-medium">运行 {run.id.slice(0, 8)}</span>
-                   <span className="text-xs text-[var(--color-text-muted)]">{run.created_at?.slice(0, 19)}</span>
+                   <span className="text-sm font-medium">{t('eval.run_label', { id: run.id.slice(0, 8) })}</span>
+                   <span className="text-xs text-[var(--color-text-muted)]">{run.created_at?.slice(0, 19) || t('common.not_reported')}</span>
                 </div>
-                <div className="grid grid-cols-4 gap-3 mb-3">
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-green-400">{run.passed_cases}</div>
-                      <div className="text-xs text-[var(--color-text-muted)]">通过</div>
+                {!executed ? (
+                  <p className="text-xs text-[var(--color-text-muted)]">
+                    {t('eval.run_no_cases', { total: run.total_cases ?? t('common.not_reported') })}
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-4 gap-3 mb-3">
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-[var(--color-success)]">
+                        {run.passed_cases ?? t('common.not_reported')}
+                      </div>
+                      <div className="text-xs text-[var(--color-text-muted)]">{t('eval.passed')}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-[var(--color-error)]">
+                        {run.failed_cases ?? t('common.not_reported')}
+                      </div>
+                      <div className="text-xs text-[var(--color-text-muted)]">{t('eval.failed')}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-[var(--color-info)]">
+                        {passRate === null ? t('common.not_reported') : `${(passRate * 100).toFixed(0)}%`}
+                      </div>
+                      <div className="text-xs text-[var(--color-text-muted)]">{t('eval.pass_rate')}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-[var(--color-accent-foreground)]">
+                        {average === null ? t('common.not_reported') : average.toFixed(2)}
+                      </div>
+                      <div className="text-xs text-[var(--color-text-muted)]">{t('eval.average_score')}</div>
+                    </div>
                   </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-red-400">{run.failed_cases}</div>
-                      <div className="text-xs text-[var(--color-text-muted)]">失败</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-blue-400">{(run.pass_rate * 100).toFixed(0)}%</div>
-                      <div className="text-xs text-[var(--color-text-muted)]">通过率</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-purple-400">{run.average_score.toFixed(2)}</div>
-                      <div className="text-xs text-[var(--color-text-muted)]">平均分</div>
-                  </div>
-                </div>
-                {run.results && (
+                )}
+                {run.results && run.results.length > 0 ? (
                   <div className="space-y-1 mt-2">
                     {run.results.map((r) => (
                       <div key={r.case_id} className="flex items-center gap-2 text-xs">
-                        <span className={r.passed ? 'text-green-400' : 'text-red-400'}>
-                           {r.passed ? '通过' : '失败'}
+                        <span className={r.passed ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}>
+                           {r.passed ? t('eval.passed') : t('eval.failed')}
                         </span>
                          <span className="text-[var(--color-text-muted)]">{r.case_id}</span>
-                         <span className="text-[var(--color-text-muted)]">{r.score.toFixed(2)}</span>
+                         <span className="text-[var(--color-text-muted)]">
+                           {typeof r.score === 'number' ? r.score.toFixed(2) : t('common.not_reported')}
+                         </span>
                       </div>
                     ))}
                   </div>
+                ) : (
+                  <p className="text-xs text-[var(--color-text-muted)] mt-2">{t('eval.no_case_results')}</p>
                 )}
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
       )}

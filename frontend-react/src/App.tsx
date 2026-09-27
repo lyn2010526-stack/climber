@@ -17,8 +17,9 @@ import { useI18n } from './i18n';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { useIsMobile } from './layout/breakpoints';
 import { useSidebarState } from './layout/useSidebarState';
-import { ALL_NAV_ITEMS_BASE, NAV_ITEM_IDS, MOBILE_ADAPTED_PAGE_IDS } from './navigation/navConfig';
-import type { Page, NavGroup } from './navigation/navConfig';
+import { NAV_ITEM_IDS, MOBILE_ADAPTED_PAGE_IDS } from './navigation/navConfig';
+import type { Page } from './navigation/navConfig';
+import { SidebarNavigation } from './layout/SidebarNavigation';
 
 const WorkspaceLayout = lazy(() => import('./components/workspace/WorkspaceLayout').then(m => ({ default: m.WorkspaceLayout })));
 const AgentsPage = lazy(() => import('./pages/AgentsPage').then(m => ({ default: m.AgentsPage })));
@@ -48,8 +49,6 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 
 const VALID_PAGES = new Set(NAV_ITEM_IDS);
 
-const NAV_GROUPS: NavGroup[] = ['main', 'manage', 'config'];
-
 function getPageFromHash(): Page {
   const hash = window.location.hash
     .replace(/^#/, '')
@@ -72,7 +71,6 @@ function PageFallback() {
 
 export default function App() {
   const { t } = useI18n();
-  const ALL_NAV_ITEMS = ALL_NAV_ITEMS_BASE.map(item => ({ ...item, label: item.label ?? t(item.labelKey!) }));
   const [currentPage, setCurrentPage] = useState<Page>(getPageFromHash);
   const { open: sidebarOpen, toggle: toggleSidebar } = useSidebarState();
   const [activeOverlay, setActiveOverlay] = useState<'search' | 'commands' | null>(null);
@@ -205,55 +203,30 @@ export default function App() {
               </button>
             </div>
 
-            <nav className="flex-1 overflow-y-auto px-2.5 py-2" aria-label={t('sidebar.workspace')}>
-              {NAV_GROUPS.map((group, groupIndex) => {
-                const items = ALL_NAV_ITEMS.filter(item => item.group === group);
-                if (items.length === 0) return null;
-                return (
-                  <div key={group} className={groupIndex > 0 ? 'mt-1' : ''}>
-                    {sidebarOpen && (
-                      <p className={`px-3 ${groupIndex === 0 ? 'pb-1 pt-2' : 'pb-1 pt-4'} text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]`}>
-                        {t(`nav_groups.${group}`)}
-                      </p>
-                    )}
-                    <div className="space-y-0.5">
-                      {items.map(({ id, icon: Icon, label }) => (
-                        <button type="button"
-                          key={id}
-                          onClick={() => navigate(id)}
-                          aria-label={label}
-                          aria-current={currentPage === id ? 'page' : undefined}
-                          title={sidebarOpen ? undefined : label}
-                          className={`relative flex h-11 w-full items-center gap-3 rounded-lg border px-3 text-sm transition-colors ${
-                            currentPage === id
-                              ? 'border-[var(--color-border-accent)] bg-[var(--color-accent-subtle)] text-[var(--color-text-primary)]'
-                              : 'border-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)]'
-                          }`}
-                        >
-                          {currentPage === id && (
-                            <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-[var(--color-accent)]" />
-                          )}
-                          <span className={`rounded-md p-1.5 transition-colors ${currentPage === id ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent-foreground)]' : 'bg-transparent text-[var(--color-text-muted)]'}`}>
-                            <Icon size={14} />
-                          </span>
-                          {sidebarOpen && (
-                            <span className="font-medium">{label}</span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+            <SidebarNavigation
+              currentPage={currentPage}
+              onNavigate={navigate}
+              collapsed={!sidebarOpen}
+              label={t('sidebar.workspace')}
+              translate={t}
+              groupLabels={{ main: t('nav_groups.main'), manage: t('nav_groups.manage'), config: t('nav_groups.config') }}
+            />
 
-              {sidebarOpen && <p className="px-3 pt-4 text-xs leading-5 text-[var(--color-text-muted)]">{t('common.command_hint')}</p>}
-            </nav>
-
-            <div className="p-3 space-y-2 shrink-0" style={{ borderTop: '1px solid var(--color-border-subtle)' }}>
-              {sidebarOpen && (
-                <LanguageSwitcher showFlag compact />
+            <div
+              className={sidebarOpen ? 'p-3 space-y-2 shrink-0' : 'p-1.5 space-y-2 shrink-0'}
+              style={{ borderTop: '1px solid var(--color-border-subtle)' }}
+            >
+              {sidebarOpen ? (
+                <LanguageSwitcher showIcon compact />
+              ) : (
+                // The 64px rail has room for exactly one 44px target, so the
+                // switcher drops to icon-only there. Centering keeps the row
+                // from overflowing the rail and being clipped.
+                <div className="flex justify-center">
+                  <LanguageSwitcher showIcon iconOnly />
+                </div>
               )}
-              <div className="flex items-center justify-between px-1">
+              <div className={sidebarOpen ? 'flex items-center justify-between px-1' : 'flex justify-center'}>
                 {sidebarOpen && <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{t('common.theme')}</span>}
                 <ThemeToggle />
               </div>
@@ -261,16 +234,6 @@ export default function App() {
           </aside>
 
           <main id="main-content" className="min-w-0 flex-1 overflow-hidden flex flex-col relative" style={{ backgroundColor: 'var(--color-bg-page)' }}>
-            <header className="desktop-context-bar">
-              <div className="min-w-0">
-                 <p className="workspace-eyebrow">{t('sidebar.workspace')}</p>
-                <p className="truncate text-sm font-semibold text-[var(--color-text-primary)]">{ALL_NAV_ITEMS.find(item => item.id === currentPage)?.label ?? currentPage}</p>
-              </div>
-              <button type="button" className="context-command" onClick={() => setActiveOverlay('commands')} aria-label={t('sidebar.command_menu')}>
-                 <Search size={14} /><span>{t('sidebar.command_menu')}</span><kbd>⌘K</kbd>
-              </button>
-            </header>
-
             <Suspense fallback={<PageFallback />}>
               <PageTransition transitionKey={currentPage}>
                 {renderPage()}
@@ -278,11 +241,15 @@ export default function App() {
             </Suspense>
           </main>
 
-          <GlobalSearch isOpen={activeOverlay === 'search'} onClose={() => setActiveOverlay(null)} />
-          <CommandPalette isOpen={activeOverlay === 'commands'} onClose={() => setActiveOverlay(null)} onNavigate={(page) => navigate(page as Page)} />
-          <IOsToaster position="top-center" theme="dark" />
+          <IOsToaster position="top-center" theme="system" />
         </>
       )}
+      <GlobalSearch
+        isOpen={activeOverlay === 'search'}
+        onClose={() => setActiveOverlay(null)}
+        onNavigate={target => navigate(target.page)}
+      />
+      <CommandPalette isOpen={activeOverlay === 'commands'} onClose={() => setActiveOverlay(null)} onNavigate={(page) => navigate(page as Page)} />
     </div>
   );
 }

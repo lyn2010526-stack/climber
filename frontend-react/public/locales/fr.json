@@ -175,7 +175,9 @@
     "this_week": "Cette semaine",
     "this_month": "Ce mois",
     "last_7_days": "7 derniers jours",
-    "last_30_days": "30 derniers jours"
+    "last_30_days": "30 derniers jours",
+    "api_online": "Requête API réussie",
+    "api_offline": "API indisponible"
   },
   "chat": {
     "title": "Interface de chat",

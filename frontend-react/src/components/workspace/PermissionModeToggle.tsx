@@ -1,80 +1,101 @@
-import { useState, useCallback, useEffect } from 'react';
-import { Shield, Globe } from 'lucide-react';
+import { AlertTriangle, Loader2, RotateCcw, ShieldQuestion } from 'lucide-react';
+import type { PermissionMode } from '../../store/workspace';
+import { PERMISSION_MODES, PERMISSION_MODE_INFO } from './permissionMode';
 
 interface PermissionModeToggleProps {
-  value: 'sandbox' | 'native';
-  onChange: (mode: 'sandbox' | 'native') => void;
+  /** Mode reported by the backend, or `null` when it has not reported one. */
+  value: PermissionMode | null;
+  onChange: (mode: PermissionMode) => void;
+  disabled?: boolean;
+  loading?: boolean;
+  /** Reason the configuration could not be read or written, when there is one. */
+  error?: string | null;
+  onRetry?: () => void;
 }
 
-const STORAGE_KEY = 'agent-engine-permission-mode';
+/**
+ * One control for the permission mode the backend actually enforces. Every
+ * button is a value of `PermissionMode`, so choosing one issues
+ * `PUT /permissions/config` and nothing here claims an access level the rule
+ * engine does not grant. While the configuration is unreadable the whole group
+ * says so instead of defaulting to a mode.
+ */
+export function PermissionModeToggle({
+  value,
+  onChange,
+  disabled = false,
+  loading = false,
+  error = null,
+  onRetry,
+}: PermissionModeToggleProps) {
+  if (value === null) {
+    return (
+      <div className="space-y-1.5" role="status">
+        <p className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
+          {loading ? (
+            <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+          ) : (
+            <ShieldQuestion size={13} aria-hidden="true" />
+          )}
+          {loading ? '正在读取后端权限模式' : '权限模式未上报'}
+        </p>
+        {error && (
+          <p className="flex items-start gap-1.5 text-[11px] text-[var(--color-warning)]">
+            <AlertTriangle size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
+            <span>后端未返回权限配置：{error}</span>
+          </p>
+        )}
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex items-center gap-1 rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] px-2 py-1 text-[11px] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-text-primary)]"
+          >
+            <RotateCcw size={11} aria-hidden="true" />
+            重试读取
+          </button>
+        )}
+      </div>
+    );
+  }
 
-export function PermissionModeToggle({ value, onChange }: PermissionModeToggleProps) {
-  const [showToast, setShowToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
-
-  useEffect(() => {
-    if (value) {
-      localStorage.setItem(STORAGE_KEY, value);
-    }
-  }, [value]);
-
-  const handleToggle = useCallback((mode: 'sandbox' | 'native') => {
-    if (mode === value) return;
-
-    if (mode === 'native') {
-      setToastMessage('已启用原生模式 — 智能体拥有完整系统访问权限');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
-    }
-
-    onChange(mode);
-  }, [value, onChange]);
+  const active = PERMISSION_MODE_INFO[value];
 
   return (
-    <div className="relative inline-flex items-center">
-      <div className="flex items-center bg-[var(--color-bg-surface-primary)] border border-[var(--color-border-subtle)] rounded-lg p-0.5">
-        <button
-          type="button"
-          onClick={() => handleToggle('sandbox')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
-            value === 'sandbox'
-              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
-              : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-hover)]/50'
-          }`}
-          title="沙箱模式 — 安全受限环境"
-        >
-          <Shield size={13} />
-          <span>沙箱</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleToggle('native')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
-            value === 'native'
-              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-sm shadow-amber-500/10'
-              : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-hover)]/50'
-          }`}
-          title="原生模式 — 完整系统访问，需要审批"
-        >
-          <Globe size={13} />
-          <span>原生</span>
-        </button>
+    <div className="space-y-1.5">
+      <div role="radiogroup" aria-label="权限模式" className="flex flex-wrap gap-1">
+        {PERMISSION_MODES.map((mode) => {
+          const info = PERMISSION_MODE_INFO[mode];
+          const selected = mode === value;
+          return (
+            <button
+              key={mode}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              disabled={disabled || loading}
+              onClick={() => onChange(mode)}
+              title={info.summary}
+              className={`rounded-[var(--radius-md)] border px-2 py-1 text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                selected
+                  ? 'border-[var(--color-border-accent)] bg-[var(--color-accent-subtle)] text-[var(--color-text-primary)]'
+                  : 'border-[var(--color-border-subtle)] text-[var(--color-text-muted)] hover:border-[var(--color-border-default)] hover:text-[var(--color-text-secondary)]'
+              }`}
+            >
+              {info.label}
+            </button>
+          );
+        })}
       </div>
-
-      {showToast && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 animate-slideUp">
-          <div className="bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs px-3 py-2 rounded-lg whitespace-nowrap shadow-lg shadow-amber-500/5">
-            {toastMessage}
-          </div>
-          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rotate-45 bg-amber-500/10 border-l border-t border-amber-500/30" />
-        </div>
+      <p className="text-[11px] text-[var(--color-text-muted)]">
+        后端模式 <span className="font-mono text-[var(--color-text-secondary)]">{value}</span> · {active.summary}
+      </p>
+      {error && (
+        <p role="alert" className="flex items-start gap-1.5 text-[11px] text-[var(--color-warning)]">
+          <AlertTriangle size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span>权限模式更新失败：{error}</span>
+        </p>
       )}
     </div>
   );
-}
-
-export function getStoredPermissionMode(): 'sandbox' | 'native' {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  return stored === 'native' ? 'native' : 'sandbox';
 }

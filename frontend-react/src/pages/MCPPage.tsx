@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
-import { Download, Trash2, Search, Check, Server, Star, RefreshCw, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Download, Trash2, Search, Server, RefreshCw, AlertCircle, CheckCircle2, CircleSlash, ChevronRight, ServerCog, CircleHelp } from 'lucide-react';
 import { api } from '../api';
+import { useTranslation } from '../i18n';
+import { includesQuery } from '../lib/search';
 import { PageHeader } from '../components/ui/PageHeader';
-import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
 import { EmptyState } from '../components/ui/EmptyState';
-import { SkeletonCard } from '../components/ui/Skeleton';
 
 interface MCPServer {
   id: string;
@@ -16,13 +16,22 @@ interface MCPServer {
   category: string;
   author: string;
   is_builtin: boolean;
-  is_installed: boolean;
+  is_installed?: boolean;
   tags: string[];
   install_config: Record<string, any>;
   popularity: number;
+  status?: string;
+  tools?: Array<{ name: string; description?: string }> | string[];
+  resources?: Array<{ name: string; uri?: string; description?: string }> | string[];
+  tools_count?: number;
+  resources_count?: number;
 }
 
+const selectClass = 'h-[var(--control-height-sm)] rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-surface-2)] px-3 text-xs text-[var(--color-text-primary)] transition-all duration-200 focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20';
+
 export function MCPPage() {
+  const { t } = useTranslation();
+  const [installedOnly, setInstalledOnly] = useState(false);
   const [servers, setServers] = useState<MCPServer[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,200 +39,284 @@ export function MCPPage() {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [installing, setInstalling] = useState<string | null>(null);
+  const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
+  const [expanded, setExpanded] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchServers();
-    fetchCategories();
-  }, []);
-
-  const fetchServers = async () => {
+  const fetchServers = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await api.listMCPServers();
       setServers(data);
-    } catch (e: any) {
-      setError(e.message || '加载 MCP 服务器失败');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('common.error'));
     }
     setLoading(false);
-  };
+  }, [t]);
 
-  const fetchCategories = async () => {
-    try {
-      const data = await api.listMCPCategories();
-      setCategories(data);
-    } catch { /* skip */ }
-  };
+  useEffect(() => {
+    fetchServers();
+    api.listMCPCategories()
+      .then(data => setCategories(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [fetchServers]);
 
   const installServer = async (serverId: string) => {
+    if (installing) return;
+    setError(null);
     setInstalling(serverId);
     try {
       await api.installMCPServer(serverId, {});
-      setServers(prev => prev.map(s =>
-        s.id === serverId ? { ...s, is_installed: true } : s
-      ));
-    } catch { /* skip */ }
-    setInstalling(null);
+      setActionErrors(prev => { const next = { ...prev }; delete next[serverId]; return next; });
+      await fetchServers();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : t('common.error');
+      setActionErrors(prev => ({ ...prev, [serverId]: message }));
+      setError(message);
+    } finally {
+      setInstalling(null);
+    }
   };
 
   const uninstallServer = async (serverId: string) => {
+    if (installing) return;
+    setInstalling(serverId);
+    setError(null);
     try {
       await api.deleteMCPServer(serverId);
-      setServers(prev => prev.map(s =>
-        s.id === serverId ? { ...s, is_installed: false } : s
-      ));
-    } catch { /* skip */ }
+      setActionErrors(prev => { const next = { ...prev }; delete next[serverId]; return next; });
+      await fetchServers();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : t('common.error');
+      setActionErrors(prev => ({ ...prev, [serverId]: message }));
+      setError(message);
+    } finally {
+      setInstalling(null);
+    }
   };
 
-  const filteredServers = servers.filter(s => {
-    const matchesCategory = !selectedCategory || s.category === selectedCategory;
-    const matchesSearch = !searchQuery ||
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesCategory && matchesSearch;
-  });
+  const filteredServers = servers.filter(server =>
+    (!selectedCategory || server.category === selectedCategory) &&
+    includesQuery([server.name, server.description, server.author, ...(server.tags ?? [])], searchQuery) &&
+    (!installedOnly || server.is_installed)
+  );
 
-  const groupedServers: Record<string, MCPServer[]> = {};
-  for (const srv of filteredServers) {
-    if (!groupedServers[srv.category]) groupedServers[srv.category] = [];
-    groupedServers[srv.category]!.push(srv);
-  }
+  const hasFilters = Boolean(searchQuery || selectedCategory || installedOnly);
+  const showList = !loading && (!error || filteredServers.length > 0);
+  const installedCount = servers.filter(s => s.is_installed === true).length;
 
   return (
-    <div className="h-full overflow-y-auto page-transition">
-      <div className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto">
+    <div className="page-scroll page-transition">
+      <div className="page-container">
         <PageHeader
-          title="MCP 市场"
-          description="安装 Model Context Protocol 服务器以扩展智能体能力"
-          icon={<Server size={20} />}
+          title={t('navigation.mcp')}
+          icon={<Server size={20} aria-hidden="true" />}
+          actions={
+            <Button variant="outline" size="sm" icon={<RefreshCw size={14} />} disabled={loading} onClick={fetchServers}>
+              {t('common.refresh')}
+            </Button>
+          }
         />
 
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          <div className="flex-1">
-            <Input
-              placeholder="搜索 MCP 服务器..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              icon={<Search size={16} />}
-            />
-          </div>
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl text-sm text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
-          >
-            <option value="">全部分类</option>
-            {categories.map(c => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
-
         {error && (
-          <Card variant="default" className="mb-6 border-[var(--color-error)]/30">
-            <CardContent className="p-4 flex items-center gap-3">
-              <AlertCircle size={18} className="text-[var(--color-error)] shrink-0" />
-              <p className="text-sm text-[var(--color-error)] flex-1">{error}</p>
-              <Button variant="outline" size="sm" icon={<RefreshCw size={14} />} onClick={fetchServers}>
-                重试
-              </Button>
-            </CardContent>
-          </Card>
+          <div role="alert" className="mb-3 flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] p-3">
+            <AlertCircle size={16} aria-hidden="true" className="shrink-0 text-[var(--color-error)]" />
+            <p className="flex-1 break-words text-sm text-[var(--color-error)]">{error}</p>
+            <Button variant="ghost" size="sm" icon={<RefreshCw size={14} />} onClick={fetchServers}>
+              {t('common.retry')}
+            </Button>
+          </div>
+        )}
+
+        {!loading && servers.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <div className="w-full max-w-xs">
+              <Input
+                size="sm"
+                placeholder="搜索 MCP 服务器..."
+                aria-label={t('common.search')}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                icon={<Search size={14} aria-hidden="true" />}
+              />
+            </div>
+            <select
+              aria-label={t('common.filter')}
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className={selectClass}
+            >
+              <option value="">全部分类</option>
+              {categories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            <label className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-[var(--color-text-secondary)]">
+              <input
+                type="checkbox"
+                checked={installedOnly}
+                onChange={e => setInstalledOnly(e.target.checked)}
+                className="h-3.5 w-3.5 accent-[var(--color-accent)]"
+              />
+              已安装
+            </label>
+            <span className="shrink-0 text-xs tabular-nums text-[var(--color-text-muted)]" aria-live="polite">
+              {filteredServers.length} / {servers.length} · {installedCount} 已安装
+            </span>
+          </div>
         )}
 
         {loading && (
-          <div className="space-y-6">
-            {[1, 2].map(i => (
-              <div key={i}>
-                <div className="h-4 w-20 bg-[var(--color-bg-surface-2)] rounded-xl mb-3" />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[1, 2].map(j => <SkeletonCard key={j} />)}
-                </div>
+          <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]" aria-busy="true" aria-label={t('common.loading')}>
+            {[1, 2, 3].map(i => (
+              <div key={i} className="flex items-center gap-3 border-b border-[var(--color-border-subtle)] px-3 py-2.5 last:border-b-0 md:px-4">
+                <div className="h-3.5 w-3.5 shrink-0 rounded skeleton-shimmer" style={{ animationDelay: `${i * 100}ms` }} />
+                <div className="h-3.5 flex-1 rounded skeleton-shimmer" style={{ animationDelay: `${i * 100}ms` }} />
+                <div className="h-3.5 w-20 shrink-0 rounded skeleton-shimmer" style={{ animationDelay: `${i * 100}ms` }} />
               </div>
             ))}
           </div>
         )}
 
-        {!loading && !error && filteredServers.length === 0 && (
-          <EmptyState
-            icon="file"
-            title="未找到 MCP 服务器"
-            description="尝试其他搜索关键词或分类"
-          />
+        {showList && filteredServers.length === 0 && (
+          <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]">
+            <EmptyState
+              className="w-full"
+              icon={hasFilters ? <Search size={20} aria-hidden="true" /> : <Server size={20} aria-hidden="true" />}
+              title={hasFilters ? t('common.no_results') : t('common.no_data')}
+              action={hasFilters ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setSearchQuery(''); setSelectedCategory(''); setInstalledOnly(false); }}
+                >
+                  {t('common.clear')}
+                </Button>
+              ) : undefined}
+            />
+          </div>
         )}
 
-        {!loading && !error && Object.entries(groupedServers).map(([cat, catServers]) => (
-          <div key={cat} className="mb-8">
-            <h3 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-4">
-              {cat} ({catServers.length})
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 stagger-children">
-              {catServers.map(server => (
-                <Card key={server.id} variant="default" className={`hover-lift ${server.is_installed ? 'border-[var(--color-success)]/30' : ''}`}>
-                  <CardContent className="p-5">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-[var(--color-accent)]/10 flex items-center justify-center border border-[var(--color-accent)]/20 shrink-0">
-                        <Server size={18} className="text-[var(--color-accent)]" />
+        {showList && filteredServers.length > 0 && (
+          <ul className="divide-y divide-[var(--color-border-subtle)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]" aria-label={t('navigation.mcp')}>
+            {filteredServers.map(server => {
+                      const configFields = Object.keys(server.install_config || {});
+                      const isExpanded = expanded === server.id;
+                      const actionError = actionErrors[server.id];
+                      const toolCount = server.tools_count ?? server.tools?.length;
+                      const resourceCount = server.resources_count ?? server.resources?.length;
+                      const tools = server.tools ?? [];
+                      const resources = server.resources ?? [];
+                      const retry = server.is_installed === true ? () => uninstallServer(server.id) : () => installServer(server.id);
+              return (
+                <li key={server.id} className="bg-[var(--color-bg-surface-1)] px-3 py-2 md:px-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Server size={16} aria-hidden="true" className="shrink-0 text-[var(--color-text-muted)]" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-sm font-medium text-[var(--color-text-primary)]">{server.name}</span>
+                        {server.category && <Badge variant="secondary" size="xs">{server.category}</Badge>}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-sm text-[var(--color-text-primary)] truncate">{server.name}</h3>
-                          {server.is_installed && (
-                            <Check size={14} className="text-[var(--color-success)] shrink-0" />
-                          )}
-                        </div>
-                        <p className="text-xs text-[var(--color-text-muted)] mt-1 line-clamp-2">{server.description}</p>
-                      </div>
+                      <p className="truncate text-xs text-[var(--color-text-muted)]">
+                        {[server.description, server.author, server.status].filter(Boolean).join(' · ')}
+                      </p>
                     </div>
-
-                    <div className="mt-3 flex items-center gap-2">
-                      <span className="text-xs text-[var(--color-text-muted)]">作者：{server.author}</span>
-                      {server.popularity > 0 && (
-                        <span className="flex items-center gap-1 text-xs text-[var(--color-warning)]">
-                          <Star size={10} fill="currentColor" /> {server.popularity}
-                        </span>
-                      )}
-                    </div>
-
-                    {server.tags.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {server.tags.map(tag => (
-                          <Badge key={tag} variant="default" size="xs">{tag}</Badge>
-                        ))}
-                      </div>
+                    <span
+                      role="status"
+                      data-mcp-installed={server.is_installed === undefined ? 'unreported' : server.is_installed ? 'installed' : 'available'}
+                      className={`inline-flex shrink-0 items-center gap-1.5 text-xs ${server.is_installed === undefined ? 'text-[var(--color-text-disabled)]' : server.is_installed ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-muted)]'}`}
+                    >
+                      {server.is_installed === undefined
+                        ? <CircleHelp size={13} aria-hidden="true" className="shrink-0" />
+                        : server.is_installed
+                        ? <CheckCircle2 size={13} aria-hidden="true" className="shrink-0" />
+                        : <CircleSlash size={13} aria-hidden="true" className="shrink-0" />}
+                      {server.is_installed === undefined ? '未上报' : server.is_installed ? '已安装' : '未安装'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(isExpanded ? null : server.id)}
+                      aria-expanded={isExpanded}
+                      aria-controls={`mcp-config-${server.id}`}
+                      className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-[var(--radius-md)] px-1.5 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)] sm:min-w-0"
+                    >
+                      <ServerCog size={13} aria-hidden="true" />
+                      <span className="hidden sm:inline">安装配置</span>
+                      <ChevronRight size={12} aria-hidden="true" className={isExpanded ? 'rotate-90 transition-transform' : 'transition-transform'} />
+                    </button>
+                    {server.is_installed === true ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<Trash2 size={13} aria-hidden="true" />}
+                        onClick={() => uninstallServer(server.id)}
+                        disabled={installing !== null}
+                        loading={installing === server.id}
+                        aria-label={`卸载 ${server.name}`}
+                        className="shrink-0 text-[var(--color-error)] hover:bg-[var(--color-error-subtle)]"
+                      >
+                        卸载
+                      </Button>
+                    ) : server.is_installed === false ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={<Download size={13} aria-hidden="true" />}
+                        onClick={() => installServer(server.id)}
+                        disabled={installing !== null}
+                        loading={installing === server.id}
+                        className="shrink-0"
+                      >
+                        安装
+                      </Button>
+                    ) : (
+                      <Button variant="outline" size="sm" disabled aria-label="状态未上报">未上报</Button>
                     )}
-
-                    <div className="mt-4 flex justify-end">
-                      {server.is_installed ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          icon={<Trash2 size={14} />}
-                          onClick={() => uninstallServer(server.id)}
-                          className="text-[var(--color-error)] border-[var(--color-error)]/30 hover:bg-[var(--color-error)]/10"
-                        >
-                          卸载
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          icon={<Download size={14} />}
-                          onClick={() => installServer(server.id)}
-                          disabled={installing === server.id}
-                          loading={installing === server.id}
-                        >
-                          安装
-                        </Button>
-                      )}
+                  </div>
+                  {isExpanded && (
+                      <div id={`mcp-config-${server.id}`} className="mt-2 pl-7 text-xs text-[var(--color-text-secondary)]">
+                       <div className="grid gap-2 sm:grid-cols-3">
+                         <div><span className="text-[var(--color-text-muted)]">Server</span><p className="mt-0.5 break-all">{server.name}</p></div>
+                         <div><span className="text-[var(--color-text-muted)]">Tools</span><p className="mt-0.5">{toolCount ?? t('common.none')}</p></div>
+                         <div><span className="text-[var(--color-text-muted)]">Resources</span><p className="mt-0.5">{resourceCount ?? t('common.none')}</p></div>
+                       </div>
+                       <p className="mt-2 break-words">配置字段：{configFields.join(', ') || t('common.none')}</p>
+                       {tools.length > 0 && (
+                         <div className="mt-2 border-l border-[var(--color-border-default)] pl-3">
+                           <p className="text-[var(--color-text-muted)]">Tools</p>
+                           <ul className="mt-1 space-y-1">
+                             {tools.map((tool, index) => <li key={typeof tool === 'string' ? tool : `${tool.name}-${index}`} className="break-words">{typeof tool === 'string' ? tool : tool.name}{typeof tool !== 'string' && tool.description ? ` · ${tool.description}` : ''}</li>)}
+                           </ul>
+                         </div>
+                       )}
+                       {resources.length > 0 && (
+                         <div className="mt-2 border-l border-[var(--color-border-default)] pl-3">
+                           <p className="text-[var(--color-text-muted)]">Resources</p>
+                           <ul className="mt-1 space-y-1">
+                             {resources.map((resource, index) => <li key={typeof resource === 'string' ? resource : `${resource.name}-${index}`} className="break-words">{typeof resource === 'string' ? resource : [resource.name, resource.uri, resource.description].filter(Boolean).join(' · ')}</li>)}
+                           </ul>
+                         </div>
+                       )}
+                      {server.tags && server.tags.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1.5">
+                          {server.tags.map(tag => (
+                            <Badge key={tag} variant="secondary" size="xs">{tag}</Badge>
+                          ))}
+                        </div>
+                   )}
+                   {actionError && (
+                     <div role="alert" className="mt-2 flex items-center gap-2 pl-7 text-xs text-[var(--color-error)]">
+                       <span className="min-w-0 flex-1 break-words">{actionError}</span>
+                       <Button variant="ghost" size="sm" onClick={retry} disabled={installing !== null} loading={installing === server.id}>{t('common.retry')}</Button>
+                     </div>
+                   )}
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        ))}
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </div>
   );

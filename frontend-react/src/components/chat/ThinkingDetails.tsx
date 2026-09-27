@@ -1,16 +1,26 @@
-import { useState, useEffect } from 'react';
-import { ChevronRight, Loader2 } from 'lucide-react';
+import { useId, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useI18n } from '../../i18n';
 
-/* Reference: Dify `markdown-blocks/thinking-details.tsx` */
 interface ThinkingDetailsProps {
+  /** The reasoning stream ended. Drives the dot, nothing else. */
   isComplete?: boolean;
+  /** Only rendered when a caller measured a real duration. */
   elapsedTime?: number;
   defaultOpen?: boolean;
   children: React.ReactNode;
   className?: string;
 }
 
+/**
+ * Collapsible reasoning block.
+ *
+ * The trigger states the kind of content, not a stage: the label is fixed and
+ * the dot is the only thing that moves, so a slow run never implies progress it
+ * cannot report. Toggling stays available after the stream ends, and the panel
+ * stays mounted while collapsed so the transcript keeps its text.
+ */
 export function ThinkingDetails({
   isComplete = false,
   elapsedTime,
@@ -18,49 +28,51 @@ export function ThinkingDetails({
   children,
   className,
 }: ThinkingDetailsProps) {
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(defaultOpen);
-  const [displayTime, setDisplayTime] = useState(0);
-
-  useEffect(() => {
-    if (!isComplete && elapsedTime !== undefined) {
-      const timer = setInterval(() => {
-        setDisplayTime((t) => t + 0.1);
-      }, 100);
-      return () => clearInterval(timer);
-    }
-  }, [isComplete, elapsedTime]);
-
-  const timeLabel = isComplete
-    ? `Thought(${((elapsedTime || 0).toFixed(1))}s)`
-    : `Thinking(${displayTime.toFixed(1)}s)`;
+  const panelId = useId();
 
   return (
     <div
-      className={cn('my-3 rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden transition-all duration-300', className)}
+      data-thinking-details
+      className={cn('my-2 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]', className)}
     >
-      <details
-        {...{ open: isOpen || isComplete }}
-        onToggle={(e) => {
-          if (!isComplete) {
-            setIsOpen((e.target as HTMLDetailsElement).open);
-          }
-        }}
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        aria-controls={panelId}
+        onClick={() => setIsOpen(open => !open)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-secondary)] motion-reduce:transition-none"
       >
-        <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-medium text-[var(--color-text-secondary)] select-none hover:bg-white/5 transition-all duration-200 group">
-          <div className="flex items-center justify-center w-5 h-5 rounded-lg bg-white/5 group-hover:bg-white/10 transition-colors duration-200">
-            <ChevronRight className="size-3 transition-transform duration-300 group-open:rotate-90" />
-          </div>
-          <span className="flex items-center gap-1.5">
-            {!isComplete && <Loader2 size={12} className="animate-spin text-blue-400" />}
-            {timeLabel}
+        <ChevronRight
+          size={12}
+          aria-hidden="true"
+          className={cn('shrink-0 transition-transform duration-150 motion-reduce:transition-none', isOpen && 'rotate-90')}
+        />
+        <span
+          aria-hidden="true"
+          className={cn(
+            'size-1.5 shrink-0 rounded-full bg-[var(--color-text-disabled)]',
+            !isComplete && 'bg-[var(--color-accent-foreground)] motion-safe:animate-pulse',
+          )}
+        />
+        <span className="min-w-0 truncate">{t('common.thinking', { defaultValue: '思考中' })}</span>
+        {elapsedTime !== undefined && (
+          <span className="ms-auto shrink-0 font-mono text-[11px] text-[var(--color-text-disabled)]">
+            {elapsedTime.toFixed(1)}s
           </span>
-        </summary>
-        <div className="border-t border-white/5 bg-white/[0.01] px-4 py-3">
-          <div className="text-sm text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap font-mono text-xs">
-            {children}
-          </div>
+        )}
+      </button>
+      <div
+        id={panelId}
+        data-reasoning-panel
+        hidden={!isOpen}
+        className="border-t border-[var(--color-border-subtle)] px-3 py-2"
+      >
+        <div className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-[var(--color-text-secondary)]">
+          {children}
         </div>
-      </details>
+      </div>
     </div>
   );
 }

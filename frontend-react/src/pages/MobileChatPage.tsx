@@ -1,54 +1,41 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { MobileChatInterface } from '../components/mobile/MobileChatInterface';
-import { useChat, type Message } from '../useChat';
+import { useChat } from '../useChat';
 import { useDefaultSession } from '../hooks/useDefaultSession';
 import { cacheManager } from '../components/mobile/LazyImage';
 
 export function MobileChatPage() {
-  const { sessionId } = useDefaultSession();
+  const { sessionId, creationError } = useDefaultSession();
   const { messages, isStreaming, error, sendMessage, stopStreaming, refresh } = useChat(sessionId);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleSend = useCallback(async (message: string) => {
-    if (!sessionId) return;
+    if (!sessionId) throw new Error(creationError || '会话尚未就绪，请稍后重试');
     await sendMessage(message);
-    await cacheManager.set(`last_message_${sessionId}`, {
+    void cacheManager.set(`last_message_${sessionId}`, {
       text: message,
       timestamp: Date.now(),
       sessionId,
-    });
-  }, [sessionId, sendMessage]);
+    }).catch(() => undefined);
+  }, [sessionId, creationError, sendMessage]);
 
   const handleStop = useCallback(() => {
     stopStreaming();
   }, [stopStreaming]);
 
-  const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    try {
-      refresh();
-      // Give the refreshed message list time to settle before hiding the spinner.
-      await new Promise((resolve) => setTimeout(resolve, 400));
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [refresh]);
-
+  // The mobile shell owns keyboard clamping and the navigation reserve, so the
+  // page only fills the content box. Nothing here measures the viewport, which
+  // keeps the composer mounted and the draft intact across resize events.
   return (
-    <div className="flex flex-col h-full mobile-touch-feedback">
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
       <MobileChatInterface
-        messages={messages as Message[]}
+        messages={messages}
         onSend={handleSend}
         onStop={handleStop}
         isLoading={isStreaming}
-        isRefreshing={isRefreshing}
-        onRefresh={handleRefresh}
+        disabled={!sessionId}
+        error={error || creationError}
+        onRefresh={refresh}
       />
-      {error && (
-        <div className="absolute bottom-20 left-4 right-4 bg-red-500/10 border border-red-500/30 rounded-2xl px-5 py-3 text-sm text-red-400 backdrop-blur-xl animate-fadeIn">
-          {error}
-        </div>
-      )}
     </div>
   );
 }

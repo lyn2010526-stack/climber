@@ -60,13 +60,18 @@ describe('WorkspaceStore', () => {
   });
 
   it('setPermissionMode sets mode', () => {
-    useWorkspaceStore.getState().setPermissionMode('native');
-    expect(useWorkspaceStore.getState().permissionMode).toBe('native');
+    useWorkspaceStore.getState().setPermissionMode('acceptEdits');
+    expect(useWorkspaceStore.getState().permissionMode).toBe('acceptEdits');
   });
 
-  it('setAutonomyLevel sets level', () => {
-    useWorkspaceStore.getState().setAutonomyLevel(5);
-    expect(useWorkspaceStore.getState().autonomyLevel).toBe(5);
+  it('drops a stale permission mode when a read fails', () => {
+    useWorkspaceStore.getState().setPermissionMode('plan');
+    // A failed read clears the mode rather than leaving the last known value
+    // on screen, so the UI cannot claim a mode the backend no longer confirms.
+    useWorkspaceStore.getState().setPermissionMode(null);
+    useWorkspaceStore.getState().setPermissionConfigStatus('error');
+    expect(useWorkspaceStore.getState().permissionMode).toBeNull();
+    expect(useWorkspaceStore.getState().permissionConfigStatus).toBe('error');
   });
 
   it('setTasks sets tasks', () => {
@@ -221,10 +226,13 @@ describe('WorkspaceStore', () => {
       expect(session.modelConfig).toEqual({
         provider: 'anthropic',
         modelId: 'claude-3-opus-20240220',
-        temperature: 0.7,
-        maxTokens: 4096,
       });
-      expect(session.tokenUsage).toEqual({ used: 0, limit: 200000 });
+      // The session API sends no temperature, no token ceiling and no usage
+      // counters, so those stay absent instead of being filled with plausible
+      // numbers the backend never produced.
+      expect(session.modelConfig?.temperature).toBeUndefined();
+      expect(session.modelConfig?.maxTokens).toBeUndefined();
+      expect(session.tokenUsage).toBeUndefined();
       expect(session.createdAt).toBe(Date.parse('2026-01-02T03:04:05'));
       expect(state.sessionsLoaded).toBe(true);
       expect(state.loadingSessions).toBe(false);
@@ -314,13 +322,24 @@ describe('WorkspaceStore', () => {
       expect(useWorkspaceStore.getState().activeSessionId).toBeNull();
     });
 
-    it('normalizes unknown backend status to idle and null title stays null', () => {
+    it('keeps an unreported status as unknown and null title stays null', () => {
       useWorkspaceStore.getState().loadSessions([
         backendSession({ title: null, status: 'weird-state' }),
       ]);
       const session = useWorkspaceStore.getState().sessions[0];
       expect(session.title).toBeNull();
-      expect(session.status).toBe('idle');
+      // A value outside the backend vocabulary is reported as unknown; mapping
+      // it to `idle` would state that the session is ready, which the payload
+      // never said.
+      expect(session.status).toBe('unknown');
+    });
+
+    it('passes through every status the backend actually reports', () => {
+      const reported = ['pending', 'idle', 'running', 'paused', 'completed', 'failed', 'stopped'] as const;
+      for (const status of reported) {
+        useWorkspaceStore.getState().loadSessions([backendSession({ status })]);
+        expect(useWorkspaceStore.getState().sessions[0].status).toBe(status);
+      }
     });
   });
 });

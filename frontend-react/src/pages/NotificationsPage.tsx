@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { Bell, Send, CheckCircle, AlertCircle, BellRing, Info } from 'lucide-react';
+import { Bell, Send, CheckCircle, AlertCircle, BellRing } from 'lucide-react';
 import { api } from '../api';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Badge } from '../components/ui/Badge';
 
 export function NotificationsPage() {
   const [title, setTitle] = useState('Climber 通知测试');
@@ -14,26 +13,28 @@ export function NotificationsPage() {
   const [sending, setSending] = useState(false);
 
   const send = async () => {
+    if (sending || !title.trim() || !message.trim()) return;
     setSending(true);
     setResult(null);
     try {
       const data = await api.sendNotification(title, message);
       setResult(data);
-    } catch (e: any) {
-      setResult({ ok: false, error: e.message });
+    } catch (e) {
+      setResult({ ok: false, error: e instanceof Error ? e.message : '发送失败' });
     } finally {
       setSending(false);
     }
   };
 
   const test = async () => {
+    if (sending) return;
     setSending(true);
     setResult(null);
     try {
       const data = await api.testNotification();
       setResult(data);
-    } catch (e: any) {
-      setResult({ ok: false, error: e.message });
+    } catch (e) {
+      setResult({ ok: false, error: e instanceof Error ? e.message : '测试失败' });
     } finally {
       setSending(false);
     }
@@ -41,35 +42,36 @@ export function NotificationsPage() {
 
   return (
     <div className="h-full overflow-y-auto page-transition">
-      <div className="p-4 md:p-6 lg:p-8 max-w-3xl mx-auto">
+      <div className="p-4 md:p-6 max-w-3xl mx-auto">
         <PageHeader
           title="通知中心"
-          description="测试桌面通知，任务完成或出错时会自动弹出提醒"
           icon={<Bell size={20} />}
         />
 
-        <div className="space-y-6">
+        <div className="space-y-3">
           <Card variant="default">
-            <CardContent className="p-6">
+            <CardContent className="p-4">
               <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">
                 发送自定义通知
               </h3>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">
+                  <label htmlFor="notification-title" className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">
                     标题
                   </label>
                   <Input
+                    id="notification-title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="通知标题"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">
+                  <label htmlFor="notification-message" className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">
                     内容
                   </label>
                   <textarea
+                    id="notification-message"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     rows={3}
@@ -77,8 +79,9 @@ export function NotificationsPage() {
                     placeholder="通知内容"
                   />
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-2">
                   <Button
+                    size="sm"
                     onClick={send}
                     loading={sending}
                     disabled={!title.trim() || !message.trim()}
@@ -87,6 +90,7 @@ export function NotificationsPage() {
                     发送通知
                   </Button>
                   <Button
+                    size="sm"
                     variant="secondary"
                     onClick={test}
                     loading={sending}
@@ -100,7 +104,7 @@ export function NotificationsPage() {
           </Card>
 
           {result && (
-            <div className={`rounded-xl p-4 flex items-center gap-3 border ${
+            <div role="status" aria-live="polite" className={`rounded-lg p-3 flex items-center gap-3 border ${
               result.ok
                 ? 'bg-[var(--color-success)]/10 border-[var(--color-success)]/30'
                 : 'bg-[var(--color-error)]/10 border-[var(--color-error)]/30'
@@ -116,26 +120,7 @@ export function NotificationsPage() {
             </div>
           )}
 
-          <Card variant="default">
-            <CardContent className="p-6">
-              <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">
-                通知说明
-              </h3>
-              <ul className="space-y-2">
-                {[
-                  '通知通过系统原生机制发送（Linux notify-send / macOS osascript / Windows PowerShell）',
-                  '如果系统不支持桌面通知，会自动跳过，不会影响应用运行',
-                  '任务完成、失败或需要审批时，系统会自动触发通知',
-                  '通知服务在后台运行，不占用前端资源',
-                ].map((tip, i) => (
-                  <li key={i} className="flex items-start gap-2 text-xs text-[var(--color-text-muted)]">
-                    <Info size={12} className="text-[var(--color-text-muted)] shrink-0 mt-0.5" />
-                    <span>{tip}</span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+          <p className="text-xs text-[var(--color-text-muted)]">通知由后端主机发送，显示结果取决于该主机的桌面通知支持。</p>
         </div>
       </div>
     </div>

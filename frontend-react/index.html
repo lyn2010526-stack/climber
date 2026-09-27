@@ -2,10 +2,14 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%235E6AD2'/%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='4 20 10 15 7 9 13.5 5'/%3E%3Crect x='14.75' y='2' width='6' height='6' rx='1.25'/%3E%3C/g%3E%3C/svg%3E" />
+    <!-- Favicon is referenced, not inlined: public/favicon.svg is the one
+         drawing, and a data-URI copy here is a second one that drifts. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/icon-180x180.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0" />
-    <meta name="theme-color" content="#5E6AD2" />
+    <!-- One theme-color: the app is dark in both themes, so the browser UI always
+         matches the page. Kept in step with --color-bg-page in src/index.css. -->
+    <meta name="theme-color" content="#20222E" />
     <meta name="description" content="Local-first AI Agent Workbench" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -14,8 +18,8 @@
     <meta name="format-detection" content="telephone=no" />
     <meta name="msapplication-tap-highlight" content="no" />
     
-    <!-- Android status bar color -->
-    <meta name="background-color" content="#000000" />
+    <!-- Android status bar color, follows the page background -->
+    <meta name="background-color" content="#20222E" />
     <meta name="mobile-web-app-capable" content="yes" />
     
     <link rel="manifest" href="/manifest.json" />

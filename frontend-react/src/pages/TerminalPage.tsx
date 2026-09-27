@@ -12,22 +12,22 @@ export default function TerminalPage() {
     try {
       const res = await api.executeSandboxCommand(command);
       const out = (res.output ?? '').replace(/\n/g, '\r\n');
-      return res.success ? prompt(out) : `\x1b[31m${prompt(out)}\x1b[0m`;
+      return res.success ? prompt(out) : `\x1b[31m${out}\x1b[0m`;
     } catch (err: any) {
       return `\x1b[31m${String(err?.message ?? err)}\x1b[0m`;
     }
   };
 
   return (
-    <div className="h-full flex flex-col page-transition">
-      <div className="px-4 py-3 md:px-6 md:py-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)]/80 backdrop-blur-xl">
+    <div className="h-full min-h-0 min-w-0 flex flex-col page-transition">
+      <div className="px-4 py-3 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)]">
         <PageHeader
           title="终端沙箱"
-          description="安全的命令执行环境"
+          description="通过沙箱 API 执行命令并查看输出"
           icon={<TerminalSquare size={20} />}
         />
       </div>
-      <div className="flex-1 p-4 overflow-hidden">
+      <div className="flex-1 min-h-0 p-3 overflow-hidden">
         <TerminalPanel onCommand={handleCommand} className="h-full" />
       </div>
     </div>

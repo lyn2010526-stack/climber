@@ -7,9 +7,13 @@ import { Bot, Wrench, GitBranch, FileInput, FileOutput, AlertTriangle, FlaskConi
 import { cn } from '../../lib/utils';
 import { useTranslation } from '../../i18n';
 
-// ─── Custom Node Components ───
-
-/* Reference: Flowise `CanvasNode.jsx` - border colors, selected states, version warnings */
+// Shared neutral surface; selection is independent of node type.
+const neutralNodeStyle = {
+  color: 'text-[var(--color-text-secondary)]',
+  bg: 'bg-[var(--color-bg-surface-1)]',
+  borderHover: 'hover:border-[var(--color-border-strong)]',
+  borderSelected: 'border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]',
+};
 const nodeStyles: Record<
   'input' | 'llm' | 'tool' | 'simulation' | 'condition' | 'output',
   {
@@ -22,55 +26,37 @@ const nodeStyles: Record<
 > = {
   input: {
     icon: FileInput,
-    color: 'text-blue-400',
-    bg: 'bg-blue-600/10',
-    borderHover: 'hover:border-blue-500/40',
-    borderSelected: 'border-blue-500',
+    ...neutralNodeStyle,
   },
   llm: {
     icon: Bot,
-    color: 'text-purple-400',
-    bg: 'bg-purple-500/10',
-    borderHover: 'hover:border-purple-500/40',
-    borderSelected: 'border-purple-500',
+    ...neutralNodeStyle,
   },
   tool: {
     icon: Wrench,
-    color: 'text-green-400',
-    bg: 'bg-green-500/10',
-    borderHover: 'hover:border-green-500/40',
-    borderSelected: 'border-green-500',
+    ...neutralNodeStyle,
   },
   simulation: {
     icon: FlaskConical,
-    color: 'text-cyan-400',
-    bg: 'bg-cyan-500/10',
-    borderHover: 'hover:border-cyan-500/40',
-    borderSelected: 'border-cyan-500',
+    ...neutralNodeStyle,
   },
   condition: {
     icon: GitBranch,
-    color: 'text-amber-400',
-    bg: 'bg-amber-500/10',
-    borderHover: 'hover:border-amber-500/40',
-    borderSelected: 'border-amber-500',
+    ...neutralNodeStyle,
   },
   output: {
     icon: FileOutput,
-    color: 'text-blue-400',
-    bg: 'bg-blue-500/10',
-    borderHover: 'hover:border-blue-500/40',
-    borderSelected: 'border-blue-500',
+    ...neutralNodeStyle,
   },
 };
 
 function NodeHeader({ style, nodeData, icon: Icon }: any) {
   return (
     <div className="flex items-center gap-2">
-      <div className={`p-1.5 rounded-lg ${style.bg} ${style.color}`}>
+      <div className={`shrink-0 p-1 rounded-[var(--radius-sm)] bg-[var(--color-bg-surface-2)] ${style.color}`}>
         <Icon size={14} />
       </div>
-      <span className="text-xs font-medium text-[var(--color-text-primary)] truncate">
+      <span className="min-w-0 text-xs font-semibold text-[var(--color-text-primary)] truncate">
         {nodeData['label'] || 'Node'}
       </span>
     </div>
@@ -86,10 +72,9 @@ function NodeMeta({ nodeData, type }: any) {
   else if (type === 'output') meta = nodeData['description'] || 'Workflow output';
 
   if (!meta) return null;
-  return <p className="text-[10px] text-[var(--color-text-muted)] mt-1 truncate">{meta}</p>;
+  return <p title={meta} className="text-xs text-[var(--color-text-secondary)] mt-2 truncate">{meta}</p>;
 }
 
-/* Reference: Flowise `CanvasNode.jsx` - selected state, version warning */
 export function InputNode({ data, selected }: NodeProps) {
   const style = nodeStyles.input;
   const nodeData = data as Record<string, any>;
@@ -98,13 +83,13 @@ export function InputNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        'px-4 py-3 rounded-xl border min-w-[160px] transition-all duration-200',
+        'px-3 py-2.5 rounded-[var(--radius-md)] border w-[200px]',
         style.bg,
-        selected ? style.borderSelected : 'border-white/10',
+        selected ? style.borderSelected : 'border-[var(--color-border-default)]',
         style.borderHover
       )}
     >
-      <Handle type="source" position={Position.Right} className="!bg-blue-600 !w-2 !h-2" />
+      <Handle type="source" position={Position.Right} className="!bg-[var(--color-text-muted)] !w-2 !h-2" />
       <NodeHeader style={style} nodeData={nodeData} icon={Icon} />
       <NodeMeta nodeData={nodeData} type="input" />
     </div>
@@ -120,18 +105,18 @@ export function LLMNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        'px-4 py-3 rounded-xl border min-w-[180px] transition-all duration-200',
+        'px-3 py-2.5 rounded-[var(--radius-md)] border w-[200px]',
         style.bg,
-        selected ? style.borderSelected : 'border-white/10',
+        selected ? style.borderSelected : 'border-[var(--color-border-default)]',
         style.borderHover
       )}
     >
-      <Handle type="target" position={Position.Left} className="!bg-purple-400 !w-2 !h-2" />
-      <Handle type="source" position={Position.Right} className="!bg-purple-400 !w-2 !h-2" />
+      <Handle type="target" position={Position.Left} className="!bg-[var(--color-text-muted)] !w-2 !h-2" />
+      <Handle type="source" position={Position.Right} className="!bg-[var(--color-text-muted)] !w-2 !h-2" />
       <NodeHeader style={style} nodeData={nodeData} icon={Icon} />
       <NodeMeta nodeData={nodeData} type="llm" />
       {nodeData['version_warning'] && (
-        <div className="flex items-center gap-1 mt-2 text-[9px] text-amber-400">
+        <div className="flex items-center gap-1 mt-2 text-xs text-[var(--color-warning)]">
           <AlertTriangle size={10} />
           <span>{t('common.version_outdated')}</span>
         </div>
@@ -148,14 +133,14 @@ export function ToolNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        'px-4 py-3 rounded-xl border min-w-[170px] transition-all duration-200',
+        'px-3 py-2.5 rounded-[var(--radius-md)] border w-[200px]',
         style.bg,
-        selected ? style.borderSelected : 'border-white/10',
+        selected ? style.borderSelected : 'border-[var(--color-border-default)]',
         style.borderHover
       )}
     >
-      <Handle type="target" position={Position.Left} className="!bg-green-500 !w-2 !h-2" />
-      <Handle type="source" position={Position.Right} className="!bg-green-500 !w-2 !h-2" />
+      <Handle type="target" position={Position.Left} className="!bg-[var(--color-text-muted)] !w-2 !h-2" />
+      <Handle type="source" position={Position.Right} className="!bg-[var(--color-text-muted)] !w-2 !h-2" />
       <NodeHeader style={style} nodeData={nodeData} icon={Icon} />
       <NodeMeta nodeData={nodeData} type="tool" />
     </div>
@@ -170,19 +155,19 @@ export function ConditionNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        'px-4 py-3 rounded-xl border min-w-[170px] transition-all duration-200',
+        'px-3 py-2.5 rounded-[var(--radius-md)] border w-[200px]',
         style.bg,
-        selected ? style.borderSelected : 'border-white/10',
+        selected ? style.borderSelected : 'border-[var(--color-border-default)]',
         style.borderHover
       )}
     >
-      <Handle type="target" position={Position.Left} className="!bg-amber-500 !w-2 !h-2" />
-      <Handle type="source" position={Position.Right} className="!bg-green-500 !w-2 !h-2" id="true" />
-      <Handle type="source" position={Position.Bottom} className="!bg-red-500 !w-2 !h-2" id="false" />
+      <Handle type="target" position={Position.Left} className="!bg-[var(--color-text-muted)] !w-2 !h-2" />
+      <Handle type="source" position={Position.Right} className="!bg-[var(--color-text-muted)] !w-2 !h-2" id="true" />
+      <Handle type="source" position={Position.Bottom} className="!bg-[var(--color-text-muted)] !w-2 !h-2" id="false" />
       <NodeHeader style={style} nodeData={nodeData} icon={Icon} />
-      <div className="flex items-center gap-2 mt-2 text-[9px]">
-        <span className="px-1.5 py-0.5 bg-green-500/10 text-green-400 rounded">True</span>
-        <span className="px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded">False</span>
+      <div className="flex items-center justify-between mt-2 border-t border-[var(--color-border-subtle)] pt-2 text-xs text-[var(--color-text-secondary)]">
+        <span>False</span>
+        <span>True</span>
       </div>
     </div>
   );
@@ -196,23 +181,23 @@ export function SimulationNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        'px-4 py-3 rounded-xl border min-w-[170px] transition-all duration-200',
+        'px-3 py-2.5 rounded-[var(--radius-md)] border w-[200px]',
         style.bg,
-        selected ? style.borderSelected : 'border-white/10',
+        selected ? style.borderSelected : 'border-[var(--color-border-default)]',
         style.borderHover
       )}
     >
-      <Handle type="target" position={Position.Left} className="!bg-cyan-500 !w-2 !h-2" />
-      <Handle type="source" position={Position.Right} className="!bg-cyan-500 !w-2 !h-2" />
+      <Handle type="target" position={Position.Left} className="!bg-[var(--color-text-muted)] !w-2 !h-2" />
+      <Handle type="source" position={Position.Right} className="!bg-[var(--color-text-muted)] !w-2 !h-2" />
       <NodeHeader style={style} nodeData={nodeData} icon={Icon} />
       <NodeMeta nodeData={nodeData} type="simulation" />
       {(nodeData['schema'] || nodeData['max_rounds']) && (
-        <div className="flex items-center gap-2 mt-2 text-[9px]">
+        <div className="flex items-center gap-2 mt-2 text-xs">
           {nodeData['schema'] && (
-            <span className="px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 rounded">Schema</span>
+            <span className="px-1.5 py-0.5 bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)] rounded">Schema</span>
           )}
           {nodeData['max_rounds'] && (
-            <span className="px-1.5 py-0.5 bg-cyan-500/10 text-cyan-400 rounded">R{nodeData['max_rounds']}</span>
+            <span className="px-1.5 py-0.5 bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)] rounded">R{nodeData['max_rounds']}</span>
           )}
         </div>
       )}
@@ -228,13 +213,13 @@ export function OutputNode({ data, selected }: NodeProps) {
   return (
     <div
       className={cn(
-        'px-4 py-3 rounded-xl border min-w-[160px] transition-all duration-200',
+        'px-3 py-2.5 rounded-[var(--radius-md)] border w-[200px]',
         style.bg,
-        selected ? style.borderSelected : 'border-white/10',
+        selected ? style.borderSelected : 'border-[var(--color-border-default)]',
         style.borderHover
       )}
     >
-      <Handle type="target" position={Position.Left} className="!bg-blue-400 !w-2 !h-2" />
+      <Handle type="target" position={Position.Left} className="!bg-[var(--color-text-muted)] !w-2 !h-2" />
       <NodeHeader style={style} nodeData={nodeData} icon={Icon} />
       <NodeMeta nodeData={nodeData} type="output" />
     </div>
@@ -249,8 +234,6 @@ export const nodeTypes = {
   condition: ConditionNode,
   output: OutputNode,
 };
-
-// ─── Helper to create nodes ───
 
 export function createWorkflowNode(type: string, position: { x: number; y: number }, data: Record<string, any> = {}) {
   return {

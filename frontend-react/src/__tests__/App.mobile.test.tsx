@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import App from '../App';
 import i18n from '../i18n';
 import { ThemeProvider } from '../hooks/useTheme.tsx';
@@ -95,14 +96,6 @@ vi.mock('../pages/AgentsPage', () => ({
   AgentsPage: () => <div>Agents Page</div>,
 }));
 
-vi.mock('../components/workspace/GlobalSearch', () => ({
-  GlobalSearch: () => null,
-}));
-
-vi.mock('../components/workspace/CommandPalette', () => ({
-  default: () => null,
-}));
-
 vi.mock('../components/ios', () => ({
   IOsToaster: () => null,
 }));
@@ -122,6 +115,59 @@ function renderApp() {
 }
 
 describe('Desktop-first shell contract', () => {
+  it.each(['Control', 'Meta'])('toggles the mobile command palette with %s+K and closes with Escape', async (modifier) => {
+    const user = userEvent.setup();
+    setViewport(390);
+    renderApp();
+    expect(screen.getByText('Mobile Chat')).toBeInTheDocument();
+    expect(document.querySelector('input[type="password"]')).toBeNull();
+
+    await user.keyboard(`{${modifier}>}k{/${modifier}}`);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(screen.getByRole('combobox')).toHaveFocus();
+    await user.keyboard(`{${modifier}>}k{/${modifier}}`);
+    expect(screen.queryByRole('dialog')).toBeNull();
+
+    await user.keyboard(`{${modifier}>}k{/${modifier}}`);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('navigates from the mobile command palette and closes it', async () => {
+    const user = userEvent.setup();
+    setViewport(390);
+    renderApp();
+    await user.keyboard('{Control>}k{/Control}');
+    await user.type(screen.getByRole('combobox'), 'Agents');
+    await user.keyboard('{Enter}');
+    expect(await screen.findByText('Agents Page')).toBeInTheDocument();
+    expect(window.location.hash).toBe('#agents');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('preserves global search across the mobile breakpoint and switches to commands exclusively', async () => {
+    const user = userEvent.setup();
+    setViewport(1280);
+    renderApp();
+    await screen.findByTestId('desktop-workspace');
+    await user.click(screen.getByRole('button', { name: i18n.t('sidebar.global_search') }));
+    const search = screen.getByRole('combobox');
+    await user.type(search, 'a');
+
+    setViewport(390);
+    expect(screen.getByRole('combobox')).toBe(search);
+    expect(search).toHaveValue('a');
+    await user.keyboard('{Control>}k{/Control}');
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(screen.getByRole('combobox', { name: i18n.t('common.command_palette') })).toHaveFocus();
+    await user.type(screen.getByRole('combobox'), 'Agents');
+    setViewport(1280);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(screen.getByRole('combobox')).toHaveValue('Agents');
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('renders the shell immediately without any login gate or auth request', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
       throw new Error('unexpected network call');

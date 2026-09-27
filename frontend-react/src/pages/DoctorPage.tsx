@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Activity, RefreshCw, AlertCircle, CheckCircle, HeartPulse } from 'lucide-react';
+import { Activity, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
 import { api } from '../api';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardContent } from '../components/ui/Card';
@@ -18,7 +18,7 @@ export function DoctorPage() {
   const [checks, setChecks] = useState<CheckItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [healthy, setHealthy] = useState(false);
+  const [healthy, setHealthy] = useState<boolean | null>(null);
 
   const fetchDoctor = async () => {
     setLoading(true);
@@ -32,9 +32,9 @@ export function DoctorPage() {
         }
       }
       setChecks(items);
-      setHealthy(data.healthy);
-    } catch (e: any) {
-      setError(e.message || '诊断失败');
+      setHealthy(typeof data.healthy === 'boolean' ? data.healthy : null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '诊断失败');
     } finally {
       setLoading(false);
     }
@@ -50,14 +50,13 @@ export function DoctorPage() {
 
   return (
     <div className="h-full overflow-y-auto page-transition">
-      <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto">
+      <div className="p-4 md:p-6 max-w-6xl mx-auto">
         <PageHeader
           title="系统诊断"
-          description="运行环境健康检查，快速定位配置和依赖问题"
           icon={<Activity size={20} />}
           actions={
             <Button
-              variant="secondary"
+              variant="primary"
               size="sm"
               onClick={fetchDoctor}
               loading={loading}
@@ -79,14 +78,10 @@ export function DoctorPage() {
 
         {!loading && !error && (
           <>
-            <Card variant="default" className="mb-6">
-              <CardContent className="p-4 flex items-center gap-4">
-                <div className={`p-3 rounded-2xl ${healthy ? 'bg-[var(--color-success)]/10 border border-[var(--color-success)]/20' : 'bg-[var(--color-error)]/10 border border-[var(--color-error)]/20'}`}>
-                  <HeartPulse size={24} className={healthy ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'} />
-                </div>
+            <div role="status" className="mb-4 flex flex-wrap items-center gap-3 border-b border-[var(--color-border-subtle)] pb-3">
                 <div className="flex-1">
-                  <p className={`text-sm font-semibold ${healthy ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}>
-                    {healthy ? '系统健康，所有检查通过' : '系统存在异常，请检查下方 FAIL 项'}
+                  <p className="text-sm font-medium text-[var(--color-text-primary)]">
+                    {checks.length === 0 ? '未返回诊断检查项' : healthy === null ? '诊断状态未知' : healthy && failCount === 0 ? '本次诊断通过' : '本次诊断存在异常'}
                   </p>
                   <div className="flex items-center gap-3 mt-1 text-xs text-[var(--color-text-muted)]">
                     <span className="flex items-center gap-1">
@@ -101,17 +96,16 @@ export function DoctorPage() {
                     )}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+            </div>
 
-            <div className="space-y-6 stagger-children">
+            <div className="space-y-3">
               {sections.map(section => {
                 const sectionChecks = checks.filter(c => c.section === section);
                 const sectionPass = sectionChecks.filter(c => c.ok).length;
                 return (
                   <Card key={section} variant="default">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between mb-4">
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between mb-2">
                         <h3 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
                           {section}
                         </h3>
@@ -119,9 +113,9 @@ export function DoctorPage() {
                           {sectionPass}/{sectionChecks.length}
                         </span>
                       </div>
-                      <div className="space-y-3">
+                      <div className="divide-y divide-[var(--color-border-subtle)]">
                         {sectionChecks.map(check => (
-                          <div key={check.name} className="flex items-start justify-between gap-4">
+                          <div key={check.name} className="flex items-start justify-between gap-3 py-2.5">
                             <div className="flex items-center gap-3 min-w-0 flex-1">
                               {check.ok ? (
                                 <CheckCircle size={16} className="text-[var(--color-success)] shrink-0 mt-0.5" />
@@ -129,8 +123,8 @@ export function DoctorPage() {
                                 <AlertCircle size={16} className="text-[var(--color-error)] shrink-0 mt-0.5" />
                               )}
                               <div className="min-w-0">
-                                <p className="text-sm text-[var(--color-text-primary)] truncate">{check.name}</p>
-                                <p className="text-xs text-[var(--color-text-muted)] truncate">{check.detail}</p>
+                                <p className="text-sm text-[var(--color-text-primary)] break-words">{check.name}</p>
+                                <p className="text-xs text-[var(--color-text-muted)] whitespace-pre-wrap break-words">{check.detail}</p>
                               </div>
                             </div>
                             <Badge variant={check.ok ? 'success' : 'destructive'} size="xs">

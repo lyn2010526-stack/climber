@@ -1,287 +1,221 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  Send, Users, Hash, MessageCircle,
-  Bot, Crown, Eye, Loader2, PanelLeft, X,
-} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Send } from 'lucide-react';
 import { api } from '../../api';
-
-interface GroupMember {
-  id: string;
-  agent_id: string;
-  role: string;
-  status: string;
-  message_count: number;
-}
+import { useI18n } from '../../i18n';
+import { formatTime } from '../../i18n/utils';
+import { Button } from '../ui/Button';
 
 interface GroupMessage {
   id: string;
   sender_name: string;
   content: string;
-  message_type: string;
   created_at: string;
 }
 
 interface GroupRoomProps {
   groupId: string;
-  onLeave: () => void;
+  onMemberUpdate?: (memberId: string, status: string) => void;
+  onTaskUpdate?: (taskId: string) => void;
 }
 
-const ROLE_ICONS: Record<string, any> = {
-  moderator: Crown,
-  participant: Bot,
-  observer: Eye,
-};
+/** Backend WS frames: the hub acks each frame and broadcasts message/task events. */
+type Frame =
+  | { type: 'ack'; data: { ok: boolean; id?: string; error?: string } }
+  | { type: 'message'; data: { id?: string } }
+  | { type: 'member_update'; data?: { id?: string; member_id?: string; status?: string } }
+  | { type: 'task_update'; data?: { id?: string; task_id?: string } }
+  | { type: 'error'; error?: string }
+  | { type: 'pong' }
+  | { type: string; data?: unknown };
 
-const ROLE_COLORS: Record<string, string> = {
-  moderator: 'text-amber-400',
-  participant: 'text-blue-400',
-  observer: 'text-[var(--color-text-muted)]',
-};
-
-const ROLE_LABELS: Record<string, string> = {
-  moderator: '主持人',
-  participant: '参与者',
-  observer: '观察者',
-};
-
-export function GroupRoom({ groupId, onLeave }: GroupRoomProps) {
+export function GroupRoom({ groupId, onMemberUpdate, onTaskUpdate }: GroupRoomProps) {
+  const { t } = useI18n();
   const [messages, setMessages] = useState<GroupMessage[]>([]);
-  const [members, setMembers] = useState<GroupMember[]>([]);
   const [input, setInput] = useState('');
   const [connected, setConnected] = useState(false);
   const [sending, setSending] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [historyError, setHistoryError] = useState('');
   const wsRef = useRef<WebSocket | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const sidebarToggleRef = useRef<HTMLButtonElement>(null);
-  const sidebarCloseRef = useRef<HTMLButtonElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const disposedRef = useRef(false);
 
-  // Mobile member sidebar: Escape to close, focus stays trapped logically
-  // by moving into the sidebar on open and back to the trigger on close.
-  useEffect(() => {
-    if (!sidebarOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSidebarOpen(false);
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    sidebarCloseRef.current?.focus();
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      sidebarToggleRef.current?.focus();
-    };
-  }, [sidebarOpen]);
+  const sortMessages = (list: GroupMessage[]) =>
+    [...list].sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+  const loadHistory = useCallback(async (targetGroupId: string) => {
+    const data = await api.listGroupMessages(targetGroupId);
+    if (!Array.isArray(data?.messages)) throw new Error(t('common.error'));
+    const list = data.messages as GroupMessage[];
+    if (list.some(item => !item || typeof item.id !== 'string' || typeof item.content !== 'string')) {
+      throw new Error(t('common.error'));
+    }
+    return sortMessages(list);
+  }, [t]);
 
   useEffect(() => {
-    // Fetch initial messages
-    api.listGroupMessages(groupId)
-      .then((data) => setMessages(data.messages || []))
-      .catch(() => {});
+    disposedRef.current = false;
+    setMessages([]);
+    setLoading(true);
+    setError('');
+    setHistoryError('');
 
-    // Fetch group details for members
-    api.getGroup(groupId)
-      .then((data) => setMembers(data.members || []))
-      .catch(() => {});
+    void loadHistory(groupId)
+      .then(list => {
+        if (!disposedRef.current) setMessages(list);
+      })
+      .catch(reason => {
+        if (!disposedRef.current) {
+          setHistoryError(reason instanceof Error ? reason.message : '加载消息失败');
+        }
+      })
+      .finally(() => {
+        if (!disposedRef.current) setLoading(false);
+      });
 
-    // Connect WebSocket
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}/api/v1/ws/groups/${groupId}`);
     wsRef.current = ws;
-
-    ws.onopen = () => setConnected(true);
-    ws.onclose = () => setConnected(false);
-    ws.onmessage = (event) => {
+    ws.onopen = () => { if (!disposedRef.current) setConnected(true); };
+    ws.onclose = () => {
+      if (!disposedRef.current) {
+        setConnected(false);
+        setSending(false);
+      }
+    };
+    ws.onmessage = event => {
+      if (disposedRef.current) return;
+      let frame: Frame;
       try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'message' && msg.data) {
-          setMessages((prev) => [...prev, {
-            id: msg.data.id || Date.now().toString(),
-            sender_id: msg.data.sender_id || '',
-            sender_name: msg.data.sender_name || 'Unknown',
-            content: msg.data.content || '',
-            message_type: msg.data.message_type || 'text',
-            created_at: msg.data.created_at || new Date().toISOString(),
-          }]);
-        } else if (msg.type === 'member_update' && msg.data) {
-          setMembers((prev) => prev.map(m =>
-            m.id === msg.data.member_id
-              ? { ...m, status: msg.data.status || m.status }
-              : m
-          ));
+        frame = JSON.parse(event.data) as Frame;
+      } catch {
+        return;
+      }
+      if (frame.type === 'ack') {
+        setSending(false);
+        const ack = frame.data as { ok?: boolean; error?: string } | undefined;
+        if (ack && ack.ok === false) {
+          setError(ack.error || t('common.error'));
+        } else {
+          setInput('');
+          setError('');
         }
-      } catch { /* skip */ }
+        return;
+      }
+      if (frame.type === 'error') {
+        setSending(false);
+        setError((frame as { error?: string }).error || t('common.error'));
+        return;
+      }
+      if (frame.type === 'member_update') {
+        const data = frame.data as { id?: string; member_id?: string; status?: string } | undefined;
+        if (data?.status && (data.member_id || data.id)) onMemberUpdate?.(data.member_id || data.id || '', data.status);
+        return;
+      }
+      if (frame.type === 'task_update') {
+        const data = frame.data as { id?: string; task_id?: string } | undefined;
+        if (data?.task_id || data?.id) onTaskUpdate?.(data.task_id || data.id || '');
+        return;
+      }
+      if (frame.type !== 'message') return;
+      // A broadcast only confirms that a message exists; the transcript endpoint
+      // is the only source of its sender and body, so re-read it instead of
+      // rendering an empty placeholder.
+      void loadHistory(groupId)
+        .then(list => { if (!disposedRef.current) setMessages(list); })
+         .catch(reason => {
+           if (!disposedRef.current) setHistoryError(reason instanceof Error ? reason.message : t('common.error'));
+         });
     };
 
     return () => {
+      disposedRef.current = true;
       ws.close();
+      wsRef.current = null;
     };
-  }, [groupId]);
-
-  // Periodic member refresh for real-time status
-  useEffect(() => {
-    const interval = setInterval(() => {
-      api.getGroup(groupId)
-        .then((data) => {
-          if (data.members && data.members.length > 0) {
-            setMembers(data.members);
-          }
-        })
-        .catch(() => {});
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [groupId]);
+  }, [groupId, loadHistory]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const node = endRef.current;
+    if (node && typeof node.scrollIntoView === 'function') {
+      node.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
-  const sendMessage = useCallback(() => {
-    if (!input.trim() || !wsRef.current || sending) return;
-    setSending(true);
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+     if (!input.trim() || sending) return;
+     if (wsRef.current?.readyState !== WebSocket.OPEN) {
+       setError(t('common.error'));
+       return;
+     }
+     const content = input.trim();
+     try {
+       setSending(true);
+       wsRef.current.send(JSON.stringify({ type: 'message', content }));
+       setError('');
+     } catch {
+       setSending(false);
+       setError(t('common.error'));
+     }
+   };
 
-    wsRef.current.send(JSON.stringify({
-      type: 'message',
-      sender_name: 'You',
-      content: input,
-    }));
-    setInput('');
-    setSending(false);
-  }, [input, sending]);
+  const empty = !loading && !historyError && !error && messages.length === 0;
 
   return (
-    <div className="flex h-full">
-      {/* Chat Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <div className="h-10 flex items-center px-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-elevated)]/50">
-          <button type="button"
-            ref={sidebarToggleRef}
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            aria-label="Toggle members sidebar"
-            aria-expanded={sidebarOpen}
-            className="mr-2 p-1 rounded hover:bg-[var(--color-bg-surface-elevated)] text-[var(--color-text-secondary)] lg:hidden"
-          >
-            <PanelLeft size={14} />
-          </button>
-          <Hash size={14} className="text-blue-400 mr-2" />
-           <span className="text-xs font-medium text-[var(--color-text-primary)]">群组讨论</span>
-          <div className="ml-auto flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-[10px] text-[var(--color-text-muted)]">
-              {connected ? '已连接' : '已断开'}
-            </span>
-          </div>
-        </div>
-
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {messages.length === 0 && (
-            <div className="text-center py-8">
-              <MessageCircle size={32} className="mx-auto text-[var(--color-text-muted)]/30" />
-               <p className="text-xs text-[var(--color-text-muted)] mt-2">暂无消息，开始讨论吧！</p>
+     <section aria-label={t('common.message')} className="flex h-full min-w-0 flex-col">
+       <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-3">
+         <h2 className="text-sm font-semibold">{t('common.message')}</h2>
+         <span role="status" className="text-xs text-[var(--color-text-muted)]">
+           {connected ? t('common.status') : t('common.error')}
+         </span>
+       </div>
+       {(error || historyError) && (
+         <div className="py-3 text-sm text-[var(--color-error)]">
+           <p role="alert">{error || historyError}</p>
+           {historyError && <Button variant="ghost" size="xs" className="mt-1" onClick={() => {
+             setHistoryError('');
+             setLoading(true);
+             void loadHistory(groupId).then(setMessages).catch(reason => setHistoryError(reason instanceof Error ? reason.message : t('common.error'))).finally(() => setLoading(false));
+           }}>{t('common.retry')}</Button>}
+         </div>
+       )}
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-4">
+         {loading && <p role="status" className="text-sm">{t('common.loading')}</p>}
+         {empty && <p className="text-sm text-[var(--color-text-muted)]">{t('chat.no_messages')}</p>}
+        {messages.map(message => (
+          <article key={message.id} className="text-sm">
+            <div className="flex flex-wrap gap-2 text-xs">
+              <span className="font-medium">{message.sender_name}</span>
+              <time className="text-[var(--color-text-muted)]">
+                {formatTime(message.created_at)}
+              </time>
             </div>
-          )}
-          {messages.map((msg) => (
-            <div key={msg.id} className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-[var(--color-bg-surface-elevated)] flex items-center justify-center shrink-0">
-                <Bot size={14} className="text-blue-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-[var(--color-text-primary)]">{msg.sender_name}</span>
-                  <span className="text-[10px] text-[var(--color-text-muted)]">
-                    {msg.created_at ? new Date(msg.created_at).toLocaleTimeString() : ''}
-                  </span>
-                </div>
-                <p className="text-xs text-[var(--color-text-secondary)] mt-1 whitespace-pre-wrap break-words">
-                  {msg.content}
-                </p>
-              </div>
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input */}
-        <div className="p-3 border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-elevated)]/30">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-               placeholder="输入消息..."
-              className="flex-1 px-3 py-2 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded-lg text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-blue-500/50"
-            />
-            <button type="button"
-              onClick={sendMessage}
-              disabled={!input.trim() || sending || !connected}
-              className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-            </button>
-          </div>
-        </div>
+            <p className="mt-1 whitespace-pre-wrap break-words text-[var(--color-text-secondary)]">
+              {message.content}
+            </p>
+          </article>
+        ))}
+        <div ref={endRef} />
       </div>
-
-      {/* Member Sidebar */}
-      {/* Mobile overlay */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" aria-hidden="true" onClick={() => setSidebarOpen(false)} />
-      )}
-      <div className={`fixed inset-y-0 right-0 w-56 border-l border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-elevated)]/30 flex flex-col transform transition-transform duration-300 lg:relative lg:translate-x-0 z-50 ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-        <div className="h-10 flex items-center px-3 border-b border-[var(--color-border-subtle)]">
-          <Users size={12} className="text-[var(--color-text-muted)] mr-2" />
-          <span className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
-             成员 ({members.length})
-          </span>
-          <button type="button"
-            ref={sidebarCloseRef}
-            onClick={() => setSidebarOpen(false)}
-            aria-label="Close members sidebar"
-            className="ml-auto p-1 rounded hover:bg-[var(--color-bg-surface-elevated)] text-[var(--color-text-secondary)] lg:hidden"
-          >
-            <X size={12} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {members.map((member) => {
-            const Icon = ROLE_ICONS[member.role] || Bot;
-            const isOnline = member.status === 'active';
-            return (
-              <div
-                key={member.id}
-                className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors ${
-                  isOnline ? 'bg-[var(--color-bg-surface-elevated)]/30 hover:bg-[var(--color-bg-surface-elevated)]/50' : 'opacity-60'
-                }`}
-              >
-                <div className="relative">
-                  <Icon size={12} className={ROLE_COLORS[member.role] || 'text-[var(--color-text-muted)]'} />
-                  {isOnline && (
-                    <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-[var(--color-border-subtle)] animate-pulse" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] text-[var(--color-text-primary)] truncate">{member.agent_id.slice(0, 8)}</p>
-                   <p className="text-[9px] text-[var(--color-text-muted)]">{ROLE_LABELS[member.role] || member.role}</p>
-                </div>
-                {isOnline && (
-                  <span className="text-[8px] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded-full">
-                    在线
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        <div className="p-2 border-t border-[var(--color-border-subtle)]">
-          <button type="button"
-            onClick={onLeave}
-            className="w-full py-1.5 text-[10px] text-[var(--color-text-muted)] hover:text-red-400 transition-colors"
-          >
-             退出群组
-          </button>
-        </div>
-      </div>
-    </div>
+      <form className="flex gap-2 border-t border-[var(--color-border-subtle)] pt-3" onSubmit={submit}>
+        <input
+           aria-label={t('common.message')}
+          value={input}
+          onChange={event => setInput(event.target.value)}
+           placeholder={t('chat.placeholder')}
+          className="min-w-0 flex-1 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-3 py-2 text-sm"
+        />
+        <Button
+          type="submit"
+          size="sm"
+          disabled={!input.trim() || !connected || sending}
+          icon={<Send size={14} />}
+        >
+           {sending ? t('common.saving') : t('chat.send')}
+        </Button>
+      </form>
+    </section>
   );
 }
