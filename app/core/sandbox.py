@@ -16,7 +16,7 @@ import asyncio
 import os
 import re
 import resource
-import shlex
+import signal
 import shutil
 import tempfile
 from dataclasses import dataclass, field
@@ -113,7 +113,13 @@ class SandboxExecutor:
         return self._workdir
 
     async def execute(self, command: str, timeout: int | None = None) -> str:
-        """Execute a command in the sandbox."""
+        """Execute a command in the sandbox via ``bash -c``.
+
+        Shell mode is required for real agent usability: pipes, ``&&``,
+        redirects, and command substitution are how models compose
+        commands. Safety checks run on the full command string before
+        execution.
+        """
         workdir = self._prepare_workdir()
         is_safe, reason = self._is_command_safe(command, workdir)
         if not is_safe:
@@ -122,41 +128,85 @@ class SandboxExecutor:
         effective_timeout = timeout if timeout is not None else self.config.timeout_seconds
 
         try:
-            env = os.environ.copy()
-            if not self.config.enable_network:
-                env.pop("HTTP_PROXY", None)
-                env.pop("HTTPS_PROXY", None)
-                env.pop("http_proxy", None)
-                env.pop("https_proxy", None)
-
-            args = shlex.split(command)
-            if not args:
-                return "BLOCKED: empty command"
+            env = self._build_env()
 
             proc = await asyncio.create_subprocess_exec(
-                *args,
+                "bash", "-c", command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=workdir,
                 env=env,
                 preexec_fn=self._restrict_resources,
+                start_new_session=True,
             )
 
-            try:
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=effective_timeout,
-                )
-            except TimeoutError:
-                proc.kill()
-                await proc.wait()
-                return f"TIMEOUT: Command exceeded {effective_timeout}s limit"
-
-            return self._build_output(stdout, stderr, proc.returncode)
+            stdout, stderr, returncode, timed_out = await self._communicate(proc, effective_timeout)
+            output = self._build_output(stdout, stderr, returncode)
+            if timed_out:
+                prefix = f"TIMEOUT: Command exceeded {effective_timeout}s limit."
+                return f"{prefix}\n{output}" if output else prefix
+            return output
 
         except Exception as e:
             logger.error("Sandbox execution error", error=str(e))
             return f"Error: {e!s}"
+
+    async def _communicate(
+        self, proc: asyncio.subprocess.Process, timeout: float
+    ) -> tuple[bytes, bytes, int, bool]:
+        """Drain stdout/stderr incrementally; on timeout kill the process
+        group and return whatever output was collected so far."""
+        out_chunks: list[bytes] = []
+        err_chunks: list[bytes] = []
+        drain_out = asyncio.ensure_future(self._drain(proc.stdout, out_chunks))
+        drain_err = asyncio.ensure_future(self._drain(proc.stderr, err_chunks))
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=timeout)
+            await asyncio.gather(drain_out, drain_err)
+            return b"".join(out_chunks), b"".join(err_chunks), proc.returncode or 0, False
+        except TimeoutError:
+            self._kill_process_group(proc)
+            await proc.wait()
+            drain_out.cancel()
+            drain_err.cancel()
+            await asyncio.gather(drain_out, drain_err, return_exceptions=True)
+            return b"".join(out_chunks), b"".join(err_chunks), -1, True
+
+    @staticmethod
+    async def _drain(stream: asyncio.StreamReader | None, chunks: list[bytes]) -> None:
+        if stream is None:
+            return
+        while True:
+            chunk = await stream.read(65536)
+            if not chunk:
+                break
+            chunks.append(chunk)
+
+    def _build_env(self) -> dict[str, str]:
+        """Build the child environment: network policy + output taming."""
+        env = os.environ.copy()
+        if not self.config.enable_network:
+            for var in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+                env.pop(var, None)
+        # Disable pagers and progress bars so they cannot pollute output
+        # or block on interactivity (learned from mini-SWE-agent).
+        env.setdefault("PAGER", "cat")
+        env.setdefault("MANPAGER", "cat")
+        env.setdefault("GIT_PAGER", "cat")
+        env.setdefault("LESS", "-R")
+        env.setdefault("PIP_PROGRESS_BAR", "off")
+        env.setdefault("TQDM_DISABLE", "1")
+        return env
+
+    @staticmethod
+    def _kill_process_group(proc: asyncio.subprocess.Process) -> None:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
 
     def _build_output(self, stdout: bytes, stderr: bytes, returncode: int) -> str:
         parts: list[str] = []
@@ -166,11 +216,23 @@ class SandboxExecutor:
         stderr_text = stderr.decode("utf-8", errors="replace").rstrip()
         if stderr_text:
             parts.append(f"[stderr]: {stderr_text}")
-        if returncode != 0 and not parts:
-            parts.append(f"Command exited with code {returncode}")
+        if returncode != 0:
+            parts.append(f"[exit code: {returncode}]")
         full_output = "\n".join(parts)
-        if len(full_output.encode()) > self.config.max_output_bytes:
-            full_output = full_output[:self.config.max_output_bytes] + "\n... [OUTPUT TRUNCATED]"
+        max_bytes = self.config.max_output_bytes
+        if len(full_output.encode()) > max_bytes:
+            # Keep head + tail (the regions the model reasons over) and
+            # report exactly how much was elided.
+            head_chars = int(max_bytes * 0.6)
+            tail_chars = max_bytes - head_chars
+            elided = len(full_output) - head_chars - tail_chars
+            full_output = (
+                full_output[:head_chars]
+                + f"\n\n[Output truncated: {elided} characters elided. "
+                "Re-run with a narrower command (head/tail/sed/grep) or "
+                "redirect full output to a file and search it.]\n\n"
+                + full_output[-tail_chars:]
+            )
         return full_output if full_output else "Command completed (no output)"
 
     def cleanup(self) -> None:

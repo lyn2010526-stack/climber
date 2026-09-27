@@ -52,6 +52,17 @@ def _safe_eval_math(expression: str, local_vars: dict[str, Any]) -> Any:
 from app.tools import browser_tools  # noqa: E402, F401
 
 
+@tool(description="Signal that the assigned task is finished. Call this exactly once when the objective is complete. Provide a short summary and any produced file paths.")
+async def task_complete(summary: str, files: list[str] | None = None) -> str:
+    """Terminal tool marking the task complete.
+
+    The agent engine treats the first successful call as the terminal one, so
+    it is safe to call this as soon as the objective is done.
+    """
+    payload = {"summary": summary, "files": files or []}
+    return json.dumps(payload, ensure_ascii=False)
+
+
 @tool(description="Get the current date and time")
 async def get_datetime() -> str:
     return datetime.now().isoformat()
@@ -90,6 +101,24 @@ async def web_search(query: str) -> str:
         return f"Search error: {str(e)}"
 
 
+@tool(description="Get a Wikipedia summary for a topic. Kept for the research skill contract; use web_search for broader or current sources.")
+async def wikipedia_summary(topic: str) -> str:
+    try:
+        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(topic)}"
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(url, headers={"User-Agent": "AgentEngine/0.1"})
+            if resp.status_code == 200:
+                data = resp.json()
+                return (
+                    f"## {data.get('title', topic)}\n\n"
+                    f"{data.get('extract', 'No summary available.')}\n\n"
+                    f"Source: {data.get('content_urls', {}).get('desktop', {}).get('page', '')}"
+                )
+            return f"Wikipedia: No article found for '{topic}'"
+    except Exception as e:
+        return f"Wikipedia error: {str(e)}"
+
+
 @tool(description="Evaluate mathematical expressions and calculations. Supports +, -, *, /, ^ (power), %, sqrt(), sin(), cos(), tan(), log(), pow(), pi, e, and comparison operators.")
 async def calculator(expression: str) -> str:
     try:
@@ -101,27 +130,6 @@ async def calculator(expression: str) -> str:
         return str(result)
     except Exception as e:
         return f"Error: {str(e)}"
-
-
-@tool(description="Get current weather conditions for any city worldwide. Use when the user asks about weather, temperature, or forecast for a specific location. Returns temperature, humidity, wind speed, and conditions.")
-async def get_weather(city: str) -> str:
-    try:
-        url = f"https://wttr.in/{urllib.parse.quote(city)}?format=j1"
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            data = resp.json()
-            current = data["current_condition"][0]
-            return (
-                f"Weather in {city}:\n"
-                f"Temperature: {current['temp_C']}°C\n"
-                f"Feels like: {current['FeelsLikeC']}°C\n"
-                f"Humidity: {current['humidity']}%\n"
-                f"Description: {current['weatherDesc'][0]['value']}\n"
-                f"Wind: {current['windspeedKmph']} km/h"
-            )
-    except Exception as e:
-        return f"Weather error: {str(e)}"
 
 
 @tool(description="Read content from a file on the local filesystem. Use when the user wants to view, analyze, or reference an existing file. Returns up to 10,000 characters.")
@@ -158,103 +166,26 @@ async def list_files(directory: str = ".") -> str:
         return f"Error listing directory: {str(e)}"
 
 
+_sandbox_fallback: Any = None
+
+
+def _resolve_sandbox() -> Any:
+    """Resolve the sandbox from DI, with a local fallback for headless
+    scripts/tests where the DI container is not wired."""
+    global _sandbox_fallback
+    try:
+        return di_resolve("SandboxExecutor")
+    except Exception:
+        if _sandbox_fallback is None:
+            from app.core.sandbox import SandboxExecutor
+            _sandbox_fallback = SandboxExecutor()
+        return _sandbox_fallback
+
+
 @tool(description="Run a shell command and return output")
 async def run_command(command: str) -> str:
-    sandbox = di_resolve("SandboxExecutor")
+    sandbox = _resolve_sandbox()
     return await sandbox.execute(command)
-
-
-@tool(description="Generate an image using a text description (via pollinations.ai)")
-async def generate_image(prompt: str) -> str:
-    try:
-        url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&nologo=true"
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.get(url)
-            if resp.status_code == 200:
-                # Return the URL - the model can reference it
-                return f"Image generated: {url}"
-            return f"Image generation failed: HTTP {resp.status_code}"
-    except Exception as e:
-        return f"Image generation error: {str(e)}"
-
-
-@tool(description="Translate text between languages")
-async def translate(text: str, target_language: str = "en", source_language: str = "auto") -> str:
-    try:
-        # Use LibreTranslate public instance or similar
-        url = "https://libretranslate.de/translate"
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(url, json={
-                "q": text,
-                "source": source_language,
-                "target": target_language,
-                "format": "text",
-            })
-            if resp.status_code == 200:
-                return resp.json().get("translatedText", "Translation failed")
-            # Fallback: return a note
-            return f"Translation service unavailable. Text: {text}"
-    except Exception as e:
-        return f"Translation error: {str(e)}"
-
-
-@tool(description="Get a Wikipedia summary for a topic")
-async def wikipedia_summary(topic: str) -> str:
-    try:
-        url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(topic)}"
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(url, headers={"User-Agent": "AgentEngine/0.1"})
-            if resp.status_code == 200:
-                data = resp.json()
-                return (
-                    f"## {data.get('title', topic)}\n\n"
-                    f"{data.get('extract', 'No summary available.')}\n\n"
-                    f"Source: {data.get('content_urls', {}).get('desktop', {}).get('page', '')}"
-                )
-            return f"Wikipedia: No article found for '{topic}'"
-    except Exception as e:
-        return f"Wikipedia error: {str(e)}"
-
-
-@tool(description="Shorten a long text to a summary")
-async def summarize(text: str, max_sentences: int = 3) -> str:
-    """Simple extractive summarization."""
-    try:
-        sentences = re.split(r"[.!?]+", text)
-        sentences = [s.strip() for s in sentences if len(s.strip()) > 10]
-        selected = sentences[:max_sentences]
-        return ". ".join(selected) + "."
-    except Exception as e:
-        return f"Summary error: {str(e)}"
-
-
-@tool(description="Encode/decode base64")
-async def base64_encode(text: str, decode: bool = False) -> str:
-    import base64
-    try:
-        if decode:
-            return base64.b64decode(text.encode()).decode("utf-8")
-        return base64.b64encode(text.encode()).decode("utf-8")
-    except Exception as e:
-        return f"Base64 error: {str(e)}"
-
-
-@tool(description="Parse JSON and extract a value by key path")
-async def json_get(json_string: str, key_path: str) -> str:
-    """Get a value from JSON using dot notation (e.g., 'user.name')."""
-    try:
-        data = json.loads(json_string)
-        keys = key_path.split(".")
-        for key in keys:
-            if isinstance(data, dict):
-                data = data[key]
-            elif isinstance(data, list):
-                data = data[int(key)]
-            else:
-                return f"Error: Cannot traverse into {type(data)}"
-        return json.dumps(data, ensure_ascii=False, indent=2)
-    except Exception as e:
-        return f"JSON parse error: {str(e)}"
 
 
 @tool(description="Edit a file by replacing old_string with new_string. Shows unified diff preview before applying. Use longer unique context for accuracy.")
@@ -347,6 +278,23 @@ async def file_info(path: str) -> str:
         )
     except Exception as e:
         return f"Error getting file info: {str(e)}"
+
+
+@tool(description="Parse JSON and extract a value by key path. Kept for the coding skill contract; use read_file when the complete document is needed.")
+async def json_get(json_string: str, key_path: str) -> str:
+    """Get a value from JSON using dot notation (for example, ``user.name``)."""
+    try:
+        data = json.loads(json_string)
+        for key in key_path.split("."):
+            if isinstance(data, dict):
+                data = data[key]
+            elif isinstance(data, list):
+                data = data[int(key)]
+            else:
+                return f"Error: Cannot traverse into {type(data)}"
+        return json.dumps(data, ensure_ascii=False, indent=2)
+    except Exception as e:
+        return f"JSON parse error: {str(e)}"
 
 
 def _get_group_engine():
@@ -462,9 +410,8 @@ async def apply_patch(file_path: str, patch: str) -> str:
 async def stream_command(command: str, timeout: int = 120, workdir: str = "") -> str:
     """Execute a shell command with streaming output."""
     try:
-        from app.core.di import resolve as di_resolve
-        sandbox = di_resolve("SandboxExecutor")
-        return await sandbox.execute(command)
+        sandbox = _resolve_sandbox()
+        return await sandbox.execute(command, timeout=timeout)
     except Exception as e:
         return f"Error executing command: {str(e)}"
 
@@ -718,5 +665,4 @@ async def suggest_fix(error_analysis: str, file_content: str = "") -> str:
         return json.dumps(result, ensure_ascii=False, indent=2)
     except Exception as e:
         return f"Error suggesting fix: {str(e)}"
-
 

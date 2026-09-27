@@ -1,18 +1,18 @@
 import { useCallback } from 'react';
 import { ChatInterface } from '../components/agent/ChatInterface';
-import { useChat, type Message } from '../useChat';
+import { useChat, type Message, type OutgoingAttachment } from '../useChat';
 import { useWorkspaceStore } from '../store/workspace';
 
 export function ChatPage() {
   const { activeSessionId } = useWorkspaceStore();
   const { messages, isStreaming, error, sendMessage, stopStreaming } = useChat(activeSessionId);
 
-  const handleSend = useCallback(async (message: string) => {
+  const handleSend = useCallback(async (message: string, attachments?: OutgoingAttachment[]) => {
     if (!activeSessionId) {
       alert('请先创建或选择一个会话');
       return;
     }
-    await sendMessage(message);
+    await sendMessage(message, attachments);
   }, [activeSessionId, sendMessage]);
 
   const handleStop = useCallback(() => {

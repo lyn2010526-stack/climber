@@ -25,7 +25,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.collaboration.agent_runner import run_agent_with_retry
-from app.core.collaboration.checkpoint import load_latest_checkpoint, resume_from_checkpoint
+from app.core.collaboration.checkpoint import (
+    ResumeState,
+    is_resumable,
+    load_latest_checkpoint,
+    resume_from_checkpoint,
+)
 from app.core.collaboration.group_chat import run_group_chat_process
 from app.core.collaboration.hierarchical import run_hierarchical_process
 from app.core.collaboration.memory import inject_memory, store_memory
@@ -41,6 +46,11 @@ from app.storage import async_session
 from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupTask
 
 logger = structlog.get_logger(__name__)
+
+# Task states that must never be picked up for (re)execution. A task in one of
+# these states has already been accounted for, so re-running it would duplicate
+# output and token charges.
+TERMINAL_TASK_STATUSES = frozenset({"completed", "failed", "partial", "stopped"})
 
 
 class GroupCollaborationEngine:
@@ -66,9 +76,20 @@ class GroupCollaborationEngine:
         reviewers: list[Any],
         group: Any,
         max_rounds: int | None = None,
+        resume: ResumeState | None = None,
     ) -> None:
-        """Run the sequential collaboration process for a task."""
-        await run_sequential_process(task, worker, reviewers, group, max_rounds or task.max_rounds or 5)
+        """Run the sequential collaboration process for a task.
+
+        Args:
+            task: The task to execute.
+            worker: The worker member.
+            reviewers: Reviewer members.
+            group: The group the task belongs to.
+            max_rounds: Round budget, defaulting to the task's own budget.
+            resume: Checkpoint state to continue from; when given the loop
+                resumes at the checkpointed round instead of starting over.
+        """
+        await run_sequential_process(task, worker, reviewers, group, max_rounds or task.max_rounds or 5, resume)
 
     async def _run_agent_simple(
         self,
@@ -186,12 +207,19 @@ class GroupCollaborationEngine:
         """Load the latest checkpoint for a task."""
         return await load_latest_checkpoint(task_id)
 
-    async def _resume_from_checkpoint(self, task: Any, checkpoint: Any) -> None:
-        """Resume task execution from a checkpoint."""
-        await resume_from_checkpoint(task, checkpoint)
+    async def _resume_from_checkpoint(self, task: Any, checkpoint: Any) -> ResumeState | None:
+        """Claim a checkpoint and restore the task to its checkpointed state.
+
+        Returns None when another resumer already owns the checkpoint, in which
+        case the caller must not execute anything.
+        """
+        return await resume_from_checkpoint(task, checkpoint)
 
     async def run_task(self, task_id: str) -> None:
         """Execute a group task using the group's configured process type.
+
+        A task that stopped mid-run picks up where its checkpoint left off; a
+        task in a terminal state is left alone so nothing is charged twice.
 
         Args:
             task_id: The task ID to execute.
@@ -217,10 +245,15 @@ class GroupCollaborationEngine:
             reviewers = db_reviewers
             group = db_group
 
+            if task.status in TERMINAL_TASK_STATUSES:
+                logger.info("task_already_terminal", task_id=task_id, status=task.status)
+                return
+
+            await _mark_task_started(task_id)
+
             checkpoint = await self._load_latest_checkpoint(task_id)
-            if checkpoint and checkpoint.status in ("running", "paused"):
-                logger.info("resuming_from_checkpoint", task_id=task_id, checkpoint_id=checkpoint.id)
-                await self._resume_from_checkpoint(task, checkpoint)
+            if is_resumable(checkpoint) and (group.process_type or "sequential") == "sequential":
+                await self._run_from_checkpoint(task, worker, reviewers, group, checkpoint)
                 return
 
             await _dispatch_by_process_type(self, task, worker, reviewers, group)
@@ -238,6 +271,42 @@ class GroupCollaborationEngine:
             })
         finally:
             self._running_tasks.pop(task_id, None)
+
+    async def _run_from_checkpoint(
+        self,
+        task: Any,
+        worker: Any,
+        reviewers: list[Any],
+        group: Any,
+        checkpoint: Any,
+    ) -> ResumeState | None:
+        """Resume a checkpointed task and run its remaining rounds.
+
+        The checkpoint is claimed before any round runs, so a second resumer on
+        the same checkpoint does nothing instead of replaying the round.
+
+        Returns:
+            The state execution continued from, or None when another resumer
+            already owns the checkpoint.
+        """
+        logger.info(
+            "resuming_from_checkpoint",
+            task_id=task.id,
+            checkpoint_id=checkpoint.id,
+            round=checkpoint.current_round,
+        )
+        resumed = await self._resume_from_checkpoint(task, checkpoint)
+        if resumed is None:
+            return None
+
+        task.__dict__.update({
+            "status": "running",
+            "final_output": resumed.worker_output,
+            "current_round": resumed.round,
+        })
+        max_rounds = task.max_rounds or resumed.max_rounds or 5
+        await self._run_sequential_process(task, worker, reviewers, group, max_rounds, resumed)
+        return resumed
 
     async def run_group_tasks(self, group_id: str) -> dict[str, Any]:
         """Execute all pending tasks in a group using DAG-based dependency resolution.
@@ -505,6 +574,9 @@ class GroupCollaborationEngine:
 async def _load_task_context(task_id: str) -> tuple:
     """Load task, worker, reviewers, and group from database.
 
+    The task is returned as stored — the caller decides whether to start it —
+    so a terminal status is visible before anything is overwritten.
+
     Args:
         task_id: The task ID to load.
 
@@ -548,11 +620,21 @@ async def _load_task_context(task_id: str) -> tuple:
             await db.execute(select(AgentGroupMember).where(AgentGroupMember.id.in_(task.reviewer_ids or [])))
         ).scalars().all()
 
-        task.started_at = datetime.now(UTC)
-        task.status = "running"
-        await db.commit()
-
         return task, worker, list(reviewers), group
+
+
+async def _mark_task_started(task_id: str) -> None:
+    """Stamp a task as running and record when execution started.
+
+    Args:
+        task_id: The task ID to start.
+    """
+    async with async_session() as db:
+        t = await db.get(AgentGroupTask, task_id)
+        if t:
+            t.started_at = datetime.now(UTC)
+            t.status = "running"
+            await db.commit()
 
 
 async def _dispatch_by_process_type(

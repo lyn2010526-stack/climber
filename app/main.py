@@ -24,10 +24,17 @@ from app.core.interfaces import IExecutor, IModelAdapter, ISkillRegistry, IToolR
 from app.core.logging_setup import configure_logging, get_recent_logs, write_crash_dump
 from app.core.memory_guardian import get_memory_guardian
 from app.core.observability.api import router as observability_router
+from app.core.security.api import router as security_router
 from app.core.watchdog import get_watchdog
 from app.middleware.auth import AuthMiddleware
 from app.middleware.metrics import APP_INFO, MetricsMiddleware, metrics_endpoint
-from app.middleware.security import RateLimitMiddleware, RequestValidationMiddleware, SecurityHeadersMiddleware
+from app.middleware.security import (
+    CsrfProtectionMiddleware,
+    PathIsolationMiddleware,
+    RateLimitMiddleware,
+    RequestValidationMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.storage import db_health, init_db
 from app.storage.cache import close_redis, get_redis
 from app.tools import register_builtins
@@ -223,6 +230,12 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestValidationMiddleware)
+app.add_middleware(PathIsolationMiddleware)
+app.add_middleware(
+    CsrfProtectionMiddleware,
+    excluded_paths=set(settings.csrf_exempt_paths),
+    enabled=settings.csrf_protection_enabled,
+)
 app.add_middleware(RateLimitMiddleware, trusted_proxies=settings.trusted_proxies_list)
 app.add_middleware(AuthMiddleware, public_endpoints=set(settings.auth_public_endpoints))
 app.add_middleware(SecurityHeadersMiddleware)
@@ -232,12 +245,13 @@ app.add_middleware(
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin", "Cache-Control", "X-Request-Id"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin", "Cache-Control", "X-Request-Id", "X-CSRF-Token"],
 )
 
 app.include_router(api_router, prefix="/api/v1")
 
 app.include_router(observability_router)
+app.include_router(security_router)
 for websocket_route in websocket_router.routes:
     app.add_api_websocket_route(
         f"/api/v1{websocket_route.path}",

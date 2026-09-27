@@ -27,6 +27,67 @@ interface WorkflowEditorProps {
   workflowId?: string;
 }
 
+const BRANCH_LABELS = ['true', 'false'] as const;
+type BranchLabel = (typeof BRANCH_LABELS)[number];
+
+export interface WorkflowSaveNode {
+  id: string;
+  type: string;
+  data: Record<string, unknown>;
+  position: { x: number; y: number };
+}
+
+export interface WorkflowSaveEdge {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle: BranchLabel | '';
+  condition: BranchLabel | '';
+}
+
+export interface WorkflowSavePayload {
+  name: string;
+  nodes: WorkflowSaveNode[];
+  edges: WorkflowSaveEdge[];
+}
+
+export function toBranchLabel(raw: unknown): BranchLabel | '' {
+  return BRANCH_LABELS.includes(raw as BranchLabel) ? (raw as BranchLabel) : '';
+}
+
+function readEdgeBranch(edge: Edge): BranchLabel | '' {
+  const fromHandle = toBranchLabel(edge.sourceHandle);
+  if (fromHandle) return fromHandle;
+  const legacy = edge.data?.condition;
+  return typeof legacy === 'string' ? toBranchLabel(legacy) : '';
+}
+
+export function buildWorkflowSavePayload(
+  name: string,
+  nodes: Node[],
+  edges: Edge[]
+): WorkflowSavePayload {
+  return {
+    name,
+    nodes: nodes.map((n) => ({
+      id: n.id,
+      type: String(n.type ?? ''),
+      data: n.data ?? {},
+      position: n.position,
+    })),
+    edges: edges.map((e) => {
+      const branch = readEdgeBranch(e);
+      return {
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        sourceHandle: branch,
+        condition: branch,
+      };
+    }),
+  };
+}
+
 const NODE_PALETTE = [
   { type: 'input', label: 'Input', icon: FileInput, description: 'User input variables' },
   { type: 'llm', label: 'LLM', icon: Bot, description: 'Call a language model' },
@@ -111,11 +172,7 @@ export function WorkflowEditor({
     setSaving(true);
     setError(null);
     try {
-      const payload = {
-        name: workflowName,
-        nodes: nodes.map((n) => ({ id: n.id, type: n.type, data: n.data, position: n.position })),
-        edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target, condition: (e as any).condition })),
-      };
+      const payload = buildWorkflowSavePayload(workflowName, nodes, edges);
 
       let result;
       if (workflowId) {

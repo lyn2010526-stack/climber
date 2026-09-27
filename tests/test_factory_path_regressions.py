@@ -358,7 +358,194 @@ async def test_agent_run_handler_consumes_engine_events(monkeypatch: pytest.Monk
     assert calls[-1][2] == "Complete"
 
 
-def test_crew_module_has_uuid_import() -> None:
+async def test_agent_run_handler_preserves_error_as_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.core.di as di_module
+    from app.core import AgentEvent, AgentEventType
+    from app.core import agent_engine as agent_engine_module
+    from app.core.task_worker import handle_agent_run
+
+    class _Session:
+        metrics = type("Metrics", (), {"total_tokens_used": 0, "total_iterations": 1})()
+        max_iterations = 1
+
+    class _FakeEngine:
+        def create_session(self, **kwargs):
+            return _Session()
+
+        async def run(self, session, message):
+            yield AgentEvent(type=AgentEventType.ERROR, data={"error": "tool failed"})
+
+    monkeypatch.setattr(agent_engine_module, "AgentEngine", _FakeEngine)
+    monkeypatch.setattr(di_module, "resolve", lambda name: (_ for _ in ()).throw(KeyError(name)))
+
+    result = await handle_agent_run({"objective": "go"}, lambda *args: asyncio.sleep(0))
+    assert result["status"] == "failed"
+    assert result["termination_reason"] == "error"
+    assert result["error"] == "tool failed"
+
+
+async def test_parallel_executor_reports_tool_and_argument_failures() -> None:
+    from app.core.parallel import ParallelToolExecutor
+    from app.tools import ToolRegistry
+
+    registry = ToolRegistry()
+
+    def _raises() -> str:
+        raise RuntimeError("boom")
+
+    registry.register("raises", "", {"type": "object"}, _raises)
+    executor = ParallelToolExecutor(registry, validator=lambda name, args: (False, "denied"))
+    results = await executor.execute_all([
+        {"id": "bad-json", "function": {"name": "raises", "arguments": "{"}},
+        {"id": "denied", "function": {"name": "raises", "arguments": {}}},
+    ])
+
+    assert results[0].success is False
+    assert "invalid tool arguments" in results[0].error
+    assert results[1].success is False
+    assert "blocked by sandbox" in results[1].error
+
+
+async def test_parallel_executor_marks_internal_tool_exception_failed() -> None:
+    from app.core.parallel import ParallelToolExecutor
+    from app.tools import ToolRegistry
+
+    registry = ToolRegistry()
+
+    async def _raises() -> str:
+        raise RuntimeError("boom")
+
+    registry.register("raises", "", {"type": "object"}, _raises)
+    result = (await ParallelToolExecutor(registry).execute_all([
+        {"id": "call-1", "function": {"name": "raises", "arguments": {}}},
+    ]))[0]
+
+    assert result.success is False
+    assert result.error == "Error executing raises: boom"
+
+
+async def test_parallel_executor_gathers_parsed_and_failed_calls() -> None:
+    """A parse failure must not crash gather alongside real coroutines."""
+    from app.core.parallel import ParallelToolExecutor
+    from app.tools import ToolRegistry
+
+    registry = ToolRegistry()
+    registry.register("ok", "", {"type": "object"}, lambda: "fine")
+    executor = ParallelToolExecutor(registry)
+    results = await executor.execute_all([
+        {"id": "bad", "function": {"name": "ok", "arguments": "{"}},
+        {"id": "good", "function": {"name": "ok", "arguments": {}}},
+    ])
+
+    assert [r.success for r in results] == [False, True]
+    assert results[0].tool_call_id == "bad"
+    assert results[1].result == "fine"
+
+
+def test_parse_factory_plan_defaults_to_linear_dependencies() -> None:
+    from app.core.task_worker import _parse_factory_plan
+
+    raw = json.dumps({"steps": [
+        {"action": "a", "objective": "a"},
+        {"action": "b", "objective": "b"},
+        {"action": "c", "objective": "c"},
+    ]})
+    plan = _parse_factory_plan(raw, "goal", ["web_search"])
+
+    assert [step["depends_on"] for step in plan] == [[], [1], [2]]
+
+
+def test_parse_factory_plan_accepts_explicit_independent_steps() -> None:
+    from app.core.task_worker import _parse_factory_plan
+
+    raw = json.dumps({"steps": [
+        {"action": "a", "objective": "a", "depends_on": []},
+        {"action": "b", "objective": "b", "depends_on": []},
+        {"action": "c", "objective": "c", "depends_on": [1, 2]},
+    ]})
+    plan = _parse_factory_plan(raw, "goal", ["web_search"])
+
+    assert [step["depends_on"] for step in plan] == [[], [], [1, 2]]
+
+
+async def test_parse_factory_plan_rejects_out_of_range_dependency() -> None:
+    from app.core.task_worker import _parse_factory_plan
+
+    raw = json.dumps({"steps": [
+        {"action": "a", "objective": "a", "depends_on": [2]},
+    ]})
+    with pytest.raises(ValueError):
+        _parse_factory_plan(raw, "goal", ["web_search"])
+
+
+def test_build_factory_plan_marks_independent_research_steps() -> None:
+    from app.core.task_worker import _build_factory_plan
+
+    plan = _build_factory_plan("goal", ["web_search", "file_manager", "code_executor"])
+
+    deps = {step["action"]: step["depends_on"] for step in plan}
+    research = next(step for step in plan if step["tools"] == ["web_search"])
+    inspect = next(step for step in plan if "read_file" in step["tools"])
+    execute = plan[-1]
+    assert research["depends_on"] == []
+    assert inspect["depends_on"] == []
+    assert set(execute["depends_on"]) == {research["step"], inspect["step"]}
+    assert len(deps) == len(plan)
+
+
+async def test_factory_run_executes_independent_steps_concurrently(client, monkeypatch) -> None:
+    import time
+
+    import app.api.v1.skills_router as skills_route
+    from app.core.task_worker import task_manager
+
+    active = 0
+    peak = 0
+
+    async def _slow_handler(payload, on_progress):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        await asyncio.sleep(0.1)
+        active -= 1
+        return {"output": f"done:{payload['objective']}"}
+
+    async def _factory_payload(user_id, data):
+        return {
+            "objective": data["goal"],
+            "user_id": user_id,
+            "provider": "openai",
+            "model": "test-model",
+            "api_key": "test-key",
+            "base_url": None,
+            "system_prompt": "test",
+            "tools": ["web_search"],
+            "factory_skills": data.get("skills", []),
+            "max_steps": 10,
+        }
+
+    monkeypatch.setattr(skills_route, "_factory_agent_payload", _factory_payload)
+    monkeypatch.setitem(task_manager._handlers, "agent_run", _slow_handler)
+
+    resp = await client.post(
+        "/api/v1/skills/autonomous/run",
+        json={"goal": "parallel", "skills": ["web_search", "file_manager"]},
+    )
+    assert resp.status_code == 200
+    assert peak >= 2, f"independent steps did not overlap (peak={peak})"
+
+    events = [
+        json.loads(line[6:])
+        for frame in resp.text.split("\n\n")
+        for line in frame.splitlines()
+        if line.startswith("data: ") and line != "data: [DONE]"
+    ]
+    plan_event = next(e for e in events if e["type"] == "plan")
+    assert all("depends_on" in step for step in plan_event["data"]["steps"])
+    # Evidence must stay ordered by step even when execution overlaps.
+    task_starts = [e["data"]["step"] for e in events if e["type"] == "task_start"]
+    assert task_starts == sorted(task_starts)
+
     import app.multi_agent.crew as crew_module
 
     assert hasattr(crew_module, "uuid")
@@ -689,8 +876,25 @@ async def test_workflow_export_blocks_cross_tenant_access(
     from app.config import settings
     from app.core.auth_manager import create_access_token
     from app.main import app
+    from app.models.users import User, UserRole, UserStatus
+    from app.storage import async_session
 
     monkeypatch.setattr(settings, "enable_auth", True)
+    async with async_session() as db:
+        for username, role in (
+            ("owner-user", UserRole.DEVELOPER.value),
+            ("intruder-user", UserRole.DEVELOPER.value),
+            ("admin-user", UserRole.ADMIN.value),
+        ):
+            db.add(User(
+                username=username,
+                email=f"{username}@example.test",
+                hashed_password="test-hash",
+                role=role,
+                status=UserStatus.ACTIVE.value,
+            ))
+        await db.commit()
+
     owner_tok = create_access_token("owner-user", ["read", "write"])
     intruder_tok = create_access_token("intruder-user", ["read", "write"])
     admin_tok = create_access_token("admin-user", ["read", "write", "admin"])

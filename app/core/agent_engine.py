@@ -23,6 +23,13 @@ from app.core import (
 )
 from app.core.checkpoint import InMemoryCheckpointStore
 from app.core.compressor import ContextCompressor, estimate_tokens
+from app.core.context_aging import (
+    ToolResultConfig,
+    content_to_text,
+    disclose_old_tool_results,
+    prune_old_tool_results,
+    truncate_tool_result,
+)
 from app.core.di import resolve as di_resolve
 from app.core.engine.persistence import persist_message
 from app.core.engine.tools import build_tools
@@ -41,6 +48,17 @@ from app.core.session import AgentSession, SessionConfig
 from app.core.tool_prioritizer import ToolPrioritizer
 from app.models.registry import ModelRegistry
 from app.tools import ToolRegistry
+
+
+_COMPLETION_TOOL = "task_complete"
+
+
+class _StreamWatchdogError(Exception):
+    """Raised when the agent run watchdog trips a timeout layer."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
 
 
 def _resolve_registry(service_name: str, factory: Any) -> Any:
@@ -66,7 +84,11 @@ class AgentEngine:
         checkpoint_store: InMemoryCheckpointStore | None = None,
     ) -> None:
         self.model_registry = model_registry or _resolve_registry("ModelRegistry", ModelRegistry)
-        self.tool_registry = tool_registry or _resolve_registry("ToolRegistry", ToolRegistry)
+        # Fall back to the global registry (where register_builtins()
+        # installs tools); a fresh empty registry here silently leaves the
+        # agent with zero tools whenever DI is not wired (scripts, tests).
+        from app.tools import get_tool_registry
+        self.tool_registry = tool_registry or _resolve_registry("ToolRegistry", get_tool_registry)
         self._checkpoints = checkpoint_store or InMemoryCheckpointStore()
         self._sessions: dict[str, AgentSession] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
@@ -75,6 +97,7 @@ class AgentEngine:
         self.resource_tracker = ResourceTracker()
         self.memory_service = PersistentMemoryService()
         self.tool_prioritizer = ToolPrioritizer()
+        self._tool_result_config = ToolResultConfig()
         self.reasoning = None
         self._init_debug_loop()
         self._init_sandbox()
@@ -224,12 +247,19 @@ class AgentEngine:
         self._sessions[sid] = session
         return session
 
-    async def run(self, session: AgentSession, message: str) -> AsyncIterator[AgentEvent]:
+    async def run(
+        self,
+        session: AgentSession,
+        message: str,
+        attachments: list[dict[str, Any]] | None = None,
+    ) -> AsyncIterator[AgentEvent]:
         """Run the agent engine for a session and message.
 
         Args:
             session: The agent session.
             message: The user message.
+            attachments: Optional uploaded attachment references to include as
+                multimodal content parts (images) or inlined text blocks.
 
         Yields:
             AgentEvent instances during execution.
@@ -244,7 +274,7 @@ class AgentEngine:
 
         try:
             async with lock:
-                async for event in self._run_locked(session, message):
+                async for event in self._run_locked(session, message, attachments=attachments):
                     yield event
         finally:
             self._session_locks.pop(session.session_id, None)
@@ -262,15 +292,74 @@ class AgentEngine:
                     output_parts.append(event.data["content"])
         return {"output": "".join(output_parts), "tokens_used": tokens_used}
 
-    async def _run_locked(self, session: AgentSession, message: str) -> AsyncIterator[AgentEvent]:
+    def _build_user_content(
+        self,
+        message: str,
+        attachments: list[dict[str, Any]] | None,
+    ) -> tuple[Any, list[dict[str, Any]]]:
+        """Build model-ready user content from a message and attachments.
+
+        Returns the message content (a plain string when there are no
+        resolvable attachments, otherwise a multimodal content-part list) and
+        the attachment metadata for persistence.
+        """
+        if not attachments:
+            return message, []
+
+        from app.api.v1.uploads import resolve_attachment_content
+
+        parts: list[dict[str, Any]] = []
+        if message.strip():
+            parts.append({"type": "text", "text": message})
+
+        meta: list[dict[str, Any]] = []
+        skipped: list[str] = []
+        for att in attachments:
+            upload_id = str(att.get("id") or "")
+            if not upload_id:
+                continue
+            kind = str(att.get("kind") or "file")
+            content_type = str(att.get("content_type") or "application/octet-stream")
+            name = str(att.get("name") or upload_id)
+            part = resolve_attachment_content(upload_id, kind, content_type)
+            meta.append({"id": upload_id, "name": name, "kind": kind, "content_type": content_type})
+            if part is None:
+                skipped.append(name)
+                continue
+            parts.append(part)
+
+        if skipped:
+            parts.append({
+                "type": "text",
+                "text": "Attachments could not be inlined: " + ", ".join(skipped),
+            })
+
+        if not any(p.get("type") == "image_url" for p in parts):
+            text_parts = [p.get("text", "") for p in parts if p.get("type") == "text"]
+            return "".join(text_parts).strip() or message, meta
+
+        return parts, meta
+
+    async def _run_locked(
+        self,
+        session: AgentSession,
+        message: str,
+        attachments: list[dict[str, Any]] | None = None,
+    ) -> AsyncIterator[AgentEvent]:
         """Internal run method - executes under session lock."""
         current = session.state_machine.state
         from app.core.task_state_machine import TaskState
         if current in (TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED):
             await session.state_machine.transition(TaskState.PENDING, trigger="user_restart")
         await session.state_machine.transition(TaskState.PROCESSING, trigger="run_start")
-        session.messages.append({"role": MessageRole.USER, "content": message})
-        await persist_message(session.session_id, MessageRole.USER, content=message)
+        user_content, attachment_meta = self._build_user_content(message, attachments)
+        session.messages.append({"role": MessageRole.USER, "content": user_content})
+        await persist_message(
+            session.session_id,
+            MessageRole.USER,
+            content=message,
+            metadata={"attachments": attachment_meta} if attachment_meta else None,
+        )
 
         self._set_agent_mode(session)
         self._send_start_notification(session)
@@ -280,8 +369,15 @@ class AgentEngine:
         session._last_result = None
         session._last_iteration = 0
         session._run_status_override = None
+        session._run_termination_reason = None
+        session._completion = None
+        # A new user turn breaks any repeat-call chain (user interjections
+        # reset the loop detector, matching deepseek-harness semantics).
+        session._repeat_chain_key = None
+        session._repeat_chain_count = 0
+        session_registry = self._build_session_registry(session)
         executor = ParallelToolExecutor(
-            self.tool_registry,
+            session_registry,
             validator=(lambda name, args: validate_tool_call(session, name, args, self.sandbox, self.permission_overlay, self.agent_mode, self.tool_registry)),
             session=session,
         )
@@ -289,7 +385,7 @@ class AgentEngine:
         result: ChatResult | None = None
 
         try:
-            async for event in self._iteration_loop(session, executor, compressor):
+            async for event in self._iteration_loop(session, executor, compressor, session_registry):
                 yield event
         except Exception as e:
             if session._stop_requested:
@@ -301,6 +397,10 @@ class AgentEngine:
             return
 
         if session.status.value == "failed" and session._run_status_override is None:
+            yield AgentEvent(type=AgentEventType.ERROR, data={
+                "error": session._run_status_override or "Agent execution failed",
+                "termination_reason": session._run_status_override or "error",
+            })
             return
 
         await self._store_episodic_memory(session, message)
@@ -308,6 +408,11 @@ class AgentEngine:
         result = session._last_result
         yield AgentEvent(type=AgentEventType.DONE, data={
             "status": session._run_status_override or session.status.value,
+            "termination_reason": (
+                getattr(session, "_run_termination_reason", None)
+                or session._run_status_override
+                or session.status.value
+            ),
             "iterations": session._last_iteration,
             "content": result.content if result else "",
             "tokens_used": getattr(result, "tokens_used", 0) if result else 0,
@@ -320,18 +425,25 @@ class AgentEngine:
         session: AgentSession,
         executor: Any,
         compressor: Any,
+        registry: Any = None,
     ) -> AsyncIterator[AgentEvent]:
         """Main iteration loop for agent execution."""
         from app.core.task_state_machine import TaskState
 
         iteration = 0
+        timeout_config = session.session_config.timeouts or TimeoutConfig()
         adapter = self.model_registry.get_or_create(
             provider=session.provider,
             model_id=session.model_id,
             api_key=session.api_key,
             base_url=session.base_url,
         )
-        tools = build_tools(self.tool_registry, session.tools, self.tool_prioritizer, task_description=session.messages[-1].get("content", "") if session.messages else "")
+        active_registry = registry or self.tool_registry
+        tool_names = list(session.tools)
+        if session._tool_output_store and "recall_tool_call" not in tool_names:
+            tool_names.extend(["recall_tool_call", "recall_range"])
+        last_content = content_to_text(session.messages[-1].get("content", "")) if session.messages else ""
+        tools = build_tools(active_registry, tool_names, self.tool_prioritizer, task_description=last_content)
         result: ChatResult | None = None
 
         while iteration < session.max_iterations and not session._stop_requested:
@@ -340,32 +452,69 @@ class AgentEngine:
             session.metrics.total_iterations += 1
             yield AgentEvent(type=AgentEventType.THINKING, data={"iteration": iteration})
 
+            disclosed = disclose_old_tool_results(
+                session.messages, session._tool_output_store, self._tool_result_config
+            )
+            if disclosed:
+                yield AgentEvent(type=AgentEventType.CONTEXT_COMPRESSION, data={
+                    "iteration": iteration, "stubbed_results": disclosed, "stage": "disclosure",
+                })
+            aged = prune_old_tool_results(session.messages, self._tool_result_config)
+            if aged:
+                yield AgentEvent(type=AgentEventType.CONTEXT_COMPRESSION, data={
+                    "iteration": iteration, "aged_results": aged, "stage": "aging",
+                })
+
             ctx_tokens = estimate_tokens(session.messages)
             ctx_limit = getattr(adapter.capabilities, "max_tokens", None) or session.context_config.max_tokens
             if compressor.needs_compression(session.messages) or (ctx_limit and ctx_tokens > ctx_limit * 0.8):
                 session.messages = await compressor.compress(session.messages, adapter)
                 yield AgentEvent(type=AgentEventType.CONTEXT_COMPRESSION, data={"iteration": iteration, "tokens": ctx_tokens, "limit": ctx_limit})
 
+            run_timeout_reason: str | None = None
             if adapter.capabilities.streaming:
                 result = ChatResult()
-                async for chunk in adapter.stream_chat(messages=session.messages, tools=tools or None):
-                    if session._stop_requested:
-                        result = None
-                        break
-                    if chunk.content:
-                        result.content += chunk.content
-                        yield AgentEvent(type=AgentEventType.TEXT, data={"content": chunk.content})
-                    self._accumulate_stream_tool_calls(result.tool_calls, chunk.tool_calls)
-                    if getattr(chunk, "usage", None):
-                        result.tokens_used = chunk.usage
-                    elif getattr(chunk, "tokens_used", None):
-                        result.tokens_used = chunk.tokens_used
+                stream = adapter.stream_chat(messages=session.messages, tools=tools or None)
+                try:
+                    async for chunk in self._iter_with_watchdog(stream, timeout_config):
+                        if session._stop_requested:
+                            result = None
+                            break
+                        if chunk.content:
+                            result.content += chunk.content
+                            yield AgentEvent(type=AgentEventType.TEXT, data={"content": chunk.content})
+                        self._accumulate_stream_tool_calls(result.tool_calls, chunk.tool_calls)
+                        if getattr(chunk, "usage", None):
+                            result.tokens_used = chunk.usage
+                        elif getattr(chunk, "tokens_used", None):
+                            result.tokens_used = chunk.tokens_used
+                except _StreamWatchdogError as exc:
+                    run_timeout_reason = exc.reason
+                    result = None
                 if result is not None:
                     result.finish_reason = "tool_calls" if result.tool_calls else "stop"
             else:
                 result = await self._call_llm_with_resilience(session, adapter, session.messages, iteration)
+            if run_timeout_reason is not None:
+                session._run_status_override = run_timeout_reason
+                session._run_termination_reason = run_timeout_reason
+                await session.state_machine.transition(TaskState.FAILED, trigger=run_timeout_reason)
+                yield AgentEvent(type=AgentEventType.ERROR, data={
+                    "error": f"Agent run aborted: {run_timeout_reason}",
+                    "termination_reason": run_timeout_reason,
+                })
+                break
             if result is None:
-                yield AgentEvent(type=AgentEventType.ERROR, data={"error": "LLM call failed or stopped"})
+                if session._stop_requested:
+                    await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
+                    session._run_status_override = "stopped"
+                else:
+                    await session.state_machine.transition(TaskState.FAILED, trigger="llm_error")
+                    session._run_status_override = "error"
+                yield AgentEvent(type=AgentEventType.ERROR, data={
+                    "error": "LLM call failed or stopped",
+                    "termination_reason": session._run_status_override,
+                })
                 break
             session._last_result = result
             session.metrics.total_tokens_used += getattr(result, "tokens_used", 0) or 0
@@ -384,6 +533,10 @@ class AgentEngine:
             if result.tool_calls:
                 async for _event in self._handle_tool_execution(session, executor, result, iteration, ctx_tokens):
                     yield _event
+                # A terminal completion tool (task_complete) ends the run even if
+                # the model produced more iterations worth of tool calls.
+                if getattr(session, "_completion", None) is not None:
+                    break
                 continue
 
             break
@@ -402,7 +555,12 @@ class AgentEngine:
             await self._checkpoints.save(None, cp, checkpoint_id=f"{session.session_id}-final-{iteration}")
             yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration, "final": True})
 
-        if iteration >= session.max_iterations and result and result.tool_calls:
+        if (
+            iteration >= session.max_iterations
+            and result
+            and result.tool_calls
+            and getattr(session, "_completion", None) is None
+        ):
             await session.state_machine.transition(TaskState.FAILED, trigger="max_iterations")
             session._run_status_override = "max_iterations_reached"
             return
@@ -412,6 +570,51 @@ class AgentEngine:
         else:
             await session.state_machine.transition(TaskState.COMPLETED, trigger="run_complete")
             self._send_completion_notification(session, result)
+
+    async def _iter_with_watchdog(
+        self,
+        stream: AsyncIterator[Any],
+        timeout_config: TimeoutConfig,
+    ) -> AsyncIterator[Any]:
+        """Iterate a model stream while enforcing run-level watchdogs.
+
+        Two layers are enforced on top of the per-call timeout already applied
+        by the adapter: a slow *first response* and a *stalled* stream. Both
+        surface as a structured termination reason so callers can distinguish a
+        hung model from an ordinary tool error.
+        """
+        first_response = getattr(timeout_config, "first_response_seconds", 0.0) or 0.0
+        idle = getattr(timeout_config, "idle_seconds", 0.0) or 0.0
+        if first_response <= 0 and idle <= 0:
+            async for chunk in stream:
+                yield chunk
+            return
+
+        loop = asyncio.get_event_loop()
+        started = loop.time()
+        last_event = started
+        iterator = stream.__aiter__()
+        while True:
+            budget = first_response if first_response > 0 and last_event == started else idle
+            if budget > 0:
+                remaining = budget - (loop.time() - last_event)
+                if remaining <= 0:
+                    reason = "first_response_timeout" if last_event == started else "idle_timeout"
+                    raise _StreamWatchdogError(reason)
+            else:
+                remaining = None
+            try:
+                if remaining is None:
+                    chunk = await iterator.__anext__()
+                else:
+                    chunk = await asyncio.wait_for(iterator.__anext__(), timeout=remaining)
+            except StopAsyncIteration:
+                return
+            except TimeoutError:
+                reason = "first_response_timeout" if last_event == started else "idle_timeout"
+                raise _StreamWatchdogError(reason) from None
+            last_event = loop.time()
+            yield chunk
 
     async def _call_llm(self, adapter: Any, session: AgentSession, tools: list) -> ChatResult | None:
         """Call the LLM adapter and return the result.
@@ -466,7 +669,7 @@ class AgentEngine:
             self.tool_registry,
             session.tools,
             self.tool_prioritizer,
-            task_description=(session.messages[-1].get("content", "") if session.messages else ""),
+            task_description=(content_to_text(session.messages[-1].get("content", "")) if session.messages else ""),
         )
 
         start = time.monotonic()
@@ -735,17 +938,16 @@ class AgentEngine:
                     "tool_name": tr.tool_name,
                     "result": tr.result,
                     "error": tr.error,
+                    "success": tr.success,
+                    "arguments": tr.arguments,
+                    "duration_ms": tr.duration_ms,
                 },
             )
             await self._handle_tool_debug(session, tr)
-            session.messages.append({"role": MessageRole.TOOL, "content": tr.result, "tool_call_id": tr.tool_call_id or tr.tool_name})
-            await persist_message(
-                session.session_id,
-                MessageRole.TOOL,
-                content=tr.result,
-                tool_name=tr.tool_name,
-                tool_call_id=tr.tool_call_id,
-            )
+            if tr.success and tr.tool_name == _COMPLETION_TOOL and session._completion is None:
+                session._completion = tr.result
+                session._run_termination_reason = _COMPLETION_TOOL
+            await self._record_tool_message(session, tr)
 
         cp = CheckpointData(
             session_id=session.session_id,
@@ -758,6 +960,107 @@ class AgentEngine:
         )
         await self._checkpoints.save(None, cp, checkpoint_id=f"{session.session_id}-{iteration}")
         yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration, "tool_calls": len(result.tool_calls)})
+
+        reminder = self._repeat_call_reminder(session, result.tool_calls)
+        if reminder:
+            session.messages.append({"role": MessageRole.SYSTEM, "content": reminder})
+            yield AgentEvent(type=AgentEventType.PROGRESS, data={"kind": "repeat_call_reminder", "content": reminder})
+
+    @staticmethod
+    def _repeat_call_reminder(session: AgentSession, tool_calls: list[dict[str, Any]]) -> str | None:
+        """Advisory guard against repeat loops (deepseek-harness pattern).
+
+        Tracks consecutive identical calls (name + canonicalized args) and
+        returns an escalating reminder at thresholds 3/5/8. Purely advisory:
+        it never blocks a call, and denied calls count too — hammering a
+        denied call is exactly the loop to break.
+        """
+        last_name = ""
+        for tc in tool_calls:
+            function = tc.get("function", {}) or {}
+            name = function.get("name", "")
+            arguments = function.get("arguments", {})
+            if isinstance(arguments, str):
+                try:
+                    arguments = json.loads(arguments)
+                except json.JSONDecodeError:
+                    arguments = {}
+            key = _approval_key(name, arguments)
+            if key == session._repeat_chain_key:
+                session._repeat_chain_count += 1
+            else:
+                session._repeat_chain_key = key
+                session._repeat_chain_count = 1
+            last_name = name
+
+        count = session._repeat_chain_count
+        if count < 3:
+            return None
+        preview = json.dumps(tool_calls[-1].get("function", {}).get("arguments", {}), default=str)[:500]
+        if count >= 8:
+            return (
+                f"You have called `{last_name}` with identical arguments {count} times "
+                f"consecutively (args: {preview}). You are almost certainly stuck in a "
+                "loop. Stop calling this tool with these arguments: reassess the goal, "
+                "try a fundamentally different approach, or ask the user for guidance."
+            )
+        if count >= 5:
+            return (
+                f"Repeated tool call detected: `{last_name}` x{count} with identical "
+                f"arguments (args: {preview}). Each repetition returned the same kind of "
+                "result. Change the arguments, switch tools, or explain to the user why "
+                "you are retrying before calling it again."
+            )
+        return (
+            f"Note: `{last_name}` has now been called {count} times in a row with "
+            "identical arguments. If this is intentional, continue; otherwise consider "
+            "a different approach."
+        )
+
+    async def _record_tool_message(self, session: AgentSession, tr: Any) -> None:
+        """Append a tool result to the transcript, surfacing failures to the model.
+
+        Failed tools often carry an empty result string; sending that to the
+        model makes an error indistinguishable from an empty success. Prefix the
+        error so the model can react instead of silently continuing.
+        """
+        tool_call_id = tr.tool_call_id or tr.tool_name
+        if tr.success:
+            content = truncate_tool_result(tr.result, self._tool_result_config)
+            if content != tr.result:
+                session._tool_output_store[tool_call_id] = tr.result
+        else:
+            content = f"Tool failed: {tr.error}" if tr.error else "Tool failed"
+        session.messages.append({
+            "role": MessageRole.TOOL,
+            "content": content,
+            "tool_call_id": tool_call_id,
+        })
+        await persist_message(
+            session.session_id,
+            MessageRole.TOOL,
+            content=content,
+            tool_name=tr.tool_name,
+            tool_call_id=tr.tool_call_id,
+        )
+
+    def _build_session_registry(self, session: AgentSession) -> Any:
+        """Wrap the global registry with session-scoped recall tools.
+
+        The recall tools close over this session's hidden-output store, so they
+        must not be registered globally. A read-through overlay keeps them
+        visible to the executor and to tool-definition building for this run
+        only.
+        """
+        from app.core.recall_tools import recall_tool_definitions
+        from app.tools import SessionToolRegistry
+
+        overlay = SessionToolRegistry(self.tool_registry)
+        for name, description, schema, func in recall_tool_definitions(
+            session._tool_output_store
+        ):
+            overlay.add(name, description, schema, func)
+        return overlay
 
     async def _handle_tool_debug(self, session: AgentSession, tr: Any) -> None:
         """Handle debug recovery for failed tool calls.
@@ -854,13 +1157,15 @@ class AgentEngine:
                 max_memories=5,
             )
             if memory_context:
+                # Append-only snapshot: drop stale snapshots and insert the
+                # fresh one just before the latest message, keeping the
+                # earlier prefix byte-stable for provider prompt caching.
                 memory_marker = "<!-- MEMORY_CONTEXT -->"
-                for i, msg in enumerate(session.messages):
-                    if msg.get("content", "").startswith(memory_marker):
-                        session.messages[i] = {"role": MessageRole.SYSTEM, "content": memory_marker + "\n" + memory_context}
-                        break
-                else:
-                    session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": memory_marker + "\n" + memory_context})
+                session.messages = [
+                    m for m in session.messages
+                    if not (isinstance(m.get("content"), str) and m["content"].startswith(memory_marker))
+                ]
+                session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": memory_marker + "\n" + memory_context})
         except Exception:
             pass
 
@@ -876,12 +1181,11 @@ class AgentEngine:
             if blocks:
                 core_memory_xml = core_memory.format_for_prompt(blocks)
                 core_marker = "<!-- CORE_MEMORY -->"
-                for i, msg in enumerate(session.messages):
-                    if msg.get("content", "").startswith(core_marker):
-                        session.messages[i] = {"role": MessageRole.SYSTEM, "content": core_marker + "\n" + core_memory_xml}
-                        break
-                else:
-                    session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": core_marker + "\n" + core_memory_xml})
+                session.messages = [
+                    m for m in session.messages
+                    if not (isinstance(m.get("content"), str) and m["content"].startswith(core_marker))
+                ]
+                session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": core_marker + "\n" + core_memory_xml})
         except Exception:
             pass
 

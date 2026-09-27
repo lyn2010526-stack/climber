@@ -1,10 +1,32 @@
-"""Security Sandbox + Audit System.
+"""Pre-execution policy layer for agent tool calls.
 
-Implements:
-1. Command sandbox: path whitelist, hazard command blacklist, resource limits
-2. File system isolation: project directory isolation, no cross-directory access
-3. Full operation audit: all file mods, commands, API calls logged with traceability
-4. Permission approval workflow: pause → request → temporary grant → revoke
+This used to be a second, independent sandbox: a denylist (``HAZARD_COMMANDS``)
+bolted onto an allowlist (``_ALLOWED_COMMANDS``) that contradicted itself in
+both directions -- ``chmod`` allowlisted while only ``chmod 777`` was blocked,
+``rm`` allowlisted while ``rm -rf`` was blocked -- consulted on a different code
+path than the one that actually spawns processes. Two sandboxes, two answers to
+"is this command safe?".
+
+It is now a thin policy layer:
+
+* **Command admission is delegated.** :meth:`SecuritySandbox.validate_command`
+  calls :meth:`app.core.sandbox.SandboxExecutor._is_command_safe` -- the exact
+  function ``execute`` calls before ``create_subprocess_exec``. One command
+  policy, and it is the one on the execution path. This layer only *adds* two
+  restrictions: shell metacharacters in the command token, and interpreter
+  entry points. Admission is the *union* of the checks, so no disagreement can
+  produce a false allow.
+* **Path admission is containment, not prefix.** Every root -- allowed and
+  blocked alike -- is compared with ``os.path.realpath`` plus
+  ``os.path.commonpath``, so a path is inside a root only if it really is. A
+  blocked root of ``/dev`` no longer admits ``/devfoo``.
+* **Permission layers stack with DENY dominance.** A user- or agent-level rule
+  can tighten a decision (ALLOW -> ASK -> DENY) but never widen one.
+* **The AST gate is a denylist**, and :class:`CodeSandbox` says so in its own
+  docstring. It is a tripwire against obvious mistakes, not a boundary.
+
+Nothing here executes anything. This module answers "may this tool call
+proceed?"; :mod:`app.core.sandbox` owns "how is it run, and under what limits?".
 """
 
 from __future__ import annotations
@@ -12,6 +34,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import shutil
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -41,6 +64,17 @@ class PermissionLevel(Enum):
     ALLOW = "allow"              # Directly allowed
 
 
+#: Strictest-first ordering. Used for every permission decision in this module,
+#: so "which of these two rules wins" has exactly one answer everywhere:
+#: DENY beats ASK beats ALLOW. Never invert this and expect the merge to
+#: still stack.
+_LEVEL_STRENGTH: dict[PermissionLevel, int] = {
+    PermissionLevel.DENY: 2,
+    PermissionLevel.ASK: 1,
+    PermissionLevel.ALLOW: 0,
+}
+
+
 @dataclass
 class PermissionRule:
     action: str                  # read / write / execute / delete
@@ -50,8 +84,19 @@ class PermissionRule:
 
 
 class PermissionOverlay:
-    """Three-layer permission overlay: defaults → agent-level → user-level.
+    """Three-layer permission overlay: defaults -> agent-level -> user-level.
 
+    The three layers **stack**. Every layer is consulted, every match is
+    collected, and the strictest level among them wins. A layer that matches
+    never short-circuits the search, which is what makes "stacking" true rather
+    than decorative.
+
+    The consequence that matters: an override can only ever *tighten*. A
+    user-level or agent-level rule may turn ALLOW into ASK or DENY; it can never
+    turn a default DENY into ALLOW. Loosening a default is a change to the
+    defaults, which is an operator decision, not a per-session one.
+
+    When nothing matches at any layer, the result is DENY (fail closed).
     """
 
     def __init__(self):
@@ -69,33 +114,56 @@ class PermissionOverlay:
         self._user_overrides[user_id] = rules
 
     def evaluate(self, action: str, resource: str, agent_id: str | None = None, user_id: str | None = None) -> PermissionLevel:
-        """Evaluate permission with three-layer overlay."""
-        effective = self._merge_rules(action, resource, agent_id, user_id)
-        if not effective:
-            return PermissionLevel.DENY
-        return effective.level
+        """Evaluate a permission across all three layers.
 
-    def _merge_rules(self, action: str, resource: str, agent_id: str | None, user_id: str | None) -> PermissionRule | None:
+        Returns the strictest level matched by any layer, or DENY when no
+        layer matches.
+        """
+        matches = self._collect_matches(action, resource, agent_id, user_id)
+        if not matches:
+            return PermissionLevel.DENY
+        return self._strongest(matches)
+
+    def _collect_matches(
+        self,
+        action: str,
+        resource: str,
+        agent_id: str | None,
+        user_id: str | None,
+    ) -> list[PermissionRule]:
+        """Every rule that matches, across every applicable layer.
+
+        Deliberately does not stop at the first layer with a hit: that is the
+        bug that let an override loosen a default.
+        """
         layers = [
             self._user_overrides.get(user_id, []) if user_id else [],
             self._agent_overrides.get(agent_id, []) if agent_id else [],
             self._defaults,
         ]
+        matches: list[PermissionRule] = []
         for rules in layers:
-            matches = [
+            matches.extend(
                 rule
                 for rule in rules
                 if rule.action == action and self._match(rule.resource_pattern, resource)
-            ]
-            if matches:
-                return max(
-                    matches,
-                    key=lambda rule: (
-                        self._specificity(rule.resource_pattern),
-                        self._priority(rule.level),
-                    ),
-                )
-        return None
+            )
+        return matches
+
+    @classmethod
+    def _strongest(cls, rules: list[PermissionRule]) -> PermissionLevel:
+        """Pick one level from several rules: most specific wins, then strictest.
+
+        Specificity is compared *within* a level so that a narrow ALLOW can
+        never outrank a broad DENY.
+        """
+        return max(
+            rules,
+            key=lambda rule: (
+                cls._priority(rule.level),
+                cls._specificity(rule.resource_pattern),
+            ),
+        ).level
 
     @staticmethod
     def _match(pattern: str, path: str) -> bool:
@@ -104,7 +172,7 @@ class PermissionOverlay:
 
     @staticmethod
     def _priority(level: PermissionLevel) -> int:
-        return {PermissionLevel.DENY: 2, PermissionLevel.ASK: 1, PermissionLevel.ALLOW: 0}.get(level, 0)
+        return _LEVEL_STRENGTH.get(level, 0)
 
     @staticmethod
     def _specificity(pattern: str) -> tuple[int, int]:
@@ -121,6 +189,9 @@ class SchemaValidationError(Exception):
 def validate_tool_input(schema: dict[str, Any], arguments: dict[str, Any]) -> None:
     """Validate tool arguments against JSON Schema.
 
+    Only the required-fields and top-level type checks are implemented. Nested
+    objects and array element types are not walked, so a schema that relies on
+    them is under-validated here.
     """
     if not schema:
         return
@@ -148,54 +219,156 @@ def validate_tool_input(schema: dict[str, Any], arguments: dict[str, Any]) -> No
             raise SchemaValidationError(f"Field '{key}' must be an object")
 
 
-# ─── Command Blacklist ──────────────────────────────────────────────────────
+# ─── Path Containment ────────────────────────────────────────────────────────
 
-HAZARD_COMMANDS = [
-    # Destructive file operations
-    r'\brm\s+(-[rfRF]+\s+)?/?(\s|$)',
-    r'\brm\s+-[rfRF]+\s+/',
-    r'\bshred\b',
-    r'\bwipe\b',
-    # Disk operations
-    r'\bmkfs\b',
-    r'\bfdisk\b',
-    r'\bdd\b.*\bof=/dev/',
-    r'>\s*/dev/sd[a-z]',
-    # Fork bomb / DoS
-    r':\(\)\s*{\s*:\s*\|\s*:\s*&\s*}\s*;',
-    # Privilege escalation
-    r'\bchmod\s+777\b',
-    r'\bchown\s+-R\s+root\b',
-    r'\bsudo\b',
-    # Network threats
-    r'\bnc\b.*-e\s+/bin/',
-    r'\bbash\b.*-i\b.*>&\b',
-    r'\bnohup\b',
-    r'\bcurl\b.*\|\s*(sh|bash)\b',
-    r'\bwget\b.*\|\s*(sh|bash)\b',
-    # System control
-    r'\bshutdown\b',
-    r'\breboot\b',
-    r'\bpoweroff\b',
-    r'\binit\s+[06]\b',
-    r'\bsystemctl\s+(stop|disable)\b',
-    # Mount abuse
-    r'\bmount\b.*-o\s+loop',
-    # Command injection patterns
-    r'\$\(.*\)',
-    r'`[^`]*`',
-    r';\s*(rm|shred|mkfs|fdisk|dd|chmod|chown|sudo|shutdown|reboot|poweroff)\b',
-    r'\|\s*(rm|shred|mkfs|sudo|shutdown|reboot|poweroff)\b',
-]
+def resolve_real(path: str) -> str:
+    """Fully resolve a path: expand ``~``/``$VARS`` then follow every symlink.
+
+    Containment checks are meaningless without this step -- a symlink inside an
+    allowed directory is the cheapest way out of one.
+    """
+    return os.path.realpath(os.path.expandvars(os.path.expanduser(path)))
 
 
-# ─── Security Sandbox ──────────────────────────────────────────────────────
+def is_contained(child: str, root: str) -> bool:
+    """True when ``child`` is ``root`` itself or genuinely inside ``root``.
+
+    Uses ``os.path.commonpath`` so the comparison is on whole path components.
+    A prefix test would answer ``True`` for ``/devfoo`` against the root
+    ``/dev``; this does not.
+    """
+    try:
+        resolved_child = resolve_real(child)
+        resolved_root = resolve_real(root)
+    except (OSError, ValueError):
+        return False
+    if resolved_child == resolved_root:
+        return True
+    try:
+        return os.path.commonpath([resolved_child, resolved_root]) == resolved_root
+    except ValueError:
+        # Different drives / mixed absolute-relative: never contained.
+        return False
+
+
+# ─── Command Policy ──────────────────────────────────────────────────────────
+
+#: Characters that make a shell expand or reinterpret its argv. The execution
+#: path runs commands through ``bash -c``, so a metacharacter here means the
+#: process that validated the string is not the process that runs it.
+#: ``SandboxExecutor._is_command_safe`` cannot see this -- its path-token scan
+#: only looks for absolute paths, so ``echo $(id)`` and ``ls;reboot`` are
+#: invisible to it. Rejecting them here is what makes the two agree.
+_SHELL_METACHARACTERS = frozenset("|&;<>()$`\n\r\\\"'*?[]{}!#")
+
+
+#: First whitespace-delimited token of a command line.
+_COMMAND_TOKEN = re.compile(r"^\s*(\S+)")
+
+
+def resolve_command_base(command: str) -> tuple[str | None, str]:
+    """Resolve the first token of a command line to an executable path.
+
+    Returns ``(path, "")``, or ``(None, reason)`` when the token would be
+    shell-expanded (so the real executable is undecidable at validation time)
+    or names nothing on PATH. Relative tokens resolve against the current
+    directory, matching how the execution path will interpret them.
+    """
+    token = _COMMAND_TOKEN.match(command)
+    token = token.group(1) if token else ""
+    if not token:
+        return None, "Empty command"
+
+    if any(char in _CONTROL_METACHARACTERS for char in token):
+        return None, (
+            f"Command token '{token}' contains shell metacharacters, so the "
+            "executable cannot be verified before execution"
+        )
+
+    # A token containing a separator is a path; a bare name goes through PATH.
+    if "/" in token:
+        return os.path.abspath(token), ""
+
+    found = shutil.which(token)
+    if found is None:
+        # Nothing can execute it, so refuse rather than let the shell decide
+        # what it meant.
+        return None, f"Command '{token}' was not found on PATH"
+    return found, ""
+
+
+def _execution_command_allowlist() -> set[str]:
+    """Return the command names configured for the real executor.
+
+    Keeping this lookup on the executor configuration avoids a second, stale
+    list in this preflight layer. The executor itself remains the final process
+    admission point.
+    """
+    from app.core.sandbox import SandboxConfig as ExecutionSandboxConfig
+
+    return {os.path.basename(command) for command in ExecutionSandboxConfig().allowed_commands}
+
+
+#: Shell characters that let one command become several, or let the shell run
+#: something no policy inspected: chaining, pipes, redirection, grouping, and
+#: command substitution. The execution path runs commands through ``bash -c``,
+#: so any of these means the process that validated the string is not the one
+#: that runs it. Their content cannot be validated at validation time, so
+#: commands containing them are refused outright.
+#:
+#: Quotes are deliberately *not* in this set -- ``grep "foo bar" x.py`` is
+#: ordinary and still needs to work -- but quoting hides a path from the
+#: execution path's token scan, which only fires at whitespace boundaries. That
+#: hole is closed separately, in :func:`check_command_paths`, by tokenising
+#: with the quotes already removed.
+_CONTROL_METACHARACTERS = frozenset("|&;<>()$`\n\r*?[]{}!#")
+
+
+def _shlex_split(command: str) -> list[str] | None:
+    """Split a command into tokens with quotes resolved, or ``None`` if the
+    quoting is unbalanced."""
+    import shlex
+
+    try:
+        return shlex.split(command)
+    except ValueError:
+        return None
+
+
+def check_command_paths(tokens: list[str], workdir: str) -> str | None:
+    """Return a refusal reason when any token in ``tokens`` names a path
+    outside ``workdir``, else ``None``.
+
+    This is the execution path's escape check, re-done over quote-resolved
+    tokens. The execution path scans the raw string for absolute paths at
+    whitespace boundaries, so it misses anything inside quotes -- verified
+    against the current implementation, which returns ``(True, '')`` for
+    ``echo '/etc/shadow'``. Running the same containment rule here is what
+    closes that gap.
+    """
+    for token in tokens[1:]:
+        if not token.startswith(("/", "~", "./", "../")):
+            continue
+        expanded = os.path.expanduser(os.path.expandvars(token))
+        if os.path.isabs(expanded) and not is_contained(expanded, workdir):
+            return f"path '{token}' is outside the workdir"
+    return None
+
+
+# ─── Security Sandbox ────────────────────────────────────────────────────────
 
 @dataclass
 class SandboxConfig:
-    """Sandbox isolation configuration."""
+    """Sandbox isolation configuration.
+
+    ``blocked_paths`` entries are *roots*, compared with realpath containment
+    rather than string prefix, so ``/dev`` blocks ``/dev/null`` and
+    ``/devfoo/bar`` alike. A glob entry (one containing ``*``) is matched with
+    ``fnmatch`` after a realpath/commonpath check against its static root, and
+    otherwise the entry is treated as a containment root.
+    """
     workdir: str                    # Isolated working directory
-    allowed_paths: list[str] = field(default_factory=list)  # Additional allowed paths
+    allowed_paths: list[str] = field(default_factory=list)  # Additional allowed roots
     blocked_paths: list[str] = field(default_factory=lambda: [
         '/etc/shadow', '/etc/passwd', '/etc/sudoers',
         '/root/.ssh', '/home/*/.ssh',
@@ -208,59 +381,164 @@ class SandboxConfig:
 
 
 class SecuritySandbox:
-    """Local process sandbox for safe code execution.
+    """Pre-execution policy checks for agent tool calls.
 
-    Features:
-    - File access isolation (project directory only by default)
-    - Command hazard detection
-    - Resource limits (file size, output size, timeout)
-    - Audit logging for all operations
+    This class makes no decisions of its own about which commands are safe. It
+    defers to :class:`app.core.sandbox.SandboxExecutor`, which is the
+    component that actually spawns processes, and adds only the restrictions
+    described in the module docstring. It is a gate, not a jail: it can refuse
+    a call, it cannot confine one that it admitted.
     """
 
     def __init__(self, config: SandboxConfig | None = None):
         self.config = config or SandboxConfig(workdir="/tmp/sandbox")
-        self._active = True
 
     def validate_file_access(self, path: str, mode: str = 'read') -> tuple[bool, str]:
-        """Validate if a file can be accessed."""
-        abs_path = os.path.abspath(path)
+        """Validate whether a file may be accessed.
 
-        # Check blocked paths
+        Containment is decided on the fully resolved path, so ``..`` segments
+        and symlinks are collapsed before any comparison. An explicitly
+        allowed root wins over a blocked one, which is how a caller opts into
+        something the defaults forbid.
+        """
+        if not path:
+            return False, "Access denied: empty path"
+
+        try:
+            abs_path = resolve_real(path)
+        except (OSError, ValueError) as exc:
+            return False, f"Access denied: cannot resolve path '{path}': {exc}"
+
         for blocked in self.config.blocked_paths:
-            if abs_path.startswith(blocked) or abs_path == blocked:
+            if self._matches_block(abs_path, blocked):
                 return False, f"Access denied: path '{abs_path}' is in blocked list"
 
-        # Check allowed paths
-        allowed = [self.config.workdir] + self.config.allowed_paths
-        is_allowed = any(abs_path.startswith(p) for p in allowed)
+        allowed = [self.config.workdir] + list(self.config.allowed_paths)
+        if any(is_contained(abs_path, root) for root in allowed):
+            return self._check_size(abs_path, mode)
 
-        if not is_allowed:
-            return False, f"Access denied: path '{abs_path}' is outside allowed directories"
+        return False, f"Access denied: path '{abs_path}' is outside allowed directories"
 
-        # Check file size for reads
-        if mode == 'read' and os.path.exists(abs_path):
-            size_mb = os.path.getsize(abs_path) / (1024 * 1024)
-            if size_mb > self.config.max_file_size_mb:
-                return False, f"File too large: {size_mb:.1f}MB (max {self.config.max_file_size_mb}MB)"
+    def _matches_block(self, abs_path: str, blocked: str) -> bool:
+        """Does ``abs_path`` fall under the blocked entry ``blocked``?"""
+        if "*" in blocked:
+            import fnmatch
 
+            pattern = resolve_real(blocked)
+            static_root = pattern.split("*", 1)[0].rstrip(os.sep) or os.sep
+            try:
+                same_root = os.path.commonpath([abs_path, static_root]) == static_root
+            except ValueError:
+                same_root = False
+            return same_root and fnmatch.fnmatchcase(abs_path, pattern)
+        return is_contained(abs_path, blocked)
+
+    def _check_size(self, abs_path: str, mode: str) -> tuple[bool, str]:
+        if mode != 'read':
+            return True, "OK"
+        try:
+            if os.path.exists(abs_path):
+                size_mb = os.path.getsize(abs_path) / (1024 * 1024)
+                if size_mb > self.config.max_file_size_mb:
+                    return False, f"File too large: {size_mb:.1f}MB (max {self.config.max_file_size_mb}MB)"
+        except OSError as exc:
+            return False, f"Access denied: cannot stat '{abs_path}': {exc}"
         return True, "OK"
 
     def validate_command(self, command: str) -> tuple[bool, str]:
-        """Validate a shell command against hazard list and allowlist."""
-        # Check hazard patterns first
-        for pattern in HAZARD_COMMANDS:
-            if re.search(pattern, command, re.IGNORECASE):
-                return False, f"Command blocked by safety policy: matches hazard pattern '{pattern}'"
+        """Validate a shell command.
 
-        # Check allowlist
-        parts = command.strip().split()
-        if parts:
-            base = parts[0].lstrip("./")
-            base = os.path.basename(base)
-            if base not in _ALLOWED_COMMANDS:
-                return False, f"Command '{base}' is not in the allowed commands list"
+        Four checks, all of which must pass:
+
+        1. no shell control metacharacter anywhere in the command;
+        2. the first token resolves to a real executable that is not itself a
+           shell or interpreter entry point;
+        3. no quote-hidden token names a path outside the workdir;
+        4. the execution path's own policy, :meth:`SandboxExecutor.
+           _is_command_safe`, agrees.
+
+        Check 4 is the authoritative one and is the reason the two sandboxes no
+        longer disagree: it is the same call ``SandboxExecutor.execute`` makes
+        before spawning. Checks 1-3 close gaps that policy has, verified against
+        the current implementation, which *admits* all of these::
+
+            echo $(id)                       -> (True, '')   # bypasses 4 entirely
+            echo '/etc/shadow'               -> (True, '')   # hidden from its token scan
+            python3 -c "open('/tmp/z','w')"  -> (True, '')   # hands it a program
+
+        ``echo $(id)`` never runs a policy; ``echo '/etc/shadow'`` hides a path
+        from the only check that inspects paths; and ``-c`` hands a whole program
+        to an interpreter. None of those are visible to check 4, which is
+        exactly why this layer is not redundant with it.
+        """
+        if not command or not command.strip():
+            return False, "Empty command"
+
+        if any(char in _CONTROL_METACHARACTERS for char in command):
+            return False, (
+                "Command contains a shell control character "
+                f"({sorted(_CONTROL_METACHARACTERS & set(command))[0]!r}); "
+                "chaining, redirection and substitution are not permitted"
+            )
+
+        base, reason = resolve_command_base(command)
+        if base is None:
+            return False, reason
+
+        if os.path.basename(base) in _SHELL_INTERPRETERS:
+            return False, (
+                f"Command '{os.path.basename(base)}' is a shell/interpreter "
+                "entry point; invoke the target program directly"
+            )
+
+        command_name = os.path.basename(base)
+        try:
+            allowed_commands = _execution_command_allowlist()
+        except ImportError as exc:
+            return False, f"Command policy unavailable: {exc}"
+        if command_name not in allowed_commands:
+            return False, f"Command '{command_name}' is not in the execution allowlist"
+
+        tokens = _shlex_split(command)
+        if tokens is None:
+            return False, "Unbalanced quotes in command"
+        escape = check_command_paths(tokens, self.config.workdir)
+        if escape is not None:
+            return False, f"Blocked: {escape}"
+
+        ok, delegated_reason = self._delegate_command_check(command)
+        if not ok:
+            return False, delegated_reason
 
         return True, "OK"
+
+    def _delegate_command_check(self, command: str) -> tuple[bool, str]:
+        """Run the execution path's own command policy.
+
+        Imported lazily so this module stays importable where
+        :mod:`app.core.sandbox` cannot load (it imports ``resource``, which is
+        POSIX-only), and so the delegation can be observed by tests.
+
+        The delegated check is given the configured ``workdir`` because the
+        execution path compares path tokens against it. When that directory does
+        not exist the execution path would have chosen a different, temporary
+        one, so we report the disagreement rather than silently guessing.
+        """
+        workdir = self.config.workdir
+        if not os.path.isdir(workdir):
+            return False, (
+                f"Configured workdir '{workdir}' does not exist, so the "
+                "execution path would substitute a different directory and the "
+                "delegated check could not be compared"
+            )
+        try:
+            from app.core.sandbox import SandboxExecutor
+
+            return SandboxExecutor()._is_command_safe(command, workdir)
+        except ImportError as exc:
+            # Fail closed: if the execution path's policy is unavailable, this
+            # layer has no second opinion to offer and must not admit the call.
+            return False, f"Command policy unavailable: {exc}"
 
     def sanitize_output(self, output: str) -> str:
         """Truncate oversized output."""
@@ -271,103 +549,23 @@ class SecuritySandbox:
         return output
 
 
-# Allowed commands for the allowlist check
-_ALLOWED_COMMANDS = {
-    "ls", "cat", "echo", "pwd", "cd", "mkdir", "cp", "mv", "rm",
-    "touch", "head", "tail", "grep", "find", "wc", "sort", "uniq",
-    "diff", "file", "which", "env", "export",
-    "pip", "pip3", "npm", "npx", "git", "curl", "wget",
-    "tar", "zip", "unzip", "chmod", "chown", "ln", "tee", "awk",
-    "sed", "xargs", "jq", "yq", "make", "pytest", "go", "rustc",
-    "cargo", "java", "javac", "mvn", "gradle", "docker",
-}
-
-
-def validate_command_allowlist(command: str) -> tuple[bool, str]:
-    """Validate that a command base name is in the allowed commands list.
-
-    Also checks for dangerous argument patterns (e.g., rm -rf) and
-    invalid shell syntax (unclosed quotes).
-    """
-    parts = command.strip().split()
-    if not parts:
-        return False, "Empty command"
-
-    # Check for invalid shell syntax (unclosed quotes)
-    single_quotes = command.count("'")
-    double_quotes = command.count('"')
-    if single_quotes % 2 != 0 or double_quotes % 2 != 0:
-        return False, "Invalid shell syntax: unclosed quote"
-
-    base = parts[0].lstrip("./")
-    base = os.path.basename(base)
-    if base not in _ALLOWED_COMMANDS:
-        return False, f"Command '{base}' is not in the allowed commands list"
-
-    # Check for dangerous argument patterns
-    dangerous_patterns = {
-        "rm": [
-            r"-[rR][fF]", r"-[fF][rR]",  # -rf, -Fr, -rF, -fR etc.
-            r"-r\s+-?[fF]", r"-[fF]\s+-?r",  # -r -f, -f -r
-            r"--recursive.*--force", r"--force.*--recursive",  # --recursive --force
-            r"--[a-zA-Z]*r[a-zA-Z]*f", r"--[a-zA-Z]*f[a-zA-Z]*r",  # mixed long flags
-        ],
-    }
-    if base in dangerous_patterns:
-        full_args = " ".join(parts[1:])
-        for pattern in dangerous_patterns[base]:
-            if re.search(pattern, full_args):
-                return False, f"Dangerous arguments for '{base}': {full_args}"
-
-    return True, "OK"
-
-
-
+#: Interpreters that execute a *program given to them*, so the validated
+#: executable and the executing process are no longer the same thing. Rejected
+#: in the command position; the `bash -c` the execution path itself wraps a
+#: command in is internal to that path and never reaches this check.
+_SHELL_INTERPRETERS = frozenset({
+    "sh", "bash", "zsh", "dash", "ksh", "csh", "tcsh", "fish",
+    "python", "python2", "python3",
+    "node", "nodejs", "deno", "bun",
+    "perl", "ruby", "php", "lua", "tclsh", "wish",
+    "env", "eval", "exec", "xargs", "nohup", "setsid", "timeout", "watch",
+    "find", "ssh", "sudo", "su", "doas", "stdbuf", "script",
+})
 
 
 # ─── Code Execution Sandbox ──────────────────────────────────────────────────
 
-class VerificationResult:
-    def __init__(self, allowed: bool, reason: str = ""):
-        self.allowed = allowed
-        self.reason = reason
-
-
-class CodeSandbox:
-    """AST-level static code analysis sandbox.
-
-    """
-
-    FORBIDDEN_MODULES = {"os", "sys", "subprocess", "socket", "shutil", "pickle", "marshal", "ctypes", "signal", "pty", "fcntl"}
-    FORBIDDEN_FUNCTIONS = {"eval", "exec", "open", "getattr", "setattr", "delattr", "globals", "locals", "compile", "__import__"}
-    FORBIDDEN_DUNDER = {"__dict__", "__class__", "__bases__", "__subclasses__", "__init_subclass__", "__setattr__", "__delattr__"}
-
-    def verify(self, code: str) -> VerificationResult:
-        """Verify code safety using AST analysis."""
-        try:
-            import ast
-            tree = ast.parse(code)
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        top = alias.name.split(".")[0]
-                        if top in self.FORBIDDEN_MODULES:
-                            return VerificationResult(allowed=False, reason=f"Forbidden module: {top}")
-                elif isinstance(node, ast.ImportFrom):
-                    if node.module:
-                        top = node.module.split(".")[0]
-                        if top in self.FORBIDDEN_MODULES:
-                            return VerificationResult(allowed=False, reason=f"Forbidden module: {top}")
-                elif isinstance(node, ast.Attribute):
-                    if node.attr in self.FORBIDDEN_DUNDER:
-                        return VerificationResult(allowed=False, reason=f"Forbidden dunder: {node.attr}")
-                elif isinstance(node, ast.Call):
-                    func = node.func
-                    if isinstance(func, ast.Name) and func.id in self.FORBIDDEN_FUNCTIONS:
-                        return VerificationResult(allowed=False, reason=f"Forbidden function: {func.id}")
-            return VerificationResult(allowed=True)
-        except SyntaxError as e:
-            return VerificationResult(allowed=False, reason=f"Syntax error: {e}")
+from app.core.security.code_sandbox import CodeSandbox, VerificationResult
 
 
 # ─── Permission Approval System ────────────────────────────────────────────

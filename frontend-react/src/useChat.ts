@@ -1,5 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { api } from './api';
+import { api, type UploadedAttachment } from './api';
+
+export interface OutgoingAttachment {
+  file: File;
+  kind: 'image' | 'file';
+}
 
 export interface ToolCall {
   id: string;
@@ -57,7 +62,7 @@ export function useChat(sessionId: string | null) {
     return () => { active = false; };
   }, [sessionId]);
 
-  const sendMessage = useCallback(async (content: string) => {
+  const sendMessage = useCallback(async (content: string, attachments?: OutgoingAttachment[]) => {
     if (!sessionId || isStreaming) return;
 
     const userMsg: Message = {
@@ -69,6 +74,25 @@ export function useChat(sessionId: string | null) {
     setMessages(prev => [...prev, userMsg]);
     setIsStreaming(true);
     setError(null);
+
+    let uploaded: UploadedAttachment[] = [];
+    if (attachments && attachments.length > 0) {
+      try {
+        uploaded = await Promise.all(attachments.map(a => api.uploadAttachment(a.file)));
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : 'Attachment upload failed';
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === userMsg.id
+              ? { ...msg, content: `${msg.content}\n[Upload failed: ${errMsg}]` }
+              : msg
+          )
+        );
+        setError(errMsg);
+        setIsStreaming(false);
+        return;
+      }
+    }
 
     const assistantId = `assistant-${Date.now()}`;
     const assistantMsg: Message = {
@@ -158,7 +182,7 @@ export function useChat(sessionId: string | null) {
         setError(errMsg);
         setIsStreaming(false);
       }
-    });
+    }, uploaded);
   }, [sessionId, isStreaming]);
 
   const stopStreaming = useCallback(() => {

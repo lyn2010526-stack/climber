@@ -38,34 +38,51 @@ class ParallelToolExecutor:
     async def execute_all(self, tool_calls: list[dict[str, Any]]) -> list[ToolExecutionResult]:
         tasks = []
         for tc in tool_calls:
-            name = tc.get("function", {}).get("name", "")
-            args = tc.get("function", {}).get("arguments", {})
-            tool_call_id = tc.get("id", "")
-            if isinstance(args, str):
-                try:
-                    args = json.loads(args)
-                except json.JSONDecodeError:
-                    args = {}
-            elif not isinstance(args, dict):
-                args = {}
+            name, args, parse_error, tool_call_id = self._parse_tool_call(tc)
+            if parse_error:
+                tasks.append(self._failed_result_async(name, parse_error, tool_call_id))
+                continue
             tasks.append(self._execute_one(name, args, tool_call_id))
         return await asyncio.gather(*tasks)
 
     async def execute_sequential(self, tool_calls: list[dict[str, Any]]) -> list[ToolExecutionResult]:
         results = []
         for tc in tool_calls:
-            name = tc.get("function", {}).get("name", "")
-            args = tc.get("function", {}).get("arguments", {})
-            tool_call_id = tc.get("id", "")
-            if isinstance(args, str):
-                try:
-                    args = json.loads(args)
-                except json.JSONDecodeError:
-                    args = {}
-            elif not isinstance(args, dict):
-                args = {}
+            name, args, parse_error, tool_call_id = self._parse_tool_call(tc)
+            if parse_error:
+                results.append(self._failed_result(name, parse_error, tool_call_id))
+                continue
             results.append(await self._execute_one(name, args, tool_call_id))
         return results
+
+    @staticmethod
+    def _parse_tool_call(tc: dict[str, Any]) -> tuple[str, dict[str, Any], str, str]:
+        function = tc.get("function", {})
+        name = function.get("name", "") if isinstance(function, dict) else ""
+        args = function.get("arguments", {}) if isinstance(function, dict) else {}
+        tool_call_id = tc.get("id", "")
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except json.JSONDecodeError as exc:
+                return name, {}, f"invalid tool arguments: {exc.msg}", tool_call_id
+        if not isinstance(args, dict):
+            return name, {}, "invalid tool arguments: expected an object", tool_call_id
+        return name, args, "", tool_call_id
+
+    @staticmethod
+    def _failed_result(name: str, error: str, tool_call_id: str) -> ToolExecutionResult:
+        return ToolExecutionResult(
+            tool_name=name,
+            error=error,
+            success=False,
+            arguments={},
+            tool_call_id=tool_call_id,
+        )
+
+    @staticmethod
+    async def _failed_result_async(name: str, error: str, tool_call_id: str) -> ToolExecutionResult:
+        return ParallelToolExecutor._failed_result(name, error, tool_call_id)
 
     async def _execute_one(self, name: str, arguments: dict[str, Any], tool_call_id: str = "") -> ToolExecutionResult:
         start = asyncio.get_event_loop().time()
@@ -74,20 +91,40 @@ class ParallelToolExecutor:
             try:
                 allowed, reason = self._validator(name, arguments)
             except Exception as e:
-                return ToolExecutionResult(tool_name=name, error=f"validator error: {e}", success=False, duration_ms=0, tool_call_id=tool_call_id)
+                duration = (asyncio.get_event_loop().time() - start) * 1000
+                return ToolExecutionResult(
+                    tool_name=name,
+                    error=f"validator error: {e}",
+                    success=False,
+                    duration_ms=duration,
+                    arguments=arguments,
+                    tool_call_id=tool_call_id,
+                )
             if not allowed:
                 duration = (asyncio.get_event_loop().time() - start) * 1000
-                return ToolExecutionResult(tool_name=name, error=f"blocked by sandbox: {reason}", success=False, duration_ms=duration, tool_call_id=tool_call_id)
+                return ToolExecutionResult(
+                    tool_name=name,
+                    error=f"blocked by sandbox: {reason}",
+                    success=False,
+                    duration_ms=duration,
+                    arguments=arguments,
+                    tool_call_id=tool_call_id,
+                )
         try:
             result = await asyncio.wait_for(
-                self._registry.execute(name, arguments),
+                self._registry.execute_result(name, arguments),
                 timeout=self._timeout,
             )
             duration = (asyncio.get_event_loop().time() - start) * 1000
-            return ToolExecutionResult(tool_name=name, result=result, duration_ms=duration, arguments=arguments, tool_call_id=tool_call_id)
+            return ToolExecutionResult(tool_name=name, result=result.result, error=result.error,
+                                       success=result.success, duration_ms=duration,
+                                       arguments=arguments, tool_call_id=tool_call_id)
         except TimeoutError:
-            return ToolExecutionResult(tool_name=name, error="timeout", success=False, arguments=arguments, tool_call_id=tool_call_id)
+            duration = (asyncio.get_event_loop().time() - start) * 1000
+            return ToolExecutionResult(tool_name=name, error="timeout", success=False, duration_ms=duration, arguments=arguments, tool_call_id=tool_call_id)
         except asyncio.CancelledError:
-            return ToolExecutionResult(tool_name=name, error="cancelled", success=False, arguments=arguments, tool_call_id=tool_call_id)
+            duration = (asyncio.get_event_loop().time() - start) * 1000
+            return ToolExecutionResult(tool_name=name, error="cancelled", success=False, duration_ms=duration, arguments=arguments, tool_call_id=tool_call_id)
         except Exception as e:
-            return ToolExecutionResult(tool_name=name, error=str(e), success=False, arguments=arguments, tool_call_id=tool_call_id)
+            duration = (asyncio.get_event_loop().time() - start) * 1000
+            return ToolExecutionResult(tool_name=name, error=str(e), success=False, duration_ms=duration, arguments=arguments, tool_call_id=tool_call_id)

@@ -20,6 +20,7 @@ from app.api.v1 import scheduler as scheduler_router
 from app.api.v1 import sessions as sessions_router
 from app.api.v1 import settings as settings_router
 from app.api.v1 import skills_router as skills_router_module
+from app.api.v1 import uploads as uploads_router
 from app.api.v1 import workflows as workflows_router
 from app.api.v1.routes.arcbench import router as arcbench_router
 from app.api.v1.routes.research import router as research_router
@@ -35,6 +36,7 @@ router.include_router(prompt_templates_router.router, prefix="/prompt-templates"
 router.include_router(generic_router.router, tags=["generic"])
 router.include_router(api_keys_router.router, prefix="/api-keys", tags=["api-keys"])
 router.include_router(documents_router.router, prefix="/documents", tags=["documents"])
+router.include_router(uploads_router.router, prefix="/uploads", tags=["uploads"])
 router.include_router(feedback_router.router, prefix="/feedback", tags=["feedback"])
 router.include_router(notifications_router.router, prefix="/notifications", tags=["notifications"])
 router.include_router(doctor_router.router, prefix="/doctor", tags=["doctor"])

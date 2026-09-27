@@ -116,8 +116,8 @@ async def authenticate_user(username: str, password: str) -> dict[str, Any]:
     from sqlalchemy import select
 
     from app.models.users import User, UserStatus
-    from app.storage import async_session
-    async with async_session() as session:
+    import app.storage as storage
+    async with storage.async_session() as session:
         result = await session.execute(
             select(User).where(User.username == username, User.status == UserStatus.ACTIVE.value)
         )

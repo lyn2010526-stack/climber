@@ -84,6 +84,21 @@ class Settings(BaseSettings):
     tool_timeout: int = Field(default=60)
     max_tool_retries: int = Field(default=2)
 
+    # CSRF: double-submit cookie enforcement for browser clients. Disabled under
+    # APP_TESTING so the in-process ASGI test client (which carries no cookies)
+    # keeps exercising the API directly.
+    csrf_protection: bool = Field(default=True)
+    csrf_exempt_paths: list[str] = Field(
+        default_factory=lambda: [
+            "/health",
+            "/health/logs",
+            "/metrics",
+            "/docs",
+            "/openapi.json",
+            "/favicon.ico",
+        ]
+    )
+
     telegram_bot_token: str = Field(default="")
 
     # API key rotation
@@ -131,6 +146,11 @@ class Settings(BaseSettings):
     @property
     def trusted_proxies_list(self) -> list[str]:
         return [proxy.strip() for proxy in self.trusted_proxies.split(",") if proxy.strip()]
+
+    @property
+    def csrf_protection_enabled(self) -> bool:
+        """CSRF enforcement is on unless the operator disables it or tests run."""
+        return self.csrf_protection and not self.app_testing
 
     @model_validator(mode="after")
     def _require_stable_secret(self) -> Settings:

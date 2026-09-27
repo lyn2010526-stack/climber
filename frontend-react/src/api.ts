@@ -42,6 +42,15 @@ export interface SessionMessage {
   created_at: string;
 }
 
+export interface UploadedAttachment {
+  id: string;
+  name: string | null;
+  content_type: string;
+  size: number;
+  kind: 'image' | 'text' | 'file';
+  url?: string;
+}
+
 export interface ArcBenchStatus {
   available: boolean;
   message: string;
@@ -169,15 +178,36 @@ class ApiClient {
     return response.messages;
   }
 
+// Uploads
+  async uploadAttachment(file: File): Promise<UploadedAttachment> {
+    const form = new FormData();
+    form.append('file', file);
+    const response = await fetch(`${BASE_URL}/uploads`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: form,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(error.detail || `HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
   // Chat (SSE)
-  chatStream(sessionId: string, message: string, onEvent: (event: { event: string; data: any }) => void): () => void {
+  chatStream(
+    sessionId: string,
+    message: string,
+    onEvent: (event: { event: string; data: any }) => void,
+    attachments?: UploadedAttachment[],
+  ): () => void {
     const url = `${BASE_URL}/sessions/${sessionId}/chat`;
     const abortController = new AbortController();
 
     fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, attachments: attachments ?? [] }),
       signal: abortController.signal,
     }).then(async (response) => {
       if (!response.ok) {
@@ -186,14 +216,54 @@ class ApiClient {
       }
 
       const reader = response.body?.getReader();
-      if (!reader) return;
+      if (!reader) {
+        onEvent({
+          event: 'error',
+          data: { detail: 'Chat stream response did not provide a readable body' },
+        });
+        return;
+      }
 
       const decoder = new TextDecoder();
       let buffer = '';
+      let receivedTerminalEvent = false;
+
+      const emitEvent = (event: { event: string; data: any }) => {
+        if (event.event === 'done' || event.event === 'error') {
+          receivedTerminalEvent = true;
+        }
+        onEvent(event);
+      };
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          buffer += decoder.decode();
+          if (buffer.trim()) {
+            const lines = buffer.split('\n');
+            let eventName = '';
+            let dataStr = '';
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('event:')) eventName = trimmed.slice(6).trim();
+              else if (trimmed.startsWith('data:')) dataStr += trimmed.slice(5).trim();
+            }
+            if (dataStr) {
+              try {
+                emitEvent({ event: eventName || 'text', data: JSON.parse(dataStr) });
+              } catch {
+                emitEvent({ event: eventName || 'text', data: dataStr });
+              }
+            }
+          }
+          if (!receivedTerminalEvent) {
+            emitEvent({
+              event: 'error',
+              data: { detail: 'Chat stream ended before a terminal event was received' },
+            });
+          }
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const events = buffer.split('\n\n');
@@ -217,9 +287,9 @@ class ApiClient {
 
           try {
             const data = JSON.parse(dataStr);
-            onEvent({ event: eventName || 'text', data });
+            emitEvent({ event: eventName || 'text', data });
           } catch {
-            onEvent({ event: eventName || 'text', data: dataStr });
+            emitEvent({ event: eventName || 'text', data: dataStr });
           }
         }
       }

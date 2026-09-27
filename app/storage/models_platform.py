@@ -204,3 +204,16 @@ class AutoLoopTask(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    # Attempts already spent and the budget left, so a crashed task can be
+    # resumed where it stopped and an operator can see how far it got.
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3, server_default="3")
+    # Raw text of the most recent failure, kept next to ``error`` because
+    # ``error`` carries the operator-facing summary (attempts, retryability).
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Caller-supplied de-duplication key. A repeated submission with the same
+    # key returns the original task instead of charging for a second run.
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True)
+    # Which engine owns the row: ``task_worker`` or ``auto_loop``. Both write
+    # this table, so recovery must not reclaim a row belonging to the other.
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="auto_loop", server_default="auto_loop")

@@ -18,6 +18,74 @@ from app.models import ModelAdapter, ModelCapability
 logger = structlog.get_logger()
 
 
+class _ThinkTagFilter:
+    """Strip ``<think>...</think>`` blocks from streamed content.
+
+    Reasoning-style models behind OpenAI-compatible proxies often inline
+    chain-of-thought as literal ``<think>`` tags inside ``content`` instead
+    of a separate reasoning field. Tags can split across chunk boundaries,
+    so a small carry buffer holds back partial tag candidates.
+    """
+
+    _OPEN = "<think>"
+    _CLOSE = "</think>"
+
+    def __init__(self) -> None:
+        self._in_think = False
+        self._carry = ""
+
+    def feed(self, text: str) -> str:
+        buf = self._carry + text
+        self._carry = ""
+        out: list[str] = []
+        while buf:
+            if self._in_think:
+                j = buf.find(self._CLOSE)
+                if j >= 0:
+                    self._in_think = False
+                    buf = buf[j + len(self._CLOSE):]
+                    continue
+                hold = self._tag_prefix_len(buf, self._CLOSE)
+                self._carry = buf[len(buf) - hold:] if hold else ""
+                buf = ""
+            else:
+                j = buf.find(self._OPEN)
+                if j >= 0:
+                    out.append(buf[:j])
+                    self._in_think = True
+                    buf = buf[j + len(self._OPEN):]
+                    continue
+                hold = self._tag_prefix_len(buf, self._OPEN)
+                if hold:
+                    out.append(buf[:len(buf) - hold])
+                    self._carry = buf[len(buf) - hold:]
+                else:
+                    out.append(buf)
+                buf = ""
+        return "".join(out)
+
+    def flush(self) -> str:
+        """Release any carry that turned out not to be a tag."""
+        if self._in_think:
+            self._carry = ""
+            return ""
+        carry, self._carry = self._carry, ""
+        return carry
+
+    @staticmethod
+    def _tag_prefix_len(buf: str, tag: str) -> int:
+        """Length of the longest suffix of buf that is a proper prefix of tag."""
+        for k in range(min(len(tag) - 1, len(buf)), 0, -1):
+            if buf.endswith(tag[:k]):
+                return k
+        return 0
+
+
+def strip_think_tags(text: str) -> str:
+    """Remove think blocks from a complete (non-streamed) string."""
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+
+
 class OpenAIAdapter(ModelAdapter):
     """Adapter for OpenAI Chat Completions API and compatible providers."""
 
@@ -177,6 +245,7 @@ class OpenAIAdapter(ModelAdapter):
             response.raise_for_status()
 
             buffer = b""
+            think_filter = _ThinkTagFilter()
             async for raw_bytes in response.aiter_bytes():
                 idle_event.set()
 
@@ -192,6 +261,15 @@ class OpenAIAdapter(ModelAdapter):
                         continue
 
                     if line == "data: [DONE]":
+                        tail = think_filter.flush()
+                        if tail:
+                            accumulated_content += tail
+                            yield ChatResult(
+                                content=tail,
+                                finish_reason=finish_reason or ("tool_calls" if accumulated_tool_calls else "stop"),
+                                tokens_used=tokens_used,
+                                accumulated_content=accumulated_content,
+                            )
                         yield ChatResult(
                             finish_reason=finish_reason or ("tool_calls" if accumulated_tool_calls else "stop"),
                             tokens_used=tokens_used,
@@ -212,7 +290,7 @@ class OpenAIAdapter(ModelAdapter):
                         continue
 
                     delta = chunk.get("choices", [{}])[0].get("delta", {})
-                    delta_content = delta.get("content") or ""
+                    delta_content = think_filter.feed(delta.get("content") or "")
                     if delta_content:
                         accumulated_content += delta_content
                     if delta.get("tool_calls"):
@@ -251,7 +329,8 @@ class OpenAIAdapter(ModelAdapter):
                     try:
                         chunk = json.loads(line[5:].strip())
                         delta = chunk.get("choices", [{}])[0].get("delta", {})
-                        delta_content = delta.get("content") or ""
+                        delta_content = think_filter.feed(delta.get("content") or "")
+                        delta_content += think_filter.flush()
                         if delta_content:
                             accumulated_content += delta_content
                             yield ChatResult(
@@ -263,6 +342,16 @@ class OpenAIAdapter(ModelAdapter):
                             )
                     except (json.JSONDecodeError, IndexError):
                         pass
+            else:
+                tail = think_filter.flush()
+                if tail:
+                    accumulated_content += tail
+                    yield ChatResult(
+                        content=tail,
+                        finish_reason=finish_reason,
+                        tokens_used=tokens_used,
+                        accumulated_content=accumulated_content,
+                    )
 
         except httpx.ReadTimeout:
             logger.warning("stream_read_timeout", model=self._model_id)
@@ -335,7 +424,7 @@ class OpenAIAdapter(ModelAdapter):
             response.raise_for_status()
             data = response.json()
             choice = data.get("choices", [{}])[0].get("message", {})
-            content = choice.get("content", "") or ""
+            content = strip_think_tags(choice.get("content", "") or "").strip()
             tool_calls = choice.get("tool_calls", [])
             if isinstance(tool_calls, list):
                 parsed_tool_calls = []
@@ -416,7 +505,7 @@ class OpenAIAdapter(ModelAdapter):
             chat=True,
             streaming=True,
             tools=True,
-            vision=False,
+            vision=True,
             embedding=False,
             max_tokens=128000,
         )

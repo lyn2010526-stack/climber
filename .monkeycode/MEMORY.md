@@ -166,3 +166,20 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 前端任务契约以 `app/api/v1/routes/tasks.py` 为准（`task_id`/TaskSubmitRequest），`api.ts` 中 `/tasks/{id}/run|pause|resume` 是后端不存在的幻影端点，调用方应改接 submit/cancel/getStatus
   - docker-compose 启动需要环境变量 `POSTGRES_PASSWORD`（compose 用 `${POSTGRES_PASSWORD:?}`），不再提供明文默认凭证
   - 平台 Git 凭证助手（/app/agent/bin/agent git-credential-helper）会间歇性返回 500 导致 push 失败；git 提交需在仓库级先 `git config user.name/user.email`，否则容器内无法自动探测身份
+
+[项目知识摘要]
+- Date: 2026-09-27
+- Context: Agent 在收口 P1-1（sessions.py fail-open IDOR）与 P1-2（JWT 分支不查库）时发现
+- Category: 排错调试
+- Instructions:
+  - `app/middleware/auth.py::authenticate_credentials` 的 JWT 分支现已在 2026-09-27 改为查库校验（`_load_active_jwt_user` 要求 `users` 行存在且 `status == "active"`），这使两个此前依赖"JWT 的 `sub` 无需对应 users 行"的存量测试失败：`tests/core/test_auth_security.py::test_websocket_rejects_missing_and_foreign_resource` 与 `tests/test_factory_path_regressions.py::test_workflow_export_blocks_cross_tenant_access`。修这两处需要同时新增 users 行，属于 auth/websocket 语义决定
+  - `app/api/v1/routes/websocket.py` 的 `_authenticate_websocket` 只取 `auth["sub"]` 或 `auth["owner"]`，从不看 `auth["user_id"]`，因此 API key 认证在该处恒定失败（1008）；同一函数也未捕获 `authenticate_credentials` 抛出的 `HTTPException`
+  - `auth_manager.verify_token` 对签名/过期/类型错误抛 `HTTPException(401)`，从不返回假值；只有"主体不存在"这一类才适合用 `return None` 表示未认证
+  - `Session.user_id` 在两套 DDL（Alembic 与 `Base.metadata.create_all`）里都是 NOT NULL，要复现 NULL 属主的 IDOR 必须在测试里用可空列重建 `sessions` 表
+  - 多 Agent 并发改同一仓库时测试结果会漂移：`tests/` 下 untracked 新文件（test_workflow_branching.py、test_checkpoint_resume.py、test_eval_runtime.py 等）会中途出现并自带失败。归因失败要重复跑 ≥3 次，且先用单测/子集确认是否与自己的改动相关
+
+[用户指令摘要]
+- Date: 2026-09-27
+- Context: 用户要求说明当前进展
+- Instructions:
+  - 使用中文回复，避免仅使用英文概括进展。

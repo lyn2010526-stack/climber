@@ -13,14 +13,13 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from app.core.observability.alignment import GoalTracker
-from app.core.observability.audit import AuditChain
+from app.core.observability.audit import AuditChain, audit_chain
 from app.core.observability.emergency_stop import EmergencyStopManager
 from app.core.observability.trace import TraceCollector
 
 router = APIRouter(prefix="/api/v1/observability", tags=["observability"])
 
 _trace_collector: TraceCollector | None = None
-_audit_chain: AuditChain | None = None
 _goal_tracker: GoalTracker | None = None
 _emergency_stop: EmergencyStopManager | None = None
 
@@ -33,10 +32,8 @@ def get_trace_collector() -> TraceCollector:
 
 
 def get_audit_chain() -> AuditChain:
-    global _audit_chain
-    if _audit_chain is None:
-        _audit_chain = AuditChain()
-    return _audit_chain
+    """The durable, ORM-backed audit chain (Alembic-managed ``audit_entries``)."""
+    return audit_chain
 
 
 def get_goal_tracker() -> GoalTracker:
@@ -103,12 +100,12 @@ async def list_audit_entries(
 ) -> dict[str, Any]:
     chain = get_audit_chain()
     if decision_type:
-        entries = chain.search_by_type(decision_type, limit=limit)
+        entries = await chain.search_by_type(decision_type, limit=limit)
     else:
-        entries = chain.get_chain(limit=limit, offset=offset, session_id=session_id)
+        entries = await chain.get_chain(limit=limit, offset=offset, session_id=session_id)
     return {
         "entries": [e.to_dict() for e in entries],
-        "total": chain.count_entries(session_id=session_id),
+        "total": await chain.count_entries(session_id=session_id),
         "limit": limit,
         "offset": offset,
     }

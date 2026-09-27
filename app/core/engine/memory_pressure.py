@@ -215,10 +215,12 @@ class MemoryPressureManager:
     def _estimate_tokens(messages: list[dict[str, Any]]) -> int:
         """Estimate token count from messages."""
         total = 0
+        from app.core.context_aging import content_to_text
+
         for msg in messages:
-            content = msg.get("content", "")
-            if isinstance(content, str):
-                total += len(content) // 4  # Rough estimate: 1 token ≈ 4 chars
+            # Rough estimate: 1 token ≈ 4 chars; content_to_text flattens
+            # multimodal block lists to their text parts.
+            total += len(content_to_text(msg.get("content", ""))) // 4
             tool_calls = msg.get("tool_calls", [])
             for tc in tool_calls:
                 args = tc.get("function", {}).get("arguments", "")

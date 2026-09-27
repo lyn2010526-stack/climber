@@ -14,6 +14,7 @@ from __future__ import annotations
 import ast
 import asyncio
 import json
+import re
 import time
 from typing import Any
 
@@ -123,6 +124,54 @@ def safe_exec(code: str, local_vars: dict[str, Any]) -> dict[str, Any]:
 
 logger = structlog.get_logger()
 
+# Canonical branch labels for conditional edges.
+BRANCH_TRUE = "true"
+BRANCH_FALSE = "false"
+BRANCH_UNCONDITIONAL = ""
+
+_TRUE_LABELS = frozenset({"true", "yes", "y", "1", "on", "pass", "passed", "ok", "success"})
+_FALSE_LABELS = frozenset({"false", "no", "n", "0", "off", "fail", "failed", "error", "else"})
+_LABEL_TOKENS = re.compile(r"[^a-z0-9]+")
+
+
+def _normalise_branch_label(raw: Any) -> str:
+    """Normalise an edge branch label to ``"true"``, ``"false"`` or ``""``.
+
+    Creators spell the branch label differently: the visual editor emits the
+    React Flow handle id, templates use the bare words, and hand-written graphs
+    often namespace the handle (``"cond-true"``) or send a real boolean. Any
+    unrecognised value is treated as unconditional so an unknown label never
+    silently skips a branch.
+    """
+    if isinstance(raw, bool):
+        return BRANCH_TRUE if raw else BRANCH_FALSE
+    if raw is None:
+        return BRANCH_UNCONDITIONAL
+
+    text = str(raw).strip().lower()
+    if not text:
+        return BRANCH_UNCONDITIONAL
+    if text in _TRUE_LABELS:
+        return BRANCH_TRUE
+    if text in _FALSE_LABELS:
+        return BRANCH_FALSE
+
+    tokens = [token for token in _LABEL_TOKENS.split(text) if token]
+    if BRANCH_TRUE in tokens:
+        return BRANCH_TRUE
+    if BRANCH_FALSE in tokens:
+        return BRANCH_FALSE
+    return BRANCH_UNCONDITIONAL
+
+
+def _edge_branch_label(edge: Any) -> str:
+    """Read a successor edge's branch label.
+
+    ``WorkflowEdge.condition`` is the single field every creator converges on,
+    so only its spelling needs normalising.
+    """
+    return _normalise_branch_label(getattr(edge, "condition", ""))
+
 
 class WorkflowEngine:
     """Executes workflow DAGs with full conditional branching and iteration."""
@@ -177,6 +226,7 @@ class WorkflowEngine:
                 if start_node and nid == start_node.id:
                     continue
                 if nid in skipped_nodes:
+                    node.status = NodeStatus.SKIPPED
                     continue
                 nodes_in_layer.append(node)
 
@@ -263,10 +313,10 @@ class WorkflowEngine:
     ) -> None:
         """Mark nodes on a non-matching branch as skipped.
 
-        When a condition node evaluates to false, all nodes that are
-        exclusively reachable through the false branch should be skipped.
+        The branch head is skipped first, then every node that becomes
+        unreachable once that head is removed.
         """
-        # Find all successors of the branch node
+        skipped_nodes.add(branch_node_id)
         branch_successors = workflow.get_successors(branch_node_id)
         for edge in branch_successors:
             succ_id = edge.target
@@ -282,8 +332,21 @@ class WorkflowEngine:
         target: str,
         workflow: Workflow,
         exclude_node: str | None = None,
+        conditional_only: bool = False,
     ) -> bool:
-        """Check if target is reachable from source, optionally excluding a node."""
+        """Check if target is reachable from source, optionally excluding a node.
+
+        Args:
+            source: Node to search from.
+            target: Node to search for.
+            workflow: The workflow being executed.
+            exclude_node: Node that may not be traversed.
+            conditional_only: When set, only unconditional edges are followed,
+                which answers "is this node still fed by a taken branch?"
+
+        Returns:
+            True when target is reachable from source.
+        """
         visited: set[str] = set()
         queue = [source]
 
@@ -296,6 +359,8 @@ class WorkflowEngine:
             visited.add(current)
 
             for edge in workflow.get_successors(current):
+                if conditional_only and _edge_branch_label(edge) != BRANCH_UNCONDITIONAL:
+                    continue
                 if edge.target != exclude_node and edge.target not in visited:
                     queue.append(edge.target)
 
@@ -396,7 +461,7 @@ class WorkflowEngine:
             variable = node.config.get("field", "")
 
         # Resolve variable value from inputs
-        actual_value = self._resolve_variable(variable, inputs)
+        actual_value = self._resolve_variable(variable, inputs, workflow)
 
         # Evaluate condition
         condition_result = self._evaluate_condition(actual_value, operator, value)
@@ -415,11 +480,20 @@ class WorkflowEngine:
         # Determine which edges to follow
         edges = workflow.get_successors(node.id)
         skip_targets: list[str] = []
+        branched = False
 
         for edge in edges:
-            edge_condition = edge.condition
-            if edge_condition == "true" and not condition_result or edge_condition == "false" and condition_result:
+            edge_condition = _edge_branch_label(edge)
+            if edge_condition == BRANCH_UNCONDITIONAL:
+                continue
+            branched = True
+            if (edge_condition == BRANCH_TRUE and not condition_result) or (
+                edge_condition == BRANCH_FALSE and condition_result
+            ):
                 skip_targets.append(edge.target)
+
+        if branched:
+            skip_targets = self._unreachable_targets(skip_targets, node.id, workflow)
 
         return {
             "condition_result": condition_result,
@@ -429,6 +503,40 @@ class WorkflowEngine:
             "node_id": node.id,
             "node_name": node.name,
         }, skip_targets
+
+    def _unreachable_targets(
+        self,
+        skip_targets: list[str],
+        condition_node_id: str,
+        workflow: Workflow,
+    ) -> list[str]:
+        """Drop branch heads that stay reachable through a taken branch.
+
+        A node fed by both the taken and the skipped branch still has to run,
+        so it must not be skipped. Every other head on a losing branch, plus
+        anything only reachable through it, is unreachable once the losing
+        branch is cut.
+
+        Args:
+            skip_targets: Heads of the non-matching branches.
+            condition_node_id: The condition node that branched.
+            workflow: The workflow being executed.
+
+        Returns:
+            The subset of ``skip_targets`` that is truly unreachable.
+        """
+        retained: list[str] = []
+        for target in skip_targets:
+            if self._is_reachable_from(
+                condition_node_id,
+                target,
+                workflow,
+                exclude_node=target,
+                conditional_only=True,
+            ):
+                continue
+            retained.append(target)
+        return retained
 
     def _evaluate_condition(self, actual: Any, operator: str, expected: str) -> bool:
         """Evaluate a condition."""
@@ -624,16 +732,34 @@ class WorkflowEngine:
 
         return resolved
 
-    def _resolve_variable(self, variable: str, inputs: dict[str, Any]) -> Any:
-        """Resolve a variable reference like 'node_id.key' from inputs."""
+    def _resolve_variable(
+        self,
+        variable: str,
+        inputs: dict[str, Any],
+        workflow: Workflow | None = None,
+    ) -> Any:
+        """Resolve a variable reference like 'node_id.key' from inputs.
+
+        Predecessor outputs are merged flat into ``inputs``, so a bare key such
+        as ``"response"`` resolves directly. A qualified reference falls back to
+        the named node's own output, which is how the editor and the built-in
+        templates spell a condition variable.
+        """
         if not variable:
             return None
 
         if "." in variable:
-            parts = variable.split(".", 1)
-            node_output = inputs.get(parts[0], {})
+            node_id, output_key = variable.split(".", 1)
+            node_output = inputs.get(node_id)
             if isinstance(node_output, dict):
-                return node_output.get(parts[1])
+                return node_output.get(output_key)
+            if workflow is not None:
+                source_node = workflow.get_node(node_id)
+                source_output = source_node.output if source_node is not None else None
+                if isinstance(source_output, dict):
+                    return source_output.get(output_key)
+                if source_output is not None:
+                    return source_output
             return node_output
 
         return inputs.get(variable)

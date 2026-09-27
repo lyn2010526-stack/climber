@@ -621,18 +621,119 @@ async def create_eval_dataset(request: Request,
 async def run_evaluation(request: Request,
     _auth: dict = Depends(require_scopes("write")),
 )  -> dict[str, Any]:
-    """Create an evaluation run record."""
-    from app.storage.database import Agent
-    from app.storage.models_eval import EvalDataset, EvalRun
+    """Run an evaluation and return its real score table.
+
+    Two modes, distinguished by whether the payload names a ``target``:
+
+    * **Measured** (``target`` present): the request is handed to the
+      evaluation runtime in :mod:`app.eval`, which executes the target, derives
+      the score table from real evidence, and persists it. Cases that could not
+      be measured honestly come back as ``inconclusive`` with a reason and
+      ``score: null``; the aggregate ``score``/``pass_rate`` are ``null`` when
+      nothing at all could be measured.
+    * **Legacy** (``target`` absent): unchanged from before, so existing callers
+      keep working. It records caller-supplied numbers verbatim, which is why
+      the response is tagged ``source: "reported"`` rather than being presented
+      as a measurement. Those rows are never counted as measured evidence.
+    """
 
     data = await parse_request_payload(request)
     user_id = current_user_id(request)
     dataset_id = str(data.get("dataset_id") or "").strip()
     agent_id = str(data.get("agent_id") or "").strip()
-    if not dataset_id:
-        raise HTTPException(status_code=422, detail="dataset_id is required")
     if not agent_id:
         raise HTTPException(status_code=422, detail="agent_id is required")
+    target_name = str(data.get("target") or "").strip()
+    if not target_name:
+        return await _record_reported_eval_run(
+            data=data,
+            user_id=user_id,
+            dataset_id=dataset_id,
+            agent_id=agent_id,
+        )
+
+    if not dataset_id:
+        raise HTTPException(
+            status_code=422,
+            detail="dataset_id is required for a measured run; omit target to record a run instead",
+        )
+    return await _run_measured_eval(
+        request=request,
+        data=data,
+        user_id=user_id,
+        dataset_id=dataset_id,
+        agent_id=agent_id,
+    )
+
+
+async def _run_measured_eval(*, request: Request, data: dict[str, Any], user_id: str,
+                             dataset_id: str, agent_id: str) -> dict[str, Any]:
+    """Execute a registered evaluation target and return its score table."""
+    from app.eval import EvaluationError, EvaluationService, TargetNotFoundError
+    from app.eval.errors import TargetSetupError
+    from app.eval.service import RunRequest
+    from app.storage.database import Agent
+    from app.storage.models_eval import EvalDataset
+
+    async with async_session() as db:
+        dataset = await db.get(EvalDataset, dataset_id)
+        if dataset is None or dataset.user_id != user_id:
+            raise HTTPException(status_code=404, detail="Evaluation dataset not found")
+        agent = await db.get(Agent, agent_id)
+        if agent is None or agent.user_id != user_id:
+            raise HTTPException(status_code=404, detail="Agent not found")
+
+    config = data.get("config")
+    spec = data.get("spec")
+    service = EvaluationService()
+    run_request = RunRequest(
+        target=str(data.get("target")),
+        spec=dict(spec) if isinstance(spec, dict) else {},
+        config=dict(config) if isinstance(config, dict) else {},
+        agent_id=agent_id,
+        user_id=user_id,
+        dataset_id=dataset_id,
+        expected_cases=int(data.get("expected_cases") or 0),
+        workdir=str(data.get("workdir") or ""),
+    )
+
+    if bool(data.get("preflight_only")):
+        try:
+            checks = service.preflight(run_request)
+        except TargetNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except TargetSetupError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {"target": run_request.target, "source": "preflight", "capabilities": checks}
+
+    try:
+        async with async_session() as db:
+            table = await service.run(db, run_request)
+    except TargetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (TargetSetupError, EvaluationError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    payload = table.to_dict()
+    # The evidence block is for storage and reproduction, not for API consumers.
+    payload.pop("evidence", None)
+    payload["source"] = "measured"
+    return payload
+
+
+async def _record_reported_eval_run(*, data: dict[str, Any], user_id: str,
+                                    dataset_id: str, agent_id: str) -> dict[str, Any]:
+    """Preserve the original record-only behaviour for existing callers.
+
+    Numbers recorded here come from the caller. They are stored verbatim so no
+    existing integration breaks, and tagged ``source: "reported"`` on the way out
+    so they are never mistaken for a measurement by this runtime.
+    """
+    from app.storage.database import Agent
+    from app.storage.models_eval import EvalDataset, EvalRun
+
+    if not dataset_id:
+        raise HTTPException(status_code=422, detail="dataset_id is required")
     async with async_session() as db:
         dataset = await db.get(EvalDataset, dataset_id)
         if dataset is None or dataset.user_id != user_id:
@@ -658,7 +759,38 @@ async def run_evaluation(request: Request,
             await db.rollback()
             raise HTTPException(status_code=409, detail="Evaluation run conflicts with stored data") from exc
         await db.refresh(run)
-        return _eval_run_dict(run)
+        response = _eval_run_dict(run)
+        # Reported numbers were supplied by the caller, not measured here.
+        response["source"] = "reported"
+        return response
+
+
+@router.get("/eval/targets")
+async def list_eval_targets() -> dict[str, Any]:
+    """List the evaluation targets the runtime can execute."""
+    from app.eval import EvaluationService
+
+    return {"targets": EvaluationService().describe_targets()}
+
+
+@router.get("/eval/run/{run_id}")
+async def get_eval_run(request: Request, run_id: str) -> dict[str, Any]:
+    """Re-read a stored evaluation run as its score table."""
+    from app.eval import EvaluationError, EvaluationService
+    from app.storage.models_eval import EvalRun
+
+    user_id = current_user_id(request)
+    async with async_session() as db:
+        run = await db.get(EvalRun, run_id)
+        if run is None or run.user_id != user_id:
+            raise HTTPException(status_code=404, detail="Evaluation run not found")
+        try:
+            table = await EvaluationService().get(db, run_id)
+        except EvaluationError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+    payload = table.to_dict()
+    payload.pop("evidence", None)
+    return payload
 
 
 # ─── Cost ───────────────────────────────────────────────────────────────────

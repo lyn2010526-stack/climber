@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.core.auth import get_current_user
-from app.storage import async_session
+import app.storage as storage
 from app.storage.database import Agent as AgentModel
 from app.storage.database import Message as MessageModel
 from app.storage.database import Session as SessionModel
@@ -23,6 +23,21 @@ def _clean_model_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     if not settings:
         return {}
     return {k: settings[k] for k in ("provider", "model_id", "base_url") if settings.get(k)}
+
+
+def _owned_session_filter(session_id: str, user_id: str):
+    """Build the ownership predicate for a session lookup.
+
+    The caller must always go through this filter: loading a session by id and
+    comparing the owner in Python fails open, because a row whose ``user_id`` is
+    NULL makes ``row.user_id and row.user_id != user_id`` falsy and the guard
+    passes. ``Session.user_id`` is declared ``nullable=False`` but the
+    ``create_all`` bootstrap path and historical rows can still hold NULL.
+    Pushing ``user_id == user_id`` into the WHERE clause makes SQL's
+    three-valued logic reject a NULL owner for every caller, and a row that the
+    filter hides is then indistinguishable from a row that does not exist.
+    """
+    return (SessionModel.id == session_id, SessionModel.user_id == user_id)
 
 
 def _session_effective_model(row: SessionModel, agent: AgentModel | None) -> dict[str, Any]:
@@ -73,7 +88,7 @@ class MessageOut(BaseModel):
 
 @router.get("/", response_model=list[SessionOut])
 async def list_sessions_with_slash(user_id: str = Depends(get_current_user)) -> list[SessionOut]:
-    async with async_session() as session:
+    async with storage.async_session() as session:
         result = await session.execute(
             select(SessionModel)
             .where(SessionModel.user_id == user_id)
@@ -110,7 +125,7 @@ async def create_session_with_slash(
     payload: SessionCreate,
     user_id: str = Depends(get_current_user),
 ) -> dict:
-    async with async_session() as session:
+    async with storage.async_session() as session:
         agent = None
         if payload.agent_id:
             agent = (
@@ -149,7 +164,7 @@ async def create_session_legacy(
     payload: SessionCreate,
     user_id: str = Depends(get_current_user),
 ) -> dict:
-    async with async_session() as session:
+    async with storage.async_session() as session:
         agent = None
         if payload.agent_id:
             agent = (
@@ -174,12 +189,9 @@ class MessagesResponse(BaseModel):
 
 @router.get("/{session_id}/messages", response_model=MessagesResponse)
 async def get_session_messages(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with async_session() as session:
+    async with storage.async_session() as session:
         owner = await session.scalar(
-            select(SessionModel).where(
-                SessionModel.id == session_id,
-                SessionModel.user_id == user_id,
-            )
+            select(SessionModel.id).where(*_owned_session_filter(session_id, user_id))
         )
         if owner is None:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -204,10 +216,11 @@ async def get_session_messages(session_id: str, user_id: str = Depends(get_curre
 
 @router.post("/{session_id}/clear")
 async def clear_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with async_session() as session:
-        result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
-        row = result.scalar_one_or_none()
-        if not row or (row.user_id and row.user_id != user_id):
+    async with storage.async_session() as session:
+        owned = await session.scalar(
+            select(SessionModel.id).where(*_owned_session_filter(session_id, user_id))
+        )
+        if owned is None:
             raise HTTPException(status_code=404, detail="Session not found")
         from sqlalchemy import delete
         await session.execute(delete(MessageModel).where(MessageModel.session_id == session_id))
@@ -217,10 +230,13 @@ async def clear_session(session_id: str, user_id: str = Depends(get_current_user
 
 @router.get("/{session_id}")
 async def get_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with async_session() as session:
-        result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
-        row = result.scalar_one_or_none()
-        if not row or (row.user_id and row.user_id != user_id):
+    async with storage.async_session() as session:
+        row = (
+            await session.execute(
+                select(SessionModel).where(*_owned_session_filter(session_id, user_id))
+            )
+        ).scalar_one_or_none()
+        if row is None:
             raise HTTPException(status_code=404, detail="Session not found")
         return {
             "id": row.id,
@@ -242,10 +258,13 @@ async def get_session(session_id: str, user_id: str = Depends(get_current_user))
 
 @router.delete("/{session_id}")
 async def delete_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with async_session() as session:
-        result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
-        row = result.scalar_one_or_none()
-        if not row or (row.user_id and row.user_id != user_id):
+    async with storage.async_session() as session:
+        row = (
+            await session.execute(
+                select(SessionModel).where(*_owned_session_filter(session_id, user_id))
+            )
+        ).scalar_one_or_none()
+        if row is None:
             raise HTTPException(status_code=404, detail="Session not found")
         await session.delete(row)
         await session.commit()
@@ -265,20 +284,20 @@ class ForkRequest(BaseModel):
 
 async def _ensure_owned_session(session_id: str, user_id: str) -> None:
     """Raise 404 unless the session exists and belongs to the given user."""
-    async with async_session() as session:
-        row = (
-            await session.execute(select(SessionModel).where(SessionModel.id == session_id))
-        ).scalar_one_or_none()
-        if not row or (row.user_id and row.user_id != user_id):
+    async with storage.async_session() as session:
+        owned = await session.scalar(
+            select(SessionModel.id).where(*_owned_session_filter(session_id, user_id))
+        )
+        if owned is None:
             raise HTTPException(status_code=404, detail="Session not found")
 
 
 async def _load_owned_session(db: Any, session_id: str, user_id: str) -> SessionModel:
     """Fetch an owned session row within the given session or raise 404."""
     row = (
-        await db.execute(select(SessionModel).where(SessionModel.id == session_id))
+        await db.execute(select(SessionModel).where(*_owned_session_filter(session_id, user_id)))
     ).scalar_one_or_none()
-    if not row or (row.user_id and row.user_id != user_id):
+    if row is None:
         raise HTTPException(status_code=404, detail="Session not found")
     return row
 
@@ -300,7 +319,7 @@ async def save_checkpoint(
     body: CheckpointRequest,
     user_id: str = Depends(get_current_user),
 ) -> dict:
-    async with async_session() as session:
+    async with storage.async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)
         checkpoint = {
@@ -325,7 +344,7 @@ async def save_checkpoint(
 
 @router.get("/{session_id}/checkpoint")
 async def get_latest_checkpoint(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with async_session() as session:
+    async with storage.async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)
     if not checkpoints:
@@ -335,7 +354,7 @@ async def get_latest_checkpoint(session_id: str, user_id: str = Depends(get_curr
 
 @router.get("/{session_id}/history")
 async def get_checkpoint_history(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with async_session() as session:
+    async with storage.async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)
     return {"session_id": session_id, "checkpoints": checkpoints}
@@ -343,7 +362,7 @@ async def get_checkpoint_history(session_id: str, user_id: str = Depends(get_cur
 
 @router.post("/{session_id}/fork")
 async def fork_session(session_id: str, body: ForkRequest, user_id: str = Depends(get_current_user)) -> dict:
-    async with async_session() as session:
+    async with storage.async_session() as session:
         source = await _load_owned_session(session, session_id, user_id)
         new_id = body.new_session_id or str(uuid.uuid4())
         existing = (
@@ -392,7 +411,7 @@ async def fork_session(session_id: str, body: ForkRequest, user_id: str = Depend
 
 @router.post("/{session_id}/resume")
 async def resume_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with async_session() as session:
+    async with storage.async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)
         messages = [

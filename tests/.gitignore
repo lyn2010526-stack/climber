@@ -1,0 +1,4 @@
+# Local caches provisioned by the eval runtime test-suite (a real node
+# Playwright runner is installed here on demand). Regenerated on demand;
+# never commit the downloaded package tree.
+.eval_fixtures/

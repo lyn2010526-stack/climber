@@ -4,17 +4,21 @@ Provides REST endpoints for managing security configuration:
 - Resource quotas
 - File system isolation config
 - Network allowlist
-All endpoints require admin authentication.
+
+All endpoints require admin authentication, because each one mutates or
+discloses the live isolation policy used by the request middleware and the
+docker sandbox. Mounted from ``app.main``.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from app.core.security.fs_isolation import FSIsolationConfig, FSIsolationManager
+from app.core.auth_manager import require_admin
+from app.core.security.fs_isolation import fs_isolation
 from app.core.security.network_allowlist import network_allowlist
 from app.core.security.resource_quotas import ResourceQuota, quota_manager
 
@@ -47,7 +51,7 @@ class DomainRequest(BaseModel):
 # --- Quota Endpoints ---
 
 
-@router.get("/quotas")
+@router.get("/quotas", dependencies=[Depends(require_admin())])
 async def get_quotas() -> dict[str, Any]:
     return {
         "quotas": quota_manager.get_all_quotas(),
@@ -55,7 +59,7 @@ async def get_quotas() -> dict[str, Any]:
     }
 
 
-@router.put("/quotas")
+@router.put("/quotas", dependencies=[Depends(require_admin())])
 async def update_quota(
     request: QuotaRequest,
 ) -> dict[str, Any]:
@@ -72,9 +76,8 @@ async def update_quota(
 # --- FS Config Endpoints ---
 
 
-@router.get("/fs-config")
-async def get_fs_config() -> dict[str, Any]:
-    config = FSIsolationManager().config
+def _fs_config_payload() -> dict[str, Any]:
+    config = fs_isolation.config
     return {
         "allowed_paths": config.allowed_paths,
         "blocked_paths": config.blocked_paths,
@@ -84,36 +87,48 @@ async def get_fs_config() -> dict[str, Any]:
     }
 
 
-@router.put("/fs-config")
+@router.get("/fs-config", dependencies=[Depends(require_admin())])
+async def get_fs_config() -> dict[str, Any]:
+    return _fs_config_payload()
+
+
+@router.put("/fs-config", dependencies=[Depends(require_admin())])
 async def update_fs_config(
     request: FSConfigRequest,
 ) -> dict[str, Any]:
-    config = FSIsolationConfig(
-        allowed_paths=request.allowed_paths,
-        blocked_paths=request.blocked_paths,
-        read_only_paths=request.read_only_paths,
-        max_file_size_mb=request.max_file_size_mb,
-        allowed_extensions=request.allowed_extensions,
-    )
-    manager = FSIsolationManager(config)
-    return {"status": "updated", "config": {
-        "allowed_paths": manager.config.allowed_paths,
-        "blocked_paths": manager.config.blocked_paths,
-        "read_only_paths": manager.config.read_only_paths,
-    }}
+    """Replace the live filesystem-isolation policy.
+
+    Mutates the process-wide ``fs_isolation`` policy object so the change
+    applies immediately to the request middleware and the docker sandbox.
+    Fields left at their empty defaults keep their current value, because an
+    empty ``blocked_paths`` or ``allowed_extensions`` would silently disable
+    the corresponding check.
+    """
+    config = fs_isolation.config
+    if request.allowed_paths:
+        config.allowed_paths = list(request.allowed_paths)
+    if request.blocked_paths:
+        config.blocked_paths = list(request.blocked_paths)
+    if request.read_only_paths:
+        config.read_only_paths = list(request.read_only_paths)
+    if request.max_file_size_mb > 0:
+        config.max_file_size_mb = request.max_file_size_mb
+    if request.allowed_extensions:
+        config.allowed_extensions = list(request.allowed_extensions)
+    return {"status": "updated", "config": _fs_config_payload()}
 
 
 # --- Network Allowlist Endpoints ---
 
 
-@router.get("/network-allowlist")
+@router.get("/network-allowlist", dependencies=[Depends(require_admin())])
 async def get_network_allowlist() -> dict[str, Any]:
     return {
         "allowed_domains": network_allowlist.get_allowed_domains(),
     }
 
 
-@router.post("/network-allowlist")
+@router.post("/network-allowlist", dependencies=[Depends(require_admin())])
 async def add_to_allowlist(
     request: DomainRequest,
 ) -> dict[str, Any]:
@@ -125,7 +140,7 @@ async def add_to_allowlist(
     }
 
 
-@router.delete("/network-allowlist/{domain}")
+@router.delete("/network-allowlist/{domain}", dependencies=[Depends(require_admin())])
 async def remove_from_allowlist(
     domain: str,
 ) -> dict[str, Any]:

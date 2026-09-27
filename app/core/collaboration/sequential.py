@@ -10,7 +10,7 @@ import structlog
 
 from app.core.collaboration.agent_runner import run_agent_with_retry
 from app.core.collaboration.callbacks import invoke_step_callback, invoke_task_callback, wait_for_human_review
-from app.core.collaboration.checkpoint import save_checkpoint
+from app.core.collaboration.checkpoint import ResumeState, save_checkpoint
 from app.core.collaboration.guardrails import run_guardrails
 from app.core.collaboration.memory import build_context_from_dependencies, inject_memory, merge_context, store_memory
 from app.core.collaboration.prompts import (
@@ -34,20 +34,25 @@ async def run_sequential_process(
     reviewers: list[Any],
     group: Any,
     max_rounds: int,
+    resume: ResumeState | None = None,
 ) -> None:
     """Execute sequential task with iterative refinement.
 
     Each round produces worker output, runs guardrails, and optionally
     collects reviewer feedback. Continues until no issues remain or max
     rounds reached.
+
+    When ``resume`` is given the loop starts at the checkpointed round with the
+    accumulated worker output and outstanding issues, so the rounds after the
+    checkpoint are the only ones re-executed.
     """
     context_data = await build_context_from_dependencies(task)
     memory_context = await inject_memory(task.group_id, task.id, task.description)
     full_context = merge_context(context_data, memory_context)
 
-    current_round = 0
-    worker_output = ""
-    all_issues: list[dict[str, Any]] = []
+    current_round = resume.round if resume else 0
+    worker_output = resume.worker_output if resume else ""
+    all_issues: list[dict[str, Any]] = list(resume.all_issues) if resume else []
 
     try:
         while current_round < max_rounds:
@@ -89,7 +94,7 @@ async def run_sequential_process(
             if not all_issues and await _validate_and_finalize(task, worker_output):
                     await store_memory(task.group_id, task.id, worker.agent_id, worker_output, "task_result")
                     await invoke_task_callback(task, worker_output)
-                    await _checkpoint_and_broadcast(task, current_round, worker_output, [])
+                    await _checkpoint_and_broadcast(task, current_round, worker_output, [], status="completed")
                     await _broadcast_task_completed(task, worker_output, current_round)
                     return
 
@@ -315,12 +320,27 @@ async def _validate_and_finalize(task: Any, worker_output: str) -> bool:
     return True
 
 
-async def _checkpoint_and_broadcast(task: Any, round_num: int, output: str, issues: list) -> None:
-    """Save checkpoint and broadcast."""
-    await save_checkpoint(task.id, task.group_id, round_num, task.max_rounds or 5, output, issues)
+async def _checkpoint_and_broadcast(
+    task: Any,
+    round_num: int,
+    output: str,
+    issues: list,
+    status: str = "running",
+) -> None:
+    """Save checkpoint and broadcast.
+
+    Args:
+        task: The task being executed.
+        round_num: The round the checkpoint captures.
+        output: The worker output for that round.
+        issues: Outstanding issues for that round.
+        status: State the task is in; a terminal state makes the checkpoint
+            non-resumable so a finished task is not restarted.
+    """
+    await save_checkpoint(task.id, task.group_id, round_num, task.max_rounds or 5, output, issues, status)
     await group_ws_hub.broadcast(task.group_id, {
         "type": "task_checkpoint",
-        "data": {"task_id": task.id, "round": round_num},
+        "data": {"task_id": task.id, "round": round_num, "status": status},
     })
 
 

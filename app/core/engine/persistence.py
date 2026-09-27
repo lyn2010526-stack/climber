@@ -15,6 +15,7 @@ async def persist_message(
     tool_name: str | None = None,
     tool_call_id: str | None = None,
     tokens: int = 0,
+    metadata: dict | None = None,
 ) -> str | None:
     """Persist a message to the database (fire-and-forget safe).
 
@@ -26,6 +27,7 @@ async def persist_message(
         tool_name: The tool name if this is a tool result.
         tool_call_id: ID linking a tool result to its tool call.
         tokens: Token count for this message.
+        metadata: Optional metadata (e.g. attachment references).
 
     Returns:
         The persisted message id, or None when persistence failed.
@@ -43,6 +45,7 @@ async def persist_message(
                 tool_name=tool_name,
                 tool_call_id=tool_call_id,
                 tokens=tokens,
+                metadata_=metadata or {},
             )
             db.add(msg)
             await db.commit()

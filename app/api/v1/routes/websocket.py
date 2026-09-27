@@ -17,7 +17,7 @@ from app.config import settings
 from app.core.auth import LOCAL_USER_ID
 from app.core.group_ws_hub import group_ws_hub
 from app.middleware.auth import authenticate_credentials
-from app.storage import async_session
+import app.storage as storage
 from app.storage.database import Agent, Session
 from app.storage.models_groups import AgentGroup
 
@@ -94,7 +94,7 @@ async def _authenticate_websocket(
         return None
 
     if resource_model is not None and resource_id is not None:
-        async with async_session() as db:
+        async with storage.async_session() as db:
             owner_id = (
                 await db.execute(
                     select(resource_model.user_id).where(resource_model.id == resource_id)

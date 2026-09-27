@@ -29,7 +29,8 @@ from app.core.principal import (
     reset_current_principal,
     set_current_principal,
 )
-from app.models.users import ApiKey
+from app.models.users import ApiKey, User, UserStatus
+import app.storage as storage
 from app.storage import engine
 
 # The auth middleware validates API keys asynchronously against the same
@@ -51,6 +52,59 @@ AUTH_BEARER_PREFIX = "Bearer "
 API_KEY_PREFIX = "ae_"
 
 
+async def _load_active_jwt_user(subject: str) -> User | None:
+    """Load the active user a JWT subject refers to, or None.
+
+    Mirrors the lookup ``auth_management.refresh_token`` already performs for
+    token subjects, and gives the JWT branch the same database-backed
+    assurance as ``auth_manager.validate_api_key`` for API keys: a subject is
+    only accepted when a user row exists and is still active.
+
+    The subject is matched on the primary key when it is numeric (login and
+    refresh both mint ``sub`` from ``User.id``) and on the username otherwise.
+    Callers must treat None as a hard authentication failure.
+    """
+    identity = User.id == int(subject) if subject.isdigit() else User.username == subject
+    async with storage.async_session() as session:
+        result = await session.execute(
+            select(User).where(identity, User.status == UserStatus.ACTIVE.value)
+        )
+        return result.scalar_one_or_none()
+
+
+async def _authenticate_jwt(token: str) -> dict | None:
+    """Verify a bearer token and resolve its subject against the database.
+
+    Returning None means "not authenticated": a missing, malformed, expired or
+    badly typed token, a token without a ``sub`` claim, and a subject that is
+    unknown or no longer active are all rejected the same way, so no caller can
+    mistake a rejected token for a verified one.
+    """
+    from app.core.auth_manager import auth_manager
+
+    payload = auth_manager.verify_token(token, "access")
+    if not payload:
+        return None
+
+    subject = payload.get("sub")
+    if subject is None or not str(subject).strip():
+        return None
+    subject = str(subject).strip()
+
+    user = await _load_active_jwt_user(subject)
+    if user is None:
+        return None
+
+    return {
+        "method": "jwt",
+        "sub": str(user.id),
+        "user_id": str(user.id),
+        "username": user.username,
+        "scopes": payload.get("scopes", ["read", "write"]),
+        "role": user.role,
+    }
+
+
 async def authenticate_credentials(
     headers: Mapping[str, str],
     token: str | None = None,
@@ -69,17 +123,7 @@ async def authenticate_credentials(
     if not token:
         return None
 
-    from app.core.auth_manager import auth_manager
-
-    payload = auth_manager.verify_token(token, "access")
-    if not payload:
-        return None
-
-    return {
-        "method": "jwt",
-        "sub": payload.get("sub"),
-        "scopes": payload.get("scopes", ["read", "write"]),
-    }
+    return await _authenticate_jwt(token)
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -168,18 +212,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         return await validate_api_key(raw_key)
 
     async def _validate_jwt(self, token: str) -> dict | None:
-        """Validate JWT token and return user info."""
-        from app.core.auth_manager import auth_manager
-
-        payload = auth_manager.verify_token(token, "access")
-        if not payload:
-            return None
-
-        return {
-            "method": "jwt",
-            "sub": payload.get("sub"),
-            "scopes": payload.get("scopes", ["read", "write"]),
-        }
+        """Validate JWT token and resolve its subject against the database."""
+        return await _authenticate_jwt(token)
 
 
 def create_jwt_token(subject: str, scopes: list[str] | None = None, expires_minutes: int | None = None) -> str:

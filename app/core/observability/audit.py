@@ -1,17 +1,76 @@
 """Decision audit chain for compliance and traceability.
 
-Logs every routing decision, tool selection, and model switch
-in an append-only, immutable audit trail.
+Every routing decision, tool selection, model switch, and security-enforcement
+outcome is appended to the ``audit_entries`` table.
+
+Durability contract
+-------------------
+The chain writes through the application's SQLAlchemy session onto the table
+managed by Alembic (``alembic/versions`` creates ``audit_entries``). It opens
+no connection of its own and creates no table of its own, so a decision
+recorded here is immediately visible to any other reader of the same database
+and survives process restarts.
+
+Immutability is enforced by the schema: the migration installs
+``BEFORE UPDATE`` / ``BEFORE DELETE`` triggers that abort the statement, so the
+append-only promise in :class:`AuditEntry` is a database guarantee rather than
+a convention.
 """
 
 from __future__ import annotations
 
-import json
-import sqlite3
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
+
+import structlog
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    Index,
+    String,
+    Text,
+    func,
+    select,
+)
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.storage import Base
+import app.storage as storage
+
+logger = structlog.get_logger()
+
+
+class AuditEntryRecord(Base):
+    """ORM row for one immutable decision record."""
+
+    __tablename__ = "audit_entries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    agent_id: Mapped[str] = mapped_column(String(100), nullable=False, default="", index=True)
+    session_id: Mapped[str] = mapped_column(String(100), nullable=False, default="", index=True)
+    decision_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    input_summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    output_summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    rationale: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    alternatives_considered: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    allowed: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    subject: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_audit_entries_session_decision", "session_id", "decision_type"),
+    )
 
 
 @dataclass
@@ -32,6 +91,8 @@ class AuditEntry:
     rationale: str = ""
     confidence: float = 0.0
     alternatives_considered: list[str] = field(default_factory=list)
+    allowed: bool | None = None
+    subject: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -45,46 +106,52 @@ class AuditEntry:
             "rationale": self.rationale,
             "confidence": self.confidence,
             "alternatives_considered": self.alternatives_considered,
+            "allowed": self.allowed,
+            "subject": self.subject,
         }
+
+    @classmethod
+    def from_record(cls, record: AuditEntryRecord) -> AuditEntry:
+        timestamp = record.timestamp
+        if isinstance(timestamp, datetime):
+            stamp = (
+                timestamp.isoformat()
+                if timestamp.tzinfo
+                else timestamp.replace(tzinfo=UTC).isoformat()
+            )
+        else:
+            stamp = str(timestamp)
+        return cls(
+            id=record.id,
+            timestamp=stamp,
+            agent_id=record.agent_id or "",
+            session_id=record.session_id or "",
+            decision_type=record.decision_type,
+            input_summary=record.input_summary or "",
+            output_summary=record.output_summary or "",
+            rationale=record.rationale or "",
+            confidence=float(record.confidence or 0.0),
+            alternatives_considered=list(record.alternatives_considered or []),
+            allowed=record.allowed,
+            subject=record.subject or "",
+        )
 
 
 class AuditChain:
     """Append-only audit chain for decision tracking.
 
-    Every routing decision, tool selection, and model switch
-    is logged as an immutable entry.
+    Backed by the application's SQLAlchemy session, so records land in the
+    Alembic-managed ``audit_entries`` table.
     """
 
-    def __init__(self, db_path: str = ":memory:"):
-        self._db_path = db_path
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
-        self._conn.row_factory = sqlite3.Row
-        self._create_tables()
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession] | None = None):
+        self._session_factory: async_sessionmaker[AsyncSession] = session_factory or storage.async_session
 
-    def _create_tables(self) -> None:
-        self._conn.executescript("""
-            CREATE TABLE IF NOT EXISTS audit_entries (
-                id TEXT PRIMARY KEY,
-                timestamp TEXT NOT NULL,
-                agent_id TEXT DEFAULT '',
-                session_id TEXT DEFAULT '',
-                decision_type TEXT NOT NULL,
-                input_summary TEXT DEFAULT '',
-                output_summary TEXT DEFAULT '',
-                rationale TEXT DEFAULT '',
-                confidence REAL DEFAULT 0.0,
-                alternatives_json TEXT NOT NULL DEFAULT '[]'
-            );
-            CREATE INDEX IF NOT EXISTS idx_audit_timestamp
-                ON audit_entries(timestamp);
-            CREATE INDEX IF NOT EXISTS idx_audit_decision_type
-                ON audit_entries(decision_type);
-            CREATE INDEX IF NOT EXISTS idx_audit_session
-                ON audit_entries(session_id);
-        """)
-        self._conn.commit()
+    @property
+    def session_factory(self) -> async_sessionmaker[AsyncSession]:
+        return self._session_factory
 
-    def log_decision(
+    async def log_decision(
         self,
         decision_type: str,
         input_summary: str = "",
@@ -94,6 +161,8 @@ class AuditChain:
         alternatives_considered: list[str] | None = None,
         agent_id: str = "",
         session_id: str = "",
+        allowed: bool | None = None,
+        subject: str = "",
     ) -> AuditEntry:
         """Log a decision. Entries are immutable once created."""
         entry = AuditEntry(
@@ -105,123 +174,128 @@ class AuditChain:
             alternatives_considered=alternatives_considered or [],
             agent_id=agent_id,
             session_id=session_id,
+            allowed=allowed,
+            subject=subject,
         )
-        self._persist_entry(entry)
+        await self._persist_entry(entry)
         return entry
 
-    def get_chain(
+    async def log_security_decision(
+        self,
+        decision_type: str,
+        *,
+        allowed: bool,
+        reason: str,
+        subject: str = "",
+        agent_id: str = "",
+        session_id: str = "",
+    ) -> AuditEntry:
+        """Record an allow/deny outcome from an enforcement point."""
+        return await self.log_decision(
+            decision_type=decision_type,
+            input_summary=subject[:2000],
+            output_summary="allowed" if allowed else "denied",
+            rationale=reason[:4000],
+            agent_id=agent_id,
+            session_id=session_id,
+            allowed=allowed,
+            subject=subject[:2000],
+        )
+
+    async def get_chain(
         self,
         limit: int = 100,
         offset: int = 0,
         session_id: str | None = None,
     ) -> list[AuditEntry]:
         """Retrieve audit entries, optionally filtered by session."""
+        query = select(AuditEntryRecord)
         if session_id:
-            rows = self._conn.execute(
-                "SELECT * FROM audit_entries WHERE session_id = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?",
-                (session_id, limit, offset),
-            ).fetchall()
-        else:
-            rows = self._conn.execute(
-                "SELECT * FROM audit_entries ORDER BY timestamp DESC LIMIT ? OFFSET ?",
-                (limit, offset),
-            ).fetchall()
-        return [self._row_to_entry(row) for row in rows]
+            query = query.where(AuditEntryRecord.session_id == session_id)
+        query = query.order_by(AuditEntryRecord.timestamp.desc()).limit(limit).offset(offset)
+        async with self._session_factory() as session:
+            rows = (await session.execute(query)).scalars().all()
+        return [AuditEntry.from_record(row) for row in rows]
 
-    def get_entry(self, entry_id: str) -> AuditEntry | None:
+    async def get_entry(self, entry_id: str) -> AuditEntry | None:
         """Retrieve a single audit entry by ID."""
-        row = self._conn.execute(
-            "SELECT * FROM audit_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
-        if not row:
-            return None
-        return self._row_to_entry(row)
+        async with self._session_factory() as session:
+            record = await session.get(AuditEntryRecord, entry_id)
+        return AuditEntry.from_record(record) if record else None
 
-    def search_by_type(self, decision_type: str, limit: int = 50) -> list[AuditEntry]:
+    async def search_by_type(self, decision_type: str, limit: int = 50) -> list[AuditEntry]:
         """Search audit entries by decision type."""
-        rows = self._conn.execute(
-            "SELECT * FROM audit_entries WHERE decision_type = ? ORDER BY timestamp DESC LIMIT ?",
-            (decision_type, limit),
-        ).fetchall()
-        return [self._row_to_entry(row) for row in rows]
+        query = (
+            select(AuditEntryRecord)
+            .where(AuditEntryRecord.decision_type == decision_type)
+            .order_by(AuditEntryRecord.timestamp.desc())
+            .limit(limit)
+        )
+        async with self._session_factory() as session:
+            rows = (await session.execute(query)).scalars().all()
+        return [AuditEntry.from_record(row) for row in rows]
 
-    def export_chain(
+    async def export_chain(
         self,
         session_id: str | None = None,
         decision_type: str | None = None,
     ) -> str:
         """Export audit chain as JSON for compliance reporting."""
-        entries = self._fetch_entries(session_id=session_id, decision_type=decision_type)
+        import json
+
+        entries = await self._fetch_entries(session_id=session_id, decision_type=decision_type)
         return json.dumps(
             [e.to_dict() for e in entries],
             indent=2,
             ensure_ascii=False,
         )
 
-    def count_entries(self, session_id: str | None = None) -> int:
+    async def count_entries(self, session_id: str | None = None) -> int:
         """Count total audit entries, optionally filtered by session."""
+        query = select(func.count()).select_from(AuditEntryRecord)
         if session_id:
-            row = self._conn.execute(
-                "SELECT COUNT(*) as cnt FROM audit_entries WHERE session_id = ?",
-                (session_id,),
-            ).fetchone()
-        else:
-            row = self._conn.execute("SELECT COUNT(*) as cnt FROM audit_entries").fetchone()
-        return row["cnt"]
+            query = query.where(AuditEntryRecord.session_id == session_id)
+        async with self._session_factory() as session:
+            return int((await session.execute(query)).scalar() or 0)
 
-    def _fetch_entries(
+    async def _fetch_entries(
         self,
         session_id: str | None = None,
         decision_type: str | None = None,
     ) -> list[AuditEntry]:
-        query = "SELECT * FROM audit_entries WHERE 1=1"
-        params: list[Any] = []
+        query = select(AuditEntryRecord)
         if session_id:
-            query += " AND session_id = ?"
-            params.append(session_id)
+            query = query.where(AuditEntryRecord.session_id == session_id)
         if decision_type:
-            query += " AND decision_type = ?"
-            params.append(decision_type)
-        query += " ORDER BY timestamp DESC"
-        rows = self._conn.execute(query, params).fetchall()
-        return [self._row_to_entry(row) for row in rows]
+            query = query.where(AuditEntryRecord.decision_type == decision_type)
+        query = query.order_by(AuditEntryRecord.timestamp.desc())
+        async with self._session_factory() as session:
+            rows = (await session.execute(query)).scalars().all()
+        return [AuditEntry.from_record(row) for row in rows]
 
-    def _persist_entry(self, entry: AuditEntry) -> None:
-        self._conn.execute(
-            """
-            INSERT INTO audit_entries
-            (id, timestamp, agent_id, session_id, decision_type,
-             input_summary, output_summary, rationale, confidence, alternatives_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                entry.id,
-                entry.timestamp,
-                entry.agent_id,
-                entry.session_id,
-                entry.decision_type,
-                entry.input_summary,
-                entry.output_summary,
-                entry.rationale,
-                entry.confidence,
-                json.dumps(entry.alternatives_considered),
-            ),
+    async def _persist_entry(self, entry: AuditEntry) -> None:
+        record = AuditEntryRecord(
+            id=entry.id,
+            timestamp=datetime.fromisoformat(entry.timestamp),
+            agent_id=entry.agent_id,
+            session_id=entry.session_id,
+            decision_type=entry.decision_type,
+            input_summary=entry.input_summary,
+            output_summary=entry.output_summary,
+            rationale=entry.rationale,
+            confidence=entry.confidence,
+            alternatives_considered=list(entry.alternatives_considered),
+            allowed=entry.allowed,
+            subject=entry.subject,
         )
-        self._conn.commit()
+        async with self._session_factory() as session:
+            session.add(record)
+            await session.commit()
 
-    def _row_to_entry(self, row: sqlite3.Row) -> AuditEntry:
-        return AuditEntry(
-            id=row["id"],
-            timestamp=row["timestamp"],
-            agent_id=row["agent_id"],
-            session_id=row["session_id"],
-            decision_type=row["decision_type"],
-            input_summary=row["input_summary"],
-            output_summary=row["output_summary"],
-            rationale=row["rationale"],
-            confidence=row["confidence"],
-            alternatives_considered=json.loads(row["alternatives_json"]),
-        )
+    async def close(self) -> None:
+        """No-op: the chain does not own its connection."""
+        return None
 
-    def close(self) -> None:
-        self._conn.close()
+
+# Process-wide chain used by enforcement points and the observability API.
+audit_chain = AuditChain()

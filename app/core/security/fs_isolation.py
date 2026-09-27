@@ -175,3 +175,23 @@ class FSIsolationManager:
             if self._is_blocked(current):
                 raise ValueError(f"Symlink target is blocked: {current}")
         return current
+
+    def assert_allowed(self, path: str, purpose: str = "path") -> str:
+        """Validate ``path`` and return its resolved form.
+
+        Unlike :meth:`validate_path` this raises instead of returning a reason,
+        for call sites that treat a refusal as an exception. Symlink chains are
+        resolved and re-checked so a symlink cannot smuggle a path past the
+        blocked/allowed lists.
+        """
+        resolved = self.sanitize_path(path)
+        ok, reason = self.validate_path(resolved)
+        if not ok:
+            raise ValueError(f"{purpose} rejected: {reason}")
+        return resolved
+
+
+# Process-wide policy instance. Every enforcement point (request middleware,
+# docker sandbox mounts) resolves against this one object so an operator update
+# through the security API takes effect everywhere.
+fs_isolation = FSIsolationManager()

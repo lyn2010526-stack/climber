@@ -33,8 +33,17 @@ def get_engine() -> AgentEngine:
     return _engine
 
 
+class AttachmentRef(BaseModel):
+    id: str
+    name: str | None = None
+    kind: str = "file"
+    content_type: str = "application/octet-stream"
+    size: int = 0
+
+
 class ChatRequest(BaseModel):
     message: str
+    attachments: list[AttachmentRef] | None = None
 
 
 @router.post("/{session_id}/chat")
@@ -128,7 +137,10 @@ async def chat(
 
     async def _stream() -> Any:
         try:
-            async for event in engine.run(session, request.message):
+            attachments = [
+                a.model_dump() for a in (request.attachments or [])
+            ]
+            async for event in engine.run(session, request.message, attachments=attachments):
                 yield event.to_sse()
         except Exception as e:
             import structlog

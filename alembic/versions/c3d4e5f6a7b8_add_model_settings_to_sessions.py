@@ -19,16 +19,27 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     conn = op.get_bind()
-    existing = sa.inspect(conn).get_columns('sessions')
-    if not any(column['name'] == 'model_settings' for column in existing):
-        op.add_column(
-            'sessions',
-            sa.Column('model_settings', sa.JSON(), nullable=False, server_default='{}'),
+    if any(column['name'] == 'model_settings' for column in sa.inspect(conn).get_columns('sessions')):
+        return
+    # Two separate batch passes, both required:
+    #   pass 1  SQLite refuses ``ADD COLUMN ... NOT NULL`` without a default
+    #           once ``sessions`` has rows, so backfill with ``'{}'`` first.
+    #   pass 2  SQLite has no ``ALTER COLUMN ... DROP DEFAULT``; the DDL only
+    #           reaches the right shape through a table recreate.  A single
+    #           batch would instead create the column without its default and
+    #           then fail the row copy.
+    # The end state matches the ORM: ``model_settings JSON NOT NULL`` with no
+    # server default (``Session.model_settings`` uses a Python-side ``default``).
+    with op.batch_alter_table('sessions') as batch_op:
+        batch_op.add_column(
+            sa.Column('model_settings', sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         )
-        op.alter_column('sessions', 'model_settings', server_default=None)
+    with op.batch_alter_table('sessions') as batch_op:
+        batch_op.alter_column('model_settings', server_default=None)
 
 
 def downgrade() -> None:
-    conn = sa.inspect(op.get_bind())
-    if any(column['name'] == 'model_settings' for column in conn.get_columns('sessions')):
-        op.drop_column('sessions', 'model_settings')
+    conn = op.get_bind()
+    if not any(column['name'] == 'model_settings' for column in sa.inspect(conn).get_columns('sessions')):
+        return
+    op.drop_column('sessions', 'model_settings')

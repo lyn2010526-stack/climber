@@ -271,6 +271,11 @@ class TimeoutConfig:
     per_iteration_seconds: float = 120.0
     per_session_seconds: float = 1800.0
     tool_timeout_seconds: float = 30.0
+    # Agent-run level guardrails (0 disables the check).  These mirror the
+    # three-layer watchdog used by worker agent loops: a slow first token, a
+    # stalled stream, and an overall run budget are distinct failure modes.
+    first_response_seconds: float = 0.0
+    idle_seconds: float = 0.0
 
 
 # ── Session Metrics ─────────────────────────────────────────────────────

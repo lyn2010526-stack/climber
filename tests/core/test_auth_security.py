@@ -20,7 +20,7 @@ from app.core.auth_manager import (
     verify_token,
 )
 from app.middleware.auth import _verify_jwt_token, create_jwt_token
-from app.storage import async_session
+import app.storage as storage
 from app.storage.usage import usage_tracker
 
 OLD_DEFAULT_SECRET = "dev-secret-key-change-in-production"
@@ -112,7 +112,7 @@ def test_verify_token_rejects_token_without_type_claim() -> None:
 async def _create_user(username: str, password: str) -> None:
     from app.models.users import User, UserRole, UserStatus
 
-    async with async_session() as session:
+    async with storage.async_session() as session:
         session.add(
             User(
                 username=username,
@@ -239,14 +239,26 @@ class FakeWebSocket:
 async def _insert_session(session_id: str, user_id: str) -> None:
     from app.storage.database import Session as SessionModel
 
-    async with async_session() as db:
+    async with storage.async_session() as db:
         db.add(SessionModel(id=session_id, user_id=user_id, status="pending"))
         await db.commit()
 
 
 async def test_websocket_rejects_missing_and_foreign_resource(enable_auth) -> None:
     from app.api.v1.routes.websocket import _authenticate_websocket
+    from app.models.users import User, UserRole, UserStatus
     from app.storage.database import Session as SessionModel
+
+    async with storage.async_session() as db:
+        db.add(User(
+            id=42,
+            username="ws-user-42",
+            email="ws-user-42@example.test",
+            hashed_password="test-hash",
+            role=UserRole.VIEWER.value,
+            status=UserStatus.ACTIVE.value,
+        ))
+        await db.commit()
 
     await _insert_session("owned-session", "42")
     await _insert_session("foreign-session", "99")

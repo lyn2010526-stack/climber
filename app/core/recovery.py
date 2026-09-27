@@ -46,6 +46,14 @@ class RecoveryManager:
             recovered["checkpoint"],
             interrupted=recovered["interrupted"],
         )
+        # A run interrupted mid-tool-execution leaves unanswered tool_calls
+        # in the transcript; synthesize error results so providers accept
+        # the recovered history.
+        from app.core.session_repair import repair_unpaired_tool_calls
+
+        repaired, inserted = repair_unpaired_tool_calls(session.messages)
+        if inserted:
+            session.messages = repaired
         return True
 
     @staticmethod

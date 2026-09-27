@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import logging
 import time
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -22,7 +23,10 @@ from app.core.resilience import (
     SessionTimeoutError,
     TimeoutConfig,
 )
+from app.core.session_repair import repair_unpaired_tool_calls
 from app.core.task_state_machine import TaskState, TaskStateMachine
+
+logger = logging.getLogger(__name__)
 
 _SENTINEL = object()
 
@@ -135,6 +139,15 @@ class AgentSession:
         self._session_deadline: float | None = None
         self._iteration_deadline: float | None = None
         self._circuit_breaker: CircuitBreaker | None = None
+        self._last_result: Any = None
+        self._run_status_override: str | None = None
+        self._run_termination_reason: str | None = None
+        self._completion: Any = None
+        self._last_assistant_message_id: Any = None
+        self._tool_output_store: dict[str, str] = {}
+        # Consecutive identical tool-call chain (repeat-loop detection).
+        self._repeat_chain_key: str | None = None
+        self._repeat_chain_count: int = 0
 
     def snapshot(self) -> dict[str, Any]:
         """Return a JSON-serializable snapshot without runtime primitives or secrets."""
@@ -200,6 +213,14 @@ class AgentSession:
         session.messages = (
             copy.deepcopy(raw_messages) if isinstance(raw_messages, list) else []
         )
+        if session.messages:
+            session.messages, inserted = repair_unpaired_tool_calls(session.messages)
+            if inserted:
+                logger.info(
+                    "Repaired %d unpaired tool call(s) while restoring session '%s'",
+                    inserted,
+                    session.session_id,
+                )
         raw_tool_results = snapshot.get("tool_results")
         session.tool_results = (
             copy.deepcopy(raw_tool_results) if isinstance(raw_tool_results, list) else []
@@ -224,6 +245,13 @@ class AgentSession:
     ) -> None:
         """Apply checkpoint execution state to this session."""
         self.messages = copy.deepcopy(checkpoint.messages)
+        self.messages, inserted = repair_unpaired_tool_calls(self.messages)
+        if inserted:
+            logger.info(
+                "Repaired %d unpaired tool call(s) while restoring checkpoint for session '%s'",
+                inserted,
+                self.session_id,
+            )
         tool_results = checkpoint.tool_results
         if not tool_results:
             channel_tool_results = checkpoint.channel_values.get("last_tool_results", [])

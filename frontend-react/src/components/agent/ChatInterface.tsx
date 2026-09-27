@@ -3,6 +3,7 @@ import { Send, Square, Bot, Edit3, Check, X, Maximize2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 import { api } from '../../api';
+import type { OutgoingAttachment } from '../../useChat';
 import { MessageContent, MessageActions, ToolCallCard } from '../chat/MessageContent';
 import { ThinkingDetails } from '../chat/ThinkingDetails';
 import { ThinkingIndicator } from './ThinkingIndicator';
@@ -35,7 +36,7 @@ interface Message {
 
 interface ChatInterfaceProps {
   messages: Message[];
-  onSend: (message: string) => void;
+  onSend: (message: string, attachments?: OutgoingAttachment[]) => void;
   onStop?: () => void;
   isLoading?: boolean;
   className?: string;
@@ -63,8 +64,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [editContent, setEditContent] = useState('');
   const [permissionRequests, setPermissionRequests] = useState<PermissionRequest[]>([]);
   const [feedbacks, setFeedbacks] = useState<Record<string, 'up' | 'down'>>({});
+  const [attachments, setAttachments] = useState<OutgoingAttachment[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleApprovePermission = useCallback(async (id: string) => {
     setPermissionRequests(prev => prev.filter(r => r.id !== id));
@@ -117,13 +120,28 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [editState, editContent, onSend]);
 
+  const handleFilesSelected = useCallback((files: FileList | null) => {
+    if (!files) return;
+    const next: OutgoingAttachment[] = Array.from(files).map((file) => ({
+      file,
+      kind: file.type.startsWith('image/') ? 'image' : 'file',
+    }));
+    setAttachments((prev) => [...prev, ...next]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, []);
+
+  const removeAttachment = useCallback((index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim() && !isLoading) {
-      onSend(input.trim());
+    if ((input.trim() || attachments.length > 0) && !isLoading) {
+      onSend(input.trim(), attachments.length > 0 ? attachments : undefined);
       setInput('');
+      setAttachments([]);
     }
-  }, [input, isLoading, onSend]);
+  }, [input, attachments, isLoading, onSend]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -295,12 +313,44 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                <Square size={16} />
              </Button>
            ) : (
-             <>
-                <Button type="button" variant="ghost" size="icon" className="rounded-2xl text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">
-                 <span className="text-base leading-none">+</span>
-               </Button>
-               <div className="flex-1 flex flex-col">
-                 <div className="flex items-center gap-2">
+<>
+                 <input
+                   ref={fileInputRef}
+                   type="file"
+                   multiple
+                   className="hidden"
+                   onChange={(e) => handleFilesSelected(e.target.files)}
+                 />
+                 <Button
+                   type="button"
+                   variant="ghost"
+                   size="icon"
+                   onClick={() => fileInputRef.current?.click()}
+                   className="rounded-2xl text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+                 >
+                   <span className="text-base leading-none">+</span>
+                 </Button>
+                 <div className="flex-1 flex flex-col">
+                   {attachments.length > 0 && (
+                     <div className="flex flex-wrap gap-2 mb-2">
+                       {attachments.map((attachment, idx) => (
+                         <div
+                           key={`${attachment.file.name}-${idx}`}
+                           className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded-xl text-xs text-[var(--color-text-secondary)]"
+                         >
+                           <span className="max-w-[160px] truncate">{attachment.file.name}</span>
+                           <button
+                             type="button"
+                             onClick={() => removeAttachment(idx)}
+                             className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
+                           >
+                             <X size={12} />
+                           </button>
+                         </div>
+                       ))}
+                     </div>
+                   )}
+                   <div className="flex items-center gap-2">
                    <textarea
                      ref={inputRef}
                      value={input}
