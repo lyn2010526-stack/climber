@@ -54,6 +54,16 @@ def test_run_research_returns_full_structure(monkeypatch, offline_browser) -> No
     assert result["sources"] == [f["source"] for f in result["findings"]]
 
 
+def test_fetch_url_sync_blocks_private_targets(monkeypatch) -> None:
+    def _unexpected(*args, **kwargs):
+        raise AssertionError("blocked URL must not reach urllib")
+
+    monkeypatch.setattr(research, "urlopen", _unexpected)
+
+    with pytest.raises(ValueError, match="SSRF protection"):
+        research._fetch_url_sync("http://169.254.169.254/latest/meta-data/", 3)
+
+
 def test_run_research_respects_sources_limit(monkeypatch, offline_browser) -> None:
     monkeypatch.setattr(
         research, "_fetch_url_sync", lambda url, timeout_s: _FIXED_HTML

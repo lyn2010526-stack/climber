@@ -253,11 +253,12 @@ async def test_factory_run_streams_agent_output(client, monkeypatch: pytest.Monk
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/event-stream")
 
-    events = []
-    for frame in resp.text.split("\n\n"):
-        for line in frame.splitlines():
-            if line.startswith("data: ") and line != "data: [DONE]":
-                events.append(json.loads(line[6:]))
+    events = [
+        json.loads(line[6:])
+        for frame in resp.text.split("\n\n")
+        for line in frame.splitlines()
+        if line.startswith("data: ") and line != "data: [DONE]"
+    ]
 
     types = [e["type"] for e in events]
     assert "factory_start" in types
@@ -583,7 +584,9 @@ async def test_reasoning_endpoint_returns_result(client, monkeypatch: pytest.Mon
         reasoning=ReasoningService(model_registry=reg),
         model_registry=reg,
     )
-    monkeypatch.setattr("app.api.v1.get_engine", lambda: fake_engine)
+    # The route module binds get_engine at import time via `from ... import`,
+    # so patching the engine_registry attribute would not reach it.
+    monkeypatch.setattr("app.core.reasoning.api.get_engine", lambda: fake_engine)
 
     resp = await client.post(
         "/api/v1/reason",

@@ -32,7 +32,7 @@ async def test_skill_composer_adapter_calls_execute_composition() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_agent_simple_accepts_group_id_and_role() -> None:
+async def test_run_agent_simple_accepts_group_id_and_role(monkeypatch) -> None:
     from app.core import AgentEvent, AgentEventType
     from app.core.collaboration import agent_runner
 
@@ -43,8 +43,8 @@ async def test_run_agent_simple_accepts_group_id_and_role() -> None:
         yield AgentEvent(type=AgentEventType.TEXT, data={"content": "review approved"})
         yield AgentEvent(type=AgentEventType.DONE, data={"tokens_used": 1})
 
-    agent_runner.run_agent = fake_run
-    output, _tokens = await agent_runner.run_agent_simple(
+    monkeypatch.setattr(agent_runner, "run_agent", fake_run)
+    _output, _tokens = await agent_runner.run_agent_simple(
         agent_id="rev-1",
         provider="openai",
         model_id="gpt-4o",

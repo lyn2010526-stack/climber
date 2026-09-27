@@ -1,249 +1,65 @@
-"""Integration tests."""
+"""Contract tests for the local integration clients.
+
+These tests exercise the concrete clients and their public result shapes. They
+avoid network calls while still failing when an integration class, config field,
+or security-sensitive helper regresses.
+"""
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+import hashlib
+import hmac
 
-import pytest
-
-
-@pytest.mark.asyncio
-async def test_slack_integration() -> None:
-    """Test Slack integration."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
+from app.integrations.clients.discord_client import DiscordClient, DiscordConfig
+from app.integrations.clients.github_client import GitHubClient, GitHubConfig
+from app.integrations.clients.jira_client import JiraClient, JiraConfig
+from app.integrations.clients.notion_client import NotionClient, NotionConfig
+from app.integrations.clients.slack_client import SlackClient, SlackConfig
 
 
-@pytest.mark.asyncio
-async def test_discord_integration() -> None:
-    """Test Discord integration."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
+async def test_slack_client_preserves_config_and_sends_message() -> None:
+    client = SlackClient(SlackConfig(token="token", channel="#alerts"))
+
+    assert client.config.channel == "#alerts"
+    assert await client.send_message("build passed") is True
 
 
-@pytest.mark.asyncio
-async def test_telegram_integration() -> None:
-    """Test Telegram integration."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
+async def test_discord_client_preserves_config_and_sends_message() -> None:
+    client = DiscordClient(DiscordConfig(token="token", channel_id="channel-1"))
+
+    assert client.config.channel_id == "channel-1"
+    assert await client.send_message("build passed") is True
 
 
-@pytest.mark.asyncio
-async def test_github_integration() -> None:
-    """Test GitHub integration."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
+async def test_jira_client_returns_issue_contract() -> None:
+    client = JiraClient(JiraConfig(server="https://jira.example", project="CLIMB"))
+
+    assert await client.create_issue("Regression", "details") == {
+        "id": "JIRA-1",
+        "summary": "Regression",
+    }
 
 
-@pytest.mark.asyncio
-async def test_jira_integration() -> None:
-    """Test Jira integration."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
+async def test_notion_client_returns_page_contract() -> None:
+    client = NotionClient(NotionConfig(token="token", database_id="db-1"))
+
+    assert await client.create_page("Runbook", "steps") == {
+        "id": "page-1",
+        "title": "Runbook",
+    }
 
 
-@pytest.mark.asyncio
-async def test_notion_integration() -> None:
-    """Test Notion integration."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
+def test_github_webhook_signature_accepts_valid_and_rejects_tampered_payload() -> None:
+    secret = "webhook-secret"
+    payload = b'{"action":"opened"}'
+    digest = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+    client = GitHubClient(GitHubConfig(webhook_secret=secret))
+
+    assert client.verify_webhook_signature(payload, f"sha256={digest}") is True
+    assert client.verify_webhook_signature(payload + b" ", f"sha256={digest}") is False
 
 
-@pytest.mark.asyncio
-async def test_email_delivery() -> None:
-    """Test email delivery."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
+def test_github_webhook_without_secret_is_explicitly_permissive() -> None:
+    client = GitHubClient(GitHubConfig())
 
-
-@pytest.mark.asyncio
-async def test_sms_delivery() -> None:
-    """Test SMS delivery."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_webhook_delivery() -> None:
-    """Test webhook delivery."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_payment_processing() -> None:
-    """Test payment processing."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_user_registration_flow() -> None:
-    """Test user registration flow."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_login_flow() -> None:
-    """Test login flow."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_password_reset_flow() -> None:
-    """Test password reset flow."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_subscription_flow() -> None:
-    """Test subscription flow."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_knowledge_search_flow() -> None:
-    """Test knowledge search flow."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_workflow_execution_flow() -> None:
-    """Test workflow execution flow."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_multi_tenant_isolation() -> None:
-    """Test multi-tenant isolation."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_api_rate_limiting() -> None:
-    """Test API rate limiting."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_data_export() -> None:
-    """Test data export."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_data_import() -> None:
-    """Test data import."""
-    # Arrange
-    mock_service = AsyncMock()
-    # Act
-    result = await mock_service.execute()
-    # Assert
-    assert result is not None
-    mock_service.execute.assert_called_once()
-
-
+    assert client.verify_webhook_signature(b"payload", "invalid") is True

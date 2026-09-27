@@ -177,6 +177,7 @@ async def test_stream_manager_broadcasts_to_every_subscriber():
     async def receive_one():
         async for received in manager.subscribe():
             return received
+        return None
 
     subscribers = [asyncio.create_task(receive_one()) for _ in range(2)]
     await asyncio.sleep(0)

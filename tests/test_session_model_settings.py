@@ -1,7 +1,5 @@
 """Contract tests for per-session model overrides."""
 
-from __future__ import annotations
-
 
 async def test_create_session_persists_and_lists_model_override(client) -> None:
     created = await client.post(
@@ -105,7 +103,9 @@ async def test_chat_applies_session_model_override(client, monkeypatch) -> None:
 
     fake = _FakeEngine()
     monkeypatch.setattr(chat_module, "get_engine", lambda: fake)
-    monkeypatch.setattr(chat_module.RecoveryManager, "restore_session", lambda self, session: _noop())
+    monkeypatch.setattr(
+        chat_module.RecoveryManager, "restore_session", lambda self, session: _noop()
+    )
 
     stream = await client.post(f"/api/v1/sessions/{session_id}/chat", json={"message": "hi"})
     assert stream.status_code == 200
@@ -124,14 +124,16 @@ async def _seed_agent(agent_id: str) -> None:
     from app.storage.database import Agent as AgentModel
 
     async with async_session() as db:
-        db.add(AgentModel(
-            id=agent_id,
-            name="chat-model-test",
-            provider="openai",
-            model_id="gpt-4o-mini",
-            api_key_encrypted="",
-            user_id="default-user",
-        ))
+        db.add(
+            AgentModel(
+                id=agent_id,
+                name="chat-model-test",
+                provider="openai",
+                model_id="gpt-4o-mini",
+                api_key_encrypted="",
+                user_id="default-user",
+            )
+        )
         await db.commit()
 
 
@@ -153,7 +155,9 @@ async def _chat_kwargs_for(session_id: str, monkeypatch) -> dict:
 
     fake = _FakeEngine()
     monkeypatch.setattr(chat_module, "get_engine", lambda: fake)
-    monkeypatch.setattr(chat_module.RecoveryManager, "restore_session", lambda self, session: _noop())
+    monkeypatch.setattr(
+        chat_module.RecoveryManager, "restore_session", lambda self, session: _noop()
+    )
 
     dependency_overrides = dict(fastapi_app.dependency_overrides)
     fastapi_app.dependency_overrides[chat_module.get_current_user] = lambda: "default-user"
@@ -175,7 +179,11 @@ async def test_chat_same_provider_override_keeps_agent_key(client, monkeypatch) 
     try:
         created = await client.post(
             "/api/v1/sessions/",
-            json={"title": "same-provider", "agent_id": agent_id, "model_settings": {"model_id": "gpt-4o"}},
+            json={
+                "title": "same-provider",
+                "agent_id": agent_id,
+                "model_settings": {"model_id": "gpt-4o"},
+            },
         )
         assert created.status_code == 200
         assert created.json()["provider"] == "openai"
