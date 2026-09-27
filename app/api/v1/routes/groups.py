@@ -17,7 +17,10 @@ from app.core.principal import CurrentPrincipal
 from app.schemas.api_v1.groups import (
     GroupCreateRequest,
     GroupMemberCreateRequest,
+    GroupMemberResponse,
     GroupMemberUpdateRequest,
+    GroupMessagesResponse,
+    GroupResponse,
 )
 from app.storage import async_session
 from app.storage.database import Agent
@@ -36,7 +39,7 @@ async def _get_owned_group(db: Any, group_id: str, user_id: str, *, with_members
     return (await db.execute(stmt)).scalars().first()
 
 
-@router.get("/groups")
+@router.get("/groups", response_model=list[GroupResponse])
 @router.get("/groups/", include_in_schema=False)
 async def list_groups(principal: CurrentPrincipal) -> list[dict[str, Any]]:
     """List the current user's groups with their members."""
@@ -53,7 +56,7 @@ async def list_groups(principal: CurrentPrincipal) -> list[dict[str, Any]]:
         return [_group_dict(g, members=_build_member_dicts(g.members)) for g in rows]
 
 
-@router.post("/groups")
+@router.post("/groups", response_model=GroupResponse)
 @router.post("/groups/", include_in_schema=False)
 async def create_group(payload: GroupCreateRequest, principal: CurrentPrincipal) -> dict[str, Any]:
     """Create a new group, optionally with default template members."""
@@ -115,7 +118,7 @@ async def _add_default_members(db: Any, group_id: str, user_id: str) -> None:
     await db.commit()
 
 
-@router.get("/groups/{group_id}")
+@router.get("/groups/{group_id}", response_model=GroupResponse)
 async def get_group(group_id: str, principal: CurrentPrincipal) -> dict[str, Any]:
     """Get a single group with its members."""
     user_id = principal.subject_id
@@ -126,7 +129,7 @@ async def get_group(group_id: str, principal: CurrentPrincipal) -> dict[str, Any
         return _group_dict(group, members=_build_member_dicts(group.members))
 
 
-@router.delete("/groups/{group_id}")
+@router.delete("/groups/{group_id}", response_model=dict[str, bool])
 async def delete_group(group_id: str, principal: CurrentPrincipal) -> dict[str, bool]:
     """Delete a group by ID."""
     user_id = principal.subject_id
@@ -139,7 +142,7 @@ async def delete_group(group_id: str, principal: CurrentPrincipal) -> dict[str, 
         return {"ok": True}
 
 
-@router.post("/groups/{group_id}/members")
+@router.post("/groups/{group_id}/members", response_model=GroupMemberResponse)
 async def add_group_member(
     group_id: str, payload: GroupMemberCreateRequest, principal: CurrentPrincipal
 ) -> dict[str, Any]:
@@ -176,7 +179,7 @@ async def add_group_member(
         return _member_dict(member)
 
 
-@router.get("/groups/{group_id}/messages")
+@router.get("/groups/{group_id}/messages", response_model=GroupMessagesResponse)
 async def list_group_messages(
     group_id: str, principal: CurrentPrincipal, limit: int = 50
 ) -> dict[str, Any]:
@@ -197,7 +200,7 @@ async def list_group_messages(
         return {"messages": [_message_dict(m) for m in rows]}
 
 
-@router.delete("/groups/{group_id}/members/{member_id}")
+@router.delete("/groups/{group_id}/members/{member_id}", response_model=dict[str, bool | str])
 async def remove_group_member(
     group_id: str, member_id: str, principal: CurrentPrincipal
 ) -> dict[str, bool | str]:
@@ -222,7 +225,7 @@ async def remove_group_member(
         return {"ok": True, "deleted": member_id}
 
 
-@router.patch("/groups/{group_id}/members/{member_id}")
+@router.patch("/groups/{group_id}/members/{member_id}", response_model=GroupMemberResponse)
 async def update_group_member(
     group_id: str,
     member_id: str,

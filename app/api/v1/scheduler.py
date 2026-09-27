@@ -10,6 +10,11 @@ from sqlalchemy import select
 from app.api.v1.common import current_user_id
 from app.api.v1.helpers import payload as _payload
 from app.core.auth_manager import require_scopes
+from app.schemas.api_v1.scheduler import (
+    ScheduledWorkflowResponse,
+    SchedulerDeleteResponse,
+    SchedulerTaskResponse,
+)
 from app.storage import async_session
 from app.storage.models_platform import Workflow
 
@@ -21,7 +26,7 @@ _SCHEDULER_MARKET = [
 ]
 
 
-@router.get("/scheduler")
+@router.get("/scheduler", response_model=list[ScheduledWorkflowResponse])
 @router.get("/scheduler/")
 async def list_scheduled(request: Request) -> list[dict[str, Any]]:
     user_id = current_user_id(request)
@@ -30,7 +35,7 @@ async def list_scheduled(request: Request) -> list[dict[str, Any]]:
         return [{"id": w.id, "name": w.name, "schedule": w.schedule, "last_status": w.last_status, "run_count": w.run_count} for w in rows]
 
 
-@router.post("/scheduler")
+@router.post("/scheduler", response_model=ScheduledWorkflowResponse)
 @router.post("/scheduler/")
 async def create_scheduled(request: Request,
     _auth: dict = Depends(require_scopes("write")),
@@ -53,7 +58,7 @@ async def create_scheduled(request: Request,
 
 # /scheduler/tasks endpoints (frontend compatibility)
 
-@router.get("/scheduler/tasks")
+@router.get("/scheduler/tasks", response_model=list[SchedulerTaskResponse])
 @router.get("/scheduler/tasks/")
 async def list_scheduler_tasks(request: Request) -> list[dict[str, Any]]:
     async with async_session() as db:
@@ -66,7 +71,7 @@ async def list_scheduler_tasks(request: Request) -> list[dict[str, Any]]:
         return [{"id": w.id, "name": w.name, "cron": w.schedule, "description": getattr(w, "description", ""), "enabled": True, "last_run": None, "next_run": None, "run_count": w.run_count or 0} for w in rows]
 
 
-@router.post("/scheduler/tasks")
+@router.post("/scheduler/tasks", response_model=SchedulerTaskResponse)
 @router.post("/scheduler/tasks/")
 async def create_scheduler_task(request: Request,
     _auth: dict = Depends(require_scopes("write")),
@@ -87,7 +92,7 @@ async def create_scheduler_task(request: Request,
         return {"id": wf.id, "name": wf.name, "cron": wf.schedule, "description": wf.description, "enabled": True, "last_run": None, "next_run": None, "run_count": 0}
 
 
-@router.patch("/scheduler/tasks/{task_id}")
+@router.patch("/scheduler/tasks/{task_id}", response_model=SchedulerTaskResponse)
 async def update_scheduler_task(task_id: str, request: Request,
     _auth: dict = Depends(require_scopes("write")),
 )  -> dict[str, Any]:
@@ -112,7 +117,7 @@ async def update_scheduler_task(task_id: str, request: Request,
         return {"id": wf.id, "name": wf.name, "cron": wf.schedule, "description": wf.description, "enabled": wf.last_status != "inactive", "last_run": None, "next_run": None, "run_count": wf.run_count or 0}
 
 
-@router.delete("/scheduler/tasks/{task_id}")
+@router.delete("/scheduler/tasks/{task_id}", response_model=SchedulerDeleteResponse)
 async def delete_scheduler_task(task_id: str, request: Request,
     _auth: dict = Depends(require_scopes("write")),
 )  -> dict[str, Any]:

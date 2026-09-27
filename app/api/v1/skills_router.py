@@ -15,6 +15,7 @@ from app.api.v1.helpers import DEFAULT_USER
 from app.api.v1.helpers import payload as _payload
 from app.core.api_key_crypto import decrypt_api_key
 from app.core.task_worker import TaskStatus, task_manager
+from app.schemas.api_v1.skills import SkillDeleteResponse, SkillResponse, SkillToggleResponse
 from app.storage import async_session
 from app.storage.database import Agent, ApiKey
 from app.storage.models_platform import Skill
@@ -121,7 +122,7 @@ def _skill_dict(s: Skill) -> dict[str, Any]:
     }
 
 
-@router.get("/skills")
+@router.get("/skills", response_model=list[SkillResponse])
 @router.get("/skills/")
 async def list_skills() -> list[dict[str, Any]]:
     async with async_session() as db:
@@ -129,7 +130,7 @@ async def list_skills() -> list[dict[str, Any]]:
         return [_skill_dict(s) for s in rows]
 
 
-@router.post("/skills")
+@router.post("/skills", response_model=SkillResponse)
 @router.post("/skills/")
 async def create_skill(request: Request) -> dict[str, Any]:
     data = await _payload(request)
@@ -164,17 +165,17 @@ async def _set_skill_enabled(skill_id: str, enabled: bool, user_id: str) -> dict
         return {"ok": True, "id": skill_id, "is_enabled": enabled}
 
 
-@router.post("/skills/{skill_id}/enable")
+@router.post("/skills/{skill_id}/enable", response_model=SkillToggleResponse)
 async def enable_skill(skill_id: str, request: Request) -> dict:
     return await _set_skill_enabled(skill_id, True, current_user_id(request))
 
 
-@router.post("/skills/{skill_id}/disable")
+@router.post("/skills/{skill_id}/disable", response_model=SkillToggleResponse)
 async def disable_skill(skill_id: str, request: Request) -> dict:
     return await _set_skill_enabled(skill_id, False, current_user_id(request))
 
 
-@router.delete("/skills/{skill_id}")
+@router.delete("/skills/{skill_id}", response_model=SkillDeleteResponse)
 async def delete_skill(skill_id: str, request: Request) -> dict:
     user_id = current_user_id(request)
     async with async_session() as db:
@@ -188,7 +189,7 @@ async def delete_skill(skill_id: str, request: Request) -> dict:
         return {"ok": True, "deleted": skill_id}
 
 
-@router.patch("/skills/{skill_id}")
+@router.patch("/skills/{skill_id}", response_model=SkillResponse)
 async def update_skill(skill_id: str, request: Request) -> dict[str, Any]:
     data = await _payload(request)
     user_id = current_user_id(request)

@@ -16,7 +16,13 @@ from app.api.v1.common import ok_response, redact_sensitive_fields
 from app.core.api_key_crypto import decrypt_api_key
 from app.core.di import resolve as di_resolve
 from app.core.principal import CurrentPrincipal
-from app.schemas.api_v1.crews import CrewCreateRequest, CrewRunRequest
+from app.schemas.api_v1.base import DeleteResponse
+from app.schemas.api_v1.crews import (
+    CrewCreateRequest,
+    CrewResponse,
+    CrewRunRequest,
+    CrewRunResponse,
+)
 from app.storage import async_session
 from app.storage.database import Agent
 from app.storage.models_platform import Crew, CrewRun
@@ -33,7 +39,7 @@ async def _owned_crew(db: Any, crew_id: str, user_id: str) -> Crew | None:
     ).scalar_one_or_none()
 
 
-@router.get("/crews")
+@router.get("/crews", response_model=list[CrewResponse])
 @router.get("/crews/", include_in_schema=False)
 async def list_crews(principal: CurrentPrincipal) -> list[dict[str, Any]]:
     """List the current user's crews ordered by creation date (newest first)."""
@@ -47,7 +53,7 @@ async def list_crews(principal: CurrentPrincipal) -> list[dict[str, Any]]:
         return [_crew_dict(c) for c in rows]
 
 
-@router.post("/crews")
+@router.post("/crews", response_model=CrewResponse)
 @router.post("/crews/", include_in_schema=False)
 async def create_crew(payload: CrewCreateRequest, principal: CurrentPrincipal) -> dict[str, Any]:
     """Create a new crew."""
@@ -89,7 +95,7 @@ async def create_crew(payload: CrewCreateRequest, principal: CurrentPrincipal) -
         return _crew_dict(crew)
 
 
-@router.delete("/crews/{crew_id}")
+@router.delete("/crews/{crew_id}", response_model=DeleteResponse)
 async def delete_crew(crew_id: str, principal: CurrentPrincipal) -> dict[str, bool | str]:
     """Delete a crew and its run history."""
     user_id = principal.subject_id
@@ -103,7 +109,7 @@ async def delete_crew(crew_id: str, principal: CurrentPrincipal) -> dict[str, bo
         return ok_response(crew_id)
 
 
-@router.post("/crews/{crew_id}/run")
+@router.post("/crews/{crew_id}/run", response_model=CrewRunResponse)
 async def run_crew(
     crew_id: str, payload: CrewRunRequest, principal: CurrentPrincipal
 ) -> dict[str, Any]:
