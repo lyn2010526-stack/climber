@@ -28,3 +28,20 @@ class PublicResponse(BaseModel):
     """Response base that ignores storage-only and secret fields."""
 
     model_config = ConfigDict(extra="ignore", from_attributes=True)
+
+
+class DeleteResponse(PublicResponse):
+    """Standard response returned after deleting a resource."""
+
+    ok: bool
+    deleted: str
+
+
+class SettingsResponse(PublicResponse):
+    """Effective user settings exposed by the settings API."""
+
+    autonomous_agent_mode: bool
+    token_throttle_mcp_enabled: bool
+    mcp_status: str
+    mcp_ready: bool
+    mode: str | None = None

@@ -12,13 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.common import current_user_id
 from app.core.auth_manager import require_scopes
+from app.schemas.api_v1.base import SettingsResponse
 from app.services.settings_service import SettingsService
 from app.storage import get_db
 
 router = APIRouter(tags=["settings"])
 
 
-@router.get("/")
+@router.get("/", response_model=SettingsResponse)
 async def get_settings(
     request: Request,
     db: AsyncSession = Depends(get_db),
@@ -37,7 +38,7 @@ async def get_settings(
     }
 
 
-@router.patch("/")
+@router.patch("/", response_model=SettingsResponse)
 async def update_settings(
     request: Request,
     data: dict[str, Any],

@@ -251,8 +251,17 @@ async def _run_scheduler(scheduler):
 
 app = FastAPI(
     title="Agent Engine",
-    description="Production-grade AI Agent Platform",
+    description="Production-grade AI Agent Platform HTTP API.",
     version=_APP_VERSION,
+    openapi_url="/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_tags=[
+        {"name": "system", "description": "Health and service diagnostics."},
+        {"name": "agents", "description": "Agent configuration and lifecycle."},
+        {"name": "workflows", "description": "Workflow definition and execution."},
+        {"name": "settings", "description": "User-level runtime settings."},
+    ],
     lifespan=lifespan,
     redirect_slashes=False,
 )

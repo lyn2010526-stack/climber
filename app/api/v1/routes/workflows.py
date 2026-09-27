@@ -17,9 +17,12 @@ from app.api.v1.common import ok_response, redact_sensitive_fields
 from app.core.api_key_crypto import decrypt_api_key
 from app.core.di import resolve as di_resolve
 from app.core.principal import CurrentPrincipal
+from app.schemas.api_v1.base import DeleteResponse
 from app.schemas.api_v1.workflows import (
     WorkflowCreateRequest,
+    WorkflowResponse,
     WorkflowRunRequest,
+    WorkflowRunResponse,
     WorkflowUpdateRequest,
 )
 from app.storage import async_session
@@ -51,7 +54,7 @@ async def _owned_workflow(db: Any, workflow_id: str, user_id: str) -> Workflow |
     ).scalar_one_or_none()
 
 
-@router.get("/workflows")
+@router.get("/workflows", response_model=list[WorkflowResponse])
 @router.get("/workflows/", include_in_schema=False)
 async def list_workflows(principal: CurrentPrincipal) -> list[dict[str, Any]]:
     """List the current user's workflows plus shared templates, newest first."""
@@ -64,7 +67,7 @@ async def list_workflows(principal: CurrentPrincipal) -> list[dict[str, Any]]:
         return [_workflow_dict(w) for w in rows]
 
 
-@router.post("/workflows")
+@router.post("/workflows", response_model=WorkflowResponse)
 @router.post("/workflows/", include_in_schema=False)
 async def create_workflow(
     payload: WorkflowCreateRequest, principal: CurrentPrincipal
@@ -86,7 +89,7 @@ async def create_workflow(
         return _workflow_dict(wf)
 
 
-@router.get("/workflows/{workflow_id}")
+@router.get("/workflows/{workflow_id}", response_model=WorkflowResponse)
 async def get_workflow(workflow_id: str, principal: CurrentPrincipal) -> dict[str, Any]:
     """Get a single workflow by ID (owned or shared template)."""
     user_id = principal.subject_id
@@ -97,7 +100,7 @@ async def get_workflow(workflow_id: str, principal: CurrentPrincipal) -> dict[st
         return _workflow_dict(wf)
 
 
-@router.put("/workflows/{workflow_id}")
+@router.put("/workflows/{workflow_id}", response_model=WorkflowResponse)
 async def update_workflow(
     workflow_id: str, payload: WorkflowUpdateRequest, principal: CurrentPrincipal
 ) -> dict[str, Any]:
@@ -116,7 +119,7 @@ async def update_workflow(
         return _workflow_dict(wf)
 
 
-@router.delete("/workflows/{workflow_id}")
+@router.delete("/workflows/{workflow_id}", response_model=DeleteResponse)
 async def delete_workflow(workflow_id: str, principal: CurrentPrincipal) -> dict[str, bool | str]:
     """Delete a workflow and its run history."""
     user_id = principal.subject_id
@@ -130,7 +133,7 @@ async def delete_workflow(workflow_id: str, principal: CurrentPrincipal) -> dict
         return ok_response(workflow_id)
 
 
-@router.post("/workflows/{workflow_id}/run")
+@router.post("/workflows/{workflow_id}/run", response_model=WorkflowRunResponse)
 async def run_workflow(
     workflow_id: str, payload: WorkflowRunRequest, principal: CurrentPrincipal
 ) -> dict[str, Any]:
