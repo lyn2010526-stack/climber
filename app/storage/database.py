@@ -327,7 +327,38 @@ async def ensure_task_owner_schema(database_engine: Any | None = None) -> None:
                             '"ix_auto_loop_tasks_owner_id" ON auto_loop_tasks (owner_id)'
                         )
                     )
+            await _align_user_settings_notifications(connection)
         _schema_alignment_ready.add(database_engine)
+
+
+#: Columns added to ``user_settings`` after the table was first bootstrapped.
+#: ``alembic/versions/e5f6a7b8c9d0_add_user_notification_settings.py`` owns the
+#: schema change for real deployments; this covers the test and dev databases
+#: that ``create_all`` only ever creates once.
+_USER_SETTINGS_ADDED_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("notifications", "JSON NOT NULL DEFAULT '{}'"),
+)
+
+
+async def _align_user_settings_notifications(connection: Any) -> None:
+    """Add columns that ``create_all`` cannot add to an existing table."""
+    if "user_settings" not in {table.name for table in Base.metadata.sorted_tables}:
+        return
+
+    def existing_columns(sync_connection: Any) -> set[str]:
+        inspector = inspect(sync_connection)
+        if not inspector.has_table("user_settings"):
+            return set()
+        return {column["name"] for column in inspector.get_columns("user_settings")}
+
+    existing = await connection.run_sync(existing_columns)
+    if not existing:
+        return
+    for column, ddl in _USER_SETTINGS_ADDED_COLUMNS:
+        if column not in existing:
+            await connection.execute(
+                text(f'ALTER TABLE "user_settings" ADD COLUMN "{column}" {ddl}')
+            )
 
 
 # Import memory models to register them with SQLAlchemy

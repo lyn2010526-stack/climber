@@ -322,16 +322,29 @@ async def test_change_password_404s_for_a_subject_without_a_user_row(http, auth_
 # --- scope enforcement on the API-key endpoints ------------------------------
 
 
-async def test_create_api_key_requires_admin_when_auth_enabled(http, auth_on) -> None:
-    """``require_scopes("admin", "write")`` demands both, so write alone is refused."""
+async def test_create_api_key_uses_the_caller_as_owner(http, auth_on) -> None:
+    """A non-admin may mint its own key, and the client-supplied owner is ignored."""
     resp = await http.post(
         "/api/v1/auth/keys",
         json={"owner": "owner-1", "scopes": ["read"]},
         headers=bearer("plain-user", ["read", "write"]),
     )
 
+    assert resp.status_code == 200
+    # `payload.owner` must not survive: the key belongs to the caller.
+    assert resp.json()["owner"] == "plain-user"
+
+
+async def test_create_api_key_refuses_admin_scope_for_a_non_admin(http, auth_on) -> None:
+    """Scope escalation is refused even though the caller holds ``write``."""
+    resp = await http.post(
+        "/api/v1/auth/keys",
+        json={"owner": "owner-1", "name": "escalate", "scopes": ["admin"]},
+        headers=bearer("plain-user", ["read", "write"]),
+    )
+
     assert resp.status_code == 403
-    assert "admin" in resp.json()["detail"]
+    assert "scope" in resp.json()["detail"]
 
 
 async def test_create_api_key_is_issued_for_an_admin(http, auth_on) -> None:
@@ -350,7 +363,7 @@ async def test_create_api_key_is_issued_for_an_admin(http, auth_on) -> None:
     assert body["raw_key"] not in str((await http.get("/api/v1/auth/keys", headers=admin_bearer())).json())
 
 
-async def test_create_api_key_is_refused_without_the_required_scopes(http, auth_on) -> None:
+async def test_create_api_key_is_refused_without_the_write_scope(http, auth_on) -> None:
     resp = await http.post(
         "/api/v1/auth/keys",
         json={"owner": "owner-1", "scopes": ["read"]},
@@ -358,7 +371,7 @@ async def test_create_api_key_is_refused_without_the_required_scopes(http, auth_
     )
 
     assert resp.status_code == 403
-    assert "admin" in resp.json()["detail"]
+    assert resp.json()["detail"] == "Missing required scope: write"
 
 
 async def test_list_api_keys_requires_read_scope(http, auth_on) -> None:
@@ -368,7 +381,7 @@ async def test_list_api_keys_requires_read_scope(http, auth_on) -> None:
     assert resp.json()["detail"] == "Missing required scope: read"
 
 
-async def test_revoke_api_key_requires_admin(http, auth_on) -> None:
+async def test_revoke_api_key_is_scoped_to_the_owner_or_an_admin(http, auth_on) -> None:
     created = await http.post(
         "/api/v1/auth/keys",
         json={"owner": "owner-2", "name": "k"},
@@ -379,7 +392,7 @@ async def test_revoke_api_key_requires_admin(http, auth_on) -> None:
 
     denied = await http.delete(f"/api/v1/auth/keys/{key_id}", headers=bearer("u", ["write"]))
     assert denied.status_code == 403
-    assert "admin" in denied.json()["detail"]
+    assert denied.json()["detail"] == "You may only revoke your own API keys"
 
     missing = await http.delete("/api/v1/auth/keys/kid_does_not_exist", headers=admin_bearer())
     assert missing.status_code == 404

@@ -548,9 +548,30 @@ _FACTORY_SKILL_TOOLS = {
     "code_reviewer": ["read_file", "list_files"],
 }
 
+#: Attempts per planned step, so a single transient provider error does not
+#: fail the whole run. The first failure emits ``task_retry``.
+_FACTORY_STEP_ATTEMPTS = 2
+
+
+def _step_is_replay_safe(step: dict[str, Any]) -> bool:
+    """Report whether re-running a planned step cannot repeat a side effect.
+
+    A step holding a tool that writes to the filesystem, runs a shell command or
+    reaches a container may already have applied its change before failing, so
+    a retry would duplicate it. Read-only steps are safe to replay.
+    """
+    from app.core.engine.tool_capabilities import (
+        DOCKER_TOOLS,
+        FILE_WRITE_TOOLS,
+        SHELL_TOOLS,
+    )
+
+    tools = {str(tool) for tool in step.get("tools") or ()}
+    return not tools.intersection(FILE_WRITE_TOOLS | SHELL_TOOLS | DOCKER_TOOLS)
+
 
 async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, Any]:
-    """Run a planned multi-stage workflow; failed tool steps require manual review."""
+    """Run a planned workflow; a failing step is retried once before it is escalated."""
     task_id = str(payload["_task_id"])
     goal = str(payload.get("objective", "")).strip()
     if not goal:
@@ -614,28 +635,45 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
             "max_steps": min(int(payload.get("max_steps", 10)), 6),
         }
         step_payload.pop("_task_id", None)
-        try:
-            async def _step_progress(current: int, total: int, message: str = "", _step_id: str = step_id, _index: int = index) -> None:
-                await task_manager.emit_event(task_id, "progress", {
-                    "task_id": _step_id,
-                    "step": _index,
-                    "current": current,
-                    "total": total,
-                    "message": message,
-                })
+        attempts = _FACTORY_STEP_ATTEMPTS if _step_is_replay_safe(step) else 1
 
-            result = await agent_handler(payload=step_payload, on_progress=_step_progress)
-            output = result.get("output", "") if isinstance(result, dict) else str(result)
-            results.append({"step": index, "action": step["action"], "output": output})
-            await task_manager.emit_event(task_id, "task_complete", {
-                "task_id": step_id,
-                "step": index,
-                "result": output,
+        async def _step_progress(current: int, total: int, message: str = "", _step_id: str = step_id, _index: int = index) -> None:
+            await task_manager.emit_event(task_id, "progress", {
+                "task_id": _step_id,
+                "step": _index,
+                "current": current,
+                "total": total,
+                "message": message,
             })
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            error = f"Step execution failed ({type(exc).__name__})"
+
+        last_error: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                result = await agent_handler(payload=step_payload, on_progress=_step_progress)
+                output = result.get("output", "") if isinstance(result, dict) else str(result)
+                results.append({"step": index, "action": step["action"], "output": output})
+                await task_manager.emit_event(task_id, "task_complete", {
+                    "task_id": step_id,
+                    "step": index,
+                    "result": output,
+                })
+                break
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                last_error = exc
+                if attempt < attempts:
+                    await task_manager.emit_event(task_id, "task_retry", {
+                        "task_id": step_id,
+                        "step": index,
+                        "retries": attempt,
+                        "error": f"Step execution failed ({type(exc).__name__})",
+                    })
+                    await asyncio.sleep(0.5)
+        else:
+            # Only the exception type is surfaced: step handlers carry provider
+            # and payload detail that must not reach the event stream.
+            error = f"Step execution failed ({type(last_error).__name__})" if last_error else "Step failed"
             await task_manager.emit_event(task_id, "task_failed", {
                 "task_id": step_id,
                 "step": index,

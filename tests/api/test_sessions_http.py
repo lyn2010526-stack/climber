@@ -70,7 +70,9 @@ async def test_create_rejects_an_agent_owned_by_another_user(http, auth_on) -> N
         headers=bearer("intruder-user"),
     )
 
-    assert resp.status_code == 422
+    # 404, not 422: a foreign agent must be indistinguishable from a missing
+    # one, so the response cannot be used to probe which agents exist.
+    assert resp.status_code == 404
     assert resp.json()["detail"] == "Agent not found"
 
 

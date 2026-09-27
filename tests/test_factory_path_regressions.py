@@ -271,13 +271,15 @@ async def test_factory_run_streams_agent_output(client, monkeypatch: pytest.Monk
 
 
 async def test_factory_retries_failed_step(client, monkeypatch: pytest.MonkeyPatch) -> None:
-    attempts = 0
+    step_calls = 0
 
     async def _flaky_handler(payload, on_progress):
-        nonlocal attempts
-        attempts += 1
-        if payload["objective"] == "recover this" and attempts == 2:
-            raise RuntimeError("temporary model failure")
+        nonlocal step_calls
+        if not payload["objective"].startswith("Create a concise execution plan"):
+            # The first planned step fails once, so the retry has to recover it.
+            step_calls += 1
+            if step_calls == 1:
+                raise RuntimeError("temporary model failure")
         return {"output": "recovered"}
 
     from app.api.v1 import skills_router
@@ -299,9 +301,12 @@ async def test_factory_retries_failed_step(client, monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(skills_router, "_factory_agent_payload", _factory_payload)
     monkeypatch.setitem(task_manager._handlers, "agent_run", _flaky_handler)
+    # A read-only skill, so the planned step is replayable: steps holding a
+    # write/shell/container tool are never retried, because the first attempt
+    # may already have applied its side effect.
     resp = await client.post(
         "/api/v1/skills/autonomous/run",
-        json={"goal": "recover this", "skills": ["code_executor"]},
+        json={"goal": "recover this", "skills": ["web_search"]},
     )
     assert resp.status_code == 200
     assert '"type": "task_retry"' in resp.text
@@ -338,7 +343,12 @@ async def test_agent_run_handler_consumes_engine_events(monkeypatch: pytest.Monk
         async def run(self, session, message):
             yield AgentEvent(type=AgentEventType.THINKING, data={"iteration": 1})
             yield AgentEvent(type=AgentEventType.TEXT, data={"content": "answer"})
-            yield AgentEvent(type=AgentEventType.DONE, data={})
+            # The engine always reports a terminal status on DONE; the handler
+            # treats an absent one as an unsuccessful end of stream.
+            yield AgentEvent(
+                type=AgentEventType.DONE,
+                data={"status": "completed", "iterations": 2},
+            )
 
     monkeypatch.setattr(agent_engine_module, "AgentEngine", _FakeEngine)
 

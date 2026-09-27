@@ -73,16 +73,27 @@ class _FakeRun:
 class _FakeEngine:
     def __init__(self):
         self._sessions: dict = {}
+        self._session_locks: dict = {}
         self.created: dict = {}
 
     def create_session(self, **kwargs):
-        self.created = kwargs
+        # The route calls ``copy(get_engine())``, so this fake is shared by a
+        # shallow copy. Updating the existing dict keeps the call observable
+        # from the instance the test holds.
+        self.created.update(kwargs)
+
+        class _SessionConfig:
+            pass
 
         class _Session:
             def __init__(self, user_id):
                 self.user_id = user_id
+                self.session_config = _SessionConfig()
 
         return _Session(kwargs.get("user_id", ""))
+
+    def _init_reasoning(self) -> None:
+        return None
 
     def run(self, session, message):
         return _FakeRun(session, message)
@@ -91,35 +102,77 @@ class _FakeEngine:
 async def test_chat_applies_session_model_override(client, monkeypatch) -> None:
     from app.api.v1 import chat as chat_module
 
-    created = await client.post(
-        "/api/v1/sessions/",
-        json={
-            "title": "chat-override",
-            "model_settings": {"provider": "deepseek", "model_id": "deepseek-chat"},
-        },
-    )
-    assert created.status_code == 200
-    session_id = created.json()["id"]
+    # A provider override is only honoured when a credential backs it, so the
+    # override below is paired with a credential for the same provider.
+    await _seed_credential("override-credential", "openai", "sk-openai-test")
+    try:
+        created = await client.post(
+            "/api/v1/sessions/",
+            json={
+                "title": "chat-override",
+                "model_settings": {
+                    "provider": "openai",
+                    "model_id": "gpt-4o",
+                    "credential_id": "override-credential",
+                },
+            },
+        )
+        assert created.status_code == 200
+        session_id = created.json()["id"]
 
-    fake = _FakeEngine()
-    monkeypatch.setattr(chat_module, "get_engine", lambda: fake)
-    monkeypatch.setattr(
-        chat_module.RecoveryManager, "restore_session", lambda self, session: _noop()
-    )
+        fake = _FakeEngine()
+        monkeypatch.setattr(chat_module, "get_engine", lambda: fake)
+        monkeypatch.setattr(
+            chat_module.RecoveryManager, "restore_session", lambda self, session: _noop()
+        )
 
-    stream = await client.post(f"/api/v1/sessions/{session_id}/chat", json={"message": "hi"})
-    assert stream.status_code == 200
-    await stream.aread()
+        stream = await client.post(f"/api/v1/sessions/{session_id}/chat", json={"message": "hi"})
+        assert stream.status_code == 200, stream.text
+        await stream.aread()
 
-    assert fake.created["provider"] == "deepseek"
-    assert fake.created["model_id"] == "deepseek-chat"
+        assert fake.created["provider"] == "openai"
+        assert fake.created["model_id"] == "gpt-4o"
+        assert fake.created["api_key"] == "sk-openai-test"
+    finally:
+        await _drop_credential("override-credential")
 
 
 async def _noop():
     return None
 
 
+async def _seed_credential(credential_id: str, provider: str, raw_key: str = "sk-test") -> None:
+    from app.core.api_key_crypto import encrypt_api_key
+    from app.storage import async_session
+    from app.storage.database import ApiKey as ApiKeyModel
+
+    async with async_session() as db:
+        db.add(
+            ApiKeyModel(
+                id=credential_id,
+                user_id="default-user",
+                provider=provider,
+                name="test-credential",
+                api_key_encrypted=encrypt_api_key(raw_key),
+                is_active=True,
+            )
+        )
+        await db.commit()
+
+
+async def _drop_credential(credential_id: str) -> None:
+    from app.storage import async_session
+    from app.storage.database import ApiKey as ApiKeyModel
+
+    async with async_session() as db:
+        row = await db.get(ApiKeyModel, credential_id)
+        if row is not None:
+            await db.delete(row)
+            await db.commit()
+
+
 async def _seed_agent(agent_id: str) -> None:
+    from app.core.api_key_crypto import encrypt_api_key
     from app.storage import async_session
     from app.storage.database import Agent as AgentModel
 
@@ -130,7 +183,7 @@ async def _seed_agent(agent_id: str) -> None:
                 name="chat-model-test",
                 provider="openai",
                 model_id="gpt-4o-mini",
-                api_key_encrypted="",
+                api_key_encrypted=encrypt_api_key("sk-agent-test"),
                 user_id="default-user",
             )
         )
@@ -193,5 +246,6 @@ async def test_chat_same_provider_override_keeps_agent_key(client, monkeypatch) 
         assert kwargs["provider"] == "openai"
         assert kwargs["model_id"] == "gpt-4o"
         assert kwargs["agent_id"] == agent_id
+        assert kwargs["api_key"] == "sk-agent-test"
     finally:
         await _drop_agent(agent_id)
