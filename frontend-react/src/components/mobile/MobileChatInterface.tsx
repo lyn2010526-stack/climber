@@ -1,12 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Square, Loader2, Bot } from 'lucide-react';
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string;
-  timestamp?: Date;
-}
+import { useState, useRef, useLayoutEffect, useEffect } from 'react';
+import { ArrowDown, Send, Square, Loader2, RefreshCw } from 'lucide-react';
+import { formatTime } from '../../i18n/utils';
+import type { Message } from '../../useChat';
 
 interface MobileChatInterfaceProps {
   messages: Message[];
@@ -15,313 +10,204 @@ interface MobileChatInterfaceProps {
   isLoading?: boolean;
   isRefreshing?: boolean;
   onRefresh?: () => void | Promise<void>;
+  disabled?: boolean;
+  error?: string | null;
   emptyStateTitle?: string;
-  emptyStateDescription?: string;
-  suggestions?: string[];
 }
 
-const PULL_THRESHOLD = 70;
-const PULL_MAX = 120;
+// Matches the `min-h-11` class on the composer so sending an empty draft does
+// not shrink the input.
+const MIN_INPUT_HEIGHT = 44;
+const MAX_INPUT_HEIGHT = 128;
+// Distance from the tail that still counts as "following the conversation".
+const FOLLOW_THRESHOLD = 64;
+// Safari emits the confirming Enter right after compositionend, so that single
+// keystroke has to be swallowed. Other engines report composition through
+// `isComposing` and `keyCode === 229` and need no time window.
+const COMPOSITION_GUARD_MS = 500;
+const COMPOSER_PADDING = 12;
+
+function isSafariEngine(): boolean {
+  return typeof navigator !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+}
 
 export function MobileChatInterface({
-  messages,
-  onSend,
-  onStop,
-  isLoading,
-  isRefreshing,
-  onRefresh,
-  emptyStateTitle = '开始新的对话',
-  emptyStateDescription = '输入任何问题或任务，Climber 将为你自主执行。',
-  suggestions = ['帮我分析代码', '写一个 Python 脚本', '解释这个错误'],
+  messages, onSend, onStop, isLoading, isRefreshing, onRefresh,
+  disabled, error, emptyStateTitle = '新对话',
 }: MobileChatInterfaceProps) {
   const [input, setInput] = useState('');
-  const [pullDistance, setPullDistance] = useState(0);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [awayFromBottom, setAwayFromBottom] = useState(false);
+  const [missedCount, setMissedCount] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const isScrolling = useRef(false);
-  const scrollTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const touchStartY = useRef<number | null>(null);
+  const followRef = useRef(true);
+  const sendingRef = useRef(false);
+  const composingRef = useRef(false);
+  const compositionEndRef = useRef(-Infinity);
+  const messageCountRef = useRef(messages.length);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      const smoothScroll = () => {
-        if (!scrollRef.current) return;
-        isScrolling.current = true;
-        const el = scrollRef.current;
-        el.scrollTo({
-          top: el.scrollHeight,
-          behavior: 'smooth'
-        });
-        
-        clearTimeout(scrollTimeout.current);
-        scrollTimeout.current = setTimeout(() => {
-          isScrolling.current = false;
-        }, 100);
-      };
-      
-      // Use setTimeout to ensure DOM is updated
-      setTimeout(smoothScroll, 50);
-    }
-  }, [messages, isLoading]);
+    const inputEl = inputRef.current;
+    const viewport = window.visualViewport;
+    if (!inputEl) return;
+    let frame = 0;
+    const syncKeyboard = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const height = viewport?.height ?? window.innerHeight;
+        const keyboardVisible = document.activeElement === inputEl && height < window.innerHeight - 80;
+        setKeyboardOpen(current => current === keyboardVisible ? current : keyboardVisible);
+      });
+    };
+    syncKeyboard();
+    inputEl.addEventListener('focus', syncKeyboard);
+    inputEl.addEventListener('blur', syncKeyboard);
+    viewport?.addEventListener('resize', syncKeyboard);
+    viewport?.addEventListener('scroll', syncKeyboard);
+    window.addEventListener('resize', syncKeyboard);
+    return () => {
+      cancelAnimationFrame(frame);
+      inputEl.removeEventListener('focus', syncKeyboard);
+      inputEl.removeEventListener('blur', syncKeyboard);
+      viewport?.removeEventListener('resize', syncKeyboard);
+      viewport?.removeEventListener('scroll', syncKeyboard);
+      window.removeEventListener('resize', syncKeyboard);
+    };
+  }, []);
 
-  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    isScrolling.current = true;
+  const scrollToLatest = () => {
     const el = scrollRef.current;
-    const touch = e.touches[0];
-    if (el && touch && el.scrollTop <= 0 && !isRefreshing) {
-      touchStartY.current = touch.clientY;
-    } else {
-      touchStartY.current = null;
+    if (el) el.scrollTop = el.scrollHeight;
+    followRef.current = true;
+    setAwayFromBottom(false);
+    setMissedCount(0);
+  };
+
+  useLayoutEffect(() => {
+    const inputEl = inputRef.current;
+    if (inputEl) {
+      inputEl.style.height = 'auto';
+      inputEl.style.height = `${Math.min(Math.max(inputEl.scrollHeight, MIN_INPUT_HEIGHT), MAX_INPUT_HEIGHT)}px`;
     }
-  }, [isRefreshing]);
-
-  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    if (touchStartY.current === null || !onRefresh) return;
-    const touch = e.touches[0];
-    if (!touch) return;
-    const delta = touch.clientY - touchStartY.current;
-    if (delta > 0) {
-      setPullDistance(Math.min(delta, PULL_MAX));
+    if (followRef.current && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      setMissedCount(0);
+    } else if (messages.length > messageCountRef.current) {
+      setMissedCount(count => count + messages.length - messageCountRef.current);
     }
-  }, [onRefresh]);
+    messageCountRef.current = messages.length;
+  }, [input, messages, isLoading, error, sendError]);
 
-  const handleTouchEnd = useCallback(async (e: React.TouchEvent<HTMLDivElement>) => {
-    const el = e.currentTarget;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-    clearTimeout(scrollTimeout.current);
-    scrollTimeout.current = setTimeout(() => {
-      isScrolling.current = false;
-      if (nearBottom && !isScrolling.current) {
-        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-      }
-    }, 100);
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content || typeof ResizeObserver === 'undefined') return;
+    // Observing the growing content keeps the tail pinned while a response
+    // streams in without stealing the position of a scrolled-up reader.
+    const observer = new ResizeObserver(() => {
+      if (followRef.current && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
 
-    if (touchStartY.current === null || !onRefresh) return;
-    const shouldRefresh = pullDistance >= PULL_THRESHOLD;
-    touchStartY.current = null;
-    setPullDistance(0);
-    if (shouldRefresh) {
-      await onRefresh();
-    }
-  }, [pullDistance, onRefresh]);
-
-  const handleSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    
-    if (!input.trim() || isLoading) return;
-    
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!input.trim() || isLoading || disabled || sendingRef.current || composingRef.current) return;
     const message = input.trim();
+    sendingRef.current = true;
+    setSendError(null);
     setInput('');
-    
+    scrollToLatest();
+    inputRef.current?.focus({ preventScroll: true });
     try {
       await onSend(message);
-    } catch (error) {
-      console.error('发送消息失败:', error);
-    }
-    
-    // Focus back on input
-    inputRef.current?.focus();
-  };
-
-  const handleSuggestionClick = async (suggestion: string) => {
-    setInput(suggestion);
-    inputRef.current?.focus();
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
+    } catch (cause) {
+      setInput(current => current || message);
+      setSendError(cause instanceof Error ? cause.message : '发送失败，请重试');
+    } finally {
+      sendingRef.current = false;
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-page">
-      {/* Pull-to-refresh indicator */}
-      {onRefresh && (
-        <div
-          className="flex items-center justify-center overflow-hidden transition-all"
-          style={{ height: (isRefreshing || pullDistance > 0) ? `${Math.max(pullDistance, isRefreshing ? 40 : 0)}px` : 0 }}
-          aria-hidden={!isRefreshing && pullDistance === 0}
-        >
-          <Loader2
-            size={18}
-            className={isRefreshing ? 'animate-spin' : ''}
-            style={{
-              color: 'var(--color-accent)',
-              transform: isRefreshing ? undefined : `rotate(${(pullDistance / PULL_THRESHOLD) * 360}deg)`,
-              transition: 'transform 100ms',
-            }}
-          />
-          <span className="ml-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            {isRefreshing ? '刷新中...' : pullDistance >= PULL_THRESHOLD ? '松开刷新' : '下拉刷新'}
-          </span>
-        </div>
-      )}
-
-      {/* Messages Container */}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto mobile-scroll-optimized"
-        style={{
-          padding: '16px',
-          paddingBottom: '80px',
-        }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onScroll={(e) => { if (e.currentTarget.scrollTop > 0) { touchStartY.current = null; setPullDistance(0); } }}
-      >
-        <div className="space-y-4">
+    <section aria-label="聊天" data-keyboard-open={keyboardOpen || undefined} className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-[var(--color-bg-page)] text-[var(--color-text-primary)]">
+      <div className="flex shrink-0 items-center justify-end gap-2 border-b border-[var(--color-border-subtle)] px-2">
+        {isLoading && <span role="status" className="pl-2 text-xs text-[var(--color-text-muted)]">正在生成</span>}
+        {onRefresh && <button type="button" aria-label="刷新消息" disabled={isLoading || isRefreshing} onClick={async () => {
+          try { await onRefresh(); } catch { setSendError('刷新失败，请重试'); }
+        }} className="flex h-11 w-11 items-center justify-center rounded-lg disabled:opacity-40">
+          <RefreshCw size={16} aria-hidden="true" className={isRefreshing ? 'animate-spin' : ''} />
+        </button>}
+      </div>
+      <div ref={scrollRef} role="region" aria-label="消息列表" tabIndex={0}
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 [overflow-wrap:anywhere]"
+        onScroll={event => {
+          const el = event.currentTarget;
+          // A list shorter than its own viewport always counts as the tail.
+          if (el.scrollHeight <= el.clientHeight) {
+            followRef.current = true;
+            setAwayFromBottom(false);
+            setMissedCount(0);
+            return;
+          }
+          followRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < FOLLOW_THRESHOLD;
+          setAwayFromBottom(!followRef.current);
+        }}>
+        <div ref={contentRef} className="flex min-h-full flex-col">
           {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full min-h-[60vh] px-4 text-center">
-              <div className="w-16 h-16 rounded-3xl mb-4 flex items-center justify-center border bg-[var(--color-bg-surface-1)]" style={{
-                borderColor: 'var(--color-border-default)',
-              }}>
-                <Bot size={32} className="text-[var(--color-text-primary)]" />
-              </div>
-              <h2 className="text-xl font-semibold mb-2" style={{ color: 'var(--color-text-primary)' }}>
-                {emptyStateTitle}
-              </h2>
-              <p className="text-sm mb-6" style={{ color: 'var(--color-text-muted)' }}>
-                {emptyStateDescription}
-              </p>
-              
-              {suggestions && suggestions.length > 0 && (
-                <div className="grid grid-cols-1 gap-2 w-full max-w-md">
-                  {suggestions.map((suggestion, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleSuggestionClick(suggestion)}
-                      className="mobile-touch-target flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors duration-150 active:opacity-80"
-                      style={{
-                        backgroundColor: 'var(--color-bg-surface-1)',
-                        border: '1px solid var(--color-border-subtle)',
-                        color: 'var(--color-text-secondary)'
-                      }}
-                    >
-                      <span className="text-xs" style={{ opacity: 0.6 }}>{'>'}</span>
-                      <span className="text-sm font-medium">{suggestion}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
+            <div className="flex flex-1 items-center justify-center py-8 text-center">
+              <h2 className="text-lg font-medium">{emptyStateTitle}</h2>
             </div>
-          ) : (
-            messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[85%] px-4 py-3 rounded-2xl transition-all duration-200 ${
-                    message.role === 'user' 
-                      ? 'mobile-icon-button' 
-                      : ''
-                  }`}
-                  style={{
-                    backgroundColor: message.role === 'user' 
-                      ? 'var(--color-accent)' 
-                      : 'var(--color-bg-surface-1)',
-                    color: message.role === 'user'
-                      ? 'var(--color-accent-text)'
-                      : 'var(--color-text-primary)',
-                    border: message.role === 'assistant'
-                      ? '1px solid var(--color-border-subtle)'
-                      : 'none',
-                  }}
-                >
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {message.content}
-                  </p>
-                  {message.timestamp && (
-                    <p className="text-[10px] mt-1 opacity-70">
-                      {message.timestamp.toLocaleTimeString('zh-CN', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                      })}
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-          
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className="flex items-center gap-2 px-4 py-3 rounded-2xl" style={{
-                backgroundColor: 'var(--color-bg-surface-1)',
-                border: '1px solid var(--color-border-subtle)',
-              }}>
-                <Loader2 size={16} className="animate-spin" style={{ color: 'var(--color-accent)' }} />
-                <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>正在思考...</span>
-              </div>
-            </div>
-          )}
+          ) : <div className="space-y-5">
+            {messages.map(message => <article key={message.id} className={`min-w-0 ${message.role === 'user' ? 'ml-auto max-w-[90%] rounded-xl bg-[var(--color-bg-surface-2)] px-3 py-2' : ''}`}>
+              <p className="mb-1 text-xs text-[var(--color-text-muted)]">{{ user: '你', assistant: 'Climber', system: '系统', tool: message.tool_name || '工具' }[message.role]}</p>
+              {message.content && <p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>}
+              {message.timestamp && <p className="mt-1 text-xs text-[var(--color-text-muted)]">{formatTime(message.timestamp)}</p>}
+              {message.reasoning && <details className="mt-2 text-sm"><summary className="min-h-11 cursor-pointer py-3 text-[var(--color-text-muted)]">思考过程</summary><p className="whitespace-pre-wrap">{message.reasoning}</p></details>}
+              {message.toolCalls?.map(tool => <details key={tool.id} className="mt-2 rounded-lg border border-[var(--color-border-subtle)] px-3 text-sm">
+                <summary className="min-h-11 cursor-pointer py-3">{tool.name} · {tool.error ? '失败' : tool.status === 'running' ? '运行中' : tool.status === 'success' ? '完成' : tool.status === 'error' ? '失败' : '工具调用'}</summary>
+                <pre className="max-h-48 overflow-auto pb-3 text-xs">{JSON.stringify(tool.arguments, null, 2)}</pre>
+                {(tool.error || tool.result) && <pre className="max-h-64 overflow-auto whitespace-pre-wrap pb-3 text-xs">{tool.error || tool.result}</pre>}
+              </details>)}
+            </article>)}
+          </div>}
         </div>
       </div>
-
-      {/* Input Area */}
-      <form
-        onSubmit={handleSubmit}
-        className="fixed bottom-0 left-0 right-0 z-40 safe-area-bottom mobile-content-shift-fix"
-        style={{
-          padding: `12px 16px calc(12px + env(safe-area-inset-bottom, 0px))`,
-          backgroundColor: 'rgba(10,10,15,0.95)',
-          backdropFilter: 'blur(24px)',
-          WebkitBackdropFilter: 'blur(24px)',
-          borderTop: '1px solid var(--color-border-subtle)',
-        }}
-      >
-        <div className="flex items-end gap-2 max-w-none">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="输入消息..."
-            rows={1}
-            className="flex-1 mobile-chat-input resize-none mobile-touch-target"
-            style={{ fontSize: '16px' }}
-            disabled={isLoading}
-          />
-          <button
-            type="submit"
-            disabled={!input.trim() || isLoading}
-            className="mobile-icon-button rounded-full transition-colors duration-150 active:opacity-80"
-            style={{
-              backgroundColor: !input.trim() || isLoading
-                ? 'var(--color-bg-surface-2)'
-                : 'var(--color-accent)',
-              color: !input.trim() || isLoading
-                ? 'var(--color-text-muted)'
-                : 'var(--color-accent-text)',
+      {awayFromBottom && <button type="button" onClick={scrollToLatest} className="mx-auto flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-3 text-sm">
+        <ArrowDown size={16} aria-hidden="true" />
+        回到最新
+        {missedCount > 0 && <span aria-hidden="true" className="rounded-full bg-[var(--color-accent)] px-1.5 text-xs text-[var(--color-accent-text)]">{missedCount > 99 ? '99+' : missedCount}</span>}
+      </button>}
+      {/* The shell already reserves the navigation strip and the bottom inset, so
+          the composer only keeps the horizontal safe area. */}
+      <form onSubmit={handleSubmit} className="mobile-composer shrink-0 border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] p-3"
+        style={{ paddingBottom: `${COMPOSER_PADDING}px`, paddingLeft: 'max(12px, env(safe-area-inset-left, 0px))', paddingRight: 'max(12px, env(safe-area-inset-right, 0px))' }}>
+        {(error || sendError) && <p role="alert" className="mb-2 max-h-20 overflow-auto text-sm text-[var(--color-error)] [overflow-wrap:anywhere]">{error || sendError}</p>}
+        <div className="flex items-end gap-2">
+          <textarea ref={inputRef} value={input} onChange={event => setInput(event.target.value)}
+            onCompositionStart={() => { composingRef.current = true; }}
+            onCompositionEnd={event => { composingRef.current = false; compositionEndRef.current = event.timeStamp; }}
+            onKeyDown={event => {
+              if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing || composingRef.current || event.keyCode === 229) return;
+              if (isSafariEngine() && event.timeStamp - compositionEndRef.current < COMPOSITION_GUARD_MS) {
+                // Consume the one confirming keystroke; the next Enter sends.
+                compositionEndRef.current = -Infinity;
+                return;
+              }
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
             }}
-            aria-label="发送消息"
-          >
-            {isLoading ? (
-              <Loader2 size={20} className="animate-spin" />
-            ) : (
-              <Send size={20} />
-            )}
-          </button>
-          
-          {onStop && isLoading && (
-            <button
-              type="button"
-              onClick={onStop}
-              className="mobile-icon-button rounded-full transition-colors duration-150 active:opacity-80"
-              style={{
-                backgroundColor: 'var(--color-bg-surface-2)',
-                color: 'var(--color-error)',
-              }}
-              aria-label="停止生成"
-            >
-              <Square size={20} />
-            </button>
-          )}
+            aria-label="输入消息" placeholder="输入消息" rows={1}
+            className="min-h-11 min-w-0 flex-1 resize-none overflow-y-auto rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-page)] px-3 py-2 text-base leading-6" style={{ maxHeight: 'min(128px, 30dvh)' }} />
+          {isLoading && onStop ? <button type="button" onClick={onStop} aria-label="停止生成" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--color-bg-surface-2)]"><Square size={18} aria-hidden="true" /></button> :
+            <button type="submit" disabled={!input.trim() || isLoading || disabled} aria-label="发送消息" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--color-accent)] text-[var(--color-accent-text)] disabled:bg-[var(--color-bg-disabled)] disabled:text-[var(--color-text-secondary)]">
+              {isLoading ? <Loader2 size={18} aria-hidden="true" className="animate-spin" /> : <Send size={18} aria-hidden="true" />}
+            </button>}
         </div>
       </form>
-    </div>
+    </section>
   );
 }

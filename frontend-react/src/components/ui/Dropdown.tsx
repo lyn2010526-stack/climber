@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect, useId, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useId, useCallback, isValidElement } from 'react';
 import { cn } from '../../lib/utils';
-import { ChevronRight } from 'lucide-react';
+import { icons, iconSizes } from '../../lib/icons';
 
 export interface DropdownProps {
   trigger: React.ReactNode;
@@ -11,7 +11,28 @@ export interface DropdownProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   closeOnSelect?: boolean;
+  triggerLabel?: string;
 }
+
+/**
+ * The menu is a surface-1 panel on a border-default edge, lifted by the one
+ * shadow rung that means "floating above the page". It never takes a tint: the
+ * only saturated thing inside a menu is the selected row. A submenu reuses this
+ * recipe verbatim and only re-anchors it, so nesting cannot grow a second
+ * panel look.
+ */
+const menuPanel =
+  'absolute z-[var(--z-dropdown)] min-w-[180px] rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] p-[var(--space-1)] shadow-[var(--shadow-lg)]';
+
+/**
+ * Everything a menu row is, minus its colour: the geometry, the short
+ * transition and the shared focus ring. A leaf row, a submenu trigger and a
+ * disabled row all sit on this base, so a row cannot quietly become a different
+ * size or lose its focus indicator. Colour is supplied per row, which is where
+ * selection and danger diverge.
+ */
+const menuRow =
+  'flex w-full items-center gap-[var(--control-gap)] rounded-[var(--radius-md)] px-[var(--space-3)] py-[var(--space-2)] text-left text-[var(--text-sm)] transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]';
 
 const Dropdown: React.FC<DropdownProps> = ({
   trigger,
@@ -22,9 +43,11 @@ const Dropdown: React.FC<DropdownProps> = ({
   open: controlledOpen,
   onOpenChange,
   closeOnSelect = true,
+  triggerLabel,
 }) => {
   const [internalOpen, setInternalOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
   const generatedId = useId();
 
   const isOpen = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -50,7 +73,7 @@ const Dropdown: React.FC<DropdownProps> = ({
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsOpen(false);
-        ref.current?.querySelector<HTMLElement>('[data-dropdown-trigger]')?.focus();
+        triggerRef.current?.focus();
       }
     };
     document.addEventListener('keydown', handler);
@@ -70,41 +93,94 @@ const Dropdown: React.FC<DropdownProps> = ({
     right: 'left-full ml-[var(--space-1)]',
   };
 
-  return (
-    <div ref={ref} className={cn('relative inline-block', className)}>
-      <div
+  const toggle = () => setIsOpen(!isOpen);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    ref.current?.querySelector<HTMLElement>('[role="menuitem"]:not([data-disabled])')?.focus();
+  }, [isOpen]);
+
+  /**
+   * Trigger semantics attach to the caller's own element. Wrapping it in a
+   * focusable `role="button"` div produced nested interactive content, so
+   * screen readers announced a button inside a button and the inner control
+   * stayed a second tab stop.
+   */
+  const triggerNode = isValidElement<Record<string, unknown>>(trigger)
+    ? React.cloneElement(trigger, {
+        ref: (node: HTMLElement | null) => {
+          triggerRef.current = node;
+        },
+        'aria-haspopup': 'menu' as const,
+        'aria-expanded': isOpen,
+        'aria-controls': generatedId,
+        onClick: (event: React.MouseEvent) => {
+          (trigger.props as { onClick?: (e: React.MouseEvent) => void }).onClick?.(event);
+          toggle();
+        },
+        onKeyDown: (event: React.KeyboardEvent) => {
+          (trigger.props as { onKeyDown?: (e: React.KeyboardEvent) => void }).onKeyDown?.(event);
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggle();
+          }
+        },
+      })
+    : (
+      <button
+        type="button"
+        ref={node => { triggerRef.current = node; }}
         data-dropdown-trigger
-        onClick={() => setIsOpen(!isOpen)}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsOpen(!isOpen); } }}
-        role="button"
-        tabIndex={0}
-        aria-expanded={isOpen}
+        aria-label={triggerLabel}
         aria-haspopup="menu"
+        aria-expanded={isOpen}
         aria-controls={generatedId}
+        onClick={toggle}
+        onKeyDown={event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggle();
+          }
+        }}
+        className="inline-flex items-center"
       >
         {trigger}
-      </div>
+      </button>
+    );
+
+  return (
+    <div ref={ref} className={cn('relative inline-block', className)}>
+      {triggerNode}
       {isOpen && (
         <div
           id={generatedId}
           role="menu"
           aria-orientation="vertical"
           className={cn(
-            'absolute z-[var(--z-dropdown)] min-w-[180px] py-[var(--space-1)] rounded-[var(--radius-xl)] border border-[var(--border-subtle)] bg-[var(--surface-elevated)] shadow-[var(--shadow-xl)] backdrop-blur-xl',
-            'animate-[scaleIn_150ms_cubic-bezier(0.16,1,0.3,1)]',
+            menuPanel,
+            'motion-reduce:animate-none',
             alignmentClasses[align],
             sideClasses[side]
           )}
-          onClick={() => closeOnSelect && setIsOpen(false)}
+          onClick={(e) => {
+            const item = (e.target as HTMLElement).closest('[role="menuitem"]');
+            if (closeOnSelect && item && !item.hasAttribute('data-disabled') && !item.hasAttribute('aria-haspopup')) setIsOpen(false);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
               e.preventDefault();
               const items = Array.from(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([data-disabled])') || []);
+              if (items.length === 0) return;
               const currentIndex = items.indexOf(document.activeElement as HTMLElement);
               const nextIndex = e.key === 'ArrowDown'
                 ? (currentIndex + 1) % items.length
                 : (currentIndex - 1 + items.length) % items.length;
               items[nextIndex]?.focus();
+            } else if (e.key === 'Home' || e.key === 'End') {
+              e.preventDefault();
+              const items = Array.from(ref.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([data-disabled])') || []);
+              if (items.length === 0) return;
+              (e.key === 'Home' ? items[0] : items[items.length - 1])?.focus();
             }
           }}
         >
@@ -115,26 +191,45 @@ const Dropdown: React.FC<DropdownProps> = ({
   );
 };
 
-export interface DropdownItemProps extends React.HTMLAttributes<HTMLButtonElement> {
+export interface DropdownItemProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: React.ReactNode;
   danger?: boolean;
   disabled?: boolean;
   shortcut?: string;
+  /**
+   * Marks the row the menu currently stands on. Selection is the one place a
+   * menu is allowed to spend the accent, and it is announced as the current
+   * item rather than as a check, because a menu that mixes checkable rows with
+   * plain ones cannot switch every row to a checkbox role.
+   */
+  selected?: boolean;
 }
 
 const DropdownItem = React.forwardRef<HTMLButtonElement, DropdownItemProps>(
-  ({ icon, danger, disabled, shortcut, children, className, ...props }, ref) => (
-    <button
+  ({ icon, danger, disabled, shortcut, selected, children, className, onClick, ...props }, ref) => (
+    <button type="button"
       ref={ref}
       role="menuitem"
       data-disabled={disabled || undefined}
+      data-selected={selected || undefined}
+      aria-current={selected ? 'true' : undefined}
       disabled={disabled}
+      onClick={event => {
+        if (disabled) return;
+        onClick?.(event);
+      }}
       className={cn(
-        'w-full flex items-center gap-[var(--space-2-5)] px-[var(--space-3)] py-[var(--space-2)] text-[var(--font-size-sm)] transition-colors duration-[var(--transition-fast)] text-left rounded-[var(--radius-md)] mx-[var(--space-1)]',
-        danger
-          ? 'text-[var(--color-danger)] hover:bg-[var(--color-danger-subtle)]'
-          : 'text-[var(--text-secondary)] hover:bg-[var(--surface-bg-hover)] hover:text-[var(--text-primary)]',
-        disabled && 'opacity-50 cursor-not-allowed',
+        menuRow,
+        // Precedence runs disabled, then selected, then danger, then the plain
+        // row, so exactly one colour pair is ever on the element. Two pairs at
+        // once would leave the winner up to stylesheet order.
+        disabled
+          ? 'cursor-not-allowed text-[var(--color-text-disabled)]'
+          : selected
+            ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent-foreground)] enabled:hover:text-[var(--color-accent-hover)]'
+            : danger
+              ? 'text-[var(--color-error)] enabled:hover:bg-[var(--color-error-subtle)]'
+              : 'text-[var(--color-text-secondary)] enabled:hover:bg-[var(--color-bg-surface-2)] enabled:hover:text-[var(--color-text-primary)]',
         className
       )}
       {...props}
@@ -142,7 +237,7 @@ const DropdownItem = React.forwardRef<HTMLButtonElement, DropdownItemProps>(
       {icon && <span className="shrink-0 w-[var(--icon-sm)] h-[var(--icon-sm)]" aria-hidden="true">{icon}</span>}
       <span className="flex-1 truncate">{children}</span>
       {shortcut && (
-        <kbd className="text-[10px] text-[var(--text-muted)] bg-[var(--surface-bg-subtle)] px-[var(--space-1)] py-[var(--space-0-5)] rounded-[var(--radius-sm)] font-mono">
+        <kbd className="rounded-[var(--radius-sm)] bg-[var(--color-bg-surface-2)] px-[var(--space-1)] py-[var(--space-0-5)] text-[var(--text-2xs)] text-[var(--color-text-muted)] font-mono">
           {shortcut}
         </kbd>
       )}
@@ -155,26 +250,48 @@ interface DropdownSubMenuProps {
   trigger: React.ReactNode;
   children: React.ReactNode;
   icon?: React.ReactNode;
+  className?: string;
 }
 
-const DropdownSubMenu: React.FC<DropdownSubMenuProps> = ({ trigger, children, icon }) => {
+const DropdownSubMenu: React.FC<DropdownSubMenuProps> = ({ trigger, children, icon, className }) => {
   const [open, setOpen] = useState(false);
+  const generatedId = useId();
 
   return (
-    <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <button
+    <div
+      className={cn('relative', className)}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onKeyDown={event => {
+        if (event.key === 'Escape' && open) {
+          event.stopPropagation();
+          setOpen(false);
+        }
+      }}
+    >
+      <button type="button"
         role="menuitem"
         aria-haspopup="menu"
         aria-expanded={open}
-        className="w-full flex items-center gap-[var(--space-2-5)] px-[var(--space-3)] py-[var(--space-2)] text-[var(--font-size-sm)] text-[var(--text-secondary)] hover:bg-[var(--surface-bg-hover)] hover:text-[var(--text-primary)] transition-colors rounded-[var(--radius-md)] mx-[var(--space-1)] text-left"
+        aria-controls={open ? generatedId : undefined}
+        onClick={() => setOpen(value => !value)}
+        className={cn(
+          menuRow,
+          // A submenu trigger behaves like a plain row: it has no selection of
+          // its own, so it keeps the secondary rung and the surface-2 hover.
+          'text-[var(--color-text-secondary)] enabled:hover:bg-[var(--color-bg-surface-2)] enabled:hover:text-[var(--color-text-primary)]',
+        )}
       >
         {icon && <span className="shrink-0 w-[var(--icon-sm)] h-[var(--icon-sm)]" aria-hidden="true">{icon}</span>}
         <span className="flex-1 truncate">{trigger}</span>
-        <ChevronRight className="w-[var(--icon-xs)] h-[var(--icon-xs)] text-[var(--text-muted)] shrink-0" />
+        {/* The chevron is the affordance that says a submenu opens sideways, so
+            it stays on the muted rung and only follows the row on hover. */}
+        <icons.submenu size={iconSizes.xs} className="shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" focusable="false" />
       </button>
       {open && (
         <div
-          className="absolute left-full top-0 min-w-[160px] py-[var(--space-1)] rounded-[var(--radius-xl)] border border-[var(--border-subtle)] bg-[var(--surface-elevated)] shadow-[var(--shadow-xl)]"
+          id={generatedId}
+          className={cn(menuPanel, 'left-full top-0 min-w-[160px]')}
           role="menu"
         >
           {children}
@@ -185,11 +302,13 @@ const DropdownSubMenu: React.FC<DropdownSubMenuProps> = ({ trigger, children, ic
 };
 
 const DropdownDivider: React.FC = () => (
-  <div className="my-[var(--space-1)] h-px bg-[var(--border-subtle)]" role="separator" />
+  <div className="my-[var(--space-1)] h-px bg-[var(--color-border-subtle)]" role="separator" />
 );
 
+/** A group title. It names a section, so it takes the muted rung and never a
+ *  hover or focus state of its own. */
 const DropdownHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="px-[var(--space-3)] py-[var(--space-1-5)] text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+  <div className="px-[var(--space-3)] py-[var(--space-1-5)] text-[var(--text-2xs)] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
     {children}
   </div>
 );

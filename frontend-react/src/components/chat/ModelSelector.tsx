@@ -118,7 +118,7 @@ function ScopedModelSelector({ credentialId, provider, value, onChange, disabled
       <select
         id={id} value={selected} aria-describedby={`${id}-status`}
         disabled={disabled || loading || !credentialId || !loaded || !models.length}
-        className="w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-secondary)] p-2"
+        className="w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-2"
         onChange={(event) => {
           const model = models.find((item) => item.model_id === event.target.value);
           if (credentialId && model) onChange({ credential_id: credentialId, provider, model_id: model.model_id });
@@ -132,7 +132,7 @@ function ScopedModelSelector({ credentialId, provider, value, onChange, disabled
         {!credentialId ? '请选择已保存的模型凭据' : loading ? '正在从供应商获取模型…' :
           loaded ? (models.length ? '来源：供应商实时 API' : '供应商返回空列表，暂无可选模型') : ''}
       </p>
-      {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
+      {error && <p role="alert" className="text-sm text-[var(--color-error)]">{error}</p>}
       <button type="button" disabled={disabled || loading || !credentialId} onClick={() => setRevision((n) => n + 1)}>
         {error ? '重试模型发现' : '刷新模型列表'}
       </button>

@@ -18,6 +18,19 @@ import { SessionSidebar } from '../SessionSidebar';
 let currentOwner = 'owner-a';
 let discoveryStatus = 200;
 
+/**
+ * These tests render the sidebar with no i18next provider, so the loaded
+ * resource decides the language. A row holds exactly two buttons and the
+ * trailing one is the delete action whatever it is labelled, which keeps this
+ * lookup honest in either language.
+ */
+async function deleteAction(title: string) {
+  await screen.findAllByText(title);
+  const row = screen.getAllByText(title)[0]!.closest('div') as HTMLElement;
+  const buttons = within(row).getAllByRole('button');
+  return buttons[buttons.length - 1]!;
+}
+
 afterEach(() => vi.unstubAllGlobals());
 
 beforeEach(() => {
@@ -55,6 +68,9 @@ beforeEach(() => {
   vi.mocked(api.listModels).mockResolvedValue([
     { provider: 'openai', model_id: 'gpt-4o', label: 'gpt-4o' },
   ] as any);
+  // `clearAllMocks` keeps any `mockResolvedValueOnce` a previous test queued, so
+  // an unconsumed entry would answer the next test's first call. Reset instead.
+  vi.mocked(api.listSessions).mockReset();
   vi.mocked(api.listSessions).mockResolvedValue([] as any);
 });
 
@@ -100,6 +116,7 @@ describe('SessionSidebar with workspace store', () => {
     expect(payload.agent_id).toBe('agent-1');
     expect(payload.model_settings).toBeNull();
     expect(api.listModels).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '创建配置' }));
     expect(screen.getByRole('combobox', { name: '模型来源' })).toHaveValue('agent');
 
     await waitFor(() => {
@@ -115,6 +132,7 @@ describe('SessionSidebar with workspace store', () => {
   async function chooseSavedModel() {
     const createButton = screen.getByRole('button', { name: /新建会话/ });
     await waitFor(() => expect(createButton).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: '创建配置' }));
     fireEvent.change(screen.getByRole('combobox', { name: '模型来源' }), { target: { value: 'credential' } });
     expect(createButton).toBeDisabled();
     await screen.findByRole('option', { name: 'Saved key (openai)' });
@@ -136,6 +154,33 @@ describe('SessionSidebar with workspace store', () => {
       },
     }));
     expect(api.listModels).not.toHaveBeenCalled();
+  });
+
+  it('retains the selected agent and saved model across disclosure and persists creation', async () => {
+    vi.mocked(api.listAgents).mockResolvedValue([
+      { id: 'agent-1', name: 'Nova' }, { id: 'agent-2', name: 'Second agent' },
+    ] as any);
+    vi.mocked(api.createSession).mockResolvedValue({ id: 'persisted', provider: 'openai', model_id: 'discovered-model' } as any);
+    render(<SessionSidebar />);
+    const create = await chooseSavedModel();
+    fireEvent.change(screen.getByRole('combobox', { name: '选择智能体' }), { target: { value: 'agent-2' } });
+    const toggle = screen.getByRole('button', { name: '创建配置' });
+    fireEvent.click(toggle);
+    expect(screen.queryByRole('combobox', { name: '模型来源' })).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(screen.getByRole('combobox', { name: '选择智能体' })).toHaveValue('agent-2');
+    expect(screen.getByRole('combobox', { name: '模型', exact: true })).toHaveValue('discovered-model');
+    fireEvent.click(toggle);
+    fireEvent.click(create);
+    await waitFor(() => expect(api.createSession).toHaveBeenCalledWith({
+      title: '会话 1', agent_id: 'agent-2', model_settings: {
+        credential_id: 'key-a', provider: 'openai', model_id: 'discovered-model',
+      },
+    }));
+    await waitFor(() => expect(useWorkspaceStore.getState().activeSessionId).toBe('persisted'));
+    expect(useWorkspaceStore.getState().sessions[0].modelConfig).toMatchObject({
+      provider: 'openai', modelId: 'discovered-model',
+    });
   });
 
   it('clears the override when returning to the Agent default', async () => {
@@ -173,6 +218,7 @@ describe('SessionSidebar with workspace store', () => {
     render(<SessionSidebar />);
     const createButton = screen.getByRole('button', { name: /新建会话/ });
     await waitFor(() => expect(createButton).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: '创建配置' }));
     fireEvent.change(screen.getByRole('combobox', { name: '模型来源' }), { target: { value: 'credential' } });
     await screen.findByRole('option', { name: 'Saved key (openai)' });
     fireEvent.change(screen.getByRole('combobox', { name: '已保存的模型凭据' }), { target: { value: 'key-a' } });
@@ -196,8 +242,9 @@ describe('SessionSidebar with workspace store', () => {
     vi.mocked(api.deleteSession).mockResolvedValue({ ok: true } as any);
 
     render(<SessionSidebar />);
-    const item = (await screen.findByText('会话 一')).closest('div');
-    fireEvent.click(within(item as HTMLElement).getByLabelText('删除会话 会话 一'));
+    await screen.findByText('会话 一');
+    fireEvent.click(await deleteAction('会话 一'));
+    fireEvent.click(screen.getByRole('button', { name: '删除', exact: true }));
 
     await waitFor(() => expect(api.deleteSession).toHaveBeenCalledWith('b1'));
     await waitFor(() => expect(useWorkspaceStore.getState().sessions).toHaveLength(0));
@@ -209,20 +256,24 @@ describe('SessionSidebar with workspace store', () => {
     ] as any);
     vi.mocked(api.deleteSession).mockRejectedValueOnce(new Error('Server unavailable'));
     render(<SessionSidebar />);
-    fireEvent.click(await screen.findByText('会话 一'));
+    // Select the row first, so there is a selection for the failure to preserve.
+    fireEvent.click((await screen.findAllByText('会话 一'))[0]!);
     const sessions = useWorkspaceStore.getState().sessions;
-    fireEvent.click(screen.getByLabelText('删除会话 会话 一'));
+    expect(useWorkspaceStore.getState().activeSessionId).toBe('b1');
+    fireEvent.click(await deleteAction('会话 一'));
+    fireEvent.click(screen.getByRole('button', { name: '删除', exact: true }));
     await act(async () => {});
 
     expect(useWorkspaceStore.getState().sessions).toEqual(sessions);
     expect(useWorkspaceStore.getState().activeSessionId).toBe('b1');
-    expect(screen.getByRole('button', { name: /会话 一\s*idle/ })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: /^会话 一/ })).toHaveAttribute('aria-current', 'true');
     expect(screen.getByRole('alert')).toHaveTextContent('删除会话失败，请重试');
     expect(api.listSessions).toHaveBeenCalledTimes(1);
 
     let resolveDelete!: (value: Awaited<ReturnType<typeof api.deleteSession>>) => void;
     vi.mocked(api.deleteSession).mockReturnValueOnce(new Promise(resolve => { resolveDelete = resolve; }));
-    fireEvent.click(screen.getByLabelText('删除会话 会话 一'));
+    fireEvent.click(await deleteAction('会话 一'));
+    fireEvent.click(screen.getByRole('button', { name: '删除', exact: true }));
     expect(useWorkspaceStore.getState().sessions).toEqual(sessions);
     expect(useWorkspaceStore.getState().activeSessionId).toBe('b1');
     await act(async () => resolveDelete({ ok: true } as any));

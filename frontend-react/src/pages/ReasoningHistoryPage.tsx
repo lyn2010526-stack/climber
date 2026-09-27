@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { History, Clock, ChevronRight, Brain, ArrowLeft, Zap } from 'lucide-react';
+import { Clock, ChevronRight, ArrowLeft, RefreshCw } from 'lucide-react';
 import { api } from '../api';
-import { PageHeader } from '../components/ui/PageHeader';
+import { useI18n } from '../i18n';
+import { formatDateTime } from '../i18n/utils';
+import { formatDuration } from '../lib/duration';
 import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
-import { EmptyState } from '../components/ui/EmptyState';
 import { SkeletonList } from '../components/ui/Skeleton';
 
 interface HistoryItem {
@@ -20,9 +21,14 @@ interface HistoryItem {
 }
 
 export function ReasoningHistoryPage() {
+  const { t } = useI18n();
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<HistoryItem | null>(null);
+  const [error, setError] = useState(false);
+  const [query, setQuery] = useState('');
+  const filteredHistory = history.filter(item => `${item.task} ${item.trace_id ?? ''} ${item.mode}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const formatTime = (value: string | null) => value && Number.isFinite(Date.parse(value)) ? formatDateTime(value) : '-';
 
   useEffect(() => {
     loadHistory();
@@ -30,23 +36,19 @@ export function ReasoningHistoryPage() {
 
   const loadHistory = async () => {
     setLoading(true);
+    setError(false);
     try {
       const data = await api.listReasoningHistory();
       setHistory(data);
-    } catch { /* skip */ } finally {
+    } catch { setError(true); } finally {
       setLoading(false);
     }
   };
 
-  const formatDuration = (ms: number) => {
-    if (ms < 1000) return `${ms.toFixed(0)}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
-  };
-
   if (selected) {
     return (
-      <div className="h-full overflow-y-auto page-transition">
-        <div className="p-4 md:p-6 lg:p-8 max-w-3xl mx-auto">
+      <div className="h-full overflow-y-auto">
+        <div className="p-4 max-w-5xl mx-auto">
           <Button
             variant="ghost"
             size="sm"
@@ -54,26 +56,24 @@ export function ReasoningHistoryPage() {
             onClick={() => setSelected(null)}
             className="mb-4"
           >
-            返回历史
+            {t('common.back')}
           </Button>
 
           <Card variant="default">
-            <CardContent className="p-6">
+            <CardContent className="p-4">
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20">
-                  <Brain size={20} className="text-purple-400" />
-                </div>
                 <div>
                   <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
                     推理会话
                   </h3>
                   {selected.created_at && (
                     <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-                      {new Date(selected.created_at).toLocaleString()}
+                      {formatTime(selected.created_at)}
                     </p>
                   )}
                 </div>
               </div>
+              <p className="mb-3 break-all font-mono text-xs text-[var(--color-text-muted)]">ID: {selected.trace_id || '-'}</p>
 
               <div className="text-sm text-[var(--color-text-secondary)] whitespace-pre-wrap leading-relaxed mb-4 p-4 bg-[var(--color-bg-surface-2)] rounded-xl border border-[var(--color-border-subtle)]">
                 {selected.task}
@@ -82,7 +82,7 @@ export function ReasoningHistoryPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="p-3 bg-[var(--color-bg-surface-2)] rounded-xl border border-[var(--color-border-subtle)] text-center">
                   <p className="text-xs text-[var(--color-text-muted)] mb-1">模式</p>
-                  <Badge variant="primary" size="sm">{selected.mode}</Badge>
+                  <Badge variant="default" size="sm">{selected.mode}</Badge>
                 </div>
                 <div className="p-3 bg-[var(--color-bg-surface-2)] rounded-xl border border-[var(--color-border-subtle)] text-center">
                   <p className="text-xs text-[var(--color-text-muted)] mb-1">候选数</p>
@@ -90,13 +90,13 @@ export function ReasoningHistoryPage() {
                 </div>
                 <div className="p-3 bg-[var(--color-bg-surface-2)] rounded-xl border border-[var(--color-border-subtle)] text-center">
                   <p className="text-xs text-[var(--color-text-muted)] mb-1">置信度</p>
-                  <p className="text-sm font-semibold text-[var(--color-success)]">{(selected.best_confidence * 100).toFixed(0)}%</p>
+                  <p className="text-sm font-semibold text-[var(--color-text-primary)]">{(selected.best_confidence * 100).toFixed(0)}%</p>
                 </div>
                 <div className="p-3 bg-[var(--color-bg-surface-2)] rounded-xl border border-[var(--color-border-subtle)] text-center">
                   <p className="text-xs text-[var(--color-text-muted)] mb-1">耗时</p>
                   <p className="text-sm font-semibold text-[var(--color-text-primary)] flex items-center justify-center gap-1">
                     <Clock size={12} />
-                    {formatDuration(selected.duration_ms)}
+                    {formatDuration(selected.duration_ms, 'ms')}
                   </p>
                 </div>
               </div>
@@ -117,55 +117,34 @@ export function ReasoningHistoryPage() {
   }
 
   return (
-    <div className="h-full overflow-y-auto page-transition">
-      <div className="p-4 md:p-6 lg:p-8 max-w-3xl mx-auto">
-        <PageHeader
-          title="推理历史"
-          description="查看已完成的推理会话记录"
-          icon={<History size={20} />}
-        />
-
-        {loading && <SkeletonList count={3} />}
-
-        {!loading && history.length === 0 && (
-          <EmptyState
-            icon="file"
-            title="暂无推理历史"
-            description="完成一次推理会话后将在此显示"
-          />
-        )}
-
-        {!loading && history.length > 0 && (
-          <div className="space-y-3 stagger-children">
-            {history.map((item, idx) => (
-              <button
-                key={item.trace_id || idx}
-                onClick={() => setSelected(item)}
-                className="w-full text-left p-4 bg-[var(--color-bg-surface-1)] hover:bg-[var(--color-bg-surface-2)] rounded-xl border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/30 transition-all duration-200 group"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-[var(--color-text-primary)] truncate font-medium">
-                      {item.task}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2 mt-2">
-                      <Badge variant="primary" size="xs">{item.mode}</Badge>
-                      <span className="flex items-center gap-1 text-xs text-[var(--color-text-muted)]">
-                        <Zap size={10} />
-                        {(item.best_confidence * 100).toFixed(0)}%
-                      </span>
-                      <span className="flex items-center gap-1 text-xs text-[var(--color-text-muted)]">
-                        <Clock size={10} />
-                        {formatDuration(item.duration_ms)}
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight size={16} className="text-[var(--color-text-muted)] shrink-0 mt-1 group-hover:text-[var(--color-accent)] transition-colors" />
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
+    <div className="h-full min-h-0 min-w-0 flex flex-col text-[var(--color-text-primary)]">
+      <header className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[var(--color-border-subtle)]">
+        <h2 className="text-sm font-semibold">{t('navigation.reasoning_history')} <span className="ml-2 font-normal tabular-nums text-[var(--color-text-muted)]">{filteredHistory.length} / {history.length}</span></h2>
+        <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={loadHistory} disabled={loading}>{t('common.refresh')}</Button>
+      </header>
+      <div className="px-4 py-2 border-b border-[var(--color-border-subtle)]">
+        <input aria-label={t('common.search')} placeholder={t('common.search')} value={query} onChange={event => setQuery(event.target.value)} className="w-full sm:max-w-sm rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-3 py-2 text-xs" />
+      </div>
+      {error && <div role="alert" className="flex items-center gap-3 px-4 py-2 text-xs text-[var(--color-error)]">{t('right_panel.states.load_failed')}<button type="button" onClick={loadHistory} className="underline">{t('common.retry')}</button></div>}
+      <div className="flex-1 min-h-0 overflow-auto" aria-busy={loading}>
+        {loading ? <SkeletonList count={3} /> : <>
+          <table className="w-full min-w-[760px] text-left text-xs">
+            <thead className="sticky top-0 bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)]"><tr>
+              {[t('navigation.tasks'), t('common.type'), t('common.created'), t('right_panel.trace.duration'), '置信度', t('common.actions')].map(label => <th key={label} scope="col" className="px-4 py-2 font-medium whitespace-nowrap">{label}</th>)}
+            </tr></thead>
+            <tbody className="divide-y divide-[var(--color-border-subtle)]">
+              {filteredHistory.map((item, index) => <tr key={item.trace_id || index} className="hover:bg-[var(--color-bg-surface-2)]">
+                <td className="max-w-xs px-4 py-3"><p className="truncate" title={item.task}>{item.task}</p><p className="mt-1 truncate font-mono text-[var(--color-text-muted)]" title={item.trace_id || undefined}>{item.trace_id || '-'}</p></td>
+                <td className="px-4 py-3">{item.mode}</td>
+                <td className="px-4 py-3 whitespace-nowrap tabular-nums text-[var(--color-text-secondary)]">{formatTime(item.created_at)}</td>
+                <td className="px-4 py-3 tabular-nums">{formatDuration(item.duration_ms, 'ms')}</td>
+                <td className="px-4 py-3 tabular-nums">{(item.best_confidence * 100).toFixed(0)}%</td>
+                <td className="px-4 py-2"><button type="button" onClick={() => setSelected(item)} aria-label={`${t('common.open')}: ${item.task}`} className="inline-flex items-center gap-1 rounded-md px-2 py-2 hover:bg-[var(--color-bg-surface-3)]">{t('common.open')}<ChevronRight size={14} /></button></td>
+              </tr>)}
+            </tbody>
+          </table>
+          {!error && filteredHistory.length === 0 && <p className="p-8 text-center text-xs text-[var(--color-text-muted)]">{t(history.length ? 'common.no_results' : 'common.no_data')}</p>}
+        </>}
       </div>
     </div>
   );

@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { Button } from '../Button';
 import { Badge } from '../Badge';
 import { ConfirmDialog } from '../Modal';
 import { StreamingCursor } from '../../chat/StreamingCursor';
-import css from '../../../index.css?raw';
 import markdown from '../../chat/MarkdownRenderer.tsx?raw';
 import bubble from '../../chat/MessageBubble.tsx?raw';
 import content from '../../chat/MessageContent.tsx?raw';
@@ -12,7 +13,12 @@ import modal from '../Modal.tsx?raw';
 import card from '../Card.tsx?raw';
 import mobile from '../../mobile/MobileChatInterface.tsx?raw';
 import chart from '../Chart.tsx?raw';
-import toast from '../Toast.tsx?raw';
+import toast from '../../ios/IOSToast.tsx?raw';
+
+// `import ... from '*.css?raw'` returns an empty string under Vite 8 (the
+// Tailwind plugin consumes .css before the raw loader runs), so read the file
+// from disk instead — `*Raw` globals below still work for .tsx.
+const css = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf-8');
 
 afterEach(cleanup);
 
@@ -35,10 +41,14 @@ describe('Slate presentation contract', () => {
     expect(css).not.toMatch(/\*\s*\{[^}]*box-shadow:\s*none/);
   });
 
-  it('preserves semantic colors and reduced-motion coverage for pseudo-elements', () => {
-    expect(css).toMatch(/--color-success:\s*#10B981/);
-    expect(css).toMatch(/--color-error:\s*#EF4444/);
-    expect(css).toMatch(/--color-warning:\s*#F59E0B/);
+  it('preserves semantic color tokens and reduced-motion coverage for pseudo-elements', () => {
+    // Values are tuned per theme for WCAG contrast, so the contract is that each
+    // status token stays defined in both palettes rather than any fixed hue.
+    for (const token of ['--color-success', '--color-error', '--color-warning', '--color-info']) {
+      expect(css, token).toMatch(new RegExp(`${token}:\\s*(#[0-9A-Fa-f]{3,8})`));
+    }
+    expect([...css.matchAll(/--color-success:\s*(#[0-9A-Fa-f]{3,8})/g)].length).toBeGreaterThanOrEqual(2);
+    expect([...css.matchAll(/--color-error:\s*(#[0-9A-Fa-f]{3,8})/g)].length).toBeGreaterThanOrEqual(2);
     expect(css).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\*,\s*\*::before,\s*\*::after\s*\{[^}]*animation-duration:\s*0\.01ms !important;[^}]*transition-duration:\s*0\.01ms !important;/);
     expect(css).toMatch(/@keyframes statusPulse/);
     expect(css).toMatch(/\.status-dot\.running\s*\{[^}]*animation:\s*statusPulse/);
@@ -58,10 +68,13 @@ describe('Slate presentation contract', () => {
   });
 
   it('retains semantic badge colors alongside the neutral primary badge', () => {
-    render(<><Badge variant="primary">Primary</Badge><Badge variant="success">Success</Badge><Badge variant="destructive">Error</Badge></>);
+    render(<><Badge variant="primary">Primary</Badge><Badge variant="success">Success</Badge><Badge variant="destructive">Error</Badge><Badge variant="info">Info</Badge></>);
     expect(screen.getByText('Primary')).toHaveClass('border-[var(--color-border-accent)]');
     expect(screen.getByText('Success')).toHaveClass('text-[var(--color-success)]');
     expect(screen.getByText('Error')).toHaveClass('text-[var(--color-error)]');
+    // `info` used to borrow the accent, which made it a second copy of
+    // `primary`; it now takes its own status hue.
+    expect(screen.getByText('Info')).toHaveClass('text-[var(--color-info)]', 'bg-[var(--color-info-subtle)]');
   });
 
   it('uses a solid streaming cursor with a running indicator', () => {
@@ -79,6 +92,13 @@ describe('Slate presentation contract', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
     expect(onConfirm).toHaveBeenCalledOnce();
     rerender(<ConfirmDialog open variant="danger" onConfirm={onConfirm} onClose={onClose} title="Confirm action" />);
-    expect(screen.getByRole('button', { name: 'Confirm' })).toHaveClass('bg-[#EF4444]');
+    expect(screen.getByRole('button', { name: 'Confirm' })).toHaveClass('text-[var(--color-error)]', 'bg-[var(--color-error-subtle)]', 'border-[var(--color-error)]/30');
+  });
+
+  it('keeps the accent primary on confirmation, not a gradient or blur', () => {
+    render(<ConfirmDialog open onConfirm={vi.fn()} onClose={vi.fn()} title="Confirm action" />);
+    const confirm = screen.getByRole('button', { name: 'Confirm' });
+    expect(confirm.className).not.toMatch(/gradient|blur/);
+    expect(confirm).toHaveClass('focus-visible:shadow-[var(--focus-ring)]');
   });
 });

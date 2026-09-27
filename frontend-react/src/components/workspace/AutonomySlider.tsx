@@ -1,72 +1,69 @@
 import { useCallback } from 'react';
 import { Hand, Gauge, Rocket } from 'lucide-react';
+import type { PermissionMode } from '../../store/workspace';
+import {
+  AUTONOMY_STOPS,
+  PERMISSION_MODE_INFO,
+  autonomyLevelForMode,
+  modeForAutonomyMove,
+} from './permissionMode';
 
 interface AutonomySliderProps {
-  value: number; // 1-5
-  onChange: (level: number) => void;
+  /** Mode reported by the backend, or `null` when nothing has been reported. */
+  value: PermissionMode | null;
+  onChange: (mode: PermissionMode) => void;
+  disabled?: boolean;
 }
 
-const levels = [
-  { level: 1, label: '手动', description: '每个操作前询问', icon: Hand },
-  { level: 2, label: '半自动', description: '危险操作询问', icon: Gauge },
-  { level: 3, label: '平衡', description: '破坏性操作询问', icon: Gauge },
-  { level: 4, label: '自主', description: '不可逆操作询问', icon: Rocket },
-  { level: 5, label: '全自动', description: '从不询问', icon: Rocket },
-];
+/**
+ * The scale is a view of the backend permission mode: each stop names the mode
+ * it writes, and the caption states that mode's real rule instead of promising
+ * an approval prompt the backend does not implement. An unreadable
+ * configuration disables the control and says so.
+ */
+const STOP_ICONS = [Hand, Gauge, Gauge, Rocket, Rocket];
 
-const activeColors = [
-  'text-blue-400',
-  'text-cyan-400',
-  'text-violet-400',
-  'text-purple-400',
-  'text-fuchsia-400',
-];
+export function AutonomySlider({ value, onChange, disabled = false }: AutonomySliderProps) {
+  const level = autonomyLevelForMode(value);
+  const handleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    // The level is resolved to a mode here; the caller writes it to the backend.
+    const next = modeForAutonomyMove(Number(event.target.value), value);
+    if (next) onChange(next);
+  }, [onChange, value]);
 
-const activeBgColors = [
-  'bg-blue-500',
-  'bg-cyan-500',
-  'bg-violet-500',
-  'bg-purple-500',
-  'bg-fuchsia-500',
-];
+  if (value === null || level === null) {
+    return (
+      <div className="w-full">
+        <p className="text-[11px] text-[var(--color-text-muted)]" role="status">
+          自主级别未上报：后端权限模式读取失败，无法换算自主级别
+        </p>
+      </div>
+    );
+  }
 
-const trackFillColors = [
-  'from-blue-500/20',
-  'from-cyan-500/20',
-  'from-violet-500/20',
-  'from-purple-500/20',
-  'from-fuchsia-500/20',
-];
-
-export function AutonomySlider({ value, onChange }: AutonomySliderProps) {
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    onChange(Number(e.target.value));
-  }, [onChange]);
-
-  const currentLevel = levels[value - 1];
-  if (!currentLevel) return null;
-  const Icon = currentLevel.icon;
-
-  const percentage = ((value - 1) / 4) * 100;
+  const percentage = ((level - 1) / 4) * 100;
+  const Icon = STOP_ICONS[level - 1] ?? Gauge;
 
   return (
     <div className="w-full">
       <div className="flex items-center gap-2 mb-3">
-        <Icon size={15} className={activeColors[value - 1]} />
+        <Icon size={15} className="text-[var(--color-text-secondary)]" aria-hidden="true" />
         <span className="text-xs font-medium text-[var(--color-text-primary)]">
-          自主级别: <span className={activeColors[value - 1]}>{currentLevel.label}</span>
+          自主级别: <span className="text-[var(--color-text-secondary)]">{PERMISSION_MODE_INFO[value].label}</span>
         </span>
-        <span className="text-[10px] text-[var(--color-text-muted)] ml-auto">{currentLevel.description}</span>
+        <span className="text-[10px] text-[var(--color-text-muted)] ml-auto">
+          {PERMISSION_MODE_INFO[value].summary}
+        </span>
       </div>
 
       <div className="relative">
         <div className="relative h-2 bg-[var(--color-bg-surface-elevated)] rounded-full overflow-hidden">
           <div
-            className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r ${trackFillColors[value - 1]} to-transparent transition-all duration-300`}
+            className="absolute inset-y-0 left-0 rounded-full bg-[var(--color-accent)] transition-all duration-300"
             style={{ width: `${percentage}%` }}
           />
           <div
-            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full ${activeBgColors[value - 1]} shadow-lg transition-all duration-300`}
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-[var(--color-accent)] shadow-lg transition-all duration-300"
             style={{ left: `${percentage}%` }}
           />
         </div>
@@ -76,40 +73,45 @@ export function AutonomySlider({ value, onChange }: AutonomySliderProps) {
           min={1}
           max={5}
           step={1}
-          value={value}
+          value={level}
+          disabled={disabled}
           onChange={handleChange}
-          className="absolute inset-0 w-full h-2 opacity-0 cursor-pointer"
+          aria-label="自主级别（写入后端权限模式）"
+          className="absolute inset-0 w-full h-2 opacity-0 cursor-pointer disabled:cursor-not-allowed"
           style={{ top: '0px' }}
         />
       </div>
 
       <div className="flex justify-between mt-2 px-0.5">
-        {levels.map((item) => {
-          const isActive = item.level <= value;
-          const isCurrent = item.level === value;
+        {AUTONOMY_STOPS.map((stop) => {
+          const isCurrent = stop.level === level;
+          const isActive = stop.level <= level;
+          const info = PERMISSION_MODE_INFO[stop.mode];
           return (
             <button
-              key={item.level}
+              key={stop.level}
               type="button"
-              onClick={() => onChange(item.level)}
-              className={`flex flex-col items-center gap-0.5 transition-all duration-200 ${
+              disabled={disabled}
+              onClick={() => onChange(stop.mode)}
+              title={info.summary}
+              className={`flex flex-col items-center gap-0.5 transition-all duration-200 disabled:opacity-50 ${
                 isCurrent ? 'scale-105' : ''
               }`}
             >
               <span className={`text-[10px] font-medium transition-colors ${
                 isCurrent
-                  ? activeColors[value - 1]
+                  ? 'text-[var(--color-text-secondary)]'
                   : isActive
-                    ? 'text-[var(--color-text-secondary)]'
-                    : 'text-[var(--color-text-muted)]'
+                    ? 'text-[var(--color-text-muted)]'
+                    : 'text-[var(--color-text-disabled)]'
               }`}>
-                {item.label}
+                {info.label}
               </span>
               <div className={`w-1.5 h-1.5 rounded-full transition-colors ${
                 isCurrent
-                  ? activeBgColors[value - 1]
+                  ? 'bg-[var(--color-accent)]'
                   : isActive
-                    ? 'bg-[var(--color-bg-surface-elevated)]/50'
+                    ? 'bg-[var(--color-text-secondary)]'
                     : 'bg-[var(--color-bg-surface-elevated)]'
               }`} />
             </button>

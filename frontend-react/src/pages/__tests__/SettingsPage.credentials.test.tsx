@@ -2,7 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SettingsPage } from '../SettingsPage';
 
-vi.mock('../../i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+const t = (key: string) => ({
+  'apiKeys.add_key': 'Add Key',
+  'apiKeys.name_placeholder': 'Key name',
+  'apiKeys.save_key': 'Save Key',
+  'apiKeys.authApiKeys.create_key': 'Create Key',
+  'apiKeys.authApiKeys.create': 'Create',
+  'apiKeys.authApiKeys.revoke_key': 'Revoke key',
+  // The section switcher reads its labels from the locale bundle, so the mock
+  // has to answer with the same text the real zh-CN bundle does.
+  'settings.model_credentials': '模型凭据',
+  'settings.platform_tokens': '平台访问令牌',
+} as Record<string, string>)[key] ?? key;
+vi.mock('../../i18n', () => ({
+  useI18n: () => ({ t }),
+  useTranslation: () => ({ t }),
+}));
 
 const modelKey = {
   id: 'model-test', name: 'Temporary model', provider: 'openai',
@@ -88,7 +103,9 @@ describe('Settings credential entry points', () => {
     fireEvent.click(screen.getByRole('button', { name: /create key/i }));
     expect(screen.queryByRole('button', { name: /^admin$/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
-    expect(await screen.findByText('ae_temporary_created')).toBeInTheDocument();
+    expect(await screen.findByLabelText('新建令牌')).toHaveTextContent('ae_te***************');
+    fireEvent.click(screen.getByRole('button', { name: '显示令牌' }));
+    expect(screen.getByLabelText('新建令牌')).toHaveTextContent('ae_temporary_created');
     const create = fetchMock.mock.calls.find(([url, options]) => url === '/api/v1/auth/keys' && options?.method === 'POST');
     expect(JSON.parse(create![1]!.body as string)).toEqual({ name: '', scopes: ['read', 'write'], ttl_days: null });
     vi.spyOn(window, 'confirm').mockReturnValue(true);

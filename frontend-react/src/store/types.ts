@@ -1,5 +1,3 @@
-// ── Centralized Type Definitions ──
-
 export interface Message {
   id: string;
   type: 'user' | 'thinking' | 'tool-call' | 'tool-result' | 'reflection' | 'system';
@@ -35,22 +33,38 @@ export interface ToolCall {
   status?: 'running' | 'success' | 'error';
 }
 
+/**
+ * Session status vocabulary. The backend owns the values (`app/core/__init__.py`
+ * `SessionStatus` plus the `idle`/`pending` strings the sessions API stores);
+ * `unknown` is the only frontend-invented state and marks an unreported value.
+ */
+export type SessionStatus =
+  | 'pending'
+  | 'idle'
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'stopped'
+  | 'unknown';
+
 export interface Session {
   id: string;
   title: string;
-  status: 'idle' | 'running' | 'paused' | 'completed' | 'error';
+  status: SessionStatus;
   messages: Message[];
   activeSkills: string[];
   activeTools: string[];
-  modelConfig: {
-    provider: string;
-    modelId: string;
-    temperature: number;
-    maxTokens: number;
+  /** Absent until a payload reports it; never defaulted to a real-looking value. */
+  modelConfig?: {
+    provider?: string;
+    modelId?: string;
+    temperature?: number;
+    maxTokens?: number;
   };
-  tokenUsage: {
-    used: number;
-    limit: number;
+  tokenUsage?: {
+    used?: number;
+    limit?: number;
   };
   createdAt: number;
 }
@@ -69,7 +83,8 @@ export interface Snapshot {
 }
 
 export type RightPanelTab = 'config' | 'diff' | 'toolcalls' | 'dag' | 'trace' | 'reasoning' | 'files';
-export type PermissionMode = 'sandbox' | 'native';
+/** Mirrors `app/core/permission_rules.py:PermissionMode`, the backend vocabulary. */
+export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'auto' | 'bypass' | 'strict';
 export type Theme = 'dark' | 'light';
 
 export interface AuthUser {

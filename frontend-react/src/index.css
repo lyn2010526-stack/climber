@@ -1,58 +1,129 @@
 @import "tailwindcss";
 
+/* Bind Tailwind's `dark:` variant to the app's data-theme switch instead of
+   prefers-color-scheme, otherwise utilities like `dark:bg-gray-800` stay dark
+   when the user forces light mode. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Text that exists only for assistive technology.
+   `display: none` and `visibility: hidden` also remove an element from the
+   accessibility tree, so a label written that way leaves its control unnamed.
+   Clipping to a 1px box keeps the text reachable and announced. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 @theme {
-  /* Surface Layers (Premium Light/Dark) */
-  --color-bg-page: #0d0e11;
-  --color-bg-surface-1: #121318;
-  --color-bg-surface-2: #181a20;
-  --color-bg-surface-3: #202229;
-  --color-bg-surface-4: #292c34;
+  /* Surfaces — Codex CLI measured palette. `#20222E` page, `#262938` panel,
+     `#2A2D3E` message bubble, then two rungs above the bubble for hover and
+     pressed. Each step is small on purpose: this is a dense agent workbench,
+     not a landing page, so surface separation is carried by a few percent of
+     luminance rather than by elevation shadows. */
+  --color-bg-page: #20222E;
+  --color-bg-surface-1: #262938;
+  --color-bg-surface-2: #2A2D3E;
+  --color-bg-surface-3: #31354A;
+  --color-bg-surface-4: #3A3F57;
   --color-bg-base: var(--color-bg-page);
   --color-bg-surface: var(--color-bg-surface-1);
   --color-bg-surface-hover: var(--color-bg-surface-2);
   --color-bg-surface-elevated: var(--color-bg-surface-3);
 
-  /* Text Hierarchy */
-  --color-text-primary: #e7e8ec;
-  --color-text-secondary: #a8abb4;
-  --color-text-muted: #777b86;
-  --color-text-disabled: #4f525b;
-  --color-text-inverse: #11111b;
+  /* Text Hierarchy — Codex `#E9EBF0` / `#C9CCD6` / `#8A8FA3`, with `disabled`
+     one rung below `muted`. Anchoring each step separately is what keeps the
+     four greys visibly apart: a single 4.5:1 ceiling would collapse `muted`
+     and `disabled` into one tone. */
+  --color-text-primary: #E9EBF0;
+  --color-text-secondary: #C9CCD6;
+  --color-text-muted: #8A8FA3;
+  --color-text-disabled: #6C7182;
+  /* Dark in this theme, because the accent fill is light. Reversed labels
+     always ride the accent, never a surface. */
+  --color-text-inverse: #11151B;
 
-  /* Accent System — restrained slate blue, no glow */
-  --color-accent: #475569;
-  --color-accent-hover: #3B4A5C;
-  --color-accent-subtle: rgba(71, 85, 105, 0.10);
-  --color-accent-text: #FFFFFF;
-  --color-accent-foreground: #94A3B8;
+  /* Accent System — Codex teal `#5BC8D8`, three states, no glow
+     Three roles, and no single value can carry all three: a fill that is light
+     enough to reach 3:1 against the lightest surface cannot also be dark enough
+     for a 4.5:1 label on top of it.
+       - `accent` paints a shape: 3:1 against the adjacent surface.
+       - `accent-foreground` paints text, icons and links: 4.5:1 as text.
+       - `accent-text` is the label sitting on an accent fill, so it follows
+         the fill's polarity. This theme fills with a light accent, hence dark. */
+  --color-accent: #5BC8D8;
+  --color-accent-hover: #79D6E3;
+  --color-accent-active: #3FA9BA;
+  --color-accent-subtle: rgba(91, 200, 216, 0.14);
+  --color-accent-text: #0E1A1D;
+  --color-accent-foreground: #8FDCEC;
 
-  --color-accent-secondary: #6B7A8F;
+  --color-accent-secondary: var(--color-accent-foreground);
   --color-accent-muted: var(--color-accent-subtle);
 
-  /* Semantic Colors */
-  --color-success: #10B981;
-  --color-success-subtle: rgba(16, 185, 129, 0.08);
-  --color-warning: #F59E0B;
-  --color-warning-subtle: rgba(245, 158, 11, 0.08);
-  --color-error: #EF4444;
-  --color-error-subtle: rgba(239, 68, 68, 0.08);
-  --color-info: #3B82F6;
-  --color-info-subtle: rgba(59, 130, 246, 0.08);
+  /* Semantic Colors — Codex measured values, each readable as text at 4.5:1 or
+     better on every surface, which is also what lets each `*-subtle` wash stay
+     dense enough to see. */
+  --color-success: #7EC97E;
+  --color-success-subtle: rgba(126, 201, 126, 0.14);
+  --color-warning: #D9B26A;
+  --color-warning-subtle: rgba(217, 178, 106, 0.14);
+  --color-error: #E07A72;
+  --color-error-subtle: rgba(224, 122, 114, 0.14);
+  --color-info: #8FB8E8;
+  --color-info-subtle: rgba(143, 184, 232, 0.14);
+  /* `unknown` carries "the backend never reported this". It stays outside the
+     success/warning/error vocabulary so an unreported value can never be read
+     as a healthy one, and it stays lighter than `text-disabled` so a real
+     missing value never looks like an inactive control. */
+  --color-unknown: #8A8FA3;
+  --color-unknown-subtle: rgba(138, 143, 163, 0.14);
 
-  /* Borders */
-  --color-border-subtle: rgba(255, 255, 255, 0.06);
-  --color-border-default: rgba(255, 255, 255, 0.1);
-  --color-border-strong: rgba(255, 255, 255, 0.18);
-  --color-border-accent: rgba(71, 85, 105, 0.35);
+  /* Borders — Codex `#34374A` carries a control boundary; `subtle` drops to a
+     low-alpha wash so it separates without reading as an input outline.
+     `border-accent` is a solid accent so focus and selection stay visible. */
+  --color-border-subtle: rgba(233, 235, 240, 0.08);
+  --color-border-default: #34374A;
+  --color-border-strong: #4A4F66;
+  --color-border-accent: #5BC8D8;
 
   /* Glass Surfaces */
-  --color-glass-bg: rgba(10, 10, 15, 0.85);
-  --color-glass-border: rgba(255, 255, 255, 0.08);
-  --color-glass-highlight: rgba(255, 255, 255, 0.04);
+  --color-glass-bg: var(--color-bg-surface-1);
+  --color-glass-border: rgba(233, 235, 240, 0.18);
+  --color-glass-highlight: rgba(233, 235, 240, 0.04);
 
   /* Code Blocks */
-  --color-code-bg: #0D1117;
-  --color-code-border: rgba(255, 255, 255, 0.06);
+  --color-code-bg: #1B1E29;
+  --color-code-border: #3A3F57;
+
+  /* Syntax and diff roles — OpenCode's theme schema names these roles and
+     Codex supplies the values. The code surface and the diff surface are the
+     two places a reviewer reads a lot of small coloured text, so they get
+     their own tokens instead of borrowing the semantic ones. */
+  --color-syntax-comment: #6C7182;
+  --color-syntax-keyword: #7EC97E;
+  --color-syntax-function: #5BC8D8;
+  --color-syntax-string: #8FB8E8;
+  --color-syntax-number: #82A8E0;
+  --color-syntax-type: #B48EAD;
+  --color-syntax-operator: #C9CCD6;
+  --color-diff-added: #7EC97E;
+  --color-diff-removed: #E07A72;
+  --color-diff-hunk: #5BC8D8;
+  --color-diff-added-bg: rgba(126, 201, 126, 0.12);
+  --color-diff-removed-bg: rgba(224, 122, 114, 0.12);
+
+  /* Disabled fill — a recessed wash rather than a flat grey, so it reads as
+     pressed-in on every surface. 1.4.3 exempts inactive controls, so the wash
+     keeps its perceivable density and the label rides `--color-text-secondary`
+     instead of dropping to the disabled rung. */
+  --color-bg-disabled: rgba(0, 0, 0, 0.3);
 
   /* Typography */
   --font-sans: 'Inter Variable', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -61,11 +132,30 @@
   --page-gutter: clamp(16px, 3vw, 32px);
   --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.16);
   --mobile-nav-height: 64px;
+  /* Invariant: the content area always reserves at least the navigation strip
+     plus the home-indicator safe area, so the last row is never occluded.
+     `--mobile-nav-height` and `--mobile-nav-item-min-height` move together —
+     the strip cannot be shorter than the tap targets it holds. Both the
+     `.mobile-content` and the `.mobile-main` reserve read this one value, so
+     neither shell can drift behind the fixed navigation. */
+  --mobile-nav-item-min-height: 56px;
+  --mobile-nav-reserve: calc(var(--mobile-nav-height) + max(12px, env(safe-area-inset-bottom, 0px)));
+  --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
+  /* Pill is reserved for status and filter shapes. Containers keep a
+     structural radius so surfaces never read as marketing chips. */
+  --radius-pill: 999px;
   --control-height: 44px;
+  /* Shared density: retain existing control sizes and the shell's 44px target. */
+  --control-height-xs: 2rem;
+  --control-height-sm: 2.25rem;
+  --control-height-md: 2.5rem;
+  --control-height-lg: 2.75rem;
+  --control-gap-compact: 0.25rem;
+  --control-gap: 0.5rem;
 
   /* Z-Index System */
   --z-base: 0;
@@ -77,14 +167,13 @@
   --z-tooltip: 600;
 
   /* Shadow System — depth only, no glow */
-  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.4);
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.4);
-  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
-  --shadow-lg: 0 12px 28px -6px rgb(0 0 0 / 0.5), 0 4px 10px -4px rgb(0 0 0 / 0.4);
-  --shadow-xl: 0 24px 48px -12px rgb(0 0 0 / 0.6);
-  --shadow-elevated: 0 8px 32px rgb(0 0 0 / 0.4);
-
-  --gradient-surface: var(--color-bg-surface-1);
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.16);
+  --shadow-sm: 0 2px 4px rgb(0 0 0 / 0.18);
+  --shadow-md: 0 4px 12px -4px rgb(0 0 0 / 0.24);
+  --shadow-lg: 0 8px 20px -6px rgb(0 0 0 / 0.28);
+   --shadow-xl: 0 24px 48px -12px rgb(0 0 0 / 0.32);
+  --shadow-2xl: var(--shadow-xl);
+  --shadow-elevated: var(--shadow-md);
 
   /* Motion */
   --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
@@ -97,10 +186,11 @@
   --transition-slower: 500ms var(--ease-spring);
 
   /* Focus */
-  --focus-ring: 0 0 0 2px var(--color-bg-page), 0 0 0 4px var(--color-accent);
+  --focus-ring: 0 0 0 2px var(--color-bg-page), 0 0 0 4px var(--color-accent-foreground);
   --focus-ring-offset: 2px;
 
   /* Typography Scale */
+  --text-2xs: 0.6875rem;
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
   --text-base: 1rem;
@@ -151,27 +241,98 @@
   --content-max-width: 896px;
 }
 
-/* Light Mode */
+/* Legacy token aliases. Older ui/ components referenced unprefixed variables
+   (--text-primary, --surface-bg, --accent, ...). They were never defined, so
+   those declarations silently resolved to nothing. Map each onto the canonical
+   token; because the targets are re-declared under [data-theme="light"], the
+   aliases follow the active theme automatically. */
+:root {
+  color-scheme: dark;
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-muted: var(--color-text-muted);
+  --surface-bg: var(--color-bg-surface-1);
+  --surface-bg-hover: var(--color-bg-surface-2);
+  --surface-bg-subtle: var(--color-bg-surface-2);
+  --surface-elevated: var(--color-bg-surface-3);
+  --border-subtle: var(--color-border-subtle);
+  --border-default: var(--color-border-default);
+  --accent: var(--color-accent);
+  --accent-hover: var(--color-accent-hover);
+  --accent-subtle: var(--color-accent-subtle);
+  --font-size-xs: var(--text-xs);
+  --font-size-sm: var(--text-sm);
+  --font-size-lg: var(--text-lg);
+  --line-height-relaxed: var(--leading-relaxed);
+  --size-md: 2.25rem;
+  --color-danger: var(--color-error);
+  --color-danger-subtle: var(--color-error-subtle);
+}
+
+/* Light Mode
+   Same three-way accent split as the dark theme, mirrored: the fill is dark
+   here, so `accent-text` is the light label that rides on top of it. Surfaces
+   follow OpenCode's light steps (nord6 / nord5), and the Codex teal is pressed
+   down to `#1F7A8C` so it still clears 4.5:1 as text on `#FFFFFF`. */
 [data-theme="light"] {
-  --color-accent-foreground: #475569;
-  --color-bg-page: #F6F7F9;
+  color-scheme: light;
+  --color-text-inverse: #ffffff;
+  --color-accent: #1F7A8C;
+  --color-accent-hover: #18606E;
+  --color-accent-active: #134B57;
+  --color-accent-foreground: #12545F;
+  --color-accent-text: #FFFFFF;
+  --color-accent-subtle: rgba(31, 122, 140, 0.08);
+  --color-bg-page: #F4F5F7;
   --color-bg-surface-1: #FFFFFF;
-  --color-bg-surface-2: #F3F4F6;
-  --color-bg-surface-3: #E5E7EB;
-  --color-bg-surface-4: #D1D5DB;
-  --color-text-primary: #1F2937;
-  --color-text-secondary: #6B7280;
-  --color-text-muted: #707480;
-  --color-text-disabled: #D1D5DB;
-  --color-border-subtle: rgba(0, 0, 0, 0.06);
-  --color-border-default: rgba(0, 0, 0, 0.1);
-  --color-border-strong: rgba(0, 0, 0, 0.18);
-  --color-border-accent: rgba(71, 85, 105, 0.35);
-  --color-glass-bg: rgba(255, 255, 255, 0.86);
-  --color-glass-border: rgba(0, 0, 0, 0.1);
+  --color-bg-surface-2: #ECEFF4;
+  --color-bg-surface-3: #E2E6EE;
+  --color-bg-surface-4: #D5DBE6;
+  --color-text-primary: #2E3440;
+  --color-text-secondary: #3B4252;
+  --color-text-muted: #4C566A;
+  --color-text-disabled: #7B8496;
+  --color-success: #3F7A4E;
+  --color-success-subtle: rgba(63, 122, 78, 0.09);
+  --color-warning: #8A6520;
+  --color-warning-subtle: rgba(138, 101, 32, 0.09);
+  --color-error: #B3453D;
+  --color-error-subtle: rgba(179, 69, 61, 0.09);
+  --color-info: #3F6E9E;
+  --color-info-subtle: rgba(63, 110, 158, 0.09);
+  --color-unknown: #6B7484;
+  --color-unknown-subtle: rgba(107, 116, 132, 0.10);
+  --color-border-subtle: rgba(46, 52, 64, 0.10);
+  --color-border-default: #D5DBE6;
+  --color-border-strong: #AEB7C6;
+  --color-border-accent: #1F7A8C;
+  --color-glass-bg: var(--color-bg-surface-1);
+  --color-glass-border: rgba(46, 52, 64, 0.14);
   --color-glass-highlight: rgba(255, 255, 255, 0.8);
-  --color-code-bg: #1F2937;
-  --color-code-border: rgba(0, 0, 0, 0.12);
+  --color-code-bg: #2E3440;
+  --color-code-border: #D5DBE6;
+  /* Syntax and diff keep the same role split as the dark theme, pressed for a
+     light canvas. A code block is still a dark surface in light mode, so the
+     syntax values stay close to their dark-theme counterparts. */
+  --color-syntax-comment: #6B7484;
+  --color-syntax-keyword: #7EC97E;
+  --color-syntax-function: #8FDCEC;
+  --color-syntax-string: #8FB8E8;
+  --color-syntax-number: #82A8E0;
+  --color-syntax-type: #B48EAD;
+  --color-syntax-operator: #C9CCD6;
+  --color-diff-added: #7EC97E;
+  --color-diff-removed: #E07A72;
+  --color-diff-hunk: #5BC8D8;
+  --color-diff-added-bg: rgba(63, 122, 78, 0.14);
+  --color-diff-removed-bg: rgba(179, 69, 61, 0.14);
+  --color-bg-disabled: rgba(46, 52, 64, 0.10);
+  --shadow-panel: 0 1px 2px rgb(16 24 40 / 0.04);
+  --shadow-xs: 0 1px 2px rgb(16 24 40 / 0.04);
+  --shadow-sm: 0 2px 4px rgb(16 24 40 / 0.06);
+  --shadow-md: 0 4px 12px -4px rgb(16 24 40 / 0.1);
+  --shadow-lg: 0 8px 20px -6px rgb(16 24 40 / 0.12);
+  --shadow-xl: 0 16px 32px -8px rgb(16 24 40 / 0.16);
 }
 
 /* Smooth Theme Transitions */
@@ -186,7 +347,7 @@ a,
 .nav-menu,
 .card,
 .tool-call-card {
-  transition: all 280ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, color 180ms ease, opacity 180ms ease;
 }
 
 /* Mobile Touch Targets */
@@ -417,7 +578,8 @@ body {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   overflow: hidden;
-  font-size: 14px;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 html,
@@ -461,10 +623,10 @@ button:disabled,
 
 .workspace-eyebrow {
   color: var(--color-text-muted);
-  font-size: 10px;
+  font-size: var(--text-xs);
   font-weight: 600;
   line-height: 14px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -474,8 +636,8 @@ button:disabled,
   flex: 0 0 52px;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 0 20px;
+  gap: var(--space-4);
+  padding: 0 var(--space-5);
   border-bottom: 1px solid var(--color-border-subtle);
   background: var(--color-bg-surface-1);
 }
@@ -644,6 +806,7 @@ button:disabled,
   flex-direction: column;
   overflow: hidden;
   background: var(--color-bg-page);
+  overscroll-behavior: none;
 }
 
 .mobile-context-bar {
@@ -661,7 +824,8 @@ button:disabled,
   min-width: 0;
   flex: 1;
   overflow: hidden auto;
-  padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
+  padding-bottom: var(--mobile-nav-reserve);
+  overscroll-behavior: contain;
 }
 
 .mobile-bottom-nav {
@@ -673,6 +837,8 @@ button:disabled,
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   min-height: var(--mobile-nav-height);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: content-box;
   border-top: 1px solid var(--color-border-subtle);
   background: var(--color-bg-surface-1);
 }
@@ -680,7 +846,7 @@ button:disabled,
 .mobile-nav-item {
   display: flex;
   min-width: 0;
-  min-height: 56px;
+  min-height: var(--mobile-nav-item-min-height);
   align-items: center;
   justify-content: center;
   flex-direction: column;
@@ -688,6 +854,7 @@ button:disabled,
   color: var(--color-text-muted);
   font-size: 10px;
   font-weight: 500;
+  touch-action: manipulation;
 }
 
 .mobile-nav-item[aria-current="page"],
@@ -702,16 +869,27 @@ button:disabled,
   inset: 0;
   display: flex;
   align-items: flex-end;
+  overscroll-behavior: contain;
+}
+
+/* The dimming layer is a sibling of the sheet, not the sheet's background, so
+   a press anywhere on it lands outside the dialog and dismisses it. */
+.mobile-sheet-backdrop {
+  position: absolute;
+  inset: 0;
   background: rgb(0 0 0 / 0.58);
 }
 
 .mobile-nav-sheet {
+  position: relative;
   width: 100%;
   max-height: min(78dvh, 680px);
   overflow: hidden;
   border-radius: 16px 16px 0 0;
   border-top: 1px solid var(--color-border-default);
   background: var(--color-bg-surface-1);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  overscroll-behavior: contain;
 }
 
 .mobile-sheet-header {
@@ -736,13 +914,52 @@ button:disabled,
   display: grid;
   grid-template-columns: 24px minmax(0, 1fr) 16px;
   min-width: 0;
-  min-height: 48px;
+  min-height: 52px;
   align-items: center;
   gap: 8px;
   padding: 4px 8px;
   border-radius: var(--radius-md);
   color: var(--color-text-secondary);
   text-align: left;
+}
+
+.mobile-composer {
+  position: relative;
+  z-index: 45;
+  overscroll-behavior: contain;
+}
+
+.mobile-composer textarea {
+  -webkit-appearance: none;
+  border-radius: var(--radius-md);
+}
+
+.mobile-fallback {
+  display: flex;
+  min-height: 100%;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(24px, 8vh, 64px) 16px var(--mobile-nav-reserve);
+}
+
+.mobile-fallback-card {
+  width: min(100%, 420px);
+  padding: 24px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-xl);
+  background: var(--color-bg-surface-1);
+  box-shadow: var(--shadow-md);
+}
+
+.mobile-fallback-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  margin-bottom: 20px;
+  border-radius: 50%;
+  background: var(--color-accent-subtle);
+  color: var(--color-accent-foreground);
 }
 
 .mobile-more-grid button[aria-current="page"] {
@@ -753,28 +970,61 @@ button:disabled,
 /* Page Transition */
 .page-transition {
   animation: pageSlideIn 280ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* The entry animation makes this element a block formatting context, which
+     neutralises the flex-1 that gives the page its height. Declaring the flex
+     item explicitly keeps the page at full height during and after the fade. */
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* Mobile Layout */
 .mobile-main {
-  padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
+  padding-bottom: var(--mobile-nav-reserve);
 }
 
 /* Focus Ring */
 :focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--color-bg-page), 0 0 0 4px var(--color-accent);
+  outline: 2px solid var(--color-accent-foreground);
+  outline-offset: var(--focus-ring-offset);
+  box-shadow: var(--focus-ring);
   border-radius: 8px;
+}
+
+/* Shared control baseline keeps surface, type and focus behavior consistent. */
+button,
+input,
+select,
+textarea,
+[role="button"],
+[role="switch"],
+[role="tab"] {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[role="switch"]:focus-visible,
+[role="tab"]:focus-visible {
+  outline: 2px solid var(--color-accent-foreground);
+  outline-offset: 2px;
 }
 
 /* Code Block */
 .code-block {
   background: var(--color-code-bg);
+  /* Code surfaces stay dark in both themes, so pin the text color. Without this
+     it inherits dark `--color-text-primary` in light mode and renders
+     dark-on-dark. */
+  color: var(--color-syntax-string);
   border: 1px solid var(--color-code-border);
-  border-radius: 12px;
-  padding: 14px 18px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   line-height: 1.7;
   overflow-x: auto;
 }
@@ -783,10 +1033,8 @@ button:disabled,
 .tool-call-card {
   background: var(--color-bg-surface-1);
   border: 1px solid var(--color-border-subtle);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
   transition: border-color 200ms ease;
 }
 
@@ -803,44 +1051,11 @@ button:disabled,
   gap: 8px;
 }
 
-/* Dark Mode Shadows */
-[data-theme="dark"] .shadow-lg {
-  box-shadow: 0 12px 28px -6px rgb(0 0 0 / 0.5), 0 4px 12px -4px rgb(0 0 0 / 0.3);
-}
-
-[data-theme="dark"] .shadow-xl {
-  box-shadow: 0 24px 48px -12px rgb(0 0 0 / 0.6), 0 8px 16px -8px rgb(0 0 0 / 0.4);
-}
-
-[data-theme="dark"] .shadow-2xl {
-  box-shadow: 0 32px 64px -16px rgb(0 0 0 / 0.7), 0 16px 32px -16px rgb(0 0 0 / 0.5);
-}
-
-/* Light Mode Shadows */
-[data-theme="light"] .shadow-lg {
-  box-shadow: 0 12px 28px -6px rgb(0 0 0 / 0.1), 0 4px 12px -4px rgb(0 0 0 / 0.05);
-}
-
-[data-theme="light"] .shadow-xl {
-  box-shadow: 0 24px 48px -12px rgb(0 0 0 / 0.12), 0 8px 16px -8px rgb(0 0 0 / 0.06);
-}
-
-[data-theme="light"] .shadow-2xl {
-  box-shadow: 0 32px 64px -16px rgb(0 0 0 / 0.14), 0 16px 32px -16px rgb(0 0 0 / 0.08);
-}
-
 /* Elevated Surface */
 .surface-elevated {
   background: var(--color-bg-surface-1);
+  box-shadow: var(--shadow-elevated);
   transition: box-shadow 200ms ease;
-}
-
-[data-theme="dark"] .surface-elevated {
-  box-shadow: 0 12px 28px -6px rgb(0 0 0 / 0.4), 0 4px 12px -4px rgb(0 0 0 / 0.25);
-}
-
-[data-theme="light"] .surface-elevated {
-  box-shadow: 0 12px 28px -6px rgb(0 0 0 / 0.08), 0 4px 12px -4px rgb(0 0 0 / 0.04);
 }
 
 /* Hover Lift */
@@ -850,14 +1065,7 @@ button:disabled,
 
 .hover-lift:hover {
   border-color: var(--color-border-default);
-}
-
-[data-theme="dark"] .hover-lift:hover {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-[data-theme="light"] .hover-lift:hover {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-panel);
 }
 
 /* Message Enter */
@@ -892,20 +1100,15 @@ button:disabled,
   inset: 0;
   z-index: var(--z-modal, 400);
   background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   animation: fadeIn 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 [data-theme="light"] .modal-overlay {
   background: rgba(15, 23, 42, 0.5);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 .mobile-overlay {
   background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px);
   z-index: var(--z-overlay, 300);
 }
 
@@ -914,19 +1117,7 @@ button:disabled,
   background: var(--color-bg-surface-1);
   border: 1px solid var(--color-border-default);
   box-shadow: var(--shadow-xl);
-  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-[data-theme="dark"] .modal-content {
-  background: rgba(26, 26, 34, 0.95);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.6), 0 16px 32px rgba(0, 0, 0, 0.4);
-}
-
-[data-theme="light"] .modal-content {
-  background: rgba(255, 255, 255, 0.98);
-  border-color: rgba(0, 0, 0, 0.1);
-  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.14), 0 16px 32px rgba(0, 0, 0, 0.08);
+  transition: background-color var(--transition-base), border-color var(--transition-base);
 }
 
 .modal-enter {
@@ -956,15 +1147,7 @@ button:disabled,
 /* Glass Panel */
 .glass-panel {
   background: var(--color-glass-bg);
-  backdrop-filter: blur(24px) saturate(180%);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid var(--color-glass-border);
-  will-change: background, backdrop-filter;
-}
-
-[data-theme="light"] .glass-panel {
-  background: rgba(255, 255, 255, 0.86);
-  border-color: rgba(0, 0, 0, 0.1);
 }
 
 /* Apple Button */
@@ -978,7 +1161,7 @@ button:disabled,
 
 /* Subtle Shadow */
 .shadow-apple {
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 1px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-panel);
 }
 
 /* Selected state */
@@ -1046,11 +1229,21 @@ button:disabled,
   --color-text-primary: #FFFFFF;
   --color-text-secondary: #D1D5DB;
   --color-text-muted: #9CA3AF;
-  --color-border: rgba(255, 255, 255, 0.15);
-  --color-accent: #64748B;
-  --color-success: #10B981;
-  --color-error: #EF4444;
-  --color-warning: #F59E0B;
+  --color-bg-page: #000000;
+  --color-bg-surface-1: #111111;
+  --color-bg-surface-2: #222222;
+  --color-bg-surface-3: #282828;
+  --color-bg-surface-4: #303030;
+  --color-border-default: rgba(255, 255, 255, 0.72);
+  /* On a near-black page the accent has to darken, so the label rides the
+     polarity of the fill rather than the light-on-dark ramp. */
+  --color-accent: #475569;
+  --color-accent-text: #FFFFFF;
+  --color-accent-foreground: #CBD5E1;
+  --color-success: #6BC99A;
+  --color-error: #FF988F;
+  --color-warning: #E9B863;
+  --color-info: #8EB6ED;
 }
 
 /* Stagger Children */
@@ -1113,15 +1306,15 @@ button:disabled,
     display: none;
   }
 
-  .settings-layout main {
+  .settings-layout > section:last-child {
     min-height: 0;
   }
 
   .mobile-layout {
     display: flex;
     flex-direction: column;
-    height: 100dvh;
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
     position: fixed;
     inset: 0;
@@ -1175,6 +1368,24 @@ button:disabled,
   .page-transition-mobile {
     animation: pageSlideIn 280ms cubic-bezier(0.16, 1, 0.3, 1);
   }
+
+  .mobile-workspace-shell,
+  .mobile-content,
+  .mobile-composer,
+  .mobile-nav-sheet {
+    min-width: 0;
+  }
+
+  .mobile-content > *,
+  .mobile-content article,
+  .mobile-content section {
+    max-width: 100%;
+  }
+
+  .mobile-composer textarea {
+    min-height: 44px;
+    max-height: 30dvh;
+  }
 }
 
 @media (min-width: 768px) {
@@ -1200,8 +1411,37 @@ button:disabled,
   *::after {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+}
+
+/* Increased Contrast
+   The decorative separators are the first thing to lose their reason to exist
+   here, so every border rung is pushed up to the 3:1 non-text bar and the
+   disabled fill is darkened enough to read as a boundary. Text and fill
+   tokens are already at their ceiling, so they are left alone. */
+@media (prefers-contrast: more) {
+  :root {
+    --color-border-subtle: rgba(255, 255, 255, 0.55);
+    --color-border-default: rgba(255, 255, 255, 0.72);
+    --color-border-strong: rgba(255, 255, 255, 0.92);
+    --color-border-accent: rgba(198, 214, 236, 0.95);
+    --color-glass-border: rgba(255, 255, 255, 0.72);
+    --color-code-border: rgba(255, 255, 255, 0.92);
+    --color-bg-disabled: rgba(0, 0, 0, 0.5);
+  }
+
+  [data-theme="light"] {
+    --color-border-subtle: rgba(17, 24, 39, 0.55);
+    --color-border-default: rgba(17, 24, 39, 0.72);
+    --color-border-strong: rgba(17, 24, 39, 0.92);
+    --color-border-accent: rgba(58, 74, 94, 0.95);
+    --color-glass-border: rgba(17, 24, 39, 0.72);
+    --color-code-border: rgba(17, 24, 39, 0.92);
+    --color-bg-disabled: rgba(17, 24, 39, 0.24);
   }
 }
 
@@ -1217,10 +1457,10 @@ button:disabled,
 /* Chart Colors */
 .chart-primary { color: var(--color-accent); }
 .chart-secondary { color: var(--color-accent-secondary); }
-.chart-success { color: #10B981; }
-.chart-warning { color: #F59E0B; }
-.chart-error { color: #EF4444; }
-.chart-info { color: #3B82F6; }
+.chart-success { color: var(--color-success); }
+.chart-warning { color: var(--color-warning); }
+.chart-error { color: var(--color-error); }
+.chart-info { color: var(--color-info); }
 
 .chart-grid {
   stroke: rgba(255, 255, 255, 0.06);
@@ -1230,9 +1470,15 @@ button:disabled,
   stroke: rgba(0, 0, 0, 0.08);
 }
 
-/* Input Zoom Prevention */
-input, textarea {
-  font-size: 16px !important;
+/* Input Zoom Prevention — iOS zooms when a focused field renders below 16px.
+   Scoped to small viewports so desktop keeps each component's intended type
+   scale instead of every input/textarea being forced to 16px. */
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }
 
 /* Tap Highlight Removal */
@@ -1306,245 +1552,8 @@ select:-webkit-autofill:focus {
 
 @media (min-width: 1536px) {
   .chat-container {
-    max-width: 900px;
-    margin: 0 auto;
+    padding-inline: 3rem;
   }
-}
-@tailwind utilities;
-
-/* iOS-style Component Utilities */
-
-/* iOS List Group (Settings-style) */
-.ios-list-group {
-  background: var(--color-bg-surface-1);
-  border-radius: 12px;
-  overflow: hidden;
-  border: 0.5px solid var(--color-border-subtle);
-}
-
-.ios-list-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  min-height: 44px;
-  border-bottom: 0.5px solid var(--color-border-subtle);
-  transition: background-color 120ms ease;
-  cursor: pointer;
-}
-
-.ios-list-item:last-child {
-  border-bottom: none;
-}
-
-.ios-list-item:active {
-  background: var(--color-bg-surface-2);
-}
-
-.ios-list-item-icon {
-  width: 29px;
-  height: 29px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 12px;
-  flex-shrink: 0;
-}
-
-.ios-list-item-title {
-  font-size: 17px;
-  font-weight: 400;
-  color: var(--color-text-primary);
-  flex: 1;
-}
-
-.ios-list-item-detail {
-  font-size: 17px;
-  font-weight: 400;
-  color: var(--color-text-muted);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-/* iOS Segmented Control */
-.ios-segmented {
-  display: flex;
-  background: var(--color-bg-surface-2);
-  border-radius: 9px;
-  padding: 2px;
-  gap: 0;
-}
-
-.ios-segment {
-  flex: 1;
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  text-align: center;
-  border-radius: 7px;
-  color: var(--color-text-secondary);
-  transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.ios-segment.active {
-  background: var(--color-bg-surface-1);
-  color: var(--color-text-primary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-}
-
-/* iOS Switch */
-.ios-switch {
-  position: relative;
-  width: 51px;
-  height: 31px;
-  border-radius: 16px;
-  background: var(--color-bg-surface-3);
-  transition: background-color 200ms ease;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.ios-switch.on {
-  background: #34C759;
-}
-
-.ios-switch-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 27px;
-  height: 27px;
-  border-radius: 50%;
-  background: white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.ios-switch.on .ios-switch-knob {
-  transform: translateX(20px);
-}
-
-/* iOS Card */
-.ios-card {
-  background: var(--color-bg-surface-1);
-  border-radius: 12px;
-  border: 0.5px solid var(--color-border-subtle);
-  overflow: hidden;
-}
-
-.ios-card-elevated {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-/* iOS Navigation Bar */
-.ios-navbar {
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  background: var(--color-bg-surface-1);
-  border-bottom: 0.5px solid var(--color-border-subtle);
-}
-
-.ios-navbar-title {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  text-align: center;
-  flex: 1;
-}
-
-/* iOS Skeleton Shimmer */
-.ios-skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--color-bg-surface-2) 25%,
-    var(--color-bg-surface-3) 50%,
-    var(--color-bg-surface-2) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 6px;
-}
-
-/* iOS Ripple */
-.ios-ripple {
-  position: relative;
-  overflow: hidden;
-}
-
-.ios-ripple::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
-  transform: translate(-50%, -50%);
-  transition: width 400ms ease, height 400ms ease, opacity 400ms ease;
-  opacity: 0;
-}
-
-.ios-ripple:active::after {
-  width: 200px;
-  height: 200px;
-  opacity: 1;
-}
-
-/* iOS Spring Transition */
-.ios-spring {
-  transition: all 350ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-/* iOS Blur Modal Backdrop */
-.ios-backdrop {
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  background: rgba(0, 0, 0, 0.4);
-}
-
-/* iOS Pull-to-refresh indicator */
-.ios-pull-indicator {
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--color-border-default);
-  border-top-color: var(--color-accent);
-  border-radius: 50%;
-  animation: spin 700ms linear infinite;
-}
-
-/* iOS Typography Scale */
-.ios-title-1 { font-size: 28px; font-weight: 700; letter-spacing: 0.35px; }
-.ios-title-2 { font-size: 22px; font-weight: 700; letter-spacing: 0.35px; }
-.ios-title-3 { font-size: 20px; font-weight: 600; letter-spacing: 0.35px; }
-.ios-headline { font-size: 17px; font-weight: 600; letter-spacing: -0.41px; }
-.ios-body { font-size: 17px; font-weight: 400; letter-spacing: -0.41px; }
-.ios-subhead { font-size: 15px; font-weight: 400; letter-spacing: -0.24px; }
-.ios-caption { font-size: 13px; font-weight: 400; letter-spacing: -0.08px; }
-.ios-footnote { font-size: 12px; font-weight: 400; letter-spacing: 0; }
-
-/* iOS Empty State */
-.ios-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 48px 24px;
-  color: var(--color-text-muted);
-  gap: 12px;
-}
-
-.ios-empty-state p {
-  font-size: 15px;
-  font-weight: 400;
-  letter-spacing: -0.24px;
 }
 
 /* Line Clamp */
@@ -1553,6 +1562,76 @@ select:-webkit-autofill:focus {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Code syntax roles
+   Codex supplies the values, OpenCode supplies the role names. Every token
+   class resolves to a `--color-syntax-*` token so a reviewer reading a diff or
+   a stack trace sees the same seven hues everywhere, in both themes. */
+.code-block .token-comment,
+.code-block .token-comment,
+.hljs-comment {
+  color: var(--color-syntax-comment);
+  font-style: italic;
+}
+
+.code-block .token-keyword,
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal {
+  color: var(--color-syntax-keyword);
+}
+
+.code-block .token-function,
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: var(--color-syntax-function);
+}
+
+.code-block .token-string,
+.hljs-string,
+.hljs-regexp,
+.hljs-attr,
+.hljs-template-tag {
+  color: var(--color-syntax-string);
+}
+
+.code-block .token-number,
+.hljs-number {
+  color: var(--color-syntax-number);
+}
+
+.code-block .token-type,
+.hljs-type,
+.hljs-built_in,
+.hljs-class .hljs-title,
+.hljs-title.class_ {
+  color: var(--color-syntax-type);
+}
+
+.code-block .token-operator,
+.hljs-operator,
+.hljs-punctuation {
+  color: var(--color-syntax-operator);
+}
+
+/* Diff roles
+   A diff is the densest place a reviewer reads coloured text, so added and
+   removed each get a foreground and a wash instead of borrowing the semantic
+   success/error tokens, which are tuned for prose. */
+.diff-line-added {
+  color: var(--color-diff-added);
+  background-color: var(--color-diff-added-bg);
+}
+
+.diff-line-removed {
+  color: var(--color-diff-removed);
+  background-color: var(--color-diff-removed-bg);
+}
+
+.diff-hunk-header {
+  color: var(--color-diff-hunk);
 }
 
 @import './styles/rtl.css';

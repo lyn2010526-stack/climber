@@ -1,1 +1,0 @@
-export { MobileChatPage } from '../MobileChatPage';

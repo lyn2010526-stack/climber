@@ -26,11 +26,11 @@ describe('AdaptiveMobileLayout navigation', () => {
     expect(buttons.some((t) => t?.includes('Agents'))).toBe(true);
     expect(buttons.some((t) => t?.includes('Settings'))).toBe(true);
     expect(buttons.some((t) => t?.includes('Cluster'))).toBe(true);
+    expect(buttons.some((t) => t?.toLowerCase().includes('api key'))).toBe(true);
     expect(buttons.some((t) => t?.toLowerCase().includes('workflows'))).toBe(false);
     expect(buttons.some((t) => t?.toLowerCase().includes('traces'))).toBe(false);
     expect(buttons.some((t) => t?.toLowerCase().includes('terminal'))).toBe(false);
     expect(buttons.some((t) => t?.toLowerCase().includes('eval'))).toBe(false);
-    expect(buttons.some((t) => t?.toLowerCase().includes('api key'))).toBe(false);
   });
 
   it('navigates to an adapted page from the more sheet', () => {

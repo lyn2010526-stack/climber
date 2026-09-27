@@ -14,23 +14,29 @@ const RIGHT_PANEL_MAX = 460;
 
 export function WorkspaceLayout() {
   const { t } = useI18n();
-  const { rightPanelOpen, focusMode, toggleFocusMode } = useWorkspaceStore();
+  const { rightPanelOpen, focusMode, toggleFocusMode, toggleRightPanel } = useWorkspaceStore();
   const isWideDesktop = useIsWideDesktop();
 
   const showRightPanel = rightPanelOpen && isWideDesktop && !focusMode;
+  const showRightDrawer = rightPanelOpen && !isWideDesktop && !focusMode;
 
   useEffect(() => {
-    if (!focusMode) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       const target = event.target as HTMLElement | null;
       // Escape during text input belongs to the editor; only exit focus mode from neutral focus
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-      toggleFocusMode();
+      if (focusMode) toggleFocusMode();
+      else if (showRightDrawer) toggleRightPanel();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [focusMode, toggleFocusMode]);
+  }, [focusMode, showRightDrawer, toggleFocusMode, toggleRightPanel]);
+
+  useEffect(() => {
+    if (rightPanelOpen) return;
+    document.querySelector<HTMLButtonElement>('[data-testid="right-panel-toggle"]')?.focus();
+  }, [rightPanelOpen]);
 
   if (focusMode) {
     return (
@@ -54,7 +60,7 @@ export function WorkspaceLayout() {
       <div className="flex min-w-0 flex-1 overflow-hidden">
         <SessionSidebar />
         <div className="flex min-w-0 flex-1 overflow-hidden">
-          <Group orientation="horizontal">
+          <Group orientation="horizontal" className="min-w-0 flex-1">
             <Panel minSize={40}>
               <ChatPage />
             </Panel>
@@ -68,6 +74,17 @@ export function WorkspaceLayout() {
             )}
           </Group>
         </div>
+        {showRightDrawer && (
+          <div
+            className="relative z-20 flex h-full w-[min(360px,42%)] shrink-0 flex-col border-l border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] shadow-[-12px_0_28px_rgba(0,0,0,0.16)]"
+            data-testid="right-panel-drawer"
+            id="workspace-inspector"
+            role="dialog"
+            aria-label={t('right_panel.title')}
+          >
+            <RightPanel />
+          </div>
+        )}
       </div>
     </section>
   );

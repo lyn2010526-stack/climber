@@ -1,13 +1,25 @@
 # Contributing to Climber
 
+For security vulnerabilities, follow the private reporting process in [docs/SECURITY.md](docs/SECURITY.md).
+
 ## Development Setup
 
 ```bash
 git clone https://github.com/lyn2010526-stack/climber.git
-cd climber/agent-engine
+cd climber
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-pip install -r requirements-dev.txt  # if exists
+```
+
+Frontend checks run from `frontend-react`:
+
+```bash
+cd frontend-react
+npm install
+npm run typecheck
+npm run lint
+npm test
+npm run build
 ```
 
 ## Code Style
@@ -37,3 +49,5 @@ python3 -m pytest tests/ -v --tb=short
 - [ ] No hardcoded secrets
 - [ ] Error handling included
 - [ ] Documentation updated
+- [ ] `.env.example` updated when configuration changes
+- [ ] No secrets, user data, local databases or build artifacts included

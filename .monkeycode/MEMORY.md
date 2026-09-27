@@ -166,3 +166,21 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 前端任务契约以 `app/api/v1/routes/tasks.py` 为准（`task_id`/TaskSubmitRequest），`api.ts` 中 `/tasks/{id}/run|pause|resume` 是后端不存在的幻影端点，调用方应改接 submit/cancel/getStatus
   - docker-compose 启动需要环境变量 `POSTGRES_PASSWORD`（compose 用 `${POSTGRES_PASSWORD:?}`），不再提供明文默认凭证
   - 平台 Git 凭证助手（/app/agent/bin/agent git-credential-helper）会间歇性返回 500 导致 push 失败；git 提交需在仓库级先 `git config user.name/user.email`，否则容器内无法自动探测身份
+
+[用户指令摘要]
+- Date: 2026-09-26
+- Context: 多轮英文回复后用户纠正
+- Instructions:
+  - 与用户对话一律使用中文（含推理过程与工具调用标题）
+
+[用户指令摘要]
+- Date: 2026-09-26
+- Context: 用户分享前端 AI 开发方法论
+- Instructions:
+  - 前端开发先定视觉风格、主色调和设计约束，再开始编写页面代码。
+  - 项目选择一个与技术栈和版本匹配的成熟 UI 组件库，禁止混用多个组件库；风格调整优先通过组件库主题配置完成。
+  - 先确定目录归位规则和组件复用规则；同一展示形式出现至少两次时封装为复用组件。
+  - 配色、字号、间距、圆角、阴影统一沉淀为设计 token；页面样式优先读取 token，避免散落硬编码。
+  - 将设计规范与开发规则写成独立文档，并在 Agent 宪法中索引；每次开发前读取，完成后按文档自查。
+  - 使用截图或产品参考时学习布局、结构和设计思路，优先遵循项目既有 token 与组件规范，不直接照搬表面样式。
+  - 区分 Tag、Chip、Badge 的语义：Tag 用于分类属性，Chip 用于选择筛选交互，Badge 用于数量或状态提醒。

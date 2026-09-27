@@ -144,7 +144,6 @@ export interface Home {
   overview: string;
   recent_activity: string;
   quick_stats: string;
-  welcome_message: string;
   active_agents: string;
   running_sessions: string;
   total_projects: string;

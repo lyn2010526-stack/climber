@@ -1,20 +1,28 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Languages } from 'lucide-react';
 import { supportedLanguages, SupportedLanguageCode } from '../i18n/config';
+import { useI18n } from '../i18n';
 import { cn } from '../lib/utils';
 
 interface LanguageSwitcherProps {
   className?: string;
-  showFlag?: boolean;
+  showIcon?: boolean;
   compact?: boolean;
+  /**
+   * Icon-only rendering, for the 64px collapsed rail. The name, the caret and
+   * the language text all stop being visible there, so the current language
+   * moves into the accessible name instead of being lost with the pixels.
+   */
+  iconOnly?: boolean;
 }
 
-export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ 
+export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
   className,
-  showFlag = false,
-  compact = false 
+  showIcon = false,
+  compact = false,
+  iconOnly = false,
 }) => {
-  const { i18n, t } = useTranslation();
+  const { i18n, t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -43,72 +51,84 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
 
   return (
     <div ref={dropdownRef} className={cn('relative inline-block', className)}>
-      <button
+      <button type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          'flex items-center gap-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors',
-          compact ? 'px-2 py-1' : 'px-3 py-2'
+          'flex items-center rounded-lg bg-[var(--color-bg-surface-2)] hover:bg-[var(--color-bg-surface-3)] text-[var(--color-text-primary)] transition-colors',
+          iconOnly
+            ? 'h-11 w-11 min-h-11 min-w-11 justify-center'
+            : cn('gap-2', compact ? 'px-2 py-1' : 'px-3 py-2')
         )}
         aria-haspopup="true"
         aria-expanded={isOpen}
-        aria-label={t('user_menu.language_settings')}
+        title={t('user_menu.language_settings')}
+        aria-label={
+          iconOnly
+            ? `${t('user_menu.language_settings')}: ${currentLang.name}`
+            : t('user_menu.language_settings')
+        }
       >
-        {showFlag && (
-          <span className="text-base" role="img" aria-label={currentLang.name}>
-            {currentLang.flag}
-          </span>
+        {showIcon && <Languages size={compact || iconOnly ? 14 : 16} aria-hidden="true" />}
+        {!iconOnly && (
+          <>
+            <span className={cn('font-medium', compact ? 'text-xs' : 'text-sm')}>
+              {currentLang.name}
+            </span>
+            <svg
+              className={cn(
+                'transition-transform',
+                compact ? 'w-3 h-3' : 'w-4 h-4',
+                isOpen ? 'rotate-180' : ''
+              )}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </>
         )}
-        <span className={cn('font-medium', compact ? 'text-xs' : 'text-sm')}>
-          {currentLang.name}
-        </span>
-        <svg
-          className={cn(
-            'transition-transform',
-            compact ? 'w-3 h-3' : 'w-4 h-4',
-            isOpen ? 'rotate-180' : ''
-          )}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
       </button>
 
       {isOpen && (
         <div 
           className={cn(
-            'absolute mt-2 rounded-lg shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 z-50 overflow-hidden',
-            compact ? 'right-0 w-36' : 'right-0 w-48'
+            'absolute mt-2 rounded-lg shadow-lg bg-[var(--color-bg-surface-1)] border border-[var(--color-border-default)] z-50 overflow-hidden',
+            compact ? 'w-36' : 'w-48',
+            // In the collapsed rail the trigger sits against the right edge, so a
+            // right-anchored menu would run off the screen. Anchoring to the
+            // left edge keeps the whole list inside the viewport.
+            iconOnly ? 'left-0' : 'right-0'
           )}
         >
           <div className="py-1">
             <div className={cn(
-              'font-semibold text-gray-500 dark:text-gray-400 uppercase',
+              'font-semibold text-[var(--color-text-muted)] uppercase',
               compact ? 'px-3 py-1.5 text-[10px]' : 'px-4 py-2 text-xs'
             )}>
               {t('user_menu.language_settings')}
             </div>
             {supportedLanguages.map((lang) => (
-              <button
+              <button type="button"
                 key={lang.code}
                 onClick={() => handleLanguageChange(lang.code)}
                 className={cn(
                   'w-full text-left flex items-center justify-between transition-colors',
                   compact ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm',
-                  'hover:bg-gray-100 dark:hover:bg-gray-700',
+                  'hover:bg-[var(--color-bg-surface-2)]',
                   currentLang.code === lang.code 
-                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' 
-                    : 'text-gray-700 dark:text-gray-300'
+                    ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent-foreground)]' 
+                    : 'text-[var(--color-text-secondary)]'
                 )}
               >
                 <span className="flex items-center gap-2">
-                  {showFlag && <span>{lang.flag}</span>}
+                  {showIcon && <Languages size={compact ? 12 : 14} aria-hidden="true" />}
                   <span>{lang.name}</span>
                 </span>
                 {currentLang.code === lang.code && (

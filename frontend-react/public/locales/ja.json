@@ -175,7 +175,9 @@
     "this_week": "今週",
     "this_month": "今月",
     "last_7_days": "過去 7 日間",
-    "last_30_days": "過去 30 日間"
+    "last_30_days": "過去 30 日間",
+    "api_online": "APIリクエスト成功",
+    "api_offline": "APIに接続できません"
   },
   "chat": {
     "title": "チャットインターフェース",

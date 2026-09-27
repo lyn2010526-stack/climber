@@ -1,507 +1,405 @@
-import { useState, useEffect } from 'react';
-import {
-  Settings, GitBranch, Activity, FolderTree, ChevronDown, ChevronRight,
-  Zap, Brain, Sliders, Timer, Shield, FileDiff, Wrench,
-} from 'lucide-react';
+import { Component, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import { ChevronsDownUp, ChevronsUpDown, ChevronRight, X } from 'lucide-react';
 import { useWorkspaceStore } from '../../store/workspace';
+import type { Session } from '../../store/workspace';
+import type { RightPanelTab } from '../../store/types';
+import { useI18n } from '../../i18n';
 import { ReasoningPanel } from './ReasoningPanel';
-import { DiffPanel } from '../code/DiffPanel';
-import { ToolCallVisualization } from '../agent/ToolCallVisualization';
-import type { ToolCall } from '../agent/ToolCallVisualization';
-import { api } from '../../api';
+import { RunSummary } from './rightPanel/RunSummary';
+import {
+  RIGHT_PANEL_GROUPS,
+  TAB_TO_GROUP,
+  resolveGroupTab,
+  isGroupAvailable,
+  isSessionBound,
+  type RightPanelGroupDef,
+  type RightPanelSectionDef,
+} from './rightPanel/groupModel';
+import {
+  ActivitySection,
+  ConfigSection,
+  DagSection,
+  DiffSection,
+  FilesSection,
+  TraceSection,
+} from './rightPanel/lazySections';
+import { revealTab, useInspectorLayout } from './rightPanel/persistedState';
+import { PanelError, PanelLoading, type ReportCount } from './rightPanel/PanelState';
+import { cn } from '../../lib/utils';
 
+/**
+ * The inspector is an on-demand tool: at most one group is expanded, and a
+ * section mounts only while its group is open. Opening the panel therefore
+ * issues the one request its current tab needs, and nothing more. Each session
+ * keeps its own arrangement, and a section's code is fetched the same moment it
+ * is displayed.
+ */
 export function RightPanel() {
-  const { rightPanelTab, setRightPanelTab, rightPanelOpen, activeSessionId, sessions } = useWorkspaceStore();
+  const {
+    rightPanelTab,
+    rightPanelTabNonce,
+    setRightPanelTab,
+    rightPanelOpen,
+    activeSessionId,
+    sessions,
+  } = useWorkspaceStore();
+  const { t } = useI18n();
+
+  const activeGroupId = TAB_TO_GROUP[rightPanelTab];
+  const [counts, setCounts] = useState<Partial<Record<RightPanelTab, number | undefined>>>({});
+
+  const session = useMemo(
+    () => sessions.find((item) => item.id === activeSessionId),
+    [sessions, activeSessionId],
+  );
+  const hasSession = Boolean(session);
+
+  // Availability and open state are separate facts: `hasSession` decides which
+  // groups can be entered, the remembered layout decides which one is, and a
+  // layout left behind by a session without a run is pruned to what still works.
+  const [layout, commitLayout] = useInspectorLayout(activeSessionId, hasSession, activeGroupId);
+  const { openGroup, selected } = layout;
+
+  /**
+   * A tab asked for from outside the panel reveals its group exactly once.
+   *
+   * The request is recognised by its nonce and its value, so re-rendering,
+   * opening or closing the panel repeats nothing — a manual collapse stays
+   * collapsed — while a second request for the tab already in view still counts,
+   * because its nonce moved. A session switch is a context of its own and needs
+   * no request: each conversation is read from its own remembered layout.
+   * Writing the revealed tab straight back into shared state would leak it into
+   * the next conversation, so the arrival is recorded once and the layout is
+   * written only when a genuinely new request arrives.
+   */
+  const requestKey = `${rightPanelTabNonce}:${rightPanelTab}`;
+  const handledRequestRef = useRef(requestKey);
+  useEffect(() => {
+    if (handledRequestRef.current === requestKey) return;
+    handledRequestRef.current = requestKey;
+    commitLayout((previous) => revealTab(previous, rightPanelTab));
+  }, [requestKey, rightPanelTab, commitLayout]);
+
+  const isGroupOpen = (group: RightPanelGroupDef) =>
+    openGroup === group.id && isGroupAvailable(group, hasSession);
+
+  const activeSectionOf = (group: RightPanelGroupDef): RightPanelTab => {
+    const tab = group.id === activeGroupId ? rightPanelTab : selected[group.id] ?? group.defaultTab;
+    if (!session && group.sections.find((section) => section.tab === tab)?.requiresSession) {
+      return resolveGroupTab(group, false);
+    }
+    return tab;
+  };
+
+  const openGroupDef = RIGHT_PANEL_GROUPS.find((group) => group.id === openGroup);
+  const visibleTab = openGroupDef && isGroupOpen(openGroupDef) ? activeSectionOf(openGroupDef) : undefined;
+
+  // A heading number only ever describes the section in view. Collapsing a
+  // group or switching tabs retires the previous count instead of leaving a
+  // stale one behind.
+  useEffect(() => {
+    setCounts((previous) => {
+      const next: Partial<Record<RightPanelTab, number>> = {};
+      let changed = false;
+      for (const [tab, value] of Object.entries(previous) as Array<[RightPanelTab, number]>) {
+        if (tab === visibleTab) next[tab] = value;
+        else changed = true;
+      }
+      return changed ? next : previous;
+    });
+  }, [visibleTab]);
+
+  const reporters = useMemo(() => {
+    const map = {} as Record<RightPanelTab, ReportCount>;
+    for (const group of RIGHT_PANEL_GROUPS) {
+      for (const def of group.sections) {
+        const tab = def.tab;
+        // `undefined` means the section could not report a count (still
+        // loading, or the request failed), so the heading shows no tally
+        // instead of asserting an empty section.
+        map[tab] = (count: number | undefined) =>
+          setCounts((previous) => (previous[tab] === count ? previous : { ...previous, [tab]: count }));
+      }
+    }
+    return map;
+  }, []);
 
   if (!rightPanelOpen) return null;
 
-  const activeSession = sessions.find(s => s.id === activeSessionId);
+  const closePanel = () => useWorkspaceStore.getState().toggleRightPanel();
 
-  const tabs = [
-    { id: 'config' as const, icon: Settings, label: '配置' },
-    { id: 'diff' as const, icon: FileDiff, label: 'Diff' },
-    { id: 'toolcalls' as const, icon: Wrench, label: '工具' },
-    { id: 'dag' as const, icon: GitBranch, label: 'DAG' },
-    { id: 'trace' as const, icon: Activity, label: '链路' },
-    { id: 'reasoning' as const, icon: Brain, label: '推理' },
-    { id: 'files' as const, icon: FolderTree, label: '文件' },
-  ];
+  const toggleGroup = (group: RightPanelGroupDef) => {
+    if (openGroup === group.id) {
+      commitLayout((previous) => ({ ...previous, openGroup: null }));
+      return;
+    }
+    commitLayout((previous) => ({ ...previous, openGroup: group.id }));
+    setRightPanelTab(activeSectionOf(group));
+  };
+
+  const allCollapsed = openGroup === null;
+  const collapseLabel = t(allCollapsed ? 'right_panel.expand_all' : 'right_panel.collapse_all');
 
   return (
-    <div className="flex w-full min-w-0 flex-col border-l border-[var(--color-border-subtle)] bg-[var(--color-glass-bg)] shadow-sm shadow-[var(--color-border-subtle)] backdrop-blur-2xl">
-      <div className="flex border-b border-[var(--color-border-subtle)]">
-        {tabs.map(({ id, icon: Icon, label }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setRightPanelTab(id)}
-            role="tab"
-            aria-selected={rightPanelTab === id}
-            aria-label={`${label}面板`}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-all relative ${
-              rightPanelTab === id
-                ? 'text-[var(--color-text-primary)]'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
-            }`}
-          >
-            <Icon size={13} />
-            <span>{label}</span>
-            {rightPanelTab === id && (
-              <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-[var(--color-accent)] rounded-full" />
-            )}
-          </button>
-        ))}
-      </div>
+    <aside
+      className="flex h-full min-h-0 w-full min-w-0 flex-col border-l border-[var(--color-border-subtle)] bg-[var(--color-glass-bg)]"
+      aria-label={t('right_panel.title')}
+    >
+      <header className="flex items-center gap-1 border-b border-[var(--color-border-subtle)] px-3 py-1.5">
+        <h2 className="flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-text-secondary)]">
+          {t('right_panel.title')}
+        </h2>
+        <button
+          type="button"
+          onClick={closePanel}
+          aria-label="关闭检查器"
+          title="关闭检查器"
+          data-testid="right-panel-close"
+          className="flex h-6 w-6 items-center justify-center rounded-[var(--radius-sm)] text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-secondary)]"
+        >
+          <X size={13} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          onClick={() => commitLayout((previous) => ({ ...previous, openGroup: allCollapsed ? activeGroupId : null }))}
+          title={collapseLabel}
+          aria-label={collapseLabel}
+          className="flex h-6 w-6 items-center justify-center rounded-[var(--radius-sm)] text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-secondary)]"
+        >
+          {allCollapsed ? <ChevronsUpDown size={13} aria-hidden="true" /> : <ChevronsDownUp size={13} aria-hidden="true" />}
+        </button>
+      </header>
 
-      <div className="flex-1 overflow-y-auto p-3">
-        {rightPanelTab === 'config' && <ConfigPanel session={activeSession} />}
-        {rightPanelTab === 'diff' && <DiffPanelTab sessionId={activeSessionId} />}
-        {rightPanelTab === 'toolcalls' && <ToolCallsTab sessionId={activeSessionId} />}
-        {rightPanelTab === 'dag' && <DAGPanel />}
-        {rightPanelTab === 'trace' && <TracePanel />}
-        {rightPanelTab === 'reasoning' && <ReasoningPanel />}
-        {rightPanelTab === 'files' && <FilesPanel />}
+      <RunSummary session={session} />
+
+      <div className="flex-1 overflow-y-auto p-1.5">
+        {RIGHT_PANEL_GROUPS.map((group) => {
+          const available = isGroupAvailable(group, hasSession);
+          const open = isGroupOpen(group);
+          const activeTab = activeSectionOf(group);
+          // The third gate on the section: only the entry the open group
+          // actually shows is mounted, so a section nobody is looking at issues
+          // no request and downloads no chunk.
+          const activeDef = group.sections.find((def) => def.tab === activeTab);
+          const count = open ? counts[activeTab] : undefined;
+          const GroupIcon = group.icon;
+          return (
+            <section key={group.id} className="mb-1 last:mb-0">
+              <h3>
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group)}
+                  aria-expanded={open}
+                  aria-controls={`inspector-${group.id}`}
+                  id={`inspector-heading-${group.id}`}
+                  disabled={!available}
+                  title={!available ? t('right_panel.summary.no_session_hint') : undefined}
+                  className="flex w-full items-center gap-1.5 rounded-[var(--radius-md)] px-1.5 py-1.5 text-left transition-colors hover:bg-[var(--color-bg-surface-2)] disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  <GroupIcon size={12} className="shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />
+                  <span className="flex-1 truncate text-xs font-medium text-[var(--color-text-primary)]">
+                    {t(group.labelKey)}
+                  </span>
+                  {/* Decorative tally for the entries read in the body below. */}
+                  {count !== undefined && count > 0 && (
+                    <span
+                      aria-hidden="true"
+                      className="shrink-0 font-mono text-[10px] tabular-nums text-[var(--color-text-muted)]"
+                    >
+                      {count}
+                    </span>
+                  )}
+                  <ChevronRight
+                    size={12}
+                    className={cn(
+                      'shrink-0 text-[var(--color-text-muted)] transition-transform duration-150',
+                      open && 'rotate-90',
+                    )}
+                    aria-hidden="true"
+                  />
+                </button>
+              </h3>
+
+              {open && (
+                <div id={`inspector-${group.id}`} className="pl-1">
+                  {group.sections.length > 1 && (
+                    <div
+                      role="tablist"
+                      aria-label={t(group.labelKey)}
+                      className="mb-1.5 flex gap-1 border-b border-[var(--color-border-subtle)]"
+                    >
+                      {group.sections.map((def) => (
+                        <SubTab
+                          key={def.tab}
+                          def={def}
+                          hasSession={hasSession}
+                          selected={activeTab === def.tab}
+                          onSelect={() => {
+                            commitLayout((previous) => ({
+                              ...previous,
+                              selected: { ...previous.selected, [group.id]: def.tab },
+                            }));
+                            setRightPanelTab(def.tab);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  <div
+                    role="tabpanel"
+                    id={`inspector-panel-${activeTab}`}
+                    aria-labelledby={
+                      group.sections.length > 1
+                        ? `inspector-tab-${activeTab}`
+                        : `inspector-heading-${group.id}`
+                    }
+                    className="px-1 pb-1.5"
+                  >
+                    {activeDef && (
+                      <SectionBody
+                        // Session-independent sections keep their loaded data
+                        // across a session switch instead of refetching.
+                        key={
+                          isSessionBound(activeDef) === true
+                            ? `${activeTab}-${activeSessionId}`
+                            : activeTab
+                        }
+                        def={activeDef}
+                        tab={activeTab}
+                        session={session}
+                        sessionId={activeSessionId}
+                        onCount={reporters[activeTab]}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+            </section>
+          );
+        })}
       </div>
-    </div>
+    </aside>
   );
 }
 
-function ConfigPanel({ session }: { session: any }) {
-  const provider = session?.modelConfig?.provider || '—';
-  const modelId = session?.modelConfig?.modelId || '—';
-  const temperature = session?.modelConfig?.temperature ?? 0.7;
-
+function SubTab({
+  def,
+  hasSession,
+  selected,
+  onSelect,
+}: {
+  def: RightPanelSectionDef;
+  hasSession: boolean;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const { t } = useI18n();
+  const SectionIcon = def.icon;
   return (
-    <div className="space-y-3">
-      <Section title="模型配置" icon={Sliders}>
-        <div className="space-y-2.5">
-          <div className="flex justify-between text-xs">
-            <span className="text-[var(--color-text-muted)]">提供商</span>
-            <span className="text-[var(--color-text-secondary)] font-medium">{provider}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-[var(--color-text-muted)]">模型</span>
-            <span className="text-[var(--color-text-secondary)] font-medium">{modelId}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-[var(--color-text-muted)]">温度</span>
-            <span className="text-[var(--color-text-secondary)] font-medium">{temperature}</span>
-          </div>
-        </div>
-      </Section>
-
-      <Section title="已启用技能" icon={Brain}>
-        <div className="flex flex-wrap gap-1.5">
-          {(session?.activeSkills && session.activeSkills.length > 0)
-            ? session.activeSkills.map((skill: string) => (
-              <span key={skill} className="px-2.5 py-1 bg-[var(--color-accent-subtle)] text-[var(--color-accent-secondary)] rounded-xl text-xs font-medium">
-                {skill}
-              </span>
-            ))
-            : <span className="text-xs text-[var(--color-text-muted)]">暂无启用技能</span>
-          }
-        </div>
-      </Section>
-
-      <Section title="已启用工具" icon={Zap}>
-        <div className="flex flex-wrap gap-1.5">
-          {(session?.activeTools && session.activeTools.length > 0)
-            ? session.activeTools.map((tool: string) => (
-              <span key={tool} className="px-2.5 py-1 bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)] rounded-xl text-xs font-medium border border-[var(--color-border-subtle)]">
-                {tool}
-              </span>
-            ))
-            : <span className="text-xs text-[var(--color-text-muted)]">暂无启用工具</span>
-          }
-        </div>
-      </Section>
-
-      <Section title="Token 用量" icon={Timer}>
-        <div className="space-y-2.5">
-          <div className="flex justify-between text-xs">
-            <span className="text-[var(--color-text-muted)]">已用</span>
-            <span className="text-[var(--color-text-secondary)] font-medium">{session?.tokenUsage?.used || 0} / {session?.tokenUsage?.limit || 128000}</span>
-          </div>
-          <div className="w-full h-1.5 bg-[var(--color-bg-surface-3)] rounded-full overflow-hidden">
-            <div
-              className="h-full bg-[var(--color-accent)] rounded-full transition-all"
-              style={{ width: `${Math.min(((session?.tokenUsage?.used || 0) / (session?.tokenUsage?.limit || 128000)) * 100, 100)}%` }}
-            />
-          </div>
-        </div>
-      </Section>
-
-      <Section title="安全设置" icon={Shield}>
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[var(--color-text-secondary)]">沙箱模式</span>
-            <span className="text-xs text-[var(--color-success)] font-medium">运行中</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[var(--color-text-secondary)]">会话状态</span>
-            <span className="text-xs text-[var(--color-text-muted)]">{session?.status || '空闲'}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[var(--color-text-secondary)]">文件隔离</span>
-            <span className="text-xs text-[var(--color-success)] font-medium">仅项目内</span>
-          </div>
-        </div>
-      </Section>
-    </div>
+    <button
+      type="button"
+      role="tab"
+      aria-selected={selected}
+      id={`inspector-tab-${def.tab}`}
+      aria-controls={selected ? `inspector-panel-${def.tab}` : undefined}
+      disabled={def.requiresSession && !hasSession}
+      onClick={onSelect}
+      className={cn(
+        'flex min-h-[28px] flex-1 items-center justify-center gap-1 border-b-2 px-1.5 pb-1 pt-0.5 text-[11px] transition-colors',
+        selected
+          ? 'border-[var(--color-text-secondary)] font-medium text-[var(--color-text-primary)]'
+          : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]',
+      )}
+    >
+      <SectionIcon size={11} aria-hidden="true" />
+      <span className="truncate">{t(def.labelKey)}</span>
+    </button>
   );
 }
 
-function DAGPanel() {
-  const [nodes, setNodes] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const fetchStatus = async () => {
-      setLoading(true);
-      try {
-        const data = await api.getClusterStatus();
-          if (data.plan) {
-            setNodes(data.plan.map((p: any) => ({
-              id: p.id || String(Math.random()),
-              label: p.description || p.task || 'Unknown',
-              status: p.status || 'pending',
-            })));
-          }
-      } catch { /* skip */ }
-      setLoading(false);
-    };
-    fetchStatus();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="space-y-3">
-        <p className="text-xs text-[var(--color-text-muted)]">正在加载工作流状态...</p>
-        <div className="space-y-2">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="flex items-center gap-2 animate-pulse">
-              <div className="w-3 h-3 rounded-full bg-[var(--color-bg-surface-3)]" />
-              <div className="h-3 w-32 bg-[var(--color-bg-surface-2)] rounded-xl" />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (nodes.length === 0) {
-    return (
-      <div className="space-y-3">
-        <p className="text-xs text-[var(--color-text-muted)]">任务依赖图</p>
-        <div className="text-center py-8">
-          <GitBranch size={24} className="mx-auto text-[var(--color-text-muted)]" />
-           <p className="text-xs text-[var(--color-text-muted)] mt-2">暂无活跃工作流</p>
-          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">Create a cluster to see the DAG</p>
-        </div>
-      </div>
-    );
-  }
-
+/**
+ * Three gates stand between a group heading and its section: the group must be
+ * available, it must be the open one, and the section must be the entry in
+ * view. What is left is a chunk request, and the placeholder that covers it
+ * stands exactly as many rows as the content it replaces, so the panel holds
+ * its height while the code arrives.
+ */
+function SectionBody({
+  def,
+  tab,
+  session,
+  sessionId,
+  onCount,
+}: {
+  def: RightPanelSectionDef;
+  tab: RightPanelTab;
+  session: Session | undefined;
+  sessionId: string | null;
+  onCount: ReportCount;
+}) {
+  const [retryKey, setRetryKey] = useState(0);
   return (
-    <div className="space-y-3">
-       <p className="text-xs text-[var(--color-text-muted)]">任务依赖图 — 根据需求自动规划</p>
-      <div className="space-y-1">
-        {nodes.map((node, i) => (
-          <div key={node.id} className="flex items-center gap-2">
-            <div className="flex flex-col items-center">
-              <div className={`w-3 h-3 rounded-full border-2 ${
-                node.status === 'completed' ? 'bg-[var(--color-success)] border-[var(--color-success)]' :
-                node.status === 'running' ? 'bg-[var(--color-accent)] border-[var(--color-accent)] animate-pulse' :
-                'border-[var(--color-border-subtle)]'
-              }`} />
-              {i < nodes.length - 1 && <div className="w-0.5 h-4 bg-[var(--color-border-subtle)]" />}
-            </div>
-            <span className={`text-xs ${
-              node.status === 'completed' ? 'text-[var(--color-success)]' :
-              node.status === 'running' ? 'text-[var(--color-accent)] font-medium' :
-              'text-[var(--color-text-muted)]'
-            }`}>
-              {node.label}
-            </span>
+    <LazySectionBoundary key={retryKey} onRetry={() => setRetryKey((value) => value + 1)}>
+      <Suspense
+        fallback={
+          <div data-testid="inspector-section-fallback">
+            <PanelLoading rows={def.skeletonRows} />
           </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function TracePanel() {
-  const [traces, setTraces] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const fetchTraces = async () => {
-      setLoading(true);
-      try {
-        const data = await api.listTraces();
-          setTraces(data.traces || data || []);
-      } catch { /* skip */ }
-      setLoading(false);
-    };
-    fetchTraces();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="space-y-2">
-         <p className="text-xs text-[var(--color-text-muted)]">加载追踪中...</p>
-        <div className="space-y-1.5">
-          {[1, 2].map(i => (
-            <div key={i} className="p-2 bg-[var(--color-bg-surface-2)] rounded-xl animate-pulse">
-              <div className="h-3 w-24 bg-[var(--color-bg-surface-3)] rounded-xl" />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (traces.length === 0) {
-    return (
-      <div className="space-y-2">
-         <p className="text-xs text-[var(--color-text-muted)]">完整执行追踪</p>
-        <div className="text-center py-8">
-          <Activity size={24} className="mx-auto text-[var(--color-text-muted)]" />
-           <p className="text-xs text-[var(--color-text-muted)] mt-2">暂无追踪数据</p>
-           <p className="text-[10px] text-[var(--color-text-muted)] mt-1">运行一次会话即可查看执行追踪</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-       <p className="text-xs text-[var(--color-text-muted)]">完整执行追踪 — 包含每次 LLM 调用和工具调用</p>
-      <div className="space-y-1.5">
-        {traces.map(t => (
-          <div key={t.id} className="p-2 bg-[var(--color-bg-surface-2)] rounded-xl">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className={`px-1.5 py-0.5 rounded-xl text-[10px] font-medium ${
-                  t.type === 'LLM' ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent)]' : 'bg-[var(--color-success-subtle)] text-[var(--color-success)]'
-                }`}>
-                  {t.type}
-                </span>
-                <span className="text-xs text-[var(--color-text-secondary)]">{t.label || t.name || 'Unknown'}</span>
-              </div>
-              <span className="text-[10px] text-[var(--color-text-muted)]">{t.time || ''}</span>
-            </div>
-            <div className="flex gap-3 mt-1 text-[10px] text-[var(--color-text-muted)]">
-              <span>{t.duration || 0}ms</span>
-               {(t.tokens || 0) > 0 && <span>{t.tokens} 令牌</span>}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function FilesPanel() {
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    const fetchDocuments = async () => {
-      setLoading(true);
-      try {
-        const data = await api.listDocuments();
-          setDocuments(data || []);
-      } catch { /* skip */ }
-      setLoading(false);
-    };
-    fetchDocuments();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="space-y-2">
-         <p className="text-xs text-[var(--color-text-muted)]">加载文档中...</p>
-        <div className="space-y-1">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-6 bg-[var(--color-bg-surface-2)] rounded-xl animate-pulse" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (documents.length === 0) {
-    return (
-      <div className="space-y-2">
-         <p className="text-xs text-[var(--color-text-muted)]">项目文件浏览器</p>
-        <div className="text-center py-8">
-          <FolderTree size={24} className="mx-auto text-[var(--color-text-muted)]" />
-           <p className="text-xs text-[var(--color-text-muted)] mt-2">暂无上传文档</p>
-          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">Upload documents to use with RAG</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-       <p className="text-xs text-[var(--color-text-muted)]">已上传文档 ({documents.length})</p>
-      <div className="bg-[var(--color-bg-surface-2)] rounded-2xl p-1.5 space-y-0.5 border border-[var(--color-border-subtle)]">
-        {documents.map(doc => (
-          <div key={doc.id} className="flex items-center gap-2 py-1.5 px-2 rounded-xl hover:bg-[var(--color-bg-surface-3)] text-xs text-[var(--color-text-secondary)] transition-colors">
-            <FolderTree size={12} className="text-[var(--color-text-muted)]" />
-            <span className="truncate flex-1">{doc.filename || doc.name}</span>
-            {doc.chunks && <span className="text-[10px] text-[var(--color-text-muted)]">{doc.chunks} chunks</span>}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DiffPanelTab({ sessionId }: { sessionId: string | null }) {
-  const [diffText, setDiffText] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!sessionId) return;
-    setLoading(true);
-    api.getSessionMessages(sessionId).then((messages) => {
-      const toolResults = messages.filter(m => m.role === 'tool');
-      const diffMessages = toolResults.filter((m: any) =>
-        m.content && typeof m.content === 'string' && m.content.includes('diff --git')
-      );
-      if (diffMessages.length > 0) {
-        const latestDiff = diffMessages[diffMessages.length - 1];
-        setDiffText(latestDiff?.content ?? '');
-      }
-    }).catch(() => {})
-    .finally(() => setLoading(false));
-  }, [sessionId]);
-
-  if (loading) {
-    return (
-      <div className="space-y-2">
-        <p className="text-xs text-[var(--color-text-muted)]">加载变更中...</p>
-        <div className="space-y-1.5">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-6 bg-[var(--color-bg-surface-2)] rounded-xl animate-pulse" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (!diffText) {
-    return (
-      <div className="space-y-2">
-        <p className="text-xs text-[var(--color-text-muted)]">文件变更视图</p>
-        <div className="text-center py-8">
-          <FileDiff size={24} className="mx-auto text-[var(--color-text-muted)]" />
-          <p className="text-xs text-[var(--color-text-muted)] mt-2">暂无文件变更</p>
-          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">执行文件操作后在此查看 diff</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-[var(--color-text-muted)]">文件变更 — 最新 diff</p>
-      <DiffPanel diffText={diffText} />
-    </div>
-  );
-}
-
-function ToolCallsTab({ sessionId }: { sessionId: string | null }) {
-  const [toolCalls, setToolCalls] = useState<ToolCall[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!sessionId) return;
-    setLoading(true);
-    api.getSessionMessages(sessionId).then((messages) => {
-      const results = new Map(
-        messages
-          .filter(message => message.role === 'tool' && message.tool_call_id)
-          .map(message => [message.tool_call_id, message])
-      );
-      const calls: ToolCall[] = messages.flatMap(message =>
-        message.tool_calls.map((call, idx) => {
-          const result = results.get(call.id);
-          const rawArguments = call.function?.arguments ?? call.arguments ?? {};
-          let args: Record<string, unknown> = {};
-          try {
-            args = typeof rawArguments === 'string' ? JSON.parse(rawArguments || '{}') : rawArguments;
-          } catch { /* keep malformed model arguments empty */ }
-          return {
-            id: call.id || `${message.id}-${idx}`,
-            name: call.function?.name || call.name || 'unknown',
-            arguments: args,
-            result: result?.content || undefined,
-            status: result ? 'success' : 'running',
-            startTime: message.created_at,
-          };
-        })
-      );
-      setToolCalls(calls);
-    }).catch(() => {})
-      .finally(() => setLoading(false));
-  }, [sessionId]);
-
-  if (loading) {
-    return (
-      <div className="space-y-2">
-        <p className="text-xs text-[var(--color-text-muted)]">加载工具调用中...</p>
-        <div className="space-y-1.5">
-          {[1, 2].map(i => (
-            <div key={i} className="p-2 bg-[var(--color-bg-surface-2)] rounded-xl animate-pulse">
-              <div className="h-3 w-24 bg-[var(--color-bg-surface-3)] rounded-xl" />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (toolCalls.length === 0) {
-    return (
-      <div className="space-y-2">
-        <p className="text-xs text-[var(--color-text-muted)]">工具调用记录</p>
-        <div className="text-center py-8">
-          <Wrench size={24} className="mx-auto text-[var(--color-text-muted)]" />
-          <p className="text-xs text-[var(--color-text-muted)] mt-2">暂无工具调用</p>
-          <p className="text-[10px] text-[var(--color-text-muted)] mt-1">智能体执行工具后在此查看</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-[var(--color-text-muted)]">工具调用 — 展开查看详情</p>
-      <ToolCallVisualization calls={toolCalls} defaultExpanded={false} />
-    </div>
-  );
-}
-
-function Section({ title, icon: Icon, children }: { title: string; icon: any; children: React.ReactNode }) {
-  const [expanded, setExpanded] = useState(true);
-
-  return (
-    <div className="bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl overflow-hidden backdrop-blur-sm">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-colors"
+        }
       >
-        <div className="p-1 rounded-lg bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
-          <Icon size={11} />
-        </div>
-        <span className="flex-1 text-left">{title}</span>
-        {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-      </button>
-      {expanded && <div className="px-3 pb-3">{children}</div>}
-    </div>
+        {sectionContent({ tab, session, sessionId, onCount })}
+      </Suspense>
+    </LazySectionBoundary>
   );
+}
+
+class LazySectionBoundary extends Component<
+  { children: ReactNode; onRetry: () => void },
+  { failed: boolean }
+> {
+  override state = { failed: false };
+
+  override componentDidCatch() {
+    this.setState({ failed: true });
+  }
+
+  override render() {
+    if (this.state.failed) return <PanelError onRetry={this.props.onRetry} />;
+    return this.props.children;
+  }
+}
+
+function sectionContent({
+  tab,
+  session,
+  sessionId,
+  onCount,
+}: {
+  tab: RightPanelTab;
+  session: Session | undefined;
+  sessionId: string | null;
+  onCount: ReportCount;
+}) {
+  switch (tab) {
+    case 'config':
+      // Model and token figures live here and nowhere else in the panel.
+      return <ConfigSection session={session} />;
+    case 'dag':
+      return <DagSection onCount={onCount} />;
+    case 'trace':
+      return <TraceSection onCount={onCount} />;
+    case 'reasoning':
+      return <ReasoningPanel />;
+    case 'diff':
+      return <DiffSection sessionId={sessionId} />;
+    case 'files':
+      // The localised title already carries the document count.
+      return <FilesSection />;
+    case 'toolcalls':
+      return <ActivitySection sessionId={sessionId} onCount={onCount} />;
+    default:
+      return null;
+  }
 }

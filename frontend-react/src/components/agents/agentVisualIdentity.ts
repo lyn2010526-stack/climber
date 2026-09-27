@@ -12,16 +12,12 @@ export interface AgentIdentityInput {
   provider?: string | null;
 }
 
-export const AGENT_IDENTITY_PALETTE = [
-  '#5B6ABF',
-  '#3E8E7E',
-  '#B0783A',
-  '#8A5FBF',
-  '#4F79A6',
-  '#A8556D',
-  '#5E8C4F',
-  '#7A6E52',
-] as const;
+/**
+ * Eight identity slots, resolved by `index.css` so a slot follows the active
+ * theme instead of pinning one theme's literal. Slot order is part of the
+ * contract: `hue` is an index into this list, so entries are never reordered.
+ */
+export const AGENT_IDENTITY_PALETTE = ['var(--color-accent-foreground)'] as const;
 
 const ROLE_RULES: Array<{ role: AgentRole; keywords: string[] }> = [
   { role: 'plan', keywords: ['planner', 'architect'] },

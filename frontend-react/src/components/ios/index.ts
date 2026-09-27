@@ -1,1 +1,1 @@
-export { IOsToaster, toast, IOSSkeleton, IOSSkeletonGroup } from './IOSToast';
+export { IOsToaster, toast } from './IOSToast';

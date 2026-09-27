@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { useWorkspaceStore } from '../store/workspace';
+import { normalizeSessionStatus, useWorkspaceStore } from '../store/workspace';
 
 export function useDefaultSession(): { sessionId: string | null; creationError: string | null } {
   const { activeSessionId, sessions, createSessionLocal } = useWorkspaceStore();
@@ -11,15 +11,15 @@ export function useDefaultSession(): { sessionId: string | null; creationError: 
     let cancelled = false;
     api.createSession({ title: '新对话' }).then((created) => {
       if (cancelled || !created?.id) return;
+      // The status is whatever the create response reported, and the runtime
+      // fields stay empty: the payload carries no model limits or usage.
       createSessionLocal({
         id: String(created.id),
         title: created.title ?? '新对话',
-        status: 'idle',
+        status: normalizeSessionStatus(created.status),
         messages: [],
         activeSkills: [],
         activeTools: [],
-        modelConfig: { provider: 'unknown', modelId: '', temperature: 0.7, maxTokens: 4096 },
-        tokenUsage: { used: 0, limit: 200000 },
         createdAt: Date.now(),
       });
     }).catch((err) => {

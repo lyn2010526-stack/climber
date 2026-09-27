@@ -84,81 +84,90 @@ export function useChat(sessionId: string | null) {
 
     const toolCallsMap = new Map<string, ToolCall>();
 
-    abortRef.current = api.chatStream(sessionId, content, (event: any) => {
-      const eventType = event.event;
-      const data = event.data;
-
-      if (eventType === 'text') {
-        const delta = typeof data === 'string' ? data : (data?.content || '');
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === assistantId
-              ? { ...msg, content: msg.content + delta }
-              : msg
-          )
-        );
-      } else if (eventType === 'thinking') {
-        const thinking = typeof data === 'string' ? data : (data?.content || '');
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === assistantId
-              ? { ...msg, reasoning: (msg.reasoning || '') + thinking }
-              : msg
-          )
-        );
-      } else if (eventType === 'tool_call') {
-        const tc: ToolCall = {
-          id: data.id || `tc-${Date.now()}`,
-          name: data.name || 'unknown',
-          arguments: data.arguments || {},
-          status: 'running',
-        };
-        toolCallsMap.set(tc.id, tc);
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === assistantId
-              ? { ...msg, toolCalls: Array.from(toolCallsMap.values()) }
-              : msg
-          )
-        );
-      } else if (eventType === 'tool_result') {
-        const toolId = data.id;
-        setMessages(prev =>
-          prev.map(msg => {
-            if (msg.id !== assistantId) return msg;
-            const updatedToolCalls = msg.toolCalls
-              ? msg.toolCalls.map(tc =>
-                  tc.id === toolId
-                    ? { ...tc, result: data.result ?? '', error: data.error ?? '', status: data.error ? 'error' : 'success' }
-                    : tc
-                )
-              : undefined;
-            return { ...msg, toolCalls: updatedToolCalls } as Message;
-          })
-        );
-      } else if (eventType === 'done') {
-        const doneMessageId = data?.message_id as string | undefined;
-        setMessages(prev =>
-          prev.map(msg => {
-            if (msg.id !== assistantId) return msg;
-            const updatedToolCalls = msg.toolCalls
-              ? msg.toolCalls.map(tc => ({ ...tc, status: 'success' as const }))
-              : undefined;
-            return { ...msg, id: doneMessageId ?? msg.id, toolCalls: updatedToolCalls } as Message;
-          })
-        );
-        setIsStreaming(false);
-      } else if (eventType === 'error') {
-        const errMsg = typeof data === 'string' ? data : (data?.detail || data?.error || 'Unknown error');
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === assistantId
-              ? { ...msg, content: msg.content + `\n[Error: ${errMsg}]` }
-              : msg
-          )
-        );
-        setError(errMsg);
-        setIsStreaming(false);
+    abortRef.current = api.chatStream(sessionId, content, (event) => {
+      switch (event.type) {
+        case 'text': {
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === assistantId
+                ? { ...msg, content: msg.content + event.delta }
+                : msg
+            )
+          );
+          break;
+        }
+        case 'thinking': {
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === assistantId
+                ? { ...msg, reasoning: (msg.reasoning || '') + event.delta }
+                : msg
+            )
+          );
+          break;
+        }
+        case 'tool_call': {
+          const tc: ToolCall = {
+            id: event.toolCall.id || `tc-${Date.now()}`,
+            name: event.toolCall.name,
+            arguments: event.toolCall.arguments,
+            status: 'running',
+          };
+          toolCallsMap.set(tc.id, tc);
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === assistantId
+                ? { ...msg, toolCalls: Array.from(toolCallsMap.values()) }
+                : msg
+            )
+          );
+          break;
+        }
+        case 'tool_result': {
+          setMessages(prev =>
+            prev.map(msg => {
+              if (msg.id !== assistantId) return msg;
+              const updatedToolCalls = msg.toolCalls
+                ? msg.toolCalls.map(tc =>
+                    tc.id === event.toolCallId
+                      ? { ...tc, result: event.result, error: event.error, status: event.error ? 'error' : 'success' }
+                      : tc
+                  )
+                : undefined;
+              return { ...msg, toolCalls: updatedToolCalls } as Message;
+            })
+          );
+          break;
+        }
+        case 'done': {
+          setMessages(prev =>
+            prev.map(msg => {
+              if (msg.id !== assistantId) return msg;
+              const updatedToolCalls = msg.toolCalls
+                ? msg.toolCalls.map(tc => ({ ...tc, status: 'success' as const }))
+                : undefined;
+              return { ...msg, id: event.messageId ?? msg.id, toolCalls: updatedToolCalls } as Message;
+            })
+          );
+          setIsStreaming(false);
+          break;
+        }
+        case 'error': {
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === assistantId
+                ? { ...msg, content: msg.content + `\n[Error: ${event.message}]` }
+                : msg
+            )
+          );
+          setError(event.message);
+          setIsStreaming(false);
+          break;
+        }
+        case 'unknown':
+          // 未识别事件保留原帧内容供排障，不中断流。
+          console.warn('Unrecognized chat event', event.raw);
+          break;
       }
     });
   }, [sessionId, isStreaming]);

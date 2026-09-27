@@ -1,13 +1,61 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '../../lib/utils';
-import { Copy, Check } from 'lucide-react';
+import { useTranslation } from '../../i18n';
+import { Copy, Check, ChevronRight } from 'lucide-react';
 
 interface MarkdownRendererProps {
   content: string;
   className?: string;
   enableStream?: boolean;
+  /** 长回复时展示标题目录。默认在标题数达到阈值后自动开启。 */
+  showToc?: boolean;
+}
+
+interface TocEntry {
+  level: number;
+  text: string;
+  id: string;
+}
+
+const TOC_MIN_HEADINGS = 3;
+const HEADING_RE = /^(#{2,4})\s+(.+?)\s*#*$/gm;
+
+function slugify(text: string, index: number): string {
+  const base = text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .trim()
+    .replace(/\s+/g, '-');
+  return `heading-${base || 'section'}-${index}`;
+}
+
+/** 从已预处理的内容里抽取 2-4 级标题，忽略代码块内的 `#` 注释。 */
+function extractHeadings(content: string): TocEntry[] {
+  const withoutCode = content.replace(/```[\s\S]*?```/g, '');
+  const entries: TocEntry[] = [];
+  let match: RegExpExecArray | null;
+  let index = 0;
+  HEADING_RE.lastIndex = 0;
+  while ((match = HEADING_RE.exec(withoutCode)) !== null) {
+    const text = (match[2] ?? '').trim();
+    if (text) {
+      entries.push({ level: match[1]!.length, text, id: slugify(text, index) });
+      index += 1;
+    }
+  }
+  return entries;
+}
+
+/** 把标题子节点还原为纯文本，用于生成与目录一致的锚点 id。 */
+function nodeText(children: React.ReactNode): string {
+  if (typeof children === 'string' || typeof children === 'number') return String(children);
+  if (Array.isArray(children)) return children.map(nodeText).join('');
+  if (React.isValidElement(children)) {
+    return nodeText((children.props as { children?: React.ReactNode }).children);
+  }
+  return '';
 }
 
 /* Reference: Dify `markdown/markdown-utils.ts` */
@@ -69,7 +117,7 @@ function customUrlTransform(uri: string): string | undefined {
   return undefined;
 }
 
-/* Reference: Lobe UI `Highlighter/SyntaxHighlighter/StreamRenderer.tsx` - token rendering + Vercel / Linear */
+/* Reference: assistant-ui `elements/markdown-text.tsx` `aui-code-header-root` */
 function CodeBlock({ children, className: codeClassName }: { children?: React.ReactNode; className?: string | undefined }) {
   const [copied, setCopied] = React.useState(false);
   const [showLineNumbers, setShowLineNumbers] = React.useState(false);
@@ -85,41 +133,37 @@ function CodeBlock({ children, className: codeClassName }: { children?: React.Re
   };
 
   return (
-    <div className="relative group/code my-3 message-enter">
-      {language && (
-        <div className="absolute top-2 right-10 z-10 flex items-center gap-2">
-          <span className="text-[10px] text-[var(--color-text-muted)] bg-white/5 px-2 py-0.5 rounded-md backdrop-blur-sm border border-white/5">
-            {language}
-          </span>
-        </div>
-      )}
-      <div className="absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 group-hover/code:opacity-100 transition-all duration-200">
-        <button
-          onClick={() => setShowLineNumbers(!showLineNumbers)}
-          className="p-1.5 rounded-lg bg-white/5 text-[var(--color-text-muted)] hover:bg-white/10 hover:text-white backdrop-blur-sm border border-white/5 transition-all duration-150"
-          title="行号"
-        >
-          <span className="text-[10px] font-mono">#</span>
-        </button>
-        <button
-          onClick={handleCopy}
-          className="p-1.5 rounded-lg bg-white/5 text-[var(--color-text-muted)] hover:bg-white/10 hover:text-white backdrop-blur-sm border border-white/5 transition-all duration-150"
-          title="复制代码"
-        >
-          {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-        </button>
+    <div className="my-3">
+      <div className="mb-1 flex items-center justify-between gap-2 text-xs text-[var(--color-text-muted)]">
+        <span className="font-mono lowercase">{language ?? ''}</span>
+        <span className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setShowLineNumbers(open => !open)}
+            aria-pressed={showLineNumbers}
+            className="rounded-md px-1.5 py-0.5 font-mono transition-colors duration-150 hover:bg-[var(--color-bg-surface-3)] hover:text-[var(--color-text-primary)] motion-reduce:transition-none"
+            title="行号"
+          >
+            #
+          </button>
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="rounded-md p-1 transition-colors duration-150 hover:bg-[var(--color-bg-surface-3)] hover:text-[var(--color-text-primary)] motion-reduce:transition-none"
+            title="复制代码"
+          >
+            {copied ? <Check size={12} aria-hidden="true" className="text-[var(--color-success)]" /> : <Copy size={12} aria-hidden="true" />}
+          </button>
+        </span>
       </div>
-      <pre className="code-block text-xs p-4 pt-10 rounded-xl overflow-x-auto" style={{
-        border: '1px solid var(--color-border-subtle)',
-        boxShadow: 'var(--shadow-panel)',
-      }}>
+      <pre className="code-block text-xs">
         <code className={cn('text-xs', codeClassName)}>
           {showLineNumbers ? (
             <table className="w-full border-collapse">
               <tbody>
                 {lines.map((line, i) => (
-                  <tr key={i} className="animate-in fade-in duration-300" style={{ animationDelay: `${i * 15}ms` }}>
-                    <td className="text-right pr-4 text-[var(--color-text-muted)] select-none border-r border-white/10">{i + 1}</td>
+                  <tr key={i}>
+                    <td className="border-r border-[var(--color-border-default)] pr-4 text-right text-[var(--color-text-muted)] select-none">{i + 1}</td>
                     <td className="pl-4">{line || ' '}</td>
                   </tr>
                 ))}
@@ -134,28 +178,26 @@ function CodeBlock({ children, className: codeClassName }: { children?: React.Re
   );
 }
 
+/* Reference: assistant-ui `aui-md-code-inline` — a neutral chip, not a highlight. */
 function InlineCode({ children }: { children?: React.ReactNode }) {
   return (
-    <code className="code-block text-xs px-1.5 py-0.5 rounded-md" style={{
-      color: '#f87171',
-      backgroundColor: 'rgba(248,113,113,0.08)',
-      border: '1px solid rgba(248,113,113,0.15)',
-    }}>{children}</code>
+    <code className="rounded-[4px] bg-[var(--color-bg-surface-3)] px-1 py-0.5 font-mono text-[0.9em] text-[var(--color-text-primary)]">
+      {children}
+    </code>
   );
 }
 
-/* Reference: Dify `markdown-blocks/thinking-details.tsx` + Vercel */
+/* Reference: Dify `markdown-blocks/thinking-details.tsx` */
 function ThinkDetails({ children, open: defaultOpen }: { children?: React.ReactNode; open?: boolean | undefined }) {
+  const { t } = useTranslation();
   return (
-    <details open={defaultOpen} className="group my-3 rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden message-enter" style={{
-      boxShadow: 'var(--shadow-panel)',
-    }}>
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-xs font-medium text-[var(--color-accent-foreground)] select-none hover:bg-[var(--color-bg-surface-2)] transition-colors">
-        <span className="transition-transform duration-300 group-open:rotate-90 text-[10px]">▶</span>
-        <span>Thinking</span>
+    <details open={defaultOpen} className="group my-2 overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs text-[var(--color-text-muted)] select-none transition-colors duration-150 hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-secondary)] motion-reduce:transition-none">
+        <ChevronRight size={12} aria-hidden="true" className="shrink-0 transition-transform duration-150 group-open:rotate-90 motion-reduce:transition-none" />
+        <span>{t('common.thinking')}</span>
       </summary>
-      <div className="border-t border-white/[0.06] px-4 py-3">
-        <div className="text-sm text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap font-mono text-xs">
+      <div className="border-t border-[var(--color-border-subtle)] px-3 py-2">
+        <div className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-[var(--color-text-secondary)]">
           {children}
         </div>
       </div>
@@ -163,11 +205,46 @@ function ThinkDetails({ children, open: defaultOpen }: { children?: React.ReactN
   );
 }
 
-export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className }) => {
+export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
+  content,
+  className,
+  showToc,
+}) => {
+  const { t } = useTranslation();
   const processedContent = preprocessContent(content);
+  const headings = useMemo(() => extractHeadings(processedContent), [processedContent]);
+  const tocVisible = showToc ?? headings.length >= TOC_MIN_HEADINGS;
+
+  // 渲染期的标题序号必须与 extractHeadings 的产出顺序一致，锚点才对得上目录。
+  let headingCursor = 0;
+  const headingId = (children: React.ReactNode) => {
+    const entry = headings[headingCursor];
+    headingCursor += 1;
+    const text = entry ? entry.text : nodeText(children).trim();
+    return entry ? entry.id : slugify(text, headingCursor - 1);
+  };
 
   return (
-    <div className={cn('markdown-body prose prose-invert max-w-none text-sm leading-relaxed stagger-children', className)}>
+    <div className={cn('max-w-none text-sm leading-relaxed', className)}>
+      {tocVisible && headings.length > 0 && (
+        <nav
+          aria-label={t('chat.table_of_contents')}
+          className="mb-3 border-l-2 border-[var(--color-border-default)] pl-3"
+        >
+          <ol className="space-y-0.5">
+            {headings.map(heading => (
+              <li key={heading.id} style={{ paddingLeft: `${(heading.level - 2) * 12}px` }}>
+                <a
+                  href={`#${heading.id}`}
+                  className="block truncate text-xs text-[var(--color-text-muted)] transition-colors duration-150 hover:text-[var(--color-text-primary)] motion-reduce:transition-none"
+                >
+                  {heading.text}
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      )}
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         urlTransform={customUrlTransform}
@@ -196,7 +273,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
             );
           },
           pre({ children }) {
-            return <div className="my-3">{children}</div>;
+            return <div>{children}</div>;
           },
           a({ href, children }) {
             return (
@@ -207,10 +284,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
           },
           table({ children }) {
             return (
-              <div className="overflow-x-auto my-4 rounded-xl border border-white/[0.08]" style={{
-                boxShadow: '0 0 0 1px rgba(255,255,255,0.03)',
-              }}>
-                <table className="min-w-full divide-y divide-white/[0.06] text-xs">
+              <div className="overflow-x-auto my-3 rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]">
+                <table className="min-w-full divide-y divide-[var(--color-border-subtle)] text-xs">
                   {children}
                 </table>
               </div>
@@ -218,7 +293,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
           },
           th({ children }) {
             return (
-              <th className="px-4 py-2.5 text-left text-xs font-semibold text-[var(--color-text-secondary)] bg-white/[0.04] uppercase tracking-wider" style={{
+              <th className="px-3 py-2 text-left text-xs font-semibold text-[var(--color-text-primary)] bg-[var(--color-bg-surface-2)]" style={{
                 borderBottom: '1px solid var(--color-border-subtle)',
               }}>
                 {children}
@@ -227,35 +302,38 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
           },
           td({ children }) {
             return (
-              <td className="px-4 py-2.5 text-xs text-[var(--color-text-secondary)] border-t border-white/[0.04]">
+              <td className="px-3 py-2 text-xs text-[var(--color-text-secondary)] border-t border-[var(--color-border-subtle)]">
                 {children}
               </td>
             );
           },
           blockquote({ children }) {
             return (
-              <blockquote className="border-l-2 border-[var(--color-border-accent)] pl-4 py-2 my-4 bg-[var(--color-accent-subtle)] rounded-r-xl text-[var(--color-text-secondary)] italic">
+              <blockquote className="my-3 border-l-2 border-[var(--color-border-default)] pl-3 text-[var(--color-text-secondary)]">
                 {children}
               </blockquote>
             );
           },
           ul({ children }) {
-            return <ul className="list-disc list-inside my-3 space-y-1.5 text-[var(--color-text-secondary)] marker:text-[var(--color-accent-foreground)]">{children}</ul>;
+            return <ul className="my-2 list-disc space-y-1 pl-5 marker:text-[var(--color-text-muted)]">{children}</ul>;
           },
           ol({ children }) {
-            return <ol className="list-decimal list-inside my-3 space-y-1.5 text-[var(--color-text-secondary)] marker:text-[var(--color-accent-foreground)]">{children}</ol>;
+            return <ol className="my-2 list-decimal space-y-1 pl-5 marker:text-[var(--color-text-muted)]">{children}</ol>;
           },
           h1({ children }) {
-            return <h1 className="text-xl font-bold text-[var(--color-text-primary)] mt-6 mb-3 tracking-tight">{children}</h1>;
+            return <h1 className="mt-5 mb-2 text-lg font-semibold text-[var(--color-text-primary)]">{children}</h1>;
           },
           h2({ children }) {
-            return <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mt-5 mb-2 tracking-tight">{children}</h2>;
+            return <h2 id={headingId(children)} className="mt-5 mb-2 scroll-mt-4 text-base font-semibold text-[var(--color-text-primary)]">{children}</h2>;
           },
           h3({ children }) {
-            return <h3 className="text-base font-semibold text-[var(--color-text-primary)] mt-4 mb-2 tracking-tight">{children}</h3>;
+            return <h3 id={headingId(children)} className="mt-4 mb-1.5 scroll-mt-4 text-sm font-semibold text-[var(--color-text-primary)]">{children}</h3>;
+          },
+          h4({ children }) {
+            return <h4 id={headingId(children)} className="mt-3 mb-1.5 scroll-mt-4 text-sm font-semibold text-[var(--color-text-primary)]">{children}</h4>;
           },
           p({ children }) {
-            return <p className="my-2.5 text-[var(--color-text-secondary)] leading-relaxed">{children}</p>;
+            return <p className="my-2 leading-relaxed text-[var(--color-text-primary)]">{children}</p>;
           },
           strong({ children }) {
             return <strong className="font-semibold text-[var(--color-text-primary)]">{children}</strong>;
@@ -264,7 +342,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
             return <em className="italic text-[var(--color-text-secondary)]">{children}</em>;
           },
           hr() {
-            return <hr className="border-white/[0.08] my-6" />;
+            return <hr className="my-4 border-[var(--color-border-subtle)]" />;
           },
         }}
       >

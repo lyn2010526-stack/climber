@@ -37,7 +37,6 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode; defaultTheme?:
   const [theme, setThemeState] = useState<Theme>('dark');
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize theme from localStorage or system preference
   useEffect(() => {
     if (typeof window === 'undefined') {
       setIsLoading(false);
@@ -45,19 +44,17 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode; defaultTheme?:
     }
 
     try {
-      // Step 1: Check stored preference first
       const stored = storage.get('climber-theme') as Theme;
-      
+
       if (stored && (stored === 'dark' || stored === 'light')) {
         setThemeState(stored);
         setIsLoading(false);
         return;
       }
 
-      // Step 2: Fall back to system preference
       const prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches;
       const initialTheme = prefersLight ? 'light' : defaultTheme;
-      
+
       setThemeState(initialTheme);
       setIsLoading(false);
     } catch (error) {
@@ -67,40 +64,32 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode; defaultTheme?:
     }
   }, [defaultTheme]);
 
-  // Apply theme and persist to localStorage
   useEffect(() => {
     if (isLoading) return;
 
     const root = document.documentElement;
     root.setAttribute('data-theme', theme);
-    
-    // Persist theme preference
+
     storage.set('climber-theme', theme);
   }, [theme, isLoading]);
 
-  // Listen for system theme changes (only if user hasn't set manual preference)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
-    
+
     const handler = (e: MediaQueryListEvent) => {
-      // Only auto-switch if no manual preference exists
       if (!storage.get('climber-theme')) {
-        setThemeState(e.matches ? 'light' : defaultTheme);
+        setThemeState(e.matches ? 'light' : 'dark');
       }
     };
 
-    // Support both old and new API
-    const listener = mediaQuery.addEventListener 
-      ? () => mediaQuery.addEventListener('change', handler)
-      : () => mediaQuery.addListener(handler);
-    
-    listener();
-
-    return () => {
-      mediaQuery.removeEventListener('change', handler);
-    };
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handler);
+      return () => mediaQuery.removeEventListener('change', handler);
+    }
+    mediaQuery.addListener(handler);
+    return () => mediaQuery.removeListener(handler);
   }, [defaultTheme]);
 
   const toggleTheme = useCallback(() => {

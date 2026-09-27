@@ -9,58 +9,44 @@ interface LazyImageProps {
 }
 
 export function LazyImage({ src, alt, className, placeholder, onLoad }: LazyImageProps) {
+  const [isVisible, setIsVisible] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [showPlaceholder, setShowPlaceholder] = useState(true);
-  const intersectionRef = useRef<HTMLImageElement>(null);
-  const hasIntersectionObserver = typeof window !== 'undefined' && 'IntersectionObserver' in window;
+  const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
-    if (!hasIntersectionObserver || !intersectionRef.current) {
-      // Fallback: load immediately
+    if (isVisible) return;
+    const el = imgRef.current;
+    if (!el || typeof window === 'undefined' || !('IntersectionObserver' in window)) {
+      // Fallback: load immediately when observation is unavailable.
+      setIsVisible(true);
       return;
     }
 
     const observer = new IntersectionObserver(
       (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            // Image is visible, start loading
-            const img = entry.target as HTMLImageElement;
-            const srcToLoad = img.dataset.src || src;
-            
-            const image = new Image();
-            image.onload = () => {
-              img.src = srcToLoad;
-            };
-            image.onerror = () => {
-              setShowPlaceholder(false);
-              setIsLoaded(true);
-            };
-            image.src = srcToLoad;
-            
-            observer.unobserve(img);
-          }
-        });
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setIsVisible(true);
+          observer.disconnect();
+        }
       },
       { rootMargin: '200px' } // Start loading 200px before visible
     );
 
-    observer.observe(intersectionRef.current);
+    observer.observe(el);
 
     return () => {
       observer.disconnect();
     };
-  }, [src, hasIntersectionObserver]);
+  }, [isVisible]);
 
   const handleLoad = () => {
     setIsLoaded(true);
-    setShowPlaceholder(false);
     onLoad?.();
   };
 
   return (
     <div className="relative overflow-hidden rounded-lg bg-surface-2">
-      {showPlaceholder && (
+      {!isLoaded && (
         <div className="animate-shimmer absolute inset-0 flex items-center justify-center">
           {placeholder || (
             <div className="h-full w-full skeleton-shimmer" />
@@ -68,18 +54,13 @@ export function LazyImage({ src, alt, className, placeholder, onLoad }: LazyImag
         </div>
       )}
       <img
-        ref={intersectionRef}
-        src={isLoaded ? src : ''}
-        data-src={src}
+        ref={imgRef}
+        src={isVisible ? src : undefined}
         alt={alt}
         className={`transition-opacity duration-300 ${className}`}
         style={{ opacity: isLoaded ? 1 : 0 }}
         onLoad={handleLoad}
-        onError={() => {
-          setShowPlaceholder(false);
-          setIsLoaded(true);
-        }}
-        loading="lazy"
+        onError={() => setIsLoaded(true)}
       />
     </div>
   );

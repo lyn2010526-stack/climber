@@ -3,7 +3,6 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Brain, Factory, GitBranch, Key, Stethoscope } from 'lucide-react';
 import { ALL_NAV_ITEMS_BASE, CORE_NAV_ITEMS_BASE, MOBILE_ADAPTED_PAGE_IDS, NAV_ITEM_IDS } from './navConfig';
 import { AdaptiveMobileLayout } from '../components/layout/AdaptiveMobileLayout';
-import { MobileBottomNav } from '../legacy/components/mobile/MobileBottomNav';
 import appSource from '../App.tsx?raw';
 
 vi.mock('../i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
@@ -11,6 +10,22 @@ vi.mock('../store/workspace', () => ({ useWorkspaceStore: () => ({ sessions: [] 
 afterEach(cleanup);
 
 describe('Semantic navigation contract', () => {
+  it('registers every implemented App route exactly once', () => {
+    const routedPages = new Set([...appSource.matchAll(/case '([^']+)': return/g)].map(match => match[1]));
+    expect(new Set(ALL_NAV_ITEMS_BASE.map(item => item.id))).toEqual(routedPages);
+    expect(NAV_ITEM_IDS.size).toBe(ALL_NAV_ITEMS_BASE.length);
+    expect(NAV_ITEM_IDS.has('authapikeys')).toBe(true);
+  });
+
+  it('keeps collaboration secondary and core entries consistent with the full registry', () => {
+    expect(ALL_NAV_ITEMS_BASE.filter(item => item.secondary).map(item => item.id)).toEqual(['cluster', 'crews']);
+    expect(ALL_NAV_ITEMS_BASE.slice(0, 8).some(item => item.secondary)).toBe(false);
+    expect(ALL_NAV_ITEMS_BASE.filter(item => item.group === 'manage').map(item => item.id)).toEqual(['agents', 'skills', 'mcp', 'plugins', 'plugin-manage']);
+    for (const item of CORE_NAV_ITEMS_BASE) {
+      expect(item).toEqual(ALL_NAV_ITEMS_BASE.find(entry => entry.id === item.id));
+    }
+  });
+
   it.each([
     ['factory', Factory],
     ['reasoning', Brain],
@@ -48,16 +63,5 @@ describe('Semantic navigation contract', () => {
   it('marks the mobile more entry active while on API keys', () => {
     render(<AdaptiveMobileLayout currentPage="apikeys" onNavigate={vi.fn()}><div>Keys</div></AdaptiveMobileLayout>);
     expect(screen.getByRole('button', { name: 'sidebar.more' })).toHaveAttribute('aria-current', 'page');
-  });
-
-  it('keeps the legacy mobile API key entry reachable', () => {
-    const onNavigate = vi.fn();
-    render(<MobileBottomNav currentPage="apikeys" onNavigate={onNavigate} />);
-    const more = screen.getByRole('button', { name: '更多' });
-    expect(more).toHaveAttribute('aria-current', 'page');
-    fireEvent.click(more);
-    fireEvent.click(screen.getByRole('button', { name: 'API 密钥' }));
-    expect(onNavigate).toHaveBeenCalledWith('apikeys');
-    expect(screen.queryByRole('button', { name: 'API 密钥' })).not.toBeInTheDocument();
   });
 });

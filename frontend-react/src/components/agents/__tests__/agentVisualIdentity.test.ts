@@ -16,7 +16,7 @@ describe('agentVisualIdentity', () => {
     expect(a.hue).toBe(b.hue);
   });
 
-  it('hue stays within the palette range', () => {
+  it('uses the shared accent slot for every identity', () => {
     for (let i = 0; i < 200; i++) {
       const hue = hueFromHash(hashAgentIdentity({ id: `id-${i}` }));
       expect(hue).toBeGreaterThanOrEqual(0);
@@ -24,18 +24,16 @@ describe('agentVisualIdentity', () => {
     }
   });
 
-  it('distributions across ids covers multiple hues', () => {
-    const counts = new Set<number>();
-    for (let i = 0; i < 500; i++) {
-      counts.add(buildAgentVisualIdentity({ id: `unique-${i}` }).hue);
-    }
-    expect(counts.size).toBeGreaterThan(3);
+  it('paletteColor wraps the hue index around the palette', () => {
+    expect(paletteColor(0)).toBe(AGENT_IDENTITY_PALETTE[0]);
+    expect(paletteColor(-1)).toBe(AGENT_IDENTITY_PALETTE[0]);
+    expect(paletteColor(8)).toBe(AGENT_IDENTITY_PALETTE[0]);
   });
 
-  it('paletteColor maps hue index to hex constant', () => {
-    expect(paletteColor(0)).toBe(AGENT_IDENTITY_PALETTE[0]);
-    expect(paletteColor(-1)).toBe(AGENT_IDENTITY_PALETTE[AGENT_IDENTITY_PALETTE.length - 1]);
-    expect(paletteColor(8)).toBe(AGENT_IDENTITY_PALETTE[0]);
+  it('every palette slot resolves through a theme variable', () => {
+    for (const slot of AGENT_IDENTITY_PALETTE) {
+      expect(slot).toBe('var(--color-accent-foreground)');
+    }
   });
 
   describe('initials', () => {

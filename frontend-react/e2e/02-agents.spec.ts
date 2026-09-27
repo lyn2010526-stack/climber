@@ -56,9 +56,9 @@ test.describe('Agent Management', () => {
     await navigateTo(page, 'agents');
     await expect(page.getByText('E2E Delete Me')).toBeVisible();
 
-    const card = page.locator(`article[aria-label="Agent E2E Delete Me"]`);
+    const card = page.locator(`li[aria-label="Agent E2E Delete Me"]`);
     await expect(card).toBeVisible({ timeout: 10_000 });
-    await card.locator('[data-dropdown-trigger]').click();
+    await card.locator('button[aria-label]').last().click();
     const deleteButton = page.getByText('Delete').last();
     await deleteButton.click();
     await page.waitForTimeout(500);

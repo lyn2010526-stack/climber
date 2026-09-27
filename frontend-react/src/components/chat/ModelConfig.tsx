@@ -73,7 +73,7 @@ function ScopedModelConfig({ ownerKey, value, onChange, disabled }: ModelConfigP
       <label htmlFor={id}>已保存的模型凭据</label>
       <select
         id={id} value={credential?.id || ''} disabled={loading}
-        className="w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-secondary)] p-2"
+        className="w-full rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-2"
         onChange={(event) => { setSelectedId(event.target.value); onChange(null); }}
       >
         <option value="">请选择凭据</option>
