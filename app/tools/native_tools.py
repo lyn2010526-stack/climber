@@ -16,13 +16,28 @@ import asyncio
 import os
 import re
 import shlex
+import shutil
 import subprocess
+import tempfile
+from pathlib import Path
 
 import structlog
 
-from app.tools import tool
+from app.tools import redact_error_text, tool
+from app.utils.ssrf import blocked_reason
 
 logger = structlog.get_logger()
+
+# Absolute path of the screenshot binary, resolved once so a writable PATH
+# entry ahead of the real binary cannot substitute another executable.
+# None means "unavailable" and the screenshot call is skipped.
+_SCREENSHOT_BIN: str | None = shutil.which("screencapture")
+
+# Default screenshot target, resolved from the platform temp directory so no
+# shared, guessable path is hardcoded. The value is unchanged on a default
+# Linux install; the directory is still world-writable, so callers that need
+# confidentiality should pass their own private path.
+_DEFAULT_SCREENSHOT_PATH: str = str(Path(tempfile.gettempdir()) / "screenshot.png")
 
 
 @tool(description="Run a shell command with system access. Subject to sandbox restrictions.")
@@ -78,70 +93,25 @@ async def native_run(command: str, timeout: int = 120, cwd: str | None = None) -
     except TimeoutError:
         return f"TIMEOUT: Command exceeded {timeout}s limit"
     except Exception as e:
-        return f"Error: {str(e)}"
-
-
-@tool(description="Read any file from the system. Returns file content as text.")
-async def native_read_file(path: str) -> str:
-    """Read any file from the filesystem."""
-    valid, reason = _validate_file_path(path, writable=False)
-    if not valid:
-        return f"Error: {reason}"
-    try:
-        with open(path, encoding="utf-8", errors="replace") as f:
-            content = f.read()
-        return content[:50000]
-    except Exception as e:
-        return f"Error reading {path}: {str(e)}"
-
-
-@tool(description="Write content to any file path. Creates directories if needed.")
-async def native_write_file(path: str, content: str) -> str:
-    """Write content to file."""
-    valid, reason = _validate_file_path(path, writable=True)
-    if not valid:
-        return f"Error: {reason}"
-    try:
-        dir_name = os.path.dirname(path)
-        if dir_name:
-            os.makedirs(dir_name, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(content)
-        return f"Written {len(content)} chars to {path}"
-    except Exception as e:
-        return f"Error writing {path}: {str(e)}"
-
-
-@tool(description="List files and directories at a given path.")
-async def native_list_dir(path: str = ".") -> str:
-    """List directory contents."""
-    try:
-        entries = []
-        for item in sorted(os.listdir(path)):
-            full = os.path.join(path, item)
-            is_dir = os.path.isdir(full)
-            size = os.path.getsize(full) if not is_dir else 0
-            prefix = "[DIR] " if is_dir else "[FILE] "
-            suffix = "" if is_dir else f" ({size:,} bytes)"
-            entries.append(f"{prefix}{item}{suffix}")
-        return "\n".join(entries) if entries else "(empty directory)"
-    except Exception as e:
-        return f"Error listing {path}: {str(e)}"
+        return f"Error: {redact_error_text(e)}"
 
 
 @tool(description="Open a URL in the default web browser.")
 async def open_browser(url: str) -> str:
     """Open URL in default browser."""
     try:
+        reason = blocked_reason(url)
+        if reason is not None:
+            return f"Error: request blocked by SSRF protection ({reason})"
         import webbrowser
         webbrowser.open(url)
         return f"Opened {url} in browser"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {redact_error_text(e)}"
 
 
 @tool(description="Take a screenshot of the screen. Returns the saved file path.")
-async def take_screenshot(output_path: str = "/tmp/screenshot.png") -> str:
+async def take_screenshot(output_path: str = _DEFAULT_SCREENSHOT_PATH) -> str:
     """Take a screenshot."""
     try:
         try:
@@ -151,10 +121,15 @@ async def take_screenshot(output_path: str = "/tmp/screenshot.png") -> str:
             return output_path
         except ImportError:
             pass
-        subprocess.run(["screencapture", output_path], check=True, timeout=10)
+        if _SCREENSHOT_BIN is None:
+            return "Error taking screenshot: screencapture is not available on this platform"
+        # S603 audit: argv is the resolved binary plus the caller's destination
+        # path as one argument. shell=False, so a crafted path is a path, never a
+        # command word.
+        subprocess.run([_SCREENSHOT_BIN, output_path], check=True, timeout=10)  # noqa: S603
         return output_path
     except Exception as e:
-        return f"Error taking screenshot: {str(e)}"
+        return f"Error taking screenshot: {redact_error_text(e)}"
 
 
 @tool(description="Click at x,y coordinates on screen.")
@@ -167,7 +142,7 @@ async def click_mouse(x: int, y: int, button: str = "left") -> str:
     except ImportError:
         return "pyautogui not installed. Install with: pip install pyautogui"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {redact_error_text(e)}"
 
 
 @tool(description="Type text at the current cursor position.")
@@ -180,7 +155,7 @@ async def type_text(text: str, interval: float = 0.02) -> str:
     except ImportError:
         return "pyautogui not installed. Install with: pip install pyautogui"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {redact_error_text(e)}"
 
 
 @tool(description="Process video with ffmpeg. Example: cut segment, convert format, extract audio.")
@@ -201,7 +176,7 @@ async def process_video(command: str) -> str:
     except TimeoutError:
         return "TIMEOUT: Video processing exceeded 5 minutes"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {redact_error_text(e)}"
 
 
 @tool(description="Process image with ImageMagick convert command.")
@@ -225,36 +200,18 @@ async def process_image(command: str) -> str:
     except TimeoutError:
         return "TIMEOUT: Image processing exceeded 60s"
     except Exception as e:
-        return f"Error: {str(e)}"
-
-
-@tool(description="Search the web using a search engine. Returns top results (native mode — enhanced with num_results).")
-async def native_web_search(query: str, num_results: int = 10) -> str:
-    """Search the web with enhanced result count (native mode only)."""
-    try:
-        import re
-
-        import httpx
-        url = "https://html.duckduckgo.com/html/"
-        resp = await httpx.AsyncClient(timeout=15).post(url, data={"q": query})
-        results = re.findall(
-            r'<a rel="nofollow" class="result__a" href="([^"]+)">([^<]+)</a>',
-            resp.text,
-        )
-        formatted = []
-        for href, title in results[:num_results]:
-            formatted.append(f"- {title.strip()}\n  {href}")
-        return "\n".join(formatted) if formatted else "No results found"
-    except Exception as e:
-        return f"Error searching: {str(e)}"
+        return f"Error: {redact_error_text(e)}"
 
 
 @tool(description="Download a file from URL to a local path.")
 async def download_file(url: str, output_path: str) -> str:
     """Download file from URL."""
     try:
+        reason = blocked_reason(url)
+        if reason is not None:
+            return f"Error downloading: request blocked by SSRF protection ({reason})"
         import httpx
-        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=60, follow_redirects=False) as client:
             resp = await client.get(url)
             resp.raise_for_status()
             dir_name = os.path.dirname(output_path)
@@ -264,7 +221,7 @@ async def download_file(url: str, output_path: str) -> str:
                 f.write(resp.content)
         return f"Downloaded {len(resp.content):,} bytes to {output_path}"
     except Exception as e:
-        return f"Error downloading: {str(e)}"
+        return f"Error downloading: {redact_error_text(e)}"
 
 
 # ─── Security validation helpers ──────────────────────────────────────────
@@ -320,7 +277,9 @@ def _validate_path_within_workspace(path: str) -> tuple[bool, str]:
 
 _BLOCKED_PREFIXES = ("/etc/", "/etc", "/root/", "/root", "/home/", "/home",
                      "/proc", "/sys", "/dev")
-_ALLOWED_FILE_ROOTS = ("/workspace", "/tmp")
+# The platform temp directory replaces a hardcoded "/tmp": it honours TMPDIR
+# and keeps the allowlist aligned with where temporary files actually land.
+_ALLOWED_FILE_ROOTS = ("/workspace", tempfile.gettempdir())
 
 
 def _validate_file_path(path: str, writable: bool = False) -> tuple[bool, str]:

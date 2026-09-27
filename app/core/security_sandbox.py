@@ -12,15 +12,23 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import tempfile
 import time
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 import structlog
 
 logger = structlog.get_logger()
+
+# Default isolated workdir, resolved from the platform temp directory instead of
+# a hardcoded path. The value is unchanged on a default Linux install; the
+# directory is still world-writable, so callers needing isolation should pass a
+# SandboxConfig with a private workdir.
+_DEFAULT_SANDBOX_WORKDIR: str = str(Path(tempfile.gettempdir()) / "sandbox")
 
 
 # ─── Execution Mode ──────────────────────────────────────────────────────────
@@ -121,6 +129,10 @@ class SchemaValidationError(Exception):
 def validate_tool_input(schema: dict[str, Any], arguments: dict[str, Any]) -> None:
     """Validate tool arguments against JSON Schema.
 
+    Fusion of pydantic/jsonschema strong-typing semantics (research-100-index P0):
+    in addition to type checks, enforces enum, min/max, length bounds, array item
+    types, and regex patterns when the tool declares them. Raises
+    SchemaValidationError on any violation.
     """
     if not schema:
         return
@@ -134,18 +146,63 @@ def validate_tool_input(schema: dict[str, Any], arguments: dict[str, Any]) -> No
             continue
         prop = properties[key]
         expected = prop.get("type")
-        if expected == "string" and not isinstance(value, str):
-            raise SchemaValidationError(f"Field '{key}' must be a string")
-        elif expected == "integer" and not isinstance(value, int):
-            raise SchemaValidationError(f"Field '{key}' must be an integer")
-        elif expected == "number" and not isinstance(value, (int, float)):
-            raise SchemaValidationError(f"Field '{key}' must be a number")
-        elif expected == "boolean" and not isinstance(value, bool):
-            raise SchemaValidationError(f"Field '{key}' must be a boolean")
-        elif expected == "array" and not isinstance(value, list):
-            raise SchemaValidationError(f"Field '{key}' must be an array")
-        elif expected == "object" and not isinstance(value, dict):
-            raise SchemaValidationError(f"Field '{key}' must be an object")
+
+        def _check_type(typ: str, val: Any) -> bool:
+            if typ == "string":
+                return isinstance(val, str)
+            if typ == "integer":
+                return isinstance(val, int) and not isinstance(val, bool)
+            if typ == "number":
+                return isinstance(val, (int, float)) and not isinstance(val, bool)
+            if typ == "boolean":
+                return isinstance(val, bool)
+            if typ == "array":
+                return isinstance(val, list)
+            if typ == "object":
+                return isinstance(val, dict)
+            if typ == "null":
+                return val is None
+            return True
+
+        if expected and not _check_type(expected, value):
+            raise SchemaValidationError(f"Field '{key}' must be {expected}")
+
+        if isinstance(value, str):
+            min_length = prop.get("minLength")
+            if min_length is not None and len(value) < min_length:
+                raise SchemaValidationError(f"Field '{key}' must be at least {min_length} chars (got {len(value)})")
+            max_length = prop.get("maxLength")
+            if max_length is not None and len(value) > max_length:
+                raise SchemaValidationError(f"Field '{key}' must be at most {max_length} chars (got {len(value)})")
+            pattern = prop.get("pattern")
+            if pattern is not None:
+                import re
+                if re.search(pattern, value) is None:
+                    raise SchemaValidationError(f"Field '{key}' does not match pattern {pattern!r}")
+
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if prop.get("minimum") is not None and value < prop["minimum"]:
+                raise SchemaValidationError(f"Field '{key}' must be >= {prop['minimum']}")
+            if prop.get("maximum") is not None and value > prop["maximum"]:
+                raise SchemaValidationError(f"Field '{key}' must be <= {prop['maximum']}")
+
+        enum = prop.get("enum")
+        if enum is not None and value not in enum:
+            raise SchemaValidationError(f"Field '{key}' must be one of {enum}")
+
+        if isinstance(value, list):
+            min_items = prop.get("minItems")
+            if min_items is not None and len(value) < min_items:
+                raise SchemaValidationError(f"Field '{key}' must have at least {min_items} items")
+            max_items = prop.get("maxItems")
+            if max_items is not None and len(value) > max_items:
+                raise SchemaValidationError(f"Field '{key}' must have at most {max_items} items")
+            items = prop.get("items")
+            if isinstance(items, dict):
+                item_type = items.get("type")
+                for idx, item in enumerate(value):
+                    if item_type and not _check_type(item_type, item):
+                        raise SchemaValidationError(f"Field '{key}[{idx}]' must be {item_type}")
 
 
 # ─── Command Blacklist ──────────────────────────────────────────────────────
@@ -218,8 +275,15 @@ class SecuritySandbox:
     """
 
     def __init__(self, config: SandboxConfig | None = None):
-        self.config = config or SandboxConfig(workdir="/tmp/sandbox")
+        self.config = config or SandboxConfig(workdir=_DEFAULT_SANDBOX_WORKDIR)
         self._active = True
+        # This field previously had no reader anywhere, so enable_network=False
+        # changed nothing. Push it into the tool registry, which is the layer
+        # that actually gates egress (the network tools are plain functions
+        # that never pass through this sandbox).
+        from app.tools import ToolRegistry
+
+        ToolRegistry.set_network_enabled(self.config.enable_network)
 
     def validate_file_access(self, path: str, mode: str = 'read') -> tuple[bool, str]:
         """Validate if a file can be accessed."""

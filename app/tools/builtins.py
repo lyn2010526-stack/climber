@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import ast
+import importlib
 import json
 import math
 import re
+import shutil
+import subprocess
 import urllib.parse
 from datetime import datetime
 from typing import Any
@@ -14,7 +17,8 @@ import httpx
 from sqlalchemy import select
 
 from app.core.di import resolve as di_resolve
-from app.tools import tool
+from app.tools import redact_error_text, tool
+from app.utils.ssrf import blocked_reason
 
 _SAFE_EVAL_BUILTINS = {
     "len": len, "str": str, "int": int, "float": float,
@@ -49,7 +53,13 @@ def _safe_eval_math(expression: str, local_vars: dict[str, Any]) -> Any:
 
 # Register browser tools so they are available in the tool registry
 # (native_tools registers screen/browser-style tools and lives in this package too)
-from app.tools import browser_tools  # noqa: E402, F401
+importlib.import_module("app.tools.browser_tools")
+
+# Absolute paths of the external binaries used below, resolved once so a
+# writable PATH entry ahead of the real binary cannot substitute another
+# executable. None means "unavailable" and the call is skipped.
+_PATCH_BIN: str | None = shutil.which("patch")
+_DOCKER_BIN: str | None = shutil.which("docker")
 
 
 @tool(description="Get the current date and time")
@@ -60,34 +70,34 @@ async def get_datetime() -> str:
 @tool(description="Fetch content from a URL")
 async def fetch_url(url: str) -> str:
     try:
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        reason = blocked_reason(url)
+        if reason is not None:
+            return f"Error fetching URL: request blocked by SSRF protection ({reason})"
+        async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
             resp = await client.get(url, headers={"User-Agent": "AgentEngine/0.1"})
             resp.raise_for_status()
             text = resp.text[:5000]
             return f"URL: {url}\nStatus: {resp.status_code}\n\n{text}"
     except Exception as e:
-        return f"Error fetching URL: {str(e)}"
+        return f"Error fetching URL: {redact_error_text(e)}"
 
 
 @tool(description="Search the web for current information, news, facts, or documentation. Use when the user asks about recent events, current data, or information you don't know. Returns text snippets from search results.")
 async def web_search(query: str) -> str:
     try:
         url = f"https://lite.duckduckgo.com/lite/?q={urllib.parse.quote(query)}"
-        try:
-            async with httpx.AsyncClient(timeout=15, follow_redirects=True, verify=True) as client:
-                resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-                resp.raise_for_status()
-                text = resp.text
-        except Exception:
-            async with httpx.AsyncClient(timeout=15, follow_redirects=True, verify=False) as client:
-                resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-                resp.raise_for_status()
-                text = resp.text
+        # Certificate verification stays on. A previous fallback retried with
+        # verify=False, which turned any TLS error into a full downgrade and let
+        # a network attacker read and rewrite search results.
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True, verify=True) as client:
+            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            resp.raise_for_status()
+            text = resp.text
         text = re.sub(r"<[^>]+>", " ", text)
         text = re.sub(r"\s+", " ", text).strip()[:3000]
         return f"Search results for: {query}\n\n{text}"
     except Exception as e:
-        return f"Search error: {str(e)}"
+        return f"Search error: {redact_error_text(e)}"
 
 
 @tool(description="Evaluate mathematical expressions and calculations. Supports +, -, *, /, ^ (power), %, sqrt(), sin(), cos(), tan(), log(), pow(), pi, e, and comparison operators.")
@@ -100,7 +110,7 @@ async def calculator(expression: str) -> str:
         result = _safe_eval_math(expression, {})
         return str(result)
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {redact_error_text(e)}"
 
 
 @tool(description="Get current weather conditions for any city worldwide. Use when the user asks about weather, temperature, or forecast for a specific location. Returns temperature, humidity, wind speed, and conditions.")
@@ -121,7 +131,7 @@ async def get_weather(city: str) -> str:
                 f"Wind: {current['windspeedKmph']} km/h"
             )
     except Exception as e:
-        return f"Weather error: {str(e)}"
+        return f"Weather error: {redact_error_text(e)}"
 
 
 @tool(description="Read content from a file on the local filesystem. Use when the user wants to view, analyze, or reference an existing file. Returns up to 10,000 characters.")
@@ -131,7 +141,7 @@ async def read_file(path: str) -> str:
             content = f.read()
         return content[:10000]
     except Exception as e:
-        return f"Error reading file: {str(e)}"
+        return f"Error reading file: {redact_error_text(e)}"
 
 
 @tool(description="Write content to a file on the local filesystem. Use when the user wants to create a new file or overwrite an existing one. Automatically creates parent directories if needed.")
@@ -141,7 +151,7 @@ async def write_file(path: str, content: str) -> str:
             f.write(content)
         return f"File written: {path}"
     except Exception as e:
-        return f"Error writing file: {str(e)}"
+        return f"Error writing file: {redact_error_text(e)}"
 
 
 @tool(description="List files in a directory")
@@ -155,7 +165,7 @@ async def list_files(directory: str = ".") -> str:
             entries.append(f"[{kind}] {entry}")
         return "\n".join(entries) if entries else "Directory is empty"
     except Exception as e:
-        return f"Error listing directory: {str(e)}"
+        return f"Error listing directory: {redact_error_text(e)}"
 
 
 @tool(description="Run a shell command and return output")
@@ -175,7 +185,7 @@ async def generate_image(prompt: str) -> str:
                 return f"Image generated: {url}"
             return f"Image generation failed: HTTP {resp.status_code}"
     except Exception as e:
-        return f"Image generation error: {str(e)}"
+        return f"Image generation error: {redact_error_text(e)}"
 
 
 @tool(description="Translate text between languages")
@@ -195,7 +205,7 @@ async def translate(text: str, target_language: str = "en", source_language: str
             # Fallback: return a note
             return f"Translation service unavailable. Text: {text}"
     except Exception as e:
-        return f"Translation error: {str(e)}"
+        return f"Translation error: {redact_error_text(e)}"
 
 
 @tool(description="Get a Wikipedia summary for a topic")
@@ -213,7 +223,7 @@ async def wikipedia_summary(topic: str) -> str:
                 )
             return f"Wikipedia: No article found for '{topic}'"
     except Exception as e:
-        return f"Wikipedia error: {str(e)}"
+        return f"Wikipedia error: {redact_error_text(e)}"
 
 
 @tool(description="Shorten a long text to a summary")
@@ -225,7 +235,7 @@ async def summarize(text: str, max_sentences: int = 3) -> str:
         selected = sentences[:max_sentences]
         return ". ".join(selected) + "."
     except Exception as e:
-        return f"Summary error: {str(e)}"
+        return f"Summary error: {redact_error_text(e)}"
 
 
 @tool(description="Encode/decode base64")
@@ -236,7 +246,7 @@ async def base64_encode(text: str, decode: bool = False) -> str:
             return base64.b64decode(text.encode()).decode("utf-8")
         return base64.b64encode(text.encode()).decode("utf-8")
     except Exception as e:
-        return f"Base64 error: {str(e)}"
+        return f"Base64 error: {redact_error_text(e)}"
 
 
 @tool(description="Parse JSON and extract a value by key path")
@@ -254,7 +264,7 @@ async def json_get(json_string: str, key_path: str) -> str:
                 return f"Error: Cannot traverse into {type(data)}"
         return json.dumps(data, ensure_ascii=False, indent=2)
     except Exception as e:
-        return f"JSON parse error: {str(e)}"
+        return f"JSON parse error: {redact_error_text(e)}"
 
 
 @tool(description="Edit a file by replacing old_string with new_string. Shows unified diff preview before applying. Use longer unique context for accuracy.")
@@ -292,7 +302,7 @@ async def edit_file(path: str, old_string: str, new_string: str) -> str:
         logger.info("file_edited", path=path)
         return f"File updated: {path}\n\nDiff:\n{diff}"
     except Exception as e:
-        return f"Error editing file: {str(e)}"
+        return f"Error editing file: {redact_error_text(e)}"
 
 
 @tool(description="Show diff between two strings or files.")
@@ -306,7 +316,7 @@ async def file_diff(path: str, new_content: str) -> str:
         diff = difflib.unified_diff(old, new, lineterm="")
         return "\n".join(list(diff)[:200]) or "No differences"
     except Exception as e:
-        return f"Error diffing file: {str(e)}"
+        return f"Error diffing file: {redact_error_text(e)}"
 
 
 @tool(description="Append content to a file.")
@@ -317,7 +327,7 @@ async def append_file(path: str, content: str) -> str:
             f.write(content)
         return f"Appended to {path}"
     except Exception as e:
-        return f"Error appending to file: {str(e)}"
+        return f"Error appending to file: {redact_error_text(e)}"
 
 
 @tool(description="Check if a file or directory exists.")
@@ -330,7 +340,7 @@ async def file_exists(path: str) -> str:
             return f"Exists: {path} ({kind})"
         return f"Not found: {path}"
     except Exception as e:
-        return f"Error checking path: {str(e)}"
+        return f"Error checking path: {redact_error_text(e)}"
 
 
 @tool(description="Get file size and metadata.")
@@ -346,7 +356,7 @@ async def file_info(path: str) -> str:
             f"Permissions: {oct(stat.st_mode)}"
         )
     except Exception as e:
-        return f"Error getting file info: {str(e)}"
+        return f"Error getting file info: {redact_error_text(e)}"
 
 
 def _get_group_engine():
@@ -374,7 +384,7 @@ async def handoff_task(task_id: str, target_agent_id: str, reason: str = "") -> 
         result = await engine.handoff_task(task_id, target_agent_id, reason)
         return f"Task handed off successfully: {result}"
     except Exception as e:
-        return f"Handoff failed: {str(e)}"
+        return f"Handoff failed: {redact_error_text(e)}"
 
 
 @tool(
@@ -394,7 +404,7 @@ async def run_group_tasks(group_id: str) -> str:
         result = await engine.run_group_tasks(group_id)
         return f"Group tasks executed: {result}"
     except Exception as e:
-        return f"Group task execution failed: {str(e)}"
+        return f"Group task execution failed: {redact_error_text(e)}"
 
 
 @tool(
@@ -412,19 +422,25 @@ async def apply_patch(file_path: str, patch: str) -> str:
     """Apply a unified diff patch to a file."""
     try:
         import os
-        import subprocess
         import tempfile
 
         if not os.path.exists(file_path):
             return f"Error: File '{file_path}' does not exist"
+
+        if _PATCH_BIN is None:
+            return "Error applying patch: patch utility not found in PATH"
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".patch", delete=False) as pf:
             pf.write(patch)
             patch_file = pf.name
 
         try:
-            result = subprocess.run(
-                ["patch", "-p1", "--dry-run", "-i", patch_file, file_path],
+            # S603 audit: argv is a fixed literal list plus the tool's own
+            # arguments; file_path arrives as a separate argv element, so an
+            # agent cannot inject extra patch options, and the diff travels
+            # through a private temp file rather than the command line.
+            result = subprocess.run(  # noqa: S603
+                [_PATCH_BIN, "-p1", "--dry-run", "-i", patch_file, file_path],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -432,8 +448,8 @@ async def apply_patch(file_path: str, patch: str) -> str:
             if result.returncode != 0:
                 return f"Patch dry-run failed:\n{result.stderr}"
 
-            result = subprocess.run(
-                ["patch", "-p1", "-i", patch_file, file_path],
+            result = subprocess.run(  # noqa: S603
+                [_PATCH_BIN, "-p1", "-i", patch_file, file_path],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -444,7 +460,7 @@ async def apply_patch(file_path: str, patch: str) -> str:
         finally:
             os.unlink(patch_file)
     except Exception as e:
-        return f"Error applying patch: {str(e)}"
+        return f"Error applying patch: {redact_error_text(e)}"
 
 
 @tool(
@@ -466,7 +482,7 @@ async def stream_command(command: str, timeout: int = 120, workdir: str = "") ->
         sandbox = di_resolve("SandboxExecutor")
         return await sandbox.execute(command)
     except Exception as e:
-        return f"Error executing command: {str(e)}"
+        return f"Error executing command: {redact_error_text(e)}"
 
 
 @tool(
@@ -484,14 +500,19 @@ async def stream_command(command: str, timeout: int = 120, workdir: str = "") ->
 async def container_exec(container: str, command: str, workdir: str = "") -> str:
     """Execute a command inside a Docker container."""
     try:
-        import subprocess
+        if _DOCKER_BIN is None:
+            return "Error: Docker is not installed or not in PATH"
 
-        full_cmd = ["docker", "exec"]
+        full_cmd = [_DOCKER_BIN, "exec"]
         if workdir:
             full_cmd.extend(["-w", workdir])
         full_cmd.extend([container, "sh", "-c", command])
 
-        result = subprocess.run(
+        # S603 audit: each variable stays one argv element, so container and
+        # workdir cannot smuggle extra docker flags. `command` is intentionally
+        # a shell string executed *inside* the container, which is why this tool
+        # is classified as a command tool in core/engine/validation.py.
+        result = subprocess.run(  # noqa: S603
             full_cmd,
             capture_output=True,
             text=True,
@@ -503,7 +524,7 @@ async def container_exec(container: str, command: str, workdir: str = "") -> str
     except FileNotFoundError:
         return "Error: Docker is not installed or not in PATH"
     except Exception as e:
-        return f"Error executing in container: {str(e)}"
+        return f"Error executing in container: {redact_error_text(e)}"
 
 
 @tool(
@@ -577,7 +598,10 @@ Rules:
 
         try:
             from app.core.agent_engine import AgentEngine
-            engine = AgentEngine(model_registry, __import__("app.tools", fromlist=["ToolRegistry"]).ToolRegistry())
+            from app.tools import get_tool_registry
+            # A fresh ToolRegistry() here would be empty, so the decomposer
+            # agent would have no tools at all. Use the populated global.
+            engine = AgentEngine(model_registry, get_tool_registry())
             session = engine.create_session(
                 agent_id="decomposer",
                 user_id="default-user",
@@ -590,7 +614,7 @@ Rules:
             result = await engine.run_agent(session, decomposition_prompt)
             response_text = result.get("output", "")
         except Exception as e:
-            return f"LLM decomposition failed: {str(e)}"
+            return f"LLM decomposition failed: {redact_error_text(e)}"
 
         # Parse JSON from response
         json_str = response_text
@@ -631,9 +655,9 @@ Rules:
 
         return f"Decomposed into {len(created_tasks)} tasks:\n" + "\n".join(f"- {k}: {v}" for k, v in created_tasks.items())
     except json.JSONDecodeError as e:
-        return f"Failed to parse decomposition plan: {str(e)}\nRaw response: {response_text}"
+        return f"Failed to parse decomposition plan: {redact_error_text(e)}\nRaw response: {response_text}"
     except Exception as e:
-        return f"Auto-decomposition failed: {str(e)}"
+        return f"Auto-decomposition failed: {redact_error_text(e)}"
 
 
 @tool(
@@ -659,7 +683,7 @@ async def analyze_error(error_message: str, context: str = "{}") -> str:
         analysis = analyzer.analyze(error_message, context=ctx)
         return json.dumps(analysis.to_dict(), ensure_ascii=False, indent=2)
     except Exception as e:
-        return f"Error analyzing error: {str(e)}"
+        return f"Error analyzing error: {redact_error_text(e)}"
 
 
 @tool(
@@ -717,6 +741,144 @@ async def suggest_fix(error_analysis: str, file_content: str = "") -> str:
         }
         return json.dumps(result, ensure_ascii=False, indent=2)
     except Exception as e:
-        return f"Error suggesting fix: {str(e)}"
+        return f"Error suggesting fix: {redact_error_text(e)}"
 
 
+# --- Self-editing core memory tools (Letta-style) ---
+# The target user/agent is resolved from a server-side contextvar bound by the
+# engine before the iteration loop (see app/core/memory_context.py). The model
+# supplies only label/text, so it cannot redirect a write into another user's
+# or agent's memory. Blocks flagged read_only are never mutated.
+
+
+def _core_memory_scope_or_error() -> tuple[str, str] | str:
+    """Resolve (user_id, agent_id) from server-side context, or an error str."""
+    from app.core.memory_context import get_memory_scope
+
+    user_id, agent_id = get_memory_scope()
+    if not user_id:
+        return "Error: no active user memory scope (cannot persist memory)"
+    return user_id, agent_id or ""
+
+
+@tool(
+    description="Append a note to a persistent core memory block for this user/agent. "
+    "Use to remember durable facts about the user, preferences, or project state. "
+    "Creates the block if it does not exist. Never store secrets, tokens, or credentials.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "label": {"type": "string", "description": "Memory block label (e.g. 'persona', 'user_profile', 'project')"},
+            "text": {"type": "string", "description": "Text to append to the block"},
+        },
+        "required": ["label", "text"],
+    },
+)
+async def core_memory_append(label: str, text: str) -> str:
+    """Append text to a core memory block for the current user/agent."""
+    try:
+        scope = _core_memory_scope_or_error()
+        if isinstance(scope, str):
+            return scope
+        user_id, agent_id = scope
+        if not label.strip():
+            return "Error: label must not be empty"
+        if not text.strip():
+            return "Error: text must not be empty"
+        from app.core.core_memory import core_memory
+
+        block = await core_memory.append_block(
+            user_id=user_id, label=label.strip(), text=text.strip(), agent_id=agent_id or None
+        )
+        if block is None:
+            return f"Error: could not append to block '{label}'"
+        if block.read_only:
+            return f"Block '{label}' is read-only; not modified"
+        return f"Appended to core memory block '{label}' (now {len(block.value)} chars)"
+    except Exception as e:
+        return f"Error appending core memory: {redact_error_text(e)}"
+
+
+@tool(
+    description="Record a durable lesson learned from this task (a mistake fixed, a "
+    "gotcha discovered, a workflow that worked). Lessons are injected back into future "
+    "sessions only when they keyword-match the user's request. Keep it one crisp, "
+    "actionable sentence. Never store secrets or credentials.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "lesson": {"type": "string", "description": "One actionable lesson sentence"},
+            "tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Optional keyword tags improving future retrieval",
+            },
+        },
+        "required": ["lesson"],
+    },
+)
+async def save_lesson(lesson: str, tags: list[str] | None = None) -> str:
+    """Persist a lesson as an episodic memory (memory_type='lesson')."""
+    try:
+        scope = _core_memory_scope_or_error()
+        if isinstance(scope, str):
+            return scope
+        user_id, agent_id = scope
+        if not lesson.strip():
+            return "Error: lesson must not be empty"
+        from app.core.persistent_memory import persistent_memory
+
+        mem = await persistent_memory.create_episodic_memory(
+            user_id=user_id,
+            content=lesson.strip(),
+            agent_id=agent_id or None,
+            memory_type="lesson",
+            importance=0.7,
+            tags=[t.strip() for t in (tags or []) if t.strip()],
+        )
+        return f"Lesson saved (id={mem.id}); it will resurface when a future request matches it."
+    except Exception as e:
+        return f"Error saving lesson: {redact_error_text(e)}"
+
+
+@tool(
+    description="Replace old_text with new_text inside a persistent core memory block. "
+    "Use to correct or update an existing remembered fact. Only edits the block for this "
+    "user/agent; read-only blocks are never modified.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "label": {"type": "string", "description": "Memory block label to edit"},
+            "old_text": {"type": "string", "description": "Exact substring to replace"},
+            "new_text": {"type": "string", "description": "Replacement text"},
+        },
+        "required": ["label", "old_text", "new_text"],
+    },
+)
+async def core_memory_replace(label: str, old_text: str, new_text: str) -> str:
+    """Replace a substring inside a core memory block for the current user/agent."""
+    try:
+        scope = _core_memory_scope_or_error()
+        if isinstance(scope, str):
+            return scope
+        user_id, agent_id = scope
+        if not label.strip():
+            return "Error: label must not be empty"
+        if not old_text:
+            return "Error: old_text must not be empty"
+        from app.core.core_memory import core_memory
+
+        block = await core_memory.replace_in_block(
+            user_id=user_id,
+            label=label.strip(),
+            old_text=old_text,
+            new_text=new_text,
+            agent_id=agent_id or None,
+        )
+        if block is None:
+            return f"Error: block '{label}' not found"
+        if block.read_only:
+            return f"Block '{label}' is read-only; not modified"
+        return f"Updated core memory block '{label}' (now {len(block.value)} chars)"
+    except Exception as e:
+        return f"Error editing core memory: {redact_error_text(e)}"

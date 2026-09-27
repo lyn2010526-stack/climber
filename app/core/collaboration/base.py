@@ -172,8 +172,18 @@ class GroupCollaborationEngine:
                     )
                 if output:
                     return output, total_tokens
-            except Exception:
-                pass
+            except Exception as exc:
+                # The fallback attempt is the last chance: on failure control
+                # falls through to the `failed_after_retry` error log below,
+                # which already reports the primary `last_error`.
+                logger.warning(
+                    f"{role}_fallback_failed",
+                    agent_id=agent_id,
+                    fallback_provider=fb_provider,
+                    fallback_model=fb_model,
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
 
         logger.error(
             f"{role}_failed_after_retry",
@@ -196,6 +206,14 @@ class GroupCollaborationEngine:
         Args:
             task_id: The task ID to execute.
         """
+        from app.core.observability.emergency_stop import execution_blocked
+
+        blocked = execution_blocked()
+        if blocked is not None:
+            logger.warning("Group task refused by emergency stop", task_id=task_id)
+            await _update_task_status(task_id, "failed")
+            return
+
         db_task = None
         db_worker = None
         db_reviewers = []
@@ -248,6 +266,12 @@ class GroupCollaborationEngine:
         Returns:
             A dictionary with execution results.
         """
+        from app.core.observability.emergency_stop import execution_blocked
+
+        blocked = execution_blocked()
+        if blocked is not None:
+            return {"error": blocked, "results": [], "group_id": group_id}
+
         async with async_session() as db:
             group = (await db.execute(select(AgentGroup).where(AgentGroup.id == group_id))).scalar_one_or_none()
             if not group:
@@ -598,8 +622,17 @@ async def _update_task_status(task_id: str, status: str) -> None:
             if t:
                 t.status = status
                 await db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        # Status is mirrored to the websocket hub, so a DB failure here loses
+        # persistence, not user-visible state. Swallowed deliberately to keep
+        # the caller's control flow independent of transient DB errors.
+        logger.warning(
+            "task_status_update_failed",
+            task_id=task_id,
+            status=status,
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
 
 
 async def _select_worker(task: Any) -> Any | None:
@@ -685,8 +718,13 @@ def get_group_collaboration_engine() -> GroupCollaborationEngine:
         except KeyError:
             from app.models.registry import ModelRegistry
             model_registry = ModelRegistry()
+        try:
+            tool_registry = di_resolve("ToolRegistry")
+        except KeyError:
+            from app.tools import get_tool_registry
+            tool_registry = get_tool_registry()
         _group_collaboration_engine = GroupCollaborationEngine(
             model_registry=model_registry,
-            tool_registry=__import__("app.tools", fromlist=["ToolRegistry"]).ToolRegistry(),
+            tool_registry=tool_registry,
         )
     return _group_collaboration_engine

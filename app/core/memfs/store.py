@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -30,6 +31,18 @@ import structlog
 from app.core.memfs.memory_block import MemoryBlock
 
 logger = structlog.get_logger()
+
+# Absolute path of the git binary, resolved once. A bare "git" would be looked up
+# in PATH on every call, so any writable PATH entry ahead of the real binary
+# could hijack these calls. When git is absent the git-backed features degrade
+# to "disabled" instead of raising.
+_GIT_BIN: str | None = shutil.which("git")
+
+# Single audited entry point for process creation in this module (MemFS._run_git):
+# every call passes a fixed argv whose only variable members are either ints
+# interpolated into a flag or relative paths that _resolve_path() has already
+# confined to base_path, and every path goes after a "--" separator so it can
+# never be read as an option. Arguments never reach a shell.
 
 DEFAULT_SYSTEM_FILES: dict[str, dict[str, Any]] = {
     "system/persona.md": {
@@ -89,48 +102,64 @@ class MemFS:
     def git_enabled(self) -> bool:
         return self._git_available
 
-    def _check_git(self) -> bool:
-        """Check if git is available and the base_path is a git repo."""
+    def _run_git(
+        self,
+        args: list[str],
+        *,
+        timeout: int = 5,
+        text: bool = False,
+    ) -> subprocess.CompletedProcess[str] | None:
+        """Run git with the pre-resolved absolute binary.
+
+        Returns:
+            The completed process, or None when git is unavailable or the call
+            timed out, in which case the git-backed feature is skipped.
+        """
+        if _GIT_BIN is None:
+            return None
         try:
-            result = subprocess.run(
-                ["git", "rev-parse", "--git-dir"],
+            # S603 audit: argv is [_GIT_BIN, *args] where args comes from the
+            # literal argument lists in this file, so the only variable members
+            # are a validated int and base_path-confined relative paths placed
+            # after "--". shell=False, so no argument is re-parsed.
+            return subprocess.run(  # noqa: S603
+                [_GIT_BIN, *args],
                 cwd=str(self._base_path),
                 capture_output=True,
-                timeout=5,
+                text=text,
+                timeout=timeout,
             )
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return False
+        except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+            logger.warning("memfs_git_command_failed", command=args[:1], error=str(exc))
+            return None
+
+    def _check_git(self) -> bool:
+        """Check if git is available and the base_path is a git repo."""
+        result = self._run_git(["rev-parse", "--git-dir"])
+        return result is not None and result.returncode == 0
 
     def _init_git(self) -> None:
         """Initialize git repo if not already initialized."""
+        if _GIT_BIN is None:
+            logger.warning("memfs_git_binary_missing", path=str(self._base_path))
+            self._git_available = False
+            return
+
         git_dir = self._base_path / ".git"
         if not git_dir.exists():
-            try:
-                subprocess.run(
-                    ["git", "init"],
-                    cwd=str(self._base_path),
-                    capture_output=True,
-                    timeout=10,
-                )
-                gitignore = self._base_path / ".gitignore"
-                gitignore.write_text("__pycache__/\n*.pyc\n")
-                subprocess.run(
-                    ["git", "add", ".gitignore"],
-                    cwd=str(self._base_path),
-                    capture_output=True,
-                    timeout=5,
-                )
-                subprocess.run(
-                    ["git", "commit", "-m", "chore: initialize memfs", "--allow-empty"],
-                    cwd=str(self._base_path),
-                    capture_output=True,
-                    timeout=5,
-                )
-                logger.info("memfs_git_initialized", path=str(self._base_path))
-            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-                logger.warning("memfs_git_init_failed", error=str(e))
+            if self._run_git(["init"], timeout=10) is None:
+                logger.warning("memfs_git_init_failed", step="init", path=str(self._base_path))
                 self._git_available = False
+                return
+            gitignore = self._base_path / ".gitignore"
+            gitignore.write_text("__pycache__/\n*.pyc\n")
+            if self._run_git(["add", "--", ".gitignore"]) is None or self._run_git(
+                ["commit", "-m", "chore: initialize memfs", "--allow-empty"]
+            ) is None:
+                logger.warning("memfs_git_init_failed", step="stage", path=str(self._base_path))
+                self._git_available = False
+                return
+            logger.info("memfs_git_initialized", path=str(self._base_path))
 
     async def read(self, path: str) -> str:
         """Read a memory file and return its content (without frontmatter).
@@ -205,8 +234,16 @@ class MemFS:
                 raw = file_path.read_text(encoding="utf-8")
                 existing_block = MemoryBlock.from_markdown(path, raw)
                 existing_block.content = content
-            except Exception:
-                pass
+            except Exception as exc:
+                # An unreadable file or malformed frontmatter must not block the
+                # write: `existing_block` stays None and the caller falls back to
+                # a fresh block, which then overwrites the file.
+                logger.debug(
+                    "memory_frontmatter_unparsable",
+                    path=path,
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
 
         block = MemoryBlock.new(path=path, content=content) if existing_block is None else existing_block
 
@@ -396,33 +433,27 @@ class MemFS:
             return await asyncio.to_thread(self._get_history_sync, path, limit)
 
     def _get_history_sync(self, path: str, limit: int) -> list[dict[str, Any]]:
-        try:
-            result = subprocess.run(
-                [
-                    "git", "log", f"--max-count={limit}",
-                    "--format=%H|%aI|%an|%s", "--", path,
-                ],
-                cwd=str(self._base_path),
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode != 0:
-                return []
-
-            history: list[dict[str, Any]] = []
-            for line in result.stdout.strip().splitlines():
-                parts = line.split("|", 3)
-                if len(parts) == 4:
-                    history.append({
-                        "hash": parts[0][:12],
-                        "date": parts[1],
-                        "author": parts[2],
-                        "message": parts[3],
-                    })
-            return history
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        # `limit` is an int and `path` is passed after "--", so neither can be
+        # read as an option and nothing is interpreted by a shell.
+        result = self._run_git(
+            ["log", f"--max-count={limit}", "--format=%H|%aI|%an|%s", "--", path],
+            timeout=10,
+            text=True,
+        )
+        if result is None or result.returncode != 0:
             return []
+
+        history: list[dict[str, Any]] = []
+        for line in result.stdout.strip().splitlines():
+            parts = line.split("|", 3)
+            if len(parts) == 4:
+                history.append({
+                    "hash": parts[0][:12],
+                    "date": parts[1],
+                    "author": parts[2],
+                    "message": parts[3],
+                })
+        return history
 
     async def search(self, query: str) -> list[dict[str, Any]]:
         """Search memory files by content (grep-based).
@@ -500,44 +531,12 @@ class MemFS:
 
     def _git_commit_file(self, path: str, action: str) -> None:
         """Commit a file change to git."""
-        try:
-            subprocess.run(
-                ["git", "add", path],
-                cwd=str(self._base_path),
-                capture_output=True,
-                timeout=5,
-            )
-            subprocess.run(
-                [
-                    "git", "commit", "-m",
-                    f"memfs: {action} {path}",
-                    "--quiet",
-                ],
-                cwd=str(self._base_path),
-                capture_output=True,
-                timeout=5,
-            )
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
+        # `path` was confined to base_path by _resolve_path() before this point
+        # and is passed after "--", so it cannot be read as a git option.
+        self._run_git(["add", "--", path])
+        self._run_git(["commit", "-m", f"memfs: {action} {path}", "--quiet"])
 
     def _git_remove_file(self, path: str) -> None:
         """Remove a file from git tracking."""
-        try:
-            subprocess.run(
-                ["git", "rm", "--cached", path],
-                cwd=str(self._base_path),
-                capture_output=True,
-                timeout=5,
-            )
-            subprocess.run(
-                [
-                    "git", "commit", "-m",
-                    f"memfs: delete {path}",
-                    "--quiet",
-                ],
-                cwd=str(self._base_path),
-                capture_output=True,
-                timeout=5,
-            )
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
+        self._run_git(["rm", "--cached", "--", path])
+        self._run_git(["commit", "-m", f"memfs: delete {path}", "--quiet"])

@@ -1,10 +1,23 @@
 """Standard-library Chat Completions client and explicitly scripted test model."""
 
+from __future__ import annotations
+
 import json
 import os
 import urllib.error
 import urllib.parse
 import urllib.request
+
+# S310 audit: the only schemes this module ever opens are http/https. The
+# base URL is validated in OpenAICompatibleModel.__init__ (scheme allowlist,
+# no embedded credentials, no query/fragment, HTTPS required unless the
+# operator opts into the platform grading network), so no `file:` or custom
+# scheme can reach urlopen. The destination is operator-configured through the
+# environment rather than caller-supplied, and NoRedirect blocks the redirect
+# hop that would otherwise escape the checked URL, so the app-level SSRF gate
+# in app/utils/ssrf.py is not the control here: applying it would reject the
+# private plain-HTTP model seats the harness is built to reach.
+_ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
 
 
 class ModelError(Exception):
@@ -71,10 +84,15 @@ class OpenAICompatibleModel:
         return cls(base_url, model, api_key, insecure_http=True)
 
     def complete(self, messages, tools, max_tokens, timeout):
+        if urllib.parse.urlsplit(self.url).scheme.lower() not in _ALLOWED_URL_SCHEMES:
+            raise ModelError("Model endpoint scheme is not permitted")
         payload = json.dumps(
             {"model": self.model, "messages": messages, "tools": tools, "max_tokens": max_tokens, "stream": False}
         ).encode()
-        request = urllib.request.Request(
+        # S310 audit: the scheme allowlist check above runs immediately before
+        # this call, and the destination is the operator-configured endpoint
+        # validated in __init__, so no file:/custom scheme can be opened.
+        request = urllib.request.Request(  # noqa: S310
             self.url,
             data=payload,
             headers={

@@ -43,8 +43,13 @@ async def close_redis():
     """Close Redis connection."""
     global _redis_client
     if _redis_client:
-        await _redis_client.close()
-        _redis_client = None
+        try:
+            close = getattr(_redis_client, "aclose", None)
+            if close is None:
+                close = _redis_client.close
+            await close()
+        finally:
+            _redis_client = None
 
 
 class Cache:
@@ -62,10 +67,19 @@ class Cache:
             return None
         try:
             data = await self._redis.get(self._key(key))
-            if data:
+            if data is not None:
                 return json.loads(data)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Best-effort by contract: a cache read miss, an unreachable Redis, or
+            # a payload written by an older schema all degrade to None. Callers
+            # treat None as "not cached" and fall through to the source of truth,
+            # so propagating here would turn a cache problem into a request failure.
+            logger.debug(
+                "cache_get_failed",
+                key=key,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
         return None
 
     async def set(self, key: str, value: Any, ttl: int = 300) -> bool:
@@ -109,7 +123,13 @@ def cached(ttl: int = 300, key_prefix: str = "cache"):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             cache = Cache(await get_redis())
-            cache_key = f"{key_prefix}:{func.__name__}:{hashlib.md5(str(args).encode()).hexdigest()[:8]}:{hashlib.md5(str(sorted(kwargs.items())).encode()).hexdigest()[:8]}"
+            # md5 is a cache-key fingerprint here, not a security primitive:
+            # collisions would only cause a cache miss, never a bypass.
+            args_fp = hashlib.md5(str(args).encode(), usedforsecurity=False).hexdigest()[:8]
+            kwargs_fp = hashlib.md5(
+                str(sorted(kwargs.items())).encode(), usedforsecurity=False
+            ).hexdigest()[:8]
+            cache_key = f"{key_prefix}:{func.__name__}:{args_fp}:{kwargs_fp}"
             result = await cache.get(cache_key)
             if result is not None:
                 return result

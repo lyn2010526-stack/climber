@@ -160,7 +160,16 @@ class PromptTemplateRepository:
         for item in data:
             try:
                 template = PromptTemplate.from_dict(item)
-            except Exception:
+            except Exception as exc:
+                # One malformed entry must not hide every valid template, so the
+                # load continues; debug level keeps a user-supplied payload (and
+                # whatever it contained) out of the default log stream.
+                logger.debug(
+                    "Skipping malformed template repository entry",
+                    path=self._path,
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
                 continue
             self._templates[template.id] = template
 

@@ -355,8 +355,17 @@ async def _mark_task_failed(task: Any, error: str) -> None:
             if t:
                 t.status = "failed"
                 await db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        # The websocket broadcast below is the user-visible failure signal and
+        # must still fire, so a DB write failure is logged and skipped rather
+        # than raised past the broadcast.
+        logger.warning(
+            "task_failure_persist_failed",
+            task_id=task.id,
+            group_id=task.group_id,
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
     await group_ws_hub.broadcast(task.group_id, {
         "type": "task_failed",
         "data": {"task_id": task.id, "error": error},

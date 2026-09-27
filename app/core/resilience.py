@@ -12,13 +12,17 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import random
+import secrets
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+import structlog
+
 from app.core.exceptions import AgentEngineError
+
+logger = structlog.get_logger(__name__)
 
 # ── Errors ───────────────────────────────────────────────────────────────
 
@@ -183,7 +187,11 @@ class RetryHandler:
         delay = self.config.base_delay * (2 ** attempt)
         delay = min(delay, self.config.max_delay)
         if self.config.jitter:
-            delay = random.uniform(0.0, delay)
+            # Spread retry delays only: the value never becomes a token, key or
+            # identifier, so it carries no security weight. The source is the OS
+            # CSPRNG anyway (SystemRandom), which costs nothing at retry rates
+            # and keeps the value unpredictable.
+            delay = secrets.SystemRandom().uniform(0.0, delay)
         return delay
 
     async def execute(self, coro: Any) -> Any:
@@ -242,8 +250,16 @@ class ResourceTracker:
                 result = callback()
                 if inspect.isawaitable(result):
                     await result
-            except Exception:
-                pass
+            except Exception as exc:
+                # Best-effort by contract: one failing cleanup callback must not
+                # block the remaining ones, and cleanup runs on the shutdown path
+                # where raising would mask the original error.
+                logger.debug(
+                    "cleanup_callback_failed",
+                    callback=repr(callback),
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
 
         for resource in reversed(self._resources):
             try:
@@ -253,8 +269,15 @@ class ResourceTracker:
                     resource.close()
                 elif hasattr(resource, "__aexit__"):
                     await resource.__aexit__(None, None, None)
-            except Exception:
-                pass
+            except Exception as exc:
+                # Same contract as above: a resource that refuses to close is
+                # skipped so the rest of the stack still gets released.
+                logger.debug(
+                    "resource_close_failed",
+                    resource_type=type(resource).__name__,
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                )
 
         self._resources.clear()
         self._cleanup_callbacks.clear()

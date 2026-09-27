@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -10,6 +11,26 @@ import structlog
 from pydantic import BaseModel
 
 logger = structlog.get_logger()
+
+
+_SENSITIVE_ERROR_PATTERNS = (
+    re.compile(
+        r"(?i)(\b(?:api[_-]?key|authorization|password|passwd|secret|token)\b\s*[:=]\s*)((?:bearer\s+)?[^\s,;]+)"
+    ),
+    re.compile(r"(?i)(\bbearer\s+)([^\s,;]+)"),
+    re.compile(r"\b(?:sk|rk)-[A-Za-z0-9_-]{12,}\b"),
+)
+
+
+def redact_error_text(error: BaseException) -> str:
+    """Return exception text with common credential-shaped values removed."""
+    text = str(error)
+    for pattern in _SENSITIVE_ERROR_PATTERNS:
+        if pattern.groups == 2:
+            text = pattern.sub(r"\1[REDACTED]", text)
+        else:
+            text = pattern.sub("[REDACTED]", text)
+    return text or type(error).__name__
 
 
 class ToolDefinition(BaseModel):
@@ -21,6 +42,69 @@ class ToolDefinition(BaseModel):
 
 class ToolRegistry:
     """Central registry for all available tools."""
+
+    # Tools that open a socket. Verified by scanning the registered callables
+    # for httpx/requests/socket/playwright use, not by guessing from names:
+    # download_file and translate were both silently missing, and the browser
+    # tools drive Playwright, which egresses on the agent's behalf.
+    # Enforced in execute(), so this set must stay in sync with reality.
+    NETWORK_TOOLS: frozenset[str] = frozenset(
+        {
+            "web_search",
+            "fetch_url",
+            "get_weather",
+            "wikipedia_summary",
+            "generate_image",
+            "download_file",
+            "translate",
+            "browser_navigate",
+            "browser_screenshot",
+            "browser_click",
+            "browser_type",
+            "browser_extract_links",
+            "browser_extract_text",
+            "open_browser",
+            "take_screenshot",
+            "click_mouse",
+            "type_text",
+        }
+    )
+    _network_enabled: bool = True
+
+    @staticmethod
+    def network_enabled_from_env() -> bool:
+        """Read CLIMBER_ENABLE_NETWORK, failing closed on a bad value.
+
+        An unparsable setting blocks egress: a typo in a security control must
+        not silently restore network access.
+        """
+        import os
+
+        raw = os.environ.get("CLIMBER_ENABLE_NETWORK")
+        if raw is None or raw == "":
+            return True
+        return raw.strip().lower() in ("1", "true", "yes", "on")
+
+    @classmethod
+    def set_network_enabled(cls, enabled: bool) -> None:
+        """Enable or disable outbound network access for registered tools."""
+        cls._network_enabled = bool(enabled)
+
+    @classmethod
+    def network_enabled(cls) -> bool:
+        return cls._network_enabled
+
+    @classmethod
+    def bootstrap_network_gate(cls) -> None:
+        """Seed the gate from the environment at process start.
+
+        Deliberately not called from ``__init__``: the gate is class-level
+        state, and several production sites build a throwaway registry
+        (workflow engine, collaboration, builtins). Seeding in the constructor
+        meant the first such call re-read the environment and undid whatever
+        the engine's sandbox had already decided, silently restoring egress.
+        """
+        cls._network_enabled = cls.network_enabled_from_env()
 
     def __init__(self):
         self._tools: dict[str, Callable] = {}
@@ -132,6 +216,36 @@ class ToolRegistry:
             "required": required,
         }
 
+    @classmethod
+    def _url_argument_keys(cls) -> frozenset[str]:
+        """Argument names that carry a caller-supplied URL."""
+        return frozenset({"url", "uri", "target", "link", "endpoint", "address", "host"})
+
+    @classmethod
+    def _check_url_arguments(cls, arguments: dict[str, Any]) -> str | None:
+        """Return a refusal reason when an argument points at a blocked address.
+
+        The egress gate above answers "may this deployment use the network at
+        all". This answers "which address may it reach", which the gate cannot:
+        ``fetch_url("http://169.254.169.254/latest/meta-data/")"`` is allowed
+        egress and still steals cloud credentials. ``app.utils.ssrf`` held this
+        logic but nothing called it, so the check runs here, on the single
+        execution path every network tool already passes through.
+        """
+        if not isinstance(arguments, dict):
+            return None
+
+        from app.utils.ssrf import blocked_reason
+
+        for key in cls._url_argument_keys():
+            value = arguments.get(key)
+            if not isinstance(value, str) or not value.strip():
+                continue
+            reason = blocked_reason(value)
+            if reason is not None:
+                return f"request blocked by SSRF protection ({reason})"
+        return None
+
     async def execute(self, name: str, arguments: dict[str, Any]) -> str:
         """Execute a registered tool.
 
@@ -141,6 +255,21 @@ class ToolRegistry:
         func = self._tools.get(name)
         if not func:
             raise ValueError(f"Tool '{name}' not found")
+
+        if name in self.NETWORK_TOOLS and not self.network_enabled():
+            logger.warning("Network tool blocked by egress gate", tool=name)
+            return (
+                f"Error executing {name}: network access is disabled for this "
+                "deployment. Ask the user to enable it if network egress is required."
+            )
+
+        if name in self.NETWORK_TOOLS:
+            refusal = self._check_url_arguments(arguments)
+            if refusal is not None:
+                logger.warning(
+                    "Network tool blocked by SSRF guard", tool=name, reason=refusal
+                )
+                return f"Error executing {name}: {refusal}"
 
         try:
             if asyncio.iscoroutinefunction(func):
@@ -154,8 +283,14 @@ class ToolRegistry:
                 return json.dumps(result, ensure_ascii=False, default=str)
             return str(result)
         except Exception as e:
-            logger.error("Tool execution failed", tool=name, error=str(e))
-            return f"Error executing {name}: {str(e)}"
+            safe_error = redact_error_text(e)
+            logger.error(
+                "Tool execution failed",
+                tool=name,
+                error_type=type(e).__name__,
+                error=safe_error,
+            )  # noqa: TRY400 - keep traceback-free structured logging
+            return f"Error executing {name}: {safe_error}"
 
     def get_openai_tools(self) -> list[dict[str, Any]]:
         """Return tools in OpenAI function calling format."""
@@ -225,4 +360,8 @@ def tool(
 
 def register_builtins() -> None:
     """Import and register all built-in tools."""
-    from app.tools import builtins  # noqa: F401
+    import importlib
+
+    # Imported for its registration side effect (@tool decorators populate the
+    # registry); importlib states that without binding a name this returns.
+    importlib.import_module("app.tools.builtins")

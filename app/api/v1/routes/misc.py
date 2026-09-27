@@ -100,7 +100,12 @@ async def _add_local_ollama_models(models: list[dict[str, Any]]) -> None:
 @router.get("/tools/")
 async def list_tools() -> list[dict[str, Any]]:
     """List all registered tools from the tool registry."""
-    import app.tools.builtins  # noqa: F401  ensures builtin tools are registered
+    # Import for the registration side effect: importing the module runs the
+    # @tool decorators that populate the registry. importlib keeps that intent
+    # explicit instead of binding a name this function never reads.
+    import importlib
+
+    importlib.import_module("app.tools.builtins")
     tool_registry = __import__("app.core.di", fromlist=["resolve"]).resolve("ToolRegistry")
 
     return [

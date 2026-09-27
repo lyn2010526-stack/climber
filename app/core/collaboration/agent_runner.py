@@ -43,6 +43,16 @@ async def run_agent(
     Yields:
         AgentEvent instances from the agent engine.
     """
+    from app.core.observability.emergency_stop import execution_blocked
+
+    blocked = execution_blocked()
+    if blocked is not None:
+        yield AgentEvent(
+            type=AgentEventType.ERROR,
+            data={"error": blocked},
+        )
+        return
+
     model_registry = di_resolve("ModelRegistry")
     tool_registry = di_resolve("ToolRegistry")
     engine = AgentEngine(model_registry=model_registry, tool_registry=tool_registry)
@@ -149,6 +159,11 @@ async def run_agent_with_retry(
     Returns:
         A tuple of (output_text, tokens_used), or ("", 0) on failure.
     """
+    from app.core.observability.emergency_stop import execution_blocked
+
+    if execution_blocked() is not None:
+        return "", 0
+
     last_error: Exception | None = None
     principal = principal or get_context_principal()
 
@@ -249,8 +264,18 @@ async def _try_fallback_model(
                 )
             if output:
                 return output, total_tokens
-        except Exception:
-            pass
+        except Exception as exc:
+            # The fallback attempt is the last chance: on failure control falls
+            # through to the `failed_after_retry` error log below, which already
+            # reports the primary `last_error`.
+            logger.warning(
+                f"{role}_fallback_failed",
+                agent_id=agent_id,
+                fallback_provider=fb_provider,
+                fallback_model=fb_model,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
 
     logger.error(f"{role}_failed_after_retry", agent_id=agent_id, error=str(last_error) if last_error else "unknown")
     return "", 0

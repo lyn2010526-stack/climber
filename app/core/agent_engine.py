@@ -9,10 +9,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import os
 import re
 import time
 from collections.abc import AsyncIterator
 from typing import Any
+
+import structlog
 
 from app.core import (
     AgentEvent,
@@ -21,13 +24,19 @@ from app.core import (
     ContextConfig,
     MessageRole,
 )
-from app.core.checkpoint import InMemoryCheckpointStore
+from app.core.checkpoint import InMemoryCheckpointStore, SQLiteCheckpointStore
 from app.core.compressor import ContextCompressor, estimate_tokens
 from app.core.di import resolve as di_resolve
 from app.core.engine.persistence import persist_message
-from app.core.engine.tools import build_tools
-from app.core.engine.validation import _COMMAND_TOOLS, _FILE_TOOLS, _approval_key, validate_tool_call
-from app.core.parallel import ParallelToolExecutor
+from app.core.engine.tools import DEFAULT_MAX_TOOLS_IN_PROMPT, build_tools
+from app.core.engine.validation import (
+    _COMMAND_TOOLS,
+    _FILE_TOOLS,
+    _approval_key,
+    make_tool_call_id,
+    validate_tool_call,
+)
+from app.core.parallel import DEFAULT_MAX_RESULT_CHARS, ParallelToolExecutor, truncate_tool_result
 from app.core.persistent_memory import PersistentMemoryService
 from app.core.resilience import (
     CircuitBreaker,
@@ -41,6 +50,179 @@ from app.core.session import AgentSession, SessionConfig
 from app.core.tool_prioritizer import ToolPrioritizer
 from app.models.registry import ModelRegistry
 from app.tools import ToolRegistry
+
+logger = structlog.get_logger()
+
+
+# Markers for per-turn injected system content. These blocks change every turn
+# (fresh lessons, fresh graph context), so they must stay out of any cached
+# prompt prefix: Anthropic hashes the whole system block, and one changed
+# character invalidates the cache for the entire request.
+DYNAMIC_SYSTEM_MARKERS = ("<!-- LESSONS -->", "<!-- GRAPH_CONTEXT -->")
+LESSONS_MARKER = DYNAMIC_SYSTEM_MARKERS[0]
+GRAPH_CONTEXT_MARKER = DYNAMIC_SYSTEM_MARKERS[1]
+
+
+DEFAULT_MAX_SESSIONS = 128
+
+
+def _parse_max_sessions(raw: Any) -> int:
+    """Resolve the session cap, falling back to the default on bad input.
+
+    A malformed environment value must never disable the cap, so anything
+    unparsable or non-positive yields DEFAULT_MAX_SESSIONS.
+
+    Args:
+        raw: The raw configuration value.
+
+    Returns:
+        A positive session cap.
+    """
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_MAX_SESSIONS
+    if value <= 0:
+        return DEFAULT_MAX_SESSIONS
+    return value
+
+
+def _observability_sinks():
+    """Return the shared trace collector and audit chain.
+
+    ``TraceCollector`` and ``AuditChain`` had no production writer, so
+    ``/observability/traces`` and ``/observability/audit`` always answered with
+    an empty list while the engine did its work unrecorded. The engine is the
+    place that knows what happened, so it writes here.
+
+    Returns:
+        A ``(collector, audit_chain)`` tuple, or ``(None, None)`` when
+        observability storage is unavailable. Instrumentation must never be the
+        reason a task fails.
+    """
+    try:
+        from app.core.observability.api import get_audit_chain, get_trace_collector
+
+        return get_trace_collector(), get_audit_chain()
+    except Exception as exc:
+        logger.warning(
+            "observability_sinks_unavailable",
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        return None, None
+
+
+def _alignment_tracker():
+    """Return the shared alignment tracker when observability is available."""
+    try:
+        from app.core.observability.api import get_goal_tracker
+
+        return get_goal_tracker()
+    except Exception as exc:
+        logger.warning(
+            "alignment_tracker_unavailable",
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        return None
+
+
+def _record_audit(
+    audit_chain: Any,
+    decision_type: str,
+    *,
+    session_id: str = "",
+    input_summary: str = "",
+    output_summary: str = "",
+    rationale: str = "",
+    confidence: float = 0.0,
+) -> None:
+    """Append one audit entry, swallowing storage failures."""
+    if audit_chain is None:
+        return
+    try:
+        audit_chain.log_decision(
+            decision_type=decision_type,
+            input_summary=input_summary[:500],
+            output_summary=output_summary[:500],
+            rationale=rationale[:500],
+            confidence=confidence,
+            session_id=session_id,
+        )
+    except Exception:
+        logger.debug("audit_log_failed", decision_type=decision_type)
+
+
+def _record_span_event(collector: Any, span: Any, event: Any) -> None:
+    """Attach one engine event to the active trace span, ignoring failures."""
+    if collector is None or span is None:
+        return
+    try:
+        event_type = getattr(event.type, "value", str(event.type))
+        collector.add_event(
+            span,
+            event_type,
+            {"data": _jsonable(getattr(event, "data", {}))},
+        )
+    except Exception:
+        logger.debug("trace_event_failed")
+
+
+def _jsonable(value: Any) -> Any:
+    """Best-effort conversion of event payloads into JSON-serialisable data."""
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
+def _emergency_stop_active() -> bool:
+    """Return True when a global emergency stop forbids new executions.
+
+    Delegates to ``execution_blocked``, the single gate every execution entry
+    point shares, so the engine and the workflow/crew/collaboration paths can
+    never disagree about whether the kill switch is engaged.
+    """
+    from app.core.observability.emergency_stop import execution_blocked
+
+    return execution_blocked() is not None
+
+
+def _record_usage(result: Any, adapter: Any, session: AgentSession) -> None:
+    """Feed a model result into the token usage counter.
+
+    TOKEN_USAGE existed but had no write point, so token spend was invisible
+    on /metrics. Every failure is contained: metrics must never break a
+    completed model call.
+
+    Args:
+        result: The ChatResult returned by the adapter.
+        adapter: The adapter, used to name the provider.
+        session: The session the call belonged to.
+    """
+    if result is None:
+        return
+    try:
+        from app.middleware.metrics import record_token_usage
+
+        provider = getattr(adapter, "provider", None) or type(adapter).__name__
+        model_id = (
+            getattr(adapter, "_model_id", None)
+            or getattr(adapter, "model_id", None)
+            or session.model_id
+            or ""
+        )
+        record_token_usage(
+            provider=str(provider),
+            model_id=str(model_id),
+            usage=getattr(result, "usage", None),
+        )
+    except Exception:  # pragma: no cover - never fail a completed call
+        return
 
 
 def _resolve_registry(service_name: str, factory: Any) -> Any:
@@ -63,13 +245,32 @@ class AgentEngine:
         self,
         model_registry: Any = None,
         tool_registry: Any = None,
-        checkpoint_store: InMemoryCheckpointStore | None = None,
+        checkpoint_store: InMemoryCheckpointStore | SQLiteCheckpointStore | None = None,
     ) -> None:
         self.model_registry = model_registry or _resolve_registry("ModelRegistry", ModelRegistry)
         self.tool_registry = tool_registry or _resolve_registry("ToolRegistry", ToolRegistry)
-        self._checkpoints = checkpoint_store or InMemoryCheckpointStore()
+        # InMemory was the default, so every restart dropped all checkpoints and
+        # RecoveryManager had nothing to restore from. The SQLite store is
+        # already wired to the application database, so it is the safe default;
+        # tests that want isolation still pass InMemoryCheckpointStore().
+        self._checkpoints: Any = checkpoint_store or SQLiteCheckpointStore()
         self._sessions: dict[str, AgentSession] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
+        # Insertion-ordered mirror of _sessions. The most recent session id
+        # sits last, so the first entry is the least recently used. Kept as a
+        # separate list because dict ordering cannot express "recently touched"
+        # without rewriting every hit.
+        self._session_order: list[str] = []
+        # A hard cap on resident sessions. Sessions are created by eight
+        # production call sites that all drop their reference afterwards, so
+        # the registry would otherwise grow for the process lifetime and keep
+        # every api_key reachable. Zero disables eviction.
+        self.max_sessions = _parse_max_sessions(
+            os.environ.get("CLIMBER_MAX_SESSIONS", DEFAULT_MAX_SESSIONS)
+        )
+        # Single source for the tool-result budget, shared by the executor and
+        # the debug-recovery path so both entry points cap results identically.
+        self._tool_result_char_limit = DEFAULT_MAX_RESULT_CHARS
         self._background_tasks: set[asyncio.Task] = set()
         self._shutdown_event = asyncio.Event()
         self.resource_tracker = ResourceTracker()
@@ -80,6 +281,11 @@ class AgentEngine:
         self._init_sandbox()
         self._init_permissions()
         self._init_reasoning()
+
+    @property
+    def checkpoint_store(self) -> InMemoryCheckpointStore | SQLiteCheckpointStore:
+        """The store this engine writes checkpoints to (consulted by recovery)."""
+        return self._checkpoints
 
     def _init_reasoning(self) -> None:
         """Initialize the multi-strategy reasoning service so the /reason API works."""
@@ -105,7 +311,16 @@ class AgentEngine:
             self.permission_overlay = PermissionOverlay()
             self._setup_default_permissions()
             self.agent_mode = AgentMode.ACT
-        except Exception:
+        except Exception as exc:
+            # Previously silent. Command execution now fails closed in
+            # validation._check_sandbox when sandbox is None, so this state is
+            # degraded-but-safe; it must still be visible to operators instead of
+            # being discovered through a refused tool call.
+            logger.error(
+                "sandbox_init_failed command_execution_disabled",
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
             self.sandbox = None
             self.permission_overlay = None
             self.agent_mode = None
@@ -153,8 +368,15 @@ class AgentEngine:
             os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(config.to_dict(), f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+        except Exception as exc:
+            # The in-memory permission overlay is already applied, so failing to
+            # persist only means the defaults are re-seeded on next start.
+            logger.debug(
+                "permission_config_persist_failed",
+                path=path,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
 
     def _setup_default_permissions(self) -> None:
         """Setup default permission overlay, mirroring permission_rules DEFAULT mode."""
@@ -221,8 +443,103 @@ class AgentEngine:
             session.permission_config = self._default_permission_config
         if system_prompt:
             session.messages.append({"role": MessageRole.SYSTEM, "content": system_prompt})
-        self._sessions[sid] = session
+        self._register_session(session)
         return session
+
+    def _prompt_tool_budget(self, session: AgentSession) -> int | None:
+        """Decide how many tool schemas this session may put in the prompt.
+
+        A session that names its own tools has made an explicit choice, so
+        the full list is sent. A session that leaves ``tools`` empty is asking
+        for the default set, and that set is trimmed to the documented budget.
+
+        Args:
+            session: The session about to be run.
+
+        Returns:
+            The maximum tool count, or None to send every tool.
+        """
+        if session.tools:
+            return None
+        override = os.environ.get("CLIMBER_MAX_PROMPT_TOOLS")
+        if override:
+            try:
+                value = int(override)
+            except ValueError:
+                return DEFAULT_MAX_TOOLS_IN_PROMPT
+            return value if value > 0 else None
+        return DEFAULT_MAX_TOOLS_IN_PROMPT
+
+    def _touch_session(self, session_id: str) -> None:
+        """Mark a session as most recently used.
+
+        Args:
+            session_id: Identifier of the session being used.
+        """
+        order = getattr(self, "_session_order", None)
+        if order is None:
+            return
+        if session_id in order:
+            order.remove(session_id)
+        order.append(session_id)
+
+    def _register_session(self, session: AgentSession) -> None:
+        """Add a session to the registry and enforce the residency cap.
+
+        Eviction reuses :meth:`close_session` so an evicted entry releases its
+        lock, stops its state machine and clears ``api_key`` exactly like an
+        explicit DELETE does. A session that is mid-run is never a candidate:
+        its ``run()`` still holds the object, and dropping the registry entry
+        would leave the iteration without a lock to acquire.
+
+        Args:
+            session: The session to register.
+        """
+        sid = session.session_id
+        self._sessions[sid] = session
+        self._touch_session(sid)
+        self._evict_sessions_if_needed(protect=sid)
+
+    def _evict_sessions_if_needed(self, protect: str | None = None) -> None:
+        """Close the least recently used sessions until the cap is met.
+
+        Args:
+            protect: Session id that must survive this pass. The session being
+                registered is protected, because a cap of 1 would otherwise
+                evict the brand-new session before the caller ever sees it.
+        """
+        cap = getattr(self, "max_sessions", 0)
+        if not cap or cap <= 0:
+            return
+        order = getattr(self, "_session_order", None)
+        if order is None:
+            return
+        while len(self._sessions) > cap:
+            victim = None
+            for candidate in order:
+                if candidate == protect:
+                    continue
+                session = self._sessions.get(candidate)
+                lock = self._session_locks.get(candidate)
+                if session is None or (lock is not None and lock.locked()) or self._session_is_busy(session):
+                    continue
+                victim = candidate
+                break
+            if victim is None:
+                # Every remaining session is mid-run. Exceeding the cap is
+                # correct here: dropping an in-flight run would strand it.
+                return
+            self.close_session(victim)
+
+    @staticmethod
+    def _session_is_busy(session: AgentSession) -> bool:
+        """Return True while a session is mid-run and must not be evicted."""
+        from app.core.task_state_machine import TaskState
+
+        try:
+            return session.state_machine.state == TaskState.RUNNING
+        except Exception:
+            return False
 
     async def run(self, session: AgentSession, message: str) -> AsyncIterator[AgentEvent]:
         """Run the agent engine for a session and message.
@@ -234,21 +551,99 @@ class AgentEngine:
         Yields:
             AgentEvent instances during execution.
         """
-        if session.session_id not in self._session_locks:
-            self._session_locks[session.session_id] = asyncio.Lock()
+        # The emergency stop documented that it blocks new task executions,
+        # but nothing ever read the flag, so activating it through the REST
+        # API changed nothing. This is the read.
+        if _emergency_stop_active():
+            yield AgentEvent(
+                type=AgentEventType.ERROR,
+                data={
+                    "error": "Emergency stop is active; task execution is blocked",
+                    "emergency_stop": True,
+                },
+            )
+            return
 
-        lock = self._session_locks[session.session_id]
+        lock = self._session_locks.get(session.session_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._session_locks[session.session_id] = lock
+        # A session that is being worked on is the most recent user of the
+        # registry, so refresh its LRU position before taking the lock.
+        self._touch_session(session.session_id)
+
         if lock.locked():
             yield AgentEvent(type=AgentEventType.ERROR, data={"error": "Session is busy processing another request"})
             return
 
+        collector, audit_chain = _observability_sinks()
+        alignment_tracker = _alignment_tracker()
+        if alignment_tracker is not None:
+            try:
+                alignment_tracker.check_alignment(message)
+            except Exception:
+                logger.debug("alignment_check_failed", session_id=session.session_id)
+        span = None
+        if collector is not None:
+            try:
+                span = collector.start_span(
+                    operation="agent.run",
+                    tags={"session_id": session.session_id},
+                )
+            except Exception:
+                span = None
+
+        _record_audit(
+            audit_chain,
+            "agent_run_start",
+            session_id=session.session_id,
+            input_summary=message,
+        )
+
+        span_status = "ok"
         try:
             async with lock:
                 async for event in self._run_locked(session, message):
+                    if span is not None:
+                        _record_span_event(collector, span, event)
                     yield event
-        finally:
-            self._session_locks.pop(session.session_id, None)
+        except asyncio.CancelledError:
+            from app.core.task_state_machine import TaskState
 
+            with contextlib.suppress(Exception):
+                if session.state_machine.can_transition_to(TaskState.CANCELLED):
+                    await session.state_machine.transition(TaskState.CANCELLED, trigger="consumer_cancelled")
+            raise
+        except Exception as exc:
+            span_status = "error"
+            _record_audit(
+                audit_chain,
+                "agent_run_error",
+                session_id=session.session_id,
+                input_summary=message,
+                output_summary=str(exc),
+            )
+            raise
+        finally:
+            if span is not None:
+                try:
+                    collector.end_span(span, status=span_status)
+                except Exception as exc:
+                    logger.warning(
+                        "trace_span_end_failed",
+                        session_id=session.session_id,
+                        status=span_status,
+                        error=str(exc),
+                        error_type=type(exc).__name__,
+                    )
+            _record_audit(
+                audit_chain,
+                "agent_run_end",
+                session_id=session.session_id,
+                output_summary=span_status,
+            )
+            if self._session_locks.get(session.session_id) is lock:
+                self._session_locks.pop(session.session_id, None)
     async def run_agent(self, session: AgentSession, message: str) -> dict[str, Any]:
         """Consume the streaming API and return the legacy aggregate result."""
         output_parts: list[str] = []
@@ -273,9 +668,12 @@ class AgentEngine:
         await persist_message(session.session_id, MessageRole.USER, content=message)
 
         self._set_agent_mode(session)
+        self._set_memory_scope(session)
         self._send_start_notification(session)
         await self._inject_memory_context(session, message)
         await self._inject_core_memory(session)
+        await self._inject_lessons(session, message)
+        await self._inject_graph_context(session)
 
         session._last_result = None
         session._last_iteration = 0
@@ -284,6 +682,7 @@ class AgentEngine:
             self.tool_registry,
             validator=(lambda name, args: validate_tool_call(session, name, args, self.sandbox, self.permission_overlay, self.agent_mode, self.tool_registry)),
             session=session,
+            max_result_chars=getattr(self, "_tool_result_char_limit", DEFAULT_MAX_RESULT_CHARS),
         )
         compressor = ContextCompressor(session.context_config)
         result: ChatResult | None = None
@@ -331,7 +730,13 @@ class AgentEngine:
             api_key=session.api_key,
             base_url=session.base_url,
         )
-        tools = build_tools(self.tool_registry, session.tools, self.tool_prioritizer, task_description=session.messages[-1].get("content", "") if session.messages else "")
+        tools = build_tools(
+            self.tool_registry,
+            session.tools,
+            self.tool_prioritizer,
+            task_description=session.messages[-1].get("content", "") if session.messages else "",
+            max_tools=self._prompt_tool_budget(session),
+        )
         result: ChatResult | None = None
 
         while iteration < session.max_iterations and not session._stop_requested:
@@ -399,7 +804,7 @@ class AgentEngine:
                 channel_versions={"messages": iteration},
                 versions_seen={"node": {"messages": iteration}},
             )
-            await self._checkpoints.save(None, cp, checkpoint_id=f"{session.session_id}-final-{iteration}")
+            await self._save_checkpoint(session, cp, f"{session.session_id}-final-{iteration}")
             yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration, "final": True})
 
         if iteration >= session.max_iterations and result and result.tool_calls:
@@ -429,7 +834,9 @@ class AgentEngine:
         if session._stop_requested:
             await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
             return None
-        return await adapter.chat(messages=session.messages, tools=tools or None)
+        result = await adapter.chat(messages=session.messages, tools=tools or None)
+        _record_usage(result, adapter, session)
+        return result
 
     async def _call_llm_with_resilience(
         self,
@@ -467,6 +874,7 @@ class AgentEngine:
             session.tools,
             self.tool_prioritizer,
             task_description=(session.messages[-1].get("content", "") if session.messages else ""),
+            max_tools=self._prompt_tool_budget(session),
         )
 
         start = time.monotonic()
@@ -517,6 +925,30 @@ class AgentEngine:
             result.finish_reason = "tool_calls" if result.tool_calls else "stop"
         return result
 
+    async def _save_checkpoint(self, session: AgentSession, checkpoint: Any, checkpoint_id: str) -> str:
+        """Persist a checkpoint under the session's current turn thread.
+
+        Uses the thread namespace so checkpoints from distinct turns stay
+        isolated, and links each new checkpoint to the previous one in the same
+        session to build a rollback-capable parent chain. Falls back to a plain
+        save when the store does not support thread/parent arguments.
+        """
+        thread_id = getattr(session, "current_turn_id", "") or ""
+        previous = getattr(session, "_last_checkpoint_id", None)
+        try:
+            cid = await self._checkpoints.save(
+                None,
+                checkpoint,
+                thread_id=thread_id,
+                checkpoint_id=checkpoint_id,
+                parent_id=previous,
+            )
+        except TypeError:
+            cid = await self._checkpoints.save(None, checkpoint, checkpoint_id=checkpoint_id)
+        with contextlib.suppress(AttributeError):
+            session._last_checkpoint_id = cid
+        return cid
+
     def _validate_tool_call(self, session: AgentSession, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
         """Validate a tool call using the engine's configured sandbox/mode.
 
@@ -543,6 +975,10 @@ class AgentEngine:
         for session in list(self._sessions.values()):
             with contextlib.suppress(Exception):
                 await session.graceful_shutdown()
+        background_tasks = tuple(self._background_tasks)
+        if background_tasks:
+            await asyncio.gather(*background_tasks, return_exceptions=True)
+            self._background_tasks.difference_update(background_tasks)
         await self.resource_tracker.cleanup()
 
     async def recover_session(self, session: AgentSession) -> bool:
@@ -551,19 +987,20 @@ class AgentEngine:
         Returns:
             True if a checkpoint was found and loaded, False otherwise.
         """
+        from app.core.recovery import RecoveryManager
+
         try:
-            checkpoint = await self._checkpoints.get_latest(None, session.session_id)
+            return await RecoveryManager(self._checkpoints).restore_session(session)
         except Exception:
-            checkpoint = None
-        return checkpoint is not None
+            return False
 
     async def __aenter__(self) -> AgentEngine:
         """Enter the engine context manager."""
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Exit the engine context manager, marking shutdown."""
-        self._shutdown_event.set()
+        """Exit the engine context manager after draining owned work."""
+        await self.graceful_shutdown()
 
     @staticmethod
     def _accumulate_stream_tool_calls(accumulated: list[dict[str, Any]], chunks: list[dict[str, Any]]) -> None:
@@ -695,7 +1132,9 @@ class AgentEngine:
                     arguments = json.loads(arguments)
                 except json.JSONDecodeError:
                     arguments = {}
-            tool_call_id = tc.get("id") or f"tool-{iteration}-{len(session.messages)}"
+            tool_call_id = tc.get("id") or make_tool_call_id(
+                session.session_id, iteration, len(session.messages)
+            )
             allowed, reason = self._validate_tool_call(session, function.get("name", ""), arguments)
             event_data = {"id": tool_call_id, "name": function.get("name"), "arguments": arguments}
             if not allowed and isinstance(reason, dict) and reason.get("requires_approval"):
@@ -705,22 +1144,13 @@ class AgentEngine:
                 session._pending_permission = {**event_data, "decision": None}
                 session._permission_event = asyncio.Event()
                 yield AgentEvent(type=AgentEventType.TOOL_CALL, data=event_data)
-                try:
-                    await asyncio.wait_for(
-                        session._permission_event.wait(),
-                        timeout=self.permission_timeout_seconds,
-                    )
-                except TimeoutError:
-                    session._pending_permission["decision"] = "timeout"
-                decision = session._pending_permission.get("decision")
+                decision = await self._wait_for_permission(session)
                 if decision in {"allow", "allow_session", "allow_always"}:
                     approved = getattr(session, "_approved_tool_calls", None)
                     if approved is None:
                         approved = set()
                         session._approved_tool_calls = approved
                     approved.add(_approval_key(function.get("name", ""), arguments))
-                session._pending_permission = None
-                session._permission_event = None
             else:
                 yield AgentEvent(type=AgentEventType.TOOL_CALL, data=event_data)
         tool_results = await executor.execute_all(result.tool_calls)
@@ -738,11 +1168,17 @@ class AgentEngine:
                 },
             )
             await self._handle_tool_debug(session, tr)
-            session.messages.append({"role": MessageRole.TOOL, "content": tr.result, "tool_call_id": tr.tool_call_id or tr.tool_name})
+            tool_content = tr.result
+            if tr.error or not tr.success:
+                error_text = tr.error or "Tool execution failed without an error message."
+                tool_content = f"Tool execution failed: {error_text}"
+                if tr.result:
+                    tool_content += f"\n\nTool output:\n{tr.result}"
+            session.messages.append({"role": MessageRole.TOOL, "content": tool_content, "tool_call_id": tr.tool_call_id or tr.tool_name})
             await persist_message(
                 session.session_id,
                 MessageRole.TOOL,
-                content=tr.result,
+                content=tool_content,
                 tool_name=tr.tool_name,
                 tool_call_id=tr.tool_call_id,
             )
@@ -752,11 +1188,21 @@ class AgentEngine:
             messages=session.messages,
             iteration=iteration,
             status=session.state_machine.state.value,
+            tool_results=[
+                {
+                    "tool": tr.tool_name,
+                    "tool_call_id": tr.tool_call_id,
+                    "result": tr.result,
+                    "error": tr.error,
+                    "success": tr.success,
+                }
+                for tr in tool_results
+            ],
             channel_values={"last_tool_calls": result.tool_calls, "last_tool_results": [tr.result for tr in tool_results], "context_tokens": ctx_tokens},
             channel_versions={"messages": iteration, "tools": len(result.tool_calls)},
             versions_seen={"node": {"messages": iteration, "tools": len(result.tool_calls)}},
         )
-        await self._checkpoints.save(None, cp, checkpoint_id=f"{session.session_id}-{iteration}")
+        await self._save_checkpoint(session, cp, f"{session.session_id}-{iteration}")
         yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration, "tool_calls": len(result.tool_calls)})
 
     async def _handle_tool_debug(self, session: AgentSession, tr: Any) -> None:
@@ -779,7 +1225,11 @@ class AgentEngine:
                 )
                 if fixed and fixed.success and fixed.output:
                     tr.error = ""
-                    tr.result = fixed.output
+                    tr.result = truncate_tool_result(
+                        fixed.output,
+                        getattr(self, "_tool_result_char_limit", DEFAULT_MAX_RESULT_CHARS),
+                    )
+                    tr.success = True
 
     def _set_agent_mode(self, session: AgentSession) -> None:
         """Set the current agent mode for tool execution context.
@@ -790,8 +1240,34 @@ class AgentEngine:
         try:
             from app.core.file_patch import set_current_agent_mode
             set_current_agent_mode(session.mode)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "agent_mode_binding_failed",
+                session_id=session.session_id,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
+
+    def _set_memory_scope(self, session: AgentSession) -> None:
+        """Bind the session's (user_id, agent_id) memory scope for tools.
+
+        Self-editing memory tools (core_memory_append / core_memory_replace)
+        resolve their target user/agent from this server-side contextvar rather
+        than from model-supplied arguments, so a prompt cannot redirect a write
+        into another user's or agent's memory.
+        """
+        try:
+            from app.core.memory_context import set_memory_scope
+            set_memory_scope(session.user_id, session.agent_id or None)
+        except Exception as exc:
+            logger.warning(
+                "memory_scope_binding_failed",
+                session_id=session.session_id,
+                user_id=session.user_id,
+                agent_id=session.agent_id,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
 
     def _send_start_notification(self, session: AgentSession) -> None:
         """Send notification when agent starts.
@@ -802,8 +1278,16 @@ class AgentEngine:
         try:
             from app.services.notifications import notification_service
             self._spawn(notification_service.agent_message(session.agent_id or "Agent", "开始执行任务..."))
-        except Exception:
-            pass
+        except Exception as exc:
+            # Notification delivery is a side channel; the agent run must
+            # proceed even when the notification service is unavailable.
+            logger.debug(
+                "start_notification_failed",
+                session_id=session.session_id,
+                agent_id=session.agent_id,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
 
     def _send_completion_notification(self, session: AgentSession, result: Any) -> None:
         """Send notification when agent completes.
@@ -815,8 +1299,16 @@ class AgentEngine:
         try:
             from app.services.notifications import notification_service
             self._spawn(notification_service.task_complete(f"Agent {session.agent_id}", result.content[:100] if result and result.content else None))
-        except Exception:
-            pass
+        except Exception as exc:
+            # Notification delivery is a side channel; the run result is already
+            # persisted and the caller must still receive it.
+            logger.debug(
+                "completion_notification_failed",
+                session_id=session.session_id,
+                agent_id=session.agent_id,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
 
     def _send_failure_notification(self, session: AgentSession, error: str) -> None:
         """Send notification when agent fails.
@@ -828,17 +1320,39 @@ class AgentEngine:
         try:
             from app.services.notifications import notification_service
             self._spawn(notification_service.task_failed(f"Agent {session.agent_id}", error))
-        except Exception:
-            pass
+        except Exception as exc:
+            # The failure itself is already reported by the caller's error path;
+            # a failed notification must not mask it.
+            logger.debug(
+                "failure_notification_failed",
+                session_id=session.session_id,
+                agent_id=session.agent_id,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
 
     def _spawn(self, coro: Any) -> None:
         """Run a fire-and-forget task while holding a reference until it finishes."""
         try:
             task = asyncio.create_task(coro)
             self._background_tasks.add(task)
-            task.add_done_callback(self._background_tasks.discard)
-        except Exception:
-            pass
+            task.add_done_callback(self._background_task_done)
+        except Exception as exc:
+            # `create_task` needs a running loop; without one the coroutine can
+            # only be closed. It is fire-and-forget, so dropping it is correct.
+            logger.debug(
+                "background_task_spawn_failed",
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
+
+    def _background_task_done(self, task: asyncio.Task) -> None:
+        """Release a completed task and consume failures from fire-and-forget work."""
+        self._background_tasks.discard(task)
+        if task.cancelled():
+            return
+        with contextlib.suppress(Exception):
+            task.exception()
 
     async def _inject_memory_context(self, session: AgentSession, message: str) -> None:
         """Inject relevant memories into session context.
@@ -852,6 +1366,7 @@ class AgentEngine:
                 user_id=session.user_id,
                 query=message,
                 max_memories=5,
+                agent_id=session.agent_id or None,
             )
             if memory_context:
                 memory_marker = "<!-- MEMORY_CONTEXT -->"
@@ -861,8 +1376,16 @@ class AgentEngine:
                         break
                 else:
                     session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": memory_marker + "\n" + memory_context})
-        except Exception:
-            pass
+        except Exception as exc:
+            # Memory injection only enriches the prompt; a retrieval failure
+            # leaves the session usable with no memory context.
+            logger.debug(
+                "memory_context_injection_failed",
+                session_id=session.session_id,
+                user_id=session.user_id,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
 
     async def _inject_core_memory(self, session: AgentSession) -> None:
         """Inject core memory blocks into session context.
@@ -882,11 +1405,102 @@ class AgentEngine:
                         break
                 else:
                     session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": core_marker + "\n" + core_memory_xml})
-        except Exception:
-            pass
+        except Exception as exc:
+            # Core memory is optional prompt enrichment; the run continues
+            # without it when the blocks cannot be read.
+            logger.debug(
+                "core_memory_injection_failed",
+                session_id=session.session_id,
+                user_id=session.user_id,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
+
+    async def _inject_lessons(self, session: AgentSession, message: str) -> None:
+        """Inject keyword-matched lessons (gptme-style) as a SYSTEM message.
+
+        Lessons are episodic memories with ``memory_type="lesson"`` recorded via
+        the ``save_lesson`` tool. They are injected only when the current user
+        message retrieves at least one hit (keyword/vector match), so quiet
+        sessions carry no extra prompt surface. The injection replaces the
+        previous lessons marker rather than accumulating.
+        """
+        try:
+            if not message or not message.strip():
+                return
+            lessons = await self.memory_service.retrieve_memories(
+                user_id=session.user_id,
+                query=message,
+                limit=3,
+                agent_id=session.agent_id or None,
+                memory_type="lesson",
+            )
+            if not lessons:
+                return
+            lines = ["Relevant lessons from past work (apply them proactively):"]
+            for mem in lessons:
+                lines.append(f"- {mem.summary or mem.content}")
+            lessons_text = "\n".join(lines)
+            lessons_marker = LESSONS_MARKER
+            for i, msg in enumerate(session.messages):
+                if msg.get("content", "").startswith(lessons_marker):
+                    session.messages[i] = {"role": MessageRole.SYSTEM, "content": lessons_marker + "\n" + lessons_text}
+                    break
+            else:
+                session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": lessons_marker + "\n" + lessons_text})
+        except Exception as exc:
+            # Lesson recall is best-effort context; retrieval errors must not
+            # block the turn that triggered them.
+            logger.debug(
+                "lesson_injection_failed",
+                session_id=session.session_id,
+                user_id=session.user_id,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
+
+    async def _inject_graph_context(self, session: AgentSession) -> None:
+        """Inject the agent's graph context as a SYSTEM message (opt-in only).
+
+        Returns an empty string for agents that did not enable graph memory, so
+        the disabled path costs nothing. Replaces the previous marker rather
+        than accumulating, matching the memory/core-memory/lessons injections.
+        """
+        try:
+            settings = await self.memory_service.get_graph_memory_settings(
+                session.agent_id or None
+            )
+            graph_context = await self.memory_service.format_graph_context_for_prompt(
+                user_id=session.user_id,
+                agent_id=session.agent_id or None,
+                memory_config=settings,
+            )
+            if not graph_context:
+                return
+            marker = GRAPH_CONTEXT_MARKER
+            for i, msg in enumerate(session.messages):
+                if msg.get("content", "").startswith(marker):
+                    session.messages[i] = {"role": MessageRole.SYSTEM, "content": marker + "\n" + graph_context}
+                    break
+            else:
+                session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": marker + "\n" + graph_context})
+        except Exception as exc:
+            # Graph memory is opt-in context; when it cannot be read the agent
+            # simply runs without the graph section.
+            logger.debug(
+                "graph_context_injection_failed",
+                session_id=session.session_id,
+                user_id=session.user_id,
+                agent_id=session.agent_id,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
 
     async def _store_episodic_memory(self, session: AgentSession, message: str) -> None:
         """Store important interaction in episodic memory.
+
+        Also feeds the opt-in graph memory, which is a no-op (no DB work)
+        unless the agent enabled it in its ``memory_config``.
 
         Args:
             session: The agent session.
@@ -895,15 +1509,35 @@ class AgentEngine:
         try:
             result = getattr(session, "_last_result", None)
             if result and result.content and len(result.content) > 10:
+                content = f"User: {message}\nAssistant: {result.content[:500]}"
                 await self.memory_service.create_episodic_memory(
                     user_id=session.user_id,
-                    content=f"User: {message}\nAssistant: {result.content[:500]}",
+                    content=content,
                     agent_id=session.agent_id,
                     source_session_id=session.session_id,
                     importance=0.7,
                 )
-        except Exception:
-            pass
+                settings = await self.memory_service.get_graph_memory_settings(
+                    session.agent_id or None
+                )
+                self._spawn(
+                    self.memory_service.record_graph_memory(
+                        user_id=session.user_id,
+                        content=content,
+                        memory_config=settings,
+                        agent_id=session.agent_id or None,
+                    )
+                )
+        except Exception as exc:
+            # Episodic and graph memory are post-turn bookkeeping; the
+            # assistant response is already delivered to the caller.
+            logger.debug(
+                "episodic_memory_store_failed",
+                session_id=session.session_id,
+                user_id=session.user_id,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
 
     def _trigger_memory_reflection(self, session: AgentSession) -> None:
         """Trigger memory reflection (fire-and-forget).
@@ -914,10 +1548,38 @@ class AgentEngine:
         try:
             from app.core.memory_reflection import memory_reflection
             self._spawn(memory_reflection.maybe_reflect(session.user_id))
-        except Exception:
-            pass
+        except Exception as exc:
+            # Reflection is opportunistic; a failure must not surface to the
+            # user who just finished a turn.
+            logger.debug(
+                "memory_reflection_trigger_failed",
+                session_id=session.session_id,
+                user_id=session.user_id,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
 
-    def resolve_permission(self, tool_call_id: str, decision: str) -> bool:
+    async def _wait_for_permission(self, session: AgentSession) -> str:
+        """Wait for a permission decision and always clear its live wait state."""
+        pending = session._pending_permission
+        event = session._permission_event
+        if pending is None or event is None:
+            return "deny"
+
+        try:
+            await asyncio.wait_for(event.wait(), timeout=self.permission_timeout_seconds)
+        except TimeoutError:
+            if session._pending_permission is pending:
+                pending["decision"] = "timeout"
+        finally:
+            decision = pending.get("decision") or "deny"
+            if session._pending_permission is pending:
+                session._pending_permission = None
+                if session._permission_event is event:
+                    session._permission_event = None
+        return decision
+
+    def resolve_permission(self, tool_call_id: str, decision: str, user_id: str | None = None) -> bool:
         """Resolve a pending permission request.
 
         Args:
@@ -929,11 +1591,67 @@ class AgentEngine:
         """
         for session in self._sessions.values():
             if session._pending_permission and session._pending_permission.get("tool_call_id") == tool_call_id:
+                if user_id is not None and str(session.user_id) != str(user_id):
+                    continue
                 session._pending_permission["decision"] = decision
                 if session._permission_event is not None:
                     session._permission_event.set()
                 return True
         return False
+
+    def has_pending_permission(self, tool_call_id: str) -> bool:
+        """Return whether any live session owns a pending approval."""
+        return any(
+            session._pending_permission
+            and session._pending_permission.get("tool_call_id") == tool_call_id
+            for session in self._sessions.values()
+        )
+
+    def close_session(self, session_id: str) -> bool:
+        """Release an in-memory session and everything it holds.
+
+        Sessions were previously only ever added to ``self._sessions``, so
+        every session created for the process lifetime stayed resident --
+        messages, tool results, and ``session_config.api_key`` -- with no
+        release path. ``DELETE /api/v1/sessions/{id}`` removed the database
+        row only, which made the leak invisible to callers.
+
+        Args:
+            session_id: Identifier of the session to close.
+
+        Returns:
+            True if a session was found and released, False if unknown.
+        """
+        session = self._sessions.pop(session_id, None)
+        lock = self._session_locks.get(session_id)
+        if lock is None or not lock.locked():
+            self._session_locks.pop(session_id, None)
+        order = getattr(self, "_session_order", None)
+        if order is not None and session_id in order:
+            order.remove(session_id)
+        if session is None:
+            return False
+
+        # A run() holding the session keeps its own reference, so removing
+        # the registry entry is not enough: ask the loop to wind down and
+        # release the credential held on the config object.
+        with contextlib.suppress(Exception):
+            session.stop()
+        with contextlib.suppress(Exception):
+            session.session_config.api_key = ""
+
+        # Unblock any coroutine parked in the approval wait; it observes the
+        # cleared pending record on resume and proceeds without approval.
+        if session._pending_permission is not None:
+            session._pending_permission["decision"] = "deny"
+            if session._permission_event is not None:
+                with contextlib.suppress(RuntimeError):
+                    session._permission_event.set()
+        session._pending_permission = None
+        session._permission_event = None
+        with contextlib.suppress(Exception):
+            session._pending_tasks.clear()
+        return True
 
     def get_permission_config(self) -> Any:
         """Get the default permission configuration.

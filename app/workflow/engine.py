@@ -83,7 +83,7 @@ def safe_eval(expression: str, local_vars: dict[str, Any]) -> Any:
     try:
         tree = ast.parse(expression, mode="eval")
         _validate_ast(tree)
-        return eval(compile(tree, "<workflow>", "eval"), {"__builtins__": _SAFE_EVAL_BUILTINS}, local_vars)
+        return eval(compile(tree, "<workflow>", "eval"), {"__builtins__": _SAFE_EVAL_BUILTINS}, local_vars)  # noqa: S307
     except Exception:
         raise
 
@@ -112,14 +112,26 @@ def _validate_code_ast(node: ast.AST) -> None:
 
 
 def safe_exec(code: str, local_vars: dict[str, Any]) -> dict[str, Any]:
-    try:
-        tree = ast.parse(code, mode="exec")
-        _validate_code_ast(tree)
-        exec_globals: dict[str, Any] = {"__builtins__": _SAFE_EVAL_BUILTINS}
-        exec(compile(tree, "<workflow>", "exec"), exec_globals, local_vars)
-        return local_vars
-    except Exception:
-        raise
+    """Execute a validated workflow code block and return the mutated locals.
+
+    The `exec` below is required: a workflow code node runs a *statement*
+    block (assignments, loops, conditionals), which `eval` cannot execute and
+    which the standard library offers no other way to run. The security
+    control is _validate_code_ast(), which runs first and rejects every node
+    outside the allowlist, every underscore-prefixed attribute (dunder graph
+    traversal) and every import outside the fixed module set; execution then
+    runs with __builtins__ replaced by _SAFE_EVAL_BUILTINS, so __import__ and
+    the rest of the real builtins are unreachable. Callers re-validate after
+    template substitution.
+    """
+    tree = ast.parse(code, mode="exec")
+    _validate_code_ast(tree)
+    exec_globals: dict[str, Any] = {"__builtins__": _SAFE_EVAL_BUILTINS}
+    # S102 audit: the AST allowlist above is the control, and it is re-run by
+    # the caller after template substitution. Running a statement block needs
+    # exec; replacing it would mean hand-writing a Python interpreter.
+    exec(compile(tree, "<workflow>", "exec"), exec_globals, local_vars)  # noqa: S102
+    return local_vars
 
 logger = structlog.get_logger()
 
@@ -146,6 +158,16 @@ class WorkflowEngine:
         """Execute a workflow DAG with conditional branching."""
         start_time = time.time()
         user_inputs = user_inputs or {}
+
+        from app.core.observability.emergency_stop import execution_blocked
+
+        blocked = execution_blocked()
+        if blocked is not None:
+            return WorkflowResult(
+                workflow_id=getattr(workflow, "id", "unknown"),
+                status="emergency_stop",
+                error=blocked,
+            )
 
         try:
             layers = workflow.topological_sort()
@@ -188,7 +210,14 @@ class WorkflowEngine:
                 self._execute_node(node, workflow, user_inputs, user_id, skipped_nodes)
                 for node in nodes_in_layer
             ]
-            await asyncio.gather(*tasks)
+            try:
+                await asyncio.gather(*tasks)
+            except asyncio.CancelledError:
+                for node in nodes_in_layer:
+                    if node.status == NodeStatus.RUNNING:
+                        node.status = NodeStatus.PENDING
+                        node.error = "Workflow execution cancelled"
+                raise
 
             # Check for failures
             for node in nodes_in_layer:
@@ -358,7 +387,17 @@ class WorkflowEngine:
                 resolved_tool_inputs[k] = v
 
         from app.core.parallel import ParallelToolExecutor
-        registry = self.tool_registry or ToolRegistry()
+        if self.tool_registry is None:
+            # Falling back to a fresh ToolRegistry() builds an EMPTY registry:
+            # every tool node would then fail with "tool not found" and the
+            # workflow would look like a model failure rather than a wiring
+            # bug. Fail loudly at the point of the mistake instead.
+            raise RuntimeError(
+                "WorkflowEngine was constructed without a tool_registry; "
+                "tool nodes cannot resolve any tool. Pass the application "
+                "registry to the constructor."
+            )
+        registry = self.tool_registry
         executor = ParallelToolExecutor(registry)
         tool_result = await executor.execute_all([{
             "id": f"wf-{node.id}",
@@ -685,6 +724,4 @@ class WorkflowEngine:
             if node.output is not None:
                 outputs[node.name] = node.output
         return outputs
-
-
 

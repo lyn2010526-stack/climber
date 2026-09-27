@@ -10,7 +10,9 @@ Tracks workspace state for coding tasks:
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
+import tempfile
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -19,6 +21,11 @@ from typing import Any
 import structlog
 
 logger = structlog.get_logger()
+
+# Absolute path of the git binary, resolved once so a writable PATH entry ahead
+# of the real binary cannot substitute a different executable for the status
+# scan below. None means "git unavailable": the scan is skipped.
+_GIT_BIN: str | None = shutil.which("git")
 
 
 class FileCategory(StrEnum):
@@ -100,7 +107,10 @@ class RuntimeStateCapsule:
 
     SOURCE_EXTENSIONS = {".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".c", ".cpp", ".h"}
     TEST_PATTERNS = {"test_", "_test", ".test.", ".spec.", "/tests/", "/test/"}
-    SCRATCH_PATTERNS = {"/tmp/", "temp_", "scratch", ".tmp"}
+    # Classification patterns, not files this process creates. The scratch
+    # marker is anchored on the platform temp directory so it keeps matching
+    # the same paths without hardcoding a temp path.
+    SCRATCH_PATTERNS = {f"{tempfile.gettempdir()}/", "temp_", "scratch", ".tmp"}
     CONFIG_EXTENSIONS = {".json", ".yaml", ".yml", ".toml", ".cfg", ".ini", ".xml"}
 
     def __init__(self, workdir: str | None = None) -> None:
@@ -167,51 +177,68 @@ class RuntimeStateCapsule:
             return self._snapshots[-1].blocking_facts
         return []
 
-    def _scan_files(self) -> dict[str, FileState]:
-        """Scan workspace for dirty/modified files."""
-        files: dict[str, FileState] = {}
+    def _git_status(self) -> str | None:
+        """Return `git status --porcelain` output, or None when it is unusable.
 
-        # Try git status first
+        None covers a missing git binary, a timeout, and a non-zero exit, so
+        the caller treats all three as "no git information available".
+        """
+        if _GIT_BIN is None:
+            logger.debug("runtime_capsule_git_unavailable", workdir=self._workdir)
+            return None
         try:
-            result = subprocess.run(
-                ["git", "status", "--porcelain"],
+            # S603 audit: argv is fully fixed (binary + "status" +
+            # "--porcelain") and the captured output is parsed as data, never
+            # executed, so nothing caller-supplied reaches the command.
+            result = subprocess.run(  # noqa: S603
+                [_GIT_BIN, "status", "--porcelain"],
                 cwd=self._workdir,
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
-            if result.returncode == 0:
-                for line in result.stdout.strip().split("\n"):
-                    if not line:
-                        continue
-                    status = line[:2]
-                    path = line[3:].strip()
-                    change_type = "modified"
-                    if "??" in status:
-                        change_type = "added"
-                    elif "D" in status:
-                        change_type = "deleted"
+        except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+            logger.debug("runtime_capsule_git_status_failed", workdir=self._workdir, error=str(exc))
+            return None
+        if result.returncode != 0:
+            return None
+        return result.stdout
 
-                    full_path = os.path.join(self._workdir, path)
-                    size = 0
-                    mtime = 0.0
-                    if os.path.exists(full_path) and change_type != "deleted":
-                        try:
-                            stat = os.stat(full_path)
-                            size = stat.st_size
-                            mtime = stat.st_mtime
-                        except OSError:
-                            pass
+    def _scan_files(self) -> dict[str, FileState]:
+        """Scan workspace for dirty/modified files."""
+        files: dict[str, FileState] = {}
 
-                    files[path] = FileState(
-                        path=path,
-                        category=self.classify_file(path),
-                        size_bytes=size,
-                        modified_at=mtime,
-                        change_type=change_type,
-                    )
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
+        status_output = self._git_status()
+        if status_output is not None:
+            for line in status_output.strip().split("\n"):
+                if not line:
+                    continue
+                status = line[:2]
+                path = line[3:].strip()
+                change_type = "modified"
+                if "??" in status:
+                    change_type = "added"
+                elif "D" in status:
+                    change_type = "deleted"
+
+                full_path = os.path.join(self._workdir, path)
+                size = 0
+                mtime = 0.0
+                if os.path.exists(full_path) and change_type != "deleted":
+                    try:
+                        stat = os.stat(full_path)
+                        size = stat.st_size
+                        mtime = stat.st_mtime
+                    except OSError:
+                        pass
+
+                files[path] = FileState(
+                    path=path,
+                    category=self.classify_file(path),
+                    size_bytes=size,
+                    modified_at=mtime,
+                    change_type=change_type,
+                )
 
         self._files = files
         return files
