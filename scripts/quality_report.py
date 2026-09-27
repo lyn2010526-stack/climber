@@ -27,7 +27,7 @@ import sys
 import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -99,11 +99,7 @@ class QualityReport:
 def calculate_complexity(node: ast.AST) -> int:
     complexity = 1
     for child in ast.walk(node):
-        if isinstance(child, (ast.If, ast.While, ast.For, ast.AsyncFor)):
-            complexity += 1
-        elif isinstance(child, ast.ExceptHandler):
-            complexity += 1
-        elif isinstance(child, ast.With, ast.AsyncWith):
+        if isinstance(child, (ast.If, ast.While, ast.For, ast.AsyncFor, ast.ExceptHandler)) or isinstance(child, ast.With, ast.AsyncWith):
             complexity += 1
         elif isinstance(child, ast.BoolOp):
             complexity += len(child.values) - 1
@@ -338,7 +334,7 @@ def format_report_text(report: QualityReport) -> str:
 
 def save_report(report: QualityReport, output_format: str = "json") -> Path:
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
     if output_format == "json":
         path = REPORTS_DIR / f"quality_{timestamp}.json"
@@ -410,7 +406,7 @@ def main() -> int:
     tech_debt = calculate_tech_debt(all_functions, duplication)
 
     report = QualityReport(
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         duration_seconds=time.monotonic() - start,
         overall_score=0,
         file_metrics=file_metrics,

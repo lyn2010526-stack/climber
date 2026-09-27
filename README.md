@@ -1,6 +1,6 @@
 # Climber — 本地优先 AI Agent 工作台
 
-[![Tests](https://img.shields.io/badge/tests-151%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-70%20targeted%20security%20passing-brightgreen)]()
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.88%2B-009688)]()
@@ -18,12 +18,12 @@ Climber 是一个生产级 AI Agent 工作台，支持自主软件开发、多 A
 |------|------|
 | 分层记忆 | 记忆分块（核心/会话上下文/归档/实体/人格）+ 情节记忆衰减与自动归档，支持上下文压缩 |
 | 多 Agent 协作 | 顺序/层级/群聊三种协作流程，依赖图死锁检测与检查点/恢复 |
-| 工具系统 | 统一工具运行时，MCP 协议接入，安全沙箱隔离 |
+| 工具系统 | 统一工具运行时，MCP 客户端/路由接入，安全沙箱隔离 |
 | 模型调度 | 多模型注册（registry 按 `DEFAULT_MODEL_SPEC` 选择）+ 熔断/超时与降级回退 |
-| 权限控制 | 6 级权限模式（默认/接受编辑/计划/自动/严格/绕过），危险命令与 Shell 注入拦截 |
-| 会话持久化 | 检查点/恢复，断点续跑 |
-| 安全加固 | 路径穿越防护、Shell 注入风险拦截、系统提示词注入保护 |
-| 可观测性 | 结构化日志、JSON 指标、Token 用量追踪 |
+| 权限控制 | 6 级权限模式（默认/接受编辑/计划/自动/严格/绕过），危险命令与 Shell 注入拦截；生产认证需显式启用 |
+| 会话持久化 | SQLite 检查点存储、会话恢复、回滚；工具结果回放按读/写/命令/网络分类 |
+| 安全加固 | 工具输入校验、权限覆盖层、路径与命令沙箱校验、网络出口与 SSRF 门禁；任务进度 WebSocket 的认证仍待补齐 |
+| 可观测性 | AgentEngine 写入 trace/audit，提供 observability API；Prometheus 指标与 Token 用量追踪 |
 | 提示词管理 | 外部模板仓库加载（`app/core/prompt_engine/`） |
 
 ## 快速开始
@@ -107,14 +107,14 @@ flowchart TB
         ToolRT["ToolRuntime\n统一工具运行时"]
         PermCfg["PermissionConfig\n6 级权限控制"]
         Memory["Memory\n分层记忆系统"]
-        Safety["SafetyPipeline\n安全防护"]
+        Safety["Validation + SecuritySandbox\n安全校验"]
     end
 
     subgraph Infra["基础设施层"]
         DB["SQLite / PostgreSQL"]
         Chroma["ChromaDB\n向量记忆"]
         Redis["Redis\n缓存"]
-        MCP["MCP Client\n外部工具"]
+        MCP["MCP Client / Router\n外部工具"]
         LLM["LLM Provider\n多模型适配"]
     end
 
@@ -149,13 +149,13 @@ flowchart TB
 | 会话管理 | `app/core/engine/session.py` | 会话生命周期管理 |
 | 提示词引擎 | `app/core/prompt_engine/` | 三层提示词引擎（模板/注入/模型适配） |
 | 工具运行时 | `app/tools/` | 统一工具注册与执行 |
-| MCP 桥接 | `app/core/mcp_controller.py` | MCP 工具协议接入 |
+| MCP 接入 | `app/tools/mcp_client.py`、`app/tools/mcp_router.py` | MCP 客户端、注册表与多服务器工具路由 |
 | 权限控制 | `app/core/permission_rules.py` | 权限规则引擎 |
 | 模型注册 | `app/models/registry.py` | 多模型注册与选择 |
 | 熔断降级 | `app/core/execution/circuit_breaker.py` | 超时管理、熔断与回退 |
-| 安全工具 | `app/core/security/` | 路径隔离、沙箱、资源配额 |
+| 安全校验 | `app/core/engine/validation.py`、`app/core/security_sandbox.py`、`app/core/safety_pipeline.py` | 工具分类、权限、命令/文件校验与安全流水线 |
 | 多 Agent | `app/core/collaboration/` | 顺序/层级/群聊协作流程、死锁检测 |
-| Crew/Flow 编排 | `app/multi_agent/` | Crew 编排与事件驱动 Flow |
+| Crew/Flow 编排 | `app/multi_agent/crew.py`、`app/multi_agent/flow.py` | Crew 编排与任务 worker 使用的命名工作流；`FlowExecutor` 仍属未接线实现 |
 
 ## 配置说明
 
@@ -190,17 +190,22 @@ VECTOR_STORE_PATH=./data/chroma
 
 | 文档 | 描述 |
 |------|------|
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 系统架构、模块关系、数据流 |
-| [API.md](docs/API.md) | 所有 API 端点详细说明 |
-| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | 部署指南（Docker、本地、云） |
-| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | 开发指南、代码规范、测试方法 |
-| [SECURITY.md](docs/SECURITY.md) | 安全策略、已知风险、防护措施 |
+| `docs/ARCHITECTURE.md` | 系统架构、模块关系、数据流 |
+| `docs/API.md` | 所有 API 端点详细说明 |
+| `docs/DEPLOYMENT.md` | 部署指南（Docker、本地、云） |
+| `docs/DEVELOPMENT.md` | 开发指南、代码规范、测试方法 |
+| `docs/SECURITY.md` | 安全策略、已知风险、防护措施与配置前提 |
+| `SECURITY_AUDIT_REPORT.md` | 历史审计、当前复核、验证命令与剩余风险 |
+| `docs/DEAD_CODE_DOCUMENTATION_AUDIT.md` | 模块接线和能力声明事实对账 |
 
 ## 测试
 
 ```bash
 # 后端测试
-python3 -m pytest tests/ -v
+python3 -m pytest tests/ -q
+
+# 安全门禁定向回归
+python3 -m pytest tests/core/test_secret_key_validation.py tests/core/test_auth_escalation.py tests/core/test_default_admin_security.py tests/core/test_ssrf_enforcement.py tests/core/test_network_egress_gate.py tests/core/test_emergency_stop_enforcement.py tests/core/test_emergency_stop_wiring.py tests/core/test_layer_import_boundaries.py -q -o addopts='' -p no:cacheprovider
 
 # 前端测试
 cd frontend-react

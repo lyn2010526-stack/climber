@@ -2,7 +2,7 @@
 
 ## 执行摘要
 
-本报告基于对 GitHub Copilot Workspace、Amazon Q Developer、Replit Agent、Bolt.new、Windsurf、Codeium、Tabnine、GitHub Codespaces、GitPod、StackBlitz 等 10 个顶尖 AI 编程工具的深度研究，提取了可复用的设计模式和交互逻辑，并转化为 /workspace/agent-engine 的实际代码改进建议。
+本报告基于对 GitHub Copilot Workspace、Amazon Q Developer、Replit Agent、Bolt.new、Windsurf、Codeium、Tabnine、GitHub Codespaces、GitPod、StackBlitz 等 10 个顶尖 AI 编程工具的深度研究，提取了可复用的设计模式和交互逻辑，并转化为 `/workspace/climber` 的实际代码改进建议。
 
 ## 一、核心发现与模式识别
 
@@ -389,4 +389,4 @@ Common Technical Patterns:
 报告生成日期：2026-08-04
 研究范围：10 个顶级 AI 编程工具
 分析方法：文档分析、代码审查、功能对比、专家评审
-应用目标：/workspace/agent-engine 持续集成改进
+应用目标：`/workspace/climber` 持续集成改进

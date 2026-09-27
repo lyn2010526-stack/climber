@@ -10,6 +10,9 @@
 - [API 文档](API.md) - `/api/v1` 端点与认证
 - [部署指南](DEPLOYMENT.md) - 环境变量、Docker、静态托管
 - [Headless 本地运行器](HEADLESS.md) - 独立 CLI、文件工具、预算、JSONL 与限制
+- [仓库级测试报告](../../docs/TEST_REPORT.md) - 历史结果、当前定向验证和当前非集成回归基线
+- [依赖审计](../../docs/DEPENDENCY_AUDIT.md) - Python/npm 依赖检查及工具覆盖限制
+- [死代码事实对账](../../docs/DEAD_CODE_DOCUMENTATION_AUDIT.md) - 未接线模块和能力声明的当前复核
 
 ## 规格
 

@@ -11,7 +11,7 @@
 ### 安装与启动
 
 ```bash
-cd /workspace/agent-engine
+cd /workspace/climber
 pip install --break-system-packages -r requirements.txt
 
 # 本地（认证关闭）
@@ -38,7 +38,7 @@ python3 -m pytest tests/core/engine/pregel/test_runtime_hardening.py tests/test_
 python3 -c "from app.main import app; s=app.openapi(); ..."
 ```
 
-全量收集与运行：`python3 -m pytest tests/ --collect-only -q`（约 6.2 万项）与 `python3 -m pytest tests/ -q -p no:cacheprovider`。无 `--timeout` 插件，不要传该参数。
+全量收集与运行：`python3 -m pytest tests/ --collect-only -q` 与 `python3 -m pytest tests/ -q --timeout=120 -o addopts='' -p no:cacheprovider --ignore=tests/integration`。当前非集成回归基线（2026-09-26）为 `1024 passed, 18 failed, 2 warnings, 18 subtests passed`，详见 `../../docs/TEST_REPORT.md`；不要把历史的 6.2 万项收集数当作当前仓库事实。
 
 ### 已知环境注意
 
@@ -51,14 +51,14 @@ python3 -c "from app.main import app; s=app.openapi(); ..."
 所有前端命令需放大内存：
 
 ```bash
-cd /workspace/agent-engine/frontend-react
+cd /workspace/climber/frontend-react
 export NODE_OPTIONS="--max-old-space-size=4096"
 
 npm run typecheck
 npm run build
 npm run lint          # oxlint
 
-# 单元测试（380 文件 / 3305 项）；并发 worker 过多会卡死，建议限制
+# 单元测试；并发 worker 过多会卡死，建议限制
 npm test -- --maxWorkers=2
 
 # E2E（Playwright，webServer 自动拉起后端与 vite）
@@ -74,8 +74,8 @@ npm run test:e2e -- e2e/06-workspace-responsive.spec.ts
 
 ## 验收门禁
 
-- 后端：compileall、ruff、OpenAPI operation ID 唯一、联合回归 + smoke。
-- 前端：typecheck、生产 build、3305 项 Vitest、1440/768/375 三视口 Playwright（scrollWidth <= innerWidth、导航可达、按钮 >= 44px、键盘焦点）。
+- 后端：compileall、ruff、OpenAPI operation ID 唯一、联合回归 + smoke；当前非集成回归仍有 18 个失败项，失败清单见 `../../docs/TEST_REPORT.md`。
+- 前端：typecheck、生产 build、当前 Vitest 集合、1440/768/375 三视口 Playwright（scrollWidth <= innerWidth、导航可达、按钮 >= 44px、键盘焦点）；具体数量以当前运行输出为准。
 - 测试真实执行，禁止 skip、排除或修改断言伪造通过。
 
 ## 文档

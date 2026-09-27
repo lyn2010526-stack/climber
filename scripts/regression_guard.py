@@ -16,12 +16,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -223,16 +222,7 @@ async def send_slack_alert(webhook_url: str, report: RegressionReport) -> bool:
                 },
             },
         ]
-        for suite in failed_suites:
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*{suite.name}*\n"
-                    + "\n".join(f"  - {t}" for t in suite.failed_tests[:5]),
-                },
-            })
-
+        blocks.extend({ "type": "section", "text": { "type": "mrkdwn", "text": f"*{suite.name}*\n" + "\n".join(f"  - {t}" for t in suite.failed_tests[:5]), }, } for suite in failed_suites)
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(webhook_url, json={"blocks": blocks})
             return resp.status_code == 200
@@ -242,7 +232,7 @@ async def send_slack_alert(webhook_url: str, report: RegressionReport) -> bool:
 
 def save_report(report: RegressionReport) -> Path:
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     report_path = REPORTS_DIR / f"regression_{timestamp}.json"
     report_path.write_text(json.dumps(report.to_dict(), indent=2))
 
@@ -268,9 +258,7 @@ def format_report_text(report: RegressionReport) -> str:
             f"{result.duration_seconds:.1f}s)"
         )
         if result.failed_tests:
-            for test in result.failed_tests[:5]:
-                lines.append(f"        - {test}")
-    lines.append("-" * 60)
+            lines.extend(f"        - {test}" for test in result.failed_tests[:5])
     return "\n".join(lines)
 
 
@@ -328,7 +316,7 @@ async def run_guard(args: argparse.Namespace) -> RegressionReport:
     total_duration = sum(r.duration_seconds for r in results)
 
     report = RegressionReport(
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         overall_passed=overall_passed,
         test_results=results,
         total_duration=total_duration,

@@ -15,16 +15,18 @@
 
 ## 安全架构概览
 
-Climber 采用纵深防御（Defense-in-Depth）策略，通过 7 层安全防护确保系统安全：
+Climber 采用纵深防御（Defense-in-Depth）策略，当前代码可核实的防护包括请求中间件、认证上下文、工具权限、输入校验、沙箱与可观测审计：
+
+安全能力受运行配置约束。`ENABLE_AUTH` 默认值为 `false`，本地/测试模式会注入默认 principal；生产或 staging 必须设置真实 `APP_SECRET_KEY` 并显式启用认证。`app/main.py` 已注册 `CsrfProtectionMiddleware`；认证入口、Bearer/API key 请求和 cookie 会话的例外语义仍应以对应测试和部署配置为准。
 
 ```mermaid
 flowchart TB
-    L1["Layer 1\n传输安全\nHTTPS / HSTS"]
+    L1["Layer 1\n请求与安全头中间件"]
     L2["Layer 2\n请求验证\n大小限制 / JSON 深度"]
     L3["Layer 3\n速率限制\nToken Bucket"]
-    L4["Layer 4\n认证授权\nJWT / API Key"]
+    L4["Layer 4\n认证授权\n访问令牌 / Principal"]
     L5["Layer 5\n输入消毒\n路径 / Shell / Prompt"]
-    L6["Layer 6\n权限控制\n7 级权限模式"]
+    L6["Layer 6\n权限控制\nallow / ask / deny"]
     L7["Layer 7\n沙箱隔离\nDocker / 进程"]
 
     L1 --> L2 --> L3 --> L4 --> L5 --> L6 --> L7
@@ -37,9 +39,8 @@ flowchart TB
 ### Layer 1: 传输安全
 
 **防护措施**:
-- HSTS (HTTP Strict Transport Security) 强制 HTTPS
-- TLS 1.2+ 加密传输
-- 证书固定（Certificate Pinning）
+- `SecurityHeadersMiddleware` 添加应用安全响应头
+- HTTPS、HSTS、TLS 版本和证书策略由部署层负责
 
 **响应头**:
 ```
@@ -59,7 +60,7 @@ MAX_CONTENT_LENGTH = 5 * 1024 * 1024  # 5 MB
 MAX_JSON_DEPTH = 10
 ```
 
-**实现**: `app/middleware/security.py`
+**实现**: `app/middleware/security.py`、`app/middleware/rate_limit.py`
 
 ### Layer 3: 速率限制
 
@@ -73,18 +74,20 @@ MAX_JSON_DEPTH = 10
 ### Layer 4: 认证授权
 
 **防护措施**:
-- JWT Token 认证
-- API Key 加密存储
-- 会话隔离
+- `AuthMiddleware` 建立请求认证上下文
+- `app/core/auth_manager.py` 创建和验证带过期时间的访问/刷新令牌
+- 管理员范围通过 `require_admin()` 校验
+- API Key 使用应用密钥派生的加密存储路径
+- 会话和群组 WebSocket 在认证启用时校验凭据及资源归属
+- `app/api/v1/routes/tasks.py` 的任务进度 WebSocket 当前直接接受连接，未复用 WebSocket 认证门禁
 
-**JWT 配置**:
+**访问令牌配置**:
 ```env
-JWT_SECRET_KEY=<强随机密钥>
-JWT_ALGORITHM=HS256
-JWT_EXPIRE_MINUTES=1440
+APP_SECRET_KEY=<强随机密钥>
+ENABLE_AUTH=true
 ```
 
-**API Key 加密**: 使用 AES-256 加密存储于数据库
+**API Key 加密**: 由应用密钥派生 Fernet 密钥后加密存储；具体实现以配置和代码为准。
 
 ### Layer 5: 输入消毒
 
@@ -129,21 +132,19 @@ ALLOWED_PATHS=/workspace/projects,/home/user/workspace
 - 危险模式检测
 - 上下文隔离
 
-**实现**: `app/core/security_utils.py`
+**实现**: `app/core/engine/validation.py`、`app/core/security_sandbox.py`、`app/core/safety_pipeline.py`
 
 ### Layer 6: 权限控制
 
-**7 级权限模式**:
+**权限决策**:
 
 | 级别 | 模式 | 说明 |
 |------|------|------|
-| 1 | Read-Only | 仅允许读取操作 |
-| 2 | Standard | 标准权限，危险操作需确认 |
-| 3 | Elevated | 提升权限，允许写入 |
-| 4 | Admin | 管理权限 |
-| 5 | Unrestricted | 无限制 |
-| 6 | Bypass | 绕过所有检查 |
-| 7 | Debug | 调试模式 |
+| allow | 允许 | 规则匹配后直接执行 |
+| ask | 请求确认 | 默认模式下非读取操作的默认决策 |
+| deny | 拒绝 | 黑名单、计划模式或无有效安全规则时拒绝 |
+
+`PermissionMode` 还提供 `default`、`acceptEdits`、`plan`、`auto`、`bypass`、`strict` 六种模式。文档将权限模式与 allow/ask/deny 决策分开描述。
 
 **权限规则引擎**:
 ```json
@@ -159,7 +160,7 @@ ALLOWED_PATHS=/workspace/projects,/home/user/workspace
 }
 ```
 
-**实现**: `app/core/permission_controller.py` / `app/core/permission_rules.py`
+**实现**: `app/core/permission_rules.py`、`app/core/security_sandbox.py`
 
 ### Layer 7: 沙箱隔离
 
@@ -178,7 +179,7 @@ class SandboxConfig:
     read_only_root: bool = True
 ```
 
-**实现**: `app/core/docker_sandbox.py` / `app/core/sandbox.py`
+**实现**: `app/core/security/docker_sandbox.py`、`app/core/security/fs_isolation.py`、`app/core/sandbox.py`
 
 ---
 
@@ -216,7 +217,7 @@ flowchart TD
 - 工具调用权限检查
 - Agent 行为审计日志
 
-**相关代码**: `app/core/security_utils.py`
+**相关代码**: `app/core/engine/validation.py`、`app/core/security_sandbox.py`
 
 ### 2. 路径穿越
 
@@ -254,7 +255,7 @@ ALLOWED_PATHS=/workspace/projects
 **描述**: API Key 被未授权访问或日志泄露。
 
 **缓解措施**:
-- AES-256 加密存储
+- 应用密钥派生的加密存储
 - 内存中解密，不持久化明文
 - 日志脱敏
 - Key 轮换机制
@@ -268,7 +269,7 @@ ALLOWED_PATHS=/workspace/projects
 **描述**: 攻击者获取有效会话 Token 冒充用户。
 
 **缓解措施**:
-- JWT 过期机制
+- 访问令牌过期机制
 - Token 绑定用户 ID
 - 会话所有权验证
 - HTTPS 传输加密
@@ -334,8 +335,8 @@ ALLOWED_PATHS=/workspace/projects
 LOG_LEVEL=WARN
 
 # 认证
-JWT_SECRET_KEY=<32+字节随机密钥>
-JWT_EXPIRE_MINUTES=60
+APP_SECRET_KEY=<32+字节随机密钥>
+ENABLE_AUTH=true
 
 # 限制
 MAX_TOKENS_PER_SESSION=50000
@@ -345,7 +346,7 @@ MEMORY_LIMIT_MB=1024
 
 ### 生产环境安全清单
 
-- [ ] 修改所有默认密钥（APP_SECRET_KEY, JWT_SECRET_KEY）
+- [ ] 为生产环境设置强随机 `APP_SECRET_KEY` 并启用 `ENABLE_AUTH`
 - [ ] 启用沙箱模式（SANDBOX_MODE=true）
 - [ ] 配置 ALLOWED_PATHS 限制文件访问
 - [ ] 启用 HTTPS

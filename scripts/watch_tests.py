@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock, Thread
 from typing import Any
 
 from watchdog.events import (
     FileSystemEvent,
-    FileSystemEventHandler,
     PatternMatchingEventHandler,
 )
 from watchdog.observers import Observer
@@ -70,7 +68,7 @@ class TestResult:
         self.output = output
         self.test_count = test_count
         self.fail_count = fail_count
-        self.timestamp = datetime.now().isoformat()
+        self.timestamp = datetime.now(UTC).isoformat()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -105,9 +103,7 @@ class AlertManager:
         """Check if we should send an alert for this file."""
         now = time.time()
         last_alert = self._state.get("alerted_files", {}).get(file_path, 0)
-        if now - last_alert < 300:
-            return False
-        return True
+        return not now - last_alert < 300
 
     def record_failure(self, file_path: str) -> None:
         """Record a test failure."""
@@ -161,7 +157,7 @@ class AlertManager:
             f.write(f"Backend: {result.backend}\n")
             f.write(f"Duration: {result.duration:.2f}s\n")
             f.write(f"Tests: {result.test_count}, Failures: {result.fail_count}\n")
-            f.write(f"\n--- Output ---\n")
+            f.write("\n--- Output ---\n")
             f.write(result.output[-2000:])
             f.write("\n")
 
@@ -188,7 +184,7 @@ class CoverageReporter:
     def record_coverage(self, percentage: float) -> None:
         """Record a coverage measurement."""
         entry = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "coverage": percentage,
         }
         self._history.append(entry)
@@ -201,7 +197,7 @@ class CoverageReporter:
         recent = [e["coverage"] for e in self._history[-5:]]
         if recent[-1] > recent[0]:
             return "improving"
-        elif recent[-1] < recent[0]:
+        if recent[-1] < recent[0]:
             return "declining"
         return "stable"
 
@@ -588,7 +584,7 @@ class ChangeHandler(PatternMatchingEventHandler):
         """Run backend tests for a changed file."""
         rel_path = os.path.relpath(file_path, str(PROJECT_ROOT))
         print(f"\n[BACKEND CHANGE] {rel_path}")
-        print(f"  Running tests...")
+        print("  Running tests...")
 
         if "__pycache__" in file_path or ".pytest_cache" in file_path:
             return
@@ -600,7 +596,7 @@ class ChangeHandler(PatternMatchingEventHandler):
         """Run frontend tests for a changed file."""
         rel_path = os.path.relpath(file_path, str(PROJECT_ROOT))
         print(f"\n[FRONTEND CHANGE] {rel_path}")
-        print(f"  Running tests...")
+        print("  Running tests...")
 
         if "node_modules" in file_path:
             return
@@ -624,7 +620,7 @@ class ChangeHandler(PatternMatchingEventHandler):
             self.alert_manager.record_success()
         else:
             self.alert_manager.send_alert(result, trigger_file)
-            print(f"\n  Failure output (last 15 lines):")
+            print("\n  Failure output (last 15 lines):")
             lines = result.output.strip().split("\n")
             for line in lines[-15:]:
                 print(f"    {line}")
@@ -792,7 +788,7 @@ class ContinuousTestDaemon:
 
     def _run_periodic_backend(self) -> None:
         """Run periodic full backend test."""
-        print(f"\n[PERIODIC] Full backend test @ {datetime.now().strftime('%H:%M:%S')}")
+        print(f"\n[PERIODIC] Full backend test @ {datetime.now(UTC).strftime('%H:%M:%S')}")
         result = self.runner.run_backend_tests(quick=False)
         status = "PASS" if result.passed else "FAIL"
         print(f"  [{status}] {result.test_count} tests, "
@@ -809,7 +805,7 @@ class ContinuousTestDaemon:
 
     def _run_periodic_coverage(self) -> None:
         """Run coverage report generation."""
-        print(f"\n[COVERAGE] Generating report @ {datetime.now().strftime('%H:%M:%S')}")
+        print(f"\n[COVERAGE] Generating report @ {datetime.now(UTC).strftime('%H:%M:%S')}")
         result = self.runner.run_backend_coverage()
         status = "PASS" if result.passed else "FAIL"
         print(f"  [{status}] {result.test_count} tests ({result.duration:.2f}s)")
@@ -823,7 +819,7 @@ class ContinuousTestDaemon:
 
     def _run_periodic_e2e(self) -> None:
         """Run E2E tests periodically."""
-        print(f"\n[E2E] Running E2E tests @ {datetime.now().strftime('%H:%M:%S')}")
+        print(f"\n[E2E] Running E2E tests @ {datetime.now(UTC).strftime('%H:%M:%S')}")
         result = self.runner.run_e2e_tests()
         status = "PASS" if result.passed else "FAIL"
         print(f"  [{status}] {result.test_count} tests, "
@@ -843,7 +839,6 @@ class ContinuousTestDaemon:
 def run_full_suite() -> None:
     """Run full test suite (non-watch mode)."""
     runner = TestRunner()
-    alert_manager = AlertManager(ALERT_STATE_FILE)
     coverage_reporter = CoverageReporter(COVERAGE_DIR)
 
     print("=" * 60)

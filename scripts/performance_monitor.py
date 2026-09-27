@@ -23,7 +23,7 @@ import sys
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -96,7 +96,7 @@ class APIMonitor:
             latency_ms = (time.monotonic() - start) * 1000
             return APIMetric(
                 endpoint=endpoint,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 response_time_ms=latency_ms,
                 status_code=resp.status_code,
                 success=200 <= resp.status_code < 500,
@@ -105,7 +105,7 @@ class APIMonitor:
             latency_ms = (time.monotonic() - start) * 1000
             return APIMetric(
                 endpoint=endpoint,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 response_time_ms=latency_ms,
                 status_code=0,
                 success=False,
@@ -140,7 +140,7 @@ class SystemMonitor:
                 connections = 0
 
             metric = SystemMetric(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 cpu_percent=cpu,
                 memory_percent=mem.percent,
                 memory_used_mb=mem.used / (1024**2),
@@ -150,7 +150,7 @@ class SystemMonitor:
             )
         except ImportError:
             metric = SystemMetric(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 cpu_percent=0.0,
                 memory_percent=0.0,
                 memory_used_mb=0.0,
@@ -255,7 +255,7 @@ def analyze_performance(
 
 def save_metrics(report: PerformanceReport) -> Path:
     METRICS_DIR.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     path = METRICS_DIR / f"perf_{timestamp}.json"
     data = report.to_dict()
     data["api_metrics"] = [m.__dict__ for m in report.api_metrics]
@@ -296,9 +296,7 @@ def format_report_text(report: PerformanceReport) -> str:
     if report.summary.get("alerts"):
         lines.append("")
         lines.append("  ALERTS:")
-        for alert in report.summary["alerts"]:
-            lines.append(f"    - {alert}")
-
+        lines.extend(f"    - {alert}" for alert in report.summary["alerts"])
     lines.append("-" * 60)
     return "\n".join(lines)
 
@@ -338,7 +336,7 @@ async def main() -> int:
     )
 
     report = PerformanceReport(
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         duration_seconds=duration,
         api_metrics=api_monitor.metrics,
         system_metrics=sys_monitor.metrics,

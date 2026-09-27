@@ -70,6 +70,7 @@ graph TD
 ### 基础设施
 
 - `app/main.py` 注册 `RateLimitMiddleware`（仅受信代理读取转发头）、CORS、SecurityHeaders、Metrics 与 RequestValidation；401/403/429/500 响应仍携带 CORS、安全头与 metrics。
+- `app/main.py` 同时注册 `CsrfProtectionMiddleware`；认证入口和非 cookie 凭据的例外规则由中间件实现并由 `tests/core/test_csrf_middleware.py` 覆盖。
 - 静态托管 `frontend-react/dist`，SPA fallback；dist 缺失 index.html 时启动明确报错。
 - `APP_SECRET_KEY` 移除随机回退：认证启用或 production/staging 缺失稳定 key 快速失败；local/test 使用稳定持久开发密钥。
 - prompt templates 单一前缀 `/api/v1/prompt-templates`，固定子路由位于 `/{template_id}` 之前。

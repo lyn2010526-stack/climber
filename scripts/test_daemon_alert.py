@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import json
-import os
 import smtplib
-from datetime import datetime
+from datetime import UTC, datetime
 from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Any
@@ -41,7 +40,7 @@ class AlertConfig:
             self.cooldown_seconds = config.get("cooldown_seconds", 300)
 
     @classmethod
-    def load(cls) -> "AlertConfig":
+    def load(cls) -> AlertConfig:
         if ALERT_CONFIG_FILE.exists():
             try:
                 data = json.loads(ALERT_CONFIG_FILE.read_text())
@@ -84,7 +83,7 @@ class AlertSender:
             return False
 
         alert_key = f"{title}:{message[:50]}"
-        now = datetime.now().timestamp()
+        now = datetime.now(UTC).timestamp()
         last_sent = self._last_alerts.get(alert_key, 0)
         if now - last_sent < self.config.cooldown_seconds:
             return False
@@ -117,7 +116,7 @@ class AlertSender:
                 "color": color_map.get(severity, "#ff0000"),
                 "title": title,
                 "text": message,
-                "ts": int(datetime.now().timestamp()),
+                "ts": int(datetime.now(UTC).timestamp()),
             }]
         }
         if metadata:
@@ -138,7 +137,7 @@ class AlertSender:
             "title": title,
             "message": message,
             "severity": severity,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "source": "test-daemon",
         }
         if metadata:
@@ -150,7 +149,7 @@ class AlertSender:
         self,
         title: str,
         message: str,
-        metadata: dict[str, Any] | None,
+        metadata: dict[str, Any] | None,  # noqa: ARG002  # base notifier contract
     ) -> bool:
         """Send email alert."""
         try:

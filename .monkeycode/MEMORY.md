@@ -152,17 +152,85 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
 - Context: Agent 在完整回归前端与生成文档时发现
 - Category: 测试方法
 - Instructions:
-  - 前端完整 vitest 用默认并发 worker 会长时间无输出（卡死/超时）；可信全量用 `NODE_OPTIONS="--max-old-space-size=4096" npx vitest run --maxWorkers=2`，并串行执行 typecheck/build/test，避免并行争抢内存
-  - 依赖 Task 子代理生成项目文档时可能返回空结果或失败报 `Upstream HTTP/2 stream failed`；文档与规格类产出应直接由主会话写入，不要反复重试子代理
+- 前端完整 vitest 用默认并发 worker 会长时间无输出（卡死/超时）；可信全量用 `NODE_OPTIONS="--max-old-space-size=4096" npx vitest run --maxWorkers=2`，并串行执行 typecheck/build/test，避免并行争抢内存
+- 依赖 Task 子代理生成项目文档时可能返回空结果或失败报 `Upstream HTTP/2 stream failed`；文档与规格类产出应直接由主会话写入，不要反复重试子代理
+
+[项目知识摘要]
+- Date: 2026-09-26
+- Context: Agent 在建立规则优先的开发治理文档时核对仓库结构
+- Category: 工作流协作
+- Instructions:
+  - Climber 的默认开发边界是 Python/FastAPI 后端；`app/static/` 当前只有少量 HTML，`frontend-react/` 是独立的前端目录，任务需明确前端扩展后才启用组件库评估。
+  - 仓库没有 uni-app 目录或配置，治理文档和开发计划不得把 uni-app 当作项目事实。
+  - 开发任务按 API 合约、Agent 核心、领域与模型、存储与迁移、集成与工具、Web 表面、测试与质量、文档与治理 8 个边界拆分，并在开始前声明文件归属。
+  - 治理文档入口是根目录 `AGENTS.md`、`docs/DEVELOPMENT_RULES.md` 和 `docs/DESIGN_SYSTEM.md`；新增文档需同步登记 `docs/DEVELOPMENT_RULES.md` 的相关文档索引。
 
 
 [项目知识摘要]
-- Date: 2026-09-12
-- Context: Agent 在执行阻断级修复与交付验证时发现
-- Category: 构建方法
+- Date: 2026-09-26
+- Context: Agent 在修复安全门禁、分层导入与 lint 配置时发现
+- Category: 排错调试
 - Instructions:
-  - 当前可信验证基线（覆盖并修正 2026-08-05 条目中过时的 3305 tests 声明）：后端 `python3 -m pytest tests/` 41 passed；前端 `src/` 内 vitest 38 files / 640 tests；`npm run typecheck` 与 `npm run build` 零错误通过。孤儿测试 NotFoundPage.test.tsx / ForbiddenPage.test.tsx 因页面已删除且无引用，经用户确认已删除
-  - cleanup 系列提交曾删除仍被路由/页面引用的组件（tracing/TraceViewer、workflow/WorkflowNodes、mobile/LazyImage、ios/IOSToast、store/auth 等），修复时用 `git show <删除提交>^:<路径>` 恢复；barrel 文件（chat/ui/ios/index.ts、components/index.ts）中指向不存在文件的导出行必须同步修剪
-  - 前端任务契约以 `app/api/v1/routes/tasks.py` 为准（`task_id`/TaskSubmitRequest），`api.ts` 中 `/tasks/{id}/run|pause|resume` 是后端不存在的幻影端点，调用方应改接 submit/cancel/getStatus
-  - docker-compose 启动需要环境变量 `POSTGRES_PASSWORD`（compose 用 `${POSTGRES_PASSWORD:?}`），不再提供明文默认凭证
-  - 平台 Git 凭证助手（/app/agent/bin/agent git-credential-helper）会间歇性返回 500 导致 push 失败；git 提交需在仓库级先 `git config user.name/user.email`，否则容器内无法自动探测身份
+  - `ruff.toml` 会完全遮蔽 `pyproject.toml` 的 `[tool.ruff*]`（Ruff 发现顺序：同目录 ruff.toml 优先）。历史上 pyproject 的严格规则集（含 bandit `S` 系列）从未生效；两份配置已同步为一致内容，修改规则时两处都要改，或删掉 ruff.toml 只留 pyproject
+  - `app/core/` 反向依赖 `app/api/v1/` 会造成循环导入：`app.core.reasoning.api` 曾 import `app.api.v1.common`，而 `app/api/v1/__init__.py` 又聚合 `reasoning.api`，导致 `import app.core.reasoning.api` 直接报 `partially initialized module ... has no attribute 'router'`。共享 engine 访问器已移到 `app/core/engine_registry.py`；core 层取调用者身份直接用 `app.core.principal.get_context_principal()`，不要再 import `app.api.v1.common`
+  - 用 `from X import f` 绑定后，测试里 `monkeypatch.setattr("包.get_engine", ...)` 对已导入模块无效，必须 patch 使用方模块（`app.core.reasoning.api.get_engine`）
+  - 应急停止（emergency stop）统一入口是 `app.core.observability.emergency_stop.execution_blocked()`，返回拒绝原因字符串或 None。新增执行入口（workflow/crew/collaboration/headless）必须调用它，只接 `AgentEngine.run()` 会出现旁路
+  - `app.core.observability.api` 曾自带一个 `_emergency_stop` 单例，与 `emergency_stop.get_emergency_stop()` 互不相通，导致 REST 激活急停后引擎完全看不到；任何模块都不得自建 manager 单例
+  - SSRF 防护原本在 `app/utils/ssrf.py` 但零调用方，实际不生效；现统一在 `ToolRegistry.execute()` 里对 `NETWORK_TOOLS` 的 url/uri/target/link/endpoint 参数做检查（egress 门禁在前、SSRF 在后）
+  - `app/tools/builtins.py` 的 `web_search` 曾有 `verify=False` 的 TLS 校验降级重试（可被中间人利用），已删除；`app/storage/cache.py` 的 md5 仅用于缓存 key 指纹，加了 `usedforsecurity=False`
+  - 快照：`.monkeycode/checkpoints/cp-0119-security-gate-fixes.tar.gz`、`cp-0120-security-and-layering.tar.gz`、`cp-0121` 至 `cp-0125`
+
+[项目知识摘要]
+- Date: 2026-09-26
+- Context: Agent 在接入 SSRF、可观测性和 checkpoint 持久化时发现
+- Category: 测试方法
+- Instructions:
+  - 独立 research pipeline 的 urllib 抓取必须在 `urlopen` 前调用 `app.utils.ssrf.blocked_reason()`；ToolRegistry 的统一工具执行门禁无法覆盖直接调用的 pipeline。
+  - TraceCollector、AuditChain、GoalTracker 默认使用 `CLIMBER_DATA_DIR` 下的 SQLite 文件；测试应传入 `tmp_path`，生产 API 通过 `app.core.observability.api` 的共享 getter 读取。
+  - AgentEngine 默认使用 SQLiteCheckpointStore，跨实例重启恢复应使用同一数据库配置验证；需要隔离时显式传入 InMemoryCheckpointStore。
+
+[项目知识摘要]
+- Date: 2026-09-26
+- Context: Agent 在执行两轮八任务并行优化和统一回归时发现
+- Category: 测试方法
+- Instructions:
+  - 八个并行任务必须按 `AGENTS.md` 文件边界拆分；跨任务汇总后先检查重叠文件、`git diff --check`、编译和定向测试，再串行运行全量测试。
+  - CSRF 中间件接入后，认证入口 `/api/v1/auth/login` 和 `/api/v1/auth/refresh` 必须排除；Bearer/API key 请求跳过浏览器双提交校验，cookie 会话继续校验。
+  - 测试中禁止直接给共享模块函数赋值替身；使用 `monkeypatch.setattr` 自动恢复，避免测试顺序污染。
+  - 第二轮资源授权任务未执行源代码审计，继续列为待处理安全工作包；依赖审计已记录在 `docs/DEPENDENCY_AUDIT.md`。
+
+[项目知识摘要]
+- Date: 2026-09-26
+- Context: Agent 在第三、四轮八任务优化、迁移自愈和串行回归验证时发现
+- Category: 测试方法 | 排错调试 | 运维部署
+- Instructions:
+  - 当前非集成基线命令：`python3 -m pytest tests/ -q --timeout=120 -o addopts='' -p no:cacheprovider --ignore=tests/integration`；结果 `1088 passed, 1 warning, 18 subtests passed`，warning 为 ChromaDB 第三方弃用提示。
+  - 绝不要并行启动多个 pytest 进程：所有测试共用 `data/test.db`，`cleanup_db` 夹具会互相清空数据，产生大量假失败。测试必须串行执行。
+  - `data/test.db` 由 `create_all` 引导且不含 `alembic_version` 表，`create_all` 不给既有表补列。新增列需要 `init_db()` 里的 `ensure_task_owner_schema()` 之类自愈步骤，或先 `alembic stamp` 再 `upgrade`。
+  - 初始迁移 `dd8212a8f22a` 假定空库，对已由 `create_all` 建表的数据库执行会因重复建表失败；索引类迁移必须先判断表是否存在。
+  - 任务 owner 已持久化到 `AutoLoopTask.owner_id`（可空），读取时回退历史 objective JSON；新提交在 `submit()` 时直接写入该字段。
+  - 浏览器导航已安装 context 级 `**/*` 路由，每个请求目的地都经过 SSRF 校验，初始 URL 和重定向均受控。
+  - 第四轮修复了三个取消缺陷：Workflow 取消后节点残留 RUNNING、Flow 取消后子任务继续运行、并行 Crew 取消后任务残留 RUNNING。对应测试已从 `xfail(strict=True)` 转为常规回归。
+  - `pip-audit` 在本环境不可用（命令和 `pip_audit` 模块都缺失），Python 依赖漏洞扫描仍未完成，详见 `docs/DEPENDENCY_AUDIT.md`。
+
+[项目知识摘要]
+- Date: 2026-09-27
+- Context: Agent 在清理 `app/` 的 bandit（S）与 pyflakes（F）lint 门禁时通过最小复现实验确认的 Ruff 行为
+- Category: 排错调试
+- Instructions:
+  - S603 只要 argv 里有任一非字面量元素就报（变量、`str(x)` 调用、列表解包都算），纯字面量 argv 不报。因此按要求用 `shutil.which()` 解析绝对路径会必然产生 S603：两个规则无法同时靠"改代码"满足。
+  - S607（部分可执行路径）用 `shutil.which()` 换成绝对路径即可消除；S102（`exec`）、S310（`urllib.request.Request`/`urlopen`）、S311（`random`）无法靠注释或代码结构调整消除，只能保留真实修复 + 就地 `noqa`（仓库已有先例：`app/tools/research.py` 的 `# noqa: S310`、`app/core/observability/trace.py` 的 `# noqa: S311`）。S311 只有换 `secrets.SystemRandom()` 才能真消除。
+  - S108 只认字面量里的 `/tmp`、`/var/tmp`；`tempfile.gettempdir()` 派生的模块级常量不报，且可保持默认值不变。
+  - `ruff check --select RUF100` 单独跑会把所有 noqa 误报为"non-enabled"；判断 noqa 是否多余必须用仓库完整配置（`ruff check app/`）跑。
+  - 门禁命令：`python3 -m ruff check app/ --select S,F,E9` 与 `--select F,E9`；`tests/core/engine/test_file_tool_classification.py::test_file_table_names_only_registered_tools` 是既有失败（该文件不导入 `app.main`，全局工具注册表为空），与本轮改动无关。
+
+[项目知识摘要]
+- Date: 2026-09-27
+- Context: Agent 在把 `ruff check .` 从 603 个问题清到 0 的过程中反复踩到的两类破坏
+- Category: 排错调试 | 工作流协作
+- Instructions:
+  - **绝对不要用脚本批量做 AST 改写**（循环转推导式、`extend` 替换、删除 `elif` 等）。这类改写会静默吞掉分支体和 `return` 语句，`ruff` 和 `compileall` 都发现不了，只在运行时或测试里暴露。必须逐处手工改并当场核对。
+  - 检测丢失语句的可靠方法：写 AST 脚本对比改动前后的函数「带值 return 数量」，比 `git diff` 肉眼扫更可靠。判据是同一函数的带值 `return` 变少即为丢失。
+  - **TC001/TC002/TC003 迁移在 FastAPI 路由模块上是运行时破坏**。FastAPI 在建路由时求值 handler 注解，把 `CurrentPrincipal`、`AsyncSession`、各 `XxxRequest` 移进 `if TYPE_CHECKING:` 后，所有这些端点会把 body 参数降级成 query 参数并返回 422。涉及 `app/api/v1/{common,helpers,settings}.py`、`app/api/v1/routes/{agents,crews,groups,skills,workflows}.py`、`app/core/reasoning/api.py`。这些文件已加文件级 `# ruff: noqa: TC001, TC002`，防止下次 lint 又移回去。
+  - 判别某条 TC00x 建议是否可用：看该注解是否出现在 `APIRouter` 的 handler 签名上（或 `Depends()` 参数里）。是则必须留在运行时导入。
+  - `git checkout -- <file>` 会丢掉该文件未提交的全部改动，即使后来用 `cp` 从 checkpoint 恢复，也可能覆盖掉更晚的版本。回滚前先与 `.monkeycode/checkpoints/` 里最新的快照逐文件 `diff` 核对。

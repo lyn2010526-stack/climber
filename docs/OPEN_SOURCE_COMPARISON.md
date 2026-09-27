@@ -1,7 +1,7 @@
 # 开源 AI Agent / Multi-Agent / AI Coding 项目对比分析报告
 
 > 生成日期: 2026-08-03
-> 分析目标: /workspace/agent-engine (Climber)
+> 分析目标: `/workspace/climber` (Climber)
 > 对比项目数量: 20
 
 ---

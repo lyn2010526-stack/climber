@@ -20,8 +20,7 @@ import shutil
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -105,16 +104,15 @@ async def check_database(db_url: str) -> CheckResult:
             await engine.dispose()
             latency = (time.monotonic() - start) * 1000
             return CheckResult("database", "pass", "SQLite connection OK", latency)
-        else:
-            from sqlalchemy import text
-            from sqlalchemy.ext.asyncio import create_async_engine
+        from sqlalchemy import text
+        from sqlalchemy.ext.asyncio import create_async_engine
 
-            engine = create_async_engine(db_url, pool_pre_ping=True)
-            async with engine.begin() as conn:
-                await conn.execute(text("SELECT 1"))
-            await engine.dispose()
-            latency = (time.monotonic() - start) * 1000
-            return CheckResult("database", "pass", "PostgreSQL connection OK", latency)
+        engine = create_async_engine(db_url, pool_pre_ping=True)
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+        await engine.dispose()
+        latency = (time.monotonic() - start) * 1000
+        return CheckResult("database", "pass", "PostgreSQL connection OK", latency)
     except Exception as e:
         latency = (time.monotonic() - start) * 1000
         return CheckResult("database", "fail", f"Database error: {e}", latency)
@@ -318,7 +316,7 @@ async def run_all_checks(
         overall = "healthy"
 
     return HealthReport(
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         overall_status=overall,
         checks=checks,
     )

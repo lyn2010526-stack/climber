@@ -50,10 +50,10 @@ agent-engine/
 │   ├── core/            # Agent 引擎核心 (149+ 模块)
 │   │   ├── engine/      # 会话执行引擎
 │   │   ├── memory/      # 记忆系统
-│   │   ├── metacognition/ # 元认知模块
+│   │   ├── metacognition/ # 实验性元认知模块，当前无主线调用方
 │   │   ├── prompt_engine/ # 提示词引擎
 │   │   ├── reasoning/   # 推理模块
-│   │   ├── security/    # 安全模块
+│   │   ├── security/    # 独立安全 API/组件，当前未由 main.py 挂载
 │   │   └── execution/   # 执行器
 │   ├── middleware/      # 中间件 (安全/指标/速率限制)
 │   ├── models/          # LLM 模型适配器
@@ -192,15 +192,25 @@ flowchart TB
 ### ToolRuntime（工具运行时）
 
 **目的**: 统一工具注册、发现和执行
-**位置**: `app/core/tool_runtime.py`
-**依赖**: MCPRegistry, PermissionController
+**位置**: `app/tools/__init__.py`
+**依赖**: MCP client/registry、`app/core/engine/validation.py`、`app/core/security_sandbox.py`
+
+### 主线状态对账
+
+- MCP 主线由 `app/tools/mcp_client.py`、`app/tools/mcp_router.py`、`app/tools/__init__.py` 和 `app/api/v1/routes/misc.py` 提供。`app/core/mcp_controller.py` 只有本地生命周期 stub，当前无生产导入方。
+- `app/core/metacognition/` 由包内模块互相导入，仓库其余生产模块没有导入方，状态为实验性/未接线。
+- `app/core/security/` 提供独立安全组件和 `/api/v1/security` router，但 `app/main.py` 未挂载该 router；AgentEngine 实际使用 `app/core/security_sandbox.py`、`app/core/engine/validation.py` 及相关安全门禁。
+- `app/core/engine/safety.py` 的 docstring 已明确其为兼容层；AgentEngine 实际调用 `app/core/engine/validation.py` 中的 `validate_tool_call`。
+- `Flow` 由 `app/core/task_worker.py` 注册的 `workflow` 任务调用，并通过 `WorkflowEngine` 执行；`FlowExecutor` 在仓库内没有生产调用方。
+- AgentEngine 默认使用 `SQLiteCheckpointStore`；`app/core/recovery.py` 读取最新检查点，并通过 `app/core/replay.py` 只回放可安全复用的读结果。
+- AgentEngine 通过 `app/core/observability.api` 获取共享 `TraceCollector` 与 `AuditChain` 并写入；对应 API 在 `app/main.py` 挂载。
 **被依赖**: AgentEngine, MultiAgent
 
-### PermissionController（权限控制）
+### Permission rules and security sandbox（权限控制）
 
-**目的**: 7 级权限模式管理，危险命令拦截
-**位置**: `app/core/permission_controller.py`
-**依赖**: PermissionRules
+**目的**: allow/ask/deny 决策、六种权限模式、危险命令和文件访问校验
+**位置**: `app/core/permission_rules.py`、`app/core/security_sandbox.py`、`app/core/engine/validation.py`
+**依赖**: 工具分类表和安全流水线
 **被依赖**: ToolRuntime, AgentEngine
 
 ### ModelScheduler（模型调度）
@@ -381,12 +391,12 @@ erDiagram
 flowchart TB
     subgraph SecurityLayers["安全层"]
         direction TB
-        L1["Layer 1: 传输安全\nHTTPS / HSTS"]
+        L1["Layer 1: 请求与安全头中间件"]
         L2["Layer 2: 请求验证\n大小限制 / JSON 深度"]
         L3["Layer 3: 速率限制\nToken Bucket"]
-        L4["Layer 4: 认证授权\nJWT / API Key"]
+        L4["Layer 4: 认证授权\n访问令牌 / Principal"]
         L5["Layer 5: 输入消毒\n路径验证 / Shell 分析"]
-        L6["Layer 6: 权限控制\n7 级权限模式"]
+        L6["Layer 6: 权限控制\nallow / ask / deny"]
         L7["Layer 7: 沙箱隔离\nDocker / 进程隔离"]
     end
 

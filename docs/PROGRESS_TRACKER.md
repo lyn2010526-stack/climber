@@ -1,6 +1,6 @@
 # Best Practices Integration Progress Tracker
 
-基于对 10 个优秀开源项目的深度研究，本文档跟踪将最佳实践集成到 /workspace/agent-engine 的进度。
+基于对 10 个优秀开源项目的深度研究，本文档跟踪将最佳实践集成到 `/workspace/climber` 的进度。
 
 ## 研究覆盖
 

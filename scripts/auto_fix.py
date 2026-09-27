@@ -25,7 +25,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -78,7 +78,7 @@ class AutoFixReport:
         return {
             "timestamp": self.timestamp,
             "duration_seconds": round(self.duration_seconds, 2),
-            "total_fixes": total_fixes,
+            "total_fixes": self.total_fixes,
             "fixes_by_category": self.fixes_by_category,
             "fixes_by_file": self.fixes_by_file,
             "remaining_issues": self.remaining_issues,
@@ -199,7 +199,7 @@ def parse_ruff_output(output: str) -> dict[str, int]:
             continue
         parts = line.split()
         for part in parts:
-            if part.startswith("F") or part.startswith("E") or part.startswith("W"):
+            if part.startswith(("F", "E", "W")):
                 rule_counts[part] = rule_counts.get(part, 0) + 1
                 break
     return rule_counts
@@ -262,10 +262,10 @@ def main() -> int:
 
     duration = time.monotonic() - start
     remaining_output = run_ruff_check(args.path)
-    remaining = len([l for l in remaining_output.strip().split("\n") if l])
+    remaining = len([line for line in remaining_output.strip().split("\n") if line])
 
     report = AutoFixReport(
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         duration_seconds=duration,
         total_fixes=fixes_count,
         fixes_by_category={category: fixes_count},

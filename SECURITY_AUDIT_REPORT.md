@@ -1,13 +1,21 @@
 # Agent Engine 安全审计报告
 
-**扫描日期**: 2026-08-03
-**项目路径**: `/workspace/agent-engine`
+**扫描日期**: 2026-08-03（历史报告；当前事实对账日期见 `docs/DEAD_CODE_DOCUMENTATION_AUDIT.md`）
+**项目路径**: `/workspace/climber`
 **项目类型**: Python FastAPI 后端 + React 前端
 **审计范围**: 硬编码密钥、SQL 注入、命令注入、路径遍历、XSS、CSRF、认证授权、依赖漏洞
+
+**当前复核日期**: 2026-09-26
+
+**当前复核范围**: 认证配置与 WebSocket 路由、应用密钥校验、网络出口与 SSRF 门禁、急停接线、核心层导入边界；依赖漏洞数据库和完整渗透测试未在本次复核中执行。
 
 ---
 
 ## 执行摘要
+
+> 本文件保留历史安全审计结论，部分条目已经被后续代码改动影响。认证、CSRF、限流、命令执行和依赖版本条目需要按当前代码重新验证；当前模块引用和文档能力状态以 `docs/DEAD_CODE_DOCUMENTATION_AUDIT.md` 为准。
+
+> 当前复核结论：历史条目不能直接视为当前漏洞数量。当前代码和定向测试确认了部分安全门禁，同时保留了配置风险、未接线 CSRF 中间件、任务 WebSocket 认证缺口和依赖状态未复核等事项。
 
 | 风险等级 | 数量 |
 |---------|CRITICAL| 3 |
@@ -24,16 +32,16 @@
 
 ### C-1: .env 文件中硬编码真实 API 密钥 [CRITICAL]
 
-**位置**: `/workspace/agent-engine/.env`
+**位置**: `STEPFUN_API_KEY` 曾以明文形式出现在本报告的历史版本中（已脱敏）。
 ```env
-STEPFUN_API_KEY=***REDACTED***
+STEPFUN_API_KEY=<REDACTED-ROTATE-IMMEDIATELY>
 ```
 
-该密钥以明文形式存储在 .env 文件中。如果该文件被提交到版本控制系统或泄露，攻击者可直接获取该密钥访问 StepFun API 服务。
+该密钥已在报告中脱敏。原始值仅存在于本地 `.env`（已被 `.gitignore` 忽略，未纳入版本控制）。由于明文值已出现在文档中，该密钥必须视为已泄露。
 
 **修复建议**:
-- 立即轮换该 API 密钥
-- 将 .env 添加到 .gitignore
+- 立即轮换该 API 密钥（最高优先级）
+- 保持 `.env` 在 `.gitignore` 中
 - 使用环境变量注入或密钥管理服务
 - 提供 .env.example 作为模板（已有）
 
@@ -55,9 +63,19 @@ app_secret_key: str = Field(default_factory=lambda: secrets.token_hex(32))
 
 ## 2. 认证授权漏洞
 
-### C-3: 完全缺失认证体系 [CRITICAL]
+### 当前复核 A-1: 认证默认关闭与任务 WebSocket 未认证 [HIGH]
 
-**位置**: `app/core/auth.py:5-10`
+**证据**: `app/config.py:68` 将 `ENABLE_AUTH` 默认设为 `false`；`app/middleware/auth.py:116-123` 在关闭认证时放行请求；`app/api/v1/routes/tasks.py:90-103` 的任务进度 WebSocket 直接执行 `accept()`。会话和群组 WebSocket 通过 `app/api/v1/routes/websocket.py:_authenticate_websocket` 在认证启用时校验凭据与资源归属。
+
+**影响**: 将服务暴露到不可信网络且未设置 `ENABLE_AUTH=true` 时，HTTP API 和任务进度通道可能被匿名访问。任务 WebSocket 当前没有用户或任务资源归属校验。
+
+**剩余动作**:
+- 生产部署强制设置 `ENABLE_AUTH=true`、真实随机 `APP_SECRET_KEY` 和明确的 CORS allowlist。
+- 为任务进度 WebSocket 接入与会话/群组 WebSocket 相同的认证和资源授权流程。
+
+### C-3: 历史结论：认证体系缺失 [CRITICAL，需复核]
+
+**历史位置**: `app/core/auth.py:5-10`
 ```python
 LOCAL_USER_ID = "default-user"
 
@@ -65,7 +83,7 @@ def get_current_user() -> str:
     return LOCAL_USER_ID
 ```
 
-所有 API 端点均可匿名访问。前端虽然预留了 `Authorization` 请求头逻辑（`api.ts:11-12`），但后端**完全没有实现任何 token 验证逻辑**。任何能访问到服务端口的用户都可以：
+该结论属于 2026-08-03 的历史快照。当前代码已有 `app/middleware/auth.py`、`app/core/auth_manager.py`、`app/core/principal.py` 和 `require_admin()`，实际认证行为取决于 `ENABLE_AUTH` 与公开端点配置，需使用当前配置和测试重新确认：
 - 读取所有会话、消息、文档
 - 管理 API 密钥
 - 执行代码和命令
@@ -78,7 +96,7 @@ def get_current_user() -> str:
 
 ### H-1: WebSocket 无认证 [HIGH]
 
-**位置**: `app/api/v1/websocket.py:20-34`
+**位置**: 历史位置 `app/api/v1/websocket.py:20-34`；当前会话/群组实现已增加认证，任务进度实现仍见 `app/api/v1/routes/tasks.py:90-103`。
 
 WebSocket 端点 `/ws/{session_id}` 和 `/ws/groups/{group_id}` 没有任何认证或授权检查。攻击者可以：
 - 监听任意会话的消息
@@ -233,15 +251,11 @@ async def serve_frontend_spa(request: Request, full_path: str):
 
 ## 7. CSRF 防护
 
-### H-3: 完全缺失 CSRF 防护 [HIGH]
+### H-3: 历史结论：CSRF 防护缺失 [HIGH，需复核]
 
 **位置**: 全局
 
-项目未实现任何 CSRF 防护机制：
-- 没有 CSRF token
-- 没有 SameSite Cookie 设置
-- 没有 Origin/Referer 校验
-- CORS 配置使用白名单但允许 credentials
+该结论属于历史扫描。当前 `app/middleware/security.py` 已包含 `CsrfProtectionMiddleware`，但 `app/main.py` 当前注册的是限流、请求验证、安全头和认证相关中间件，未注册 CSRF 中间件。当前 token 主要通过 header 传递，WebSocket 也支持 cookie；部署前必须明确 CSRF 防护接线和 cookie 策略。
 
 **修复建议**:
 - 实现 Double-Submit Cookie 模式或 Synchronizer Token 模式
@@ -295,6 +309,32 @@ async def serve_frontend_spa(request: Request, full_path: str):
 
 ## 9. 其他安全问题
 
+### 当前复核 V-1: 已验证的安全门禁
+
+以下结论来自 2026-09-26 实际运行的 70 个定向测试：
+
+- `APP_SECRET_KEY` 在认证启用、生产和 staging 配置下拒绝空值或已知占位符。
+- 认证关闭时不会自动把生产部署提升为管理员；认证启用时不会自动授予管理员权限。
+- 网络工具在出口关闭时拒绝执行；启用出口时仍执行 SSRF 地址检查。
+- 急停门禁覆盖引擎、workflow、crew/collaboration 等已测试执行入口。
+- 核心层导入边界回归测试通过，避免 `app.core` 反向依赖 `app.api.v1`。
+
+实际命令：
+
+```bash
+python3 -m pytest tests/core/test_secret_key_validation.py tests/core/test_auth_escalation.py tests/core/test_default_admin_security.py tests/core/test_ssrf_enforcement.py tests/core/test_network_egress_gate.py tests/core/test_emergency_stop_enforcement.py tests/core/test_emergency_stop_wiring.py tests/core/test_layer_import_boundaries.py -q -o addopts='' -p no:cacheprovider
+```
+
+结果：`70 passed in 9.85s`。
+
+### 当前复核 V-2: 未解决风险清单
+
+- 依赖风险表仍来自历史扫描，本次没有运行 `pip-audit` 或 `npm audit`，版本和漏洞状态需要重新获取。
+- 历史命令注入、路径遍历、LIKE 通配符、异常信息和限流粒度条目尚未由本次定向测试逐项关闭；继续按历史风险处理，直到有当前代码审查和测试证据。
+- `CsrfProtectionMiddleware` 尚未接入应用中间件链，cookie 认证场景需要部署层补充防护。
+- 任务进度 WebSocket 尚未完成认证和资源授权。
+- 本次验证未覆盖真实多进程部署、反向代理信任边界、外部 LLM/MCP 服务和生产数据库权限。
+
 ### M-5: 全局异常处理泄露堆栈信息 [MEDIUM]
 
 **位置**: `app/main.py:221-223`
@@ -332,7 +372,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 5. 升级 chromadb
 
 ### 第二优先级（本周内修复）
-6. 添加 CSRF 防护
+6. 复核 CSRF 中间件启用范围和部署配置
 7. 实现 WebSocket 认证
 8. 升级 React Router
 9. 修复 SPA 文件服务路径遍历
