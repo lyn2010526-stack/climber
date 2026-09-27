@@ -1,61 +1,109 @@
-# Climber — 本地优先 AI Agent 工作台
+# Climber
 
-[![Tests](https://img.shields.io/badge/tests-70%20targeted%20security%20passing-brightgreen)]()
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue)]()
-[![License](https://img.shields.io/badge/license-MIT-green)]()
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.88%2B-009688)]()
-[![React](https://img.shields.io/badge/React-18%2B-61DAFB)]()
+**本地优先的 AI Agent 工作台，用于构建、运行和审计可恢复的 Agent 工作流。**
 
-> 本地优先、开源的 AI Agent 平台。无需注册登录，数据完全本地存储。
+[![Tests](https://img.shields.io/badge/tests-1088%20passed-brightgreen)](docs/TEST_REPORT.md)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-backend-009688)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19-61DAFB)](frontend-react/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-## 项目介绍
+Climber 把模型、工具、记忆、权限和多 Agent 编排放进一个可观察的运行时。它适合在本地开发 Agent，也适合把 Agent 能力嵌入需要检查点、恢复、权限边界和审计记录的内部自动化系统。
 
-Climber 是一个生产级 AI Agent 工作台，支持自主软件开发、多 Agent 协作和工具扩展。系统采用分层架构设计，提供从模型调度、上下文管理到权限控制的全栈能力。所有数据默认存储在本地 SQLite，可选 PostgreSQL 用于多用户并发场景。
+## 你可以用它做什么
 
-### 核心能力
+- **开发助手**：让 Agent 阅读项目、调用工具、执行受控命令，并以会话和检查点保留上下文。
+- **工作流自动化**：把多个 Agent 组织成顺序、层级或群聊协作流程，支持任务取消、失败恢复和运行记录。
+- **工具扩展**：注册内置工具，接入 MCP 服务，使用统一的工具结果、超时、重试和错误脱敏机制。
+- **本地知识工作台**：使用分层记忆、向量检索和上下文压缩，让长会话保持可用。
+- **安全实验与集成**：通过权限模式、命令/路径校验、SSRF 防护、CSRF 防护和所有权检查，给 Agent 行为设置可验证的边界。
 
-| 能力 | 说明 |
-|------|------|
-| 分层记忆 | 记忆分块（核心/会话上下文/归档/实体/人格）+ 情节记忆衰减与自动归档，支持上下文压缩 |
-| 多 Agent 协作 | 顺序/层级/群聊三种协作流程，依赖图死锁检测与检查点/恢复 |
-| 工具系统 | 统一工具运行时，MCP 客户端/路由接入，安全沙箱隔离 |
-| 模型调度 | 多模型注册（registry 按 `DEFAULT_MODEL_SPEC` 选择）+ 熔断/超时与降级回退 |
-| 权限控制 | 6 级权限模式（默认/接受编辑/计划/自动/严格/绕过），危险命令与 Shell 注入拦截；生产认证需显式启用 |
-| 会话持久化 | SQLite 检查点存储、会话恢复、回滚；工具结果回放按读/写/命令/网络分类 |
-| 安全加固 | 工具输入校验、权限覆盖层、路径与命令沙箱校验、网络出口与 SSRF 门禁；任务进度 WebSocket 的认证仍待补齐 |
-| 可观测性 | AgentEngine 写入 trace/audit，提供 observability API；Prometheus 指标与 Token 用量追踪 |
-| 提示词管理 | 外部模板仓库加载（`app/core/prompt_engine/`） |
+## 核心能力
+
+| 领域 | 能力 | 对使用者的价值 |
+| --- | --- | --- |
+| Agent 运行时 | `AgentEngine`、ReAct 执行循环、模型注册与回退 | 统一管理模型调用、工具调用和会话生命周期 |
+| 编排 | Workflow、Crew、Flow，以及顺序/层级/群聊协作 | 将单个 Agent 扩展为可追踪的多步骤任务 |
+| 记忆 | 核心记忆、会话上下文、归档、实体、人格和情节记忆 | 支持长会话、上下文压缩和跨重启恢复 |
+| 工具 | 内置工具、MCP Client、MCP Router、工具预算和超时 | 扩展外部能力，同时保留统一的执行边界 |
+| 持久化 | SQLite 默认存储、PostgreSQL、多版本迁移、检查点 | 本地零依赖启动，也能迁移到多用户部署 |
+| 安全 | 权限模式、命令/路径沙箱、SSRF、CSRF、认证和租户所有权 | 在工具执行前后验证请求和资源边界 |
+| 可观测性 | Trace、审计记录、Prometheus 指标、Token 用量 | 定位 Agent 行为、成本和失败原因 |
+| 交互界面 | React + Vite 前端、REST、SSE、WebSocket、Swagger | 从 UI、API 或实时流接入同一个运行时 |
+
+## 工作方式
+
+```mermaid
+flowchart LR
+    User["用户或 API 客户端"] --> API["FastAPI REST / SSE / WebSocket"]
+    API --> Engine["AgentEngine"]
+    Engine --> Model["模型注册与回退"]
+    Engine --> Memory["分层记忆与上下文压缩"]
+    Engine --> Tools["工具运行时与 MCP"]
+    Engine --> Policy["权限、路径、命令与网络门禁"]
+    Engine --> Checkpoint["检查点、恢复与审计"]
+    Model --> Provider["OpenAI / Anthropic / Google / Ollama"]
+    Tools --> External["本地工具或外部 MCP 服务"]
+    Checkpoint --> Storage["SQLite / PostgreSQL / Redis / Chroma"]
+```
+
+一次 Agent 运行会经过模型选择、上下文组装、权限检查、工具执行和结果记录。需要长任务时，运行时可以保存检查点，在进程重启或任务恢复后继续工作。
 
 ## 快速开始
 
-### 前置要求
+### 方式一：Docker Compose
 
-- Python 3.11+
-- Node.js 18+
-- pip / npm
-
-### 后端启动
+适合第一次体验完整服务栈。Compose 文件会启动 API、React 前端、PostgreSQL 和 Redis；Chroma 作为向量存储服务保留在同一配置中。
 
 ```bash
-# 克隆仓库
 git clone https://github.com/lyn2010526-stack/climber.git
 cd climber
 
-# 创建虚拟环境
-python -m venv venv
-source venv/bin/activate
+cp .env.example .env
+# 编辑 .env，至少配置一个模型提供商和一个随机生成的 APP_SECRET_KEY
+export POSTGRES_PASSWORD='replace-with-a-local-password'
 
-# 安装依赖
-pip install -r requirements.txt
-
-# 数据库迁移
-alembic upgrade head
-
-# 启动服务
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+docker compose up --build
 ```
 
-### 前端启动
+启动后访问：
+
+| 服务 | 地址 |
+| --- | --- |
+| Web 界面 | http://localhost:5173 |
+| API | http://localhost:8000 |
+| Swagger | http://localhost:8000/docs |
+| OpenAPI JSON | http://localhost:8000/openapi.json |
+| 健康检查 | http://localhost:8000/health |
+| Prometheus 指标 | http://localhost:8000/metrics |
+
+停止服务：
+
+```bash
+docker compose down
+```
+
+### 方式二：本地运行后端
+
+适合后端开发、API 调试和运行 pytest。默认数据库是本地 SQLite，不需要先安装 PostgreSQL 或 Redis。
+
+```bash
+git clone https://github.com/lyn2010526-stack/climber.git
+cd climber
+
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+cp .env.example .env
+# 编辑 .env，配置 API key、APP_SECRET_KEY 和 CORS_ORIGINS
+alembic upgrade head
+uvicorn app.main:app --reload --port 8000
+```
+
+### 启动 React 前端
+
+后端启动后，在另一个终端运行：
 
 ```bash
 cd frontend-react
@@ -63,163 +111,145 @@ npm install
 npm run dev
 ```
 
-### Docker 启动
+前端开发服务器默认运行在 `http://localhost:5173`。API 代理配置位于 Vite 配置中，前端请求使用 `/api` 前缀。
 
-```bash
-docker-compose up -d
-```
+## 配置
 
-### 访问地址
+配置从项目根目录的 `.env` 读取，完整占位符见 `.env.example`。
 
-| 服务 | URL |
-|------|-----|
-| 前端界面 | http://localhost:5173 |
-| 后端 API | http://localhost:8000 |
-| API 文档 (Swagger) | http://localhost:8000/docs |
-| 健康检查 | http://localhost:8000/health |
-| 指标 | http://localhost:8000/metrics |
+### 最小模型配置
 
-## 系统架构
-
-```mermaid
-flowchart TB
-    subgraph Client["客户端层"]
-        Frontend["React 前端\nVite + TypeScript"]
-        Telegram["Telegram Bot"]
-    end
-
-    subgraph API["API 层 (FastAPI)"]
-        REST["REST API\n/api/v1"]
-        WS["WebSocket\n/ws"]
-        SSE["SSE 流式"]
-        Middleware["中间件\nCORS / 安全头\n速率限制 / 请求验证"]
-    end
-
-    subgraph AgentEngine["Agent 引擎核心"]
-        Engine["AgentEngine\n主调度器"]
-        SessionMgr["SessionManager\n会话/检查点/恢复"]
-        PromptEngine["PromptEngine\n三层提示词引擎"]
-        ReactLoop["ReActLoop\n执行循环"]
-    end
-
-    subgraph CoreServices["核心服务层"]
-        ModelReg["ModelRegistry\n多模型注册与回退"]
-        ToolRT["ToolRuntime\n统一工具运行时"]
-        PermCfg["PermissionConfig\n6 级权限控制"]
-        Memory["Memory\n分层记忆系统"]
-        Safety["Validation + SecuritySandbox\n安全校验"]
-    end
-
-    subgraph Infra["基础设施层"]
-        DB["SQLite / PostgreSQL"]
-        Chroma["ChromaDB\n向量记忆"]
-        Redis["Redis\n缓存"]
-        MCP["MCP Client / Router\n外部工具"]
-        LLM["LLM Provider\n多模型适配"]
-    end
-
-    Frontend --> Middleware
-    Telegram --> Engine
-    Middleware --> REST
-    Middleware --> WS
-    REST --> SSE
-    REST --> Engine
-    WS --> Engine
-    Engine --> SessionMgr
-    Engine --> PromptEngine
-    Engine --> ReactLoop
-    ReactLoop --> ModelReg
-    ReactLoop --> ToolRT
-    ReactLoop --> PermCfg
-    Engine --> Memory
-    Engine --> Safety
-    ModelReg --> LLM
-    ToolRT --> MCP
-    SessionMgr --> DB
-    Memory --> Chroma
-    Memory --> Redis
-    PromptEngine --> Memory
-```
-
-## 核心模块
-
-| 模块 | 路径 | 职责 |
-|------|------|------|
-| Agent Engine | `app/core/agent_engine.py` | 主引擎，协调所有组件 |
-| 会话管理 | `app/core/engine/session.py` | 会话生命周期管理 |
-| 提示词引擎 | `app/core/prompt_engine/` | 三层提示词引擎（模板/注入/模型适配） |
-| 工具运行时 | `app/tools/` | 统一工具注册与执行 |
-| MCP 接入 | `app/tools/mcp_client.py`、`app/tools/mcp_router.py` | MCP 客户端、注册表与多服务器工具路由 |
-| 权限控制 | `app/core/permission_rules.py` | 权限规则引擎 |
-| 模型注册 | `app/models/registry.py` | 多模型注册与选择 |
-| 熔断降级 | `app/core/execution/circuit_breaker.py` | 超时管理、熔断与回退 |
-| 安全校验 | `app/core/engine/validation.py`、`app/core/security_sandbox.py`、`app/core/safety_pipeline.py` | 工具分类、权限、命令/文件校验与安全流水线 |
-| 多 Agent | `app/core/collaboration/` | 顺序/层级/群聊协作流程、死锁检测 |
-| Crew/Flow 编排 | `app/multi_agent/crew.py`、`app/multi_agent/flow.py` | Crew 编排与任务 worker 使用的命名工作流；`FlowExecutor` 仍属未接线实现 |
-
-## 配置说明
-
-创建 `.env` 文件（参考 `.env.example`）：
+至少配置一个模型提供商：
 
 ```env
-# API Keys（至少配置一个，通过环境变量读取）
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
+OPENAI_API_KEY=<your-openai-key>
+DEFAULT_MODEL_SPEC=gpt-4o-mini
+```
 
-# 数据库（默认 SQLite）
+也可以使用其他已接入的提供商：
+
+```env
+ANTHROPIC_API_KEY=<your-anthropic-key>
+GOOGLE_API_KEY=<your-google-key>
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+### 生产环境基础配置
+
+```env
+APP_ENV=production
+APP_DEBUG=false
+APP_SECRET_KEY=<random-value-at-least-16-characters>
+ENABLE_AUTH=true
+CORS_ORIGINS=https://your-frontend.example.com
+CORS_ALLOW_CREDENTIALS=true
+```
+
+`APP_SECRET_KEY` 必须使用你自己的随机值。仓库中的示例值会被配置校验识别为占位符，不能用于生产签名。
+
+### 存储选项
+
+```env
+# 默认：本地 SQLite
 DATABASE_URL=sqlite+aiosqlite:///./data/climber.db
 
-# 日志
-APP_LOG_LEVEL=INFO
+# 多用户并发部署可改用 PostgreSQL
+DATABASE_URL=postgresql+asyncpg://<user>:<password>@<host>:5432/<database>
 
-# 应用密钥（JWT 签名使用，必填且不可为空）
-APP_SECRET_KEY=change-me-in-production
-
-# 模型（registry 按 DEFAULT_MODEL_SPEC 读取，默认 gpt-4o）
-DEFAULT_MODEL_SPEC=gpt-4o
-
-# 向量库
+# 可选缓存和向量存储
+REDIS_URL=redis://localhost:6379/0
 VECTOR_STORE_PATH=./data/chroma
 ```
 
-> 完整配置项见 `app/config.py` 的 `Settings` 类（`app_env`、`app_debug`、`trusted_proxies`、
-> `cors_origins`、`jwt_algorithm`、`jwt_expire_minutes`、`redis_url`、`sqlite_wal` 等）。
-> 未被 `Settings` 或代码中 `os.environ` 读取的变量会被 pydantic-settings 静默忽略。
+## 安全边界
 
-## 文档
+Climber 把安全检查放在 Agent 执行路径中：
 
-| 文档 | 描述 |
-|------|------|
-| `docs/ARCHITECTURE.md` | 系统架构、模块关系、数据流 |
-| `docs/API.md` | 所有 API 端点详细说明 |
-| `docs/DEPLOYMENT.md` | 部署指南（Docker、本地、云） |
-| `docs/DEVELOPMENT.md` | 开发指南、代码规范、测试方法 |
-| `docs/SECURITY.md` | 安全策略、已知风险、防护措施与配置前提 |
-| `SECURITY_AUDIT_REPORT.md` | 历史审计、当前复核、验证命令与剩余风险 |
-| `docs/DEAD_CODE_DOCUMENTATION_AUDIT.md` | 模块接线和能力声明事实对账 |
+- 工具调用经过权限模式、工具预算、超时和重试控制。
+- Shell 命令、文件路径和沙箱操作经过分类与校验。
+- 外部 HTTP、浏览器导航和 MCP HTTP 端点经过 SSRF 校验，重定向目标也会重新检查。
+- CSRF、Bearer Token、WebSocket 会话和资源所有权分别进行验证。
+- 工具异常和结果会进行脱敏，避免把凭据或内部错误直接返回给客户端。
+- 检查点和审计记录支持恢复、回放和问题定位。
 
-## 测试
+安全配置依赖部署环境。生产部署必须使用随机 `APP_SECRET_KEY`、明确的 `CORS_ORIGINS`、真实的认证配置和受保护的数据库凭据。完整说明见 [`docs/SECURITY.md`](docs/SECURITY.md) 和 [`SECURITY_AUDIT_REPORT.md`](SECURITY_AUDIT_REPORT.md)。
+
+## API 示例
+
+### 创建会话并发送消息
 
 ```bash
-# 后端测试
-python3 -m pytest tests/ -q
-
-# 安全门禁定向回归
-python3 -m pytest tests/core/test_secret_key_validation.py tests/core/test_auth_escalation.py tests/core/test_default_admin_security.py tests/core/test_ssrf_enforcement.py tests/core/test_network_egress_gate.py tests/core/test_emergency_stop_enforcement.py tests/core/test_emergency_stop_wiring.py tests/core/test_layer_import_boundaries.py -q -o addopts='' -p no:cacheprovider
-
-# 前端测试
-cd frontend-react
-npm test
-
-# E2E 测试
-cd frontend-react
-npm run test:e2e
+curl -X POST http://localhost:8000/api/v1/sessions/ \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"代码审查"}'
 ```
 
-## 贡献指南
+聊天接口通过 SSE 返回实时事件：
 
-详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+```text
+data: {"type":"text","data":{"content":"..."}}
+data: {"type":"tool_call","data":{"name":"...","arguments":{}}}
+data: {"type":"done"}
+```
 
-## License
+完整端点、认证方式、请求体和事件格式见 [`docs/API.md`](docs/API.md)。交互式 API 文档启动后位于 `/docs`。
 
-MIT
+## 测试与质量
+
+后端测试使用 pytest。共享测试数据库要求串行执行：
+
+```bash
+python3 -m pytest tests/ -q --timeout=120 -o addopts='' \
+  -p no:cacheprovider --ignore=tests/integration
+```
+
+当前验证结果：`1088 passed, 1 warning, 18 subtests passed`。唯一 warning 来自 ChromaDB 第三方弃用提示。
+
+Lint 和安全门禁：
+
+```bash
+python3 -m ruff check .
+python3 -m ruff check app/ --select S,F,E9
+python3 -m compileall -q app/ scripts/ alembic/
+```
+
+前端脚本位于 `frontend-react/package.json`：
+
+```bash
+npm run typecheck
+npm run lint
+npm test
+npm run build
+```
+
+## 项目边界
+
+Climber 当前聚焦 Agent 后端运行时和配套 Web 工作台。前端目录是独立的 React/Vite 应用；前端依赖、浏览器 E2E 和构建需要单独安装与验证。部分集成依赖（例如外部模型、Redis、PostgreSQL、MCP 服务）由部署配置决定，默认 SQLite 路径可在本地完成后端开发。
+
+## 项目结构
+
+| 目录 | 作用 |
+| --- | --- |
+| `app/core/` | Agent 引擎、会话、记忆、权限、恢复、安全门禁 |
+| `app/api/` | FastAPI API 路由和请求响应契约 |
+| `app/models/` | 模型适配器、注册表和领域模型 |
+| `app/tools/` | 内置工具、MCP Client、MCP Router |
+| `app/storage/` | SQLAlchemy 模型、数据库连接和持久化 |
+| `app/multi_agent/` | Crew、Flow 和多 Agent 任务编排 |
+| `alembic/` | 数据库迁移 |
+| `frontend-react/` | React + Vite Web 界面 |
+| `tests/` | 后端单元、API、安全和回归测试 |
+| `docs/` | 架构、API、部署、安全和开发文档 |
+
+## 文档入口
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)：模块关系和数据流
+- [`docs/API.md`](docs/API.md)：API 端点、认证和 SSE 事件
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)：本地、Docker 和生产部署
+- [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md)：开发、测试和代码规范
+- [`docs/SECURITY.md`](docs/SECURITY.md)：安全策略和配置前提
+- [`AGENTS.md`](AGENTS.md)：仓库治理、文件边界和验证要求
+
+## 许可证
+
+MIT，见 [`LICENSE`](LICENSE)。
