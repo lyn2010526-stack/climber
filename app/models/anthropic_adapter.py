@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 import structlog
 
 from app.core import ChatResult
 from app.models import ModelAdapter, ModelCapability
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = structlog.get_logger()
 
@@ -76,18 +78,83 @@ class AnthropicAdapter(ModelAdapter):
             max_tokens=200_000,
         )
 
-    def _convert_messages(
-        self, messages: list[dict[str, Any]]
-    ) -> tuple[str | None, list[dict[str, Any]]]:
-        system_parts: list[str] = []
-        converted: list[dict[str, Any]] = []
+    @staticmethod
+    def _split_system_messages(
+        messages: list[dict[str, Any]],
+    ) -> tuple[list[str], list[str]]:
+        """Separate stable system text from per-turn injected system blocks.
 
+        Anthropic hashes the entire system value to key its prompt cache, so a
+        system block that changes each turn (Climber injects lessons and graph
+        context that way) would invalidate the cache on every single request.
+        The stable part is what gets cached; the dynamic part is appended after
+        the breakpoint so it still reaches the model.
+
+        Args:
+            messages: The full message list in engine order.
+
+        Returns:
+            (stable_system_texts, dynamic_system_texts).
+        """
+        from app.core.agent_engine import DYNAMIC_SYSTEM_MARKERS
+
+        stable: list[str] = []
+        dynamic: list[str] = []
+        for msg in messages:
+            if msg.get("role") != "system":
+                continue
+            content = msg.get("content") or ""
+            if any(marker in content for marker in DYNAMIC_SYSTEM_MARKERS):
+                dynamic.append(content)
+            else:
+                stable.append(content)
+        return stable, dynamic
+
+    def _build_system_payload(
+        self, system_texts: list[str], enable_cache: bool = True
+    ) -> list[dict[str, Any]] | None:
+        """Build the system value as content blocks with a cache breakpoint.
+
+        Anthropic only honours ``cache_control`` inside a content block, so the
+        previous plain-string form was structurally uncacheable. The marker sits
+        on the last block, which makes the whole system prefix cacheable.
+
+        Args:
+            system_texts: Stable system strings, in order.
+            enable_cache: Set False for one-off calls that should not pay a
+                cache write.
+
+        Returns:
+            A content-block list, or None when there is no system text.
+        """
+        texts = [t for t in system_texts if t]
+        if not texts:
+            return None
+        blocks: list[dict[str, Any]] = [{"type": "text", "text": t} for t in texts]
+        if enable_cache:
+            blocks[-1]["cache_control"] = {"type": "ephemeral"}
+        return blocks
+
+    def _convert_messages(
+        self, messages: list[dict[str, Any]], enable_cache: bool = True
+    ) -> tuple[list[dict[str, Any]] | None, list[dict[str, Any]]]:
+        stable, dynamic = self._split_system_messages(messages)
+        system = self._build_system_payload(stable, enable_cache=enable_cache)
+        if dynamic and system is not None:
+            # Appended after the cache breakpoint so per-turn memory still
+            # reaches the model without invalidating the cached prefix.
+            for text in dynamic:
+                if text:
+                    system.append({"type": "text", "text": text})
+        elif dynamic:
+            system = [{"type": "text", "text": t} for t in dynamic if t]
+
+        converted: list[dict[str, Any]] = []
         for msg in messages:
             role = msg.get("role", "")
             content = msg.get("content")
 
             if role == "system":
-                system_parts.append(content or "")
                 continue
             if role == "tool":
                 converted.append({
@@ -122,11 +189,12 @@ class AnthropicAdapter(ModelAdapter):
 
             converted.append({"role": role, "content": content or ""})
 
-        system = "\n\n".join(system_parts) if system_parts else None
         return system, converted
 
-    def _convert_tools(self, tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        result = []
+    def _convert_tools(
+        self, tools: list[dict[str, Any]], enable_cache: bool = True
+    ) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
         for t in tools:
             func = t.get("function", {})
             result.append({
@@ -134,6 +202,8 @@ class AnthropicAdapter(ModelAdapter):
                 "description": func.get("description", ""),
                 "input_schema": func.get("parameters", {"type": "object", "properties": {}}),
             })
+        if result and enable_cache:
+            result[-1]["cache_control"] = {"type": "ephemeral"}
         return result
 
     async def stream_chat(
@@ -143,7 +213,9 @@ class AnthropicAdapter(ModelAdapter):
         **kwargs: Any,
     ) -> AsyncIterator[ChatResult]:
         """Stream Anthropic Messages API with token-level granularity."""
-        system, converted_msgs = self._convert_messages(messages)
+        system, converted_msgs = self._convert_messages(
+            messages, enable_cache=kwargs.get("cache_system_prompt", True)
+        )
 
         payload: dict[str, Any] = {
             "model": self._model_id,
@@ -155,7 +227,9 @@ class AnthropicAdapter(ModelAdapter):
         if system:
             payload["system"] = system
         if tools:
-            payload["tools"] = self._convert_tools(tools)
+            payload["tools"] = self._convert_tools(
+                tools, enable_cache=kwargs.get("cache_tools", True)
+            )
 
         headers = {
             "x-api-key": self._api_key,
@@ -175,6 +249,7 @@ class AnthropicAdapter(ModelAdapter):
                 f"{self._base_url}/v1/messages",
                 headers=headers,
                 json=payload,
+                timeout=kwargs.get("timeout", 120),
             ) as resp:
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():
@@ -238,9 +313,9 @@ class AnthropicAdapter(ModelAdapter):
                             tokens_used += event.get("usage", {}).get("output_tokens", 0)
 
         except Exception as e:
-            logger.error("Anthropic streaming error", error=str(e))
+            logger.exception("Anthropic streaming error", error=str(e))
             yield ChatResult(
-                content=f"\n[Error: {str(e)}]",
+                content=f"\n[Error: {e!s}]",
                 tool_calls=[],
                 finish_reason="error",
                 tokens_used=tokens_used,

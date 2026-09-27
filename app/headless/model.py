@@ -25,7 +25,7 @@ class ModelError(Exception):
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ARG002  # urllib HTTPRedirectHandler override
         raise ModelError("Model endpoint redirects are disabled")
 
 
@@ -92,7 +92,7 @@ class OpenAICompatibleModel:
         # S310 audit: the scheme allowlist check above runs immediately before
         # this call, and the destination is the operator-configured endpoint
         # validated in __init__, so no file:/custom scheme can be opened.
-        request = urllib.request.Request(  # noqa: S310
+        request = urllib.request.Request(
             self.url,
             data=payload,
             headers={
@@ -120,7 +120,7 @@ class ScriptedFakeModel:
             raise ValueError("Fake model script must be a JSON array of response envelopes")
         self.responses = iter(responses)
 
-    def complete(self, messages, tools, max_tokens, timeout):
+    def complete(self, messages, tools, max_tokens, timeout):  # noqa: ARG002  # model adapter complete() interface
         try:
             return next(self.responses)
         except StopIteration:

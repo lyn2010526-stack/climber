@@ -3,6 +3,10 @@
 - Letta `core_memory` blocks (persona, user_profile, etc.)
 - XML injection into system prompt
 - LLM self-managed tools: core_memory_append, core_memory_replace
+
+Design references:
+- https://docs.letta.com/v1-sdk/concepts/stateful-agents
+- https://langchain-ai.github.io/langmem/concepts/conceptual_guide/
 """
 
 from __future__ import annotations
@@ -22,25 +26,53 @@ class CoreMemoryService:
     """Manage core memory blocks and inject them into system prompts."""
 
     async def get_blocks(self, user_id: str, agent_id: str | None = None) -> list[CoreMemoryBlock]:
+        """Return the blocks visible to an agent: its own blocks plus global ones.
+
+        Letta semantics: an agent sees global (user-level) blocks AND its own
+        agent-specific overrides. When ``agent_id`` is falsy, only global blocks
+        are returned (shared-pool default preserved).
+        """
         async with async_session() as db:
             query = select(CoreMemoryBlock).where(CoreMemoryBlock.user_id == user_id)
             if agent_id:
-                query = query.where(CoreMemoryBlock.agent_id == agent_id)
-            query = query.order_by(CoreMemoryBlock.label)
+                from sqlalchemy import or_
+                query = query.where(
+                    or_(
+                        CoreMemoryBlock.agent_id == agent_id,
+                        CoreMemoryBlock.agent_id.is_(None),
+                    )
+                )
+            else:
+                query = query.where(CoreMemoryBlock.agent_id.is_(None))
+            query = query.order_by(CoreMemoryBlock.label, CoreMemoryBlock.agent_id)
             result = await db.execute(query)
-            return list(result.scalars().all())
+            blocks = list(result.scalars().all())
+            if not agent_id:
+                return blocks
+            # An agent-scoped block is an override, so hide the same-label
+            # global block from the injected context.
+            overrides = {block.label for block in blocks if block.agent_id == agent_id}
+            return [block for block in blocks if block.agent_id == agent_id or block.label not in overrides]
 
     async def get_block(self, user_id: str, label: str, agent_id: str | None = None) -> CoreMemoryBlock | None:
+        """Resolve a single block: prefer the agent-specific block, else the global.
+
+        Returns the agent's override when it exists; otherwise the user's global
+        block with the same label; otherwise ``None``.
+        """
         async with async_session() as db:
-            query = select(CoreMemoryBlock).where(
+            base = select(CoreMemoryBlock).where(
                 CoreMemoryBlock.user_id == user_id,
                 CoreMemoryBlock.label == label,
             )
             if agent_id:
-                query = query.where(CoreMemoryBlock.agent_id == agent_id)
-            else:
-                query = query.where(CoreMemoryBlock.agent_id.is_(None))
-            result = await db.execute(query)
+                scoped = await db.execute(base.where(CoreMemoryBlock.agent_id == agent_id))
+                block = scoped.scalar_one_or_none()
+                if block is not None:
+                    return block
+                glob = await db.execute(base.where(CoreMemoryBlock.agent_id.is_(None)))
+                return glob.scalar_one_or_none()
+            result = await db.execute(base.where(CoreMemoryBlock.agent_id.is_(None)))
             return result.scalar_one_or_none()
 
     async def create_or_update_block(
@@ -53,6 +85,10 @@ class CoreMemoryService:
         description: str = "",
         read_only: bool = False,
     ) -> CoreMemoryBlock:
+        if not label.strip():
+            raise ValueError("Memory block label cannot be empty")
+        if limit < 1:
+            raise ValueError("Memory block limit must be positive")
         async with async_session() as db:
             query = select(CoreMemoryBlock).where(
                 CoreMemoryBlock.user_id == user_id,

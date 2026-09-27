@@ -31,13 +31,13 @@ class _DefaultEmbeddingWrapper(EmbeddingFunction):
     def name(self) -> str:
         return "default"
 
-    def __call__(self, input: list[str]) -> list[list[float]]:
-        return self.embed(input)
+    def __call__(self, texts: list[str]) -> list[list[float]]:
+        return self.embed(texts)
 
-    def embed(self, input: list[str]) -> list[list[float]]:
+    def embed(self, texts: list[str]) -> list[list[float]]:
         if self._default_ef is None:
             self._default_ef = chromadb.utils.embedding_functions.DefaultEmbeddingFunction()
-        return self._default_ef(input)
+        return self._default_ef(texts)
 
 
 class VectorMemoryService:
@@ -185,8 +185,7 @@ class VectorMemoryService:
     async def count(self, collection: str) -> int:
         """Count documents in a collection."""
         coll = self._get_collection(collection)
-        count = await self._run(coll.count)
-        return count
+        return await self._run(coll.count)
 
 
 # Global singleton

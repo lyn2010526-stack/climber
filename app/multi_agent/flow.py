@@ -12,16 +12,18 @@ from __future__ import annotations
 import asyncio
 import inspect
 import uuid
-from collections.abc import Callable
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from pydantic import BaseModel, Field
 
-from app.core.agent_engine import AgentEngine
-from app.models.registry import ModelRegistry
-from app.tools import ToolRegistry
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from app.core.agent_engine import AgentEngine
+    from app.models.registry import ModelRegistry
+    from app.tools import ToolRegistry
 
 logger = structlog.get_logger()
 
@@ -142,6 +144,13 @@ class FlowExecutor:
 
         state.flow_id = state.flow_id or str(uuid.uuid4())[:8]
 
+        from app.core.observability.emergency_stop import execution_blocked
+
+        blocked = execution_blocked()
+        if blocked is not None:
+            state.errors["__emergency_stop__"] = blocked
+            return state
+
         # Discover methods
         methods = self._discover_methods(flow_instance)
         completed: set[str] = set()
@@ -155,46 +164,55 @@ class FlowExecutor:
             running_tasks[name] = task
 
         # Main execution loop
-        while running_tasks:
-            done, _ = await asyncio.wait(
-                running_tasks.values(),
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-
-            for task in done:
-                # Find method name for this task
-                method_name = None
-                for name, t in running_tasks.items():
-                    if t is task:
-                        method_name = name
-                        break
-
-                if method_name is None:
-                    continue
-
-                del running_tasks[method_name]
-
-                try:
-                    result = task.completed_result() if hasattr(task, 'completed_result') else task.result()
-                    if isinstance(task.result(), Exception):
-                        raise task.result()
-                    completed.add(method_name)
-                    state.results[method_name] = result
-                except Exception as e:
-                    failed.add(method_name)
-                    state.errors[method_name] = str(e)
-                    logger.error("Flow method failed", method=method_name, error=str(e))
-
-                # Find triggered methods
-                triggered = self._find_triggered_methods(
-                    methods, completed, failed, state, running_tasks,
+        try:
+            while running_tasks:
+                done, _ = await asyncio.wait(
+                    running_tasks.values(),
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
-                for name, method in triggered:
-                    if name not in running_tasks and name not in completed:
-                        task = asyncio.create_task(
-                            self._run_method(method, state, flow_instance),
-                        )
-                        running_tasks[name] = task
+
+                for task in done:
+                    # Find method name for this task
+                    method_name = None
+                    for name, t in running_tasks.items():
+                        if t is task:
+                            method_name = name
+                            break
+
+                    if method_name is None:
+                        continue
+
+                    del running_tasks[method_name]
+
+                    try:
+                        result = task.completed_result() if hasattr(task, 'completed_result') else task.result()
+                        if isinstance(task.result(), Exception):
+                            raise task.result()
+                        completed.add(method_name)
+                        state.results[method_name] = result
+                    except Exception as e:
+                        failed.add(method_name)
+                        state.errors[method_name] = str(e)
+                        logger.exception("Flow method failed", method=method_name, error=str(e))
+
+                    # Find triggered methods
+                    triggered = self._find_triggered_methods(
+                        methods, completed, failed, state, running_tasks,
+                    )
+                    for name, method in triggered:
+                        if name not in running_tasks and name not in completed:
+                            task = asyncio.create_task(
+                                self._run_method(method, state, flow_instance),
+                            )
+                            running_tasks[name] = task
+        except asyncio.CancelledError:
+            pending = tuple(running_tasks.values())
+            for task in pending:
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+            state.errors["__cancelled__"] = "Flow execution cancelled"
+            raise
 
         # Determine final status
         if failed:
@@ -335,6 +353,16 @@ class Flow:
         from app.workflow.engine import WorkflowEngine
 
         params = params or {}
+        from app.core.observability.emergency_stop import execution_blocked
+
+        blocked = execution_blocked()
+        if blocked is not None:
+            return {
+                "status": "emergency_stop",
+                "workflow": self.name,
+                "error": blocked,
+            }
+
         try:
             workflow = await self._resolve_workflow(params)
         except Exception as exc:
@@ -364,7 +392,7 @@ class Flow:
                 user_id=str(params.get("user_id", "system")),
             )
         except Exception as exc:
-            logger.error("flow_execution_failed", name=self.name, error=str(exc))
+            logger.exception("flow_execution_failed", name=self.name, error=str(exc))
             return {
                 "status": FlowStatus.FAILED.value,
                 "workflow": self.name,

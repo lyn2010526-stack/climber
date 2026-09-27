@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from app.core.observability.storage import default_observability_db
+
 
 @dataclass
 class AuditEntry:
@@ -55,9 +57,11 @@ class AuditChain:
     is logged as an immutable entry.
     """
 
-    def __init__(self, db_path: str = ":memory:"):
-        self._db_path = db_path
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+    def __init__(self, db_path: str | None = None):
+        # ":memory:" made every entry vanish on restart, so /audit always
+        # returned an empty list. Resolve to a file under data/ instead.
+        self._db_path = db_path or default_observability_db("audit.db")
+        self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._create_tables()
 

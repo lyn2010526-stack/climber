@@ -39,7 +39,7 @@ async def invoke_step_callback(task: Any, role: str, agent_id: str, output: str)
             "data": {"callback": task.step_callback, "role": role, "agent_id": agent_id},
         })
     except Exception as e:
-        logger.error("step_callback_failed", task_id=task.id, error=str(e))
+        logger.exception("step_callback_failed", task_id=task.id, error=str(e))
 
 
 async def invoke_task_callback(task: Any, final_output: str) -> None:
@@ -64,7 +64,7 @@ async def invoke_task_callback(task: Any, final_output: str) -> None:
             "data": {"callback": task.task_callback, "task_id": task.id},
         })
     except Exception as e:
-        logger.error("task_callback_failed", task_id=task.id, error=str(e))
+        logger.exception("task_callback_failed", task_id=task.id, error=str(e))
 
 
 async def wait_for_human_review(task: Any, output: str) -> bool:

@@ -123,14 +123,14 @@ class CoverageChecker:
     ) -> CoverageReport:
         start = time.monotonic()
         checklist_items = _TASK_TYPE_CHECKLISTS.get(task_type, _DEFAULT_CHECKLIST)
-        checklist: dict[str, bool] = {item: False for item in checklist_items}
+        checklist: dict[str, bool] = dict.fromkeys(checklist_items, False)
 
         combined_content = self._combine_candidates(candidates)
 
         try:
             raw_report = await self._call_llm(task, combined_content, candidates, model_adapter, timeout)
         except Exception as exc:
-            logger.error(
+            logger.exception(
                 "Coverage LLM call failed",
                 error=str(exc),
                 provider=getattr(model_adapter, "provider", "unknown"),
@@ -194,7 +194,7 @@ class CoverageChecker:
             logger.warning("Coverage LLM call timed out", timeout=timeout)
             return {}
         except Exception as exc:
-            logger.error("Coverage LLM call failed", error=str(exc))
+            logger.exception("Coverage LLM call failed", error=str(exc))
             return {}
 
     def _build_prompt(

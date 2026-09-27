@@ -12,6 +12,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 16px;
         }
         .login-card {
             background: white;
@@ -20,6 +21,11 @@
             padding: 40px;
             max-width: 400px;
             width: 100%;
+        }
+        @media (max-width: 480px) {
+            .login-card {
+                padding: 28px 20px;
+            }
         }
         .login-header {
             text-align: center;
@@ -56,49 +62,80 @@
         .hidden {
             display: none;
         }
+        .btn-login:disabled {
+            cursor: wait;
+            opacity: 0.75;
+        }
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
     </style>
 </head>
 <body>
-    <div class="login-card">
+    <main class="login-card">
         <div class="login-header">
-            <h2>🚀 Agent Engine</h2>
+            <h2>Agent Engine</h2>
             <p>生产级认证系统</p>
         </div>
 
-        <div id="error-alert" class="alert alert-danger hidden" role="alert"></div>
+        <div id="error-alert" class="alert alert-danger hidden" role="alert" aria-live="assertive" tabindex="-1"></div>
 
-        <form id="login-form">
+        <form id="login-form" aria-describedby="error-alert" novalidate>
             <div class="mb-3">
                 <label for="username" class="form-label">用户名</label>
-                <input type="text" class="form-control" id="username" placeholder="请输入用户名" required>
+                 <input type="text" class="form-control" id="username" name="username" autocomplete="username" placeholder="请输入用户名" required aria-required="true">
             </div>
 
             <div class="mb-3">
                 <label for="password" class="form-label">密码</label>
-                <input type="password" class="form-control" id="password" placeholder="请输入密码" required>
+                 <input type="password" class="form-control" id="password" name="password" autocomplete="current-password" placeholder="请输入密码" required aria-required="true">
             </div>
 
-            <button type="submit" class="btn btn-login text-white">登录</button>
+             <button type="submit" id="login-button" class="btn btn-login text-white" aria-describedby="login-status">登录</button>
+             <span id="login-status" class="visually-hidden" role="status" aria-live="polite"></span>
         </form>
 
         <div class="mt-4 p-3 bg-light rounded">
             <small class="text-muted">
-                <strong>默认账户：</strong><br>
-                用户名：<code>admin</code><br>
-                密码：<code>admin123</code>
+                首次部署的管理员口令由服务端随机生成，仅在启动日志中输出一次。
+                <br>如未设置 <code>BOOTSTRAP_ADMIN_PASSWORD</code>，请从启动日志中获取。
             </small>
         </div>
-    </div>
+    </main>
 
     <script>
         document.getElementById('login-form').addEventListener('submit', async function(e) {
             e.preventDefault();
 
             const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
+            const passwordInput = document.getElementById('password');
+            const password = passwordInput.value;
             const errorAlert = document.getElementById('error-alert');
+            const loginButton = document.getElementById('login-button');
+            const loginStatus = document.getElementById('login-status');
 
             errorAlert.classList.add('hidden');
+            errorAlert.textContent = '';
+            loginStatus.textContent = '正在登录，请稍候';
+            loginButton.disabled = true;
+            loginButton.setAttribute('aria-busy', 'true');
+            loginButton.textContent = '登录中...';
+
+            if (!this.reportValidity()) {
+                loginStatus.textContent = '请填写用户名和密码';
+                loginButton.disabled = false;
+                loginButton.removeAttribute('aria-busy');
+                loginButton.textContent = '登录';
+                return;
+            }
 
             try {
                 const response = await fetch('/api/v1/auth/login', {
@@ -109,22 +146,38 @@
                     body: JSON.stringify({ username, password })
                 });
 
-                const data = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(data.detail || '登录失败');
+                let data;
+                try {
+                    data = await response.json();
+                } catch {
+                    data = {};
                 }
 
-                // Store token in localStorage
-                localStorage.setItem('access_token', data.access_token);
-                localStorage.setItem('user_id', data.user_id);
-                localStorage.setItem('scopes', JSON.stringify(data.scopes));
+                if (!response.ok) {
+                    const detail = typeof data.detail === 'string' ? data.detail : '登录失败';
+                    throw new Error(detail);
+                }
+
+                if (typeof data.access_token !== 'string' || !data.access_token) {
+                    throw new Error('登录响应无效，请稍后重试');
+                }
+
+                // Keep the access token scoped to this tab instead of persistent storage.
+                sessionStorage.setItem('access_token', data.access_token);
+                if (data.user_id !== undefined) sessionStorage.setItem('user_id', String(data.user_id));
+                if (Array.isArray(data.scopes)) sessionStorage.setItem('scopes', JSON.stringify(data.scopes));
 
                 // Redirect to dashboard
                 window.location.href = '/auth/keys';
             } catch (error) {
-                errorAlert.textContent = error.message;
+                errorAlert.textContent = error instanceof Error ? error.message : '登录失败，请稍后重试';
                 errorAlert.classList.remove('hidden');
+                loginStatus.textContent = '登录失败';
+                errorAlert.focus();
+            } finally {
+                loginButton.disabled = false;
+                loginButton.removeAttribute('aria-busy');
+                loginButton.textContent = '登录';
             }
         });
     </script>

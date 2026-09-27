@@ -108,7 +108,7 @@ def _parse_critique_response(raw: str) -> CritiqueResult:
             return CritiqueResult(
                 passed=False,
                 summary="Failed to parse critique response",
-                scores={d: 1.0 for d in _DIMENSIONS},
+                scores=dict.fromkeys(_DIMENSIONS, 1.0),
                 issues=[
                     Issue(
                         severity=IssueSeverity.MAJOR,
@@ -173,7 +173,7 @@ class SelfRefineLoop:
         """
         current = initial
         traces: list[RoundTrace] = []
-        final_critique = CritiqueResult(scores={d: 0.0 for d in _DIMENSIONS})
+        final_critique = CritiqueResult(scores=dict.fromkeys(_DIMENSIONS, 0.0))
 
         for round_num in range(1, max_rounds + 1):
             round_start = time.monotonic()
@@ -249,7 +249,7 @@ class SelfRefineLoop:
             )
             raw = result.content
         except Exception as exc:
-            logger.error(
+            logger.exception(
                 "Critique LLM call failed",
                 round=round_num,
                 error=str(exc),
@@ -268,7 +268,7 @@ class SelfRefineLoop:
             return CritiqueResult(
                 passed=False,
                 summary=f"Critique failed: {type(exc).__name__}",
-                scores={d: 1.0 for d in _DIMENSIONS},
+                scores=dict.fromkeys(_DIMENSIONS, 1.0),
             )
 
         duration = (time.monotonic() - start) * 1000
@@ -325,7 +325,7 @@ class SelfRefineLoop:
             )
             improved = result.content.strip()
         except Exception as exc:
-            logger.error(
+            logger.exception(
                 "Improvement LLM call failed",
                 error=str(exc),
                 provider=getattr(model_adapter, "provider", "unknown"),

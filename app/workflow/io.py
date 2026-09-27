@@ -95,7 +95,7 @@ def _deserialize_workflow(data: dict[str, Any]) -> Workflow:
 class WorkflowIO:
     @staticmethod
     def export_workflow(workflow: Workflow) -> dict[str, Any]:
-        payload = {
+        return {
             "version": CURRENT_VERSION,
             "exported_at": _now_iso(),
             "metadata": {
@@ -107,7 +107,6 @@ class WorkflowIO:
             "nodes": _serialize_workflow(workflow)["nodes"],
             "edges": _serialize_workflow(workflow)["edges"],
         }
-        return payload
 
     @staticmethod
     def export_to_file(workflow: Workflow, file_path: str | Path, fmt: str = "json") -> Path:

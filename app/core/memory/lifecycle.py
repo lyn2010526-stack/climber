@@ -179,7 +179,7 @@ class MemoryLifecycleManager:
             records = result.scalars().all()
 
             query_lower = query.lower()
-            query_words = set(w for w in query_lower.split() if len(w) > 2)
+            query_words = {w for w in query_lower.split() if len(w) > 2}
             scored: list[tuple[float, MemoryRecord]] = []
 
             for record in records:

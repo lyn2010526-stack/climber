@@ -16,16 +16,18 @@ logger = structlog.get_logger()
 class NetworkAllowlist:
     """Manages outbound network allowlist (deny-by-default)."""
 
-    DEFAULT_ALLOWED_DOMAINS = [
-        "api.openai.com",
-        "api.anthropic.com",
-        "localhost",
-        "127.0.0.1",
-    ]
+    DEFAULT_ALLOWED_DOMAINS = frozenset(
+        {
+            "api.openai.com",
+            "api.anthropic.com",
+            "localhost",
+            "127.0.0.1",
+        }
+    )
 
     def __init__(self, allowed_domains: list[str] | None = None):
         domains = allowed_domains or self.DEFAULT_ALLOWED_DOMAINS
-        self._allowed: set[str] = set(d.strip().lower() for d in domains)
+        self._allowed: set[str] = {d.strip().lower() for d in domains}
         self._wildcards: list[str] = []
         self._rebuild_wildcards()
 

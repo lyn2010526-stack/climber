@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from app.models import ModelAdapter, ModelCapability
 from app.models.anthropic_adapter import AnthropicAdapter
 from app.models.google_adapter import GoogleGeminiAdapter
 from app.models.ollama_adapter import OllamaAdapter
 from app.models.openai_adapter import OpenAIAdapter
 from app.models.stepfun_adapter import StepFunAdapter
+
+if TYPE_CHECKING:
+    from app.models import ModelAdapter, ModelCapability
 
 logger = structlog.get_logger()
 
@@ -179,7 +181,7 @@ class ModelRegistry:
     def list_models(self) -> list[dict[str, Any]]:
         """List all registered models."""
         result = []
-        for _key, adapter in self._models.items():
+        for adapter in self._models.values():
             caps = adapter.capabilities
             result.append({
                 "provider": adapter.provider,

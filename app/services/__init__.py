@@ -7,17 +7,17 @@ class BaseService:
     def __init__(self, *args, **kwargs):
         pass
 
-    async def get(self, id: str) -> dict | None:
+    async def get(self, entity_id: str) -> dict | None:  # noqa: ARG002  # BaseService interface
         return None
 
-    async def list(self, **filters) -> list[dict]:
+    async def list(self, **filters) -> list[dict]:  # noqa: ARG002  # BaseService interface
         return []
 
     async def create(self, data: dict) -> dict:
         return data
 
-    async def update(self, id: str, data: dict) -> dict | None:
+    async def update(self, entity_id: str, data: dict) -> dict | None:  # noqa: ARG002  # BaseService interface
         return None
 
-    async def delete(self, id: str) -> bool:
+    async def delete(self, entity_id: str) -> bool:  # noqa: ARG002  # BaseService interface
         return False

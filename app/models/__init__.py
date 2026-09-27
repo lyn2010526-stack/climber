@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
-from app.core import ChatResult
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from app.core import ChatResult
 
 
 class ModelCapability(BaseModel):

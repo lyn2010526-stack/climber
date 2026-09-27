@@ -15,13 +15,10 @@ import ast
 import asyncio
 import json
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from app.core.agent_engine import AgentEngine
-from app.models.registry import ModelRegistry
-from app.tools import ToolRegistry
 from app.workflow import (
     NodeStatus,
     NodeType,
@@ -29,6 +26,11 @@ from app.workflow import (
     WorkflowNode,
     WorkflowResult,
 )
+
+if TYPE_CHECKING:
+    from app.core.agent_engine import AgentEngine
+    from app.models.registry import ModelRegistry
+    from app.tools import ToolRegistry
 
 _SAFE_EVAL_BUILTINS = {
     "len": len, "str": str, "int": int, "float": float,
@@ -83,23 +85,13 @@ def safe_eval(expression: str, local_vars: dict[str, Any]) -> Any:
     try:
         tree = ast.parse(expression, mode="eval")
         _validate_ast(tree)
-        return eval(compile(tree, "<workflow>", "eval"), {"__builtins__": _SAFE_EVAL_BUILTINS}, local_vars)  # noqa: S307
+        return eval(compile(tree, "<workflow>", "eval"), {"__builtins__": _SAFE_EVAL_BUILTINS}, local_vars)
     except Exception:
         raise
 
 
 def _validate_code_ast(node: ast.AST) -> None:
-    allowed_nodes = _SAFE_NODES + (
-        ast.Module,
-        ast.Assign, ast.AugAssign, ast.AnnAssign,
-        ast.For, ast.While, ast.If, ast.Return,
-        ast.Break, ast.Continue,
-        ast.FunctionDef, ast.AsyncFunctionDef,
-        ast.arg, ast.arguments, ast.Return,
-        ast.Pass, ast.Assert, ast.Raise,
-        ast.Import, ast.ImportFrom,
-        ast.Expr, ast.Store, ast.NameConstant,
-    )
+    allowed_nodes = (*_SAFE_NODES, ast.Module, ast.Assign, ast.AugAssign, ast.AnnAssign, ast.For, ast.While, ast.If, ast.Return, ast.Break, ast.Continue, ast.FunctionDef, ast.AsyncFunctionDef, ast.arg, ast.arguments, ast.Return, ast.Pass, ast.Assert, ast.Raise, ast.Import, ast.ImportFrom, ast.Expr, ast.Store, ast.NameConstant)
     for child in ast.walk(node):
         if not isinstance(child, allowed_nodes):
             raise ValueError(f"Unsafe code node: {type(child).__name__}")
@@ -130,7 +122,7 @@ def safe_exec(code: str, local_vars: dict[str, Any]) -> dict[str, Any]:
     # S102 audit: the AST allowlist above is the control, and it is re-run by
     # the caller after template substitution. Running a statement block needs
     # exec; replacing it would mean hand-writing a Python interpreter.
-    exec(compile(tree, "<workflow>", "exec"), exec_globals, local_vars)  # noqa: S102
+    exec(compile(tree, "<workflow>", "exec"), exec_globals, local_vars)
     return local_vars
 
 logger = structlog.get_logger()
@@ -281,7 +273,7 @@ class WorkflowEngine:
         except Exception as e:
             node.status = NodeStatus.FAILED
             node.error = str(e)
-            logger.error("Node execution failed", node=node.name, error=str(e))
+            logger.exception("Node execution failed", node=node.name, error=str(e))
 
     def _skip_downstream(
         self,
@@ -326,7 +318,7 @@ class WorkflowEngine:
 
             for edge in workflow.get_successors(current):
                 if edge.target != exclude_node and edge.target not in visited:
-                    queue.append(edge.target)
+                    queue.append(edge.target)  # noqa: PERF401 # BFS: queue mutation order is the algorithm
 
         return False
 
@@ -358,11 +350,9 @@ class WorkflowEngine:
             system_prompt=system_prompt,
         )
 
-        full_response_parts: list[str] = []
-        async for event in self.agent_engine.run(session, prompt):
-            if event.type.value == "text":
-                full_response_parts.append(event.data.get("content", ""))
-
+        full_response_parts: list[str] = [
+            event.data.get("content", "") async for event in self.agent_engine.run(session, prompt) if event.type.value == "text"
+        ]
         return {
             "response": "".join(full_response_parts),
             "node_id": node.id,
@@ -457,7 +447,7 @@ class WorkflowEngine:
 
         for edge in edges:
             edge_condition = edge.condition
-            if edge_condition == "true" and not condition_result or edge_condition == "false" and condition_result:
+            if (edge_condition == "true" and not condition_result) or (edge_condition == "false" and condition_result):
                 skip_targets.append(edge.target)
 
         return {
@@ -478,21 +468,21 @@ class WorkflowEngine:
 
         if operator == "equals":
             return actual_str == expected
-        elif operator == "not_equals":
+        if operator == "not_equals":
             return actual_str != expected
-        elif operator == "contains":
+        if operator == "contains":
             return expected in actual_str
-        elif operator == "not_contains":
+        if operator == "not_contains":
             return expected not in actual_str
-        elif operator == "starts_with":
+        if operator == "starts_with":
             return actual_str.startswith(expected)
-        elif operator == "ends_with":
+        if operator == "ends_with":
             return actual_str.endswith(expected)
-        elif operator == "not_empty":
+        if operator == "not_empty":
             return bool(actual_str.strip())
-        elif operator == "empty":
+        if operator == "empty":
             return not actual_str.strip()
-        elif operator == "greater_than":
+        if operator == "greater_than":
             try:
                 return float(actual_str) > float(expected)
             except (ValueError, TypeError):
@@ -634,14 +624,13 @@ class WorkflowEngine:
             pred_node = workflow.get_node(pred_id)
             if pred_node and pred_node.output is not None:
                 if isinstance(pred_node.output, dict):
-                    for k, v in pred_node.output.items():
-                        resolved[k] = v
+                    resolved.update(pred_node.output)
                 else:
                     resolved[pred_id] = pred_node.output
 
         # Apply explicit input references (override auto-merged)
         for key, ref in node.inputs.items():
-            # Format: "node_id.output_key" or "node_id"
+            # Format: "node_id.output_key" or "node_id"  # noqa: ERA001  # documents the expected shape, not dead code
             if "." in ref:
                 node_id, output_key = ref.split(".", 1)
             else:

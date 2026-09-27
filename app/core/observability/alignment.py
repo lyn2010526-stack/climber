@@ -12,8 +12,10 @@ import re
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
+
+from app.core.observability.storage import default_observability_db
 
 
 @dataclass
@@ -66,10 +68,12 @@ class GoalTracker:
     when the alignment score falls below the configured threshold.
     """
 
-    def __init__(self, db_path: str = ":memory:", alignment_threshold: float = 0.7):
-        self._db_path = db_path
+    def __init__(self, db_path: str | None = None, alignment_threshold: float = 0.7):
+        # ":memory:" made every goal and check vanish on restart, so
+        # /alignment always reported an empty, drift-free state.
+        self._db_path = db_path or default_observability_db("alignment.db")
         self._alignment_threshold = alignment_threshold
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._create_tables()
 
@@ -155,18 +159,30 @@ class GoalTracker:
             results.append(check)
         return results
 
-    def get_drift_score(self) -> float:
-        """Compute overall drift score across all recent alignment checks.
+    def get_drift_score(self, window_hours: float = 1.0) -> float:
+        """Compute overall drift score across recent alignment checks.
 
-        Returns 0.0 (fully aligned) to 1.0 (fully drifted).
+        The cutoff is computed in Python and passed as an ISO 8601 string so it
+        matches the stored format. The previous SQL compared a stored
+        ``2026-09-26T11:00:44+00:00`` against ``datetime('now', '-1 hour')``,
+        which yields ``2026-09-26 13:00:44``: the space sorts before ``T``, so
+        every row looked recent no matter its age.
+
+        Args:
+            window_hours: How far back a check still counts, in hours.
+
+        Returns:
+            0.0 (fully aligned) to 1.0 (fully drifted).
         """
+        cutoff = (datetime.now(UTC) - timedelta(hours=window_hours)).isoformat()
         rows = self._conn.execute(
             """
             SELECT goal_id, AVG(alignment_score) as avg_score
             FROM alignment_checks
-            WHERE timestamp > datetime('now', '-1 hour')
+            WHERE timestamp > ?
             GROUP BY goal_id
-            """
+            """,
+            (cutoff,),
         ).fetchall()
         if not rows:
             return 0.0
@@ -219,7 +235,7 @@ class GoalTracker:
     def _generate_notes(self, score: float) -> str:
         if score >= self._alignment_threshold:
             return "aligned"
-        elif score >= self._alignment_threshold * 0.5:
+        if score >= self._alignment_threshold * 0.5:
             return "partial_alignment"
         return "drift_detected"
 

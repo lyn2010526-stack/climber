@@ -49,6 +49,7 @@ class InMemoryCheckpointStore:
         self._store: dict[str, CheckpointData] = {}
         self._parents: dict[str, str | None] = {}
         self._pending_writes: dict[str, list[PendingWrite]] = {}
+        self._threads: dict[str, list[str]] = {}
 
     async def save(
         self,
@@ -59,17 +60,82 @@ class InMemoryCheckpointStore:
         parent_id: str | None = None,
     ) -> str:
         cid = checkpoint_id or f"cp-{int(time.time()*1000)}"
+        if thread_id or parent_id is not None:
+            checkpoint.metadata = {
+                **checkpoint.metadata,
+                "thread_id": thread_id or "",
+                "parent_id": parent_id,
+            }
         self._store[cid] = checkpoint
         self._parents[cid] = parent_id
+        if thread_id:
+            chain = self._threads.setdefault(thread_id, [])
+            if cid not in chain:
+                chain.append(cid)
         return cid
 
     async def get(self, _thread_id: str | None, checkpoint_id: str) -> CheckpointData | None:
         return self._store.get(checkpoint_id)
 
+    async def get_ancestors(self, checkpoint_id: str) -> list[CheckpointData]:
+        """Walk the parent chain from `checkpoint_id` back to the root.
+
+        Returns the lineage newest-first, including the starting checkpoint.
+        Stops on a missing or cyclic parent reference.
+        """
+        lineage: list[CheckpointData] = []
+        seen: set[str] = set()
+        current: str | None = checkpoint_id
+        while current is not None and current not in seen:
+            seen.add(current)
+            checkpoint = self._store.get(current)
+            if checkpoint is None:
+                break
+            lineage.append(checkpoint)
+            current = self._parents.get(current)
+        return lineage
+
+    async def rollback_to(self, checkpoint_id: str, prune_descendants: bool = False) -> CheckpointData | None:
+        """Return the snapshot at `checkpoint_id` for restoration.
+
+        With `prune_descendants`, checkpoints whose lineage descends from the
+        target are removed so the store reflects the rolled-back timeline.
+        """
+        target = self._store.get(checkpoint_id)
+        if target is None:
+            return None
+        if prune_descendants:
+            # Collect the whole descendant set BEFORE mutating anything:
+            # deleting a node mid-scan would drop its parent edge and hide its
+            # own descendants (transitive lineage would be lost).
+            descendants = [
+                cid
+                for cid in list(self._store)
+                if cid != checkpoint_id and checkpoint_id in self._lineage_ids(cid)
+            ]
+            for cid in descendants:
+                self._store.pop(cid, None)
+                self._parents.pop(cid, None)
+            for thread, chain in self._threads.items():
+                self._threads[thread] = [cid for cid in chain if cid in self._store]
+        return target
+
+    def _lineage_ids(self, checkpoint_id: str) -> list[str]:
+        """Return ancestor ids of `checkpoint_id`, excluding itself."""
+        ids: list[str] = []
+        seen: set[str] = set()
+        current: str | None = checkpoint_id
+        while current is not None and current not in seen:
+            seen.add(current)
+            ids.append(current)
+            current = self._parents.get(current)
+        return ids[1:]
+
     async def get_latest(self, _thread_id: str | None, session_id: str, thread_id: str = "") -> tuple[CheckpointData, str] | None:
         candidates = [
             (cid, cp) for cid, cp in self._store.items()
             if cp.session_id == session_id
+            and (not thread_id or cid in self._threads.get(thread_id, []))
         ]
         if not candidates:
             return None
@@ -85,6 +151,8 @@ class InMemoryCheckpointStore:
         for cid in to_delete:
             del self._store[cid]
             self._parents.pop(cid, None)
+        for thread, chain in self._threads.items():
+            self._threads[thread] = [cid for cid in chain if cid in self._store]
         return len(to_delete)
 
     async def put_writes(self, checkpoint_id: str, writes: list[PendingWrite]) -> None:
@@ -278,6 +346,56 @@ class SQLiteCheckpointStore:
             )
             await db.commit()
             return result.rowcount > 0
+
+    async def rollback_to(self, checkpoint_id: str, prune_descendants: bool = False) -> CheckpointData | None:
+        """Return the snapshot at ``checkpoint_id`` for restoration.
+
+        Parity with :meth:`InMemoryCheckpointStore.rollback_to`. Parent links
+        live in the record metadata (``metadata.parent_id``, written by
+        :meth:`save`), so descendant pruning walks the parent chains of all
+        checkpoints belonging to the target's session.
+        """
+        from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
+
+        target = await self.get(None, checkpoint_id)
+        if target is None:
+            return None
+        if prune_descendants:
+            await ensure_checkpoint_schema()
+            async with async_session() as db:
+                records = (
+                    await db.execute(
+                        __import__("sqlalchemy")
+                        .select(CheckpointRecord)
+                        .where(CheckpointRecord.session_id == target.session_id)
+                    )
+                ).scalars().all()
+                parents: dict[str, str | None] = {}
+                for record in records:
+                    meta = self._load_json(getattr(record, "metadata_", "{}"), {})
+                    parents[record.id] = meta.get("parent_id")
+
+                def _is_descendant(cid: str) -> bool:
+                    seen: set[str] = set()
+                    current = parents.get(cid)
+                    while current is not None and current not in seen:
+                        if current == checkpoint_id:
+                            return True
+                        seen.add(current)
+                        current = parents.get(current)
+                    return False
+
+                descendant_ids = [
+                    rid for rid in parents if rid != checkpoint_id and _is_descendant(rid)
+                ]
+                if descendant_ids:
+                    await db.execute(
+                        __import__("sqlalchemy")
+                        .delete(CheckpointRecord)
+                        .where(CheckpointRecord.id.in_(descendant_ids))
+                    )
+                    await db.commit()
+        return target
 
     async def put_writes(self, checkpoint_id: str, writes: list[PendingWrite]) -> None:
         from app.storage.database import CheckpointRecord, ensure_checkpoint_schema

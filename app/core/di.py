@@ -7,10 +7,12 @@ instead of being instantiated at module level.
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import structlog
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = structlog.get_logger()
 

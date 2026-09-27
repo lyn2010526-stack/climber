@@ -63,7 +63,7 @@ def _run_notifier(argv: list[str]) -> None:
     from _script_safe() text, so a quote in a notification title cannot append
     statements to the script.
     """
-    subprocess.run(argv, check=False, timeout=5)  # noqa: S603
+    subprocess.run(argv, check=False, timeout=5)  # noqa: S603  # argv[0] is an absolute path from shutil.which()
 
 
 def notify(title: str, message: str, *, urgency: str = "normal", icon: str | None = None) -> bool:

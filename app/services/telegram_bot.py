@@ -11,9 +11,12 @@ Usage:
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
+
+if TYPE_CHECKING:
+    from telegram import Update
 
 logger = structlog.get_logger()
 
@@ -45,7 +48,6 @@ async def start_telegram_bot() -> bool:
         return True
 
     try:
-        from telegram import Update
         from telegram.ext import (
             ApplicationBuilder,
             CommandHandler,
@@ -54,7 +56,7 @@ async def start_telegram_bot() -> bool:
             filters,
         )
     except ImportError as e:
-        logger.error("python-telegram-bot not installed", error=str(e))
+        logger.exception("python-telegram-bot not installed", error=str(e))
         return False
 
     application = ApplicationBuilder().token(token).build()
@@ -140,8 +142,8 @@ async def start_telegram_bot() -> bool:
             # Persist history (keep last 20 messages)
             state["messages"] = session.messages[-20:]
         except Exception as e:
-            logger.error("Telegram handler error", error=str(e))
-            await update.effective_chat.send_message(f"[内部错误] {str(e)}")
+            logger.exception("Telegram handler error", error=str(e))
+            await update.effective_chat.send_message(f"[内部错误] {e!s}")
 
     application.add_handler(CommandHandler("start", cmd_start))
     application.add_handler(CommandHandler("list", cmd_list_tools))

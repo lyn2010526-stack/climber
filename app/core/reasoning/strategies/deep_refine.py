@@ -239,10 +239,9 @@ class DeepRefineStrategy:
             {"role": "system", "content": DEEP_REFINE_SYSTEM_PROMPT},
             {"role": "user", "content": task},
         ]
-        parts: list[str] = []
-        async for chunk in model_adapter.stream_chat(messages=messages):
-            if chunk.content:
-                parts.append(chunk.content)
+        parts: list[str] = [
+            chunk.content async for chunk in model_adapter.stream_chat(messages=messages) if chunk.content
+        ]
         return "".join(parts)
 
     async def _run_critique(
@@ -270,8 +269,8 @@ class DeepRefineStrategy:
             )
             return _parse_critique_response(result.content)
         except Exception as exc:
-            logger.error("deep_refine_critique_error", error=str(exc))
-            return CritiqueResult(passed=False, scores={d: 1.0 for d in ("correctness", "completeness", "clarity", "safety", "actionability")})
+            logger.exception("deep_refine_critique_error", error=str(exc))
+            return CritiqueResult(passed=False, scores=dict.fromkeys(("correctness", "completeness", "clarity", "safety", "actionability"), 1.0))
 
     async def _generate_reflection(
         self,
@@ -299,7 +298,7 @@ class DeepRefineStrategy:
                 "suggested_approach": data.get("suggested_approach", ""),
             }
         except Exception as exc:
-            logger.error("deep_refine_reflection_error", error=str(exc))
+            logger.exception("deep_refine_reflection_error", error=str(exc))
             return None
 
     async def _run_improvement(
@@ -337,7 +336,7 @@ class DeepRefineStrategy:
                 return None
             return improved
         except Exception as exc:
-            logger.error("deep_refine_improve_error", error=str(exc))
+            logger.exception("deep_refine_improve_error", error=str(exc))
             return None
 
     async def _decide_backtrack(

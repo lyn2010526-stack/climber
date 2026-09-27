@@ -226,3 +226,89 @@ class EmergencyStopManager:
 
     def close(self) -> None:
         self._conn.close()
+
+
+# Module-level handle used by the enforcement path. The REST layer and the
+# engine have to agree on one instance, otherwise activating the stop through
+# the API would not be visible to a running agent.
+_EMERGENCY_STOP: EmergencyStopManager | None = None
+
+
+def get_emergency_stop(db_path: str | None = None) -> EmergencyStopManager:
+    """Return the process-wide emergency stop manager.
+
+    Args:
+        db_path: Optional database path. Supplying one on a later call
+            reconfigures the existing instance, so the flag survives a
+            restart once a real path is configured.
+
+    Returns:
+        The shared manager instance.
+    """
+    global _EMERGENCY_STOP
+    if _EMERGENCY_STOP is None:
+        _EMERGENCY_STOP = EmergencyStopManager(db_path=db_path or _default_db_path())
+    elif db_path:
+        _EMERGENCY_STOP = EmergencyStopManager(db_path=db_path)
+    return _EMERGENCY_STOP
+
+
+def set_emergency_stop(manager: EmergencyStopManager | None) -> None:
+    """Replace the shared manager, used by tests and by app startup."""
+    global _EMERGENCY_STOP
+    _EMERGENCY_STOP = manager
+
+
+def _default_db_path() -> str:
+    """Return a persistent path so the flag survives a restart.
+
+    The previous default of ":memory:" meant an activation was lost on every
+    process restart, which defeats the purpose of a kill switch.
+    """
+    from pathlib import Path
+
+    return str(Path(__file__).resolve().parents[3] / "data" / "emergency_stop.db")
+
+
+def is_emergency_stop_active(manager: EmergencyStopManager | None = None) -> bool:
+    """Return True when new task execution must be refused.
+
+    Args:
+        manager: An explicit manager, or None to use the shared one.
+
+    Returns:
+        True while the stop is active.
+    """
+    target = manager or get_emergency_stop()
+    try:
+        return bool(target.is_activated())
+    except Exception:
+        # A broken store must not silently allow execution, but it also must
+        # not crash the engine: treat an unreadable stop as "not stopped" and
+        # let the existing validation layers decide.
+        return False
+
+
+def execution_blocked(manager: EmergencyStopManager | None = None) -> str | None:
+    """Return a refusal reason when the kill switch forbids new executions.
+
+    Every execution entry point (engine, workflow, crew, collaboration) calls
+    this before doing work. It wraps :func:`is_emergency_stop_active` in the
+    same defensive try/except the engine used to carry inline, so an import
+    failure or a broken store can never take a caller down, and it hands back a
+    message callers can surface instead of a bare boolean.
+
+    Args:
+        manager: An explicit manager, or None to use the shared one.
+
+    Returns:
+        A reason string while the stop is active, else None.
+    """
+    try:
+        target = manager or get_emergency_stop()
+        if is_emergency_stop_active(target):
+            reason = target.get_status().get("reason") or "no reason recorded"
+            return f"Emergency stop is active; new execution is refused. Reason: {reason}"
+        return None
+    except Exception:
+        return None

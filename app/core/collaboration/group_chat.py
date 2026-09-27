@@ -11,7 +11,11 @@ import structlog
 from app.core.collaboration.agent_runner import run_agent_simple
 from app.core.collaboration.callbacks import invoke_step_callback, invoke_task_callback
 from app.core.collaboration.memory import store_memory
-from app.core.collaboration.prompts import build_group_chat_context, build_group_chat_prompt, summarize_group_chat
+from app.core.collaboration.prompts import (
+    build_group_chat_context,
+    build_group_chat_prompt,
+    summarize_group_chat,
+)
 from app.core.collaboration.resolver import resolve_api_key, resolve_base_url
 from app.core.group_ws_hub import group_ws_hub
 from app.storage import async_session
@@ -97,7 +101,7 @@ async def _execute_chat_round(
         output = ""
         try:
             async with asyncio.timeout(TASK_TIMEOUT):
-                output, tokens = await run_agent_simple(
+                output, _tokens = await run_agent_simple(
                     agent_id=participant.agent_id,
                     provider=participant.model_provider or "openai",
                     model_id=participant.model_id or "gpt-4o",
@@ -108,7 +112,7 @@ async def _execute_chat_round(
                     tools=participant.tools or [],
                 )
         except Exception as e:
-            logger.error("group_chat_agent_failed", agent_id=participant.agent_id, error=str(e))
+            logger.exception("group_chat_agent_failed", agent_id=participant.agent_id, error=str(e))
             output = f"[Error: {e}]"
 
         conversation.append({

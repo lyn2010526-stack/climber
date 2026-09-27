@@ -80,10 +80,10 @@ class MCPHealthMonitor:
                 status=McpStatus.ERROR,
                 error="Health check timed out",
             )
-        except Exception as e:
+        except Exception:
             result = HealthCheckResult(
                 status=McpStatus.ERROR,
-                error=str(e),
+                error="Health check failed",
             )
 
         name = getattr(client, "name", "unknown")
@@ -111,7 +111,7 @@ class MCPHealthMonitor:
                 except asyncio.CancelledError:
                     break
                 except Exception as e:
-                    logger.error("Monitor loop error", server=name, error=str(e))
+                    logger.exception("Monitor loop error", server=name, error_type=type(e).__name__)
                 await asyncio.sleep(interval)
 
         self._monitors[name] = asyncio.create_task(_monitor_loop())
@@ -184,7 +184,7 @@ class AutoRestart:
             return True
         except Exception as e:
             self._restart_counts[name] = count + 1
-            logger.error("Restart failed", server=name, error=str(e))
+            logger.exception("Restart failed", server=name, error_type=type(e).__name__)
             return False
 
     def get_restart_count(self, name: str) -> int:

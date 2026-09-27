@@ -50,34 +50,37 @@ class MCPRouter:
 
         if not server_name:
             return MCPToolResult(
-                content=[{
-                    "type": "text",
-                    "text": f"Tool '{tool_name}' not found on any registered server",
-                }],
+                content=[
+                    {
+                        "type": "text",
+                        "text": f"Tool '{tool_name}' not found on any registered server",
+                    }
+                ],
                 isError=True,
             )
 
         client = self.servers[server_name]
         try:
             if hasattr(client, "call_tool"):
-                result = await client.call_tool(tool_name, arguments)
-                return result
+                return await client.call_tool(tool_name, arguments)
             return MCPToolResult(
-                content=[{
-                    "type": "text",
-                    f"Server '{server_name}' does not support tool calls": True,
-                }],
+                content=[
+                    {
+                        "type": "text",
+                        f"Server '{server_name}' does not support tool calls": True,
+                    }
+                ],
                 isError=True,
             )
         except Exception as e:
-            logger.error(
+            logger.warning(
                 "Tool routing failed",
                 tool=tool_name,
                 server=server_name,
-                error=str(e),
+                error_type=type(e).__name__,
             )
             return MCPToolResult(
-                content=[{"type": "text", "text": f"Error: {str(e)}"}],
+                content=[{"type": "text", "text": "MCP tool routing failed"}],
                 isError=True,
             )
 
@@ -99,7 +102,7 @@ class MCPRouter:
                 logger.warning(
                     "Failed to list tools",
                     server=server_name,
-                    error=str(e),
+                    error_type=type(e).__name__,
                 )
                 result[server_name] = []
         return result

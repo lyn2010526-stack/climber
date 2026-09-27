@@ -2,35 +2,33 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.core import AgentEvent, AgentEventType
-from app.core.agent_engine import AgentEngine
 from app.core.api_key_crypto import decrypt_api_key
 from app.core.auth import get_current_user
-from app.core.di import resolve as di_resolve
+from app.core.auth_manager import require_scopes
 from app.core.recovery import RecoveryManager
 from app.storage import async_session
 from app.storage.database import Agent as AgentModel
 from app.storage.database import ApiKey as ApiKeyModel
 from app.storage.database import Session as SessionModel
 
-router = APIRouter()
+if TYPE_CHECKING:
+    from app.core.agent_engine import AgentEngine
 
-_engine: AgentEngine | None = None
+router = APIRouter()
 
 
 def get_engine() -> AgentEngine:
-    global _engine
-    if _engine is None:
-        model_registry = di_resolve("ModelRegistry")
-        tool_registry = di_resolve("ToolRegistry")
-        _engine = AgentEngine(model_registry=model_registry, tool_registry=tool_registry)
-    return _engine
+    """Compatibility re-export; the accessor now lives in app.core."""
+    from app.core.engine_registry import get_engine as _get_engine
+
+    return _get_engine()
 
 
 class ChatRequest(BaseModel):
@@ -42,6 +40,7 @@ async def chat(
     session_id: str,
     request: ChatRequest,
     user_id: str = Depends(get_current_user),
+    _auth: dict = Depends(require_scopes("write")),
 ):
     engine = get_engine()
     session = engine._sessions.get(session_id)
@@ -112,7 +111,7 @@ async def chat(
             session_id=session_id,
         )
         try:
-            await RecoveryManager().restore_session(session)
+            await RecoveryManager(getattr(engine, "checkpoint_store", None)).restore_session(session)
         except Exception as e:
             import structlog
 

@@ -277,6 +277,10 @@ class SecuritySandbox:
     def __init__(self, config: SandboxConfig | None = None):
         self.config = config or SandboxConfig(workdir=_DEFAULT_SANDBOX_WORKDIR)
         self._active = True
+        # Strong references to fire-and-forget audit-persistence tasks. Without
+        # them the event loop may garbage-collect a task before it finishes and
+        # the audit record is silently lost.
+        self._persist_tasks: set[asyncio.Task] = set()
         # This field previously had no reader anywhere, so enable_network=False
         # changed nothing. Push it into the tool registry, which is the layer
         # that actually gates egress (the network tools are plain functions
@@ -295,7 +299,7 @@ class SecuritySandbox:
                 return False, f"Access denied: path '{abs_path}' is in blocked list"
 
         # Check allowed paths
-        allowed = [self.config.workdir] + self.config.allowed_paths
+        allowed = [self.config.workdir, *self.config.allowed_paths]
         is_allowed = any(abs_path.startswith(p) for p in allowed)
 
         if not is_allowed:
@@ -402,9 +406,9 @@ class CodeSandbox:
 
     """
 
-    FORBIDDEN_MODULES = {"os", "sys", "subprocess", "socket", "shutil", "pickle", "marshal", "ctypes", "signal", "pty", "fcntl"}
-    FORBIDDEN_FUNCTIONS = {"eval", "exec", "open", "getattr", "setattr", "delattr", "globals", "locals", "compile", "__import__"}
-    FORBIDDEN_DUNDER = {"__dict__", "__class__", "__bases__", "__subclasses__", "__init_subclass__", "__setattr__", "__delattr__"}
+    FORBIDDEN_MODULES = frozenset({"os", "sys", "subprocess", "socket", "shutil", "pickle", "marshal", "ctypes", "signal", "pty", "fcntl"})
+    FORBIDDEN_FUNCTIONS = frozenset({"eval", "exec", "open", "getattr", "setattr", "delattr", "globals", "locals", "compile", "__import__"})
+    FORBIDDEN_DUNDER = frozenset({"__dict__", "__class__", "__bases__", "__subclasses__", "__init_subclass__", "__setattr__", "__delattr__"})
 
     def verify(self, code: str) -> VerificationResult:
         """Verify code safety using AST analysis."""
@@ -590,10 +594,22 @@ class AuditSystem:
             severity=severity,
             details={"path": path, **(details or {})},
         ))
-        asyncio.create_task(self._persist(
+        self._spawn_persist(self._persist(
             session_id=session_id, action=f"file:{operation}", severity=severity,
             details={"path": path, **(details or {})}, user_id=user_id,
         ))
+
+    def _spawn_persist(self, coro) -> None:
+        """Run an audit-persistence coroutine, keeping a strong reference.
+
+        The event loop only holds a weak reference to a running task, so a
+        fire-and-forget ``create_task`` can be garbage-collected before it
+        finishes and the audit record is lost. The reference is dropped from
+        the set once the task completes.
+        """
+        task = asyncio.ensure_future(coro)
+        self._persist_tasks.add(task)
+        task.add_done_callback(self._persist_tasks.discard)
 
     def log_command(
         self,
@@ -613,7 +629,7 @@ class AuditSystem:
             details={"command": command, "blocked": blocked, "output_preview": result[:200]},
             result=result,
         ))
-        asyncio.create_task(self._persist(
+        self._spawn_persist(self._persist(
             session_id=session_id, action="command:execute",
             severity="critical" if blocked else "warning",
             details={"command": command, "blocked": blocked, "output_preview": result[:200]},
@@ -637,7 +653,7 @@ class AuditSystem:
             severity="warning" if status_code >= 400 else "info",
             details={"endpoint": endpoint, "status": status_code, "duration_ms": duration_ms},
         ))
-        asyncio.create_task(self._persist(
+        self._spawn_persist(self._persist(
             session_id=session_id, action="api:call",
             severity="warning" if status_code >= 400 else "info",
             details={"endpoint": endpoint, "status": status_code, "duration_ms": duration_ms},
@@ -661,7 +677,7 @@ class AuditSystem:
             severity="warning" if granted else "info",
             details={"granted": granted, "reason": reason},
         ))
-        asyncio.create_task(self._persist(
+        self._spawn_persist(self._persist(
             session_id=session_id, action=f"permission:{action}",
             severity="warning" if granted else "info",
             details={"granted": granted, "reason": reason}, user_id=user_id,

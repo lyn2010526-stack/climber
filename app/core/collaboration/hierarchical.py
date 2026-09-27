@@ -121,7 +121,7 @@ async def _plan_subtasks(task: Any, manager: Any) -> str:
             )
         return manager_plan
     except Exception as e:
-        logger.error("manager_failed", task_id=task.id, error=str(e))
+        logger.exception("manager_failed", task_id=task.id, error=str(e))
         await group_ws_hub.broadcast(task.group_id, {
             "type": "task_failed",
             "data": {"task_id": task.id, "error": f"Manager planning failed: {e}"},
@@ -185,7 +185,7 @@ async def _validate_output(task: Any, manager: Any, plan: str, subtask_outputs: 
             )
         return manager_validation
     except Exception as e:
-        logger.error("manager_validation_failed", task_id=task.id, error=str(e))
+        logger.exception("manager_validation_failed", task_id=task.id, error=str(e))
         await group_ws_hub.broadcast(task.group_id, {
             "type": "hierarchical_validate",
             "data": {"content": f"Validation error: {e}", "tokens_used": 0},

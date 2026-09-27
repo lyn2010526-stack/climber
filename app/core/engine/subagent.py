@@ -13,12 +13,14 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 logger = structlog.get_logger()
 
@@ -250,8 +252,7 @@ class SubagentManager:
 
         if task in done:
             return task.result()
-        else:
-            raise asyncio.CancelledError()
+        raise asyncio.CancelledError
 
     def cancel(self, task_id: str) -> bool:
         """Cancel a running sub-agent and optionally cascade to children."""
@@ -334,9 +335,7 @@ class SubagentManager:
 
 class DepthLimitExceeded(Exception):
     """Raised when sub-agent depth limit is exceeded."""
-    pass
 
 
 class ConcurrencyLimitExceeded(Exception):
     """Raised when concurrency limit is reached."""
-    pass

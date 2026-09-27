@@ -41,7 +41,7 @@ def _store_state(states: dict[str, dict[str, Any]], key: str, state: dict[str, A
     states[key] = state
 
 
-async def _websocket_heartbeat(websocket: WebSocket, session_id: str) -> None:
+async def _websocket_heartbeat(websocket: WebSocket, session_id: str) -> None:  # noqa: ARG001
     """Send periodic ping frames to keep connection alive."""
     try:
         while True:

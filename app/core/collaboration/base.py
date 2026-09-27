@@ -227,7 +227,7 @@ class GroupCollaborationEngine:
                 if db_task is None or db_worker is None or db_group is None:
                     return
             except Exception as e:
-                logger.error("db_error_loading_task", task_id=task_id, error=str(e))
+                logger.exception("db_error_loading_task", task_id=task_id, error=str(e))
                 return
 
             task = db_task
@@ -288,7 +288,11 @@ class GroupCollaborationEngine:
         if not tasks:
             return {"status": "no_pending_tasks"}
 
-        from app.core.collaboration.deadlock import deadlocked_task_ids, detect_deadlock, topological_order
+        from app.core.collaboration.deadlock import (
+            deadlocked_task_ids,
+            detect_deadlock,
+            topological_order,
+        )
 
         dependency_map = {t.id: list(t.dependencies or []) for t in tasks}
         deadlock_cycles = detect_deadlock(dependency_map)
@@ -332,7 +336,7 @@ class GroupCollaborationEngine:
                     completed_tasks.add(task_id)
                     level_results.append({"task_id": task_id, "status": "completed"})
                 except Exception as e:
-                    logger.error("dag_task_failed", task_id=task_id, error=str(e))
+                    logger.exception("dag_task_failed", task_id=task_id, error=str(e))
                     level_results.append({"task_id": task_id, "status": "failed", "error": str(e)})
 
             results["levels"].append(level_results)
@@ -653,14 +657,13 @@ async def _select_worker(task: Any) -> Any | None:
                 return worker
 
     async with async_session() as db:
-        worker = (
+        return (
             await db.execute(
                 select(AgentGroupMember)
                 .where(AgentGroupMember.group_id == task.group_id)
                 .where(AgentGroupMember.role.in_(["worker", "participant"]))
             )
         ).scalars().first()
-    return worker
 
 
 async def _load_reviewers(task: Any) -> list[Any]:

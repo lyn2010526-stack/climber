@@ -12,9 +12,8 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -25,7 +24,6 @@ from app.core.engine.pregel.checkpoint import (
     InMemoryCheckpointSaver,
 )
 from app.core.engine.pregel.command import Command, is_command, parse_node_output
-from app.core.engine.pregel.graph import StateGraph
 from app.core.engine.pregel.hitl import HITLManager
 from app.core.engine.pregel.policies import (
     DefaultErrorHandler,
@@ -36,6 +34,11 @@ from app.core.engine.pregel.policies import (
 )
 from app.core.engine.pregel.state import GraphState
 from app.core.engine.pregel.streaming import StreamEvent, StreamEventType
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Iterable
+
+    from app.core.engine.pregel.graph import StateGraph
 
 logger = structlog.get_logger(__name__)
 
@@ -532,7 +535,7 @@ class PregelEngine:
             return result
 
         except Exception as e:
-            logger.error("node_failed", node=node_name, error=str(e))
+            logger.exception("node_failed", node=node_name, error=str(e))
             raise
 
     def _parse_output(self, output: Any) -> tuple[dict | None, str | list[str] | None, Any]:
@@ -559,8 +562,7 @@ class PregelEngine:
             return []
 
         # Use static edges
-        outgoing = self._graph.get_outgoing_edges(current_node)
-        return outgoing
+        return self._graph.get_outgoing_edges(current_node)
 
     async def _resolve_router(self, router: callable, state: GraphState) -> str:
         """Resolve a router function to a node name."""
@@ -572,5 +574,5 @@ class PregelEngine:
                 return "__end__"
             return str(result)
         except Exception as e:
-            logger.error("router_error", error=str(e))
+            logger.exception("router_error", error=str(e))
             return "__end__"

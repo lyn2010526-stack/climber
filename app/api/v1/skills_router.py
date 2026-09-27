@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -19,6 +18,9 @@ from app.core.task_worker import TaskStatus, task_manager
 from app.storage import async_session
 from app.storage.database import Agent, ApiKey
 from app.storage.models_platform import Skill
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 router = APIRouter()
 

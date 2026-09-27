@@ -61,8 +61,8 @@ class PromptTemplate:
     def render(self, variables: dict[str, str] | None = None) -> str:
         """Render template with variable substitution."""
         result = self.content
-        vars = {**self.variables, **(variables or {})}
-        for key, value in vars.items():
+        merged = {**self.variables, **(variables or {})}
+        for key, value in merged.items():
             result = result.replace("{{" + key + "}}", str(value))
         return result
 

@@ -21,7 +21,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, synonym
 
 from app.storage import Base
 
@@ -193,6 +193,10 @@ class AutoLoopTask(Base):
     __tablename__ = "auto_loop_tasks"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    # Nullable keeps rows created before ownership was persisted loadable. The
+    # legacy objective payload remains the fallback for those rows.
+    owner_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    user_id = synonym("owner_id")
     objective: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     max_steps: Mapped[int] = mapped_column(Integer, default=10)

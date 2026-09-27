@@ -1,5 +1,8 @@
 """Reasoning API — multi-strategy reasoning endpoint with streaming support."""
 
+# ruff: noqa: TC001, TC002  # FastAPI resolves route handler annotations at
+# runtime, so these names must stay importable at runtime.
+
 from __future__ import annotations
 
 import json
@@ -9,8 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
-from app.api.v1.common import current_user_id
 from app.core.auth_manager import require_scopes as _require_scopes
+from app.core.engine_registry import get_engine
+from app.core.principal import get_context_principal
 from app.core.reasoning import (
     ReasoningRequest,
     ReasoningResult,
@@ -25,6 +29,21 @@ from app.storage.repository_reasoning import (
 DEFAULT_USER = "default-user"
 
 router = APIRouter(tags=["reasoning"], redirect_slashes=False)
+
+
+def current_user_id(request: Request) -> str:
+    """Resolve the caller's subject id.
+
+    Mirrors ``app.api.v1.common.current_user_id`` without importing it: that
+    module lives in the ``app.api.v1`` package, and importing it from here made
+    ``app.api.v1.__init__`` re-enter while it was still executing, so
+    ``import app.core.reasoning.api`` failed outright.
+    """
+    del request
+    try:
+        return get_context_principal().subject_id
+    except RuntimeError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
 async def _get_owned_trace(trace_repo: ReasoningTraceRepository, trace_id: str, user_id: str) -> Any:
@@ -43,8 +62,6 @@ async def reason_with_slash(
     _rate_limit: None = RateLimit,
     _auth: dict = Depends(_require_scopes("write")),
 ) -> ReasoningResult:
-    from app.api.v1 import get_engine
-
     user_id = current_user_id(request)
     engine = get_engine()
     if not hasattr(engine, 'reasoning') or not engine.reasoning or not engine.reasoning.is_available():
@@ -75,7 +92,7 @@ async def reason_with_slash(
     except NotImplementedError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Reasoning failed: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Reasoning failed: {e!s}") from e
 
 
 @router.post("")
@@ -95,8 +112,6 @@ async def reason_stream(
     db: AsyncSession = Depends(get_db),
     _auth: dict = Depends(_require_scopes("write")),
 ) -> EventSourceResponse:
-    from app.api.v1 import get_engine
-
     user_id = current_user_id(request)
     engine = get_engine()
     if not hasattr(engine, 'reasoning') or not engine.reasoning or not engine.reasoning.is_available():
@@ -157,13 +172,12 @@ async def reason_stream(
 
 @router.get("/modes")
 async def list_reasoning_modes() -> list[dict[str, Any]]:
-    modes = [
+    return [
         {"id": "auto", "name": "Auto", "description": "Automatically select best strategy", "available": True},
         {"id": "tree", "name": "Tree of Thought", "description": "Parallel multi-path + self-refine", "available": True},
         {"id": "deep", "name": "Deep Refine", "description": "Iterative refinement with backtracking", "available": True},
         {"id": "debate", "name": "Debate", "description": "Multi-agent debate convergence", "available": True},
     ]
-    return modes
 
 
 @router.post("/{trace_id}/feedback")

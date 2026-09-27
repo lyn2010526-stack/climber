@@ -12,7 +12,9 @@ import json
 import os
 import re
 import time
-from collections.abc import AsyncIterator
+from collections.abc import (
+    AsyncIterator,  # noqa: TC003  # no `from __future__ import annotations`; evaluated at runtime
+)
 from typing import Any
 
 import structlog
@@ -305,7 +307,12 @@ class AgentEngine:
         try:
             import os
 
-            from app.core.security_sandbox import AgentMode, PermissionOverlay, SandboxConfig, SecuritySandbox
+            from app.core.security_sandbox import (
+                AgentMode,
+                PermissionOverlay,
+                SandboxConfig,
+                SecuritySandbox,
+            )
             workdir = os.environ.get("CLIMBER_SANDBOX_WORKDIR") or os.getcwd()
             self.sandbox = SecuritySandbox(SandboxConfig(workdir=workdir))
             self.permission_overlay = PermissionOverlay()
@@ -1438,8 +1445,7 @@ class AgentEngine:
             if not lessons:
                 return
             lines = ["Relevant lessons from past work (apply them proactively):"]
-            for mem in lessons:
-                lines.append(f"- {mem.summary or mem.content}")
+            lines.extend(f"- {mem.summary or mem.content}" for mem in lessons)
             lessons_text = "\n".join(lines)
             lessons_marker = LESSONS_MARKER
             for i, msg in enumerate(session.messages):

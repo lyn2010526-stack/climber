@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from app.core.reasoning.base import (
-    Candidate,
-    CoverageReport,
-    CritiqueResult,
-)
+if TYPE_CHECKING:
+    from app.core.reasoning.base import (
+        Candidate,
+        CoverageReport,
+        CritiqueResult,
+    )
 
 logger = structlog.get_logger()
 

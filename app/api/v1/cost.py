@@ -24,7 +24,7 @@ def _budget_window_start(period: str) -> datetime:
         return midnight
     if period == "weekly":
         return midnight - timedelta(days=midnight.weekday())
-    # monthly (default)
+    # monthly (default)  # noqa: ERA001  # documents the expected shape, not dead code
     return midnight.replace(day=1)
 
 

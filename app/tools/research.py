@@ -22,13 +22,14 @@ from datetime import UTC, datetime
 from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import parse_qs, quote_plus, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 import structlog
 
 from app.core.enhanced_rag import compute_bm25
 from app.core.web_content_cleaner import clean_web_content
 from app.tools.rag import chunk_text
+from app.utils.ssrf import blocked_reason
 
 logger = structlog.get_logger(__name__)
 
@@ -64,6 +65,17 @@ _STATIC_EXTS = (".pdf", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".zip", ".mp4"
 _SESSION_ID = "research"
 
 
+class _NoRedirectHandler(HTTPRedirectHandler):
+    """Keep urllib from following an unvalidated redirect target."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ARG002  # urllib HTTPRedirectHandler override
+        return None
+
+
+_NO_REDIRECT_OPENER = build_opener(_NoRedirectHandler)
+urlopen = _NO_REDIRECT_OPENER.open
+
+
 class _TextExtractor(HTMLParser):
     """Strip markup and collect visible text."""
 
@@ -72,7 +84,7 @@ class _TextExtractor(HTMLParser):
         self._parts: list[str] = []
         self._skip = 0
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:  # noqa: ARG002  # HTMLParser handle_starttag callback
         if tag in ("script", "style", "noscript", "svg"):
             self._skip += 1
         elif tag in ("p", "div", "br", "li", "h1", "h2", "h3", "h4", "tr"):
@@ -215,7 +227,12 @@ def _topic_from_query(query: str) -> str:
 
 def _fetch_url_sync(url: str, timeout_s: int) -> str:
     """Fetch a URL with urllib (standard library only). Raises on failure."""
-    request = Request(url, headers={"User-Agent": _USER_AGENT, "Accept-Language": "en,en-US;q=0.9"})
+    reason = blocked_reason(url)
+    if reason is not None:
+        raise ValueError(f"request blocked by SSRF protection ({reason})")
+    request = Request(
+        url, headers={"User-Agent": _USER_AGENT, "Accept-Language": "en,en-US;q=0.9"}
+    )
     with urlopen(request, timeout=timeout_s) as response:
         charset = response.headers.get_content_charset() or "utf-8"
         payload = response.read(_MAX_BYTES)
@@ -238,7 +255,7 @@ def _candidate_urls(query: str, timeout_s: int) -> list[str]:
                 urls.append(link)
     except Exception as exc:
         logger.debug("research_candidate_discovery_failed", error=str(exc))
-    return urls[:_MAX_CANDIDATES]
+    return [url for url in urls if blocked_reason(url) is None][:_MAX_CANDIDATES]
 
 
 def _build_finding(query: str, url: str, title: str, body: str) -> dict[str, Any] | None:
@@ -285,6 +302,10 @@ async def _collect_browser(candidates: list[str], query: str, timeout_s: int) ->
     findings: list[dict[str, Any]] = []
     try:
         for url in candidates:
+            reason = blocked_reason(url)
+            if reason is not None:
+                logger.warning("research_browser_url_blocked", url=url, reason=reason)
+                continue
             try:
                 summary = await asyncio.wait_for(
                     browser_tools.browser_navigate(url, session_id=_SESSION_ID), timeout=timeout_s
@@ -325,7 +346,7 @@ def run_research(query: str, sources: int = 3, timeout_s: int = 30) -> dict[str,
         else:
             findings = _collect_sync(candidates, query, timeout_s)
     except Exception as exc:
-        logger.error("research_pipeline_failed", error=str(exc))
+        logger.exception("research_pipeline_failed", error=str(exc))
         findings = []
 
     findings.sort(key=lambda f: f["rel_score"], reverse=True)
@@ -374,9 +395,7 @@ def research_report_text(result: dict[str, Any]) -> str:
     for finding in findings:
         lines.append(f"### {finding.get('title', finding.get('source', ''))}")
         lines.append(f"- 来源：{finding.get('source', '')}（相关度 {finding.get('rel_score', 0.0)}）")
-        for point in finding.get("key_points", []):
-            lines.append(f"- {point}")
-        lines.append("")
+        lines.extend(f"- {point}" for point in finding.get("key_points", []))
 
     sources = result.get("sources") or []
     lines.append("## 来源列表")

@@ -8,11 +8,10 @@ import asyncio
 import contextlib
 import time
 import uuid
-from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from sqlalchemy import select
@@ -20,6 +19,9 @@ from sqlalchemy import select
 from app.core.task_state_machine import TaskState, TaskStateMachine
 from app.storage import async_session
 from app.storage.models_platform import AutoLoopTask
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
 
 
 def _to_utc(ts: float | None) -> datetime | None:

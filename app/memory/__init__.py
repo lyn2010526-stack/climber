@@ -75,8 +75,7 @@ class LongTermMemory:
         if not facts:
             return ""
         lines = ["## Known Facts:"]
-        for f in facts:
-            lines.append(f"- [{f['category']}] {f['fact']}")
+        lines.extend(f"- [{f['category']}] {f['fact']}" for f in facts)
         return "\n".join(lines)
 
 

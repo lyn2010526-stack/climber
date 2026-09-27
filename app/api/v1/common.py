@@ -4,6 +4,9 @@ Provides common request parsing, database query helpers, and response formatting
 functions used across all route modules.
 """
 
+# ruff: noqa: TC003  # FastAPI resolves route handler
+# annotations at runtime, so these names must stay importable at runtime.
+
 from __future__ import annotations
 
 from collections.abc import Sequence

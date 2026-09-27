@@ -71,7 +71,7 @@ class DebateAgent:
 
         try:
             result = await self.model_adapter.chat(
-                [{"role": "system", "content": self.system_prompt}] + self.messages[-self.max_history:],
+                [{"role": "system", "content": self.system_prompt}, *self.messages[-self.max_history:]],
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
@@ -79,7 +79,7 @@ class DebateAgent:
             usage = getattr(result, "usage", None) or {}
             self.total_tokens += getattr(result, "tokens_used", 0) or usage.get("total_tokens", 0)
         except Exception as exc:
-            logger.error("debate_agent_chat_failed", role=self.role, error=str(exc))
+            logger.exception("debate_agent_chat_failed", role=self.role, error=str(exc))
             response = f"[{self.role} encountered an error: {type(exc).__name__}]"
 
         self.messages.append({"role": "assistant", "content": response})
@@ -231,14 +231,11 @@ class DebateStrategy:
             final_critique = CritiqueResult(
                 passed=consensus_reached,
                 summary=summary,
-                scores={
-                    dim: quality
-                    for dim in ("correctness", "completeness", "clarity", "safety", "actionability")
-                },
+                scores=dict.fromkeys(("correctness", "completeness", "clarity", "safety", "actionability"), quality),
             )
             confidence = self._scorer.score_from_critique(final_critique)
         except Exception as exc:
-            logger.error("debate_scoring_failed", error=str(exc))
+            logger.exception("debate_scoring_failed", error=str(exc))
 
         total_tokens = proponent.total_tokens + opponent.total_tokens + judge.total_tokens
 

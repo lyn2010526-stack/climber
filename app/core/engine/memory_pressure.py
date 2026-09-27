@@ -304,4 +304,4 @@ class MemoryPressureManager:
             "content": f"[Previous context summary: {len(to_summarize)} earlier messages. Key points: {'; '.join(summary_parts)}]",
         }
 
-        return system_msgs + [summary_msg] + recent
+        return [*system_msgs, summary_msg, *recent]

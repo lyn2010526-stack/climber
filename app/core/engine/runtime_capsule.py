@@ -105,13 +105,13 @@ class RuntimeStateCapsule:
     mutation receipts, and blocking fact detection.
     """
 
-    SOURCE_EXTENSIONS = {".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".c", ".cpp", ".h"}
-    TEST_PATTERNS = {"test_", "_test", ".test.", ".spec.", "/tests/", "/test/"}
+    SOURCE_EXTENSIONS = frozenset({".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".c", ".cpp", ".h"})
+    TEST_PATTERNS = frozenset({"test_", "_test", ".test.", ".spec.", "/tests/", "/test/"})
     # Classification patterns, not files this process creates. The scratch
     # marker is anchored on the platform temp directory so it keeps matching
     # the same paths without hardcoding a temp path.
-    SCRATCH_PATTERNS = {f"{tempfile.gettempdir()}/", "temp_", "scratch", ".tmp"}
-    CONFIG_EXTENSIONS = {".json", ".yaml", ".yml", ".toml", ".cfg", ".ini", ".xml"}
+    SCRATCH_PATTERNS = frozenset({f"{tempfile.gettempdir()}/", "temp_", "scratch", ".tmp"})
+    CONFIG_EXTENSIONS = frozenset({".json", ".yaml", ".yml", ".toml", ".cfg", ".ini", ".xml"})
 
     def __init__(self, workdir: str | None = None) -> None:
         self._workdir = workdir or os.getcwd()
@@ -190,7 +190,7 @@ class RuntimeStateCapsule:
             # S603 audit: argv is fully fixed (binary + "status" +
             # "--porcelain") and the captured output is parsed as data, never
             # executed, so nothing caller-supplied reaches the command.
-            result = subprocess.run(  # noqa: S603
+            result = subprocess.run(  # noqa: S603  # argv[0] is an absolute path from shutil.which()
                 [_GIT_BIN, "status", "--porcelain"],
                 cwd=self._workdir,
                 capture_output=True,

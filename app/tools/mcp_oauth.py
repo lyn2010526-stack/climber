@@ -7,14 +7,29 @@ import hashlib
 import secrets
 import time
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 import structlog
 
 from app.config import settings
+from app.utils.ssrf import blocked_reason
 
 logger = structlog.get_logger()
+
+
+def _validate_endpoint(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("OAuth endpoint must use HTTP(S)")
+    if parsed.username or parsed.password:
+        raise ValueError("OAuth endpoint must not contain credentials")
+    if blocked_reason(url) is not None:
+        raise ValueError("OAuth endpoint blocked by SSRF protection")
+
+
+def _endpoint_host(url: str) -> str:
+    return urlparse(url).hostname or "unknown"
 
 
 class OAuthTokenStore:
@@ -72,6 +87,8 @@ class OAuthFlow:
         scopes: list[str] | None = None,
     ) -> str:
         """Build authorization URL with PKCE."""
+        _validate_endpoint(server_url)
+        _validate_endpoint(authorization_endpoint)
         state = secrets.token_urlsafe(32)
         verifier, challenge = self._generate_pkce()
         self._code_verifiers[state] = verifier
@@ -88,7 +105,7 @@ class OAuthFlow:
             params["scope"] = " ".join(scopes)
 
         url = f"{authorization_endpoint}?{urlencode(params)}"
-        logger.info("Generated authorization url", server=server_url, state=state[:8])
+        logger.info("Generated authorization url", server=_endpoint_host(server_url))
         return url
 
     async def exchange_code(
@@ -99,6 +116,8 @@ class OAuthFlow:
         token_endpoint: str,
     ) -> dict[str, Any]:
         """Exchange authorization code for tokens."""
+        _validate_endpoint(server_url)
+        _validate_endpoint(token_endpoint)
         verifier = self._code_verifiers.pop(state, None)
         if not verifier:
             raise ValueError("Invalid or expired state parameter")
@@ -115,15 +134,20 @@ class OAuthFlow:
                 },
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPError as exc:
+                raise ValueError("OAuth token exchange failed") from exc
             token_data = response.json()
 
         await self.token_store.set(server_url, token_data)
-        logger.info("Token exchange successful", server=server_url)
+        logger.info("Token exchange successful", server=_endpoint_host(server_url))
         return token_data
 
     async def refresh_token(self, server_url: str, token_endpoint: str) -> dict[str, Any]:
         """Refresh an expired access token."""
+        _validate_endpoint(server_url)
+        _validate_endpoint(token_endpoint)
         existing = await self.token_store.get(server_url)
         if not existing or "refresh_token" not in existing:
             raise ValueError("No refresh token available")
@@ -138,11 +162,14 @@ class OAuthFlow:
                 },
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPError as exc:
+                raise ValueError("OAuth token refresh failed") from exc
             token_data = response.json()
 
         await self.token_store.set(server_url, token_data)
-        logger.info("Token refreshed", server=server_url)
+        logger.info("Token refreshed", server=_endpoint_host(server_url))
         return token_data
 
     async def get_access_token(self, server_url: str, token_endpoint: str) -> str:
@@ -155,6 +182,4 @@ class OAuthFlow:
             new_tokens = await self.refresh_token(server_url, token_endpoint)
             return new_tokens["access_token"]
         except ValueError:
-            raise ValueError(
-                f"No valid token for {server_url}. Authorization required."
-            ) from None
+            raise ValueError("No valid token. Authorization required.") from None

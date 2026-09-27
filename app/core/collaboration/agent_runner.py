@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 import structlog
 
@@ -13,6 +13,9 @@ from app.core.collaboration.constants import FALLBACK_MODELS, MAX_RETRIES, TASK_
 from app.core.di import resolve as di_resolve
 from app.core.group_ws_hub import group_ws_hub
 from app.core.principal import Principal, get_context_principal
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = structlog.get_logger(__name__)
 
@@ -296,7 +299,7 @@ def _get_fallback_model(provider: str, model_id: str) -> tuple[str, str] | None:
         return FALLBACK_MODELS[key]
     from app.models.registry import MODEL_ALIASES
     if key in MODEL_ALIASES:
-        resolved_provider, resolved_model = MODEL_ALIASES[key]
+        _resolved_provider, resolved_model = MODEL_ALIASES[key]
         if resolved_model.lower() in FALLBACK_MODELS:
             return FALLBACK_MODELS[resolved_model.lower()]
     return None

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -24,10 +24,12 @@ from app.core.reasoning.base import (
     RoundTrace,
 )
 from app.core.reasoning.components.scorer import CandidateScorer
-from app.core.reasoning.components.self_refine import SelfRefineLoop
 from app.core.reasoning.prompts.tree_prompts import (
     PATH_SYSTEM_PROMPTS,
 )
+
+if TYPE_CHECKING:
+    from app.core.reasoning.components.self_refine import SelfRefineLoop
 
 logger = structlog.get_logger()
 
@@ -58,7 +60,7 @@ class TreeOfThoughtStrategy:
                 try:
                     return await self._run_path(request, path_type, self_refine, model_adapter, idx)
                 except Exception as exc:
-                    logger.error("tot_path_failed", path_type=path_type, error=str(exc))
+                    logger.exception("tot_path_failed", path_type=path_type, error=str(exc))
                     return None
 
         start = time.monotonic()
@@ -136,11 +138,9 @@ class TreeOfThoughtStrategy:
             {"role": "user", "content": task},
         ]
 
-        parts: list[str] = []
-        async for chunk in model_adapter.stream_chat(messages=messages):
-            if chunk.content:
-                parts.append(chunk.content)
-
+        parts: list[str] = [
+            chunk.content async for chunk in model_adapter.stream_chat(messages=messages) if chunk.content
+        ]
         return "".join(parts)
 
     async def _refine_path(

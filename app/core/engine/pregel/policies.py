@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import secrets
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 import structlog
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = structlog.get_logger(__name__)
 
@@ -196,7 +198,7 @@ async def execute_with_retry(
         except Exception as e:
             last_error = e
             if not retry_policy.should_retry(attempt, e):
-                logger.error(
+                logger.exception(
                     "node_error_no_retry",
                     node=node_name,
                     attempt=attempt,

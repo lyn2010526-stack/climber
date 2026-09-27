@@ -136,16 +136,16 @@ class EventBus:
         params.append(limit)
         rows = self._conn.execute(query, params).fetchall()
         events = []
-        for row in rows:
-            events.append(
-                TaskEvent(
-                    event_id=row["event_id"],
-                    event_type=row["event_type"],
-                    task_id=row["task_id"],
-                    timestamp=row["timestamp"],
-                    data=json.loads(row["data_json"]),
-                )
+        events.extend(
+            TaskEvent(
+                event_id=row["event_id"],
+                event_type=row["event_type"],
+                task_id=row["task_id"],
+                timestamp=row["timestamp"],
+                data=json.loads(row["data_json"]),
             )
+            for row in rows
+        )
         return events
 
     def clear_history(self) -> None:

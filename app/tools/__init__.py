@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import re
-from collections.abc import Callable
+from collections.abc import (
+    Callable,  # noqa: TC003  # no `from __future__ import annotations`; evaluated at runtime
+)
 from typing import Any
 
 import structlog
@@ -289,22 +291,22 @@ class ToolRegistry:
                 tool=name,
                 error_type=type(e).__name__,
                 error=safe_error,
-            )  # noqa: TRY400 - keep traceback-free structured logging
+            )
             return f"Error executing {name}: {safe_error}"
 
     def get_openai_tools(self) -> list[dict[str, Any]]:
         """Return tools in OpenAI function calling format."""
-        result = []
-        for _name, defn in self._definitions.items():
-            result.append({
+        return [
+            {
                 "type": "function",
                 "function": {
                     "name": defn.name,
                     "description": defn.description,
                     "parameters": defn.parameters,
                 },
-            })
-        return result
+            }
+            for defn in self._definitions.values()
+        ]
 
     def list_tools(self) -> list[ToolDefinition]:
         return list(self._definitions.values())

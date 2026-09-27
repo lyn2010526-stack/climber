@@ -42,9 +42,7 @@ async def inject_memory(group_id: str, task_id: str, query: str) -> str:
         return ""
 
     memory_lines = ["Relevant memories:"]
-    for mem in memories:
-        memory_lines.append(f"- [{mem.memory_type}] {mem.content}")
-
+    memory_lines.extend(f"- [{mem.memory_type}] {mem.content}" for mem in memories)
     await group_ws_hub.broadcast(group_id, {
         "type": "memory_injected",
         "data": {"task_id": task_id, "count": len(memories)},

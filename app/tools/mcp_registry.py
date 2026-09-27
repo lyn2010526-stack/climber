@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 import structlog
 
 from app.config import settings
+from app.utils.ssrf import blocked_reason
 
 logger = structlog.get_logger()
 
@@ -19,6 +21,18 @@ class MCPRegistryClient:
 
     def __init__(self, base_url: str = DEFAULT_REGISTRY_URL) -> None:
         self.base_url = base_url.rstrip("/")
+        self._validate_url(self.base_url)
+
+    @staticmethod
+    def _validate_url(url: str) -> None:
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("MCP registry URL must use HTTP(S)")
+        if parsed.username or parsed.password:
+            raise ValueError("MCP registry URL must not contain credentials")
+        reason = blocked_reason(url)
+        if reason is not None:
+            raise ValueError("MCP registry URL blocked by SSRF protection")
 
     async def search(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         """Search for MCP servers by name or description."""
@@ -36,7 +50,7 @@ class MCPRegistryClient:
                     return data["servers"]
                 return []
         except httpx.HTTPError as e:
-            logger.warning("Registry search failed", query=query, error=str(e))
+            logger.warning("Registry search failed", error_type=type(e).__name__)
             return []
 
     async def get_server(self, name: str) -> dict[str, Any] | None:
@@ -49,10 +63,10 @@ class MCPRegistryClient:
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 404:
                 return None
-            logger.warning("Registry get_server failed", name=name, error=str(e))
+            logger.warning("Registry get_server failed", name=name, error_type=type(e).__name__)
             return None
         except httpx.HTTPError as e:
-            logger.warning("Registry get_server failed", name=name, error=str(e))
+            logger.warning("Registry get_server failed", name=name, error_type=type(e).__name__)
             return None
 
     async def list_popular(self, limit: int = 20) -> list[dict[str, Any]]:
@@ -71,7 +85,7 @@ class MCPRegistryClient:
                     return data["servers"]
                 return []
         except httpx.HTTPError as e:
-            logger.warning("Registry list_popular failed", error=str(e))
+            logger.warning("Registry list_popular failed", error_type=type(e).__name__)
             return []
 
     async def list_categories(self) -> list[str]:
@@ -87,5 +101,5 @@ class MCPRegistryClient:
                     return data["categories"]
                 return []
         except httpx.HTTPError as e:
-            logger.warning("Registry list_categories failed", error=str(e))
+            logger.warning("Registry list_categories failed", error_type=type(e).__name__)
             return []

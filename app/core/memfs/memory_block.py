@@ -138,8 +138,7 @@ def _serialize_yaml(data: dict[str, Any], indent: int = 0) -> list[str]:
                 lines.append(f"{prefix}{key}: []")
             else:
                 lines.append(f"{prefix}{key}:")
-                for item in value:
-                    lines.append(f"{prefix}  - {_yaml_scalar(item)}")
+                lines.extend(f"{prefix}  - {_yaml_scalar(item)}" for item in value)
         elif isinstance(value, dict):
             lines.append(f"{prefix}{key}:")
             lines.extend(_serialize_yaml(value, indent + 1))

@@ -125,7 +125,7 @@ class UserProfile(Base):
 
     # Behavioral patterns
     common_topics: Mapped[list[dict]] = mapped_column(JSON, default=list)
-    # Each: {"topic": "Python", "frequency": 15, "last_mentioned": "2024-01-15"}
+    # Each: {"topic": "Python", "frequency": 15, "last_mentioned": "2024-01-15"}  # noqa: ERA001  # documents the expected shape, not dead code
 
     # Interaction summary
     total_sessions: Mapped[int] = mapped_column(Integer, default=0)

@@ -9,10 +9,19 @@ from typing import Any
 import structlog
 
 from app.core.collaboration.agent_runner import run_agent_with_retry
-from app.core.collaboration.callbacks import invoke_step_callback, invoke_task_callback, wait_for_human_review
+from app.core.collaboration.callbacks import (
+    invoke_step_callback,
+    invoke_task_callback,
+    wait_for_human_review,
+)
 from app.core.collaboration.checkpoint import save_checkpoint
 from app.core.collaboration.guardrails import run_guardrails
-from app.core.collaboration.memory import build_context_from_dependencies, inject_memory, merge_context, store_memory
+from app.core.collaboration.memory import (
+    build_context_from_dependencies,
+    inject_memory,
+    merge_context,
+    store_memory,
+)
 from app.core.collaboration.prompts import (
     build_initial_prompt,
     build_review_prompt,
@@ -189,7 +198,7 @@ async def _execute_worker_turn(
             raise Exception("worker returned empty output after retry")
         return output, tokens
     except Exception as e:
-        logger.error("worker_failed", task_id=task.id, round=current_round, error=str(e))
+        logger.exception("worker_failed", task_id=task.id, round=current_round, error=str(e))
         await group_ws_hub.broadcast(task.group_id, {
             "type": "task_failed",
             "data": {"task_id": task.id, "error": f"Worker failed after retry: {e}"},
@@ -246,7 +255,7 @@ async def _execute_reviewer_turn(
         review_error = None
         try:
             async with asyncio.timeout(TASK_TIMEOUT):
-                review_output, review_tokens = await __import__("app.core.collaboration.agent_runner", fromlist=["run_agent_simple"]).run_agent_simple(
+                review_output, _review_tokens = await __import__("app.core.collaboration.agent_runner", fromlist=["run_agent_simple"]).run_agent_simple(
                     agent_id=reviewer.agent_id,
                     provider=reviewer.model_provider or "openai",
                     model_id=reviewer.model_id or "gpt-4o",

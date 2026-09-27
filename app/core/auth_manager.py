@@ -9,11 +9,19 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import structlog
 from fastapi import HTTPException, Request
 
 from app.config import settings
 
-_LOCAL_FALLBACK_SECRET = "agent-engine-local-persistent-development-key"
+logger = structlog.get_logger()
+
+# Dev-only fallback. Production and staging are rejected by the settings
+# validator, and api_key_crypto derives its Fernet key from settings rather
+# than this literal, so the value only applies to a local run with no config.
+_LOCAL_FALLBACK_SECRET = "local-dev-only-not-a-secret"
+
+PRODUCTION_ENVIRONMENTS = {"production", "prod", "staging"}
 
 
 def _secret() -> str:
@@ -131,7 +139,7 @@ async def authenticate_user(username: str, password: str) -> dict[str, Any]:
     raise HTTPException(401, "Invalid credentials")
 
 
-async def get_current_user(request: Request) -> str:
+async def get_current_user(request: Request) -> str:  # noqa: ARG001
     """Extract current user id from the request-scoped principal."""
     from app.core.principal import get_context_principal
 
@@ -161,12 +169,25 @@ def _has_scope(principal: dict[str, Any], scope: str) -> bool:
     return "admin" in scopes or scope in scopes or principal.get("role") == scope or principal.get("role") == "admin"
 
 
+def _auto_privilege_allowed() -> bool:
+    """Return True when auth-disabled mode may resolve a caller to admin.
+
+    Local development relies on this so the app is usable without configuring
+    credentials. Production must never take that path: `ENABLE_AUTH` defaults
+    to false, so a deployment that configured only a secret key would otherwise
+    expose every admin endpoint to anonymous callers.
+    """
+    if settings.enable_auth:
+        return False
+    return settings.app_env.strip().lower() not in PRODUCTION_ENVIRONMENTS
+
+
 def require_admin():
     """Dependency factory that rejects callers without admin scope."""
-    async def _check(request: Request) -> dict[str, Any]:
+    async def _check(request: Request) -> dict[str, Any]:  # noqa: ARG001
         principal = _principal_dict()
         # Local mode (auth disabled) resolves to the seeded default identity.
-        if not settings.enable_auth and principal["id"] == "default-user":
+        if _auto_privilege_allowed() and principal["id"] == "default-user":
             return {**principal, "scopes": ["admin"], "role": "admin"}
         if principal.get("role") == "admin" or "admin" in principal["scopes"]:
             return principal
@@ -176,9 +197,9 @@ def require_admin():
 
 def require_scopes(*required_scopes: str):
     """Dependency factory that enforces each required scope."""
-    async def _check(request: Request) -> dict[str, Any]:
+    async def _check(request: Request) -> dict[str, Any]:  # noqa: ARG001
         principal = _principal_dict()
-        if not settings.enable_auth and principal["id"] == "default-user":
+        if _auto_privilege_allowed() and principal["id"] == "default-user":
             return {**principal, "scopes": list(required_scopes)}
         for scope in required_scopes:
             if not _has_scope(principal, scope):
@@ -230,12 +251,72 @@ async def validate_api_key(raw_key: str) -> dict[str, Any]:
     }
 
 
+# Passwords that must never be accepted as a configured admin credential.
+# These are the values that have appeared in .env.example, READMEs and
+# tutorials for this project, which makes them public knowledge.
+_WEAK_PASSWORDS = frozenset(
+    {
+        "admin123",
+        "admin",
+        "password",
+        "changeme",
+        "change-me-in-production",
+        "123456",
+        "secret",
+    }
+)
+
+
+def _default_admin_allowed() -> bool:
+    """Return True when bootstrapping a default admin is acceptable.
+
+    Production must configure its own administrator. Creating one there means
+    shipping a credential that is already public in this repository.
+    """
+    return settings.app_env.strip().lower() not in PRODUCTION_ENVIRONMENTS
+
+
+def _is_acceptable_password(password: str) -> bool:
+    """Return True when a password is strong enough to be used as-is."""
+    candidate = (password or "").strip()
+    if candidate.lower() in _WEAK_PASSWORDS:
+        return False
+    return len(candidate) >= 12
+
+
+def _generate_admin_password() -> str:
+    """Return a random password for the bootstrapped admin account."""
+    return secrets.token_urlsafe(24)
+
+
 async def initialize_auth_system() -> dict[str, Any] | None:
-    """Initialize auth system — create default admin user if none exists."""
+    """Initialize auth system — create a default admin user if none exists.
+
+    The credential comes from ``BOOTSTRAP_ADMIN_PASSWORD`` when it is set to
+    something strong, otherwise a random password is generated and returned
+    once. A published default password is never used: this repository is
+    public, so any literal here is a known credential on every fresh
+    deployment.
+
+    In production no account is created at all, because an operator has to
+    provision the first administrator deliberately.
+    """
     from sqlalchemy import func, select
 
     from app.models.users import User, UserRole, UserStatus
     from app.storage import async_session
+
+    if not _default_admin_allowed():
+        return None
+
+    configured = (settings.bootstrap_admin_password or "").strip()
+    if configured and not _is_acceptable_password(configured):
+        logger.warning(
+            "BOOTSTRAP_ADMIN_PASSWORD rejected as too weak; generating a random "
+            "password instead. It is returned once in the startup log."
+        )
+        configured = ""
+    password = configured or _generate_admin_password()
 
     async with async_session() as session:
         result = await session.execute(select(func.count()).select_from(User))
@@ -245,12 +326,16 @@ async def initialize_auth_system() -> dict[str, Any] | None:
             admin = User(
                 username="admin",
                 email="admin@localhost",
-                hashed_password=hash_password("admin123"),
+                hashed_password=hash_password(password),
                 role=UserRole.ADMIN.value,
                 status=UserStatus.ACTIVE.value,
             )
             session.add(admin)
             await session.commit()
-            return {"username": "admin", "password_set": True}
+            return {
+                "username": "admin",
+                "generated": not configured,
+                "password": password,
+            }
 
     return None

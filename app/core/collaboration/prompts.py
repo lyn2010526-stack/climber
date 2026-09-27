@@ -59,10 +59,10 @@ def build_group_chat_context(task_description: str, conversation: list[dict[str,
         A formatted context string.
     """
     parts = [f"Task: {task_description}\n"]
-    for msg in conversation:
-        parts.append(
-            f"[{msg.get('agent_name', 'Unknown')} ({msg.get('role', 'participant')})]: {msg.get('content', '')}"
-        )
+    parts.extend(
+        f"[{msg.get('agent_name', 'Unknown')} ({msg.get('role', 'participant')})]: {msg.get('content', '')}"
+        for msg in conversation
+    )
     return "\n".join(parts)
 
 
@@ -232,6 +232,5 @@ def summarize_group_chat(task_description: str, conversation: list[dict[str, Any
         A formatted summary string.
     """
     lines = [f"Group discussion for: {task_description}\n"]
-    for msg in conversation:
-        lines.append(f"[{msg.get('agent_name', 'Unknown')}]: {msg.get('content', '')[:500]}")
+    lines.extend(f"[{msg.get('agent_name', 'Unknown')}]: {msg.get('content', '')[:500]}" for msg in conversation)
     return "\n\n".join(lines)

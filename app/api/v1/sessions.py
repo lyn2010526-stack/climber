@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -116,6 +117,8 @@ async def create_session_with_slash(
             agent = (
                 await session.execute(select(AgentModel).where(AgentModel.id == payload.agent_id))
             ).scalar_one_or_none()
+            if agent is None or agent.user_id != user_id:
+                raise HTTPException(status_code=422, detail="Agent not found")
         row = SessionModel(
             title=payload.title or "New Session",
             status="idle",
@@ -155,6 +158,8 @@ async def create_session_legacy(
             agent = (
                 await session.execute(select(AgentModel).where(AgentModel.id == payload.agent_id))
             ).scalar_one_or_none()
+            if agent is None or agent.user_id != user_id:
+                raise HTTPException(status_code=422, detail="Agent not found")
         row = SessionModel(
             title=payload.title or "New Session",
             status="idle",
@@ -242,6 +247,8 @@ async def get_session(session_id: str, user_id: str = Depends(get_current_user))
 
 @router.delete("/{session_id}")
 async def delete_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+    from app.api.v1.chat import get_engine
+
     async with async_session() as session:
         result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
         row = result.scalar_one_or_none()
@@ -249,6 +256,8 @@ async def delete_session(session_id: str, user_id: str = Depends(get_current_use
             raise HTTPException(status_code=404, detail="Session not found")
         await session.delete(row)
         await session.commit()
+    with contextlib.suppress(Exception):
+        get_engine().close_session(session_id)
     return {"ok": True}
 
 
@@ -261,6 +270,10 @@ class CheckpointRequest(BaseModel):
 
 class ForkRequest(BaseModel):
     new_session_id: str | None = None
+
+
+class RollbackRequest(BaseModel):
+    checkpoint_id: str
 
 
 async def _ensure_owned_session(session_id: str, user_id: str) -> None:
@@ -388,6 +401,39 @@ async def fork_session(session_id: str, body: ForkRequest, user_id: str = Depend
             )
         await session.commit()
     return {"session_id": new_id, "status": "forked"}
+
+
+@router.post("/{session_id}/rollback")
+async def rollback_session_checkpoint(
+    session_id: str, body: RollbackRequest, user_id: str = Depends(get_current_user)
+) -> dict:
+    """Roll the checkpoint chain back to a given checkpoint.
+
+    Truncates the stored checkpoint list so the target becomes the latest one,
+    which is what ``/resume`` and ``/checkpoint`` build on. Message history is
+    left untouched: checkpoints carry their own message snapshot, and past
+    messages remain an audit trail.
+    """
+    async with async_session() as session:
+        row = await _load_owned_session(session, session_id, user_id)
+        checkpoints = _load_checkpoints(row)
+        target_index = next(
+            (i for i, cp in enumerate(checkpoints) if cp.get("id") == body.checkpoint_id),
+            None,
+        )
+        if target_index is None:
+            raise HTTPException(status_code=404, detail="Checkpoint not found")
+        discarded = len(checkpoints) - target_index - 1
+        target = checkpoints[target_index]
+        _save_checkpoints(row, checkpoints[: target_index + 1])
+        await session.commit()
+    return {
+        "session_id": session_id,
+        "status": "rolled_back",
+        "checkpoint": target,
+        "discarded_checkpoints": discarded,
+        "total": target_index + 1,
+    }
 
 
 @router.post("/{session_id}/resume")

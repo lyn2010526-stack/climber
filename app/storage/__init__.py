@@ -9,7 +9,6 @@ that, so the pragmas below are applied to every new connection.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from pathlib import Path
 from typing import Any
 
@@ -74,7 +73,7 @@ engine = _build_engine()
 if _is_sqlite:
 
     @event.listens_for(engine.sync_engine, "connect")
-    def _apply_sqlite_pragmas(dbapi_connection, connection_record):  # noqa: ANN001
+    def _apply_sqlite_pragmas(dbapi_connection, connection_record):  # noqa: ARG001
         """WAL + tuning pragmas, applied per connection."""
         cursor = dbapi_connection.cursor()
         try:
@@ -143,24 +142,29 @@ async def db_health() -> dict[str, Any]:
 async def init_db() -> None:
     """Create all tables. Ensure all models are imported for registration."""
     # Import all models so SQLAlchemy registers them with Base
-    from app.core.memory import lifecycle as _lifecycle_models  # noqa: F401
-    from app.core.memory import persona as _persona_models  # noqa: F401
-    from app.models import users as _users_model  # noqa: F401
+    from app.core.memory import lifecycle as _lifecycle_models
+    from app.core.memory import persona as _persona_models
+    from app.models import users as _users_model
     from app.storage import (
-        database,  # noqa: F401
-        models_cost,  # noqa: F401
-        models_eval,  # noqa: F401
-        models_feedback,  # noqa: F401
-        models_files,  # noqa: F401
-        models_groups,  # noqa: F401
-        models_memory,  # noqa: F401
-        models_platform,  # noqa: F401
-        models_plugins,  # noqa: F401
-        models_reasoning,  # noqa: F401
-        models_skills,  # noqa: F401
-        models_traces,  # noqa: F401
+        database,
+        models_cost,
+        models_eval,
+        models_feedback,
+        models_files,
+        models_groups,
+        models_memory,
+        models_platform,
+        models_plugins,
+        models_reasoning,
+        models_skills,
+        models_traces,
     )
 
     async with engine.begin() as conn:
-        with contextlib.suppress(Exception):
-            await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(Base.metadata.create_all)
+
+    # ``create_all`` leaves existing tables untouched, so columns added after a
+    # database was first bootstrapped only appear through this alignment step.
+    from app.storage.database import ensure_task_owner_schema
+
+    await ensure_task_owner_schema(engine)

@@ -10,7 +10,7 @@ import re
 import shutil
 import subprocess
 import urllib.parse
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -64,7 +64,7 @@ _DOCKER_BIN: str | None = shutil.which("docker")
 
 @tool(description="Get the current date and time")
 async def get_datetime() -> str:
-    return datetime.now().isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @tool(description="Fetch content from a URL")
@@ -352,7 +352,7 @@ async def file_info(path: str) -> str:
         return (
             f"Path: {path}\n"
             f"Size: {stat.st_size:,} bytes\n"
-            f"Modified: {datetime.fromtimestamp(stat.st_mtime).isoformat()}\n"
+            f"Modified: {datetime.fromtimestamp(stat.st_mtime, UTC).isoformat()}\n"
             f"Permissions: {oct(stat.st_mode)}"
         )
     except Exception as e:
@@ -439,7 +439,7 @@ async def apply_patch(file_path: str, patch: str) -> str:
             # arguments; file_path arrives as a separate argv element, so an
             # agent cannot inject extra patch options, and the diff travels
             # through a private temp file rather than the command line.
-            result = subprocess.run(  # noqa: S603
+            result = subprocess.run(  # noqa: S603  # argv[0] is an absolute path from shutil.which()
                 [_PATCH_BIN, "-p1", "--dry-run", "-i", patch_file, file_path],
                 capture_output=True,
                 text=True,
@@ -448,7 +448,7 @@ async def apply_patch(file_path: str, patch: str) -> str:
             if result.returncode != 0:
                 return f"Patch dry-run failed:\n{result.stderr}"
 
-            result = subprocess.run(  # noqa: S603
+            result = subprocess.run(  # noqa: S603  # argv[0] is an absolute path from shutil.which()
                 [_PATCH_BIN, "-p1", "-i", patch_file, file_path],
                 capture_output=True,
                 text=True,
@@ -512,7 +512,7 @@ async def container_exec(container: str, command: str, workdir: str = "") -> str
         # workdir cannot smuggle extra docker flags. `command` is intentionally
         # a shell string executed *inside* the container, which is why this tool
         # is classified as a command tool in core/engine/validation.py.
-        result = subprocess.run(  # noqa: S603
+        result = subprocess.run(  # noqa: S603  # argv[0] is an absolute path from shutil.which()
             full_cmd,
             capture_output=True,
             text=True,

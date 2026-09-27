@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
 from app.core import ChatResult
 from app.models import ModelAdapter, ModelCapability
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 class GoogleGeminiAdapter(ModelAdapter):
@@ -115,7 +117,8 @@ class GoogleGeminiAdapter(ModelAdapter):
             }]
 
         url = f"{self._base_url}/models/{self._model_id}:generateContent?key={self._api_key}"
-        async with httpx.AsyncClient(timeout=60) as client:
+        timeout = kwargs.get("timeout", 60)
+        async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(url, json=payload)
             resp.raise_for_status()
             data = resp.json()

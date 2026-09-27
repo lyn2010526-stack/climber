@@ -6,14 +6,16 @@ import asyncio
 import contextlib
 import json
 import re
-from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 import structlog
 
 from app.core import ChatResult
 from app.models import ModelAdapter, ModelCapability
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = structlog.get_logger()
 
@@ -133,9 +135,12 @@ class OpenAIAdapter(ModelAdapter):
         total_timeout = kwargs.get("timeout", 120)
         idle_timeout = kwargs.get("idle_timeout", 15)
         accumulated_content = ""
+        accumulated_reasoning = ""
         accumulated_tool_calls: list[dict] = []
         finish_reason = None
         tokens_used = 0
+        usage: dict[str, Any] = {}
+        response_metadata: dict[str, Any] = {}
 
         client = self.get_client()
         response: httpx.Response | None = None
@@ -173,6 +178,7 @@ class OpenAIAdapter(ModelAdapter):
                     content=json.dumps(payload, ensure_ascii=False).encode(),
                 ),
                 stream=True,
+                timeout=total_timeout,
             )
             response.raise_for_status()
 
@@ -196,6 +202,9 @@ class OpenAIAdapter(ModelAdapter):
                             finish_reason=finish_reason or ("tool_calls" if accumulated_tool_calls else "stop"),
                             tokens_used=tokens_used,
                             accumulated_content=accumulated_content,
+                            reasoning_content=accumulated_reasoning,
+                            usage=usage,
+                            response_metadata=response_metadata,
                         )
                         return
 
@@ -213,8 +222,11 @@ class OpenAIAdapter(ModelAdapter):
 
                     delta = chunk.get("choices", [{}])[0].get("delta", {})
                     delta_content = delta.get("content") or ""
+                    delta_reasoning = delta.get("reasoning_content") or ""
                     if delta_content:
                         accumulated_content += delta_content
+                    if delta_reasoning:
+                        accumulated_reasoning += delta_reasoning
                     if delta.get("tool_calls"):
                         new_calls = self._parse_tool_calls_from_delta(delta["tool_calls"])
                         for i, tc in enumerate(new_calls):
@@ -228,7 +240,11 @@ class OpenAIAdapter(ModelAdapter):
                                 args = tc["function"]["arguments"]
                                 accumulated_tool_calls[i]["function"]["arguments"] += args if isinstance(args, str) else str(args)
                     if chunk.get("usage"):
-                        tokens_used = chunk["usage"].get("total_tokens", tokens_used)
+                        usage = dict(chunk["usage"])
+                        tokens_used = usage.get("total_tokens", tokens_used)
+                    for key in ("id", "model", "system_fingerprint", "object"):
+                        if chunk.get(key) is not None:
+                            response_metadata[key] = chunk[key]
                     fr = chunk.get("choices", [{}])[0].get("finish_reason")
                     if fr:
                         finish_reason = fr
@@ -239,6 +255,9 @@ class OpenAIAdapter(ModelAdapter):
                         finish_reason=finish_reason,
                         tokens_used=tokens_used,
                         accumulated_content=accumulated_content,
+                        reasoning_content=delta_reasoning,
+                        usage=usage,
+                        response_metadata=response_metadata,
                     )
 
                     if self._is_stream_terminated(chunk):
@@ -252,14 +271,27 @@ class OpenAIAdapter(ModelAdapter):
                         chunk = json.loads(line[5:].strip())
                         delta = chunk.get("choices", [{}])[0].get("delta", {})
                         delta_content = delta.get("content") or ""
+                        delta_reasoning = delta.get("reasoning_content") or ""
                         if delta_content:
                             accumulated_content += delta_content
+                        if delta_reasoning:
+                            accumulated_reasoning += delta_reasoning
+                        if chunk.get("usage"):
+                            usage = dict(chunk["usage"])
+                            tokens_used = usage.get("total_tokens", tokens_used)
+                        for key in ("id", "model", "system_fingerprint", "object"):
+                            if chunk.get(key) is not None:
+                                response_metadata[key] = chunk[key]
+                        if delta_content or delta_reasoning:
                             yield ChatResult(
                                 content=delta_content,
-                                tool_calls=list(accumulated_tool_calls),
+                                tool_calls=[],
                                 finish_reason=finish_reason,
                                 tokens_used=tokens_used,
                                 accumulated_content=accumulated_content,
+                                reasoning_content=delta_reasoning,
+                                usage=usage,
+                                response_metadata=response_metadata,
                             )
                     except (json.JSONDecodeError, IndexError):
                         pass
@@ -272,6 +304,9 @@ class OpenAIAdapter(ModelAdapter):
                 finish_reason=finish_reason or "stop",
                 tokens_used=tokens_used,
                 accumulated_content=accumulated_content,
+                reasoning_content=accumulated_reasoning,
+                usage=usage,
+                response_metadata=response_metadata,
             )
         except TimeoutError:
             logger.warning("stream_total_timeout", model=self._model_id, timeout=total_timeout)
@@ -281,9 +316,12 @@ class OpenAIAdapter(ModelAdapter):
                 finish_reason=finish_reason or "stop",
                 tokens_used=tokens_used,
                 accumulated_content=accumulated_content,
+                reasoning_content=accumulated_reasoning,
+                usage=usage,
+                response_metadata=response_metadata,
             )
         except Exception as exc:
-            logger.error("stream_chat_failed", error=str(exc), model=self._model_id)
+            logger.exception("stream_chat_failed", error=str(exc), model=self._model_id)
             raise
         finally:
             if watchdog_task and not watchdog_task.done():
@@ -336,30 +374,40 @@ class OpenAIAdapter(ModelAdapter):
             data = response.json()
             choice = data.get("choices", [{}])[0].get("message", {})
             content = choice.get("content", "") or ""
+            reasoning_content = choice.get("reasoning_content", "") or ""
             tool_calls = choice.get("tool_calls", [])
             if isinstance(tool_calls, list):
-                parsed_tool_calls = []
-                for tc in tool_calls:
-                    if tc.get("type") == "function":
-                        parsed_tool_calls.append({
-                            "id": tc.get("id", ""),
-                            "type": "function",
-                            "function": tc.get("function", {}),
-                        })
+                parsed_tool_calls = [
+                    {
+                        "id": tc.get("id", ""),
+                        "type": "function",
+                        "function": tc.get("function", {}),
+                    }
+                    for tc in tool_calls
+                    if tc.get("type") == "function"
+                ]
                 tool_calls = parsed_tool_calls
             else:
                 tool_calls = []
             usage = data.get("usage", {})
             tokens_used = usage.get("total_tokens", 0)
             finish_reason = data.get("choices", [{}])[0].get("finish_reason", "stop")
+            response_metadata = {
+                key: data[key]
+                for key in ("id", "model", "system_fingerprint", "object")
+                if data.get(key) is not None
+            }
             return ChatResult(
                 content=content,
                 tool_calls=tool_calls,
                 finish_reason=finish_reason,
                 tokens_used=tokens_used,
+                reasoning_content=reasoning_content,
+                usage=dict(usage) if isinstance(usage, dict) else {},
+                response_metadata=response_metadata,
             )
         except Exception as exc:  # pragma: no cover
-            logger.error("chat_failed", error=str(exc), model=self._model_id)
+            logger.exception("chat_failed", error=str(exc), model=self._model_id)
             raise
 
     async def chat(
@@ -370,23 +418,35 @@ class OpenAIAdapter(ModelAdapter):
     ) -> ChatResult:
         """Non-streaming chat completion."""
         kwargs.pop("stream", None)
-        chunks: list[ChatResult] = []
-        async for chunk in self.stream_chat(messages, tools, **kwargs):
-            chunks.append(chunk)
+        chunks: list[ChatResult] = [
+            chunk async for chunk in self.stream_chat(messages, tools, **kwargs)
+        ]
         if not chunks:
             return ChatResult(content="", tool_calls=[], finish_reason="stop", tokens_used=0)
         chunks[-1]
         full_content = "".join(c.content or "" for c in chunks)
+        full_reasoning = "".join(c.reasoning_content or "" for c in chunks)
         all_tool_calls: list[dict] = []
         for c in chunks:
             self._accumulate_tool_call_deltas(all_tool_calls, c.tool_calls)
         total_tokens = max((c.tokens_used or 0 for c in chunks), default=0)
+        usage = max(
+            (c.usage for c in chunks if c.usage),
+            key=lambda value: value.get("total_tokens", 0),
+            default={},
+        )
+        response_metadata = {}
+        for chunk in chunks:
+            response_metadata.update(chunk.response_metadata)
         return ChatResult(
             content=full_content or "",
             tool_calls=all_tool_calls,
             finish_reason=chunks[-1].finish_reason or "stop",
             tokens_used=total_tokens,
             accumulated_content=full_content or "",
+            reasoning_content=full_reasoning,
+            usage=usage,
+            response_metadata=response_metadata,
         )
 
     @staticmethod

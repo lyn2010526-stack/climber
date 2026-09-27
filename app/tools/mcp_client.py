@@ -7,7 +7,7 @@ promissions, and tool routing.
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Callable
+from collections.abc import Callable  # noqa: TC003
 from typing import Any
 
 import structlog
@@ -19,11 +19,13 @@ from app.tools.mcp_models import (
     MCPTool,
     MCPToolResult,
 )
+from app.utils.ssrf import blocked_reason
 
 try:  # optional dependency — keeps import safe when mcp is not installed
     from mcp import ClientSession
     from mcp.client.stdio import stdio_client
     from mcp.client.streamable_http import streamablehttp_client
+
     _MCP_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _MCP_AVAILABLE = False
@@ -71,6 +73,8 @@ class MCPClient:
         self._server_info: dict[str, Any] = {}
         self._connect_cm: Any = None
         self._connect_ctx: Any = None
+        self._transport_entered = False
+        self._session_entered = False
         self._notification_handlers: dict[str, list[Callable]] = {}
 
     @property
@@ -83,14 +87,18 @@ class MCPClient:
                 "MCP transport requires the `mcp` package. Install with: pip install mcp"
             )
         """Connect to MCP server using configured transport."""
-        if self.transport == "stdio":
-            await self._connect_stdio()
-        elif self.transport == "streamable_http":
-            await self._connect_http()
-        elif self.transport == "sse":
-            await self._connect_sse()
-        else:
+        connector = {
+            "stdio": self._connect_stdio,
+            "streamable_http": self._connect_http,
+            "sse": self._connect_sse,
+        }.get(self.transport)
+        if connector is None:
             raise ValueError(f"Unsupported transport: {self.transport}")
+        try:
+            await connector()
+        except Exception:
+            await self.close()
+            raise
 
         logger.info(
             "MCP client connected",
@@ -116,9 +124,11 @@ class MCPClient:
         )
         self._connect_cm = stdio_client(params)
         read, write = await self._connect_cm.__aenter__()
+        self._transport_entered = True
 
         self.session = ClientSession(read, write)
         await self.session.__aenter__()
+        self._session_entered = True
         await self._initialize()
 
     async def _connect_http(self) -> None:
@@ -129,15 +139,20 @@ class MCPClient:
             )
         if not self.url:
             raise ValueError("streamable_http transport requires 'url' parameter")
+        reason = blocked_reason(self.url)
+        if reason is not None:
+            raise ValueError(f"MCP endpoint blocked by SSRF protection ({reason})")
 
         self._connect_cm = streamablehttp_client(
             url=self.url,
             headers=self.headers,
         )
         read, write, _ = await self._connect_cm.__aenter__()
+        self._transport_entered = True
 
         self.session = ClientSession(read, write)
         await self.session.__aenter__()
+        self._session_entered = True
         await self._initialize()
 
     async def _connect_sse(self) -> None:
@@ -146,18 +161,22 @@ class MCPClient:
             from mcp.client.sse import sse_client
         except ImportError:
             raise ImportError(
-                "SSE transport requires mcp[sse] extra. "
-                "Install with: pip install mcp[sse]"
+                "SSE transport requires mcp[sse] extra. Install with: pip install mcp[sse]"
             ) from None
 
         if not self.url:
             raise ValueError("sse transport requires 'url' parameter")
+        reason = blocked_reason(self.url)
+        if reason is not None:
+            raise ValueError(f"MCP endpoint blocked by SSRF protection ({reason})")
 
         self._connect_cm = sse_client(url=self.url, headers=self.headers)
         read, write = await self._connect_cm.__aenter__()
+        self._transport_entered = True
 
         self.session = ClientSession(read, write)
         await self.session.__aenter__()
+        self._session_entered = True
         await self._initialize()
 
     async def _initialize(self) -> None:
@@ -194,7 +213,9 @@ class MCPClient:
                         annotations=getattr(t, "annotations", None),
                     )
             except Exception as e:
-                logger.warning("Failed to list tools", server=self.name, error=str(e))
+                logger.warning(
+                    "Failed to list tools", server=self.name, error_type=type(e).__name__
+                )
 
         if "resources" in caps:
             try:
@@ -208,7 +229,9 @@ class MCPClient:
                         mimeType=getattr(r, "mimeType", None),
                     )
             except Exception as e:
-                logger.warning("Failed to list resources", server=self.name, error=str(e))
+                logger.warning(
+                    "Failed to list resources", server=self.name, error_type=type(e).__name__
+                )
 
         if "prompts" in caps:
             try:
@@ -227,7 +250,9 @@ class MCPClient:
                         arguments=args,
                     )
             except Exception as e:
-                logger.warning("Failed to list prompts", server=self.name, error=str(e))
+                logger.warning(
+                    "Failed to list prompts", server=self.name, error_type=type(e).__name__
+                )
 
         logger.info(
             "MCP capabilities discovered",
@@ -252,13 +277,15 @@ class MCPClient:
 
             result = await self.session.list_tools(**kwargs)
             for t in result.tools:
-                all_tools.append(MCPTool(
-                    name=t.name,
-                    title=getattr(t, "title", None),
-                    description=t.description or "",
-                    inputSchema=t.inputSchema,
-                    annotations=getattr(t, "annotations", None),
-                ))
+                all_tools.append(  # noqa: PERF401
+                    MCPTool(
+                        name=t.name,
+                        title=getattr(t, "title", None),
+                        description=t.description or "",
+                        inputSchema=t.inputSchema,
+                        annotations=getattr(t, "annotations", None),
+                    )
+                )
 
             cursor = getattr(result, "nextCursor", None)
             if not cursor:
@@ -280,27 +307,36 @@ class MCPClient:
             result = await self.session.call_tool(name, arguments)
             content = []
             for item in result.content:
-                content.append(MCPContent(
-                    type=getattr(item, "type", "text"),
-                    text=getattr(item, "text", None),
-                    data=getattr(item, "data", None),
-                    mimeType=getattr(item, "mimeType", None),
-                    uri=getattr(item, "uri", None),
-                ))
+                content.append(  # noqa: PERF401
+                    MCPContent(
+                        type=getattr(item, "type", "text"),
+                        text=getattr(item, "text", None),
+                        data=getattr(item, "data", None),
+                        mimeType=getattr(item, "mimeType", None),
+                        uri=getattr(item, "uri", None),
+                    )
+                )
 
             return MCPToolResult(
                 content=content,
                 isError=getattr(result, "isError", False),
             )
         except Exception as e:
-            logger.error("Tool call failed", tool=name, server=self.name, error=str(e))
+            logger.warning(
+                "Tool call failed",
+                tool=name,
+                server=self.name,
+                error_type=type(e).__name__,
+            )
             return MCPToolResult(
-                content=[MCPContent(type="text", text=f"Error: {str(e)}")],
+                content=[MCPContent(type="text", text="MCP tool call failed")],
                 isError=True,
             )
 
     @staticmethod
-    def _validate_arguments(tool_name: str, arguments: dict[str, Any], schema: dict[str, Any]) -> None:
+    def _validate_arguments(
+        tool_name: str, arguments: dict[str, Any], schema: dict[str, Any]
+    ) -> None:
         """Validate arguments against JSON Schema (basic validation)."""
         if not isinstance(schema, dict):
             return
@@ -312,15 +348,11 @@ class MCPClient:
 
             for req_field in required:
                 if req_field not in arguments:
-                    raise ValueError(
-                        f"Tool '{tool_name}' missing required argument: {req_field}"
-                    )
+                    raise ValueError(f"Tool '{tool_name}' missing required argument: {req_field}")
 
             for key in arguments:
                 if key not in properties and schema.get("additionalProperties") is False:
-                    raise ValueError(
-                        f"Tool '{tool_name}' got unexpected argument: {key}"
-                    )
+                    raise ValueError(f"Tool '{tool_name}' got unexpected argument: {key}")
 
     async def list_resources(self) -> list[MCPResource]:
         """List available resources."""
@@ -330,12 +362,14 @@ class MCPClient:
         result = await self.session.list_resources()
         resources = []
         for r in result.resources:
-            resources.append(MCPResource(
-                uri=r.uri,
-                name=r.name,
-                description=getattr(r, "description", None),
-                mimeType=getattr(r, "mimeType", None),
-            ))
+            resources.append(  # noqa: PERF401
+                MCPResource(
+                    uri=r.uri,
+                    name=r.name,
+                    description=getattr(r, "description", None),
+                    mimeType=getattr(r, "mimeType", None),
+                )
+            )
 
         self.resources = {r.uri: r for r in resources}
         return resources
@@ -368,11 +402,13 @@ class MCPClient:
                     {"name": a.name, "description": getattr(a, "description", None)}
                     for a in p.arguments
                 ]
-            prompts.append(MCPPrompt(
-                name=p.name,
-                description=getattr(p, "description", None),
-                arguments=args,
-            ))
+            prompts.append(
+                MCPPrompt(
+                    name=p.name,
+                    description=getattr(p, "description", None),
+                    arguments=args,
+                )
+            )
 
         self.prompts = {p.name: p for p in prompts}
         return prompts
@@ -410,15 +446,17 @@ class MCPClient:
 
     async def close(self) -> None:
         """Close connection and cleanup resources."""
-        if self.session:
+        if self.session and self._session_entered:
             with contextlib.suppress(Exception):
                 await self.session.__aexit__(None, None, None)
-            self.session = None
+        self.session = None
+        self._session_entered = False
 
-        if self._connect_cm:
+        if self._connect_cm and self._transport_entered:
             with contextlib.suppress(Exception):
                 await self._connect_cm.__aexit__(None, None, None)
-            self._connect_cm = None
+        self._connect_cm = None
+        self._transport_entered = False
 
         self._notification_handlers.clear()
         logger.info("MCP client closed", name=self.name)
@@ -435,17 +473,17 @@ class MCPClient:
 
     def get_tool_definitions(self) -> list[dict[str, Any]]:
         """Return tools in OpenAI function calling format (backward compat)."""
-        result = []
-        for _name, tool in self.tools.items():
-            result.append({
+        return [
+            {
                 "type": "function",
                 "function": {
                     "name": tool.name,
                     "description": tool.description,
                     "parameters": tool.inputSchema,
                 },
-            })
-        return result
+            }
+            for tool in self.tools.values()
+        ]
 
 
 class MCPRegistry:
@@ -462,32 +500,34 @@ class MCPRegistry:
             try:
                 await client.connect()
             except Exception as e:
-                logger.error("MCP server start failed", name=client.name, error=str(e))
+                logger.warning(
+                    "MCP server start failed", name=client.name, error_type=type(e).__name__
+                )
 
     async def stop_all(self) -> None:
         for client in self._clients.values():
             try:
                 await client.close()
             except Exception as e:
-                logger.warning("mcp_client.stop_all_error", error=str(e))
+                logger.warning("mcp_client.stop_all_error", error_type=type(e).__name__)
         self._clients.clear()
 
     def get_client(self, name: str) -> MCPClient | None:
         return self._clients.get(name)
 
     def list_tools(self) -> list[dict[str, Any]]:
-        tools = []
-        for client in self._clients.values():
-            for _name, tool in client.tools.items():
-                tools.append({
-                    "type": "function",
-                    "function": {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": tool.inputSchema,
-                    },
-                })
-        return tools
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.inputSchema,
+                },
+            }
+            for client in self._clients.values()
+            for tool in client.tools.values()
+        ]
 
 
 mcp_registry = MCPRegistry()

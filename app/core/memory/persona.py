@@ -266,7 +266,7 @@ async def get_effective_persona(
 
         overrides = session_model.overrides or {}
         if overrides:
-            effective = AgentPersona(
+            return AgentPersona(
                 agent_id=base.agent_id,
                 name=overrides.get("name", base.name),
                 role=overrides.get("role", base.role),
@@ -277,7 +277,6 @@ async def get_effective_persona(
                 created_at=base.created_at,
                 updated_at=base.updated_at,
             )
-            return effective
         return base
 
 

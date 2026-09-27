@@ -1,5 +1,8 @@
 """Shared helpers for API v1 endpoints."""
 
+# ruff: noqa: TC002  # FastAPI resolves route handler
+# annotations at runtime, so these names must stay importable at runtime.
+
 from __future__ import annotations
 
 from typing import Any

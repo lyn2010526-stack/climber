@@ -14,6 +14,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -204,6 +205,22 @@ class UsageLog(Base):
 class CheckpointRecord(Base):
     """Database table for storing agent execution checkpoints."""
     __tablename__ = "checkpoints"
+    __table_args__ = (
+        Index(
+            "ix_checkpoints_session_thread_iteration_created",
+            "session_id",
+            "thread_id",
+            "iteration",
+            "created_at",
+        ),
+        Index(
+            "ix_checkpoints_session_thread_created",
+            "session_id",
+            "thread_id",
+            "created_at",
+        ),
+        Index("ix_checkpoints_session_created", "session_id", "created_at"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     session_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
@@ -244,7 +261,11 @@ async def ensure_checkpoint_schema(database_engine: Any | None = None) -> None:
             def checkpoint_columns(sync_connection: Any) -> set[str]:
                 inspector = inspect(sync_connection)
                 if not inspector.has_table("checkpoints"):
-                    return set(columns)
+                    CheckpointRecord.__table__.create(sync_connection, checkfirst=True)
+                    return {
+                        column.name
+                        for column in CheckpointRecord.__table__.columns
+                    }
                 return {
                     column["name"]
                     for column in inspector.get_columns("checkpoints")
@@ -257,6 +278,56 @@ async def ensure_checkpoint_schema(database_engine: Any | None = None) -> None:
                         text(f'ALTER TABLE checkpoints ADD COLUMN "{name}" {definition}')
                     )
         _checkpoint_schema_ready.add(database_engine)
+
+
+_schema_alignment_ready: WeakSet[Any] = WeakSet()
+_schema_alignment_lock = asyncio.Lock()
+
+
+async def ensure_task_owner_schema(database_engine: Any | None = None) -> None:
+    """Add the task ownership column to databases created before it existed.
+
+    ``Base.metadata.create_all`` never adds columns to a table it already
+    created, and the test and dev databases are bootstrapped that way. Without
+    this alignment a database that predates the ownership column fails every
+    task insert until the Alembic migration is applied by hand.
+    """
+    if database_engine is None:
+        from app.storage import engine as database_engine
+
+    if database_engine.dialect.name != "sqlite":
+        return
+    if database_engine in _schema_alignment_ready:
+        return
+
+    async with _schema_alignment_lock:
+        if database_engine in _schema_alignment_ready:
+            return
+        async with database_engine.begin() as connection:
+
+            def task_owner_columns(sync_connection: Any) -> set[str]:
+                inspector = inspect(sync_connection)
+                if not inspector.has_table("auto_loop_tasks"):
+                    return set()
+                return {
+                    column["name"]
+                    for column in inspector.get_columns("auto_loop_tasks")
+                }
+
+            existing = await connection.run_sync(task_owner_columns)
+            if "auto_loop_tasks" in {table.name for table in Base.metadata.sorted_tables}:
+                if existing and "owner_id" not in existing:
+                    await connection.execute(
+                        text('ALTER TABLE auto_loop_tasks ADD COLUMN "owner_id" VARCHAR(36)')
+                    )
+                if existing:
+                    await connection.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS "
+                            '"ix_auto_loop_tasks_owner_id" ON auto_loop_tasks (owner_id)'
+                        )
+                    )
+        _schema_alignment_ready.add(database_engine)
 
 
 # Import memory models to register them with SQLAlchemy

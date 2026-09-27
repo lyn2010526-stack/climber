@@ -4,16 +4,21 @@ from __future__ import annotations
 
 import json
 import secrets
-from collections.abc import Awaitable, Callable
 from ipaddress import ip_address, ip_network
+from typing import TYPE_CHECKING
 
 import structlog
-from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.config import settings
 from app.core.principal import get_context_principal
 from app.storage.usage import usage_tracker
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from fastapi import Request, Response
 
 logger = structlog.get_logger(__name__)
 
@@ -23,6 +28,9 @@ MAX_JSON_DEPTH = 10
 CSRF_TOKEN_HEADER = "X-CSRF-Token"
 CSRF_TOKEN_COOKIE = "csrf_token"
 CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
+API_KEY_HEADER = "X-API-Key"
+AUTHORIZATION_HEADER = "Authorization"
+BEARER_PREFIX = "Bearer "
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -32,7 +40,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
         except Exception as exc:
-            logger.error(
+            logger.exception(
                 "request_failed",
                 path=request.url.path,
                 error_type=type(exc).__name__,
@@ -90,6 +98,7 @@ class CsrfProtectionMiddleware(BaseHTTPMiddleware):
         self.excluded_paths = excluded_paths or {
             "/health", "/health/logs", "/metrics",
             "/docs", "/openapi.json", "/favicon.ico",
+            "/api/v1/auth/login", "/api/v1/auth/refresh",
         }
         self.enabled = enabled
 
@@ -101,6 +110,23 @@ class CsrfProtectionMiddleware(BaseHTTPMiddleware):
 
         path = request.url.path
         if path in self.excluded_paths:
+            return await call_next(request)
+
+        # Header-authenticated clients are protected by their API credential;
+        # CSRF applies to browser requests that rely on cookies.
+        if request.headers.get(API_KEY_HEADER) or request.headers.get(
+            AUTHORIZATION_HEADER, ""
+        ).startswith(BEARER_PREFIX):
+            return await call_next(request)
+
+        # Local unauthenticated API clients do not have a browser session to
+        # protect. Preserve that mode until a CSRF cookie has been issued;
+        # cookie-backed requests still use the double-submit check below.
+        if (
+            not settings.enable_auth
+            and request.method not in CSRF_SAFE_METHODS
+            and not request.cookies.get(CSRF_TOKEN_COOKIE)
+        ):
             return await call_next(request)
 
         if request.method in CSRF_SAFE_METHODS:
@@ -151,7 +177,7 @@ def _check_json_depth(obj, depth: int = 0) -> bool:
 class RequestValidationMiddleware(BaseHTTPMiddleware):
     """Validate request size and JSON depth."""
 
-    SKIP_PATHS = {"/health", "/health/logs", "/metrics"}
+    SKIP_PATHS = frozenset({"/health", "/health/logs", "/metrics"})
 
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.url.path in self.SKIP_PATHS:
@@ -185,7 +211,7 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Global rate limiting middleware with IP-based tracking."""
 
-    SKIP_PATHS = {"/health", "/health/logs"}
+    SKIP_PATHS = frozenset({"/health", "/health/logs"})
 
     def __init__(self, app, trusted_proxies: list[str] | None = None):
         super().__init__(app)

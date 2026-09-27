@@ -7,8 +7,7 @@ enabling access to LangGraph's checkpointing, streaming, and tool calling.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
@@ -16,6 +15,9 @@ from langgraph.graph import END, StateGraph
 from app.core.engine.pregel import (
     GraphState,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +74,7 @@ class LangGraphBridge:
             raise ValueError(f"Graph '{name}' not registered")
 
         cfg = {"configurable": config or {}}
-        result = await self._compiled[name].ainvoke(inputs, cfg)
-        return result
+        return await self._compiled[name].ainvoke(inputs, cfg)
 
     async def astream(
         self,

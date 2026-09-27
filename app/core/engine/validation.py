@@ -2,12 +2,38 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.core.session import AgentSession
+if TYPE_CHECKING:
+    from app.core.session import AgentSession
 
-# Tool names that accept a shell command under a "command" parameter
-_COMMAND_TOOLS: set[str] = {"run_command", "shell", "execute_command", "bash"}
+# Tool names that accept a shell command under a "command" parameter.
+# Single source of truth: the PLAN-mode gate, the permission-overlay
+# action choice, and the sandbox command checks all read this set, and
+# permission_rules.py classifies command tools through is_command_tool().
+_COMMAND_TOOLS: set[str] = {
+    "run_command",
+    "shell",
+    "execute_command",
+    "bash",
+    "command",
+    # app/tools/native_tools.py spawns a subprocess from a caller-supplied
+    # "command" argument. These were classified only in permission_rules.py
+    # (or nowhere at all), so the PLAN gate treated them as reads and the
+    # sandbox command check never ran.
+    "native_run",
+    "process_video",
+    "process_image",
+    # app/tools/builtins.py:stream_command forwards straight into
+    # SandboxExecutor.execute, making it the main entry point for the enforced
+    # command allowlist. It must be classified, or the allowlist gate that now
+    # guards run_command can be side-stepped by calling its streaming sibling.
+    "stream_command",
+    # app/tools/builtins.py:container_exec runs `docker exec <c> sh -c <command>`.
+    # The command executes INSIDE the container, so SandboxExecutor's allowlist
+    # cannot constrain it at all - classification here is the only gate it has.
+    "container_exec",
+}
 
 # Tool names that perform file IO under path/file parameters
 _FILE_TOOLS: dict[str, tuple[str, str]] = {
@@ -18,8 +44,30 @@ _FILE_TOOLS: dict[str, tuple[str, str]] = {
     "file_exists": ("path", "read"),
     "file_info": ("path", "read"),
     "file_diff": ("path", "read"),
-    "list_directory": ("dir", "read"),
+    # Parameter is `directory`, not `dir`. The table previously listed
+    # "list_directory", a tool that does not exist, while the real
+    # list_files was unclassified and therefore ungated in PLAN mode.
+    "list_files": ("directory", "read"),
+    # app/tools/builtins.py:apply_patch applies a unified diff to file_path.
+    "apply_patch": ("file_path", "write"),
+    # app/tools/native_tools.py:download_file writes arbitrary bytes to an
+    # arbitrary path (it also creates parent directories), so it is a write.
+    "download_file": ("output_path", "write"),
 }
+
+
+def is_command_tool(tool_name: str) -> bool:
+    """Whether a tool executes a caller-supplied command string.
+
+    Args:
+        tool_name: The registered tool name being classified.
+
+    Returns:
+        True when the tool runs a command, so it must be gated as an
+        execution tool by the PLAN-mode read-only check, the permission
+        overlay action choice, and the sandbox command checks.
+    """
+    return tool_name in _COMMAND_TOOLS
 
 
 def validate_tool_call(
@@ -88,7 +136,7 @@ def _check_plan_mode(agent_mode: Any, tool_name: str) -> tuple[bool, str]:
     if agent_mode == AgentMode.PLAN and tool_name in _COMMAND_TOOLS:
         return False, "PLAN mode: command execution is read-only"
     if agent_mode == AgentMode.PLAN and tool_name in _FILE_TOOLS:
-        param, mode = _FILE_TOOLS[tool_name]
+        _param, mode = _FILE_TOOLS[tool_name]
         if mode != "read" and tool_name != "edit_file":
             return False, "PLAN mode: file modification is read-only"
     return True, "OK"
@@ -166,6 +214,26 @@ def _approval_key(tool_name: str, arguments: dict[str, Any]) -> str:
     return f"{tool_name}:{json.dumps(arguments, sort_keys=True, default=str)}"
 
 
+def make_tool_call_id(session_id: str, iteration: int, message_count: int) -> str:
+    """Build a fallback tool_call id that is unique across sessions.
+
+    AgentEngine.resolve_permission() resolves a pending approval by matching
+    this id, so it must not repeat between two sessions that are both awaiting
+    approval. An earlier format keyed only on (iteration, message count),
+    which are per-session values: two sessions in the same iteration produced
+    the same id, and the resolve endpoint released the wrong session.
+
+    Args:
+        session_id: Owning session identifier, the only cross-session entropy.
+        iteration: Current agent iteration index.
+        message_count: Current session message count.
+
+    Returns:
+        A tool_call id that is unique per session.
+    """
+    return f"tool-{session_id}-{iteration}-{message_count}"
+
+
 def _check_schema_validation(tool_registry: Any, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
     """Validate tool call arguments against JSON schema.
 
@@ -199,6 +267,18 @@ def _check_sandbox(sandbox: Any, tool_name: str, arguments: dict[str, Any]) -> t
         A tuple of (allowed, reason).
     """
     if sandbox is None:
+        # Fail closed for command execution only. The engine sets sandbox=None
+        # when sandbox initialization raises, and treating that as "no checks"
+        # silently removed every sandbox guard for the whole process. Read-only
+        # tools stay available so a sandbox failure does not make the agent
+        # entirely useless; anything that can execute is refused, because there
+        # is provably no enforcement behind it.
+        if tool_name in _COMMAND_TOOLS:
+            return False, (
+                "Command execution is unavailable: the security sandbox failed to "
+                "initialize, so command safety cannot be enforced. Retry after the "
+                "sandbox is repaired."
+            )
         return True, "OK"
     try:
         if tool_name in _COMMAND_TOOLS:

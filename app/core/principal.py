@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 from fastapi import Depends, HTTPException, Request
 
 from app.config import settings
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 LOCAL_SUBJECT_ID = "default-user"
 

@@ -68,5 +68,7 @@ async def api_health() -> dict:
 
 
 def get_engine():
-    from app.api.v1.chat import get_engine as _get_engine
+    """Compatibility re-export of the shared engine accessor."""
+    from app.core.engine_registry import get_engine as _get_engine
+
     return _get_engine()

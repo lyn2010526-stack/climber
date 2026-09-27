@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from app.core.observability.storage import default_observability_db
+
 
 @dataclass
 class TraceSpan:
@@ -53,10 +55,13 @@ class TraceCollector:
     to reconstruct the full trace tree.
     """
 
-    def __init__(self, db_path: str = ":memory:", sample_rate: float = 1.0):
-        self._db_path = db_path
+    def __init__(self, db_path: str | None = None, sample_rate: float = 1.0):
+        # The default used to be ":memory:", which made every trace vanish on
+        # restart and left the /traces endpoints permanently empty. Resolve to a
+        # file under data/ instead, matching emergency_stop.
+        self._db_path = db_path or default_observability_db("traces.db")
         self._sample_rate = sample_rate
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._create_tables()
 
@@ -83,6 +88,7 @@ class TraceCollector:
     def _should_sample(self) -> bool:
         if self._sample_rate >= 1.0:
             return True
+        # Sampling is a load-shedding decision, not a security one.
         return random.random() < self._sample_rate
 
     def start_span(

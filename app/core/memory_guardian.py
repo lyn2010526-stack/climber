@@ -11,11 +11,13 @@ import asyncio
 import contextlib
 import gc
 import time
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 logger = structlog.get_logger()
 
@@ -104,7 +106,7 @@ class MemoryGuardian:
                 try:
                     await callback()
                 except Exception as exc:
-                    logger.error("memory_relief_callback_failed", error=str(exc))
+                    logger.exception("memory_relief_callback_failed", error=str(exc))
         elif ratio >= self.soft_ratio:
             action = "gc"
             collected = gc.collect()
@@ -121,7 +123,7 @@ class MemoryGuardian:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # pragma: no cover - guardian must not die
-                logger.error("memory_guardian_error", error=str(exc))
+                logger.exception("memory_guardian_error", error=str(exc))
 
     async def start(self) -> None:
         if self._task is None or self._task.done():

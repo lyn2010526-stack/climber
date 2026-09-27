@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import Depends, HTTPException, Request, status
 
-from app.core.principal import CurrentPrincipal
 from app.storage.usage import usage_tracker
+
+if TYPE_CHECKING:
+    from app.core.principal import CurrentPrincipal
 
 
 class RateLimiter:

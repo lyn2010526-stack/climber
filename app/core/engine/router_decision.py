@@ -236,7 +236,7 @@ class RouterDecisionEngine:
 
         # Build probability distribution
         probabilities = {}
-        for t_name, _t_config in self._tiers.items():
+        for t_name in self._tiers:
             if t_name == tier_name:
                 probabilities[t_name] = confidence
             else:

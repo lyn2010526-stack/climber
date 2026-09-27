@@ -38,9 +38,9 @@ skill_registry = SkillRegistry()
 
 
 __all__ = [
+    "LegacySkillRegistry",
     "SkillCategory",
     "SkillInfo",
     "SkillRegistry",
-    "LegacySkillRegistry",
     "skill_registry",
 ]

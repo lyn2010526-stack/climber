@@ -13,21 +13,21 @@ from app.core.checkpoint import CheckpointData
 from app.core.security_sandbox import AgentMode
 
 __all__ = [
-    "AsyncIterator",
-    "datetime",
-    "Enum",
-    "AgentMode",
-    "MessageRole",
-    "CompressionStrategy",
-    "SessionStatus",
-    "AgentEventType",
-    "FallbackStrategy",
-    "ChatResult",
     "AgentEvent",
-    "ModelRoute",
-    "SubAgentTask",
-    "ContextConfig",
+    "AgentEventType",
+    "AgentMode",
+    "AsyncIterator",
+    "ChatResult",
     "CheckpointData",
+    "CompressionStrategy",
+    "ContextConfig",
+    "Enum",
+    "FallbackStrategy",
+    "MessageRole",
+    "ModelRoute",
+    "SessionStatus",
+    "SubAgentTask",
+    "datetime",
 ]
 
 
@@ -82,6 +82,10 @@ class ChatResult:
     finish_reason: str | None = None
     tokens_used: int = 0
     accumulated_content: str = ""
+    reasoning_content: str = ""
+    usage: dict[str, Any] = field(default_factory=dict)
+    response_metadata: dict[str, Any] = field(default_factory=dict)
+    protocol_version: str = "openai.chat.completions.v1"
 
 
 @dataclass

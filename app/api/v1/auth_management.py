@@ -5,11 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.config import settings
@@ -42,7 +42,7 @@ class CreateApiKeyRequest(BaseModel):
     name: str = ""
     owner: str
     scopes: list[str] | None = None
-    ttl_days: int | None = None
+    ttl_days: int | None = Field(default=None, gt=0)
 
 
 class CreateApiKeyResponse(BaseModel):
@@ -96,14 +96,17 @@ async def login(payload: LoginRequest) -> LoginResponse:
     if not result:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    access_token = auth_manager.create_access_token(result["user_id"], result["scopes"])
-    refresh_token_value = auth_manager.create_refresh_token(result["user_id"], result["scopes"])
+    scopes = ["read", "write"]
+    if "admin" in result["scopes"]:
+        scopes.append("admin")
+    access_token = auth_manager.create_access_token(result["user_id"], scopes)
+    refresh_token_value = auth_manager.create_refresh_token(result["user_id"], scopes)
 
     return LoginResponse(
         access_token=access_token,
         refresh_token=refresh_token_value,
         expires_in=60 * 60 * 24,
-        user=result,
+        user={**result, "scopes": scopes},
     )
 
 
@@ -117,11 +120,17 @@ async def refresh_token(payload: RefreshTokenRequest) -> RefreshTokenResponse:
     if not payload_data:
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
-    user_id = int(payload_data["sub"])
+    # Keep the subject claim stable across login and refresh. The token
+    # contract exposes user ids as strings even when the database key is int.
+    try:
+        user_id = str(payload_data["sub"])
+        user_id_int = int(user_id)
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token") from None
 
     async with async_session() as session:
         result = await session.execute(
-            select(User).where(User.id == user_id, User.status == UserStatus.ACTIVE.value)
+            select(User).where(User.id == user_id_int, User.status == UserStatus.ACTIVE.value)
         )
         user = result.scalar_one_or_none()
         if not user:
@@ -170,7 +179,8 @@ async def get_me(current_user: str = Depends(get_current_user)) -> dict:
         user = result.scalar_one_or_none()
         if user is None:
             return {"id": current_user, "username": current_user, "email": "", "role": "user"}
-        role = user.role.value if getattr(user, "role", None) else "user"
+        role_value = getattr(user, "role", None)
+        role = getattr(role_value, "value", role_value) or "user"
         return {
             "id": str(user.id),
             "username": user.username,
@@ -217,7 +227,7 @@ async def create_api_key(
 
     expires_at = None
     if payload.ttl_days:
-        expires_at = datetime.utcnow() + timedelta(days=payload.ttl_days)
+        expires_at = datetime.now(UTC) + timedelta(days=payload.ttl_days)
 
     scopes = payload.scopes or ["read", "write"]
 
@@ -247,7 +257,7 @@ async def create_api_key(
 
 @router.get("/keys", response_model=ListKeysResponse)
 async def list_api_keys(
-    current_user: dict = Depends(get_current_user),
+    _current_user: dict = Depends(require_scopes("read")),
 ) -> ListKeysResponse:
     """List all API keys."""
     if not settings.enable_auth:
@@ -281,7 +291,7 @@ async def list_api_keys(
 @router.delete("/keys/{key_id}")
 async def revoke_api_key(
     key_id: str,
-    current_user: dict = Depends(require_scopes("admin")),
+    _current_user: dict = Depends(require_scopes("admin")),
 ) -> dict:
     """Revoke (deactivate) an API key."""
     if not settings.enable_auth:

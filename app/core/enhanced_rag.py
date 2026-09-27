@@ -90,6 +90,6 @@ def reciprocal_rank_fusion(results_list: list[list[dict[str, Any] | tuple[str, f
             doc_id = result[0] if isinstance(result, tuple) else result.get("id", str(rank))
             scores[doc_id] = scores.get(doc_id, 0) + 1.0 / (k + rank + 1)
 
-    scored = [(doc_id, score) for doc_id, score in scores.items()]
+    scored = list(scores.items())
     scored.sort(key=lambda x: x[1], reverse=True)
     return scored[:10]

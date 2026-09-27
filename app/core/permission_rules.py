@@ -32,6 +32,23 @@ class PermissionMode(StrEnum):
     STRICT = "strict"            # 严格模式：未显式允许即拒绝
 
 
+def _is_command_tool(tool_name: str) -> bool:
+    """检查工具是否执行命令 — 复用 engine.validation 的统一分类
+
+    延迟导入以避免循环依赖: validation.py 在模块级导入 app.core.session,
+    而 session 会在运行时导入本模块。
+
+    Args:
+        tool_name: 工具名。
+
+    Returns:
+        True 表示该工具执行命令字符串。
+    """
+    from app.core.engine.validation import is_command_tool
+
+    return is_command_tool(tool_name)
+
+
 @dataclass
 class PermissionRule:
     """单条权限规则"""
@@ -55,7 +72,7 @@ class PermissionRule:
     def _match_pattern(self, tool_name: str, arguments: dict[str, Any]) -> bool:
         """根据工具类型匹配参数模式"""
         # Bash/Command 工具: pattern 匹配命令字符串
-        if tool_name in ("bash", "run_command", "native_run", "command"):
+        if _is_command_tool(tool_name):
             command = arguments.get("command", "")
             return fnmatch.fnmatch(command, self.pattern) if self.pattern else True
 
@@ -113,10 +130,9 @@ class PermissionConfig:
                 return RuleDecision.ASK
 
         # 按顺序评估规则: deny -> ask -> allow
-        matched_rules: list[PermissionRule] = []
-        for rule in self.rules:
-            if rule.matches(tool_name, arguments):
-                matched_rules.append(rule)
+        matched_rules: list[PermissionRule] = [
+            rule for rule in self.rules if rule.matches(tool_name, arguments)
+        ]
 
         # 按决策优先级排序: deny 优先
         priority = {RuleDecision.DENY: 0, RuleDecision.ASK: 1, RuleDecision.ALLOW: 2}
@@ -155,14 +171,14 @@ class PermissionConfig:
             r'truncate\s+table',
         ]
 
-        if tool_name in ("bash", "run_command", "native_run", "command"):
+        if _is_command_tool(tool_name):
             command = arguments.get("command", "")
             for pattern in high_risk_patterns:
                 if re.search(pattern, command, re.IGNORECASE):
                     return True
 
         # 网络请求
-        if tool_name in ("web_search", "http_request", "fetch", "native_web_search"):
+        if tool_name in ("web_search", "http_request", "fetch"):
             url = arguments.get("url", "")
             if url and not url.startswith(("https://", "http://localhost", "http://127.0.0.1")):
                 return True
@@ -179,7 +195,7 @@ class PermissionConfig:
             return "high"
 
         # 命令执行
-        if tool_name in ("bash", "run_command", "native_run", "command"):
+        if _is_command_tool(tool_name):
             command = arguments.get("command", "")
             high_risk = ['rm', 'mv', 'dd', 'mkfs', 'format', 'fdisk', 'shutdown', 'reboot']
             medium_risk = ['git push', 'npm publish', 'pip install', 'docker', 'kubectl']
@@ -193,7 +209,7 @@ class PermissionConfig:
             return "low"
 
         # 网络访问
-        if tool_name in ("web_search", "http_request", "fetch", "native_web_search"):
+        if tool_name in ("web_search", "http_request", "fetch"):
             return "medium"
 
         # 文件读取/写入
@@ -270,7 +286,6 @@ def get_default_config() -> PermissionConfig:
             PermissionRule(RuleDecision.ASK, "web_search"),
             PermissionRule(RuleDecision.ASK, "http_request"),
             PermissionRule(RuleDecision.ASK, "fetch"),
-            PermissionRule(RuleDecision.ASK, "native_web_search"),
         ],
     )
 

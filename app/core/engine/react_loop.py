@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import AsyncIterator, Callable
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -10,12 +9,14 @@ import structlog
 from app.core import AgentEvent, AgentEventType, ChatResult, CheckpointData
 from app.core.compressor import ContextCompressor, estimate_tokens
 from app.core.parallel import ParallelToolExecutor
-from app.core.session import AgentSession
 from app.core.task_state_machine import TaskState
 from app.models.openai_adapter import OpenAIAdapter
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator, Callable
+
     from app.core.checkpoint import InMemoryCheckpointStore
+    from app.core.session import AgentSession
     from app.core.tool_prioritizer import ToolPrioritizer
     from app.models.registry import ModelRegistry
     from app.tools import ToolRegistry

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from typing import Any
 
 from fastapi import Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, Info, generate_latest
@@ -93,3 +94,93 @@ async def metrics_endpoint() -> Response:
         content=generate_latest(),
         media_type=CONTENT_TYPE_LATEST,
     )
+
+
+def record_token_usage(
+    provider: str,
+    model_id: str,
+    usage: dict[str, Any] | None = None,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+    total_tokens: int | None = None,
+) -> None:
+    """Increment the token counters from a model response.
+
+    TOKEN_USAGE was declared and exported but never written to, so
+    `token_usage_total` sat at zero on /metrics. This is the write point.
+
+    Every failure mode is swallowed: a metrics path must never turn a
+    successful model response into a failed request, and a provider that
+    reports no usage is normal rather than exceptional.
+
+    Args:
+        provider: Model provider name, used as a label.
+        model_id: Model identifier, used as a label.
+        usage: The provider's usage mapping, if one was returned.
+        prompt_tokens: Prompt token count, when not carried in `usage`.
+        completion_tokens: Completion token count, when not in `usage`.
+        total_tokens: Total token count, when not in `usage`.
+    """
+    if not model_id:
+        return
+
+    prompt = _as_token_count(
+        prompt_tokens if prompt_tokens is not None else (usage or {}).get("prompt_tokens")
+    )
+    completion = _as_token_count(
+        completion_tokens
+        if completion_tokens is not None
+        else (usage or {}).get("completion_tokens")
+    )
+    total = _as_token_count(
+        total_tokens if total_tokens is not None else (usage or {}).get("total_tokens")
+    )
+
+    try:
+        if prompt is not None:
+            TOKEN_USAGE.labels(
+                provider=provider or "unknown",
+                model_id=model_id,
+                type="prompt",
+            ).inc(prompt)
+        if completion is not None:
+            TOKEN_USAGE.labels(
+                provider=provider or "unknown",
+                model_id=model_id,
+                type="completion",
+            ).inc(completion)
+        if total is not None:
+            TOKEN_USAGE.labels(
+                provider=provider or "unknown",
+                model_id=model_id,
+                type="total",
+            ).inc(total)
+    except Exception:  # pragma: no cover - metrics must never break a request
+        return
+
+
+def record_chat_result(result: Any, provider: str, model_id: str) -> None:
+    """Record token usage straight from a ChatResult.
+
+    Args:
+        result: A ChatResult carrying a `usage` mapping.
+        provider: Model provider name.
+        model_id: Model identifier.
+    """
+    usage = getattr(result, "usage", None)
+    if not usage:
+        return
+    record_token_usage(provider=provider, model_id=model_id, usage=usage)
+
+
+def _as_token_count(value: Any) -> float | None:
+    """Coerce a reported token count, rejecting anything unusable."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if number < 0:
+        return None
+    return number

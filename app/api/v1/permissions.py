@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.api.v1.chat import get_engine
+from app.config import settings
 from app.core.auth_manager import get_current_user, require_admin
 from app.core.permission_rules import (
     PermissionConfig,
@@ -37,7 +38,9 @@ class PermissionConfigUpdate(BaseModel):
 
 
 @router.post("/resolve")
-async def resolve_permission(request: PermissionResolveRequest, _user: str = Depends(get_current_user)):
+async def resolve_permission(
+    request: PermissionResolveRequest, _user: str = Depends(get_current_user)
+):
     engine = get_engine()
     tool_call_id = request.tool_call_id
     decision = request.decision
@@ -45,15 +48,26 @@ async def resolve_permission(request: PermissionResolveRequest, _user: str = Dep
     if decision not in ("allow", "allow_session", "allow_always", "deny"):
         raise HTTPException(status_code=400, detail=f"Invalid decision: {decision}")
 
-    success = engine.resolve_permission(tool_call_id, decision)
+    # Local auth-disabled mode uses one synthetic principal for all in-process
+    # sessions. Ownership enforcement is meaningful once real auth is enabled;
+    # preserve the existing local development flow otherwise.
+    owner_id = str(_user) if settings.enable_auth else None
+    success = engine.resolve_permission(tool_call_id, decision, user_id=owner_id)
     if not success:
-        raise HTTPException(status_code=404, detail=f"No pending permission request for tool_call_id: {tool_call_id}")
+        if settings.enable_auth and engine.has_pending_permission(tool_call_id):
+            raise HTTPException(
+                status_code=403, detail="Permission request belongs to another user"
+            )
+        raise HTTPException(
+            status_code=404,
+            detail=f"No pending permission request for tool_call_id: {tool_call_id}",
+        )
 
     return {"status": "resolved", "tool_call_id": tool_call_id, "decision": decision}
 
 
 @router.get("/config")
-async def get_permission_config():
+async def get_permission_config(_user: str = Depends(get_current_user)):
     engine = get_engine()
     config = engine.get_permission_config()
 
@@ -76,7 +90,7 @@ async def get_permission_config():
 @router.put("/config")
 async def update_permission_config(
     update: PermissionConfigUpdate,
-    current_user: dict = Depends(require_admin),
+    _current_user: dict = Depends(require_admin()),
 ):
     engine = get_engine()
     current = engine.get_permission_config()
@@ -95,13 +109,17 @@ async def update_permission_config(
             try:
                 decision = RuleDecision(r.decision)
             except ValueError:
-                raise HTTPException(status_code=400, detail=f"Invalid rule decision: {r.decision}") from None
-            rules.append(PermissionRule(
-                decision=decision,
-                tool=r.tool,
-                pattern=r.pattern,
-                description=r.description,
-            ))
+                raise HTTPException(
+                    status_code=400, detail=f"Invalid rule decision: {r.decision}"
+                ) from None
+            rules.append(
+                PermissionRule(
+                    decision=decision,
+                    tool=r.tool,
+                    pattern=r.pattern,
+                    description=r.description,
+                )
+            )
 
     allowed_tools = current.allowed_tools
     if update.allowed_tools is not None:

@@ -90,8 +90,8 @@ class FilePatchService:
             logger.info("patch_applied", file_path=file_path)
             return True, f"Patch applied successfully to {file_path}"
         except Exception as e:
-            logger.error("patch_apply_failed", file_path=file_path, error=str(e))
-            return False, f"Error applying patch: {str(e)}"
+            logger.exception("patch_apply_failed", file_path=file_path, error=str(e))
+            return False, f"Error applying patch: {e!s}"
 
     @staticmethod
     def preview_edit(file_path: str, old_string: str, new_string: str) -> tuple[str, str]:
@@ -110,10 +110,10 @@ class FilePatchService:
             diff = FilePatchService.create_patch(content, new_content, file_path)
             return diff, "Preview generated"
         except Exception as e:
-            return "", f"Error previewing edit: {str(e)}"
+            return "", f"Error previewing edit: {e!s}"
 
     @staticmethod
-    def validate_edit(file_path: str, old_string: str, new_string: str) -> tuple[bool, str]:
+    def validate_edit(file_path: str, old_string: str, new_string: str) -> tuple[bool, str]:  # noqa: ARG004  # patch-op interface
         """Validate that old_string exists and is unique enough for safe replacement.
 
         Checks:
@@ -153,7 +153,7 @@ class FilePatchService:
 
             return True, "Edit is valid"
         except Exception as e:
-            return False, f"Error validating edit: {str(e)}"
+            return False, f"Error validating edit: {e!s}"
 
     @staticmethod
     def _apply_unified_diff(old_content: str, patch: str) -> str | None:
@@ -178,7 +178,7 @@ class FilePatchService:
         current_hunk = None
 
         for line in patch_lines:
-            if line.startswith("--- ") or line.startswith("+++ "):
+            if line.startswith(("--- ", "+++ ")):
                 continue
             if line.startswith("@@"):
                 if current_hunk is not None:
@@ -210,9 +210,11 @@ class FilePatchService:
             old_count = hunk["old_count"]
             new_hunk_lines = []
 
-            for line in hunk["lines"]:
-                if line.startswith(" ") or line.startswith("+"):
-                    new_hunk_lines.append(line[1:] + line_ending)
+            new_hunk_lines.extend(
+                line[1:] + line_ending
+                for line in hunk["lines"]
+                if line.startswith((" ", "+"))
+            )
 
             end = min(old_start + old_count, len(result_lines))
             result_lines[old_start:end] = new_hunk_lines

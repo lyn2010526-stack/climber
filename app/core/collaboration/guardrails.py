@@ -92,7 +92,7 @@ Respond with:
                 tools=[],
             )
     except Exception as e:
-        logger.error("llm_guardrail_failed", task_id=task.id, error=str(e))
+        logger.exception("llm_guardrail_failed", task_id=task.id, error=str(e))
         return True, []
 
     lower_output = review_output.lower()
@@ -139,7 +139,7 @@ async def run_function_guardrail(
             return result
         return True, []
     except Exception as e:
-        logger.error("function_guardrail_failed", func_path=func_path, error=str(e))
+        logger.exception("function_guardrail_failed", func_path=func_path, error=str(e))
         return True, []
 
 

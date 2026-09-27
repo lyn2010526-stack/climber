@@ -12,8 +12,8 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
-from collections.abc import Mapping
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -31,6 +31,9 @@ from app.core.principal import (
 )
 from app.models.users import ApiKey
 from app.storage import engine
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 # The auth middleware validates API keys asynchronously against the same
 # table; UserStore keeps a synchronous facade for the legacy test API.
@@ -258,7 +261,7 @@ class UserStore:
             result = session.execute(
                 select(ApiKey).where(
                     ApiKey.key_hash == key_hash,
-                    ApiKey.is_active == True,  # noqa: E712
+                    ApiKey.is_active == True,  # noqa: E712  # SQLAlchemy Boolean column comparison
                 )
             )
             record = result.scalar_one_or_none()

@@ -60,6 +60,9 @@ class HITLManager:
         self._thread_index: dict[str, list[str]] = {}
         self._lock = asyncio.Lock()
         self._default_timeout = default_timeout
+        # Strong references to the auto-expire timers, so the event loop cannot
+        # garbage-collect a pending timeout before it fires.
+        self._expire_tasks: set[asyncio.Task] = set()
 
     async def interrupt(
         self,
@@ -101,7 +104,11 @@ class HITLManager:
         )
 
         if self._default_timeout:
-            asyncio.create_task(self._auto_expire(interrupt_obj.id, self._default_timeout))
+            expire_task = asyncio.create_task(
+                self._auto_expire(interrupt_obj.id, self._default_timeout)
+            )
+            self._expire_tasks.add(expire_task)
+            expire_task.add_done_callback(self._expire_tasks.discard)
 
         return interrupt_obj.id
 

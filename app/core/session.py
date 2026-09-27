@@ -294,7 +294,11 @@ class AgentSession:
         import asyncio
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(self.state_machine.transition(TaskState.CANCELLED, trigger="user_stop"))
+            cancel_task = loop.create_task(
+                self.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
+            )
+            self._pending_tasks.add(cancel_task)
+            cancel_task.add_done_callback(self._pending_tasks.discard)
         except RuntimeError:
             pass
 

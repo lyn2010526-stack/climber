@@ -105,9 +105,13 @@ class WorkspaceSandbox:
         for key in _ENV_ALLOWLIST:
             if key in os.environ:
                 env[key] = os.environ[key]
-        for key, value in os.environ.items():
-            if key.startswith("npm_config_") and "auth" not in key.lower():
-                env[key] = value
+        env.update(
+            {
+                key: value
+                for key, value in os.environ.items()
+                if key.startswith("npm_config_") and "auth" not in key.lower()
+            }
+        )
         env.update(self.command_env)
         return env
 
@@ -148,7 +152,7 @@ class WorkspaceSandbox:
 
     @property
     def tools(self) -> list:
-        return TOOLS + [COMMAND_TOOL] if self.allow_commands else TOOLS
+        return [*TOOLS, COMMAND_TOOL] if self.allow_commands else TOOLS
 
 
 TOOLS = [

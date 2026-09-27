@@ -74,7 +74,7 @@ async def native_run(command: str, timeout: int = 120, cwd: str | None = None) -
             target_paths = [p for p in full_args.split() if not p.startswith('-')]
             for tp in target_paths:
                 abs_tp = os.path.abspath(tp)
-                if abs_tp == '/' or abs_tp.startswith('/etc') or abs_tp.startswith('/root') or abs_tp.startswith('/home'):
+                if abs_tp == '/' or abs_tp.startswith(('/etc', '/root', '/home')):
                     return f"Command rejected: rm targeting system path ({full_args})"
 
         proc = await asyncio.create_subprocess_exec(
@@ -126,7 +126,7 @@ async def take_screenshot(output_path: str = _DEFAULT_SCREENSHOT_PATH) -> str:
         # S603 audit: argv is the resolved binary plus the caller's destination
         # path as one argument. shell=False, so a crafted path is a path, never a
         # command word.
-        subprocess.run([_SCREENSHOT_BIN, output_path], check=True, timeout=10)  # noqa: S603
+        subprocess.run([_SCREENSHOT_BIN, output_path], check=True, timeout=10)  # noqa: S603  # argv[0] is an absolute path from shutil.which()
         return output_path
     except Exception as e:
         return f"Error taking screenshot: {redact_error_text(e)}"
@@ -170,7 +170,7 @@ async def process_video(command: str) -> str:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+        _stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
         output = stderr.decode("utf-8", errors="replace")[:5000]
         return output if output else "Video processing completed"
     except TimeoutError:
@@ -290,12 +290,12 @@ def _validate_file_path(path: str, writable: bool = False) -> tuple[bool, str]:
     abs_path = os.path.abspath(path)
 
     for blocked in _BLOCKED_PREFIXES:
-        if abs_path == blocked or abs_path.startswith(blocked + "/") or abs_path.startswith(blocked + os.sep):
+        if abs_path == blocked or abs_path.startswith((blocked + "/", blocked + os.sep)):
             return False, f"Access denied: path '{abs_path}' is in a blocked system directory"
 
     allowed = False
     for root in _ALLOWED_FILE_ROOTS:
-        if abs_path == root or abs_path.startswith(root + "/") or abs_path.startswith(root + os.sep):
+        if abs_path == root or abs_path.startswith((root + "/", root + os.sep)):
             allowed = True
             break
 

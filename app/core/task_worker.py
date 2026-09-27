@@ -5,17 +5,19 @@ import asyncio
 import json
 import uuid
 from collections import OrderedDict, defaultdict, deque
-from collections.abc import Callable, Coroutine
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from app.storage import async_session
 from app.storage.models_platform import AutoLoopTask
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Coroutine
 
 logger = structlog.get_logger()
 
@@ -116,6 +118,7 @@ class TaskManager:
             }
             record = AutoLoopTask(
                 id=task_id,
+                owner_id=payload.get("_owner_id"),
                 objective=json.dumps({"type": task_type, **persisted_payload}),
                 status=TaskStatus.PENDING.value,
                 max_steps=payload.get("max_steps", 10),
@@ -255,7 +258,7 @@ class TaskManager:
                 await self._emit_progress(task_id, {"status": "cancelled"})
 
             except Exception as exc:
-                logger.error("task_failed", task_id=task_id, error=str(exc))
+                logger.exception("task_failed", task_id=task_id, error=str(exc))
                 async with async_session() as session:
                     record = await session.get(AutoLoopTask, task_id)
                     if record:
@@ -557,8 +560,7 @@ async def handle_workflow(payload: dict[str, Any], on_progress) -> dict[str, Any
     workflow_name = payload.get("workflow", "default")
     params = payload.get("params", {})
     flow = Flow(name=workflow_name)
-    result = await flow.execute(params=params, on_progress=on_progress)
-    return result
+    return await flow.execute(params=params, on_progress=on_progress)
 
 
 task_manager = TaskManager(max_workers=3)
@@ -586,5 +588,5 @@ async def run_standalone_worker():
                     if task_type in task_manager._handlers:
                         await task_manager.submit(task_type, obj)
                 except Exception as exc:
-                    logger.error("enqueue_failed", task_id=record.id, error=str(exc))
+                    logger.exception("enqueue_failed", task_id=record.id, error=str(exc))
         await asyncio.sleep(5)

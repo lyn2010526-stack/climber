@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
 from app.core import ChatResult
 from app.models import ModelAdapter, ModelCapability
 from app.services.ollama_queue import ollama_offline_queue
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 
 class OllamaAdapter(ModelAdapter):
@@ -51,16 +53,18 @@ class OllamaAdapter(ModelAdapter):
             max_tokens=4096,
         )
 
-    async def _is_ollama_reachable(self) -> bool:
+    async def _is_ollama_reachable(self, timeout: float = 2) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=2) as client:
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.get(f"{self._base_url}/api/tags")
                 return resp.status_code == 200
         except Exception:
             return False
 
-    async def _make_request(self, payload: dict[str, Any], stream: bool = False) -> Any:
-        async with httpx.AsyncClient(timeout=120) as client:
+    async def _make_request(
+        self, payload: dict[str, Any], stream: bool = False, timeout: float = 120
+    ) -> Any:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             if stream:
                 async with client.stream("POST", f"{self._base_url}/api/chat", json=payload) as resp:
                     resp.raise_for_status()
@@ -88,7 +92,8 @@ class OllamaAdapter(ModelAdapter):
         if tools:
             payload["tools"] = tools
 
-        if not await self._is_ollama_reachable():
+        timeout = kwargs.get("timeout", 120)
+        if not await self._is_ollama_reachable(timeout=min(timeout, 2)):
             yield ChatResult(
                 content="\n[Ollama offline. Request queued for retry when connection is restored.]",
                 tool_calls=[],
@@ -98,7 +103,7 @@ class OllamaAdapter(ModelAdapter):
             return
 
         try:
-            async with httpx.AsyncClient(timeout=120) as client, client.stream(
+            async with httpx.AsyncClient(timeout=timeout) as client, client.stream(
                 "POST", f"{self._base_url}/api/chat", json=payload
             ) as response:
                 response.raise_for_status()
@@ -120,7 +125,7 @@ class OllamaAdapter(ModelAdapter):
                         yield ChatResult(content=content)
         except Exception as e:
             yield ChatResult(
-                content=f"\n[Error: {str(e)}]",
+                content=f"\n[Error: {e!s}]",
                 tool_calls=[],
                 finish_reason="error",
             )
@@ -144,7 +149,8 @@ class OllamaAdapter(ModelAdapter):
         if tools:
             payload["tools"] = tools
 
-        if not await self._is_ollama_reachable():
+        timeout = kwargs.get("timeout", 120)
+        if not await self._is_ollama_reachable(timeout=min(timeout, 2)):
             await ollama_offline_queue.enqueue(payload)
             return ChatResult(
                 content="Ollama offline. Request queued for retry when connection is restored.",
@@ -153,7 +159,7 @@ class OllamaAdapter(ModelAdapter):
             )
 
         try:
-            data = await self._make_request(payload, stream=False)
+            data = await self._make_request(payload, stream=False, timeout=timeout)
             message = data.get("message", {})
             content = message.get("content", "")
 
@@ -161,6 +167,11 @@ class OllamaAdapter(ModelAdapter):
             for tc in message.get("tool_calls", []):
                 func = tc.get("function", {})
                 args = func.get("arguments", {})
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except json.JSONDecodeError:
+                        args = {}
                 tool_calls.append({
                     "id": func.get("name", ""),
                     "type": "function",
@@ -177,7 +188,7 @@ class OllamaAdapter(ModelAdapter):
             )
         except Exception as e:
             return ChatResult(
-                content=f"Error: {str(e)}",
+                content=f"Error: {e!s}",
                 tool_calls=[],
                 finish_reason="error",
             )

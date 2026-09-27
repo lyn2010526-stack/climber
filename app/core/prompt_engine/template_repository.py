@@ -324,7 +324,7 @@ class PromptTemplateRepository:
                 self._persist()
             return template
         except (json.JSONDecodeError, KeyError) as e:
-            logger.error("Failed to import template: %s", e)
+            logger.exception("Failed to import template: %s", e)
             return None
 
     def import_bulk(self, json_str: str) -> list[PromptTemplate]:
@@ -349,6 +349,6 @@ class PromptTemplateRepository:
                 except Exception as e:
                     logger.warning("Skipping invalid template: %s", e)
         except json.JSONDecodeError as e:
-            logger.error("Failed to parse import JSON: %s", e)
+            logger.exception("Failed to parse import JSON: %s", e)
 
         return imported

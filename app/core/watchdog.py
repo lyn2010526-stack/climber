@@ -11,13 +11,15 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from app.core.logging_setup import write_crash_dump
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 logger = structlog.get_logger()
 

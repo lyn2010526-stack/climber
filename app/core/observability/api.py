@@ -9,12 +9,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from app.core.auth_manager import require_admin
 from app.core.observability.alignment import GoalTracker
 from app.core.observability.audit import AuditChain
-from app.core.observability.emergency_stop import EmergencyStopManager
+from app.core.observability.emergency_stop import get_emergency_stop as _shared_emergency_stop
 from app.core.observability.trace import TraceCollector
 
 router = APIRouter(prefix="/api/v1/observability", tags=["observability"])
@@ -22,7 +23,6 @@ router = APIRouter(prefix="/api/v1/observability", tags=["observability"])
 _trace_collector: TraceCollector | None = None
 _audit_chain: AuditChain | None = None
 _goal_tracker: GoalTracker | None = None
-_emergency_stop: EmergencyStopManager | None = None
 
 
 def get_trace_collector() -> TraceCollector:
@@ -46,11 +46,16 @@ def get_goal_tracker() -> GoalTracker:
     return _goal_tracker
 
 
-def get_emergency_stop() -> EmergencyStopManager:
-    global _emergency_stop
-    if _emergency_stop is None:
-        _emergency_stop = EmergencyStopManager()
-    return _emergency_stop
+def get_emergency_stop():
+    """Return the process-wide emergency stop manager.
+
+    The engine reads the kill switch through
+    ``app.core.observability.emergency_stop.get_emergency_stop``. Activating the
+    stop through this router only works if both paths resolve to the same
+    instance, so this delegates instead of keeping a second module-level
+    singleton.
+    """
+    return _shared_emergency_stop()
 
 
 class EmergencyStopRequest(BaseModel):
@@ -135,6 +140,7 @@ async def get_alignment_status() -> dict[str, Any]:
 @router.post("/emergency-stop")
 async def activate_emergency_stop(
     request: EmergencyStopRequest,
+    _auth: dict = Depends(require_admin()),
 ) -> dict[str, Any]:
     manager = get_emergency_stop()
     if manager.is_activated():
@@ -148,6 +154,7 @@ async def activate_emergency_stop(
 
 @router.delete("/emergency-stop")
 async def deactivate_emergency_stop(
+    _auth: dict = Depends(require_admin()),
     request: EmergencyStopDeactivateRequest | None = None,
 ) -> dict[str, Any]:
     manager = get_emergency_stop()

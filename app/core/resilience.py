@@ -119,9 +119,9 @@ class CircuitBreaker:
                 result = await coro
             else:
                 result = await coro()
-        except BaseException as e:
+        except BaseException:
             self._record_failure()
-            raise e
+            raise
         self._record_success()
         return result
 
@@ -218,7 +218,7 @@ class RetryHandler:
                 if not self._is_retryable(e):
                     raise
                 if attempt >= self.config.max_retries:
-                    raise e
+                    raise
                 delay = self._calculate_delay(attempt)
                 attempt += 1
                 await asyncio.sleep(delay)

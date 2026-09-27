@@ -142,7 +142,7 @@ class ReasoningPipeline:
             )
         except TimeoutError:
             elapsed = (time.monotonic() - start) * 1000
-            logger.error(
+            logger.exception(
                 "reasoning_timeout", timeout=request.timeout_seconds, elapsed_ms=f"{elapsed:.0f}"
             )
             return ReasoningResult(

@@ -27,7 +27,12 @@ from app.core.observability.api import router as observability_router
 from app.core.watchdog import get_watchdog
 from app.middleware.auth import AuthMiddleware
 from app.middleware.metrics import APP_INFO, MetricsMiddleware, metrics_endpoint
-from app.middleware.security import RateLimitMiddleware, RequestValidationMiddleware, SecurityHeadersMiddleware
+from app.middleware.security import (
+    CsrfProtectionMiddleware,
+    RateLimitMiddleware,
+    RequestValidationMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.storage import db_health, init_db
 from app.storage.cache import close_redis, get_redis
 from app.tools import register_builtins
@@ -60,11 +65,16 @@ def _register_core_services() -> None:
     from app.core.scheduler import TaskScheduler
     from app.core.skill_composition import SkillComposer
     from app.models.registry import ModelRegistry
-    from app.multi_agent.crew import Crew
     from app.skills.registry import LegacySkillRegistry, SkillRegistry
+    from app.tools import ToolRegistry
     from app.tools import tool_registry as global_tool_registry
     from app.tools.mcp_client import MCPRegistry
     from app.workflow.engine import WorkflowEngine
+
+    # Seed the egress gate before anything can build a registry. This is the
+    # only place the environment is read; afterwards an explicit decision
+    # (e.g. the engine sandbox disabling network) must stand.
+    ToolRegistry.bootstrap_network_gate()
 
     model_registry = ModelRegistry()
     skill_registry = SkillRegistry()
@@ -87,11 +97,27 @@ def _register_core_services() -> None:
     di_register("AutoLoopEngine", auto_loop_engine)
     di_register("TaskScheduler", task_scheduler)
 
-    workflow_engine = WorkflowEngine(engine=agent_engine, model_registry=model_registry)
+    workflow_engine = WorkflowEngine(
+        engine=agent_engine,
+        model_registry=model_registry,
+        tool_registry=tool_registry_instance,
+    )
     skill_composer = SkillComposer(skill_registry=skill_registry)
     unified = UnifiedExecutor()
     unified.register_adapter("workflow", WorkflowExecutorAdapter(workflow_engine))
-    unified.register_adapter("crew", CrewExecutorAdapter(Crew([], [], agent_engine)))
+    # Crew definitions are request-scoped; do not register an executable empty
+    # crew at application startup.
+    crew_adapter = CrewExecutorAdapter(None)
+    if not crew_adapter.is_configured:
+        logger.warning(
+            "crew_executor_registered_unconfigured",
+            detail=(
+                "crew adapter is registered without a request-scoped crew; "
+                "executor_type='crew' fails until a configured crew is supplied. "
+                "Crew runs go through the crews API."
+            ),
+        )
+    unified.register_adapter("crew", crew_adapter)
     unified.register_adapter("skill", SkillComposerExecutorAdapter(skill_composer))
     di_register(IExecutor, unified)
     di_register("UnifiedExecutor", unified)
@@ -129,11 +155,20 @@ async def lifespan(app: FastAPI):
 
             admin_creds = await initialize_auth_system()
             if admin_creds:
-                logger.info(
-                    "Auth system initialized",
-                    admin_username=admin_creds["username"],
-                    admin_password_set=True,
-                )
+                if admin_creds.get("generated"):
+                    # Printed exactly once, at bootstrap. There is no default
+                    # password to guess because none is stored in the repo.
+                    logger.warning(
+                        "Bootstrap admin created with a generated password - "
+                        "record it now, it is not shown again",
+                        admin_username=admin_creds["username"],
+                        admin_password=admin_creds["password"],
+                    )
+                else:
+                    logger.info(
+                        "Auth system initialized",
+                        admin_username=admin_creds["username"],
+                    )
         except Exception as e:
             logger.warning("Database initialization failed", error=str(e))
 
@@ -223,6 +258,7 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestValidationMiddleware)
+app.add_middleware(CsrfProtectionMiddleware)
 app.add_middleware(RateLimitMiddleware, trusted_proxies=settings.trusted_proxies_list)
 app.add_middleware(AuthMiddleware, public_endpoints=set(settings.auth_public_endpoints))
 app.add_middleware(SecurityHeadersMiddleware)
@@ -230,9 +266,19 @@ app.add_middleware(MetricsMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
+    allow_credentials=settings.cors_allow_credentials,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin", "Cache-Control", "X-Request-Id"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "X-Requested-With",
+        "Accept",
+        "Origin",
+        "Cache-Control",
+        "X-Request-Id",
+        "X-CSRF-Token",
+        "X-API-Key",
+    ],
 )
 
 app.include_router(api_router, prefix="/api/v1")
@@ -359,11 +405,7 @@ if FRONTEND_DIR.exists():
         if response.status_code == 404:
             path = request.url.path
             if (
-                path.startswith("/api/")
-                or path.startswith("/docs")
-                or path == "/openapi.json"
-                or path == "/health"
-                or path.startswith("/_test/")
+                path.startswith(("/api/", "/docs", "/_test/")) or path == "/openapi.json" or path == "/health"
             ):
                 return response
             file_path = (FRONTEND_DIR / path.lstrip("/")).resolve()

@@ -1,5 +1,8 @@
 """Workflow CRUD and execution API endpoints."""
 
+# ruff: noqa: TC001  # FastAPI resolves route handler
+# annotations at runtime, so these names must stay importable at runtime.
+
 from __future__ import annotations
 
 import time
@@ -33,7 +36,7 @@ async def _visible_workflow(db: Any, workflow_id: str, user_id: str) -> Workflow
         await db.execute(
             select(Workflow).where(
                 Workflow.id == workflow_id,
-                or_(Workflow.user_id == user_id, Workflow.is_template == True),  # noqa: E712
+                or_(Workflow.user_id == user_id, Workflow.is_template == True),  # noqa: E712  # SQLAlchemy Boolean column comparison; Column.__eq__ builds an expression
             )
         )
     ).scalar_one_or_none()
@@ -56,7 +59,7 @@ async def list_workflows(principal: CurrentPrincipal) -> list[dict[str, Any]]:
     async with async_session() as db:
         stmt = select(Workflow)
         if principal.auth_method != "local":
-            stmt = stmt.where(or_(Workflow.user_id == user_id, Workflow.is_template == True))  # noqa: E712
+            stmt = stmt.where(or_(Workflow.user_id == user_id, Workflow.is_template == True))  # noqa: E712  # SQLAlchemy Boolean column comparison
         rows = (await db.execute(stmt.order_by(Workflow.created_at.desc()))).scalars().all()
         return [_workflow_dict(w) for w in rows]
 

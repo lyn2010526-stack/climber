@@ -85,10 +85,10 @@ async def _add_local_ollama_models(models: list[dict[str, Any]]) -> None:
         async with httpx.AsyncClient(timeout=1.5) as client:
             resp = await client.get(f"{base}/api/tags")
             if resp.status_code == 200:
-                for m in resp.json().get("models", []):
-                    models.append(
-                        {"provider": "ollama", "model_id": m.get("name", ""), "label": f"{m.get('name', '')} (local)"}
-                    )
+                models.extend(
+                    {"provider": "ollama", "model_id": m.get("name", ""), "label": f"{m.get('name', '')} (local)"}
+                    for m in resp.json().get("models", [])
+                )
     except Exception as e:
         logger.warning("list_models_ollama_discovery", error=str(e))
 
@@ -146,7 +146,7 @@ async def get_stats() -> dict[str, Any]:
 
 @router.get("/profile")
 @router.get("/profile/")
-async def get_profile(request: Request) -> dict[str, Any]:
+async def get_profile(request: Request) -> dict[str, Any]:  # noqa: ARG001
     """Get the current user profile."""
     from app.core.principal import get_context_principal
 
@@ -188,7 +188,7 @@ async def terminal_execute(
     effective_timeout = min(body.timeout or 30, 120)
     output = await sandbox.execute(command, timeout=effective_timeout)
     logger.info("terminal_command_executed", command=command, user_id=current_user_id(request), timeout=effective_timeout)
-    return {"command": command, "output": output, "success": not (output.startswith("TIMEOUT") or output.startswith("Error"))}
+    return {"command": command, "output": output, "success": not (output.startswith(("TIMEOUT", "Error")))}
 
 
 # ─── Cluster ────────────────────────────────────────────────────────────────

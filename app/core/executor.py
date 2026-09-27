@@ -10,8 +10,7 @@ All three implement the same IExecutor interface, enabling polymorphic use.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -21,6 +20,9 @@ from app.core.interfaces import (
     ExecutionStatus,
     IExecutor,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
 
 logger = structlog.get_logger()
 
@@ -43,7 +45,7 @@ class WorkflowExecutorAdapter:
                 error=result.error if hasattr(result, "error") else None,
             )
         except Exception as exc:
-            logger.error("workflow_execution_failed", error=str(exc))
+            logger.exception("workflow_execution_failed", error=str(exc))
             return ExecutionResult(status=ExecutionStatus.FAILED, error=str(exc))
 
 
@@ -73,7 +75,7 @@ class SkillComposerExecutorAdapter:
                 error=getattr(result, "error", None),
             )
         except Exception as exc:
-            logger.error("skill_composition_failed", error=str(exc))
+            logger.exception("skill_composition_failed", error=str(exc))
             return ExecutionResult(status=ExecutionStatus.FAILED, error=str(exc))
 
 
@@ -83,7 +85,27 @@ class CrewExecutorAdapter:
     def __init__(self, crew: Any) -> None:
         self._crew = crew
 
-    async def execute(self, context: ExecutionContext, **kwargs: Any) -> ExecutionResult:
+    @property
+    def is_configured(self) -> bool:
+        """Whether the wrapped crew has anything to execute.
+
+        A crew built with no agents and no tasks always returns a successful
+        output with an empty result list, so a caller that received COMPLETED
+        had no way to tell the crew never ran. ``main._register_core_services``
+        registers exactly such a crew, since agents and tasks are per-request
+        data that startup does not have.
+        """
+        return bool(getattr(self._crew, "agents", None) or getattr(self._crew, "tasks", None))
+
+    async def execute(self, context: ExecutionContext, **kwargs: Any) -> ExecutionResult:  # noqa: ARG002
+        if not self.is_configured:
+            error = (
+                "crew executor is registered with an unconfigured crew "
+                "(no agents and no tasks); run crews through the crews API "
+                "or supply a crew that has agents and tasks"
+            )
+            logger.error("crew_executor_unconfigured", error=error)
+            return ExecutionResult(status=ExecutionStatus.FAILED, error=error)
         try:
             output = await self._crew.execute(user_id=context.user_id)
             return ExecutionResult(
@@ -96,7 +118,7 @@ class CrewExecutorAdapter:
                 },
             )
         except Exception as exc:
-            logger.error("crew_execution_failed", error=str(exc))
+            logger.exception("crew_execution_failed", error=str(exc))
             return ExecutionResult(status=ExecutionStatus.FAILED, error=str(exc))
 
 

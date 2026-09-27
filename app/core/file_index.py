@@ -48,7 +48,7 @@ class FileIndexService:
         if content is not None:
             return self.compute_hash(content) != entry.content_hash
         if os.path.exists(path):
-            mtime = datetime.fromtimestamp(os.path.getmtime(path))
+            mtime = datetime.fromtimestamp(os.path.getmtime(path), UTC)
             return mtime > entry.modified_at
         return False
 

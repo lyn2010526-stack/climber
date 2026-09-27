@@ -1,4 +1,10 @@
-"""Context compression for managing long conversations."""
+"""Context compression for managing long conversations.
+
+Design references:
+- https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+- https://docs.letta.com/v1-sdk/concepts/stateful-agents
+- https://langchain-ai.github.io/langmem/concepts/conceptual_guide/
+"""
 
 from __future__ import annotations
 
@@ -16,7 +22,7 @@ def estimate_tokens(messages: list[dict[str, Any]]) -> int:
     total = 0
     for msg in messages:
         content = msg.get("content", "")
-        total += len(content) // 4
+        total += len(str(content)) // 4
         for tc in msg.get("tool_calls", []):
             total += len(str(tc)) // 4
     return total
@@ -29,7 +35,8 @@ class ContextCompressor:
         self._config = config
 
     def needs_compression(self, messages: list[dict[str, Any]]) -> bool:
-        return estimate_tokens(messages) > self._config.max_tokens
+        threshold = self._config.max_tokens * self._config.summarize_threshold
+        return estimate_tokens(messages) >= threshold
 
     async def compress(self, messages: list[dict[str, Any]], model: Any) -> list[dict[str, Any]]:
         strategy = self._config.compression_strategy
@@ -43,21 +50,55 @@ class ContextCompressor:
 
     def _truncate(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         keep = self._config.keep_recent_messages
-        if len(messages) <= keep + 1:
+        if keep < 1 or len(messages) <= keep:
             return messages
-        result = messages[:1]
+        head = self._system_messages(messages)
+        result = list(head)
         result.append({"role": "system", "content": "[Earlier conversation truncated for brevity]"})
-        result.extend(messages[-(keep):])
+        result.extend(self._keep_complete_turns(messages, keep))
         return result
 
     def _sliding(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         keep = self._config.keep_recent_messages
-        if len(messages) <= keep:
+        if keep < 1 or len(messages) <= keep:
             return messages
-        result = messages[:1]
+        head = self._system_messages(messages)
+        result = list(head)
         result.append({"role": "system", "content": "[Earlier messages truncated]"})
-        result.extend(messages[-(keep):])
+        result.extend(self._keep_complete_turns(messages, keep))
         return result
+
+    @staticmethod
+    def _system_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Keep every system instruction; system messages are pinned context."""
+        return [message for message in messages if message.get("role") == MessageRole.SYSTEM]
+
+    @staticmethod
+    def _keep_complete_turns(messages: list[dict[str, Any]], keep: int) -> list[dict[str, Any]]:
+        """Keep the most recent `keep` complete turns without splitting an
+        assistant message's tool_calls from its following TOOL result messages.
+
+        A turn is a non-TOOL message plus any immediately following TOOL
+        messages. Walking backwards from the tail, the first turn whose tool
+        results are cut off is extended to include its leading non-TOOL message
+        so the assistant/tool pairing survives compression intact.
+        """
+        non_system = [message for message in messages if message.get("role") != MessageRole.SYSTEM]
+        if keep >= len(non_system):
+            return non_system
+        tail = non_system[-keep:]
+        rest = non_system[:-keep]
+        if tail and tail[0].get("role") == MessageRole.TOOL and rest:
+            return rest[-1:] + tail
+        if (
+            tail
+            and tail[0].get("role") == MessageRole.ASSISTANT
+            and tail[0].get("tool_calls")
+            and len(rest) >= 2
+            and rest[-1].get("role") == MessageRole.TOOL
+        ):
+            return rest[-2:] + tail
+        return tail
 
     async def _summarize(self, messages: list[dict[str, Any]], model: Any) -> list[dict[str, Any]]:
         """Summarize older messages into a single system message using the LLM.
@@ -67,12 +108,13 @@ class ContextCompressor:
         Falls back to truncation if the model call fails.
         """
         keep = self._config.keep_recent_messages
-        if len(messages) <= keep + 1:
+        if keep < 1 or len(messages) <= keep:
             return messages
 
-        head = messages[:1] if messages and messages[0].get("role") == MessageRole.SYSTEM else []
-        tail = messages[-keep:]
-        middle = messages[len(head): -keep] if len(messages) > len(head) + keep else []
+        head = self._system_messages(messages)
+        non_system = [message for message in messages if message.get("role") != MessageRole.SYSTEM]
+        tail = self._keep_complete_turns(non_system, keep)
+        middle = non_system[: -len(tail)] if tail else non_system
         if not middle:
             return messages
 
@@ -84,7 +126,7 @@ class ContextCompressor:
         try:
             for msg in middle:
                 role = msg.get("role", "user")
-                content = msg.get("content", "")
+                content = str(msg.get("content", ""))
                 summary_prompt += f"[{role}] {content[:1000]}\n"
 
             hold_messages = [
@@ -110,7 +152,7 @@ class ContextCompressor:
         self,
         messages: list[dict[str, Any]],
         max_tokens: int,
-        model: str = "gpt-4",
+        _model: str = "gpt-4",
     ) -> list[dict[str, Any]]:
         """Compress messages to fit within token budget.
 
@@ -123,28 +165,33 @@ class ContextCompressor:
         if current_tokens <= max_tokens:
             return messages
 
-        system_msgs = [m for m in messages if m.get("role") == "system"]
+        system_msgs = self._system_messages(messages)
         non_system = [m for m in messages if m.get("role") != "system"]
 
         system_tokens = sum(estimate_tokens([m]) for m in system_msgs)
         remaining_budget = max_tokens - system_tokens
 
-        kept = []
+        kept: list[dict[str, Any]] = []
         used_tokens = 0
         for msg in reversed(non_system):
             msg_tokens = estimate_tokens([msg])
-            if used_tokens + msg_tokens <= remaining_budget * 0.8:
+            if used_tokens + msg_tokens <= max(0, remaining_budget):
                 kept.insert(0, msg)
                 used_tokens += msg_tokens
             else:
                 break
 
+        kept = self._keep_complete_turns(kept, len(kept)) if kept else kept
+
         summarized_count = len(non_system) - len(kept)
         if summarized_count > 0:
             summary = {
                 "role": "system",
-                "content": f"<summary of {summarized_count} earlier messages>",
+                "content": (
+                    f"[Earlier context omitted: {summarized_count} messages. "
+                    "Use conversation search or memory tools when exact details are needed.]"
+                ),
             }
-            return system_msgs + [summary] + kept
+            return [*system_msgs, summary, *kept]
 
         return system_msgs + kept

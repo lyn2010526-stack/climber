@@ -1,19 +1,17 @@
+"""Legacy safety helpers.
+
+The production validation chain lives in
+``app.core.engine.validation``; this module is kept for import
+compatibility only and must not hold its own copy of the command-tool
+classification, which previously drifted (missing every native tool).
+"""
+
 from __future__ import annotations
 
 from typing import Any
 
-COMMAND_TOOLS = {"run_command", "shell", "execute_command", "bash"}
-
-FILE_TOOLS: dict[str, tuple[str, str]] = {
-    "read_file": ("path", "read"),
-    "write_file": ("path", "write"),
-    "edit_file": ("path", "write"),
-    "append_file": ("path", "write"),
-    "file_exists": ("path", "read"),
-    "file_info": ("path", "read"),
-    "file_diff": ("path", "read"),
-    "list_directory": ("dir", "read"),
-}
+from app.core.engine.validation import _COMMAND_TOOLS as COMMAND_TOOLS
+from app.core.engine.validation import _FILE_TOOLS as FILE_TOOLS
 
 
 def setup_default_permissions(permission_overlay: Any) -> None:

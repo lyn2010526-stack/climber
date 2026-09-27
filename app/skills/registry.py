@@ -8,14 +8,16 @@ moved to dedicated modules.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from pydantic import BaseModel, Field
 
 from app.core.interfaces import ISkillRegistry
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 logger = structlog.get_logger()
 

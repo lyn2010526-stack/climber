@@ -202,7 +202,9 @@ async def export_workflow(workflow_id: str, request: Request) -> Response:
 
 
 @router.get("/{workflow_id}/export")
-async def export_workflow_get(workflow_id: str, request: Request, format: str = "json") -> Response:
+async def export_workflow_get(
+    workflow_id: str, request: Request, format: str = "json"
+) -> Response:
     """Export a workflow as a downloadable file (GET)."""
     fmt = format.lower()
 
