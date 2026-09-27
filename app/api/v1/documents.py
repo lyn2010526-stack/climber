@@ -172,7 +172,13 @@ async def search_documents(request: Request, query: str, n_results: int = 5):
                 ).limit(n_results)
             )
             docs = result.scalars().all()
-            results.extend({ "text": d.content or "", "metadata": {"filename": d.filename, "doc_id": d.id}, "score": 0.5, } for d in docs)
+            for d in docs:
+                results.append({
+                    "text": d.content or "",
+                    "metadata": {"filename": d.filename, "doc_id": d.id},
+                    "score": 0.5,
+                })
+
     # Rerank with BM25
     reranked = rerank_results(query, results, top_k=n_results)
     return SearchResponse(query=query, results=reranked, n_results=len(reranked))

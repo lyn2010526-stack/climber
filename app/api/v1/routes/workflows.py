@@ -213,7 +213,9 @@ async def run_workflow(
     if wf is not None:
         await _record_workflow_run(run, result_payload)
 
-    return result_payload
+    # The route owns the workflow id, so it fills the identifier when the
+    # executor result omits it. WorkflowRunResponse requires `id`.
+    return {"id": workflow_id, **result_payload}
 
 
 async def _execute_workflow(

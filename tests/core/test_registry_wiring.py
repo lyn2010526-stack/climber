@@ -19,11 +19,15 @@ from __future__ import annotations
 
 import pytest
 
-from app.tools import ToolRegistry, get_tool_registry
+from app.tools import ToolRegistry, get_tool_registry, register_builtins
 
 
 def test_the_global_registry_is_populated() -> None:
     """Sanity check: the shared registry must actually hold the tools."""
+    # ``main.lifespan`` populates the singleton through ``_register_core_services``;
+    # the ASGI test client never runs the lifespan, so the builtins have to be
+    # registered here for the assertion to describe production.
+    register_builtins()
     assert len(get_tool_registry()._tools) > 0
 
 
@@ -49,26 +53,54 @@ def test_workflow_engine_never_builds_its_own_registry() -> None:
 
 
 @pytest.mark.asyncio
-async def test_workflow_tool_node_refuses_an_unwired_engine() -> None:
+async def test_workflow_tool_node_fails_loudly_for_an_unregistered_tool() -> None:
+    """A tool node the registry cannot serve must fail, not report success.
+
+    ``WorkflowEngine`` deliberately falls back to the application registry when
+    no ``tool_registry`` is injected, because the Flow and API paths construct
+    the engine without one and a real ``read_file`` has to reach those nodes.
+    The protection against silently building an empty registry is therefore the
+    "tool is absent" refusal, not a refusal to run at all.
+    """
     from app.workflow.engine import WorkflowEngine
 
     class FakeEngine:
         pass
 
+    register_builtins()
     engine = WorkflowEngine(engine=FakeEngine())  # type: ignore[arg-type]
 
     with pytest.raises(RuntimeError, match="tool_registry"):
-        await engine._execute_tool_node(_make_tool_node(), {})
+        await engine._execute_tool_node(_make_tool_node(tool_name="no_such_tool"), {})
 
 
-def _make_tool_node():
+@pytest.mark.asyncio
+async def test_workflow_tool_node_resolves_a_builtin_through_the_fallback() -> None:
+    """The same engine must still reach a registered tool with no injection."""
+    from app.workflow.engine import WorkflowEngine
+
+    class FakeEngine:
+        sandbox = None
+        permission_overlay = None
+
+    register_builtins()
+    engine = WorkflowEngine(engine=FakeEngine())  # type: ignore[arg-type]
+
+    output = await engine._execute_tool_node(_make_tool_node("get_datetime", {}), {})
+
+    assert "result" in output
+
+
+def _make_tool_node(tool_name: str = "read_file", tool_inputs: dict | None = None):
     from app.workflow import NodeType, WorkflowNode
 
+    if tool_inputs is None:
+        tool_inputs = {"path": "x"}
     return WorkflowNode(
         id="n1",
         type=NodeType.TOOL,
         name="read",
-        config={"tool_name": "read_file", "tool_inputs": {"path": "x"}},
+        config={"tool_name": tool_name, "tool_inputs": tool_inputs},
     )
 
 
@@ -77,6 +109,7 @@ def test_collaboration_engine_receives_a_populated_registry() -> None:
     from app.core.collaboration.base import get_group_collaboration_engine
     from app.core.di import register
 
+    register_builtins()
     registry = get_tool_registry()
     register("ToolRegistry", registry)
     engine = get_group_collaboration_engine()

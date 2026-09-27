@@ -28,6 +28,7 @@ from app.core.watchdog import get_watchdog
 from app.middleware.auth import AuthMiddleware
 from app.middleware.metrics import APP_INFO, MetricsMiddleware, metrics_endpoint
 from app.middleware.security import (
+    CsrfProtectionMiddleware,
     RateLimitMiddleware,
     RequestValidationMiddleware,
     SecurityHeadersMiddleware,
@@ -64,11 +65,16 @@ def _register_core_services() -> None:
     from app.core.scheduler import TaskScheduler
     from app.core.skill_composition import SkillComposer
     from app.models.registry import ModelRegistry
-    from app.multi_agent.crew import Crew
     from app.skills.registry import LegacySkillRegistry, SkillRegistry
+    from app.tools import ToolRegistry
     from app.tools import tool_registry as global_tool_registry
     from app.tools.mcp_client import MCPRegistry
     from app.workflow.engine import WorkflowEngine
+
+    # Seed the egress gate before anything can build a registry. This is the
+    # only place the environment is read; afterwards an explicit decision
+    # (e.g. the engine sandbox disabling network) must stand.
+    ToolRegistry.bootstrap_network_gate()
 
     model_registry = ModelRegistry()
     skill_registry = SkillRegistry()
@@ -91,11 +97,27 @@ def _register_core_services() -> None:
     di_register("AutoLoopEngine", auto_loop_engine)
     di_register("TaskScheduler", task_scheduler)
 
-    workflow_engine = WorkflowEngine(engine=agent_engine, model_registry=model_registry)
+    workflow_engine = WorkflowEngine(
+        engine=agent_engine,
+        model_registry=model_registry,
+        tool_registry=tool_registry_instance,
+    )
     skill_composer = SkillComposer(skill_registry=skill_registry)
     unified = UnifiedExecutor()
     unified.register_adapter("workflow", WorkflowExecutorAdapter(workflow_engine))
-    unified.register_adapter("crew", CrewExecutorAdapter(Crew([], [], agent_engine)))
+    # Crew definitions are request-scoped; do not register an executable empty
+    # crew at application startup.
+    crew_adapter = CrewExecutorAdapter(None)
+    if not crew_adapter.is_configured:
+        logger.warning(
+            "crew_executor_registered_unconfigured",
+            detail=(
+                "crew adapter is registered without a request-scoped crew; "
+                "executor_type='crew' fails until a configured crew is supplied. "
+                "Crew runs go through the crews API."
+            ),
+        )
+    unified.register_adapter("crew", crew_adapter)
     unified.register_adapter("skill", SkillComposerExecutorAdapter(skill_composer))
     di_register(IExecutor, unified)
     di_register("UnifiedExecutor", unified)
@@ -253,11 +275,18 @@ app = FastAPI(
     title="Agent Engine",
     description="Production-grade AI Agent Platform",
     version=_APP_VERSION,
+    openapi_tags=[
+        {"name": "system", "description": "Health and service diagnostics."},
+        {"name": "agents", "description": "Agent configuration and lifecycle."},
+        {"name": "workflows", "description": "Workflow definition and execution."},
+        {"name": "settings", "description": "User-level runtime settings."},
+    ],
     lifespan=lifespan,
     redirect_slashes=False,
 )
 
 app.add_middleware(RequestValidationMiddleware)
+app.add_middleware(CsrfProtectionMiddleware)
 app.add_middleware(RateLimitMiddleware, trusted_proxies=settings.trusted_proxies_list)
 app.add_middleware(AuthMiddleware, public_endpoints=set(settings.auth_public_endpoints))
 app.add_middleware(SecurityHeadersMiddleware)

@@ -27,7 +27,16 @@ _CHECKPOINT_KEY = "_checkpoints"
 def _clean_model_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     if not settings:
         return {}
-    return {k: settings[k] for k in ("provider", "model_id", "base_url") if settings.get(k)}
+    cleaned = {}
+    for key in ("provider", "model_id", "base_url", "credential_id"):
+        value = settings.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, str) or (key == "credential_id" and not value.strip()):
+            raise HTTPException(422, detail=f"Invalid model_settings.{key}")
+        if value.strip():
+            cleaned[key] = value.strip()
+    return cleaned
 
 
 async def resolve_model_credential(
@@ -149,8 +158,7 @@ async def create_session_with_slash(
             if agent is None:
                 raise HTTPException(404, detail="Agent not found")
         model_settings = _clean_model_settings(payload.model_settings)
-        if payload.model_settings:
-            await resolve_model_credential(session, user_id, payload.model_settings)
+        await resolve_model_credential(session, user_id, model_settings)
         row = SessionModel(
             title=payload.title or "New Session",
             status="idle",
@@ -184,30 +192,7 @@ async def create_session_legacy(
     payload: SessionCreate,
     user_id: str = Depends(get_current_user),
 ) -> dict:
-    async with async_session() as session:
-        agent = None
-        if payload.agent_id:
-            agent = (
-                await session.execute(select(AgentModel).where(
-                    AgentModel.id == payload.agent_id, AgentModel.user_id == user_id,
-                ))
-            ).scalar_one_or_none()
-            if agent is None:
-                raise HTTPException(404, detail="Agent not found")
-        model_settings = _clean_model_settings(payload.model_settings)
-        if payload.model_settings:
-            await resolve_model_credential(session, user_id, payload.model_settings)
-        row = SessionModel(
-            title=payload.title or "New Session",
-            status="idle",
-            agent_id=payload.agent_id or None,
-            user_id=user_id,
-            model_settings=model_settings,
-        )
-        session.add(row)
-        await session.commit()
-        await session.refresh(row)
-        return {"id": row.id, "session_id": row.id, **_session_effective_model(row, agent)}
+    return await create_session_with_slash(payload, user_id)
 
 
 class MessagesResponse(BaseModel):

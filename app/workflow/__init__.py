@@ -16,6 +16,7 @@ class NodeType(StrEnum):
     CONDITION = "condition"
     CODE = "code"
     ITERATOR = "iterator"
+    SIMULATION = "simulation"
     END = "end"
 
 

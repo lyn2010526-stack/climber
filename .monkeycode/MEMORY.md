@@ -239,4 +239,15 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 检测丢失语句的可靠方法：写 AST 脚本对比改动前后的函数「带值 return 数量」，比 `git diff` 肉眼扫更可靠。判据是同一函数的带值 `return` 变少即为丢失。
   - **TC001/TC002/TC003 迁移在 FastAPI 路由模块上是运行时破坏**。FastAPI 在建路由时求值 handler 注解，把 `CurrentPrincipal`、`AsyncSession`、各 `XxxRequest` 移进 `if TYPE_CHECKING:` 后，所有这些端点会把 body 参数降级成 query 参数并返回 422。涉及 `app/api/v1/{common,helpers,settings}.py`、`app/api/v1/routes/{agents,crews,groups,skills,workflows}.py`、`app/core/reasoning/api.py`。这些文件已加文件级 `# ruff: noqa: TC001, TC002`，防止下次 lint 又移回去。
   - 判别某条 TC00x 建议是否可用：看该注解是否出现在 `APIRouter` 的 handler 签名上（或 `Depends()` 参数里）。是则必须留在运行时导入。
-  - `git checkout -- <file>` 会丢掉该文件未提交的全部改动，即使后来用 `cp` 从 checkpoint 恢复，也可能覆盖掉更晚的版本。回滚前先与 `.monkeycode/checkpoints/` 里最新的快照逐文件 `diff` 核对。
+   - `git checkout -- <file>` 会丢掉该文件未提交的全部改动，即使后来用 `cp` 从 checkpoint 恢复，也可能覆盖掉更晚的版本。回滚前先与 `.monkeycode/checkpoints/` 里最新的快照逐文件 `diff` 核对。
+
+[项目知识摘要]
+- Date: 2026-09-27
+- Context: Agent 在 pr2 分支修复 merge 冲突错误回退导致的测试失败时发现
+- Category: 排错调试 | 测试方法
+- Instructions:
+  - merge 冲突「错误回退」有快速判据：`git diff --quiet <pre-merge-sha> HEAD -- <file>` 返回 0 说明该文件与合并前的 pr2 侧完全一致，即合并解决时整块采用了 pr2（较旧）一侧，main 的实现被整体丢弃。`app/core/recovery.py`、`app/core/checkpoint.py`、`app/core/collaboration/{hierarchical,agent_runner,base,handoff}.py` 都命中该判据。
+  - 合并后的正确形态是「双向合并」：main 侧提供加固后的契约（抛错、脱敏、排序），pr2 侧提供独立新增能力（`checkpoint.rollback_to`/`get_ancestors`、`RecoveryManager.rollback_session`/`ToolReplayPolicy`、collaboration 的 emergency_stop 门禁、`logger.exception`、`_resolved_provider` 重命名、`AsyncIterator` 的 TC003 迁移）。恢复时按方法粒度逐个搬运，不要整文件覆盖。
+  - `app/core/collaboration/base.py` 曾从 `app.core.collaboration.handoff` 改成 `app.core.task_dag`，而该模块在本分支根本不存在，3 个 handoff 测试直接 `ModuleNotFoundError`。校验这类问题的最快手段是 `grep -rn "<module>" app/` 确认目标模块真实存在。
+  - `tests/core/test_emergency_stop_coverage.py::test_collaboration_retry_refuses_before_attempt` 断言 `run_agent_with_retry` 在急停时返回 `("", 0)`。这与 main 侧「tool-only 成功也返回 `("", N)`」的契约有歧义，恢复 main 侧抛错语义时必须保留这个门禁分支原样。
+  - 恢复 main 侧 `AgentEngine` 需要的是结构性合并而非几行补丁：main 已重构为 `RunStorage` 持久化（`__init__(run_store=...)`、`self._run_store`、`track_run` 上下文），pr2 侧是 1680 行的内联持久化 + 会话淘汰/权限配置/指标扩展。`git diff --stat origin/main HEAD -- app/core/agent_engine.py` 显示 1050 行差异。

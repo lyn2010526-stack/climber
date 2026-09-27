@@ -9,11 +9,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.config import settings
+from app.core import task_worker as task_worker_module
 from app.core.auth import LOCAL_USER_ID
 from app.core.auth_manager import require_scopes
 from app.core.task_worker import task_manager
 from app.middleware.auth import authenticate_credentials
-from app.storage import async_session
 from app.storage.database import Session
 from app.storage.models_platform import AutoLoopTask, Workflow
 
@@ -36,6 +36,16 @@ class TaskResponse(BaseModel):
 
 
 _ws_clients: dict[WebSocket, str] = {}
+
+
+def _task_session() -> Any:
+    """Return the session factory the task worker writes task rows with.
+
+    Task rows are owned by the task worker, so every read on this router goes
+    through the same factory the worker uses instead of binding a second
+    reference to the storage module.
+    """
+    return task_worker_module.async_session()
 
 
 async def _ws_broadcast(task_id: str, data: dict):
@@ -73,7 +83,7 @@ async def submit_task(req: SubmitTaskRequest, _auth: dict = Depends(require_scop
 async def get_task(task_id: str, _auth: dict = Depends(require_scopes("read"))):
     """Get task status and result."""
     owner_id = str(_auth.get("user_id") or _auth.get("id"))
-    async with async_session() as db:
+    async with _task_session() as db:
         record = await _owned_task(db, task_id, owner_id)
         if record is None:
             raise HTTPException(404, "Task not found")
@@ -89,7 +99,7 @@ async def list_tasks(
 ):
     """List recent tasks, optionally filtered by status."""
     owner_id = str(_auth.get("user_id") or _auth.get("id"))
-    async with async_session() as db:
+    async with _task_session() as db:
         stmt = select(AutoLoopTask).order_by(AutoLoopTask.created_at.desc()).limit(limit)
         if status_filter or status:
             stmt = stmt.where(AutoLoopTask.status == (status_filter or status))
@@ -99,14 +109,15 @@ async def list_tasks(
 
 @router.post("/{task_id}/cancel")
 async def cancel_task(task_id: str, _auth: dict = Depends(require_scopes("write"))):
-    """Cancel a running task."""
+    """Cancel a running task. Owners may cancel their own tasks; admins may cancel any."""
     owner_id = str(_auth.get("user_id") or _auth.get("id"))
-    async with async_session() as db:
-        if await _owned_task(db, task_id, owner_id) is None:
+    is_admin = _auth.get("role") == "admin" or "admin" in _auth.get("scopes", [])
+    async with _task_session() as db:
+        if await _owned_task(db, task_id, owner_id, include_all=is_admin) is None:
             raise HTTPException(404, "Task not found")
     success = await task_manager.cancel(task_id)
     if not success:
-        raise HTTPException(409, "Task not running")
+        raise HTTPException(400, "Task not running or not found")
     return {"task_id": task_id, "cancelled": True}
 
 
@@ -131,7 +142,7 @@ async def task_websocket(websocket: WebSocket):
 
 async def _ensure_owned_resources(payload: dict[str, Any], owner_id: str) -> None:
     """Reject task references to sessions or workflows owned by another user."""
-    async with async_session() as db:
+    async with _task_session() as db:
         session_id = payload.get("session_id")
         if session_id:
             session = await db.scalar(select(Session).where(Session.id == str(session_id)))
@@ -153,9 +164,11 @@ def _task_owner(record: AutoLoopTask) -> str | None:
     return str(owner_id) if owner_id else None
 
 
-async def _owned_task(db: Any, task_id: str, owner_id: str) -> AutoLoopTask | None:
+async def _owned_task(
+    db: Any, task_id: str, owner_id: str, include_all: bool = False
+) -> AutoLoopTask | None:
     record = await db.scalar(select(AutoLoopTask).where(AutoLoopTask.id == task_id))
-    if record is None or _task_owner(record) != owner_id:
+    if record is None or (not include_all and _task_owner(record) != owner_id):
         return None
     return record
 
@@ -210,7 +223,7 @@ async def _authenticate_task_websocket(websocket: WebSocket, task_id: str | None
         await websocket.close(code=1008)
         return None
 
-    async with async_session() as db:
+    async with _task_session() as db:
         task = await db.scalar(select(AutoLoopTask).where(AutoLoopTask.id == task_id))
         if task is None:
             await websocket.close(code=1008)

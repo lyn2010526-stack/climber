@@ -15,7 +15,9 @@ import time
 from collections.abc import (
     AsyncIterator,  # noqa: TC003  # no `from __future__ import annotations`; evaluated at runtime
 )
+from dataclasses import replace
 from typing import Any
+from uuid import uuid4
 
 import structlog
 
@@ -26,10 +28,17 @@ from app.core import (
     ContextConfig,
     MessageRole,
 )
-from app.core.checkpoint import InMemoryCheckpointStore, SQLiteCheckpointStore
+from app.core.checkpoint import (
+    CheckpointData,
+    InMemoryCheckpointStore,
+    SQLiteCheckpointStore,
+    sanitize_checkpoint,
+)
 from app.core.compressor import ContextCompressor, estimate_tokens
 from app.core.di import resolve as di_resolve
 from app.core.engine.persistence import persist_message
+from app.core.engine.run_storage import RunStorage, track_run
+from app.core.engine.session_runner import merge_stream_chunk, response_usage
 from app.core.engine.tools import DEFAULT_MAX_TOOLS_IN_PROMPT, build_tools
 from app.core.engine.validation import (
     _COMMAND_TOOLS,
@@ -66,6 +75,17 @@ GRAPH_CONTEXT_MARKER = DYNAMIC_SYSTEM_MARKERS[1]
 
 
 DEFAULT_MAX_SESSIONS = 128
+
+
+class _CheckpointUnavailable(RuntimeError):
+    """A durable checkpoint could not be written, so the run cannot be trusted.
+
+    Raised with the store's own exception as its cause, so the original class
+    (``RuntimeError``, ``OSError``, a driver error) stays observable. It exists
+    only to separate "the checkpoint store is broken" from "the agent failed":
+    the first must abort the run loudly, the second is an ordinary outcome the
+    caller reports as a failed turn.
+    """
 
 
 def _parse_max_sessions(raw: Any) -> int:
@@ -248,6 +268,7 @@ class AgentEngine:
         model_registry: Any = None,
         tool_registry: Any = None,
         checkpoint_store: InMemoryCheckpointStore | SQLiteCheckpointStore | None = None,
+        run_store: RunStorage | None = None,
     ) -> None:
         self.model_registry = model_registry or _resolve_registry("ModelRegistry", ModelRegistry)
         self.tool_registry = tool_registry or _resolve_registry("ToolRegistry", ToolRegistry)
@@ -256,6 +277,7 @@ class AgentEngine:
         # already wired to the application database, so it is the safe default;
         # tests that want isolation still pass InMemoryCheckpointStore().
         self._checkpoints: Any = checkpoint_store or SQLiteCheckpointStore()
+        self._run_store = run_store if run_store is not None else RunStorage()
         self._sessions: dict[str, AgentSession] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
         # Insertion-ordered mirror of _sessions. The most recent session id
@@ -608,12 +630,35 @@ class AgentEngine:
         )
 
         span_status = "ok"
+        # Terminal events are buffered so the run store commits the turn and
+        # session rows before the consumer observes DONE or ERROR.
+        terminal: list[AgentEvent] = []
+        # Engines assembled by harnesses via __new__ never run __init__ and own
+        # no store, so their runs stay purely in-memory instead of failing on a
+        # missing attribute.
+        run_store = getattr(self, "_run_store", None)
+        tracker = track_run(session, run_store) if run_store is not None else contextlib.nullcontext()
         try:
-            async with lock:
-                async for event in self._run_locked(session, message):
-                    if span is not None:
-                        _record_span_event(collector, span, event)
-                    yield event
+            # aclosing() is what forwards a consumer's GeneratorExit into the
+            # run body. Without it an abandoned stream left the loop suspended
+            # mid-response, so the usage the model had already reported was
+            # never recorded and the turn was committed as bare.
+            async with (
+                lock,
+                tracker,
+                contextlib.aclosing(self._run_locked(session, message)) as events,
+            ):
+                async for event in events:
+                    if event.type in {AgentEventType.DONE, AgentEventType.ERROR}:
+                        terminal.append(event)
+                    else:
+                        if span is not None:
+                            _record_span_event(collector, span, event)
+                        yield event
+            for event in terminal:
+                if span is not None:
+                    _record_span_event(collector, span, event)
+                yield event
         except asyncio.CancelledError:
             from app.core.task_state_machine import TaskState
 
@@ -655,14 +700,25 @@ class AgentEngine:
         """Consume the streaming API and return the legacy aggregate result."""
         output_parts: list[str] = []
         tokens_used = 0
+        status = None
+        error = None
+        cost_status = "unknown"
         async for event in self.run(session, message):
             if event.type == AgentEventType.TEXT:
                 output_parts.append(event.data.get("content", ""))
             elif event.type == AgentEventType.DONE:
                 tokens_used = event.data.get("tokens_used", tokens_used)
+                status = event.data.get("status")
+                cost_status = event.data.get("cost_status", "unknown")
                 if not output_parts and event.data.get("content"):
                     output_parts.append(event.data["content"])
-        return {"output": "".join(output_parts), "tokens_used": tokens_used}
+            elif event.type == AgentEventType.ERROR:
+                error = event.data.get("error")
+        return {"output": "".join(output_parts),
+                "tokens_used": getattr(session, "_run_tokens", tokens_used),
+                "status": status or session.status.value, "error": error,
+                "cost_status": cost_status,
+                "usage_status": getattr(session, "_run_usage_status", "unknown")}
 
     async def _run_locked(self, session: AgentSession, message: str) -> AsyncIterator[AgentEvent]:
         """Internal run method - executes under session lock."""
@@ -671,20 +727,31 @@ class AgentEngine:
         if current in (TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED):
             await session.state_machine.transition(TaskState.PENDING, trigger="user_restart")
         await session.state_machine.transition(TaskState.PROCESSING, trigger="run_start")
-        session.messages.append({"role": MessageRole.USER, "content": message})
-        await persist_message(session.session_id, MessageRole.USER, content=message)
+        # A recovered session already carries the restored transcript, the turn
+        # it belongs to and its iteration count. Appending the caller's text
+        # again would fork the history the checkpoint preserved and burn an
+        # iteration the recovered run had already spent, so the resumed run
+        # continues that turn instead of starting a parallel one.
+        resuming = session._resume_interrupted
+        if not resuming:
+            session._stop_requested = False
+            session.messages.append({"role": MessageRole.USER, "content": message})
+            await persist_message(session.session_id, MessageRole.USER, content=message)
 
         self._set_agent_mode(session)
         self._set_memory_scope(session)
         self._send_start_notification(session)
-        await self._inject_memory_context(session, message)
-        await self._inject_core_memory(session)
+        if not resuming:
+            await self._inject_memory_context(session, message)
+            await self._inject_core_memory(session)
         await self._inject_lessons(session, message)
         await self._inject_graph_context(session)
 
         session._last_result = None
-        session._last_iteration = 0
+        if not resuming:
+            session._last_iteration = 0
         session._run_status_override = None
+        session._last_assistant_message_id = None
         executor = ParallelToolExecutor(
             self.tool_registry,
             validator=(lambda name, args: validate_tool_call(session, name, args, self.sandbox, self.permission_overlay, self.agent_mode, self.tool_registry)),
@@ -695,13 +762,29 @@ class AgentEngine:
         result: ChatResult | None = None
 
         try:
-            async for event in self._iteration_loop(session, executor, compressor):
-                yield event
+            # The same aclosing() contract as run(): an early GeneratorExit has
+            # to reach the iteration loop so a half-consumed stream still records
+            # what the model reported before the turn is committed.
+            async with contextlib.aclosing(self._iteration_loop(session, executor, compressor)) as events:
+                async for event in events:
+                    yield event
         except Exception as e:
+            # A run whose turn could not be made durable has produced no
+            # recoverable state, so it is reported as an error and re-raised:
+            # a checkpoint store that cannot be written is an operator problem,
+            # not an agent failure the caller should absorb as a failed turn.
+            session._last_error = str(e)
+            if isinstance(e, _CheckpointUnavailable):
+                self._send_failure_notification(session, str(e))
+                raise
             if session._stop_requested:
                 await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
-            else:
+            elif session.state_machine.can_transition_to(TaskState.FAILED):
                 await session.state_machine.transition(TaskState.FAILED, trigger="unhandled_error")
+            # A turn that had already reached a terminal state stays there: the
+            # turn row is committed from the state machine, so downgrading
+            # COMPLETED back to FAILED would be a second, contradictory record
+            # of the same run.
             yield AgentEvent(type=AgentEventType.ERROR, data={"error": str(e)})
             self._send_failure_notification(session, str(e))
             return
@@ -716,7 +799,9 @@ class AgentEngine:
             "status": session._run_status_override or session.status.value,
             "iterations": session._last_iteration,
             "content": result.content if result else "",
-            "tokens_used": getattr(result, "tokens_used", 0) if result else 0,
+            "tokens_used": getattr(session, "_run_tokens", 0),
+            "cost_status": getattr(session, "_run_cost_status", "unknown"),
+            "usage_status": getattr(session, "_run_usage_status", "unknown"),
             "metrics": session.metrics.to_dict(),
             "message_id": getattr(session, "_last_assistant_message_id", None),
         })
@@ -730,7 +815,13 @@ class AgentEngine:
         """Main iteration loop for agent execution."""
         from app.core.task_state_machine import TaskState
 
-        iteration = 0
+        # A recovered turn already spent the iterations the checkpoint
+        # recorded; restarting the count would hand it a fresh budget it never
+        # had. The flag is consumed here so downstream bookkeeping sees a
+        # normal run.
+        iteration = session._last_iteration if session._resume_interrupted else 0
+        session._resume_interrupted = False
+        run_store = getattr(self, "_run_store", None)
         adapter = self.model_registry.get_or_create(
             provider=session.provider,
             model_id=session.model_id,
@@ -760,27 +851,53 @@ class AgentEngine:
 
             if adapter.capabilities.streaming:
                 result = ChatResult()
-                async for chunk in adapter.stream_chat(messages=session.messages, tools=tools or None):
-                    if session._stop_requested:
-                        result = None
-                        break
-                    if chunk.content:
-                        result.content += chunk.content
-                        yield AgentEvent(type=AgentEventType.TEXT, data={"content": chunk.content})
-                    self._accumulate_stream_tool_calls(result.tool_calls, chunk.tool_calls)
-                    if getattr(chunk, "usage", None):
-                        result.tokens_used = chunk.usage
-                    elif getattr(chunk, "tokens_used", None):
-                        result.tokens_used = chunk.tokens_used
+                started = time.monotonic()
+                try:
+                    async for chunk in adapter.stream_chat(messages=session.messages, tools=tools or None):
+                        # One accumulator decides what a chunk means: an
+                        # authoritative cumulative snapshot is trusted and only
+                        # its unseen suffix is emitted, a plain delta is
+                        # appended. Re-implementing that here re-appended the
+                        # snapshot on every chunk, and chunk.usage (a dict) was
+                        # written straight into the integer token field.
+                        delta = merge_stream_chunk(result, chunk)
+                        if session._stop_requested:
+                            if run_store is not None:
+                                await run_store.record_response(session, result, iteration, complete=False)
+                            session.metrics.total_tokens_used += getattr(result, "tokens_used", 0) or 0
+                            result = None
+                            break
+                        if delta:
+                            yield AgentEvent(type=AgentEventType.TEXT, data={"content": delta})
+                        self._accumulate_stream_tool_calls(result.tool_calls, chunk.tool_calls)
+                except BaseException:
+                    if result is not None:
+                        if run_store is not None:
+                            await run_store.record_response(session, result, iteration, complete=False)
+                        session.metrics.total_tokens_used += getattr(result, "tokens_used", 0) or 0
+                    raise
+                finally:
+                    session.metrics.llm_call_durations.append(time.monotonic() - started)
                 if result is not None:
-                    result.finish_reason = "tool_calls" if result.tool_calls else "stop"
+                    result.finish_reason = result.finish_reason or ("tool_calls" if result.tool_calls else "stop")
             else:
                 result = await self._call_llm_with_resilience(session, adapter, session.messages, iteration)
             if result is None:
+                session._last_error = "LLM call failed or stopped"
+                await session.state_machine.transition(
+                    TaskState.CANCELLED if session._stop_requested else TaskState.FAILED,
+                    trigger="llm_stopped")
                 yield AgentEvent(type=AgentEventType.ERROR, data={"error": "LLM call failed or stopped"})
                 break
             session._last_result = result
+            # Normalize before bookkeeping so the store, the run totals and the
+            # persisted message all read the same model-reported counters.
+            result.tokens_used = response_usage(result)["total_tokens"] or 0
+            if run_store is not None:
+                await run_store.record_response(session, result, iteration, complete=result.finish_reason != "error")
             session.metrics.total_tokens_used += getattr(result, "tokens_used", 0) or 0
+            if result.finish_reason == "error":
+                raise RuntimeError("Model reported an error response")
 
             if result.content:
                 async for event in self._handle_text_result(session, result, adapter):
@@ -800,23 +917,26 @@ class AgentEngine:
 
             break
 
-        if result is not None and not session._stop_requested:
-            from app.core import CheckpointData
-            cp = CheckpointData(
-                session_id=session.session_id,
-                messages=session.messages,
-                iteration=iteration,
-                status=session.state_machine.state.value,
-                channel_values={"final_result": result.content if result.content else ""},
-                channel_versions={"messages": iteration},
-                versions_seen={"node": {"messages": iteration}},
-            )
-            await self._save_checkpoint(session, cp, f"{session.session_id}-final-{iteration}")
-            yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration, "final": True})
-
-        if iteration >= session.max_iterations and result and result.tool_calls:
+        if session.status.value == "failed":
+            return
+        # A stop requested between the final model response and this point
+        # would otherwise be reported as a completed turn whose checkpoint
+        # claims "processing" -- a lie recovery then believes.
+        if session._stop_requested and result is not None:
+            if run_store is not None:
+                await run_store.record_response(session, result, iteration, complete=False)
+            session.metrics.total_tokens_used += getattr(result, "tokens_used", 0) or 0
+        # Running out of iterations is only a success when the last round
+        # actually answered. A budget that expired on an empty reply, on tool
+        # calls still in flight, or before any model call landed produced
+        # nothing, and reporting "completed" turned a broken turn into a
+        # silent success.
+        exhausted = result is None or result.tool_calls or not result.content
+        if not session._stop_requested and iteration >= session.max_iterations and exhausted:
             await session.state_machine.transition(TaskState.FAILED, trigger="max_iterations")
             session._run_status_override = "max_iterations_reached"
+            session._last_error = "Maximum iterations reached"
+            await self._write_final_checkpoint(session, result, iteration)
             return
 
         if session._stop_requested:
@@ -824,6 +944,31 @@ class AgentEngine:
         else:
             await session.state_machine.transition(TaskState.COMPLETED, trigger="run_complete")
             self._send_completion_notification(session, result)
+        # Written after the terminal transition, so the snapshot states the
+        # outcome: a checkpoint still reading "processing" makes recovery treat
+        # a finished turn as an interrupted one, and turn.checkpoint_id would
+        # point at a snapshot that no longer described reality.
+        await self._write_final_checkpoint(session, result, iteration)
+        yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration, "final": True})
+
+    async def _write_final_checkpoint(self, session: AgentSession, result: Any, iteration: int) -> None:
+        """Persist the turn's terminal checkpoint, failing the run if it cannot be written.
+
+        Raises:
+            _CheckpointUnavailable: Wrapping whatever the store raised. A
+                checkpoint is a promise about what recovery will find; when the
+                store is down that promise is broken, and the turn must not be
+                reported as successful. The wrapper keeps the cause's class
+                (RuntimeError, OSError, ...) intact for callers that inspect it.
+        """
+        try:
+            await self._save_checkpoint(
+                session,
+                {"final_result": result.content if result is not None and result.content else ""},
+            )
+        except Exception as exc:
+            session._last_error = str(exc)
+            raise _CheckpointUnavailable(str(exc)) from exc
 
     async def _call_llm(self, adapter: Any, session: AgentSession, tools: list) -> ChatResult | None:
         """Call the LLM adapter and return the result.
@@ -911,50 +1056,90 @@ class AgentEngine:
     async def _stream_accumulate(self, adapter: Any, messages: list[dict[str, Any]], tools: list) -> ChatResult:
         """Accumulate a streaming response into a single ChatResult.
 
-        When the adapter reports authoritative cumulative content
-        (accumulated_content), it is trusted as-is; otherwise per-chunk
-        deltas are appended. No prefix-based dedup heuristic is needed.
+        Delegates to the same snapshot rules the streaming path uses, so a
+        resilience-wrapped call and a direct one can never disagree about the
+        content or the token counters they report.
         """
         result = ChatResult()
         async for chunk in adapter.stream_chat(messages=messages, tools=tools or None):
-            full = getattr(chunk, "accumulated_content", "") or ""
-            if full:
-                result.content = full
-            elif chunk.content:
-                result.content += chunk.content
+            merge_stream_chunk(result, chunk)
             if getattr(chunk, "tool_calls", None):
-                result.tool_calls.extend(chunk.tool_calls)
-            if getattr(chunk, "finish_reason", None):
-                result.finish_reason = chunk.finish_reason
-            if getattr(chunk, "tokens_used", None):
-                result.tokens_used = chunk.tokens_used
+                self._accumulate_stream_tool_calls(result.tool_calls, chunk.tool_calls)
         if result.finish_reason is None:
             result.finish_reason = "tool_calls" if result.tool_calls else "stop"
         return result
 
-    async def _save_checkpoint(self, session: AgentSession, checkpoint: Any, checkpoint_id: str) -> str:
+    async def _save_checkpoint(
+        self,
+        session: AgentSession,
+        checkpoint: CheckpointData | dict[str, Any],
+        checkpoint_id: str = "",
+        *,
+        pending_writes: list[dict[str, Any]] | None = None,
+    ) -> str:
         """Persist a checkpoint under the session's current turn thread.
+
+        ``checkpoint`` is either a fully built ``CheckpointData`` (for callers
+        that own the tool-result payload themselves) or a mapping of channel
+        values, in which case the session-owned state (messages, iteration,
+        status, turn thread, last error) is stamped here so every checkpoint
+        describes the same session uniformly.
+
+        Every payload is redacted before it reaches the store. The stores
+        sanitize credential-shaped *fields* but know nothing about the session's
+        API key, so a model echoing that key back inside a message would persist
+        it verbatim; passing the key as a secret is what stops that.
 
         Uses the thread namespace so checkpoints from distinct turns stay
         isolated, and links each new checkpoint to the previous one in the same
         session to build a rollback-capable parent chain. Falls back to a plain
         save when the store does not support thread/parent arguments.
         """
+        if isinstance(checkpoint, CheckpointData):
+            cp = checkpoint
+        else:
+            last_iteration = getattr(session, "_last_iteration", 0)
+            cp = CheckpointData(
+                session_id=session.session_id,
+                messages=session.messages,
+                iteration=last_iteration,
+                status=self._checkpoint_status(session),
+                channel_values=dict(checkpoint or {}),
+                channel_versions={"messages": last_iteration},
+                versions_seen={"node": {"messages": last_iteration}},
+            )
+        cp = replace(
+            cp,
+            metadata={
+                **cp.metadata,
+                "thread_id": getattr(session, "current_turn_id", "") or "",
+                "error": getattr(session, "_last_error", None),
+            },
+            pending_writes=list(pending_writes or cp.pending_writes or []),
+        )
+        cp = sanitize_checkpoint(cp, secrets=(getattr(session, "api_key", "") or "",))
         thread_id = getattr(session, "current_turn_id", "") or ""
         previous = getattr(session, "_last_checkpoint_id", None)
+        cid_or_uuid = checkpoint_id or str(uuid4())
         try:
             cid = await self._checkpoints.save(
                 None,
-                checkpoint,
+                cp,
                 thread_id=thread_id,
-                checkpoint_id=checkpoint_id,
+                checkpoint_id=cid_or_uuid,
                 parent_id=previous,
             )
         except TypeError:
-            cid = await self._checkpoints.save(None, checkpoint, checkpoint_id=checkpoint_id)
+            cid = await self._checkpoints.save(None, cp, checkpoint_id=cid_or_uuid)
         with contextlib.suppress(AttributeError):
             session._last_checkpoint_id = cid
         return cid
+
+    @staticmethod
+    def _checkpoint_status(session: AgentSession) -> str:
+        """Return the session's current state as a checkpoint status string."""
+        state = getattr(getattr(session, "state_machine", None), "state", None)
+        return str(getattr(state, "value", None) or "processing")
 
     def _validate_tool_call(self, session: AgentSession, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
         """Validate a tool call using the engine's configured sandbox/mode.
@@ -993,13 +1178,17 @@ class AgentEngine:
 
         Returns:
             True if a checkpoint was found and loaded, False otherwise.
+
+        Raises:
+            ValueError: If the checkpoint still carries pending writes, because
+                a tool side effect the checkpoint cannot vouch for would be
+                replayed. That refusal is a safety decision, so it is raised
+                rather than folded into a False that reads as "nothing to
+                restore" and invites a blind retry.
         """
         from app.core.recovery import RecoveryManager
 
-        try:
-            return await RecoveryManager(self._checkpoints).restore_session(session)
-        except Exception:
-            return False
+        return await RecoveryManager(self._checkpoints).restore_session(session)
 
     async def __aenter__(self) -> AgentEngine:
         """Enter the engine context manager."""
@@ -1011,9 +1200,27 @@ class AgentEngine:
 
     @staticmethod
     def _accumulate_stream_tool_calls(accumulated: list[dict[str, Any]], chunks: list[dict[str, Any]]) -> None:
-        """Merge streamed tool call deltas into complete tool calls."""
-        for tool_call in chunks:
-            index = tool_call.get("index", 0)
+        """Merge streamed tool call deltas into complete tool calls.
+
+        A provider either numbers its calls (multi-call streams send argument
+        fragments under ``index``) or identifies them (``id`` on the opening
+        fragment). Resolving on the index alone collapsed every id-less fragment
+        into slot 0, so two distinct calls arrived merged into one with their
+        arguments concatenated. Identity therefore wins over position, and
+        position is only a fallback for fragments that carry neither.
+        """
+        for position, tool_call in enumerate(chunks):
+            call_id = tool_call.get("id")
+            existing = next((i for i, call in enumerate(accumulated)
+                             if call_id and call.get("id") == call_id), None)
+            if "index" in tool_call:
+                index = tool_call["index"]
+            elif existing is not None:
+                index = existing
+            elif call_id and position < len(accumulated) and accumulated[position].get("id"):
+                index = len(accumulated)
+            else:
+                index = position
             while len(accumulated) <= index:
                 accumulated.append({
                     "id": "",
@@ -1032,7 +1239,10 @@ class AgentEngine:
                     arguments = json.dumps(arguments, ensure_ascii=False)
                 elif not isinstance(arguments, str):
                     arguments = str(arguments)
-                target["function"]["arguments"] += arguments
+                if isinstance(function["arguments"], dict):
+                    target["function"]["arguments"] = arguments
+                else:
+                    target["function"]["arguments"] += arguments
 
     async def _stream_chat(self, adapter: Any, session: AgentSession, tools: list) -> ChatResult | None:
         """Handle streaming chat response.
@@ -1047,34 +1257,14 @@ class AgentEngine:
         """
         from app.core import ChatResult
 
-        full_content = ""
-        accumulated_tool_calls = []
-        total_tokens = 0
+        result = ChatResult()
         async for chunk in adapter.stream_chat(messages=session.messages, tools=tools or None):
             if session._stop_requested:
                 return None
-            if chunk.content:
-                full_content += chunk.content
-            for tc in chunk.tool_calls:
-                idx = tc.get("index", 0) if "index" in tc else 0
-                while len(accumulated_tool_calls) <= idx:
-                    accumulated_tool_calls.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
-                if tc.get("id"):
-                    accumulated_tool_calls[idx]["id"] = tc["id"]
-                if tc.get("function", {}).get("name"):
-                    accumulated_tool_calls[idx]["function"]["name"] = tc["function"]["name"]
-                if tc.get("function", {}).get("arguments"):
-                    new_args = tc["function"]["arguments"]
-                    if isinstance(new_args, dict):
-                        new_args = json.dumps(new_args, ensure_ascii=False)
-                    elif not isinstance(new_args, str):
-                        new_args = str(new_args)
-                    accumulated_tool_calls[idx]["function"]["arguments"] += new_args
-            if hasattr(chunk, "usage") and chunk.usage:
-                total_tokens = chunk.usage
-            elif hasattr(chunk, "tokens_used") and chunk.tokens_used:
-                total_tokens = chunk.tokens_used
-        return ChatResult(content=full_content, tool_calls=accumulated_tool_calls, finish_reason="tool_calls" if accumulated_tool_calls else "stop", tokens_used=total_tokens)
+            merge_stream_chunk(result, chunk)
+            self._accumulate_stream_tool_calls(result.tool_calls, chunk.tool_calls)
+        result.finish_reason = result.finish_reason or ("tool_calls" if result.tool_calls else "stop")
+        return result
 
     async def _handle_text_result(self, session: AgentSession, result: Any, adapter: Any) -> AsyncIterator[AgentEvent]:
         """Handle text content from LLM response.
@@ -1127,7 +1317,7 @@ class AgentEngine:
         Returns:
             bool indicating whether to continue the loop.
         """
-        from app.core import CheckpointData
+        from app.middleware.metrics import TOOL_CALL_LATENCY, TOOL_CALL_TOTAL
 
         session.messages.append({"role": MessageRole.ASSISTANT, "content": "", "tool_calls": result.tool_calls})
         await persist_message(session.session_id, MessageRole.ASSISTANT, content="", tool_calls=result.tool_calls)
@@ -1163,6 +1353,10 @@ class AgentEngine:
         tool_results = await executor.execute_all(result.tool_calls)
         session.metrics.total_tool_calls += len(result.tool_calls)
         for tr in tool_results:
+            # Tool volume and latency were the two numbers the tool dashboards
+            # read, and nothing in the engine ever produced them.
+            TOOL_CALL_TOTAL.labels(tool_name=tr.tool_name, status="success" if tr.success else "error").inc()
+            TOOL_CALL_LATENCY.labels(tool_name=tr.tool_name).observe((tr.duration_ms or 0.0) / 1000.0)
             session.metrics.tool_call_durations.append(getattr(tr, "duration_ms", 0.0) or 0.0)
             self.tool_prioritizer.record_outcome(tr.tool_name, tr.success, tr.duration_ms)
             yield AgentEvent(
@@ -1208,6 +1402,15 @@ class AgentEngine:
             channel_values={"last_tool_calls": result.tool_calls, "last_tool_results": [tr.result for tr in tool_results], "context_tokens": ctx_tokens},
             channel_versions={"messages": iteration, "tools": len(result.tool_calls)},
             versions_seen={"node": {"messages": iteration, "tools": len(result.tool_calls)}},
+            # A tool call leaves side effects the transcript cannot vouch for:
+            # the checkpoint is the only record that any existed at all. Leaving
+            # it blank made an interrupted tool round look replay-safe, so
+            # recovery happily re-ran writes the run had already performed.
+            pending_writes=[
+                {"channel": "tools", "value": tc, "write_id": tc.get("id", str(index)),
+                 "status": "committed"}
+                for index, tc in enumerate(result.tool_calls)
+            ],
         )
         await self._save_checkpoint(session, cp, f"{session.session_id}-{iteration}")
         yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration, "tool_calls": len(result.tool_calls)})

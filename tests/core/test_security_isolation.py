@@ -91,10 +91,13 @@ def test_fs_sanitize_rejects_traversal(fs_manager: FSIsolationManager) -> None:
         fs_manager.sanitize_path("../../etc/passwd")
 
 
-def test_fs_sanitize_resolves_normal(fs_manager: FSIsolationManager, tmp_path) -> None:
+def test_fs_sanitize_resolves_normal(fs_manager: FSIsolationManager, tmp_path, monkeypatch) -> None:
     target = tmp_path / "a" / "b"
     target.mkdir(parents=True)
-    os.chdir(tmp_path)
+    # monkeypatch.chdir restores the working directory afterwards. A bare
+    # os.chdir leaves the process inside tmp_path, and every later test that
+    # shells out with ``python -m ...`` then fails to resolve its own package.
+    monkeypatch.chdir(tmp_path)
     resolved = fs_manager.sanitize_path("a/b")
     assert resolved == str(target)
 

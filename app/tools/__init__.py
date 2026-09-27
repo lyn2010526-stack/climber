@@ -35,6 +35,29 @@ def redact_error_text(error: BaseException) -> str:
     return text or type(error).__name__
 
 
+TOOL_ERROR_PREFIX = "Error executing "
+
+
+def tool_error_text(name: str, detail: str) -> str:
+    """Render a failed tool call as the text answer the model expects."""
+    return f"{TOOL_ERROR_PREFIX}{name}: {detail}"
+
+
+def is_tool_error(text: Any, name: str | None = None) -> bool:
+    """Return True when ``text`` is a registry error answer, not a result.
+
+    ``ToolRegistry.execute`` answers a raised tool error, a blocked egress and
+    an SSRF refusal with text instead of raising, because every caller of a
+    tool is a model that expects a string back. A caller that reports success
+    on top of that answer (the experiment harness and its ledger) has to
+    recognise the prefix, otherwise a crashed tool is recorded as a successful
+    attempt. Pass ``name`` to require the error to name that specific tool.
+    """
+    if not isinstance(text, str) or not text.startswith(TOOL_ERROR_PREFIX):
+        return False
+    return name is None or text.startswith(f"{TOOL_ERROR_PREFIX}{name}:")
+
+
 class ToolDefinition(BaseModel):
     name: str
     description: str
@@ -260,9 +283,10 @@ class ToolRegistry:
 
         if name in self.NETWORK_TOOLS and not self.network_enabled():
             logger.warning("Network tool blocked by egress gate", tool=name)
-            return (
-                f"Error executing {name}: network access is disabled for this "
-                "deployment. Ask the user to enable it if network egress is required."
+            return tool_error_text(
+                name,
+                "network access is disabled for this deployment. "
+                "Ask the user to enable it if network egress is required.",
             )
 
         if name in self.NETWORK_TOOLS:
@@ -271,7 +295,7 @@ class ToolRegistry:
                 logger.warning(
                     "Network tool blocked by SSRF guard", tool=name, reason=refusal
                 )
-                return f"Error executing {name}: {refusal}"
+                return tool_error_text(name, refusal)
 
         try:
             if asyncio.iscoroutinefunction(func):
@@ -292,7 +316,7 @@ class ToolRegistry:
                 error_type=type(e).__name__,
                 error=safe_error,
             )
-            return f"Error executing {name}: {safe_error}"
+            return tool_error_text(name, safe_error)
 
     def get_openai_tools(self) -> list[dict[str, Any]]:
         """Return tools in OpenAI function calling format."""
@@ -364,6 +388,11 @@ def register_builtins() -> None:
     """Import and register all built-in tools."""
     import importlib
 
-    # Imported for its registration side effect (@tool decorators populate the
+    # Imported for their registration side effect (@tool decorators populate the
     # registry); importlib states that without binding a name this returns.
+    # native_tools carries the screen/browser controls, the media helpers and
+    # download_file. Without this import those tools never reach the registry,
+    # which leaves the safety tables below classifying names that no model can
+    # actually call, and leaves download_file -- a network write -- ungated.
     importlib.import_module("app.tools.builtins")
+    importlib.import_module("app.tools.native_tools")

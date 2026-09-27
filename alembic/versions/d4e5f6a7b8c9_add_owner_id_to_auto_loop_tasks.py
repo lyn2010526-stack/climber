@@ -1,29 +1,25 @@
-"""Add task ownership for API isolation.
+"""Retained as a chain terminator for the auto-loop task ownership column.
+
+The idempotent implementation of this change lives in f6a7b8c9d0e1, which
+inspects the live schema before touching it. Keeping d4e5f6a7b8c9 in the
+history avoids rewriting an already-released revision id, but its body is a
+no-op so a fresh database only ever applies the guarded version.
 
 Revision ID: d4e5f6a7b8c9
-Revises: c3d4e5f6a7b8
+Revises: f6a7b8c9d0e1
 """
 
 from collections.abc import Sequence
 
-import sqlalchemy as sa
-from alembic import op
-
 revision: str = "d4e5f6a7b8c9"
-down_revision: str | None = "c3d4e5f6a7b8"
+down_revision: str | None = "f6a7b8c9d0e1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "auto_loop_tasks",
-        sa.Column("owner_id", sa.String(length=36), nullable=False, server_default="default-user"),
-    )
-    op.create_index("ix_auto_loop_tasks_owner_id", "auto_loop_tasks", ["owner_id"])
-    op.alter_column("auto_loop_tasks", "owner_id", server_default=None)
+    """No-op: f6a7b8c9d0e1 already added owner_id and its index."""
 
 
 def downgrade() -> None:
-    op.drop_index("ix_auto_loop_tasks_owner_id", table_name="auto_loop_tasks")
-    op.drop_column("auto_loop_tasks", "owner_id")
+    """No-op: the column and index are owned by f6a7b8c9d0e1."""

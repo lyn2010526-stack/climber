@@ -107,8 +107,13 @@ def test_file_table_names_only_registered_tools() -> None:
     ``list_directory`` slipped through precisely because nothing checked the
     table against the registry.
     """
-    from app.tools import get_tool_registry
+    from app.tools import get_tool_registry, register_builtins
 
+    # main.lifespan populates the singleton through _register_core_services and
+    # the ASGI test client never runs the lifespan, so the builtins are
+    # registered here. Relying on another test to have done it makes this guard
+    # pass or fail according to collection order.
+    register_builtins()
     registered = {t.name for t in get_tool_registry().list_tools()}
     assert registered, "tool registry is empty; the test setup is wrong"
     unknown = sorted(set(_FILE_TOOLS) - registered)

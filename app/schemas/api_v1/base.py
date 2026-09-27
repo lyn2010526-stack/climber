@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class StrictRequest(BaseModel):
@@ -44,4 +44,6 @@ class SettingsResponse(PublicResponse):
     token_throttle_mcp_enabled: bool
     mcp_status: str
     mcp_ready: bool
+    notifications: dict[str, Any] = Field(default_factory=dict)
+    notification_delivery_available: bool = False
     mode: str | None = None

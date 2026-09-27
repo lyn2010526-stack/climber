@@ -83,8 +83,13 @@ def test_registry_has_no_functional_duplicates(registry) -> None:
 
 
 def test_tool_count_reduced_by_the_consolidation(registry) -> None:
-    """49 -> 45. Guards against a silent re-add of the removed clones."""
-    assert len(registry.list_tools()) == 45
+    """49 -> 46. Guards against a silent re-add of the removed clones.
+
+    The baseline moved from 45 to 46 when ``simulate_experiment`` was added for
+    the simulation-experiment workflow; it dispatches to an external simulator
+    and has no surviving clone, so the consolidation goal is unchanged.
+    """
+    assert len(registry.list_tools()) == 46
 
 
 def test_redundant_native_duplicates_are_gone(registry) -> None:

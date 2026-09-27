@@ -433,7 +433,7 @@ class GroupCollaborationEngine:
         Returns:
             A dictionary with handoff details.
         """
-        from app.core.task_dag import HandoffMessage
+        from app.core.collaboration.handoff import HandoffMessage
 
         async with async_session() as db:
             task = await db.get(AgentGroupTask, task_id)

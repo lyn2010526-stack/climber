@@ -8,6 +8,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from app.tools import is_tool_error
+
 if TYPE_CHECKING:
     from app.tools import ToolRegistry
 
@@ -149,9 +151,24 @@ class ParallelToolExecutor:
                 timeout=self._timeout,
             )
             duration = (asyncio.get_event_loop().time() - start) * 1000
+            result = truncate_tool_result(result, self.max_result_chars)
+            if is_tool_error(result):
+                # ToolRegistry answers a raised tool error, a blocked egress and
+                # an SSRF refusal with text instead of raising, so the caller
+                # cannot see the failure. Surface it here, or every consumer
+                # would report a dead tool as a successful call.
+                return ToolExecutionResult(
+                    tool_name=name,
+                    result=result,
+                    error=result,
+                    success=False,
+                    duration_ms=duration,
+                    arguments=arguments,
+                    tool_call_id=tool_call_id,
+                )
             return ToolExecutionResult(
                 tool_name=name,
-                result=truncate_tool_result(result, self.max_result_chars),
+                result=result,
                 duration_ms=duration,
                 arguments=arguments,
                 tool_call_id=tool_call_id,

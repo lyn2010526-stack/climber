@@ -141,6 +141,35 @@ class WorkflowEngine:
         self.model_registry = model_registry
         self.tool_registry = tool_registry
 
+    def _resolve_registry(self) -> ToolRegistry:
+        """Return the tool registry used for dispatch.
+
+        Prefers an explicitly injected registry, then the application DI
+        global (which main.py fills via register_builtins), then the
+        module-level global registry, and finally a fresh empty registry.
+        This keeps real tools (e.g. simulate_experiment) available to
+        Flow and API workflow runs that do not pass a registry directly.
+        """
+        if self.tool_registry is not None:
+            return self.tool_registry
+        try:
+            from app.core.di import resolve as di_resolve
+
+            return di_resolve("ToolRegistry")
+        except KeyError:
+            pass
+        try:
+            from app.tools import tool_registry as module_global
+
+            return module_global
+        except (ImportError, AttributeError):
+            # A partially initialised tools package is not actionable here;
+            # fall through to an empty registry.
+            pass
+        from app.tools import ToolRegistry as _ToolRegistry
+
+        return _ToolRegistry()
+
     async def execute(
         self,
         workflow: Workflow,
@@ -263,6 +292,8 @@ class WorkflowEngine:
                 )
             elif node.type == NodeType.CODE:
                 output = self._execute_code_node(node, resolved_inputs)
+            elif node.type == NodeType.SIMULATION:
+                output = await self._execute_simulation_node(node, resolved_inputs)
             elif node.type == NodeType.END:
                 output = resolved_inputs
             else:
@@ -377,18 +408,29 @@ class WorkflowEngine:
                 resolved_tool_inputs[k] = v
 
         from app.core.parallel import ParallelToolExecutor
-        if self.tool_registry is None:
-            # Falling back to a fresh ToolRegistry() builds an EMPTY registry:
-            # every tool node would then fail with "tool not found" and the
-            # workflow would look like a model failure rather than a wiring
-            # bug. Fail loudly at the point of the mistake instead.
+        registry = self._resolve_registry()
+        if not registry.get_tool(tool_name):
+            # A registry that resolves but does not contain the requested tool
+            # means the workflow was wired against a tool that is not
+            # registered. Fail loudly at the point of the mistake instead of
+            # surfacing a model failure downstream.
             raise RuntimeError(
-                "WorkflowEngine was constructed without a tool_registry; "
-                "tool nodes cannot resolve any tool. Pass the application "
-                "registry to the constructor."
+                f"WorkflowEngine cannot resolve tool '{tool_name}'. "
+                "Construct the engine with a tool_registry, or register the "
+                "builtins on the application registry."
             )
-        registry = self.tool_registry
-        executor = ParallelToolExecutor(registry)
+        sandbox = getattr(self.agent_engine, "sandbox", None)
+        permission_overlay = getattr(self.agent_engine, "permission_overlay", None)
+        capabilities = node.config.get("tool_capabilities")
+
+        from app.core.engine.tool_capabilities import build_workflow_tool_validator
+        validator = build_workflow_tool_validator(
+            registry,
+            sandbox=sandbox,
+            permission_overlay=permission_overlay,
+            capabilities=capabilities,
+        )
+        executor = ParallelToolExecutor(registry, validator=validator)
         tool_result = await executor.execute_all([{
             "id": f"wf-{node.id}",
             "function": {
@@ -397,6 +439,15 @@ class WorkflowEngine:
             },
         }])
         tool_result = tool_result[0]
+        if not tool_result.success:
+            # A denied, sandboxed or crashing tool call must not leave the node
+            # looking successful: the workflow would report "completed" and an
+            # empty result while the action never ran. Surfacing the reason
+            # fails the node so the operator sees what the policy refused.
+            raise RuntimeError(
+                f"tool '{tool_name}' was not executed: "
+                f"{tool_result.error or 'the tool call returned no result'}"
+            )
 
         return {
             "result": tool_result.result,
@@ -602,6 +653,142 @@ class WorkflowEngine:
 
         return {
             "result": result,
+            "node_id": node.id,
+            "node_name": node.name,
+        }
+
+    async def _execute_simulation_node(
+        self,
+        node: WorkflowNode,
+        inputs: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute a simulation-experiment node via the SimulationHarness.
+
+        Config:
+        - tool_name: the (MCP or native) simulation tool to dispatch
+        - schema: optional plan schema (sweep/base/objective). When an
+          ``llm_mode`` is enabled and the tool schema is available, the
+          goal is planned by an LLM sub-agent instead.
+        - goal: the natural-language engineering requirement
+        - max_rounds: per-experiment retry budget
+        - policy: optional ParameterPolicy dict for pre-dispatch allowlist
+        - ledger_dir: optional directory for the reproducible JSONL ledger
+        - orchestrator_mode: when true, run the full 总指挥 close-loop
+          (ScienceSimulationAgent) — select tool, plan, run, aggregate
+          review, refine and repeat up to ``plan_rounds``.
+        - plan_rounds: max aggregate loop iterations (default 3).
+        """
+        from app.simulation.harness import HarnessOptions, SimulationHarness
+        from app.simulation.review import HarnessReviewer, ParameterPolicy
+
+        tool_name = node.config.get("tool_name", "")
+        schema = node.config.get("schema", {})
+        if isinstance(schema, str):
+            schema = json.loads(schema) if schema.strip() else {}
+        max_rounds = int(node.config.get("max_rounds", 8))
+        ledger_dir = node.config.get("ledger_dir") or None
+        goal = str(inputs.get("goal", node.config.get("goal", "")))
+        plan_rounds = int(node.config.get("plan_rounds", 3))
+        orchestrator_mode = bool(node.config.get("orchestrator_mode", False))
+
+        registry = self._resolve_registry()
+        sandbox = getattr(self.agent_engine, "sandbox", None)
+        permission_overlay = getattr(self.agent_engine, "permission_overlay", None)
+        capabilities = node.config.get("tool_capabilities")
+
+        from app.core.engine.tool_capabilities import build_workflow_tool_validator
+        validator = build_workflow_tool_validator(
+            registry,
+            sandbox=sandbox,
+            permission_overlay=permission_overlay,
+            capabilities=capabilities,
+        )
+
+        policy = None
+        policy_cfg = node.config.get("policy")
+        if policy_cfg:
+            policy = ParameterPolicy(
+                allowed=policy_cfg.get("allowed"),
+                ranges=policy_cfg.get("ranges", {}),
+                disallowed_values=policy_cfg.get("disallowed_values", {}),
+                require=policy_cfg.get("require", []),
+            )
+
+        ledger = None
+        if ledger_dir:
+            from app.simulation.ledger import ExperimentLedger
+            ledger = ExperimentLedger(ledger_dir)
+
+        if node.config.get("llm_mode") or orchestrator_mode:
+            provider = node.config.get("provider", "openai")
+            model_id = node.config.get("model_id", "gpt-4")
+            import os as _os
+            api_key_env = node.config.get("api_key_env", "")
+            api_key = _os.environ.get(api_key_env, "") if api_key_env else node.config.get("api_key", "")
+
+            async def _llm_call(prompt: str, system_prompt: str):
+                from app.core.engine.session_runner import run_llm_single
+                return await run_llm_single(
+                    self.agent_engine, provider, model_id, api_key,
+                    system_prompt, prompt,
+                )
+
+        if orchestrator_mode:
+            from app.simulation.orchestrator import (
+                OrchestratorOptions,
+                ScienceSimulationAgent,
+            )
+
+            agent = ScienceSimulationAgent(
+                registry,
+                options=OrchestratorOptions(
+                    max_plan_rounds=plan_rounds,
+                    harness_options=HarnessOptions(
+                        max_rounds=max_rounds, policy=policy,
+                    ),
+                    default_tool=tool_name,
+                ),
+                llm_call=_llm_call,
+                ledger=ledger,
+                validate_tool_call=validator,
+            )
+            result = await agent.run(goal)
+            return {
+                "accepted": result.accepted,
+                "rejected": result.rejected,
+                "satisfied": result.satisfied,
+                "rounds": len(result.rounds),
+                "final_report": result.final_report,
+                "ledger_path": result.ledger_path,
+                "node_id": node.id,
+                "node_name": node.name,
+            }
+
+        harness = SimulationHarness(
+            registry,
+            reviewer=HarnessReviewer(),
+            options=HarnessOptions(max_rounds=max_rounds, policy=policy),
+            ledger=ledger,
+            validate_tool_call=validator,
+        )
+
+        llm_planner = None
+        if node.config.get("llm_mode"):
+            tool_def = registry.get_tool(tool_name) if registry else None
+            from app.simulation.llm_planner import LLMExperimentPlanner
+            llm_planner = LLMExperimentPlanner(
+                llm_call=_llm_call,
+                tool_name=tool_name,
+                tool_def=tool_def,
+            )
+
+        result = await harness.run_requirement(goal, tool_name, schema, llm_planner=llm_planner)
+
+        return {
+            "accepted": result.accepted,
+            "rejected": result.rejected,
+            "reports": [r.model_dump() for r in result.reports],
+            "ledger_path": result.ledger_path,
             "node_id": node.id,
             "node_name": node.name,
         }

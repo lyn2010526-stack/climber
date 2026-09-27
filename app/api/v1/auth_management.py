@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.config import settings
@@ -40,9 +40,9 @@ class LoginResponse(BaseModel):
 
 class CreateApiKeyRequest(BaseModel):
     name: str = ""
-    owner: str
+    owner: str = ""
     scopes: list[str] | None = None
-    ttl_days: int | None = Field(default=None, gt=0)
+    ttl_days: int | None = None
 
 
 class CreateApiKeyResponse(BaseModel):
@@ -215,7 +215,7 @@ async def change_password(
 @router.post("/keys", response_model=CreateApiKeyResponse)
 async def create_api_key(
     payload: CreateApiKeyRequest,
-    current_user: dict = Depends(require_scopes("admin", "write")),
+    current_user: dict = Depends(require_scopes("write")),
 ) -> CreateApiKeyResponse:
     """Create a new API key for programmatic access."""
     if not settings.enable_auth:
@@ -226,17 +226,26 @@ async def create_api_key(
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
 
     expires_at = None
+    if payload.ttl_days is not None and not 1 <= payload.ttl_days <= 365:
+        raise HTTPException(status_code=422, detail="ttl_days must be between 1 and 365")
     if payload.ttl_days:
         expires_at = datetime.now(UTC) + timedelta(days=payload.ttl_days)
 
-    scopes = payload.scopes or ["read", "write"]
+    requested_scopes = set(payload.scopes or ["read", "write"])
+    allowed_scopes = {"read", "write"}
+    if current_user.get("role") == "admin" or "admin" in current_user.get("scopes", []):
+        allowed_scopes.add("admin")
+    if not requested_scopes.issubset(allowed_scopes):
+        raise HTTPException(status_code=403, detail="Requested API key scope is not permitted")
+    scopes = sorted(requested_scopes)
+    owner = str(current_user.get("id") or current_user.get("user_id"))
 
     async with async_session() as session:
         api_key_record = ApiKey(
             id=key_id,
             key_hash=key_hash,
             name=payload.name,
-            owner=payload.owner,
+            owner=owner,
             scopes=json.dumps(scopes),
             is_active=True,
             expires_at=expires_at,
@@ -249,7 +258,7 @@ async def create_api_key(
         id=key_id,
         raw_key=raw_key,
         name=payload.name,
-        owner=payload.owner,
+        owner=owner,
         scopes=scopes,
         expires_at=expires_at.isoformat() if expires_at else None,
     )
@@ -257,16 +266,17 @@ async def create_api_key(
 
 @router.get("/keys", response_model=ListKeysResponse)
 async def list_api_keys(
-    _current_user: dict = Depends(require_scopes("read")),
+    current_user: dict = Depends(require_scopes("read")),
 ) -> ListKeysResponse:
     """List all API keys."""
     if not settings.enable_auth:
         raise HTTPException(status_code=400, detail="Authentication is disabled")
 
     async with async_session() as session:
-        result = await session.execute(
-            select(ApiKey).order_by(ApiKey.created_at.desc())
-        )
+        query = select(ApiKey).order_by(ApiKey.created_at.desc())
+        if current_user.get("role") != "admin" and "admin" not in current_user.get("scopes", []):
+            query = query.where(ApiKey.owner == str(current_user.get("id") or current_user.get("user_id")))
+        result = await session.execute(query)
         keys = result.scalars().all()
 
         result_keys = []
@@ -291,7 +301,7 @@ async def list_api_keys(
 @router.delete("/keys/{key_id}")
 async def revoke_api_key(
     key_id: str,
-    _current_user: dict = Depends(require_scopes("admin")),
+    current_user: dict = Depends(require_scopes("write")),
 ) -> dict:
     """Revoke (deactivate) an API key."""
     if not settings.enable_auth:
@@ -304,6 +314,11 @@ async def revoke_api_key(
         key_record = result.scalar_one_or_none()
         if not key_record:
             raise HTTPException(status_code=404, detail=f"API key {key_id} not found")
+
+        is_admin = current_user.get("role") == "admin" or "admin" in current_user.get("scopes", [])
+        owner = str(current_user.get("id") or current_user.get("user_id"))
+        if not is_admin and key_record.owner != owner:
+            raise HTTPException(status_code=403, detail="You may only revoke your own API keys")
 
         key_record.is_active = False
         await session.commit()

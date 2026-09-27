@@ -19,6 +19,7 @@ import shlex
 import shutil
 import subprocess
 import tempfile
+import urllib.parse
 from pathlib import Path
 
 import structlog
@@ -211,8 +212,23 @@ async def download_file(url: str, output_path: str) -> str:
         if reason is not None:
             return f"Error downloading: request blocked by SSRF protection ({reason})"
         import httpx
+        # Redirects are followed manually: every hop has to pass the SSRF
+        # policy on its own before the client is allowed to request it.
         async with httpx.AsyncClient(timeout=60, follow_redirects=False) as client:
-            resp = await client.get(url)
+            current_url = url
+            resp = None
+            for _hop in range(5):
+                resp = await client.get(current_url)
+                if resp.is_redirect and resp.headers.get("location"):
+                    next_url = str(resp.headers["location"])
+                    if not next_url.startswith(("http://", "https://")):
+                        next_url = urllib.parse.urljoin(current_url, next_url)
+                    next_reason = blocked_reason(next_url)
+                    if next_reason is not None:
+                        return f"Error downloading: blocked redirect ({next_reason})"
+                    current_url = next_url
+                    continue
+                break
             resp.raise_for_status()
             dir_name = os.path.dirname(output_path)
             if dir_name:

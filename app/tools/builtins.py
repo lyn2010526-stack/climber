@@ -67,17 +67,41 @@ async def get_datetime() -> str:
     return datetime.now(UTC).isoformat()
 
 
+# Hard cap on the request chain of a single fetch_url call. The first
+# request plus at most 5 redirect hops, so a redirect loop cannot pin the
+# tool open forever.
+_FETCH_URL_MAX_REQUESTS = 6
+
+
 @tool(description="Fetch content from a URL")
 async def fetch_url(url: str) -> str:
     try:
         reason = blocked_reason(url)
         if reason is not None:
             return f"Error fetching URL: request blocked by SSRF protection ({reason})"
+        # Redirects are followed by hand, one hop at a time. Automatic
+        # following inside httpx would let any hop escape the SSRF check
+        # above, so the same check has to be repeated per location.
         async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
-            resp = await client.get(url, headers={"User-Agent": "AgentEngine/0.1"})
+            current_url = url
+            for request_count in range(_FETCH_URL_MAX_REQUESTS):
+                resp = await client.get(current_url, headers={"User-Agent": "AgentEngine/0.1"})
+                if not resp.has_redirect_location:
+                    break
+                if request_count == _FETCH_URL_MAX_REQUESTS - 1:
+                    return (
+                        "Error fetching URL: too many redirects "
+                        f"(maximum {_FETCH_URL_MAX_REQUESTS - 1})"
+                    )
+                current_url = urllib.parse.urljoin(str(resp.url), resp.headers["location"])
+                reason = blocked_reason(current_url)
+                if reason is not None:
+                    return f"Error fetching URL: redirect blocked: {reason}"
             resp.raise_for_status()
             text = resp.text[:5000]
             return f"URL: {url}\nStatus: {resp.status_code}\n\n{text}"
+    except httpx.TimeoutException:
+        return "Error fetching URL: request timed out (15s timeout)"
     except Exception as e:
         return f"Error fetching URL: {redact_error_text(e)}"
 
