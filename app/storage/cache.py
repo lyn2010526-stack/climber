@@ -43,8 +43,11 @@ async def close_redis():
     """Close Redis connection."""
     global _redis_client
     if _redis_client:
-        await _redis_client.close()
-        _redis_client = None
+        try:
+            close = getattr(_redis_client, "aclose", None) or _redis_client.close
+            await close()
+        finally:
+            _redis_client = None
 
 
 class Cache:
@@ -62,7 +65,7 @@ class Cache:
             return None
         try:
             data = await self._redis.get(self._key(key))
-            if data:
+            if data is not None:
                 return json.loads(data)
         except Exception:
             pass
@@ -109,7 +112,9 @@ def cached(ttl: int = 300, key_prefix: str = "cache"):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             cache = Cache(await get_redis())
-            cache_key = f"{key_prefix}:{func.__name__}:{hashlib.md5(str(args).encode()).hexdigest()[:8]}:{hashlib.md5(str(sorted(kwargs.items())).encode()).hexdigest()[:8]}"
+            args_fp = hashlib.sha256(str(args).encode()).hexdigest()[:16]
+            kwargs_fp = hashlib.sha256(str(sorted(kwargs.items())).encode()).hexdigest()[:16]
+            cache_key = f"{key_prefix}:{func.__name__}:{args_fp}:{kwargs_fp}"
             result = await cache.get(cache_key)
             if result is not None:
                 return result

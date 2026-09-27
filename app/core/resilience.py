@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-import random
+import secrets
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -183,7 +183,7 @@ class RetryHandler:
         delay = self.config.base_delay * (2 ** attempt)
         delay = min(delay, self.config.max_delay)
         if self.config.jitter:
-            delay = random.uniform(0.0, delay)
+            delay = secrets.SystemRandom().uniform(0.0, delay)
         return delay
 
     async def execute(self, coro: Any) -> Any:

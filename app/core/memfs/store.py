@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -30,6 +31,10 @@ import structlog
 from app.core.memfs.memory_block import MemoryBlock
 
 logger = structlog.get_logger()
+
+# Absolute git path resolved at import time, so a PATH change cannot swap the
+# binary between the availability probe and the commands that follow it.
+_GIT_BIN = shutil.which("git")
 
 DEFAULT_SYSTEM_FILES: dict[str, dict[str, Any]] = {
     "system/persona.md": {
@@ -91,9 +96,11 @@ class MemFS:
 
     def _check_git(self) -> bool:
         """Check if git is available and the base_path is a git repo."""
+        if _GIT_BIN is None:
+            return False
         try:
-            result = subprocess.run(
-                ["git", "rev-parse", "--git-dir"],
+            result = subprocess.run(  # noqa: S603
+                [_GIT_BIN, "rev-parse", "--git-dir"],
                 cwd=str(self._base_path),
                 capture_output=True,
                 timeout=5,
@@ -107,26 +114,35 @@ class MemFS:
         git_dir = self._base_path / ".git"
         if not git_dir.exists():
             try:
-                subprocess.run(
-                    ["git", "init"],
+                init_result = subprocess.run(  # noqa: S603
+                    [_GIT_BIN, "init"],
                     cwd=str(self._base_path),
                     capture_output=True,
                     timeout=10,
                 )
+                if init_result.returncode != 0:
+                    self._git_available = False
+                    return
                 gitignore = self._base_path / ".gitignore"
                 gitignore.write_text("__pycache__/\n*.pyc\n")
-                subprocess.run(
-                    ["git", "add", ".gitignore"],
+                add_result = subprocess.run(  # noqa: S603
+                    [_GIT_BIN, "add", ".gitignore"],
                     cwd=str(self._base_path),
                     capture_output=True,
                     timeout=5,
                 )
-                subprocess.run(
-                    ["git", "commit", "-m", "chore: initialize memfs", "--allow-empty"],
+                if add_result.returncode != 0:
+                    self._git_available = False
+                    return
+                commit_result = subprocess.run(  # noqa: S603
+                    [_GIT_BIN, "commit", "-m", "chore: initialize memfs", "--allow-empty"],
                     cwd=str(self._base_path),
                     capture_output=True,
                     timeout=5,
                 )
+                if commit_result.returncode != 0:
+                    self._git_available = False
+                    return
                 logger.info("memfs_git_initialized", path=str(self._base_path))
             except (subprocess.TimeoutExpired, FileNotFoundError) as e:
                 logger.warning("memfs_git_init_failed", error=str(e))
@@ -397,10 +413,11 @@ class MemFS:
 
     def _get_history_sync(self, path: str, limit: int) -> list[dict[str, Any]]:
         try:
-            result = subprocess.run(
+            relative_path = self._resolve_path(path).relative_to(self._base_path)
+            result = subprocess.run(  # noqa: S603
                 [
-                    "git", "log", f"--max-count={limit}",
-                    "--format=%H|%aI|%an|%s", "--", path,
+                    _GIT_BIN, "log", f"--max-count={limit}",
+                    "--format=%H|%aI|%an|%s", "--", str(relative_path),
                 ],
                 cwd=str(self._base_path),
                 capture_output=True,
@@ -494,22 +511,24 @@ class MemFS:
     def _resolve_path(self, path: str) -> Path:
         """Resolve a relative path to an absolute path, preventing traversal."""
         resolved = (self._base_path / path).resolve()
-        if not str(resolved).startswith(str(self._base_path)):
+        try:
+            resolved.relative_to(self._base_path)
+        except ValueError:
             raise ValueError(f"Path traversal detected: {path}")
         return resolved
 
     def _git_commit_file(self, path: str, action: str) -> None:
         """Commit a file change to git."""
         try:
-            subprocess.run(
-                ["git", "add", path],
+            subprocess.run(  # noqa: S603
+                [_GIT_BIN, "add", path],
                 cwd=str(self._base_path),
                 capture_output=True,
                 timeout=5,
             )
-            subprocess.run(
+            subprocess.run(  # noqa: S603
                 [
-                    "git", "commit", "-m",
+                    _GIT_BIN, "commit", "-m",
                     f"memfs: {action} {path}",
                     "--quiet",
                 ],
@@ -523,15 +542,15 @@ class MemFS:
     def _git_remove_file(self, path: str) -> None:
         """Remove a file from git tracking."""
         try:
-            subprocess.run(
-                ["git", "rm", "--cached", path],
+            subprocess.run(  # noqa: S603
+                [_GIT_BIN, "rm", "--cached", path],
                 cwd=str(self._base_path),
                 capture_output=True,
                 timeout=5,
             )
-            subprocess.run(
+            subprocess.run(  # noqa: S603
                 [
-                    "git", "commit", "-m",
+                    _GIT_BIN, "commit", "-m",
                     f"memfs: delete {path}",
                     "--quiet",
                 ],

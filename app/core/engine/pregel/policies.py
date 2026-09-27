@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import random
+import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
@@ -44,7 +44,7 @@ class RetryPolicy:
         delay = self.initial_interval * (self.backoff_factor ** (attempt - 1))
         delay = min(delay, self.max_interval)
         if self.jitter:
-            delay = delay * (0.5 + random.random() * 0.5)
+            delay = delay * (0.5 + secrets.SystemRandom().random() * 0.5)
         return delay
 
 

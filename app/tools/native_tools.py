@@ -16,13 +16,18 @@ import asyncio
 import os
 import re
 import shlex
+import shutil
 import subprocess
 
 import structlog
 
-from app.tools import tool
+from app.tools import redact_error_text, tool
 
 logger = structlog.get_logger()
+
+# Resolved once so a PATH entry appearing later cannot substitute a different
+# screencapture binary for the one this module was loaded with.
+_SCREENCAPTURE_BIN = shutil.which("screencapture")
 
 
 @tool(description="Run a shell command with system access. Subject to sandbox restrictions.")
@@ -78,7 +83,7 @@ async def native_run(command: str, timeout: int = 120, cwd: str | None = None) -
     except TimeoutError:
         return f"TIMEOUT: Command exceeded {timeout}s limit"
     except Exception as e:
-        return f"Error: {e!s}"
+        return f"Error: {redact_error_text(e)}"
 
 
 @tool(description="Read any file from the system. Returns file content as text.")
@@ -92,7 +97,7 @@ async def native_read_file(path: str) -> str:
             content = f.read()
         return content[:50000]
     except Exception as e:
-        return f"Error reading {path}: {e!s}"
+        return f"Error reading {path}: {redact_error_text(e)}"
 
 
 @tool(description="Write content to any file path. Creates directories if needed.")
@@ -109,7 +114,7 @@ async def native_write_file(path: str, content: str) -> str:
             f.write(content)
         return f"Written {len(content)} chars to {path}"
     except Exception as e:
-        return f"Error writing {path}: {e!s}"
+        return f"Error writing {path}: {redact_error_text(e)}"
 
 
 @tool(description="List files and directories at a given path.")
@@ -126,7 +131,7 @@ async def native_list_dir(path: str = ".") -> str:
             entries.append(f"{prefix}{item}{suffix}")
         return "\n".join(entries) if entries else "(empty directory)"
     except Exception as e:
-        return f"Error listing {path}: {e!s}"
+        return f"Error listing {path}: {redact_error_text(e)}"
 
 
 @tool(description="Open a URL in the default web browser.")
@@ -137,7 +142,7 @@ async def open_browser(url: str) -> str:
         webbrowser.open(url)
         return f"Opened {url} in browser"
     except Exception as e:
-        return f"Error: {e!s}"
+        return f"Error: {redact_error_text(e)}"
 
 
 @tool(description="Take a screenshot of the screen. Returns the saved file path.")
@@ -151,10 +156,12 @@ async def take_screenshot(output_path: str = "/tmp/screenshot.png") -> str:
             return output_path
         except ImportError:
             pass
-        subprocess.run(["screencapture", output_path], check=True, timeout=10)
+        if _SCREENCAPTURE_BIN is None:
+            return "Error taking screenshot: no screenshot backend available"
+        subprocess.run([_SCREENCAPTURE_BIN, output_path], check=True, timeout=10)  # noqa: S603
         return output_path
     except Exception as e:
-        return f"Error taking screenshot: {e!s}"
+        return f"Error taking screenshot: {redact_error_text(e)}"
 
 
 @tool(description="Click at x,y coordinates on screen.")
@@ -167,7 +174,7 @@ async def click_mouse(x: int, y: int, button: str = "left") -> str:
     except ImportError:
         return "pyautogui not installed. Install with: pip install pyautogui"
     except Exception as e:
-        return f"Error: {e!s}"
+        return f"Error: {redact_error_text(e)}"
 
 
 @tool(description="Type text at the current cursor position.")
@@ -180,7 +187,7 @@ async def type_text(text: str, interval: float = 0.02) -> str:
     except ImportError:
         return "pyautogui not installed. Install with: pip install pyautogui"
     except Exception as e:
-        return f"Error: {e!s}"
+        return f"Error: {redact_error_text(e)}"
 
 
 @tool(description="Process video with ffmpeg. Example: cut segment, convert format, extract audio.")
@@ -201,7 +208,7 @@ async def process_video(command: str) -> str:
     except TimeoutError:
         return "TIMEOUT: Video processing exceeded 5 minutes"
     except Exception as e:
-        return f"Error: {e!s}"
+        return f"Error: {redact_error_text(e)}"
 
 
 @tool(description="Process image with ImageMagick convert command.")
@@ -225,7 +232,7 @@ async def process_image(command: str) -> str:
     except TimeoutError:
         return "TIMEOUT: Image processing exceeded 60s"
     except Exception as e:
-        return f"Error: {e!s}"
+        return f"Error: {redact_error_text(e)}"
 
 
 @tool(description="Search the web using a search engine. Returns top results (native mode — enhanced with num_results).")
@@ -246,7 +253,7 @@ async def native_web_search(query: str, num_results: int = 10) -> str:
             formatted.append(f"- {title.strip()}\n  {href}")
         return "\n".join(formatted) if formatted else "No results found"
     except Exception as e:
-        return f"Error searching: {e!s}"
+        return f"Error searching: {redact_error_text(e)}"
 
 
 @tool(description="Download a file from URL to a local path.")
@@ -285,7 +292,7 @@ async def download_file(url: str, output_path: str) -> str:
                 return f"Downloaded {len(resp.content):,} bytes to {output_path}"
             return "Error downloading: too many redirects"
     except Exception as e:
-        return f"Error downloading: {e!s}"
+        return f"Error downloading: {redact_error_text(e)}"
 
 
 # ─── Security validation helpers ──────────────────────────────────────────

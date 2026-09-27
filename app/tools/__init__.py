@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -10,6 +11,37 @@ import structlog
 from pydantic import BaseModel
 
 logger = structlog.get_logger()
+
+# Credential shapes that must never reach a log line, an API response, or a
+# chat message. Each pattern targets a labelled or prefixed secret rather than
+# any random base64 blob, so ordinary tool output stays readable.
+_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(?i)\b(?:sk|rk|pk|ghp|gho|ghu|ghs|ghr|github_pat)[-_][A-Za-z0-9]{16,}"),
+    re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._\-]{16,}"),
+    re.compile(
+        r"(?i)\b(api[_-]?key|apikey|secret|token|password|passwd|pwd|authorization)\b"
+        r"(\s*[:=]\s*|\"\s*:\s*\")(\"|')?[^\s\"',;]{4,}(\"|')?"
+    ),
+)
+_REDACTED = "[REDACTED]"
+
+
+def redact_error_text(value: object) -> str:
+    """Return exception text with credential-looking values masked.
+
+    Tool errors are surfaced to the model and echoed into chat transcripts, so
+    an upstream message that embeds a key or bearer token is stripped before it
+    leaves the process.
+    """
+    text = value if isinstance(value, str) else str(value)
+    for pattern in _SECRET_PATTERNS:
+        if pattern.groups >= 3:
+            text = pattern.sub(lambda m: f"{m.group(1)}{m.group(2)}{_REDACTED}", text)
+        elif "Bearer" in pattern.pattern:
+            text = pattern.sub(f"Bearer {_REDACTED}", text)
+        else:
+            text = pattern.sub(_REDACTED, text)
+    return text
 
 
 class ToolDefinition(BaseModel):
@@ -154,8 +186,9 @@ class ToolRegistry:
                 return json.dumps(result, ensure_ascii=False, default=str)
             return str(result)
         except Exception as e:
-            logger.error("Tool execution failed", tool=name, error=str(e))
-            return f"Error executing {name}: {e!s}"
+            safe = redact_error_text(e)
+            logger.error("Tool execution failed", tool=name, error=safe, error_type=type(e).__name__)
+            return f"Error executing {name}: {safe}"
 
     def get_openai_tools(self) -> list[dict[str, Any]]:
         """Return tools in OpenAI function calling format."""

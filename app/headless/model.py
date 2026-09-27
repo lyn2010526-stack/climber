@@ -71,6 +71,9 @@ class OpenAICompatibleModel:
         return cls(base_url, model, api_key, insecure_http=True)
 
     def complete(self, messages, tools, max_tokens, timeout):
+        parsed = urllib.parse.urlsplit(self.url)
+        if parsed.scheme not in {"http", "https"}:
+            raise ModelError("Model endpoint scheme is not allowed")
         payload = json.dumps(
             {"model": self.model, "messages": messages, "tools": tools, "max_tokens": max_tokens, "stream": False}
         ).encode()
