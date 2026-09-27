@@ -295,6 +295,41 @@ class _AttemptOutcome:
         return self.failure_kind is None
 
 
+def _verification_metadata(result: Any) -> dict[str, Any]:
+    """Describe whether a handler supplied independent acceptance evidence.
+
+    A completed handler call proves execution completed. It does not prove the
+    requested work passed its acceptance checks. Handlers can opt into the
+    stronger claim with ``acceptance: {"passed": True, ...}``; older handlers
+    remain compatible and are explicitly reported as unverified.
+    """
+    if not isinstance(result, dict):
+        return {"status": "unverified", "reason": "handler returned no acceptance evidence"}
+
+    acceptance = result.get("acceptance")
+    if isinstance(acceptance, bool):
+        return {
+            "status": "verified" if acceptance else "rejected",
+            "reason": "handler acceptance flag",
+        }
+    if isinstance(acceptance, dict) and isinstance(acceptance.get("passed"), bool):
+        return {
+            "status": "verified" if acceptance["passed"] else "rejected",
+            "reason": str(acceptance.get("reason") or "handler acceptance evidence"),
+        }
+    return {"status": "unverified", "reason": "handler returned no acceptance evidence"}
+
+
+def _normalise_result(result: Any) -> dict[str, Any]:
+    """Return a JSON-shaped result with an explicit verification status."""
+    if isinstance(result, dict):
+        normalised = dict(result)
+    else:
+        normalised = {"output": str(result)}
+    normalised.setdefault("verification", _verification_metadata(normalised))
+    return normalised
+
+
 @dataclass
 class RecoveryReport:
     """What a recovery sweep reclaimed and restarted."""
@@ -855,7 +890,7 @@ class TaskManager:
                 else TaskStatus.FAILED.value
             )
 
-        stored_result = result if isinstance(result, dict) else {"output": str(result)}
+        stored_result = _normalise_result(result)
         if result_status == TaskStatus.COMPLETED.value:
             return _AttemptOutcome(status=result_status, result=stored_result)
 

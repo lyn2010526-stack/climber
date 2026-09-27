@@ -20,7 +20,7 @@ from app.core.auth_manager import (
     require_scopes,
 )
 from app.models.users import ApiKey, User, UserRole, UserStatus
-from app.storage import async_session
+import app.storage as storage
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -119,7 +119,7 @@ async def refresh_token(payload: RefreshTokenRequest) -> RefreshTokenResponse:
 
     user_id = int(payload_data["sub"])
 
-    async with async_session() as session:
+    async with storage.async_session() as session:
         result = await session.execute(
             select(User).where(User.id == user_id, User.status == UserStatus.ACTIVE.value)
         )
@@ -146,7 +146,7 @@ async def logout(request: Request) -> dict:
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
         token_hash = hashlib.sha256(token.encode()).hexdigest()
-        async with async_session() as session:
+        async with storage.async_session() as session:
             from app.models.users import UserSession
 
             result = await session.execute(
@@ -165,7 +165,7 @@ async def get_me(current_user: str = Depends(get_current_user)) -> dict:
     """Get current user information."""
     if not settings.enable_auth:
         return {"id": current_user, "username": current_user, "email": "", "role": "local"}
-    async with async_session() as session:
+    async with storage.async_session() as session:
         result = await session.execute(select(User).where(User.id == current_user))
         user = result.scalar_one_or_none()
         if user is None:
@@ -185,7 +185,7 @@ async def change_password(
     current_user: str = Depends(get_current_user),
 ) -> dict:
     """Change current user password."""
-    async with async_session() as session:
+    async with storage.async_session() as session:
         result = await session.execute(
             select(User).where(User.id == current_user)
         )
@@ -221,7 +221,7 @@ async def create_api_key(
 
     scopes = payload.scopes or ["read", "write"]
 
-    async with async_session() as session:
+    async with storage.async_session() as session:
         api_key_record = ApiKey(
             id=key_id,
             key_hash=key_hash,
@@ -253,7 +253,7 @@ async def list_api_keys(
     if not settings.enable_auth:
         raise HTTPException(status_code=400, detail="Authentication is disabled")
 
-    async with async_session() as session:
+    async with storage.async_session() as session:
         result = await session.execute(
             select(ApiKey).order_by(ApiKey.created_at.desc())
         )
@@ -287,7 +287,7 @@ async def revoke_api_key(
     if not settings.enable_auth:
         raise HTTPException(status_code=400, detail="Authentication is disabled")
 
-    async with async_session() as session:
+    async with storage.async_session() as session:
         result = await session.execute(
             select(ApiKey).where(ApiKey.id == key_id)
         )

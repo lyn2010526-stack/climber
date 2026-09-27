@@ -19,6 +19,11 @@ from app.storage.database import Session as SessionModel
 _CHECKPOINT_KEY = "_checkpoints"
 
 
+def async_session():
+    """Resolve the current session factory while remaining patchable in tests."""
+    return storage.async_session()
+
+
 def _clean_model_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
     if not settings:
         return {}
@@ -88,7 +93,7 @@ class MessageOut(BaseModel):
 
 @router.get("/", response_model=list[SessionOut])
 async def list_sessions_with_slash(user_id: str = Depends(get_current_user)) -> list[SessionOut]:
-    async with storage.async_session() as session:
+    async with async_session() as session:
         result = await session.execute(
             select(SessionModel)
             .where(SessionModel.user_id == user_id)
@@ -125,7 +130,7 @@ async def create_session_with_slash(
     payload: SessionCreate,
     user_id: str = Depends(get_current_user),
 ) -> dict:
-    async with storage.async_session() as session:
+    async with async_session() as session:
         agent = None
         if payload.agent_id:
             agent = (
@@ -164,7 +169,7 @@ async def create_session_legacy(
     payload: SessionCreate,
     user_id: str = Depends(get_current_user),
 ) -> dict:
-    async with storage.async_session() as session:
+    async with async_session() as session:
         agent = None
         if payload.agent_id:
             agent = (
@@ -189,7 +194,7 @@ class MessagesResponse(BaseModel):
 
 @router.get("/{session_id}/messages", response_model=MessagesResponse)
 async def get_session_messages(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with storage.async_session() as session:
+    async with async_session() as session:
         owner = await session.scalar(
             select(SessionModel.id).where(*_owned_session_filter(session_id, user_id))
         )
@@ -216,7 +221,7 @@ async def get_session_messages(session_id: str, user_id: str = Depends(get_curre
 
 @router.post("/{session_id}/clear")
 async def clear_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with storage.async_session() as session:
+    async with async_session() as session:
         owned = await session.scalar(
             select(SessionModel.id).where(*_owned_session_filter(session_id, user_id))
         )
@@ -230,7 +235,7 @@ async def clear_session(session_id: str, user_id: str = Depends(get_current_user
 
 @router.get("/{session_id}")
 async def get_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with storage.async_session() as session:
+    async with async_session() as session:
         row = (
             await session.execute(
                 select(SessionModel).where(*_owned_session_filter(session_id, user_id))
@@ -258,7 +263,7 @@ async def get_session(session_id: str, user_id: str = Depends(get_current_user))
 
 @router.delete("/{session_id}")
 async def delete_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with storage.async_session() as session:
+    async with async_session() as session:
         row = (
             await session.execute(
                 select(SessionModel).where(*_owned_session_filter(session_id, user_id))
@@ -284,7 +289,7 @@ class ForkRequest(BaseModel):
 
 async def _ensure_owned_session(session_id: str, user_id: str) -> None:
     """Raise 404 unless the session exists and belongs to the given user."""
-    async with storage.async_session() as session:
+    async with async_session() as session:
         owned = await session.scalar(
             select(SessionModel.id).where(*_owned_session_filter(session_id, user_id))
         )
@@ -319,7 +324,7 @@ async def save_checkpoint(
     body: CheckpointRequest,
     user_id: str = Depends(get_current_user),
 ) -> dict:
-    async with storage.async_session() as session:
+    async with async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)
         checkpoint = {
@@ -344,7 +349,7 @@ async def save_checkpoint(
 
 @router.get("/{session_id}/checkpoint")
 async def get_latest_checkpoint(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with storage.async_session() as session:
+    async with async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)
     if not checkpoints:
@@ -354,7 +359,7 @@ async def get_latest_checkpoint(session_id: str, user_id: str = Depends(get_curr
 
 @router.get("/{session_id}/history")
 async def get_checkpoint_history(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with storage.async_session() as session:
+    async with async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)
     return {"session_id": session_id, "checkpoints": checkpoints}
@@ -362,7 +367,7 @@ async def get_checkpoint_history(session_id: str, user_id: str = Depends(get_cur
 
 @router.post("/{session_id}/fork")
 async def fork_session(session_id: str, body: ForkRequest, user_id: str = Depends(get_current_user)) -> dict:
-    async with storage.async_session() as session:
+    async with async_session() as session:
         source = await _load_owned_session(session, session_id, user_id)
         new_id = body.new_session_id or str(uuid.uuid4())
         existing = (
@@ -411,7 +416,7 @@ async def fork_session(session_id: str, body: ForkRequest, user_id: str = Depend
 
 @router.post("/{session_id}/resume")
 async def resume_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
-    async with storage.async_session() as session:
+    async with async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)
         messages = [
