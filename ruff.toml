@@ -1,27 +1,210 @@
-line-length = 120
+# ⚠️ 本文件会遮蔽 pyproject.toml 中的 [tool.ruff*] 配置。
+#
+# Ruff 的发现顺序：同目录下的 .ruff.toml / ruff.toml 优先，命中即停止读取
+# pyproject.toml。这导致 pyproject.toml 里更严格的规则集（含 flake8-bandit
+# 的 S 系列安全规则、flake8-pytest-style、tryceratops、perflint 等）从未生效，
+# 而 CI 与本地看到的是另一套宽松规则。
+#
+# 唯一真相源：pyproject.toml 的 [tool.ruff*] 段。
+# 本文件保持与 pyproject.toml 逐项一致，任何规则修改只改 pyproject.toml，
+# 然后把同样的值同步到这里，直到本文件被移除。
+
+line-length = 100
 target-version = "py311"
+src = ["app", "tests"]
+
+# Lint gate scope (Design A).
+# The gate covers first-party source that must stay clean: app/, tests/ and the
+# hand-written part of alembic/. Scratch, benchmark, example and vendored trees
+# are excluded from discovery so their debt cannot drown the real signal.
+# This list is duplicated verbatim in pyproject.toml [tool.ruff] because
+# ruff.toml shadows pyproject.toml: a change in only one of the two is a bug.
+extend-exclude = [
+    # build / vcs / runtime noise
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "htmlcov",
+    "logs",
+    "workspace",
+    # generated migrations (alembic/env.py and friends stay gated)
+    "alembic/versions",
+    # scratch / benchmark / example / vendored trees (out of gate scope)
+    "examples",                        # teaching and demo scripts
+    "adapters",                        # vendored arcbench harness
+    "benchmark*.py",                   # benchmark harnesses
+    "comprehensive_performance_test.py",  # one-off load test
+    "optimize_database.py",            # one-off DB maintenance script
+    "redis_cache_warming.py",          # one-off cache warmer
+    "frontend-react",                  # JS/TS tree, gated by eslint + tsc
+]
 
 [lint]
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "UP",  # pyupgrade
-    "SIM", # flake8-simplify
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "UP",     # pyupgrade
+    "SIM",    # flake8-simplify
+    "A",      # flake8-builtins
+    "C4",     # flake8-comprehensions
+    "DTZ",    # flake8-datetimez
+    "ICN",    # flake8-import-conventions
+    "PIE",    # flake8-pie
+    "PT",     # flake8-pytest-style
+    "RET",    # flake8-return
+    "RSE",    # flake8-raise
+    "SLF",    # flake8-self
+    "TID",    # flake8-tidy-imports
+    "TCH",    # flake8-type-checking
+    "ARG",    # flake8-unused-arguments
+    "ERA",    # eradicate
+    "NPY",    # numpy-specific rules
+    "RUF",    # ruff-specific rules
+    "S",      # flake8-bandit (security)
+    "TRY",    # tryceratops
+    "FLY",    # flynt
+    "PERF",   # perflint
 ]
 ignore = [
-    "E501", # line too long (handled by formatter)
-    "B008", # do not perform function calls in argument defaults
+    "E501",    # line too long (handled by formatter)
+    "B008",    # do not perform function calls in argument defaults (FastAPI pattern)
+    "S101",    # use of assert (needed for type narrowing)
+    "TRY003",  # specify messages outside exception class
+    "TRY300",  # the codebase keeps the success-path return inside `else`; both forms are equivalent
+    "TRY301",  # validation raises inline, which is clearer than deferring to an inner function
+    "TRY400",  # logging.exception is not required; call sites log the error explicitly
+    "TRY004",  # TypeError vs ValueError choice is deliberate per call site
+    "TRY203",  # the redundant exception variable keeps the traceback context explicit
+    "TRY201",  # `raise` re-raise reads better inline
+    "TRY002",  # the custom exception carries a message, as the API contract requires
+    "TRY401",  # verbose exception messages are part of the API error contract
+    "A003",    # class attribute shadowing builtin
+    "SLF001",  # private member access is used pervasively on DI holders
+    "RUF001",  # full-width punctuation in Chinese strings is intentional
+    "RUF002",
+    "RUF003",
 ]
 
 [lint.per-file-ignores]
-"tests/*" = ["S101"] # allow assert in tests
+"tests/**/*.py" = [
+    "S101",    # allow assert in tests
+    "ARG001",  # unused function arguments (fixtures)
+    "ARG002",  # unused method arguments (fixtures)
+    "ARG005",  # unused lambda arguments (parametrize stubs)
+    "SLF001",  # private member access
+    "PLR2004", # magic numbers
+    "PT009",   # unittest-style assertions are clearer for some parametrised cases
+    "PT018",   # composite assertions
+    "PT011",   # raises(Exception) is deliberate in negative-path tests
+    "PT027",   # unittest-style raises assertions
+    "TC001",   # runtime imports are needed for module patching
+    "TC002",
+    "TC003",
+    "S105",    # security tests deliberately pass weak/placeholder secrets
+    "S106",
+    "S107",
+    "S603",    # tests invoke python/pytest with literal argv
+    "S108",    # sandbox tests assert on literal /tmp paths by design
+]
+"alembic/**/*.py" = [
+    "E402",    # module-level import not at top
+]
+"app/api/v1/auth_management.py" = ["S105"]  # "bearer" is the OAuth2 token type, not a secret
+"app/models/users.py" = ["S105"]              # "bearer" is the OAuth2 token type, not a secret
+"app/middleware/security.py" = ["S105"]       # header names, not credentials
+"app/core/auth_manager.py" = ["S105", "DTZ003"]  # local-only fallback secret; naive-UTC DateTime columns
+"app/integrations/clients/github_client.py" = ["S105"]
+"app/workflow/engine.py" = ["S105", "S102", "S307", "ARG002"]  # AST-validated eval/exec for workflow expressions
+
+# SQLAlchemy declarative models resolve their annotations at mapper
+# configuration time, not at type-check time. Moving `Mapped[...]` targets
+# (datetime, Decimal, json types, relationship targets) into a TYPE_CHECKING
+# block makes the mapper raise MappedAnnotationError at import. These imports
+# must stay at runtime.
+"app/storage/models_*.py" = ["TC001", "TC002", "TC003"]
+"app/storage/database.py" = ["TC001", "TC002", "TC003"]
+"app/storage/repository_*.py" = ["TC001", "TC002", "TC003"]
+# init_db() imports every model module purely for SQLAlchemy side-effect
+# registration. The imports are intentionally unused.
+"app/storage/__init__.py" = ["F401"]
+
+# Parameter names that are part of an external contract and cannot be renamed:
+#   - `type` and `format` are FastAPI query parameters; renaming them changes
+#     the HTTP API surface that existing clients call.
+#   - `input` is the LangChain/LangGraph Runnable protocol signature. Renaming
+#     it breaks structural compatibility with the upstream implementations this
+#     Protocol describes.
+"app/api/v1/routes/misc.py" = ["A002"]
+"app/api/v1/workflows.py" = ["A002"]
+"app/core/engine/pregel/graph.py" = ["A002"]
+# The APIKey/User tables use naive DateTime columns whose defaults are
+# datetime.utcnow, and reads compare against datetime.utcnow(). Introducing an
+# aware value on the write path would make the comparison raise TypeError after
+# a database round-trip, so the naive-UTC convention is kept until those
+# columns are migrated to timezone=True.
+"app/middleware/auth.py" = ["DTZ003"]
+# Sampling is a load-shedding decision, not a security one: a biased sample only
+# changes how many spans are recorded, never what is recorded.
+"app/core/observability/trace.py" = ["S311"]
+# Both call sites run a scheme allowlist plus SSRF validation immediately before
+# urlopen, and the destination is validated at construction time.
+"app/headless/model.py" = ["S310"]
+"app/tools/research.py" = ["S310"]
+"app/config.py" = ["S105"]
+"app/core/engine/tool_rules.py" = ["S105", "S107"]  # "<heartbeat>" is a sentinel, not a credential
+"app/headless/workspace.py" = ["S602", "S607"]  # executes agent-authored commands by design
+"app/tools/builtins.py" = ["S307", "ARG001"]  # calculator eval is AST-guarded; tool signatures are a public contract
+"app/core/sandbox.py" = ["S602", "S603", "S607"]  # the sandbox is the boundary that runs commands
+# Development-only tooling and tests. These are not request-reachable code:
+# the scripts are run by maintainers and the tests pass literal argv values.
+# Production code under app/ keeps the full S gate.
+"scripts/**/*.py" = [
+    "S603",   # subprocess argv is built from maintainer-supplied config
+    "S310",   # urlopen targets are local file:// paths for the alert daemon
+    "S607",   # radon/pytest are resolved from the dev PATH
+]
+"gunicorn.conf.py" = ["S108"]  # /dev/shm/agent-engine is the documented bind path
+
+# Pluggable-strategy and component packages. Every class here implements a
+# shared hook signature (reasoning strategies, metacognition analyzers,
+# reflection evaluators, integration clients). A hook declares the full
+# parameter list so sibling implementations stay substitutable, and a given
+# implementation may legitimately ignore a parameter it has no use for.
+# Renaming or dropping them would break the interface these packages exist to
+# provide, so the unused-argument rules are disabled for these trees only.
+"app/core/reasoning/**/*.py" = ["ARG001", "ARG002", "ARG004"]
+"app/core/metacognition/**/*.py" = ["ARG001", "ARG002", "ARG004"]
+"app/reflection/**/*.py" = ["ARG001", "ARG002", "ARG004"]
+"app/integrations/clients/*.py" = ["ARG001", "ARG002", "ARG004"]
+"app/evaluation/**/*.py" = ["ARG001", "ARG002", "ARG004"]
+"app/core/collaboration/*.py" = ["ARG001", "ARG002", "ARG004"]
+"app/core/execution/*.py" = ["ARG001", "ARG002", "ARG004"]
+"app/core/integration/*.py" = ["ARG001", "ARG002", "ARG004"]
+"app/core/engine/**/*.py" = ["ARG001", "ARG002", "ARG004"]
+"app/multi_agent/*.py" = ["ARG001", "ARG002", "ARG004"]
+"app/main.py" = ["ARG001"]  # Starlette exception-handler signatures
+"app/core/agent_engine.py" = ["ARG002"]  # _call_llm_with_resilience keeps `iteration` for the retry contract
+"app/core/tool_prioritizer.py" = ["ARG002"]
+"app/core/task_worker.py" = ["ARG001"]
+"app/core/prompt_manager.py" = ["ARG002"]
 
 [lint.isort]
 known-first-party = ["app"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[lint.flake8-annotations]
+allow-star-arg-any = true
+
+[lint.pydocstyle]
+convention = "google"
 
 [format]
 quote-style = "double"
 indent-style = "space"
+docstring-code-format = true
+line-ending = "lf"

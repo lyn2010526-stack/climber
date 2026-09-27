@@ -101,3 +101,6 @@ data/
 logs/
 benchmark_results*.json
 comprehensive_performance_report.json
+
+# Agent working snapshots (tar.gz, tens of MB, machine-local)
+.monkeycode/checkpoints/

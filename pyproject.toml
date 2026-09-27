@@ -27,7 +27,14 @@ exclude = ["tests*"]
 line-length = 100
 target-version = "py311"
 src = ["app", "tests"]
+# Lint gate scope (Design A).
+# The gate covers first-party source that must stay clean: app/, tests/ and the
+# hand-written part of alembic/. Scratch, benchmark, example and vendored trees
+# are excluded from discovery so their debt cannot drown the real signal.
+# This list is duplicated verbatim in ruff.toml because ruff.toml shadows
+# pyproject.toml: a change in only one of the two is a bug.
 extend-exclude = [
+    # build / vcs / runtime noise
     ".git",
     ".venv",
     "__pycache__",
@@ -35,8 +42,17 @@ extend-exclude = [
     "dist",
     "htmlcov",
     "logs",
-    "alembic/versions",
     "workspace",
+    # generated migrations (alembic/env.py and friends stay gated)
+    "alembic/versions",
+    # scratch / benchmark / example / vendored trees (out of gate scope)
+    "examples",                        # teaching and demo scripts
+    "adapters",                        # vendored arcbench harness
+    "benchmark*.py",                   # benchmark harnesses
+    "comprehensive_performance_test.py",  # one-off load test
+    "optimize_database.py",            # one-off DB maintenance script
+    "redis_cache_warming.py",          # one-off cache warmer
+    "frontend-react",                  # JS/TS tree, gated by eslint + tsc
 ]
 
 [tool.ruff.lint]
@@ -74,18 +90,45 @@ ignore = [
     "S101",    # use of assert (needed for type narrowing)
     "TRY003",  # specify messages outside exception class
     "A003",    # class attribute shadowing builtin
+    "SLF001",  # private member access is used pervasively on DI holders
+    "RUF001",  # full-width punctuation in Chinese strings is intentional
+    "RUF002",
+    "RUF003",
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
     "S101",    # allow assert in tests
     "ARG001",  # unused function arguments (fixtures)
+    "ARG002",  # unused method arguments (fixtures)
+    "ARG005",  # unused lambda arguments (parametrize stubs)
     "SLF001",  # private member access
     "PLR2004", # magic numbers
+    "PT009",   # unittest-style assertions are clearer for some parametrised cases
+    "PT018",   # composite assertions
+    "PT011",   # raises(Exception) is deliberate in negative-path tests
+    "PT027",   # unittest-style raises assertions
+    "TC001",   # runtime imports are needed for module patching
+    "TC002",
+    "TC003",
+    "S105",    # security tests deliberately pass weak/placeholder secrets
+    "S106",
+    "S107",
 ]
 "alembic/**/*.py" = [
     "E402",    # module-level import not at top
 ]
+"app/api/v1/auth_management.py" = ["S105"]  # "bearer" is the OAuth2 token type, not a secret
+"app/models/users.py" = ["S105"]              # "bearer" is the OAuth2 token type, not a secret
+"app/middleware/security.py" = ["S105"]       # header names, not credentials
+"app/core/auth_manager.py" = ["S105"]        # local-only fallback secret, replaced in production
+"app/integrations/clients/github_client.py" = ["S105"]
+"app/workflow/engine.py" = ["S105"]
+"app/config.py" = ["S105"]
+"app/core/engine/tool_rules.py" = ["S105"]
+"app/headless/workspace.py" = ["S602", "S607"]  # executes agent-authored commands by design
+"app/tools/builtins.py" = ["S307"]  # calculator eval is guarded by an AST node allowlist
+"app/core/sandbox.py" = ["S602", "S603", "S607"]  # the sandbox is the boundary that runs commands
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

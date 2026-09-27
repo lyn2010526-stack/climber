@@ -53,7 +53,7 @@ max_requests = int(os.getenv("GUNICORN_MAX_REQUESTS", "1000"))
 max_requests_jitter = int(os.getenv("GUNICORN_MAX_REQUESTS_JITTER", "50"))
 
 
-def on_starting(server):
+def on_starting(server):  # noqa: ARG001  # gunicorn hook signature
     """Called just before the master process is initialized.
 
     Validates configuration and logs deployment parameters.
@@ -79,8 +79,8 @@ def post_fork(server, worker):
         import random
         import secrets
         random.seed(secrets.token_bytes(16))
-    except Exception:
-        pass
+    except Exception as exc:
+        server.log.warning("Worker random reseed failed: %s", exc)
 
 
 def post_exec(server):
@@ -121,23 +121,23 @@ def pre_exec(server):
 def post_fork_optimized(server, worker):
     """Optimized post-fork hook for better memory sharing and performance"""
     server.log.info(f"Worker spawned (pid: {worker.pid}) - Optimized settings applied")
-    
+
     try:
         import random
         import secrets
-        
+
         # Seed randomness per worker
         random.seed(secrets.token_bytes(16))
-        
+
         # Enable TCP keepalive at OS level
         import socket
         sock = server.socket
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        
+
     except Exception as e:
         server.log.warning(f"Post-fork optimization failed: {e}")
 
 
 # Override post_fork with optimized version
-post_fork = post_fork_optimized
+post_fork = post_fork_optimized  # noqa: F811  # deliberate override of the hook above

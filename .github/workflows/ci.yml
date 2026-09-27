@@ -37,9 +37,14 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff mypy
+          pip install ruff==0.16.9 mypy
           pip install -r requirements.txt
 
+      # Gate scope is defined by the exclude list in ruff.toml AND
+      # pyproject.toml [tool.ruff] (the two must stay identical: ruff.toml
+      # shadows pyproject.toml). `ruff check .` therefore covers first-party
+      # source -- app/, tests/, alembic/ -- plus the root scripts/plugins, and
+      # skips the scratch/example/benchmark/vendored trees listed there.
       - name: Run ruff linter
         run: ruff check .
 
