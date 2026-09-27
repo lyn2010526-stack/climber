@@ -7,30 +7,17 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
+from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
-
-from alembic import context
 
 # Add project root to path so ``app`` imports resolve
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.storage import (
-    Base,  # noqa: E402
-    database,  # noqa: F401
-    models_cost,  # noqa: F401
-    models_eval,  # noqa: F401
-    models_feedback,  # noqa: F401
-    models_files,  # noqa: F401
-    models_groups,  # noqa: F401
-    models_memory,  # noqa: F401
-    models_platform,  # noqa: F401
-    models_plugins,  # noqa: F401
-    models_reasoning,  # noqa: F401
-    models_skills,  # noqa: F401
-    models_traces,  # noqa: F401
-)
 from app.config import settings
+from app.storage import (
+    Base,
+)
 
 config = context.config
 
