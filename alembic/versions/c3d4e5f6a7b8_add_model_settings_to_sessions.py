@@ -8,7 +8,6 @@ Create Date: 2026-09-18 00:00:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-
 from alembic import op
 
 revision: str = 'c3d4e5f6a7b8'
@@ -21,11 +20,13 @@ def upgrade() -> None:
     conn = op.get_bind()
     existing = sa.inspect(conn).get_columns('sessions')
     if not any(column['name'] == 'model_settings' for column in existing):
-        op.add_column(
-            'sessions',
-            sa.Column('model_settings', sa.JSON(), nullable=False, server_default='{}'),
-        )
-        op.alter_column('sessions', 'model_settings', server_default=None)
+        # SQLite cannot alter a column in place. Batch mode recreates the
+        # table when needed while preserving the intended no-default schema.
+        with op.batch_alter_table('sessions') as batch_op:
+            batch_op.add_column(
+                sa.Column('model_settings', sa.JSON(), nullable=False, server_default='{}')
+            )
+            batch_op.alter_column('model_settings', server_default=None)
 
 
 def downgrade() -> None:
