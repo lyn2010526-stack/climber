@@ -120,7 +120,12 @@
     "memory": "Mémoires",
     "group": "Groupes",
     "all": "Tout",
-    "searching": "Recherche..."
+    "searching": "Recherche...",
+    "preview_only": {
+      "document": "Aperçu seul : un fragment de document n'a pas de page de détail",
+      "memory": "Aperçu seul : les mémoires n'ont pas de page de détail",
+      "group": "Ouvrir dans Groupes"
+    }
   },
   "navigation": {
     "dashboard": "Tableau de bord",
@@ -206,7 +211,17 @@
     "clear_history": "Effacer l'historique",
     "start_conversation": "Commencer une conversation",
     "no_messages": "Aucun message",
-    "typing": "En train d'écrire..."
+    "typing": "En train d'écrire...",
+    "aria_label": "Chat",
+    "input_placeholder": "Saisissez votre message ici...",
+    "empty_state_title": "Commencer une conversation",
+    "suggestion_1": "Expliquer cette tâche",
+    "suggestion_2": "Examiner l'espace de travail actuel",
+    "suggestion_3": "Planifier l'étape suivante",
+    "edit_message": "Modifier le message",
+    "wide_column": "Utiliser une colonne large",
+    "stop_generation": "Arrêter la génération",
+    "table_of_contents": "Table des matières"
   },
   "agents": {
     "title": "Gestion des agents",
@@ -234,6 +249,7 @@
     "agent_deleted": "Agent supprimé avec succès",
     "card_aria_label": "Agent {{name}}",
     "status_configured": "Configuré",
+    "status_model_configured": "Modèle configuré",
     "status_incomplete": "Incomplet",
     "status_disabled": "Désactivé",
     "coming_soon_title": "Bientôt disponible",
@@ -269,8 +285,7 @@
     "create_first": "Créez votre premier agent pour commencer.",
     "clear_search": "Effacer la recherche",
     "previous": "Précédent",
-    "next": "Suivant",
-    "create_agent": "Créer un agent"
+    "next": "Suivant"
   },
   "apiKeys": {
     "add_key": "Ajouter une clé",
@@ -448,5 +463,91 @@
     "api_usage": "Utilisation de l'API",
     "download_report": "Télécharger le rapport",
     "log_out": "Se déconnecter"
+  },
+  "collaboration": {
+    "not_reported": "Non signalé", "heading_task": "Tâche du groupe", "back_to_list": "Retour aux groupes", "topic_unset": "Sujet non signalé", "no_run_yet": "Aucune exécution", "steps_progress": "{{done}} / {{total}} étapes", "task_id_label": "ID de tâche", "result_heading": "Résultat", "new_task": "Nouvelle tâche",
+    "task_status": { "pending": "En attente", "running": "En cours", "completed": "Terminée", "failed": "Échec", "cancelled": "Annulée" }, "group_status": { "active": "Active" }, "cancel": { "action": "Annuler la tâche", "cancelling": "Annulation..." },
+    "aria": { "task_status": "État de la tâche", "group_discussion": "Discussion du groupe", "sidebar": "Barre latérale de collaboration", "loading_members": "Chargement des membres" }, "members": { "empty": "Aucun membre", "remove_named": "Supprimer {{name}}", "role": "Rôle", "adding": "Ajout...", "retry": "Réessayer" }, "sidebar": { "members": "Membres", "add_member": "Ajouter un membre", "submit_task": "Envoyer la tâche", "topic": "Sujet" },
+    "task": { "objective_label": "Objectif", "objective_placeholder": "Décrivez la tâche", "max_steps": "Nombre maximal d'étapes", "submitting": "Envoi...", "submit": "Envoyer la tâche" }, "errors": { "load_groups": "Impossible de charger les groupes", "load_members": "Impossible de charger les membres", "update_member": "Impossible de mettre à jour le membre", "create_group": "Impossible de créer le groupe" },
+    "groups": { "heading": "Groupes", "create": "Créer un groupe", "name_label": "Nom du groupe", "topic_label": "Sujet", "topic_placeholder": "Sujet facultatif", "template_hint": "Utiliser le modèle de membres par défaut", "reload": "Recharger", "loading": "Chargement des groupes...", "empty": "Aucun groupe", "member_count": "{{count}} membres", "member_count_unreported": "Nombre de membres non signalé", "enter": "Entrer" }
+  },
+  "right_panel": {
+    "title": "Inspecteur d'exécution",
+    "collapse_all": "Tout réduire",
+    "expand_all": "Tout déplier",
+    "groups": {
+      "overview": "Session",
+      "execution": "Exécution",
+      "changes": "Modifications et fichiers",
+      "activity": "Activité des outils"
+    },
+    "sections": {
+      "config": "Configuration",
+      "diff": "Diff",
+      "dag": "DAG",
+      "trace": "Trace",
+      "reasoning": "Raisonnement",
+      "files": "Fichiers",
+      "toolcalls": "Outils"
+    },
+    "status": {
+      "idle": "Inactif",
+      "running": "En cours",
+      "paused": "En pause",
+      "completed": "Terminé",
+      "error": "En erreur",
+      "pending": "En file d'attente",
+      "failed": "Échoué",
+      "stopped": "Arrêté",
+      "unknown": "Statut non signalé"
+    },
+    "summary": {
+      "untitled": "Session sans titre",
+      "no_session": "Aucune session sélectionnée",
+      "no_session_hint": "Sélectionnez ou créez une session pour voir le résumé de l'exécution",
+      "tokens": "Jetons",
+      "token_of_limit": "{{used}} / {{limit}}",
+      "not_reported": "Non signalé",
+      "none": "Aucun"
+    },
+    "config": {
+      "title": "Configuration de l'exécution",
+      "provider": "Fournisseur",
+      "model": "Modèle",
+      "temperature": "Température",
+      "max_tokens": "Jetons maximum",
+      "token_title": "Budget de jetons",
+      "tokens_not_reported": "Cette exécution ne signale aucun budget de jetons",
+      "skills_title": "Compétences actives",
+      "no_skills": "Aucune compétence active",
+      "tools_title": "Outils actifs",
+      "no_tools": "Aucun outil actif"
+    },
+    "trace": {
+      "duration": "Durée",
+      "tokens": "jetons"
+    },
+    "files": {
+      "title": "{{count}} fichier",
+      "title_other": "{{count}} fichiers",
+      "chunks": "{{count}} fragment",
+      "chunks_other": "{{count}} fragments"
+    },
+    "states": {
+      "loading": "Chargement des données d'exécution",
+      "load_failed": "Les données d'exécution n'ont pas été signalées",
+      "load_failed_hint": "Le backend n'a pas répondu. Vérifiez la connexion et réessayez.",
+      "retry": "Réessayer",
+      "empty_dag": "Aucun graphe d'exécution",
+      "empty_dag_hint": "Le DAG apparaît dès qu'une exécution commence à planifier.",
+      "empty_trace": "Aucune donnée de trace",
+      "empty_trace_hint": "Les traces apparaissent après le premier appel au modèle.",
+      "empty_diff": "Aucune modification de fichier",
+      "empty_diff_hint": "Les modifications de cette exécution apparaîtront ici.",
+      "empty_documents": "Aucun document",
+      "empty_documents_hint": "Les fichiers lus par cette exécution apparaîtront ici.",
+      "empty_tools": "Aucune activité d'outil",
+      "empty_tools_hint": "Les appels d'outils de cette exécution apparaîtront ici."
+    }
   }
 }

@@ -11,13 +11,13 @@ import frTranslation from '../locales/fr.json';
 import deTranslation from '../locales/de.json';
 
 export const supportedLanguages = [
-  { code: 'en', name: 'English', flag: '🇺🇸', rtl: false },
-  { code: 'zh-CN', name: '中文（简体）', flag: '🇨🇳', rtl: false },
-  { code: 'ja', name: '日本語', flag: '🇯🇵', rtl: false },
-  { code: 'ko', name: '한국어', flag: '🇰🇷', rtl: false },
-  { code: 'es', name: 'Español', flag: '🇪🇸', rtl: false },
-  { code: 'fr', name: 'Français', flag: '🇫🇷', rtl: false },
-  { code: 'de', name: 'Deutsch', flag: '🇩🇪', rtl: false },
+  { code: 'en', name: 'English', rtl: false },
+  { code: 'zh-CN', name: '中文（简体）', rtl: false },
+  { code: 'ja', name: '日本語', rtl: false },
+  { code: 'ko', name: '한국어', rtl: false },
+  { code: 'es', name: 'Español', rtl: false },
+  { code: 'fr', name: 'Français', rtl: false },
+  { code: 'de', name: 'Deutsch', rtl: false },
 ] as const;
 
 export type SupportedLanguageCode = (typeof supportedLanguages)[number]['code'];
@@ -34,7 +34,7 @@ const i18nOptions: InitOptions = {
     'fr': { translation: frTranslation },
     'de': { translation: deTranslation },
   },
-  fallbackLng: 'en',
+  fallbackLng: 'zh-CN',
   debug: false,
   interpolation: {
     escapeValue: false,

@@ -1,74 +1,87 @@
 import { useState } from 'react';
-import { User, Bot, Terminal, ChevronDown, Copy, ThumbsUp, ThumbsDown, Edit3 } from 'lucide-react';
+import { Terminal, ChevronDown, Copy, ThumbsUp, ThumbsDown, Edit3 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { cva } from 'class-variance-authority';
+import { useI18n } from '../../i18n';
+import { formatTime } from '../../i18n/utils';
 import { MarkdownRenderer } from './MarkdownRenderer';
 
-/* Reference: Lobe UI `chat/Bubble/style.ts` - cva variants */
-const bubbleVariants = cva(
-  'px-5 py-3 text-sm leading-[1.7] shadow-lg message-enter',
-  {
-    variants: {
-      role: {
-        user: 'bg-[var(--color-accent)] text-white rounded-3xl rounded-br-xl',
-        assistant: 'bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)] text-[var(--color-text-primary)] rounded-3xl rounded-tl-xl',
-        system: 'bg-amber-500/10 border border-amber-500/20 text-amber-200 rounded-2xl',
-        tool: 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-200 rounded-2xl',
-      },
-    },
-    defaultVariants: {
-      role: 'assistant',
-    },
-  }
-);
+/**
+ * Reveal-on-hover for the message actions.
+ *
+ * Pointer devices fade the row in on hover; touch devices, which cannot hover,
+ * keep it visible. `group-focus-within` covers the keyboard: tabbing into any
+ * action reveals the whole row, so a focused control is never invisible.
+ */
+const actionsReveal =
+  '[@media(hover:hover)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none';
 
-/* Reference: Lobe UI `chat/ChatItem/components/Avatar.tsx` */
-function Avatar({ role }: { role: string }) {
-  const isUser = role === 'user';
-  return (
-    <div className={cn(
-      'flex items-center justify-center rounded-2xl text-xs font-bold shrink-0',
-      'w-9 h-9',
-      isUser ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-bg-surface-3)] text-[var(--color-text-primary)]'
-    )}>
-      {isUser ? <User size={16} /> : <Bot size={16} />}
-    </div>
-  );
-}
+/** Reserves the action row's height so the transcript does not step as it appears. */
+const FOOTER_MIN_HEIGHT = 'min-h-[31px]';
 
-/* Reference: Lobe UI `chat/ChatItem/components/MessageContent.tsx` */
+const actionButton =
+  'rounded-md p-1 text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[var(--color-bg-surface-3)] hover:text-[var(--color-text-primary)] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-[var(--color-accent-foreground)]';
+
 interface MessageContentProps {
   content: string;
   role: string;
   timestamp: Date | undefined;
   actions?: React.ReactNode | undefined;
+  /** Replaces the rendered content, for rows that assemble their own body. */
+  body?: React.ReactNode | undefined;
+  /** Merged into the row, e.g. the reading-column width the caller decided. */
+  className?: string;
 }
 
-export const MessageContent: React.FC<MessageContentProps> = ({ content, role, timestamp, actions }) => {
+/**
+ * A transcript row.
+ *
+ * The user's turn is a fitted, right-aligned surface because it is short input
+ * to be read back. An assistant turn is plain full-width text: the answer is the
+ * content, and a bubble around it would compete with the code blocks and tables
+ * the answer itself carries.
+ */
+export const MessageContent: React.FC<MessageContentProps> = ({ content, role, timestamp, actions, body, className }) => {
   const isUser = role === 'user';
-  const timeStr = timestamp ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const isSystem = role === 'system';
+  const timeStr = timestamp ? formatTime(timestamp) : '';
 
   return (
-    <div className={cn('flex gap-3 max-w-[85%] group', isUser ? 'flex-row-reverse ml-auto' : '')}>
-      <Avatar role={role} />
-      <div className={cn('flex flex-col gap-1 min-w-0', isUser ? 'items-end' : 'items-start')}>
-        <div className={cn(bubbleVariants({ role: role as any }))}>
-          {isUser ? (
-            <span className="whitespace-pre-wrap">{content}</span>
-          ) : (
-            <MarkdownRenderer content={content} />
+    <div className={cn('group flex w-full min-w-0', isUser ? 'justify-end' : 'items-start', className)}>
+      <div
+        className={cn(
+          'flex min-w-0 flex-col',
+          isUser ? 'w-fit max-w-[90%] items-end sm:max-w-[85%]' : 'w-full items-start',
+        )}
+      >
+        <div
+          className={cn(
+            'min-w-0 max-w-full break-words text-sm leading-relaxed text-[var(--color-text-primary)]',
+            isUser &&
+              'w-fit whitespace-pre-wrap rounded-[var(--radius-lg)] rounded-br-[var(--radius-sm)] bg-[var(--color-bg-surface-2)] px-4 py-2.5',
+            isSystem &&
+              'border-l-2 border-[var(--color-border-default)] pl-4 text-[var(--color-text-secondary)]',
+            !isUser && !isSystem && 'w-full',
           )}
+        >
+          {body ?? (isUser ? content : <MarkdownRenderer content={content} />)}
         </div>
-        <div className={cn('flex items-center gap-2 px-1 transition-opacity duration-200', isUser ? 'flex-row-reverse' : '')}>
-          {timeStr && <span className="text-[10px] text-[var(--color-text-muted)]">{timeStr}</span>}
-          {actions && <div className="flex items-center gap-1">{actions}</div>}
-        </div>
+        {(timeStr || actions) && (
+          <div
+            className={cn(
+              'flex w-full items-center gap-2 px-1 pt-1 text-xs text-[var(--color-text-muted)]',
+              isUser ? 'justify-end' : 'justify-start',
+              FOOTER_MIN_HEIGHT,
+            )}
+          >
+            {timeStr && <time dateTime={new Date(timestamp!).toISOString()}>{timeStr}</time>}
+            {actions}
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-/* Reference: Lobe UI `chat/ChatItem/components/Actions.tsx` */
 interface MessageActionsProps {
   onCopy?: () => void;
   onFeedback?: (type: 'up' | 'down') => void;
@@ -77,24 +90,40 @@ interface MessageActionsProps {
 
 export const MessageActions: React.FC<MessageActionsProps> = ({ onCopy, onFeedback, onEdit }) => {
   return (
-    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+    <div
+      data-message-actions
+      className={cn(
+        'flex items-center gap-0.5 transition-opacity duration-150 ease-out',
+        actionsReveal,
+      )}
+    >
       {onEdit && (
-        <button type="button" onClick={onEdit} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors" title="编辑">
-          <Edit3 size={12} />
+        <button type="button" onClick={onEdit} className={actionButton} title="编辑">
+          <Edit3 size={12} aria-hidden="true" />
         </button>
       )}
       {onCopy && (
-        <button type="button" onClick={onCopy} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors" title="复制">
-          <Copy size={12} />
+        <button type="button" onClick={onCopy} className={actionButton} title="复制">
+          <Copy size={12} aria-hidden="true" />
         </button>
       )}
       {onFeedback && (
         <>
-          <button type="button" onClick={() => onFeedback('up')} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-emerald-400 transition-colors" title="有用">
-            <ThumbsUp size={12} />
+          <button
+            type="button"
+            onClick={() => onFeedback('up')}
+            className={cn(actionButton, 'hover:text-[var(--color-success)]')}
+            title="有用"
+          >
+            <ThumbsUp size={12} aria-hidden="true" />
           </button>
-          <button type="button" onClick={() => onFeedback('down')} className="p-1 rounded-lg hover:bg-white/10 text-[var(--color-text-muted)] hover:text-rose-400 transition-colors" title="无用">
-            <ThumbsDown size={12} />
+          <button
+            type="button"
+            onClick={() => onFeedback('down')}
+            className={cn(actionButton, 'hover:text-[var(--color-error)]')}
+            title="无用"
+          >
+            <ThumbsDown size={12} aria-hidden="true" />
           </button>
         </>
       )}
@@ -102,7 +131,6 @@ export const MessageActions: React.FC<MessageActionsProps> = ({ onCopy, onFeedba
   );
 };
 
-/* Reference: Dify `chat/answer/tool-detail.tsx` + Vercel AI SDK + Linear */
 interface ToolCallCardProps {
   name: string;
   arguments: Record<string, unknown>;
@@ -111,83 +139,91 @@ interface ToolCallCardProps {
   isRunning: boolean | undefined;
 }
 
-const statusConfig = {
-  running: { color: 'var(--color-accent-foreground)', bg: 'var(--color-accent-subtle)', label: '执行中', pulse: true },
-  success: { color: '#10B981', bg: 'rgba(16,185,129,0.12)', label: '成功', pulse: false },
-  error: { color: '#EF4444', bg: 'rgba(239,68,68,0.12)', label: 'error', pulse: false },
-};
-
+/**
+ * A tool call, labelled only by what the caller actually knows.
+ *
+ * A call with no result, no error and no running flag reports nothing: three
+ * states exist, and inferring a fourth from their absence would be a guess.
+ */
 export const ToolCallCard: React.FC<ToolCallCardProps> = ({ name, arguments: args, result, error, isRunning }) => {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-  const status = error ? 'error' : isRunning ? 'running' : result ? 'success' : 'running';
-  const config = statusConfig[status];
+
+  const status = error ? 'error' : isRunning ? 'running' : result ? 'success' : null;
+  const statusLabel =
+    status === 'error'
+      ? t('tool_call.status_error', { defaultValue: '失败' })
+      : status === 'running'
+        ? t('tool_call.status_running', { defaultValue: '执行中' })
+        : status === 'success'
+          ? t('tool_call.status_success', { defaultValue: '完成' })
+          : null;
+  const statusTone =
+    status === 'error'
+      ? 'text-[var(--color-error)]'
+      : status === 'running'
+        ? 'text-[var(--color-accent-foreground)]'
+        : 'text-[var(--color-success)]';
+  const hasOutput = result !== undefined && result !== '';
 
   return (
-    <div className="max-w-[85%] message-enter">
+    <div data-tool-call className="w-full min-w-0">
       <div
-        className="rounded-2xl border overflow-hidden transition-all duration-200"
-        style={{
-          borderColor: expanded ? 'var(--color-border-default)' : 'var(--color-border-subtle)',
-          backgroundColor: expanded ? 'var(--color-bg-surface-2)' : 'var(--color-bg-surface-1)',
-          boxShadow: expanded ? '0 4px 20px rgba(0,0,0,0.2)' : 'none',
-        }}
+        className={cn(
+          'overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] transition-colors duration-150 motion-reduce:transition-none',
+          expanded && 'bg-[var(--color-bg-surface-2)] border-[var(--color-border-default)]',
+        )}
       >
-        <button type="button"
-          onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors cursor-pointer group"
-          style={{ borderBottom: expanded ? '1px solid var(--color-border-subtle)' : 'none' }}
+        <button
+          type="button"
+          onClick={() => setExpanded(open => !open)}
+          aria-expanded={expanded}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--color-text-primary)] transition-colors duration-150 hover:bg-[var(--color-bg-surface-2)] motion-reduce:transition-none"
         >
-          <div className="p-1.5 rounded-xl flex items-center justify-center" style={{
-            backgroundColor: config.bg,
-            color: config.color,
-          }}>
-            <Terminal size={12} />
-          </div>
-          <span className="text-xs font-semibold flex-1" style={{ color: 'var(--color-text-primary)' }}>{name}</span>
-          {isRunning && (
-            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium" style={{
-              backgroundColor: config.bg,
-              color: config.color,
-            }}>
-              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: config.color }} />
-              执行中
+          <Terminal size={12} aria-hidden="true" className="shrink-0 text-[var(--color-text-muted)]" />
+          <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
+          {statusLabel && (
+            <span className={cn('flex shrink-0 items-center gap-1.5', statusTone)}>
+              {status === 'running' && (
+                <span
+                  aria-hidden="true"
+                  className="size-1.5 rounded-full bg-[var(--color-accent-foreground)] motion-safe:animate-pulse"
+                />
+              )}
+              {statusLabel}
             </span>
           )}
-          {!isRunning && !error && result && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{
-              backgroundColor: 'rgba(16,185,129,0.12)',
-              color: '#10B981',
-            }}>成功</span>
-          )}
-          {error && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{
-              backgroundColor: 'rgba(239,68,68,0.12)',
-              color: '#EF4444',
-            }}>{config.label}</span>
-          )}
-          <div className="p-1 rounded-lg transition-all duration-200" style={{
-            color: 'var(--color-text-muted)',
-            transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
-          }}>
-            <ChevronDown size={14} />
-          </div>
+          <ChevronDown
+            size={12}
+            aria-hidden="true"
+            className={cn(
+              'shrink-0 text-[var(--color-text-muted)] transition-transform duration-150 motion-reduce:transition-none',
+              expanded && 'rotate-180',
+            )}
+          />
         </button>
         {expanded && (
-          <div className="px-4 pb-4 space-y-3 animate-in slide-in-from-top-2 duration-200">
+          <div className="space-y-3 border-t border-[var(--color-border-subtle)] px-3 py-2.5">
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-text-muted)' }}>Input</div>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+                {t('tool_call.arguments', { defaultValue: '参数' })}
+              </p>
               <pre className="code-block text-xs whitespace-pre-wrap">{JSON.stringify(args, null, 2)}</pre>
             </div>
-            {result && (
+            {hasOutput && (
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--color-text-muted)' }}>Output</div>
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+                {t('tool_call.result', { defaultValue: '执行结果' })}
+                </p>
                 <pre className="code-block text-xs whitespace-pre-wrap">{result}</pre>
               </div>
             )}
             {error && (
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: '#EF4444' }}>Error</div>
-                <pre className="code-block text-xs" style={{ color: '#EF4444' }}>{error}</pre>
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-error)]">
+                  {t('tool_call.error_detail', { defaultValue: '错误详情' })}
+                </p>
+                <pre className="code-block text-xs whitespace-pre-wrap text-[var(--color-error)]">{error}</pre>
               </div>
             )}
           </div>

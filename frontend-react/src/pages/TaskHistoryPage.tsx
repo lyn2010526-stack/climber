@@ -1,22 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Clock, CheckCircle2, AlertCircle, Copy, Download, ChevronRight } from 'lucide-react';
+import { Copy, Download, ChevronRight, RefreshCw } from 'lucide-react';
 import { api, type TaskSummary, type TaskDetail } from '../api';
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: '等待中',
-  running: '执行中',
-  completed: '已完成',
-  failed: '失败',
-  cancelled: '已取消',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  pending: 'text-[var(--color-text-muted)]',
-  running: 'text-[var(--color-accent)]',
-  completed: 'text-green-400',
-  failed: 'text-red-400',
-  cancelled: 'text-[var(--color-text-muted)]',
-};
+import { useI18n } from '../i18n';
+import { formatDateTime } from '../i18n/utils';
+import {
+  TASK_STATUS_LABEL_KEYS,
+  reportedNumber,
+  taskStatusColor,
+  taskStatusLabel,
+} from '../components/collaboration/taskStatus';
 
 const taskOutput = (task: TaskDetail | null): string => {
   if (!task?.result) return '';
@@ -25,35 +17,55 @@ const taskOutput = (task: TaskDetail | null): string => {
 };
 
 export function TaskHistoryPage() {
+  const { t } = useI18n();
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTask, setSelectedTask] = useState<TaskDetail | null>(null);
+  const [error, setError] = useState(false);
+  const [opening, setOpening] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('');
+  const formatTime = (value: string | null | undefined) => value && Number.isFinite(Date.parse(value))
+    ? formatDateTime(value) : '-';
+  const filteredTasks = tasks.filter(task => (!status || task.status === status)
+    && `${task.objective} ${task.task_id}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
 
   useEffect(() => {
     loadTasks();
   }, []);
 
   const loadTasks = async () => {
+    setLoading(true);
+    setError(false);
     try {
       const data = await api.listTasks();
       setTasks(data);
-    } catch (e) {
-      console.error('Failed to load tasks:', e);
+    } catch {
+      setError(true);
     } finally {
       setLoading(false);
     }
   };
 
   const openTask = async (taskId: string) => {
+    setOpening(taskId);
+    setError(false);
     try {
       setSelectedTask(await api.getTask(taskId));
     } catch {
       setSelectedTask(null);
+      setError(true);
+    } finally {
+      setOpening(null);
     }
   };
 
-  const copyOutput = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const copyOutput = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      setError(true);
+    }
   };
 
   const downloadOutput = (task: TaskDetail) => {
@@ -71,7 +83,7 @@ export function TaskHistoryPage() {
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-[var(--color-text-muted)]">加载任务历史...</span>
+          <span role="status" className="text-sm text-[var(--color-text-muted)]">{t('common.loading')}</span>
         </div>
       </div>
     );
@@ -87,51 +99,53 @@ export function TaskHistoryPage() {
             onClick={() => setSelectedTask(null)}
             className="text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
           >
-            返回列表
+            {t('common.back')}
           </button>
           <ChevronRight size={10} className="text-[var(--color-text-muted)]" />
-          <span className="text-xs text-[var(--color-text-secondary)]">任务详情</span>
+          <span className="text-xs text-[var(--color-text-secondary)]">{t('task_history.detail_heading')}</span>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           <div className="space-y-2">
             <h3 className="text-sm font-medium text-[var(--color-text-primary)]">{selectedTask.objective}</h3>
-            <div className="flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
-              <span>ID: {selectedTask.task_id.slice(0, 8)}...</span>
-              <span>步骤: {selectedTask.progress}/{selectedTask.total_steps}</span>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--color-text-muted)]">
+              <span className="font-mono break-all">ID: {selectedTask.task_id}</span>
+              <span>{t('common.created')}: {formatTime(selectedTask.created_at)}</span>
+              <span>{t('task_history.steps', { done: reportedNumber(selectedTask.progress, t), total: reportedNumber(selectedTask.total_steps, t) })}</span>
               {typeof tokens === 'number' && <span>Tokens: {tokens.toLocaleString()}</span>}
             </div>
             <div className="flex items-center gap-2">
-              <span className={`text-[10px] ${STATUS_COLORS[selectedTask.status] || 'text-[var(--color-text-muted)]'}`}>
-                {STATUS_LABELS[selectedTask.status] || selectedTask.status}
+              <span className={`text-xs ${taskStatusColor(selectedTask.status)}`}>
+                {taskStatusLabel(selectedTask.status, t)}
               </span>
             </div>
           </div>
+          {error && <p role="alert" className="text-xs text-[var(--color-error)]">{t('common.error')} · {t('common.try_again')}</p>}
           {output && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-medium text-[var(--color-text-secondary)]">最终产出</h4>
+                <h4 className="text-xs font-medium text-[var(--color-text-secondary)]">{t('task_history.final_output')}</h4>
                 <div className="flex items-center gap-2">
                   <button type="button"
                     onClick={() => copyOutput(output)}
                     className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] flex items-center gap-1 transition-colors"
                   >
-                    <Copy size={10} /> 复制
+                    <Copy size={10} /> {t('common.copy')}
                   </button>
                   <button type="button"
                     onClick={() => downloadOutput(selectedTask)}
                     className="text-[10px] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] flex items-center gap-1 transition-colors"
                   >
-                    <Download size={10} /> 导出
+                    <Download size={10} /> {t('common.export')}
                   </button>
                 </div>
               </div>
-              <pre className="p-3 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-xl text-xs text-[var(--color-text-primary)] whitespace-pre-wrap font-mono">
+              <pre className="p-3 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-md text-xs text-[var(--color-text-primary)] whitespace-pre-wrap break-words font-mono">
                 {output}
               </pre>
             </div>
           )}
           {selectedTask.error && (
-            <pre className="p-3 bg-[var(--color-bg-surface-1)] border border-red-500/20 rounded-xl text-xs text-red-400 whitespace-pre-wrap font-mono">
+            <pre className="p-3 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-md text-xs text-[var(--color-error)] whitespace-pre-wrap break-words font-mono">
               {selectedTask.error}
             </pre>
           )}
@@ -141,51 +155,34 @@ export function TaskHistoryPage() {
   }
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="p-4 border-b border-[var(--color-border-subtle)]">
-        <h2 className="text-sm font-medium text-[var(--color-text-primary)]">任务历史</h2>
-        <p className="text-[10px] text-[var(--color-text-muted)] mt-1">共 {tasks.length} 个任务</p>
+    <div className="h-full min-h-0 min-w-0 flex flex-col text-[var(--color-text-primary)]">
+      <div className="px-4 py-3 border-b border-[var(--color-border-subtle)] flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold">{t('navigation.task_history')} <span className="ml-2 font-normal text-[var(--color-text-muted)] tabular-nums">{filteredTasks.length} / {tasks.length}</span></h2>
+        <button type="button" onClick={loadTasks} className="inline-flex items-center gap-2 rounded-md border border-[var(--color-border-subtle)] px-3 py-2 text-xs hover:bg-[var(--color-bg-surface-2)]"><RefreshCw size={14} />{t('common.refresh')}</button>
       </div>
-      <div className="flex-1 overflow-y-auto">
-        {tasks.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-xs text-[var(--color-text-muted)]">暂无任务记录</p>
-            <p className="text-[10px] text-[var(--color-text-muted)] mt-1">创建 Agent 任务后，这里会显示历史记录</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-[var(--color-border-subtle)]">
-            {tasks.map((task) => (
-              <div
-                key={task.task_id}
-                onClick={() => openTask(task.task_id)}
-                className="p-3 hover:bg-white/[0.03] cursor-pointer transition-all duration-200 group"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-[var(--color-text-primary)] truncate group-hover:text-white transition-colors">{task.objective}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className={`text-[10px] ${STATUS_COLORS[task.status] || 'text-[var(--color-text-muted)]'}`}>
-                        {STATUS_LABELS[task.status] || task.status}
-                      </span>
-                      <span className="text-[10px] text-[var(--color-text-muted)]">
-                        {task.created_at ? new Date(task.created_at).toLocaleString('zh-CN') : '-'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 text-[var(--color-text-muted)]">
-                    {task.status === 'completed' ? (
-                      <CheckCircle2 size={12} className="text-[var(--color-success)]" />
-                    ) : task.status === 'failed' ? (
-                      <AlertCircle size={12} className="text-[var(--color-error)]" />
-                    ) : (
-                      <Clock size={10} />
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="flex flex-wrap gap-2 px-4 py-2 border-b border-[var(--color-border-subtle)]">
+        <input aria-label={t('common.search')} placeholder={t('common.search')} value={query} onChange={event => setQuery(event.target.value)} className="min-w-0 flex-1 rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-3 py-2 text-xs" />
+        <select aria-label={t('common.status')} value={status} onChange={event => setStatus(event.target.value)} className="rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-3 py-2 text-xs">
+          <option value="">{t('common.all')}</option>
+          {Array.from(new Set([...Object.keys(TASK_STATUS_LABEL_KEYS), ...tasks.map(task => task.status)])).map(value => <option key={value} value={value}>{taskStatusLabel(value, t)}</option>)}
+        </select>
+      </div>
+      {error && <div role="alert" className="flex items-center gap-3 px-4 py-2 text-xs text-[var(--color-error)]">{t('right_panel.states.load_failed')}<button type="button" onClick={loadTasks} className="underline">{t('common.retry')}</button></div>}
+      <div className="flex-1 min-h-0 overflow-auto">
+        <table className="w-full min-w-[640px] text-left text-xs">
+          <thead className="sticky top-0 bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)]"><tr>
+            {[t('navigation.tasks'), t('common.status'), t('common.created'), t('common.actions')].map(label => <th key={label} scope="col" className="px-4 py-2 font-medium whitespace-nowrap">{label}</th>)}
+          </tr></thead>
+          <tbody className="divide-y divide-[var(--color-border-subtle)]">
+            {filteredTasks.map(task => <tr key={task.task_id} className="hover:bg-[var(--color-bg-surface-2)]">
+              <td className="px-4 py-3 max-w-xs"><p className="truncate" title={task.objective}>{task.objective}</p><p className="mt-1 font-mono text-[var(--color-text-muted)] truncate" title={task.task_id}>{task.task_id}</p></td>
+              <td className={`px-4 py-3 whitespace-nowrap ${taskStatusColor(task.status)}`}>{taskStatusLabel(task.status, t)}</td>
+              <td className="px-4 py-3 whitespace-nowrap tabular-nums text-[var(--color-text-secondary)]">{formatTime(task.created_at)}</td>
+              <td className="px-4 py-2"><button type="button" disabled={opening !== null} onClick={() => openTask(task.task_id)} aria-label={`${t('common.open')}: ${task.objective}`} className="inline-flex items-center gap-1 rounded-md px-2 py-2 hover:bg-[var(--color-bg-surface-3)] disabled:opacity-50">{opening === task.task_id ? t('common.loading') : t('common.open')}<ChevronRight size={14} /></button></td>
+            </tr>)}
+          </tbody>
+        </table>
+        {!error && filteredTasks.length === 0 && <p className="p-8 text-center text-xs text-[var(--color-text-muted)]">{t(tasks.length ? 'common.no_results' : 'common.no_data')}</p>}
       </div>
     </div>
   );

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api';
 import { apiClient, ApiError } from '../../lib/api-client';
-import { agentService } from '../../services/agentService';
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
   status, headers: { 'Content-Type': 'application/json' },
@@ -66,7 +65,7 @@ describe('Settings API contracts', () => {
     });
     expect(fetchMock.mock.calls[0][1]?.headers).not.toHaveProperty('Authorization');
     fetchMock.mockResolvedValueOnce(json([{ id: 'temporary-agent' }]));
-    await expect(agentService.list()).resolves.toEqual([{ id: 'temporary-agent' }]);
+    await expect(api.listAgents()).resolves.toEqual([{ id: 'temporary-agent' }]);
     expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/agents', expect.any(Object));
   });
 

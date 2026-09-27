@@ -10,6 +10,22 @@ vi.mock('../store/workspace', () => ({ useWorkspaceStore: () => ({ sessions: [] 
 afterEach(cleanup);
 
 describe('Semantic navigation contract', () => {
+  it('registers every implemented App route exactly once', () => {
+    const routedPages = new Set([...appSource.matchAll(/case '([^']+)': return/g)].map(match => match[1]));
+    expect(new Set(ALL_NAV_ITEMS_BASE.map(item => item.id))).toEqual(routedPages);
+    expect(NAV_ITEM_IDS.size).toBe(ALL_NAV_ITEMS_BASE.length);
+    expect(NAV_ITEM_IDS.has('authapikeys')).toBe(true);
+  });
+
+  it('keeps collaboration secondary and core entries consistent with the full registry', () => {
+    expect(ALL_NAV_ITEMS_BASE.filter(item => item.secondary).map(item => item.id)).toEqual(['cluster', 'crews']);
+    expect(ALL_NAV_ITEMS_BASE.slice(0, 8).some(item => item.secondary)).toBe(false);
+    expect(ALL_NAV_ITEMS_BASE.filter(item => item.group === 'manage').map(item => item.id)).toEqual(['agents', 'skills', 'mcp', 'plugins', 'plugin-manage']);
+    for (const item of CORE_NAV_ITEMS_BASE) {
+      expect(item).toEqual(ALL_NAV_ITEMS_BASE.find(entry => entry.id === item.id));
+    }
+  });
+
   it.each([
     ['factory', Factory],
     ['reasoning', Brain],

@@ -120,7 +120,12 @@
     "memory": "Memories",
     "group": "Groups",
     "all": "All",
-    "searching": "Searching..."
+    "searching": "Searching...",
+    "preview_only": {
+      "document": "Preview only — a document chunk has no detail page",
+      "memory": "Preview only — memories have no detail page",
+      "group": "Open in Clusters"
+    }
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -161,6 +166,7 @@
     "eval": "Evaluations",
     "terminal": "Terminal",
     "plugin_management": "Plugin Management",
+    "factory": "Factory",
     "crews": "Crews",
     "cluster": "Cluster",
     "stats": "Statistics",
@@ -205,7 +211,17 @@
     "clear_history": "Clear History",
     "start_conversation": "Start a conversation",
     "no_messages": "No messages yet",
-    "typing": "Typing..."
+    "typing": "Typing...",
+    "aria_label": "Chat",
+    "input_placeholder": "Type your message here...",
+    "empty_state_title": "Start a conversation",
+    "suggestion_1": "Explain this task",
+    "suggestion_2": "Review the current workspace",
+    "suggestion_3": "Help me plan the next step",
+    "edit_message": "Edit message",
+    "wide_column": "Use wide column",
+    "stop_generation": "Stop generation",
+    "table_of_contents": "Table of contents"
   },
   "agents": {
     "title": "Agents Management",
@@ -233,6 +249,7 @@
     "agent_deleted": "Agent deleted successfully",
     "card_aria_label": "Agent {{name}}",
     "status_configured": "Configured",
+    "status_model_configured": "Model configured",
     "status_incomplete": "Incomplete",
     "status_disabled": "Disabled",
     "coming_soon_title": "Coming soon",
@@ -268,8 +285,7 @@
     "create_first": "Create your first agent to get started.",
     "clear_search": "Clear search",
     "previous": "Previous",
-    "next": "Next",
-    "create_agent": "Create Agent"
+    "next": "Next"
   },
   "apiKeys": {
     "add_key": "Add New Key",
@@ -446,5 +462,104 @@
     "api_usage": "API Usage",
     "download_report": "Download Report",
     "log_out": "Log Out"
+  },
+  "collaboration": {
+    "not_reported": "Not reported",
+    "heading_task": "Group task",
+    "back_to_list": "Back to groups",
+    "topic_unset": "Topic not reported",
+    "no_run_yet": "No task run yet",
+    "steps_progress": "{{done}} / {{total}} steps",
+    "task_id_label": "Task ID",
+    "result_heading": "Result",
+    "new_task": "New task",
+    "task_status": { "pending": "Pending", "running": "Running", "completed": "Completed", "failed": "Failed", "cancelled": "Cancelled" },
+    "group_status": { "active": "Active" },
+    "cancel": { "action": "Cancel task", "cancelling": "Cancelling..." },
+    "aria": { "task_status": "Task status", "group_discussion": "Group discussion", "sidebar": "Collaboration sidebar", "loading_members": "Loading members" },
+    "members": { "empty": "No members", "remove_named": "Remove {{name}}", "role": "Role", "adding": "Adding...", "retry": "Retry" },
+    "sidebar": { "members": "Members", "add_member": "Add member", "submit_task": "Submit task", "topic": "Topic" },
+    "task": { "objective_label": "Objective", "objective_placeholder": "Describe the task", "max_steps": "Maximum steps", "submitting": "Submitting...", "submit": "Submit task" },
+    "errors": { "load_groups": "Could not load groups", "load_members": "Could not load members", "update_member": "Could not update member", "create_group": "Could not create group" },
+    "groups": { "heading": "Groups", "create": "Create group", "name_label": "Group name", "topic_label": "Topic", "topic_placeholder": "Optional topic", "template_hint": "Use default member template", "reload": "Reload", "loading": "Loading groups...", "empty": "No groups", "member_count": "{{count}} members", "member_count_unreported": "Member count not reported", "enter": "Enter" }
+  },
+  "right_panel": {
+    "title": "Run inspector",
+    "collapse_all": "Collapse all",
+    "expand_all": "Expand all",
+    "groups": {
+      "overview": "Session",
+      "execution": "Execution",
+      "changes": "Changes & files",
+      "activity": "Tool activity"
+    },
+    "sections": {
+      "config": "Configuration",
+      "diff": "Diff",
+      "dag": "DAG",
+      "trace": "Trace",
+      "reasoning": "Reasoning",
+      "files": "Files",
+      "toolcalls": "Tools"
+    },
+    "status": {
+      "idle": "Idle",
+      "running": "Running",
+      "paused": "Paused",
+      "completed": "Completed",
+      "error": "Errored",
+      "pending": "Queued",
+      "failed": "Failed",
+      "stopped": "Stopped",
+      "unknown": "Status not reported"
+    },
+    "summary": {
+      "untitled": "Untitled session",
+      "no_session": "No session selected",
+      "no_session_hint": "Select or create a session to see the run summary",
+      "tokens": "Tokens",
+      "token_of_limit": "{{used}} / {{limit}}",
+      "not_reported": "Not reported",
+      "none": "None"
+    },
+    "config": {
+      "title": "Run configuration",
+      "provider": "Provider",
+      "model": "Model",
+      "temperature": "Temperature",
+      "max_tokens": "Max tokens",
+      "token_title": "Token budget",
+      "tokens_not_reported": "This run reports no token budget",
+      "skills_title": "Active skills",
+      "no_skills": "No active skills",
+      "tools_title": "Active tools",
+      "no_tools": "No active tools"
+    },
+    "trace": {
+      "duration": "Duration",
+      "tokens": "tokens"
+    },
+    "files": {
+      "title": "{{count}} file",
+      "title_other": "{{count}} files",
+      "chunks": "{{count}} chunk",
+      "chunks_other": "{{count}} chunks"
+    },
+    "states": {
+      "loading": "Loading run data",
+      "load_failed": "Run data was not reported",
+      "load_failed_hint": "The backend did not answer. Check the connection and retry.",
+      "retry": "Retry",
+      "empty_dag": "No execution graph",
+      "empty_dag_hint": "The DAG appears once a run starts planning.",
+      "empty_trace": "No trace data",
+      "empty_trace_hint": "Traces appear after the first model call.",
+      "empty_diff": "No file changes",
+      "empty_diff_hint": "Edits this run makes will show up here.",
+      "empty_documents": "No documents",
+      "empty_documents_hint": "Files this run reads will show up here.",
+      "empty_tools": "No tool activity",
+      "empty_tools_hint": "Tool calls this run makes will show up here."
+    }
   }
 }

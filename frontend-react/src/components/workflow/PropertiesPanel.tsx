@@ -58,16 +58,17 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: PropertiesPanelPro
   const fieldKey = (label: string) => label.toLowerCase().replace(/\s+/g, '_');
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="relative flex flex-col h-full min-h-0">
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-[var(--color-border-subtle)]">
-        <h3 className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
+        <h3 className="text-xs font-semibold text-[var(--color-text-secondary)]">
           Node Properties
         </h3>
         <div className="flex items-center gap-1">
           <button type="button"
             onClick={() => setShowDeleteConfirm(true)}
-            className="p-1 rounded hover:bg-red-500/10 text-[var(--color-text-muted)] hover:text-red-400 transition-colors"
+            aria-label="Delete node"
+            className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-[var(--color-error-subtle)] hover:text-[var(--color-error)]"
           >
             <Trash2 size={12} />
           </button>
@@ -75,29 +76,30 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: PropertiesPanelPro
       </div>
 
       {/* Node Info */}
-      <div className="p-3 border-b border-[var(--color-border-subtle)]">
-        <div className="flex items-center gap-2 mb-1">
+      <div className="px-3 py-2 border-b border-[var(--color-border-subtle)]">
+        <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-[var(--color-text-primary)] capitalize">{node.type}</span>
-          <span className="text-[9px] text-[var(--color-text-muted)] font-mono">{node.id}</span>
+          <span className="truncate text-[10px] text-[var(--color-text-muted)] font-mono">{node.id}</span>
         </div>
       </div>
 
       {/* Fields */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-3">
         {fields.map((field) => {
           const key = fieldKey(field.label);
-          const value = (node.data as any)?.[key] || '';
+          const rawValue = (node.data as any)?.[key];
+          const value = rawValue === false ? 'false' : rawValue === true ? 'true' : rawValue == null ? '' : String(rawValue);
 
           return (
             <div key={field.label}>
-              <label className="block text-[10px] font-medium text-[var(--color-text-muted)] mb-1">
+              <label className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1">
                 {field.label}
               </label>
               {field.type === 'select' ? (
                 <select
                   value={value}
                   onChange={(e) => handleChange(key, e.target.value)}
-                   className="w-full px-2 py-1.5 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded text-[11px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50"
+                    className="h-9 w-full px-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)] rounded-[var(--radius-sm)] text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
                 >
                   <option value="">Select...</option>
                   {field.options?.map((opt) => (
@@ -109,7 +111,7 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: PropertiesPanelPro
                   value={value}
                   onChange={(e) => handleChange(key, e.target.value)}
                   rows={3}
-                   className="w-full px-2 py-1.5 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded text-[11px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 resize-none"
+                   className="w-full px-2.5 py-2 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)] rounded-[var(--radius-sm)] text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)] resize-y"
                   placeholder={`Enter ${fieldKey(field.label)}...`}
                 />
               ) : (
@@ -117,7 +119,7 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: PropertiesPanelPro
                   type="text"
                   value={value}
                   onChange={(e) => handleChange(key, e.target.value)}
-                   className="w-full px-2 py-1.5 bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] rounded text-[11px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50"
+                    className="h-9 w-full px-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-default)] rounded-[var(--radius-sm)] text-xs text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]"
                   placeholder={`Enter ${fieldKey(field.label)}...`}
                 />
               )}
@@ -128,10 +130,10 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: PropertiesPanelPro
 
       {/* Delete Confirmation */}
       {showDeleteConfirm && (
-         <div className="absolute inset-0 bg-[var(--color-bg-deep)]/80 backdrop-blur-sm flex items-center justify-center z-50">
+         <div className="absolute inset-0 bg-[var(--color-bg-page)]/80 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="p-4 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-xl shadow-xl max-w-[240px]">
             <div className="flex items-center gap-2 mb-3">
-              <AlertCircle size={16} className="text-red-400" />
+              <AlertCircle size={16} className="text-[var(--color-error)]" />
               <span className="text-xs font-medium text-[var(--color-text-primary)]">Delete Node?</span>
             </div>
             <p className="text-[10px] text-[var(--color-text-muted)] mb-4">
@@ -149,7 +151,7 @@ export function PropertiesPanel({ node, onUpdate, onDelete }: PropertiesPanelPro
                   onDelete();
                   setShowDeleteConfirm(false);
                 }}
-                className="flex-1 px-3 py-1.5 text-[11px] text-white bg-red-500 rounded-lg hover:bg-red-500/90 transition-colors"
+                className="flex-1 px-3 py-1.5 text-[11px] text-white bg-[var(--color-error)] rounded-lg hover:bg-[var(--color-error)]/90 transition-colors"
               >
                 Delete
               </button>

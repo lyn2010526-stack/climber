@@ -120,7 +120,12 @@
     "memory": "Erinnerungen",
     "group": "Gruppen",
     "all": "Alle",
-    "searching": "Suche..."
+    "searching": "Suche...",
+    "preview_only": {
+      "document": "Nur Vorschau — ein Dokumentabschnitt hat keine Detailseite",
+      "memory": "Nur Vorschau — Erinnerungen haben keine Detailseite",
+      "group": "In Gruppen öffnen"
+    }
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -206,7 +211,17 @@
     "clear_history": "Verlauf löschen",
     "start_conversation": "Unterhaltung beginnen",
     "no_messages": "Noch keine Nachrichten",
-    "typing": "Schreibt..."
+    "typing": "Schreibt...",
+    "aria_label": "Chat",
+    "input_placeholder": "Nachricht hier eingeben...",
+    "empty_state_title": "Unterhaltung beginnen",
+    "suggestion_1": "Diese Aufgabe erklären",
+    "suggestion_2": "Aktuellen Arbeitsbereich prüfen",
+    "suggestion_3": "Nächsten Schritt planen",
+    "edit_message": "Nachricht bearbeiten",
+    "wide_column": "Breite Spalte verwenden",
+    "stop_generation": "Generierung stoppen",
+    "table_of_contents": "Inhaltsverzeichnis"
   },
   "agents": {
     "title": "Agentenverwaltung",
@@ -234,6 +249,7 @@
     "agent_deleted": "Agent erfolgreich gelöscht",
     "card_aria_label": "Agent {{name}}",
     "status_configured": "Konfiguriert",
+    "status_model_configured": "Modell konfiguriert",
     "status_incomplete": "Unvollständig",
     "status_disabled": "Deaktiviert",
     "coming_soon_title": "Demnächst verfügbar",
@@ -269,8 +285,7 @@
     "create_first": "Erstellen Sie Ihren ersten Agenten, um zu starten.",
     "clear_search": "Suche löschen",
     "previous": "Zurück",
-    "next": "Weiter",
-    "create_agent": "Agent erstellen"
+    "next": "Weiter"
   },
   "apiKeys": {
     "add_key": "Neuen Schlüssel hinzufügen",
@@ -448,5 +463,91 @@
     "api_usage": "API-Nutzung",
     "download_report": "Bericht herunterladen",
     "log_out": "Abmelden"
+  },
+  "collaboration": {
+    "not_reported": "Nicht gemeldet", "heading_task": "Gruppenaufgabe", "back_to_list": "Zurück zu Gruppen", "topic_unset": "Thema nicht gemeldet", "no_run_yet": "Noch keine Aufgabenausführung", "steps_progress": "{{done}} / {{total}} Schritte", "task_id_label": "Aufgaben-ID", "result_heading": "Ergebnis", "new_task": "Neue Aufgabe",
+    "task_status": { "pending": "Ausstehend", "running": "Läuft", "completed": "Abgeschlossen", "failed": "Fehlgeschlagen", "cancelled": "Abgebrochen" }, "group_status": { "active": "Aktiv" }, "cancel": { "action": "Aufgabe abbrechen", "cancelling": "Wird abgebrochen..." },
+    "aria": { "task_status": "Aufgabenstatus", "group_discussion": "Gruppendiskussion", "sidebar": "Kollaborationsseitenleiste", "loading_members": "Mitglieder werden geladen" }, "members": { "empty": "Keine Mitglieder", "remove_named": "{{name}} entfernen", "role": "Rolle", "adding": "Wird hinzugefügt...", "retry": "Erneut versuchen" }, "sidebar": { "members": "Mitglieder", "add_member": "Mitglied hinzufügen", "submit_task": "Aufgabe senden", "topic": "Thema" },
+    "task": { "objective_label": "Ziel", "objective_placeholder": "Aufgabe beschreiben", "max_steps": "Maximale Schritte", "submitting": "Wird gesendet...", "submit": "Aufgabe senden" }, "errors": { "load_groups": "Gruppen konnten nicht geladen werden", "load_members": "Mitglieder konnten nicht geladen werden", "update_member": "Mitglied konnte nicht aktualisiert werden", "create_group": "Gruppe konnte nicht erstellt werden" },
+    "groups": { "heading": "Gruppen", "create": "Gruppe erstellen", "name_label": "Gruppenname", "topic_label": "Thema", "topic_placeholder": "Optionales Thema", "template_hint": "Standard-Mitgliedervorlage verwenden", "reload": "Neu laden", "loading": "Gruppen werden geladen...", "empty": "Keine Gruppen", "member_count": "{{count}} Mitglieder", "member_count_unreported": "Mitgliederzahl nicht gemeldet", "enter": "Öffnen" }
+  },
+  "right_panel": {
+    "title": "Ausführungsübersicht",
+    "collapse_all": "Alle einklappen",
+    "expand_all": "Alle ausklappen",
+    "groups": {
+      "overview": "Sitzung",
+      "execution": "Ausführung",
+      "changes": "Änderungen & Dateien",
+      "activity": "Werkzeugaktivität"
+    },
+    "sections": {
+      "config": "Konfiguration",
+      "diff": "Diff",
+      "dag": "DAG",
+      "trace": "Trace",
+      "reasoning": "Begründung",
+      "files": "Dateien",
+      "toolcalls": "Werkzeuge"
+    },
+    "status": {
+      "idle": "Leerlauf",
+      "running": "Läuft",
+      "paused": "Angehalten",
+      "completed": "Abgeschlossen",
+      "error": "Fehlgeschlagen",
+      "pending": "In Warteschlange",
+      "failed": "Fehlgeschlagen",
+      "stopped": "Gestoppt",
+      "unknown": "Status nicht gemeldet"
+    },
+    "summary": {
+      "untitled": "Unbenannte Sitzung",
+      "no_session": "Keine Sitzung ausgewählt",
+      "no_session_hint": "Wählen oder erstellen Sie eine Sitzung, um die Zusammenfassung zu sehen",
+      "tokens": "Token",
+      "token_of_limit": "{{used}} / {{limit}}",
+      "not_reported": "Nicht gemeldet",
+      "none": "Keine"
+    },
+    "config": {
+      "title": "Ausführungskonfiguration",
+      "provider": "Anbieter",
+      "model": "Modell",
+      "temperature": "Temperatur",
+      "max_tokens": "Max. Token",
+      "token_title": "Token-Budget",
+      "tokens_not_reported": "Dieser Lauf meldet kein Token-Budget",
+      "skills_title": "Aktive Fähigkeiten",
+      "no_skills": "Keine aktiven Fähigkeiten",
+      "tools_title": "Aktive Werkzeuge",
+      "no_tools": "Keine aktiven Werkzeuge"
+    },
+    "trace": {
+      "duration": "Dauer",
+      "tokens": "Token"
+    },
+    "files": {
+      "title": "{{count}} Datei",
+      "title_other": "{{count}} Dateien",
+      "chunks": "{{count}} Block",
+      "chunks_other": "{{count}} Blöcke"
+    },
+    "states": {
+      "loading": "Ausführungsdaten werden geladen",
+      "load_failed": "Ausführungsdaten wurden nicht gemeldet",
+      "load_failed_hint": "Das Backend hat nicht geantwortet. Verbindung prüfen und erneut versuchen.",
+      "retry": "Erneut versuchen",
+      "empty_dag": "Kein Ausführungsgraph",
+      "empty_dag_hint": "Der DAG erscheint, sobald ein Lauf mit der Planung beginnt.",
+      "empty_trace": "Keine Trace-Daten",
+      "empty_trace_hint": "Traces erscheinen nach dem ersten Modellaufruf.",
+      "empty_diff": "Keine Dateiänderungen",
+      "empty_diff_hint": "Änderungen dieses Laufs erscheinen hier.",
+      "empty_documents": "Keine Dokumente",
+      "empty_documents_hint": "Von diesem Lauf gelesene Dateien erscheinen hier.",
+      "empty_tools": "Keine Werkzeugaktivität",
+      "empty_tools_hint": "Werkzeugaufrufe dieses Laufs erscheinen hier."
+    }
   }
 }

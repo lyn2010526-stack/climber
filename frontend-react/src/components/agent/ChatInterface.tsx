@@ -1,20 +1,31 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Send, Square, Bot, Edit3, Check, X, Maximize2 } from 'lucide-react';
+import { Send, Square, ArrowDown, CircleAlert } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 import { api } from '../../api';
-import { MessageContent, MessageActions, ToolCallCard } from '../chat/MessageContent';
+import { MessageActions, MessageContent } from '../chat/MessageContent';
+import { MarkdownRenderer } from '../chat/MarkdownRenderer';
+import { ChatEmptyState } from './ChatEmptyState';
 import { ThinkingDetails } from '../chat/ThinkingDetails';
+import { StreamingCursor } from '../chat/StreamingCursor';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { FloatingPermissionDialog } from './FloatingPermissionDialog';
 import type { PermissionRequest } from './FloatingPermissionDialog';
 import { useI18n } from '../../i18n';
+import { getReadingWidthClass, hasParallelToolContent, useMaximizeChatSpace } from './readingWidth';
+import { ToolCallVisualization, type ToolCall as VisualToolCall } from './ToolCallVisualization';
 
+/** Same gutter on both sides of the column. */
+const GUTTER = 'px-4 md:px-6';
 
-  /* Streaming cursor - Reference: Claude / Vercel AI streaming */
-  const StreamingCursor = () => (
-    <span className="inline-block w-[2px] h-4 ml-0.5 rounded-full bg-[var(--color-accent)] animate-pulse" />
-  );
+/**
+ * The one line a textarea is allowed to grow to, as a spacing-scale multiple:
+ * `calc(var(--space-16) * 3.125)` is 12.5rem, which is the same 200px ceiling
+ * `autoGrow` enforces in pixels. Both numbers come from the token scale now, and
+ * the comment on {@link autoGrow} keeps them together.
+ */
+const COMPOSER_MAX_HEIGHT = 'max-h-[calc(var(--space-16)*3.125)]';
+const COMPOSER_MAX_HEIGHT_PX = 200;
 
 interface ToolCall {
   id: string;
@@ -23,6 +34,11 @@ interface ToolCall {
   result?: string;
   error?: string;
   status?: 'running' | 'success' | 'error';
+  requiresApproval?: boolean;
+  action?: PermissionRequest['action'];
+  description?: string;
+  details?: string;
+  severity?: PermissionRequest['severity'];
 }
 
 interface Message {
@@ -39,31 +55,37 @@ interface ChatInterfaceProps {
   onSend: (message: string) => void;
   onStop?: () => void;
   isLoading?: boolean;
+  /** A failure the caller actually observed. Renders an error row, nothing else. */
+  error?: string;
+  /** Only rendered alongside `error`; without a handler there is no retry button. */
+  onRetry?: () => void;
   className?: string;
   placeholder?: string;
   emptyStateTitle?: string;
   emptyStateDescription?: string;
   suggestions?: string[];
+  permissionRequests?: PermissionRequest[];
 }
 
-type EditState = { mode: 'view'; messageId: string } | { mode: 'edit'; messageId: string } | { mode: 'modal'; messageId: string } | null;
+type EditState = { mode: 'view' | 'edit'; messageId: string } | null;
 
 export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   messages,
   onSend,
   onStop,
   isLoading,
+  error,
+  onRetry,
   className,
   placeholder,
   emptyStateTitle,
   emptyStateDescription,
   suggestions,
+  permissionRequests: providedPermissionRequests,
 }) => {
   const { t } = useI18n();
-  /* Defaults are keyed so the empty state follows the active locale. */
   const resolvedPlaceholder = placeholder ?? t('chat.input_placeholder');
-  const resolvedEmptyStateTitle = emptyStateTitle ?? t('chat.empty_state_title');
-  const resolvedEmptyStateDescription = emptyStateDescription ?? t('chat.empty_state_description');
+  const resolvedEmptyStateTitle = emptyStateTitle ?? t('chat.empty_state_title', { defaultValue: '开始对话' });
   const resolvedSuggestions = suggestions ?? [
     t('chat.suggestion_1'),
     t('chat.suggestion_2'),
@@ -71,23 +93,61 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   ];
   const [input, setInput] = useState('');
   const [editState, setEditState] = useState<EditState>(null);
+  /**
+   * One reading column for the transcript and the composer, decided by
+   * {@link getReadingWidthClass}: a turn carrying parallel tool output needs
+   * more room than prose, and the composer follows the widest turn in view.
+   */
+  const [fullWidth, toggleFullWidth] = useMaximizeChatSpace();
   const [editContent, setEditContent] = useState('');
-  const [permissionRequests, setPermissionRequests] = useState<PermissionRequest[]>([]);
+  const [resolvedPermissionIds, setResolvedPermissionIds] = useState<Set<string>>(() => new Set());
   const [feedbacks, setFeedbacks] = useState<Record<string, 'up' | 'down'>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const editInputRef = useRef<HTMLTextAreaElement>(null);
+  /**
+   * Safari reports `isComposing` inconsistently, so the flag is also tracked
+   * from the composition events and cross-checked against keyCode 229.
+   */
+  const composing = useRef(false);
+  const followOutput = useRef(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const lastMessage = messages.at(-1);
+  const activeMessageId = isLoading && lastMessage?.role === 'assistant' ? lastMessage.id : undefined;
+  const isEmpty = messages.length === 0;
+  const isHistoryLoading = isEmpty && !!isLoading;
+  const showEmptyState = isEmpty && !isLoading && !error;
+  const conversationIsWide = messages.some(message => hasParallelToolContent(message.toolCalls?.length));
+  const composerWidth = getReadingWidthClass({ fullWidth, hasParallelContent: conversationIsWide });
+
+  const permissionRequests = (providedPermissionRequests ?? messages.flatMap(message =>
+    (message.toolCalls ?? []).flatMap(toolCall => {
+      if (!toolCall.requiresApproval) return [];
+      return [{
+        id: toolCall.id,
+        action: toolCall.action ?? 'mcp_tool',
+        description: toolCall.description ?? `${toolCall.name} requires approval`,
+        details: toolCall.details,
+        severity: toolCall.severity ?? 'medium',
+        timestamp: Date.now(),
+      } satisfies PermissionRequest];
+    }),
+  )).filter(request => !resolvedPermissionIds.has(request.id));
 
   const handleApprovePermission = useCallback(async (id: string) => {
-    setPermissionRequests(prev => prev.filter(r => r.id !== id));
+    await api.resolvePermission(id, 'allow' as Parameters<typeof api.resolvePermission>[1]);
+    setResolvedPermissionIds(prev => new Set(prev).add(id));
   }, []);
 
   const handleDenyPermission = useCallback(async (id: string) => {
-    setPermissionRequests(prev => prev.filter(r => r.id !== id));
+    await api.resolvePermission(id, 'deny');
+    setResolvedPermissionIds(prev => new Set(prev).add(id));
   }, []);
 
   const handleApproveAllPermissions = useCallback(async () => {
-    setPermissionRequests([]);
-  }, []);
+    await Promise.all(permissionRequests.map(request => api.resolvePermission(request.id, 'allow' as Parameters<typeof api.resolvePermission>[1])));
+    setResolvedPermissionIds(prev => new Set([...prev, ...permissionRequests.map(request => request.id)]));
+  }, [permissionRequests]);
 
   const submitFeedback = useCallback(async (messageId: string, type: 'up' | 'down') => {
     if (feedbacks[messageId]) return;
@@ -100,19 +160,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   }, [feedbacks]);
 
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && followOutput.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isLoading]);
 
-  /* Reference: Lobe UI EditableMessage - mode switching */
+  useEffect(() => {
+    if (editState?.mode !== 'edit') return;
+    editInputRef.current?.focus();
+  }, [editState]);
+
   const startEditing = useCallback((messageId: string, content: string) => {
     setEditContent(content);
     setEditState({ mode: 'edit', messageId });
-  }, []);
-
-  const openModal = useCallback(() => {
-    setEditState(prev => prev ? { ...prev, mode: 'modal' } : null);
   }, []);
 
   const cancelEdit = useCallback(() => {
@@ -121,260 +181,305 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   }, []);
 
   const saveEdit = useCallback(() => {
-    if (editState?.mode === 'edit' || editState?.mode === 'modal') {
-      onSend(editContent);
+    if (!isLoading && editContent.trim() && editState?.mode === 'edit') {
+      followOutput.current = true;
+      onSend(editContent.trim());
       setEditState(null);
       setEditContent('');
     }
-  }, [editState, editContent, onSend]);
+  }, [editState, editContent, onSend, isLoading]);
+
+  const canSubmit = !!input.trim() && !isLoading;
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim() && !isLoading) {
+    if (canSubmit) {
+      followOutput.current = true;
       onSend(input.trim());
       setInput('');
+      if (inputRef.current) inputRef.current.style.height = 'auto';
     }
-  }, [input, isLoading, onSend]);
+  }, [canSubmit, input, onSend]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e);
-    }
+    // A candidate Enter that belongs to an IME candidate window has to reach the
+    // input: it neither submits nor gets swallowed.
+    if (composing.current || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
+    // The confirming key of a composition arrives as "Process" on some engines.
+    if (e.nativeEvent.key === 'Process') return;
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    e.preventDefault();
+    handleSubmit(e);
   }, [handleSubmit]);
 
-  /* Auto-grow textarea - Reference: Linear / Raycast input */
   const autoGrow = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const el = e.target;
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+    // The ceiling is the same one COMPOSER_MAX_HEIGHT expresses in rem, so the
+    // box the user can scroll stops where the scripted growth stops.
+    el.style.height = Math.min(el.scrollHeight, COMPOSER_MAX_HEIGHT_PX) + 'px';
   }, []);
 
-  /* Reference: Lobe UI ChatItem - Actions hover + layout mode */
-  const renderMessageContent = (msg: Message) => {
-    const isEditing = editState?.messageId === msg.id;
+  const fillFromSuggestion = useCallback((suggestion: string) => {
+    setInput(suggestion);
+    inputRef.current?.focus();
+  }, []);
 
-    if (isEditing && (editState.mode === 'edit' || editState.mode === 'modal')) {
-      return (
-        <div className={cn('flex gap-3 max-w-[85%]', msg.role === 'user' ? 'flex-row-reverse ml-auto' : '')}>
-          <div className="flex items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] w-9 h-9 shrink-0">
-            <Edit3 size={16} />
+  const renderEditControls = (alignEnd: boolean) => (
+    <div className={cn('flex items-center gap-2', alignEnd && 'justify-end')}>
+      <Button size="sm" onClick={saveEdit} disabled={isLoading || !editContent.trim()}>
+        {t('common.save')}
+      </Button>
+      <Button size="sm" variant="ghost" onClick={cancelEdit}>
+        {t('common.cancel')}
+      </Button>
+    </div>
+  );
+
+  const renderMessageBody = (msg: Message) => {
+    const isUser = msg.role === 'user';
+    const isActive = msg.id === activeMessageId;
+    const isAwaitingFirstToken = isActive && !msg.content && !msg.reasoning && !msg.toolCalls?.length;
+    return (
+      <>
+        {isAwaitingFirstToken && <ThinkingIndicator compact />}
+        {msg.reasoning && (
+          <ThinkingDetails isComplete={!isActive} defaultOpen={!msg.content}>
+            {msg.reasoning}
+          </ThinkingDetails>
+        )}
+        {msg.toolCalls?.length ? (
+          <div className={cn(isUser ? 'my-1' : 'mb-2', 'w-full')}>
+            <ToolCallVisualization
+              calls={msg.toolCalls.map(toolCall => ({
+                ...toolCall,
+                status: isActive && toolCall.status === 'running' ? 'running' : toolCall.status,
+              })) as VisualToolCall[]}
+              defaultExpanded={isActive}
+              hideRunningStatus={!isActive}
+            />
           </div>
-          <div className={cn('flex flex-col gap-2 min-w-0 flex-1')}>
-            <div className="px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-[var(--radius-md)] focus-within:border-[var(--color-border-accent)] transition-colors duration-200">
+        ) : null}
+        {msg.content && (
+          <div className="min-w-0">
+            {isUser ? <p className="whitespace-pre-wrap">{msg.content}</p> : <MarkdownRenderer content={msg.content} />}
+            {isActive && (
+              <span data-streaming-cursor>
+                <StreamingCursor />
+              </span>
+            )}
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const renderMessage = (msg: Message) => {
+    const rowWidth = getReadingWidthClass({
+      fullWidth,
+      hasParallelContent: hasParallelToolContent(msg.toolCalls?.length),
+    });
+    if (editState?.messageId === msg.id) {
+      const alignEnd = msg.role === 'user';
+      return (
+        <div className={cn('flex w-full min-w-0', alignEnd ? 'justify-end' : 'justify-start', rowWidth)}>
+          {/* Editing takes the whole column: the composer this replaces is
+              full width, and a fit-to-content box would clip what is typed. */}
+          <div className="flex w-full min-w-0 flex-col gap-2">
+            <div
+              className={cn(
+                'rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] px-3 py-2 transition-colors duration-150 focus-within:border-[var(--color-border-accent)]',
+                alignEnd && 'rounded-br-[var(--radius-sm)]',
+              )}
+            >
               <textarea
+                ref={editInputRef}
                 value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                className="w-full bg-transparent text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none resize-none"
+                 aria-label={t('chat.edit_message', { defaultValue: '编辑消息' })}
+                onChange={e => { setEditContent(e.target.value); autoGrow(e); }}
+                onKeyDown={handleKeyDown}
+                onCompositionStart={() => { composing.current = true; }}
+                onCompositionEnd={() => { composing.current = false; }}
+                className="block min-h-[var(--space-6)] w-full resize-none bg-transparent text-[length:var(--text-sm)] leading-relaxed text-[var(--color-text-primary)] focus:outline-none"
                 rows={3}
                 autoFocus
               />
             </div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" onClick={saveEdit} className="rounded-xl">
-                <Check size={12} /> 保存
-              </Button>
-              <Button size="sm" variant="ghost" onClick={cancelEdit} className="rounded-xl">
-                <X size={12} /> 取消
-              </Button>
-              <Button size="sm" variant="ghost" onClick={openModal} className="rounded-xl">
-                <Maximize2 size={12} />
-              </Button>
-            </div>
+            {renderEditControls(alignEnd)}
           </div>
-        </div>
-      );
-    }
-
-    if (msg.role === 'tool' && msg.toolCalls) {
-      return msg.toolCalls.map(tc => (
-        <ToolCallCard
-          key={tc.id}
-          name={tc.name}
-          arguments={tc.arguments}
-          result={tc.result ?? ''}
-          error={tc.error ?? ''}
-          isRunning={tc.status === 'running'}
-        />
-      ));
-    }
-
-    if (msg.toolCalls && msg.toolCalls.length > 0) {
-      return (
-        <div className="flex gap-3 max-w-[85%] message-enter">
-          <div className="flex items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] w-9 h-9 shrink-0">
-            <Bot size={16} />
-          </div>
-          <div className="flex flex-col gap-2 min-w-0 flex-1">
-            {msg.toolCalls.map(tc => (
-              <ToolCallCard
-                key={tc.id}
-                name={tc.name}
-                arguments={tc.arguments}
-                result={tc.result ?? ''}
-                error={tc.error ?? ''}
-                isRunning={tc.status === 'running'}
-              />
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    if (msg.reasoning && !msg.content) {
-      return (
-        <div className="max-w-[85%] message-enter">
-          <ThinkingDetails defaultOpen={true}>
-            {msg.reasoning}
-          </ThinkingDetails>
         </div>
       );
     }
 
     return (
-      <div className={cn('group flex gap-3 max-w-[85%] message-enter', msg.role === 'user' ? 'flex-row-reverse ml-auto' : '')}>
-        <div>
-          <MessageContent
-            content={msg.content}
-            role={msg.role}
-            timestamp={msg.timestamp}
-            actions={
-              msg.role === 'assistant' ? (
-                <MessageActions
-                  onCopy={() => navigator.clipboard.writeText(msg.content)}
-                  onFeedback={(type) => submitFeedback(msg.id, type)}
-                  onEdit={() => startEditing(msg.id, msg.content)}
-                />
-              ) : undefined
-            }
-          />
-          {isLoading && msg.role === 'assistant' && !msg.toolCalls && <StreamingCursor />}
-        </div>
-      </div>
+      <MessageContent
+        className={rowWidth}
+        role={msg.role}
+        content={msg.content}
+        timestamp={msg.timestamp}
+        body={renderMessageBody(msg)}
+        actions={
+          msg.role === 'assistant' && msg.content ? (
+            <MessageActions
+              onCopy={() => navigator.clipboard.writeText(msg.content)}
+              onFeedback={type => submitFeedback(msg.id, type)}
+              onEdit={() => startEditing(msg.id, msg.content)}
+            />
+          ) : null
+        }
+      />
     );
   };
 
   return (
-    <div className={cn('flex flex-col h-full', className)}>
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-8 py-6 chat-container">
-        {messages.length === 0 && (
-         <div className="chat-empty flex items-center justify-center h-full">
-            <div className="chat-empty-content text-center">
-              <div className="chat-empty-icon flex items-center justify-center mx-auto text-[var(--color-text-secondary)]">
-                <Bot size={36} />
-              </div>
-              <h3 className="chat-empty-title tracking-tight">{resolvedEmptyStateTitle}</h3>
-              <p className="text-[var(--color-text-secondary)] text-sm mb-8 leading-relaxed max-w-sm mx-auto">{resolvedEmptyStateDescription}</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md mx-auto">
-                {resolvedSuggestions.map((suggestion, idx) => (
-                  <button type="button"
-                    key={idx}
-                    onClick={() => onSend(suggestion)}
-                    className="chat-empty-suggestion px-4 py-3 border border-white/[0.06] text-sm text-[var(--color-text-secondary)] hover:border-[var(--color-border-accent)] hover:text-[var(--color-text-primary)] hover:bg-white/[0.06] transition-colors duration-200 active:scale-[0.97] text-left flex items-center gap-3"
-                  >
-                     <span className="w-6 h-6 rounded-lg bg-[var(--color-accent-subtle)] flex items-center justify-center shrink-0">
-                       <span className="text-[10px] text-[var(--color-accent-foreground)] font-bold">{idx + 1}</span>
-                    </span>
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
+    <div className={cn('relative flex h-full min-h-0 min-w-0 flex-col', className)}>
+      <div
+        ref={scrollRef}
+        onScroll={() => {
+          const el = scrollRef.current;
+          if (!el) return;
+          followOutput.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          setShowScrollButton(!followOutput.current);
+        }}
+        className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain py-4', GUTTER)}
+      >
+        <div className="flex flex-col gap-5">
+          {isHistoryLoading && (
+            <div role="status" aria-label={t('common.loading')} className="flex flex-col gap-4">
+              <div className="h-4 w-2/3 rounded-[var(--radius-sm)] bg-[var(--color-bg-surface-2)] motion-safe:animate-pulse" />
+              <div className="h-4 w-1/2 rounded-[var(--radius-sm)] bg-[var(--color-bg-surface-2)] motion-safe:animate-pulse" />
             </div>
-          </div>
-        )}
-        <div className="space-y-5 mx-auto w-full max-w-4xl">
-          {messages.map(renderMessageContent)}
-          {isLoading && (
-            <div className="flex gap-3 w-full max-w-[85%]">
-              <div className="flex items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] text-[var(--color-text-secondary)] w-9 h-9 shrink-0">
-                <Bot size={16} />
-              </div>
-              <div className="flex-1">
-                <ThinkingIndicator sparkle />
-              </div>
+          )}
+          {showEmptyState && (
+            <ChatEmptyState
+              title={resolvedEmptyStateTitle}
+              description={emptyStateDescription}
+              className="min-h-full"
+              actions={
+                <div className="flex w-full flex-col items-start gap-0.5">
+                  {resolvedSuggestions.map((suggestion, idx) => (
+                    <button
+                      type="button"
+                      key={idx}
+                      onClick={() => fillFromSuggestion(suggestion)}
+                      className="flex w-full items-baseline gap-2 rounded-[var(--radius-md)] px-2 py-2 text-start text-sm text-[var(--color-text-secondary)] transition-colors duration-150 hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-[var(--color-accent-foreground)]"
+                    >
+                      <span aria-hidden="true" className="font-mono text-xs text-[var(--color-text-muted)]">&gt;</span>
+                      <span className="min-w-0 flex-1 truncate">{suggestion}</span>
+                    </button>
+                  ))}
+                </div>
+              }
+            />
+          )}
+          {!isEmpty && (
+            <div data-transcript className="flex flex-col gap-5">
+              {messages.map(msg => (
+                <React.Fragment key={msg.id}>{renderMessage(msg)}</React.Fragment>
+              ))}
+            </div>
+          )}
+          {/* The failure is the newest event, so it follows the turns it ended. */}
+          {error && (
+            <div
+              role="alert"
+              className="flex items-start gap-2 rounded-[var(--radius-md)] border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] px-3 py-2 text-sm text-[var(--color-error)]"
+            >
+              <CircleAlert size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
+              <span className="min-w-0 flex-1 break-words">
+                <span className="font-medium">{t('common.error')}</span>
+                <span className="ms-1 text-[var(--color-text-secondary)]">{error}</span>
+              </span>
+              {onRetry && (
+                <Button size="xs" variant="ghost" onClick={onRetry} className="shrink-0">
+                  {t('common.retry')}
+                </Button>
+              )}
             </div>
           )}
         </div>
       </div>
-
-       {/* Input Area */}
-       <form onSubmit={handleSubmit} aria-busy={!!isLoading} className="border-t border-white/[0.04] p-4 md:p-5 bg-[#0F0F14]/90 backdrop-blur-xl">
-         <div className="flex gap-2.5 max-w-4xl mx-auto">
-           {isLoading ? (
-              <Button type="button" variant="destructive" size="icon" onClick={onStop} aria-label={t('chat.stop_generation')} className="rounded-[var(--radius-md)]">
-               <Square size={16} />
-             </Button>
-           ) : (
-             <>
-                <Button type="button" variant="ghost" size="icon" className="rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">
-                 <span className="text-base leading-none">+</span>
-               </Button>
-               <div className="flex-1 flex flex-col">
-                 <div className="flex items-center gap-2">
-                   <textarea
-                     ref={inputRef}
-                     value={input}
-                     onChange={(e) => { setInput(e.target.value); autoGrow(e); }}
-                     onKeyDown={handleKeyDown}
-                     placeholder={resolvedPlaceholder}
-                     disabled={isLoading}
-                     className="flex-1 px-5 py-3 bg-white/[0.04] border border-white/[0.08] rounded-[var(--radius-lg)] text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-border-accent)] focus:bg-[var(--color-bg-surface-2)] transition-colors duration-200 resize-none min-h-[44px]"
-                     rows={1}
-                   />
-                 </div>
-                 <div className="flex items-center justify-between mt-2 px-1">
-                   <div className="flex items-center gap-2">
-                     <kbd className="text-[10px] px-1.5 py-0.5 rounded-md font-mono" style={{
-                       backgroundColor: 'var(--color-bg-surface-3)',
-                       color: 'var(--color-text-muted)',
-                       border: '1px solid var(--color-border-subtle)'
-                     }}>⌘K</kbd>
-                     <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>命令面板</span>
-                   </div>
-                   {input.startsWith('/') && (
-                     <div className="flex items-center gap-2">
-                       <span className="text-[10px]" style={{ color: 'var(--color-accent)' }}>斜杠命令模式</span>
-                     </div>
-                   )}
-                 </div>
-               </div>
-                 <Button type="submit" size="icon" disabled={!input.trim()} aria-label={t('chat.send')} className="rounded-[var(--radius-md)]">
-                 <Send size={16} />
-               </Button>
-             </>
-           )}
-         </div>
-       </form>
-
-      {/* Edit Modal */}
-      {editState?.mode === 'modal' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-black/80 backdrop-blur-md fade-enter">
-          <div className="bg-[#121218] border border-white/[0.08] rounded-[var(--radius-xl)] w-full h-full max-w-7xl max-h-[90vh] flex flex-col shadow-2xl shadow-black/50">
-            <div className="flex items-center justify-between p-5 border-b border-white/[0.06]">
-              <h3 className="text-lg font-semibold text-white tracking-tight">编辑消息</h3>
-              <div className="flex items-center gap-2">
-                <Button size="sm" onClick={saveEdit} className="rounded-xl">
-                  <Check size={14} /> 保存
-                </Button>
-                <Button size="sm" variant="ghost" onClick={cancelEdit} className="rounded-xl">
-                  <X size={14} />
-                </Button>
+      {showScrollButton && (
+        <Button
+          variant="secondary"
+          size="icon-sm"
+          aria-label="滚动到底部"
+          onClick={() => {
+            if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+            followOutput.current = true;
+            setShowScrollButton(false);
+          }}
+          className="mx-auto my-2 shrink-0"
+        >
+          <ArrowDown size={14} aria-hidden="true" />
+        </Button>
+      )}
+      <form
+        onSubmit={handleSubmit}
+        aria-busy={!!isLoading}
+        className={cn('border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] py-3', GUTTER)}
+      >
+        <div className={composerWidth}>
+          <div
+            className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] transition-colors duration-150 focus-within:border-[var(--color-border-accent)] motion-reduce:transition-none"
+          >
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => { setInput(e.target.value); autoGrow(e); }}
+              onKeyDown={handleKeyDown}
+              onCompositionStart={() => { composing.current = true; }}
+              onCompositionEnd={() => { composing.current = false; }}
+              placeholder={resolvedPlaceholder}
+              aria-label={resolvedPlaceholder}
+              className={cn('block min-h-[var(--space-6)] w-full resize-none bg-transparent px-3 py-2.5 text-[length:var(--text-sm)] leading-6 text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none', COMPOSER_MAX_HEIGHT)}
+              rows={1}
+            />
+            <div className="flex items-center justify-between gap-3 px-2 pb-2">
+              <p className="min-w-0 truncate text-xs text-[var(--color-text-muted)]">
+                {isLoading ? t('common.loading') : `Enter ${t('chat.send')} · Shift + Enter`}
+              </p>
+              {/* One slot, one control: stopping and sending are the same button
+                  in two states, so a run in flight can never be answered by a
+                  second, competing action. */}
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  aria-pressed={fullWidth}
+                  onClick={toggleFullWidth}
+                  className="rounded-[var(--radius-sm)] px-[var(--space-1-5)] py-[var(--space-1)] text-[length:var(--text-2xs)] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text-secondary)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] motion-reduce:transition-none"
+                >
+                   {t('chat.wide_column', { defaultValue: '宽列' })}
+                </button>
+                {isLoading ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                     aria-label={t('chat.stop_generation', { defaultValue: '停止生成' })}
+                    onClick={onStop}
+                    disabled={!onStop}
+                    className="shrink-0"
+                  >
+                    <Square size={14} aria-hidden="true" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    size="icon"
+                    aria-label={t('chat.send')}
+                    disabled={!canSubmit}
+                    className="shrink-0"
+                  >
+                    <Send size={14} aria-hidden="true" />
+                  </Button>
+                )}
               </div>
-            </div>
-            <div className="flex-1 p-6 overflow-y-auto">
-              <textarea
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                className="w-full h-full bg-transparent text-[var(--color-text-primary)] text-sm leading-relaxed resize-none focus:outline-none"
-                autoFocus
-              />
             </div>
           </div>
         </div>
-      )}
+      </form>
 
-      {/* Floating Permission Dialog */}
       <FloatingPermissionDialog
         requests={permissionRequests}
         onApprove={handleApprovePermission}

@@ -175,7 +175,9 @@
     "this_week": "이번 주",
     "this_month": "이번 달",
     "last_7_days": "최근 7 일",
-    "last_30_days": "최근 30 일"
+    "last_30_days": "최근 30 일",
+    "api_online": "API 요청 성공",
+    "api_offline": "API에 연결할 수 없음"
   },
   "chat": {
     "title": "채팅 인터페이스",

@@ -175,7 +175,9 @@
     "this_week": "本周",
     "this_month": "本月",
     "last_7_days": "最近 7 天",
-    "last_30_days": "最近 30 天"
+    "last_30_days": "最近 30 天",
+    "api_online": "API 请求成功",
+    "api_offline": "API 无法连接"
   },
   "chat": {
     "title": "聊天界面",

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { User, Bot, Copy, Check, ThumbsUp, ThumbsDown, RotateCcw, Edit3, Quote, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { formatTime } from '../../i18n/utils';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { StreamingCursor } from './StreamingCursor';
 
@@ -45,9 +46,7 @@ export function MessageBubble({
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
-  const timeStr = message.timestamp
-    ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : '';
+  const timeStr = message.timestamp ? formatTime(message.timestamp) : '';
 
   const handleCopy = () => {
     onCopy?.(message.content);
@@ -94,7 +93,7 @@ export function MessageBubble({
           className={cn(
             'px-4 py-3 text-sm leading-[1.6]',
             isUser
-              ? 'bg-[var(--color-accent)] text-white rounded-2xl rounded-br-lg'
+              ? 'bg-[var(--color-accent)] text-[var(--color-accent-text)] rounded-2xl rounded-br-lg'
               : 'bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] text-[var(--color-text-primary)] rounded-2xl rounded-tl-lg',
           )}
           style={{

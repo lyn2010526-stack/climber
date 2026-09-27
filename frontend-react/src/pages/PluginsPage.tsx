@@ -1,10 +1,22 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
-  Search, Download, Trash2, Power, PowerOff, Package, Brain,
-  Server, FileText, Star, ChevronRight, X,
-  Loader2, Plus, Filter, Zap,
+  Search, Download, Trash2, Power, PowerOff, Package, Brain, Server, FileText,
+  ChevronRight, Plus, RefreshCw, AlertCircle,
 } from 'lucide-react';
 import { api } from '../api';
+import { useTranslation } from '../i18n';
+import { includesQuery } from '../lib/search';
+import {
+  normalizePluginStatus,
+  pluginViewDescriptor,
+  type PluginViewStatus,
+} from '../components/plugins/pluginViewStatus';
+import { PageHeader } from '../components/ui/PageHeader';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
+import { Input } from '../components/ui/Input';
+import { EmptyState } from '../components/ui/EmptyState';
+import { Modal } from '../components/ui/Modal';
 
 interface Plugin {
   id: string;
@@ -12,7 +24,8 @@ interface Plugin {
   description: string;
   type: 'skill' | 'mcp' | 'prompt';
   source: string;
-  status: 'enabled' | 'disabled' | 'installed' | 'error';
+  /** Mirrors `PluginRecord.status` in app/storage/models_plugins.py. */
+  status: PluginViewStatus;
   icon: string;
   category: string;
   version: string;
@@ -20,18 +33,43 @@ interface Plugin {
   tags?: string[];
   popularity?: number;
   error?: string;
+  config?: Record<string, unknown>;
 }
 
-const TYPE_CONFIG = {
-  skill: { icon: Brain, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20', label: 'Skill' },
-  mcp: { icon: Server, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20', label: 'MCP' },
-  prompt: { icon: FileText, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20', label: 'Prompt' },
+const TYPE_CONFIG: Record<Plugin['type'], { icon: typeof Brain; label: string }> = {
+  skill: { icon: Brain, label: 'Skill' },
+  mcp: { icon: Server, label: 'MCP' },
+  prompt: { icon: FileText, label: 'Prompt' },
 };
 
 const CATEGORY_ALL = 'all';
 const CATEGORY_INSTALLED = 'installed';
 
+const inputClass = 'h-[var(--control-height-md)] w-full rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-surface-2)] px-3 text-sm text-[var(--color-text-primary)] transition-all duration-200 placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20';
+
+const labelClass = 'mb-1.5 block text-xs font-medium text-[var(--color-text-secondary)]';
+
+function PluginStatus({ status }: { status: PluginViewStatus }) {
+  const { t } = useTranslation();
+  const view = pluginViewDescriptor(status, t);
+  const StatusIcon = view.icon;
+  return (
+    <span
+      role="status"
+      data-plugin-status={status}
+      className={`inline-flex shrink-0 items-center gap-1.5 text-xs ${view.tone}`}
+    >
+      <StatusIcon size={13} aria-hidden="true" className="shrink-0" />
+      {view.label}
+    </span>
+  );
+}
+
 export function PluginsPage() {
+  const { t } = useTranslation();
+  const pluginText = (key: string, defaultValue: string, options?: Record<string, unknown>) => t(key, { defaultValue, ...options });
+  const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState(CATEGORY_ALL);
@@ -43,56 +81,57 @@ export function PluginsPage() {
   const [importName, setImportName] = useState('');
   const [importType, setImportType] = useState('mcp');
   const [expandedPlugin, setExpandedPlugin] = useState<string | null>(null);
-  const importTriggerRef = useRef<HTMLButtonElement>(null);
-  const importUrlInputRef = useRef<HTMLInputElement>(null);
-
-  // Import modal: Escape to close, focus moves into the dialog on open
-  // and back to the trigger button on close.
-  useEffect(() => {
-    if (!importModalOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setImportModalOpen(false);
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    importUrlInputRef.current?.focus();
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      importTriggerRef.current?.focus();
-    };
-  }, [importModalOpen]);
+  const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
 
   const fetchPlugins = useCallback(async () => {
+    setError(null);
     try {
       const data = await api.listPlugins();
-      setPlugins(data);
+      setPlugins(data.map((p) => ({ ...p, status: normalizePluginStatus(p.status) })));
     } catch (e) {
-      console.error('加载插件失败:', e);
+      setError(e instanceof Error ? e.message : t('common.error'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { fetchPlugins(); }, [fetchPlugins]);
 
   const handleInstall = async (id: string) => {
+    if (actionLoading) return;
+    setError(null);
     setActionLoading(id);
     try {
       await api.installPlugin(id);
+      setActionErrors(prev => { const next = { ...prev }; delete next[id]; return next; });
       await fetchPlugins();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : t('common.error');
+      setActionErrors(prev => ({ ...prev, [id]: message }));
+      setError(message);
+    }
     finally { setActionLoading(null); }
   };
 
   const handleUninstall = async (id: string) => {
+    if (actionLoading) return;
+    setError(null);
     setActionLoading(id);
     try {
       await api.uninstallPlugin(id);
+      setActionErrors(prev => { const next = { ...prev }; delete next[id]; return next; });
       await fetchPlugins();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : t('common.error');
+      setActionErrors(prev => ({ ...prev, [id]: message }));
+      setError(message);
+    }
     finally { setActionLoading(null); }
   };
 
   const handleToggle = async (plugin: Plugin) => {
+    if (actionLoading) return;
+    setError(null);
     setActionLoading(plugin.id);
     try {
       if (plugin.status === 'enabled') {
@@ -100,396 +139,348 @@ export function PluginsPage() {
       } else {
         await api.enablePlugin(plugin.id);
       }
+      setActionErrors(prev => { const next = { ...prev }; delete next[plugin.id]; return next; });
       await fetchPlugins();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : t('common.error');
+      setActionErrors(prev => ({ ...prev, [plugin.id]: message }));
+      setError(message);
+    }
     finally { setActionLoading(null); }
   };
 
   const handleImport = async () => {
-    if (!importUrl.trim()) return;
+    if (!importUrl.trim() || importing) return;
+    setImporting(true);
+    setError(null);
     try {
       await api.importPlugin(importUrl, importName, importType);
       setImportModalOpen(false);
       setImportUrl('');
       setImportName('');
       await fetchPlugins();
-    } catch (e) { console.error(e); }
+    } catch (e) { setError(e instanceof Error ? e.message : t('common.error')); }
+    finally { setImporting(false); }
   };
 
-  const filtered = plugins.filter(p => {
-    const matchSearch = !searchQuery ||
-      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.tags || []).some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchType = !selectedType || p.type === selectedType;
+  const filtered = plugins.filter(plugin => {
+    const matchSearch = includesQuery([plugin.name, plugin.description, ...(plugin.tags ?? [])], searchQuery);
+    const matchType = !selectedType || plugin.type === selectedType;
     const matchCat = selectedCategory === CATEGORY_ALL ||
-      (selectedCategory === CATEGORY_INSTALLED && (p.status === 'enabled' || p.status === 'installed')) ||
-      p.category === selectedCategory;
+      (selectedCategory === CATEGORY_INSTALLED && plugin.status === 'enabled') ||
+      plugin.category === selectedCategory;
     return matchSearch && matchType && matchCat;
   });
 
   const categories = [...new Set(plugins.map(p => p.category).filter(Boolean))];
-  const grouped: Record<string, Plugin[]> = {};
-  for (const p of filtered) {
-    const cat = p.category || 'other';
-    if (!grouped[cat]) grouped[cat] = [];
-    grouped[cat].push(p);
-  }
-
-  const enabledCount = plugins.filter(p => p.status === 'enabled').length;
-  const totalCount = plugins.length;
-
-  if (loading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <Loader2 size={32} className="text-[var(--color-accent)] animate-spin" />
-      </div>
-    );
-  }
+  const categoryCount = (cat: string) =>
+    cat === CATEGORY_ALL
+      ? plugins.length
+      : cat === CATEGORY_INSTALLED
+        ? plugins.filter(p => p.status === 'enabled').length
+        : plugins.filter(p => p.category === cat).length;
 
   return (
-    <div className="h-full overflow-y-auto p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-2xl font-bold text-[var(--color-text-primary)] flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-[var(--color-accent)]/10 flex items-center justify-center border border-[var(--color-accent)]/20">
-                <Package size={20} className="text-[var(--color-accent)]" />
-              </div>
-                插件市场
-             </h2>
-             <p className="text-[var(--color-text-secondary)] text-sm mt-1">
-               共 {totalCount} 个插件，{enabledCount} 个已启用 — 技能、MCP 服务器、提示词模板
-             </p>
-          </div>
-          <button type="button"
-            ref={importTriggerRef}
-            onClick={() => setImportModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold transition-all duration-200 active:scale-[0.97]"
-          >
-             <Plus size={16} /> 导入插件
-          </button>
-        </div>
+    <div className="page-scroll page-transition">
+      <div className="page-container">
+        <PageHeader
+          title={t('navigation.plugins')}
+          icon={<Package size={20} aria-hidden="true" />}
+          actions={
+            <>
+              <Button variant="outline" size="sm" icon={<RefreshCw size={14} />} disabled={loading} onClick={fetchPlugins}>
+                {t('common.refresh')}
+              </Button>
+              <Button variant="primary" size="sm" icon={<Plus size={14} aria-hidden="true" />} onClick={() => setImportModalOpen(true)}>
+                {pluginText('plugins.import_action', 'Import plugin')}
+              </Button>
+            </>
+          }
+        />
 
-        <div className="flex gap-3 mb-6">
-          <div className="flex-1 relative">
-            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)]" />
-            <input
-              type="text"
-              placeholder="按名称、描述或标签搜索插件..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
-            />
-          </div>
-          <div className="flex gap-2">
-            {(['', 'skill', 'mcp', 'prompt'] as const).map(type => (
-              <button type="button"
-                key={type || 'all'}
-                onClick={() => setSelectedType(type)}
-                className={`px-4 py-2 rounded-2xl text-sm font-medium border transition-all duration-200 ${
-                  selectedType === type
-                    ? 'bg-[var(--color-accent)]/15 border-[var(--color-accent)]/30 text-[var(--color-text-primary)]'
-                    : 'bg-white/[0.03] border-[var(--color-border-subtle)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)]/30'
-                }`}
-              >
-                 {type ? TYPE_CONFIG[type].label : '全部'}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
-          <button type="button"
-            onClick={() => setSelectedCategory(CATEGORY_ALL)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap border transition-all duration-200 ${
-              selectedCategory === CATEGORY_ALL
-                ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] border-[var(--color-accent)]/30'
-                : 'bg-white/[0.03] text-[var(--color-text-muted)] border-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]'
-            }`}
-          >
-              全部 ({totalCount})
-          </button>
-          <button type="button"
-            onClick={() => setSelectedCategory(CATEGORY_INSTALLED)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap border transition-all duration-200 ${
-              selectedCategory === CATEGORY_INSTALLED
-                ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] border-[var(--color-accent)]/30'
-                : 'bg-white/[0.03] text-[var(--color-text-muted)] border-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]'
-            }`}
-          >
-              已启用 ({enabledCount})
-          </button>
-          {categories.map(cat => {
-            const count = plugins.filter(p => p.category === cat).length;
-            return (
-              <button type="button"
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap capitalize border transition-all duration-200 ${
-                  selectedCategory === cat
-                    ? 'bg-[var(--color-accent)]/15 text-[var(--color-accent)] border-[var(--color-accent)]/30'
-                    : 'bg-white/[0.03] text-[var(--color-text-muted)] border-[var(--color-border-subtle)] hover:text-[var(--color-text-primary)]'
-                }`}
-              >
-                {cat} ({count})
-              </button>
-            );
-          })}
-        </div>
-
-        {Object.entries(grouped).map(([cat, catPlugins]) => (
-          <div key={cat} className="mb-10">
-            <h3 className="text-sm font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-4 flex items-center gap-2">
-              <Filter size={12} />
-              {cat}
-              <span className="text-[var(--color-text-muted)] font-normal">({catPlugins.length})</span>
-            </h3>
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-              {catPlugins.map(plugin => (
-                <PluginCard
-                  key={plugin.id}
-                  plugin={plugin}
-                  isExpanded={expandedPlugin === plugin.id}
-                  isActionLoading={actionLoading === plugin.id}
-                  onToggle={() => handleToggle(plugin)}
-                  onInstall={() => handleInstall(plugin.id)}
-                  onUninstall={() => handleUninstall(plugin.id)}
-                  onExpand={() => setExpandedPlugin(expandedPlugin === plugin.id ? null : plugin.id)}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-
-        {filtered.length === 0 && (
-          <div className="text-center py-20">
-            <Package size={48} className="mx-auto mb-4 text-[var(--color-text-muted)] opacity-30" />
-             <p className="text-[var(--color-text-muted)] text-lg">未找到插件</p>
-             <p className="text-[var(--color-text-muted)] text-sm mt-1">尝试调整搜索或筛选条件</p>
+        {error && (
+          <div role="alert" className="mb-3 flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] p-3">
+            <AlertCircle size={16} aria-hidden="true" className="shrink-0 text-[var(--color-error)]" />
+            <p className="flex-1 break-words text-sm text-[var(--color-error)]">{error}</p>
+            <Button variant="ghost" size="sm" icon={<RefreshCw size={14} />} onClick={fetchPlugins}>
+              {t('common.retry')}
+            </Button>
           </div>
         )}
-      </div>
 
-      {importModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" role="presentation" onClick={() => setImportModalOpen(false)}>
-          <div role="dialog" aria-modal="true" aria-labelledby="import-plugin-title" className="bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-2xl p-6 w-full max-w-lg shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 id="import-plugin-title" className="text-lg font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
-                 <Download size={18} className="text-[var(--color-accent)]" /> 导入插件
-               </h3>
-               <button type="button" onClick={() => setImportModalOpen(false)} aria-label="Close dialog" className="p-1 rounded-xl hover:bg-white/[0.06] text-[var(--color-text-muted)]">
-                 <X size={18} />
-               </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                 <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1.5">源地址</label>
-                 <input
-                    ref={importUrlInputRef}
-                    type="url"
-                    value={importUrl}
-                    onChange={(e) => setImportUrl(e.target.value)}
-                    placeholder="https://github.com/user/mcp-server 或原始 JSON URL"
-                  className="w-full px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
-                 />
-               </div>
-               <div>
-                 <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1.5">名称（可选）</label>
-                 <input
-                   type="text"
-                   value={importName}
-                   onChange={(e) => setImportName(e.target.value)}
-                   placeholder="我的自定义插件"
-                  className="w-full px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200"
-                 />
-               </div>
-               <div>
-                 <label className="block text-sm font-medium text-[var(--color-text-secondary)] mb-1.5">类型</label>
-                <select
-                  value={importType}
-                  onChange={(e) => setImportType(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-2xl text-sm text-[var(--color-text-primary)]"
-                >
-                   <option value="mcp">MCP 服务器</option>
-                   <option value="skill">技能</option>
-                   <option value="prompt">提示词模板</option>
-                 </select>
-               </div>
-             </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <button type="button"
-                onClick={() => setImportModalOpen(false)}
-                className="px-4 py-2 rounded-xl text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
-              >
-                  取消
-              </button>
-              <button type="button"
-                onClick={handleImport}
-                disabled={!importUrl.trim()}
-                className="px-5 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-2xl text-sm font-semibold disabled:opacity-50 transition-all duration-200 active:scale-[0.97]"
-              >
-                  导入
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PluginCard({
-  plugin,
-  isExpanded,
-  isActionLoading,
-  onToggle,
-  onInstall,
-  onUninstall,
-  onExpand,
-}: {
-  plugin: Plugin;
-  isExpanded: boolean;
-  isActionLoading: boolean;
-  onToggle: () => void;
-  onInstall: () => void;
-  onUninstall: () => void;
-  onExpand: () => void;
-}) {
-  const typeConf = TYPE_CONFIG[plugin.type] || TYPE_CONFIG.skill;
-  const TypeIcon = typeConf.icon;
-  const isEnabled = plugin.status === 'enabled';
-  const isInstalled = isEnabled || plugin.status === 'installed';
-
-  return (
-    <div
-      className={`group relative bg-[var(--color-bg-surface-1)] border rounded-2xl p-5 transition-all duration-200 ${
-        isEnabled
-          ? 'border-[var(--color-accent)]/30 shadow-lg shadow-[var(--color-accent)]/5 hover:border-[var(--color-accent)]/50'
-          : 'border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/30'
-      }`}
-    >
-      {isEnabled && (
-        <div className="absolute top-4 right-4 flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-[var(--color-success)] animate-pulse" />
-           <span className="text-xs text-[var(--color-success)] font-medium">已启用</span>
-        </div>
-      )}
-
-      <div className="flex items-start gap-3 mb-3">
-        <div className={`w-10 h-10 rounded-xl ${typeConf.bg} flex items-center justify-center shrink-0 border ${typeConf.border}`}>
-          {plugin.icon ? (
-            <span className="text-lg">{plugin.icon}</span>
-          ) : (
-            <TypeIcon size={18} className={typeConf.color} />
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <h4 className="font-medium text-sm truncate pr-16 text-[var(--color-text-primary)]">{plugin.name}</h4>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className={`px-2 py-0.5 rounded-lg text-xs font-medium border ${typeConf.bg} ${typeConf.color} ${typeConf.border}`}>
-              {typeConf.label}
-            </span>
-            {plugin.popularity && plugin.popularity > 0 && (
-              <span className="flex items-center gap-0.5 text-xs text-amber-400">
-                <Star size={10} fill="currentColor" /> {plugin.popularity}
+        {!loading && plugins.length > 0 && (
+          <div className="mb-3 space-y-2">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="w-full max-w-xs">
+                <Input
+                  size="sm"
+                  placeholder={t('plugins.catalog_search_placeholder')}
+                  aria-label={t('common.search')}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  icon={<Search size={14} aria-hidden="true" />}
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-1" role="group" aria-label={t('common.filter')}>
+                {(['', 'skill', 'mcp', 'prompt'] as const).map(type => (
+                  <button
+                    key={type || 'all'}
+                    type="button"
+                    aria-pressed={selectedType === type}
+                    onClick={() => setSelectedType(type)}
+                    className={`rounded-[var(--radius-md)] border px-2.5 py-1 text-xs font-medium transition-colors ${
+                      selectedType === type
+                        ? 'border-[var(--color-border-strong)] bg-[var(--color-bg-surface-3)] text-[var(--color-text-primary)]'
+                        : 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                    }`}
+                  >
+                    {type ? TYPE_CONFIG[type].label : t('common.all')}
+                  </button>
+                ))}
+              </div>
+              <span className="shrink-0 text-xs tabular-nums text-[var(--color-text-muted)]" aria-live="polite">
+                {filtered.length} / {plugins.length}
               </span>
+            </div>
+            {categories.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1" role="group" aria-label={t('common.filter')}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory(CATEGORY_ALL)}
+                  aria-pressed={selectedCategory === CATEGORY_ALL}
+                  className={`rounded-[var(--radius-md)] border px-2.5 py-1 text-xs font-medium transition-colors ${
+                    selectedCategory === CATEGORY_ALL
+                      ? 'border-[var(--color-border-strong)] bg-[var(--color-bg-surface-3)] text-[var(--color-text-primary)]'
+                      : 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                  }`}
+                >
+                  {t('plugins.category_all', { count: categoryCount(CATEGORY_ALL) })}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory(CATEGORY_INSTALLED)}
+                  aria-pressed={selectedCategory === CATEGORY_INSTALLED}
+                  className={`rounded-[var(--radius-md)] border px-2.5 py-1 text-xs font-medium transition-colors ${
+                    selectedCategory === CATEGORY_INSTALLED
+                      ? 'border-[var(--color-border-strong)] bg-[var(--color-bg-surface-3)] text-[var(--color-text-primary)]'
+                      : 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                  }`}
+                >
+                  {t('plugins.category_installed', { count: categoryCount(CATEGORY_INSTALLED) })}
+                </button>
+                {categories.map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat)}
+                    aria-pressed={selectedCategory === cat}
+                    className={`rounded-[var(--radius-md)] border px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
+                      selectedCategory === cat
+                        ? 'border-[var(--color-border-strong)] bg-[var(--color-bg-surface-3)] text-[var(--color-text-primary)]'
+                        : 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                    }`}
+                  >
+                    {cat} ({categoryCount(cat)})
+                  </button>
+                ))}
+              </div>
             )}
           </div>
-        </div>
-      </div>
+        )}
 
-      <p className="text-xs text-[var(--color-text-muted)] leading-relaxed mb-3 line-clamp-2">
-        {plugin.description}
-      </p>
-
-      {plugin.tags && plugin.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {plugin.tags.slice(0, 3).map(tag => (
-            <span key={tag} className="px-2 py-0.5 bg-white/[0.03] rounded-lg text-xs text-[var(--color-text-muted)] border border-[var(--color-border-subtle)]">
-              {tag}
-            </span>
-          ))}
-          {plugin.tags.length > 3 && (
-            <span className="px-2 py-0.5 text-xs text-[var(--color-text-muted)]">+{plugin.tags.length - 3}</span>
-          )}
-        </div>
-      )}
-
-      {plugin.type === 'mcp' && plugin.tools && plugin.tools.length > 0 && (
-        <div className="flex items-center gap-1.5 mb-3 text-xs text-[var(--color-text-muted)]">
-          <Zap size={10} />
-           <span>{plugin.tools.length} 个可用工具</span>
-        </div>
-      )}
-
-      {isExpanded && (
-        <div className="mt-3 pt-3 border-t border-[var(--color-border-subtle)] space-y-2">
-          <div className="flex items-center justify-between text-xs">
-             <span className="text-[var(--color-text-muted)]">来源</span>
-            <span className="text-[var(--color-text-secondary)] capitalize">{plugin.source}</span>
+        {loading && (
+          <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]" aria-busy="true" aria-label={t('common.loading')}>
+            {[1, 2, 3].map(i => (
+              <div key={i} className="flex items-center gap-3 border-b border-[var(--color-border-subtle)] px-3 py-2.5 last:border-b-0 md:px-4">
+                <div className="h-3.5 w-3.5 shrink-0 rounded skeleton-shimmer" style={{ animationDelay: `${i * 100}ms` }} />
+                <div className="h-3.5 flex-1 rounded skeleton-shimmer" style={{ animationDelay: `${i * 100}ms` }} />
+                <div className="h-3.5 w-16 shrink-0 rounded skeleton-shimmer" style={{ animationDelay: `${i * 100}ms` }} />
+              </div>
+            ))}
           </div>
-          <div className="flex items-center justify-between text-xs">
-             <span className="text-[var(--color-text-muted)]">版本</span>
-            <span className="text-[var(--color-text-secondary)]">{plugin.version || '1.0.0'}</span>
+        )}
+
+        {!loading && filtered.length > 0 && (
+          <ul className="divide-y divide-[var(--color-border-subtle)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]" aria-label={t('navigation.plugins')}>
+            {filtered.map(plugin => {
+              const typeConf = TYPE_CONFIG[plugin.type] ?? TYPE_CONFIG.skill;
+              const TypeIcon = typeConf.icon;
+              const isEnabled = plugin.status === 'enabled';
+              const isInstalled = isEnabled || plugin.status === 'installed' || plugin.status === 'disabled' || plugin.status === 'error';
+              const isExpanded = expandedPlugin === plugin.id;
+              const configFields = Object.keys(plugin.config || {});
+              return (
+                <li key={plugin.id} className="bg-[var(--color-bg-surface-1)] px-3 py-2 md:px-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <TypeIcon size={16} aria-hidden="true" className="shrink-0 text-[var(--color-text-muted)]" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-sm font-medium text-[var(--color-text-primary)]">{plugin.name}</span>
+                        <Badge variant="secondary" size="xs">{typeConf.label}</Badge>
+                        {plugin.version && <span className="shrink-0 text-xs text-[var(--color-text-muted)]">v{plugin.version}</span>}
+                      </div>
+                      <p className="truncate text-xs text-[var(--color-text-muted)]">
+                        {[plugin.description, plugin.category].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
+                    {plugin.tools && plugin.tools.length > 0 && (
+                      <span className="hidden shrink-0 text-xs tabular-nums text-[var(--color-text-muted)] sm:inline">
+                        {plugin.tools.length} {t('agents.step_tools').toLocaleLowerCase()}
+                      </span>
+                    )}
+                    <PluginStatus status={plugin.status} />
+                    <button
+                      type="button"
+                      onClick={() => setExpandedPlugin(isExpanded ? null : plugin.id)}
+                      aria-expanded={isExpanded}
+                      aria-controls={`plugin-detail-${plugin.id}`}
+                      className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-[var(--radius-md)] px-1.5 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)] sm:min-w-0"
+                    >
+                      {t('plugins.details_action')}
+                      <ChevronRight size={12} aria-hidden="true" className={isExpanded ? 'rotate-90 transition-transform' : 'transition-transform'} />
+                    </button>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {actionLoading === plugin.id ? null : plugin.status === 'unknown' ? (
+                        <Button variant="outline" size="sm" disabled aria-label={`${pluginText('plugins.status.unknown', 'Unreported')}: ${plugin.name}`}>{pluginText('plugins.status.unknown', 'Unreported')}</Button>
+                      ) : isInstalled ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            icon={isEnabled ? <Power size={13} aria-hidden="true" /> : <PowerOff size={13} aria-hidden="true" />}
+                            onClick={() => handleToggle(plugin)}
+                            disabled={actionLoading !== null}
+                          >
+                            {isEnabled ? pluginText('plugins.disable', 'Disable') : pluginText('plugins.enable', 'Enable')}
+                          </Button>
+                          {plugin.source !== 'builtin' && (
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              icon={<Trash2 size={14} aria-hidden="true" />}
+                              onClick={() => handleUninstall(plugin.id)}
+                              disabled={actionLoading !== null}
+                              aria-label={`${t('common.remove')} ${plugin.name}`}
+                              className="text-[var(--color-text-muted)] hover:bg-[var(--color-error-subtle)] hover:text-[var(--color-error)]"
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={<Download size={13} aria-hidden="true" />}
+                          onClick={() => handleInstall(plugin.id)}
+                          disabled={actionLoading !== null}
+                        >
+                          {pluginText('plugins.install', 'Install')}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  {isExpanded && (
+                    <dl
+                      id={`plugin-detail-${plugin.id}`}
+                      className="mt-2 grid gap-x-4 gap-y-1 pl-7 text-xs text-[var(--color-text-secondary)] sm:grid-cols-2"
+                    >
+                      <div className="flex gap-2"><dt className="text-[var(--color-text-muted)]">{t('plugins.detail_source')}</dt><dd className="min-w-0 break-all">{plugin.source || t('common.none')}</dd></div>
+                      <div className="flex gap-2"><dt className="text-[var(--color-text-muted)]">{t('plugins.detail_version')}</dt><dd>{plugin.version || t('common.none')}</dd></div>
+                      <div className="flex min-w-0 gap-2 sm:col-span-2"><dt className="shrink-0 text-[var(--color-text-muted)]">{t('plugins.detail_config_fields')}</dt><dd className="min-w-0 break-all">{configFields.join(', ') || t('common.none')}</dd></div>
+                      {plugin.tools && plugin.tools.length > 0 && (
+                        <div className="flex min-w-0 gap-2 sm:col-span-2"><dt className="shrink-0 text-[var(--color-text-muted)]">{t('plugins.detail_tools')}</dt><dd className="min-w-0 break-all font-mono">{plugin.tools.join(', ')}</dd></div>
+                      )}
+                    </dl>
+                  )}
+                   {plugin.error && (
+                     <p className="mt-1.5 pl-7 text-xs break-words text-[var(--color-error)]">{plugin.error}</p>
+                   )}
+                   {actionErrors[plugin.id] && !plugin.error && (
+                     <div role="alert" className="mt-2 flex items-center gap-2 pl-7 text-xs text-[var(--color-error)]">
+                       <span className="min-w-0 flex-1 break-words">{actionErrors[plugin.id]}</span>
+                       <Button
+                         variant="ghost"
+                         size="sm"
+                         disabled={actionLoading !== null}
+                         loading={actionLoading === plugin.id}
+                         onClick={() => plugin.status === 'enabled' ? handleToggle(plugin) : plugin.status === 'installed' || plugin.status === 'disabled' || plugin.status === 'error' ? handleToggle(plugin) : handleInstall(plugin.id)}
+                       >
+                         {t('common.retry')}
+                       </Button>
+                     </div>
+                   )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {!loading && !error && filtered.length === 0 && (
+          <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]">
+            <EmptyState
+              className="w-full"
+              icon={<Search size={20} aria-hidden="true" />}
+              title={t('plugins.empty_title')}
+              description={t('plugins.empty_description')}
+            />
           </div>
-          {plugin.error && (
-            <div className="mt-2 p-2 bg-[var(--color-error)]/10 rounded-xl text-xs text-[var(--color-error)] border border-[var(--color-error)]/20">
-              {plugin.error}
+        )}
+
+        <Modal
+          open={importModalOpen}
+          onClose={() => setImportModalOpen(false)}
+          title={t('plugins.import_title')}
+          size="lg"
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setImportModalOpen(false)}>
+                {t('common.cancel')}
+              </Button>
+              <Button variant="primary" size="sm" onClick={handleImport} disabled={!importUrl.trim()} loading={importing}>
+                {importing ? t('common.loading') : t('plugins.import_submit')}
+              </Button>
             </div>
-          )}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between mt-4 pt-3 border-t border-[var(--color-border-subtle)]">
-        <button type="button"
-          onClick={onExpand}
-          className="flex items-center gap-1 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
+          }
         >
-          Details <ChevronRight size={12} className={`transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
-        </button>
-
-        <div className="flex items-center gap-2">
-          {isActionLoading ? (
-            <LoaderSize16 />
-          ) : isInstalled ? (
-            <>
-              <button type="button"
-                onClick={onToggle}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-200 border ${
-                  isEnabled
-                    ? 'bg-[var(--color-success)]/10 text-[var(--color-success)] hover:bg-[var(--color-success)]/20 border-[var(--color-success)]/20'
-                    : 'bg-white/[0.03] text-[var(--color-text-muted)] hover:bg-white/[0.06] border-[var(--color-border-subtle)]'
-                }`}
+          {error && <p role="alert" className="mb-3 text-sm text-[var(--color-error)]">{error}</p>}
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="plugin-source" className={labelClass}>{t('plugins.import_url_label')}</label>
+              <input
+                id="plugin-source"
+                type="url"
+                value={importUrl}
+                onChange={(e) => setImportUrl(e.target.value)}
+                placeholder={t('plugins.import_url_placeholder')}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="plugin-name" className={labelClass}>{t('plugins.import_name_label')}</label>
+              <input
+                id="plugin-name"
+                type="text"
+                value={importName}
+                onChange={(e) => setImportName(e.target.value)}
+                placeholder={t('plugins.import_name_placeholder')}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="plugin-type" className={labelClass}>{t('plugins.import_type_label')}</label>
+              <select
+                id="plugin-type"
+                value={importType}
+                onChange={(e) => setImportType(e.target.value)}
+                className={inputClass}
               >
-                {isEnabled ? <Power size={12} /> : <PowerOff size={12} />}
-                {isEnabled ? '已启用' : '启用'}
-              </button>
-              {plugin.source !== 'builtin' && (
-                <button type="button"
-                  onClick={onUninstall}
-                  className="p-1.5 rounded-xl text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/10 transition-all duration-200"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </>
-          ) : (
-            <button type="button"
-              onClick={onInstall}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] text-white rounded-xl text-xs font-semibold transition-all duration-200 active:scale-[0.97]"
-            >
-              <Download size={12} /> Install
-            </button>
-          )}
-        </div>
+                <option value="mcp">{t('plugins.import_type_mcp')}</option>
+                <option value="skill">{t('plugins.import_type_skill')}</option>
+                <option value="prompt">{t('plugins.import_type_prompt')}</option>
+              </select>
+            </div>
+          </div>
+        </Modal>
       </div>
     </div>
   );
-}
-
-function LoaderSize16() {
-  return <Loader2 size={16} className="text-[var(--color-accent)] animate-spin" />;
 }

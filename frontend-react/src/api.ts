@@ -1,8 +1,40 @@
 import { API_BASE_URL as BASE_URL, getAuthHeaders } from './lib/api-client';
+import { normalizeChatEvent, type ChatStreamEvent, type RawSSEEvent } from './types/chatEvents';
 
 export interface ApiError {
   detail: string;
 }
+
+/**
+ * A non-2xx answer. The status travels with the error so a caller can act on the
+ * code — an approval the backend no longer holds answers 409, and only the code
+ * says that — while the message stays the backend's `detail` for display.
+ */
+export class ApiRequestError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = status;
+  }
+}
+
+/** SSE 空闲超时：连接静默多久后判定为挂起。长时生成每收到数据即重置。 */
+const SSE_IDLE_TIMEOUT_MS = 120_000;
+
+/** 连接静默超时。`idleTimeoutMs` 是空闲阈值，不是流的总时长。 */
+export class SSEIdleTimeoutError extends Error {
+  readonly idleTimeoutMs: number;
+
+  constructor(idleTimeoutMs: number) {
+    super(`SSE stream stayed idle for ${idleTimeoutMs}ms`);
+    this.name = 'SSEIdleTimeoutError';
+    this.idleTimeoutMs = idleTimeoutMs;
+  }
+}
+
+export type { ChatStreamEvent, RawSSEEvent };
 
 export interface TaskSummary {
   task_id: string;
@@ -65,48 +97,136 @@ export interface ArcBenchStatus {
   updated_at?: string | null;
 }
 
+/** One rule as `GET /permissions/config` returns it. */
+export interface PermissionRuleOut {
+  decision: string;
+  tool: string;
+  pattern: string | null;
+  description: string;
+}
+
+/** Payload of `GET /api/v1/permissions/config`. */
+export interface PermissionConfigOut {
+  mode: string;
+  rules: PermissionRuleOut[];
+  allowed_tools: string[];
+  denied_tools: string[];
+}
+
+/** Body of `PUT /api/v1/permissions/config`; every field is optional server-side. */
+export interface PermissionConfigUpdate {
+  mode?: string;
+  rules?: Array<{
+    decision: string;
+    tool: string;
+    pattern?: string | null;
+    description?: string;
+  }>;
+  allowed_tools?: string[];
+  denied_tools?: string[];
+}
+
 interface SSEMessage {
   event: string;
   data: any;
 }
 
+/**
+ * 读取 SSE 流。
+ *
+ * `idleTimeoutMs` 是**空闲**超时而非总时长：每收到一个数据块就重置计时器，
+ * 因此长时生成不会误杀，只在连接静默后判定为挂起。超时抛出 `SSEIdleTimeoutError`，
+ * 由调用方转成 `error` 事件收尾。
+ */
 async function readSSEStream(
   body: ReadableStream<Uint8Array>,
   onMessage: (message: SSEMessage) => void,
+  idleTimeoutMs: number = SSE_IDLE_TIMEOUT_MS,
 ): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let idleTimedOut = false;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  const clearIdleTimer = () => {
+    if (idleTimer !== undefined) {
+      clearTimeout(idleTimer);
+      idleTimer = undefined;
+    }
+  };
 
-    buffer += decoder.decode(value, { stream: true });
-    const blocks = buffer.split('\n\n');
-    buffer = blocks.pop() || '';
+  const armIdleTimer = () => {
+    clearIdleTimer();
+    idleTimer = setTimeout(() => {
+      // 先记标记再取消 reader：取消只会让 read() 以 done 收尾，
+      // 真正的失败信号由循环结束后的显式抛出给出。
+      idleTimedOut = true;
+      void reader.cancel().catch(() => undefined);
+    }, idleTimeoutMs);
+  };
 
-    for (const block of blocks) {
-      let eventName = '';
-      let dataStr = '';
+  try {
+    armIdleTimer();
+    while (true) {
+      let result: ReadableStreamReadResult<Uint8Array>;
+      try {
+        result = await reader.read();
+      } catch (err) {
+        if (idleTimedOut) throw new SSEIdleTimeoutError(idleTimeoutMs);
+        throw err;
+      }
+      const { done, value } = result;
+      if (done) break;
+      armIdleTimer();
 
-      for (const line of block.split('\n')) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('event:')) {
-          eventName = trimmed.slice(6).trim();
-        } else if (trimmed.startsWith('data:')) {
-          dataStr += trimmed.slice(5).trim();
+      buffer += decoder.decode(value, { stream: true });
+      const blocks = buffer.split('\n\n');
+      buffer = blocks.pop() || '';
+
+      for (const block of blocks) {
+        let eventName = '';
+        let dataStr = '';
+
+        for (const line of block.split('\n')) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('event:')) {
+            eventName = trimmed.slice(6).trim();
+          } else if (trimmed.startsWith('data:')) {
+            dataStr += trimmed.slice(5).trim();
+          }
+        }
+
+        if (!dataStr || dataStr === '[DONE]') continue;
+
+        try {
+          onMessage({ event: eventName, data: JSON.parse(dataStr) });
+        } catch {
+          onMessage({ event: eventName, data: dataStr });
         }
       }
+    }
 
-      if (!dataStr || dataStr === '[DONE]') continue;
+    if (idleTimedOut) throw new SSEIdleTimeoutError(idleTimeoutMs);
 
-      try {
-        onMessage({ event: eventName, data: JSON.parse(dataStr) });
-      } catch {
-        onMessage({ event: eventName, data: dataStr });
+    if (buffer.trim()) {
+      // 服务端可能在最后一个块里省略结尾空行，补发一次尾帧。
+      for (const line of buffer.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith('data:')) continue;
+        const dataStr = trimmed.slice(5).trim();
+        if (!dataStr || dataStr === '[DONE]') continue;
+        const eventName = buffer.split('\n').find(l => l.trim().startsWith('event:'))?.slice(6).trim() ?? '';
+        try {
+          onMessage({ event: eventName, data: JSON.parse(dataStr) });
+        } catch {
+          onMessage({ event: eventName, data: dataStr });
+        }
       }
     }
+  } finally {
+    clearIdleTimer();
+    reader.releaseLock();
   }
 }
 
@@ -191,7 +311,7 @@ class ApiClient {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-      throw new Error(error.detail || `HTTP ${response.status}`);
+      throw new ApiRequestError(response.status, error.detail || `HTTP ${response.status}`);
     }
 
     return response.json();
@@ -241,7 +361,12 @@ class ApiClient {
   }
 
   // Chat (SSE)
-  chatStream(sessionId: string, message: string, onEvent: (event: { event: string; data: any }) => void): () => void {
+  chatStream(
+    sessionId: string,
+    message: string,
+    onEvent: (event: ChatStreamEvent) => void,
+    options: { idleTimeoutMs?: number } = {},
+  ): () => void {
     const url = `${BASE_URL}/sessions/${sessionId}/chat`;
     const abortController = new AbortController();
 
@@ -256,15 +381,19 @@ class ApiClient {
         throw new Error(error.detail || `HTTP ${response.status}`);
       }
 
-      if (!response.body) return;
-
-      await readSSEStream(response.body, ({ event, data }) => {
-        onEvent({ event: event || 'text', data });
-      });
-    }).catch((err) => {
-      if (err.name !== 'AbortError') {
-        onEvent({ event: 'error', data: JSON.stringify({ detail: err.message }) });
+      if (!response.body) {
+        onEvent({ type: 'error', message: 'The server returned an empty response body.' });
+        return;
       }
+
+      await readSSEStream(
+        response.body,
+        (frame) => onEvent(normalizeChatEvent(frame)),
+        options.idleTimeoutMs,
+      );
+    }).catch((err) => {
+      if (err.name === 'AbortError') return;
+      onEvent({ type: 'error', message: err?.message || 'Request failed' });
     });
 
     return () => abortController.abort();
@@ -372,7 +501,7 @@ class ApiClient {
     return this.request<any[]>('/groups/');
   }
 
-  async createGroup(data: { name: string; description?: string; topic?: string }) {
+  async createGroup(data: { name: string; description?: string; topic?: string; template?: 'default' }) {
     return this.request<any>('/groups/', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -646,7 +775,7 @@ class ApiClient {
 
   runAutonomousSkillStream(
     data: { goal: string; skills: string[]; prompt_template: string },
-    onEvent: (event: { type: string; data: any }) => void,
+    onEvent: (event: { type: string; data: unknown }) => void,
     onClose?: () => void,
   ): () => void {
     const url = `${BASE_URL}/skills/autonomous/run`;
@@ -664,21 +793,25 @@ class ApiClient {
           throw new Error(error.detail || `HTTP ${response.status}`);
         }
 
-        if (!response.body) return;
+        if (!response.body) {
+          onEvent({ type: 'error', data: { detail: 'The server returned an empty response body.' } });
+          return;
+        }
 
-        await readSSEStream(response.body, ({ event, data }) => {
-          const payload = data as { type?: string; data?: any };
-          if (payload && typeof payload === 'object' && 'type' in payload) {
-            onEvent({ type: payload.type || event || 'message', data: payload.data });
-          } else {
-            onEvent({ type: event || 'message', data });
-          }
+        await readSSEStream(response.body, (frame) => {
+          // 该端点已按 AG-UI 风格把类型放进 `data.type`；缺失时回落到 `event:` 行。
+          const payload =
+            frame.data && typeof frame.data === 'object' ? (frame.data as Record<string, unknown>) : null;
+          const nestedType = typeof payload?.type === 'string' ? payload.type : undefined;
+          onEvent({
+            type: nestedType || frame.event || 'message',
+            data: nestedType ? payload?.data : frame.data,
+          });
         });
       })
       .catch((err) => {
-        if (err.name !== 'AbortError') {
-          onEvent({ type: 'error', data: { detail: err.message } });
-        }
+        if (err.name === 'AbortError') return;
+        onEvent({ type: 'error', data: { detail: err?.message || 'Request failed' } });
       })
       .finally(() => onClose?.());
 
@@ -739,14 +872,20 @@ class ApiClient {
     });
   }
 
-  async getPermissionConfig() {
-    return this.request<any>('/permissions/config');
+  /**
+   * GET /api/v1/permissions/config. `mode` is a bare string because the server
+   * serialises `PermissionMode` verbatim; callers narrow it with
+   * `normalizePermissionMode` instead of casting.
+   */
+  async getPermissionConfig(): Promise<PermissionConfigOut> {
+    return this.request<PermissionConfigOut>('/permissions/config');
   }
 
-  async updatePermissionConfig(config: Record<string, any>) {
-    return this.request<any>('/permissions/config', {
+  /** PUT /api/v1/permissions/config. Requires an admin token. */
+  async updatePermissionConfig(update: PermissionConfigUpdate): Promise<{ status: string; mode: string }> {
+    return this.request<{ status: string; mode: string }>('/permissions/config', {
       method: 'PUT',
-      body: JSON.stringify(config),
+      body: JSON.stringify(update),
     });
   }
 

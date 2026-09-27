@@ -28,15 +28,16 @@ const storeState = {
   deleteSession: vi.fn(),
 };
 
+let wideDesktop = true;
+
 vi.mock('../../../store/workspace', () => ({
   useWorkspaceStore: () => storeState,
 }));
 
 vi.mock('../../../layout/breakpoints', () => ({
   useIsFullDesktop: () => true,
-  useIsWideDesktop: () => true,
+  useIsWideDesktop: () => wideDesktop,
   useIsMobile: () => false,
-  useIsCompactDesktop: () => false,
 }));
 
 vi.mock('../../../i18n', () => ({
@@ -72,6 +73,7 @@ describe('WorkspaceLayout focus mode', () => {
     vi.clearAllMocks();
     storeState.focusMode = false;
     storeState.rightPanelOpen = true;
+    wideDesktop = true;
   });
 
   it('renders sidebar and right panel when focus mode is off', () => {
@@ -89,6 +91,40 @@ describe('WorkspaceLayout focus mode', () => {
     expect(screen.queryByTestId('panel-separator')).not.toBeInTheDocument();
     expect(screen.getByTestId('chat-page')).toBeInTheDocument();
     expect(screen.getAllByTestId('panel')).toHaveLength(1);
+  });
+
+  it('keeps the chat primary and presents the inspector as a drawer on compact desktop', () => {
+    wideDesktop = false;
+    render(<WorkspaceLayout />);
+    expect(screen.getByTestId('chat-page')).toBeInTheDocument();
+    expect(screen.getByTestId('right-panel-drawer')).toBeInTheDocument();
+    expect(screen.getByTestId('right-panel-drawer')).toHaveAttribute('id', 'workspace-inspector');
+    expect(screen.getByTestId('right-panel')).toBeInTheDocument();
+    expect(screen.queryByTestId('panel-separator')).not.toBeInTheDocument();
+  });
+
+  it('keeps the compact inspector in layout flow beside the chat', () => {
+    wideDesktop = false;
+    render(<WorkspaceLayout />);
+    const chat = screen.getByTestId('chat-page');
+    const drawer = screen.getByTestId('right-panel-drawer');
+    expect(chat.compareDocumentPosition(drawer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(drawer).toHaveClass('relative', 'shrink-0');
+  });
+
+  it('closes the compact drawer on Escape and keeps the drawer in flow', () => {
+    wideDesktop = false;
+    render(<WorkspaceLayout />);
+    expect(screen.getByTestId('right-panel-drawer')).toHaveAttribute('role', 'dialog');
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(storeState.toggleRightPanel).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the inspector on-demand when it is closed', () => {
+    storeState.rightPanelOpen = false;
+    render(<WorkspaceLayout />);
+    expect(screen.getByTestId('chat-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('right-panel')).not.toBeInTheDocument();
   });
 
   it('exits focus mode on Escape', () => {

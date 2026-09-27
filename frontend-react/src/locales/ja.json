@@ -120,7 +120,12 @@
     "memory": "メモリ",
     "group": "グループ",
     "all": "すべて",
-    "searching": "検索中..."
+    "searching": "検索中...",
+    "preview_only": {
+      "document": "プレビューのみ — ドキュメントチャンクに詳細ページはありません",
+      "memory": "プレビューのみ — メモリに詳細ページはありません",
+      "group": "グループで開く"
+    }
   },
   "navigation": {
     "dashboard": "ダッシュボード",
@@ -206,7 +211,17 @@
     "clear_history": "履歴をクリア",
     "start_conversation": "会話を開始",
     "no_messages": "メッセージはありません",
-    "typing": "入力中..."
+    "typing": "入力中...",
+    "aria_label": "チャット",
+    "input_placeholder": "メッセージを入力...",
+    "empty_state_title": "会話を開始",
+    "suggestion_1": "このタスクを説明",
+    "suggestion_2": "現在のワークスペースを確認",
+    "suggestion_3": "次のステップを計画",
+    "edit_message": "メッセージを編集",
+    "wide_column": "ワイド列を使用",
+    "stop_generation": "生成を停止",
+    "table_of_contents": "目次"
   },
   "agents": {
     "title": "エージェント管理",
@@ -234,6 +249,7 @@
     "agent_deleted": "エージェントが正常に削除されました",
     "card_aria_label": "エージェント {{name}}",
     "status_configured": "設定済み",
+    "status_model_configured": "モデル設定済み",
     "status_incomplete": "設定未完了",
     "status_disabled": "無効",
     "coming_soon_title": "近日公開",
@@ -269,8 +285,7 @@
     "create_first": "最初のエージェントを作成して始めましょう。",
     "clear_search": "検索をクリア",
     "previous": "前へ",
-    "next": "次へ",
-    "create_agent": "エージェントを作成"
+    "next": "次へ"
   },
   "apiKeys": {
     "add_key": "新しいキーを追加",
@@ -325,7 +340,8 @@
     "role_participant": "参加者",
     "role_observer": "オブザーバー",
     "retry": "再試行",
-    "count": "{{count}} 件のワークフロー"
+    "count": "{{count}} 件のワークフロー",
+    "member_agent_id": "エージェントID"
   },
   "projects": {
     "title": "プロジェクト管理",
@@ -447,5 +463,91 @@
     "api_usage": "API 使用量",
     "download_report": "レポートをダウンロード",
     "log_out": "ログアウト"
+  },
+  "collaboration": {
+    "not_reported": "未報告", "heading_task": "グループタスク", "back_to_list": "グループに戻る", "topic_unset": "トピック未報告", "no_run_yet": "タスクは未実行です", "steps_progress": "{{done}} / {{total}} ステップ", "task_id_label": "タスク ID", "result_heading": "結果", "new_task": "新しいタスク",
+    "task_status": { "pending": "保留中", "running": "実行中", "completed": "完了", "failed": "失敗", "cancelled": "キャンセル済み" }, "group_status": { "active": "有効" }, "cancel": { "action": "タスクをキャンセル", "cancelling": "キャンセル中..." },
+    "aria": { "task_status": "タスク状態", "group_discussion": "グループディスカッション", "sidebar": "コラボレーションサイドバー", "loading_members": "メンバーを読み込み中" }, "members": { "empty": "メンバーはいません", "remove_named": "{{name}} を削除", "role": "役割", "adding": "追加中...", "retry": "再試行" }, "sidebar": { "members": "メンバー", "add_member": "メンバーを追加", "submit_task": "タスクを送信", "topic": "トピック" },
+    "task": { "objective_label": "目的", "objective_placeholder": "タスクを説明", "max_steps": "最大ステップ数", "submitting": "送信中...", "submit": "タスクを送信" }, "errors": { "load_groups": "グループを読み込めません", "load_members": "メンバーを読み込めません", "update_member": "メンバーを更新できません", "create_group": "グループを作成できません" },
+    "groups": { "heading": "グループ", "create": "グループを作成", "name_label": "グループ名", "topic_label": "トピック", "topic_placeholder": "任意のトピック", "template_hint": "既定のメンバーテンプレートを使用", "reload": "再読み込み", "loading": "グループを読み込み中...", "empty": "グループはありません", "member_count": "{{count}} 人", "member_count_unreported": "メンバー数未報告", "enter": "入る" }
+  },
+  "right_panel": {
+    "title": "実行インスペクター",
+    "collapse_all": "すべて折りたたむ",
+    "expand_all": "すべて展開",
+    "groups": {
+      "overview": "セッション",
+      "execution": "実行プロセス",
+      "changes": "変更とファイル",
+      "activity": "ツールアクティビティ"
+    },
+    "sections": {
+      "config": "設定",
+      "diff": "差分",
+      "dag": "DAG",
+      "trace": "トレース",
+      "reasoning": "推論",
+      "files": "ファイル",
+      "toolcalls": "ツール"
+    },
+    "status": {
+      "idle": "アイドル",
+      "running": "実行中",
+      "paused": "一時停止",
+      "completed": "完了",
+      "error": "エラー",
+      "pending": "待機中",
+      "failed": "失敗",
+      "stopped": "停止",
+      "unknown": "状態は未報告"
+    },
+    "summary": {
+      "untitled": "無題のセッション",
+      "no_session": "セッションが未選択",
+      "no_session_hint": "セッションを選択または作成すると実行サマリーが表示されます",
+      "tokens": "トークン",
+      "token_of_limit": "{{used}} / {{limit}}",
+      "not_reported": "未報告",
+      "none": "なし"
+    },
+    "config": {
+      "title": "実行設定",
+      "provider": "プロバイダー",
+      "model": "モデル",
+      "temperature": "温度",
+      "max_tokens": "最大トークン数",
+      "token_title": "トークン予算",
+      "tokens_not_reported": "この実行はトークン予算を報告していません",
+      "skills_title": "有効なスキル",
+      "no_skills": "有効なスキルはありません",
+      "tools_title": "有効なツール",
+      "no_tools": "有効なツールはありません"
+    },
+    "trace": {
+      "duration": "所要時間",
+      "tokens": "トークン"
+    },
+    "files": {
+      "title": "{{count}} 件のファイル",
+      "chunks": "{{count}} 件のチャンク",
+      "title_other": "{{count}} 件のファイル",
+      "chunks_other": "{{count}} 件のチャンク"
+    },
+    "states": {
+      "loading": "実行データを読み込んでいます",
+      "load_failed": "実行データは報告されていません",
+      "load_failed_hint": "バックエンドから応答がありません。接続を確認して再試行してください。",
+      "retry": "再試行",
+      "empty_dag": "実行グラフはありません",
+      "empty_dag_hint": "実行が計画を開始すると DAG が表示されます。",
+      "empty_trace": "トレースデータがありません",
+      "empty_trace_hint": "トレースは最初のモデル呼び出し後に表示されます。",
+      "empty_diff": "ファイルの変更はありません",
+      "empty_diff_hint": "この実行による変更がここに表示されます。",
+      "empty_documents": "ドキュメントはありません",
+      "empty_documents_hint": "この実行が読み込んだファイルがここに表示されます。",
+      "empty_tools": "ツールアクティビティはありません",
+      "empty_tools_hint": "この実行のツール呼び出しがここに表示されます。"
+    }
   }
 }

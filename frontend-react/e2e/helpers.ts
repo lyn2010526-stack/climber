@@ -17,9 +17,18 @@ export async function navigateTo(page: Page, pageId: string) {
 }
 
 export async function createAgent(request: APIRequestContext, name: string, provider = 'openai', modelId = 'gpt-4o-mini') {
-  const res = await request.post('/api/v1/agents', { data: { name, provider, model_id: modelId } });
-  if (!res.ok()) throw new Error(`Create agent failed: ${res.status()}`);
-  return res.json();
+  // Agent creation is rate limited, so a burst of suites can transiently hit
+  // 429. Retry with a growing delay so a spec failure always means a real
+  // contract break rather than a throttled request.
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const res = await request.post('/api/v1/agents', { data: { name, provider, model_id: modelId } });
+    if (res.ok()) return res.json();
+    lastStatus = res.status();
+    if (lastStatus !== 429) break;
+    await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+  }
+  throw new Error(`Create agent failed: ${lastStatus}`);
 }
 
 export async function deleteAgent(request: APIRequestContext, id: string) {

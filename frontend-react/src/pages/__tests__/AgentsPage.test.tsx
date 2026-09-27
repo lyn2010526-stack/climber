@@ -66,13 +66,15 @@ describe('AgentsPage card rendering', () => {
     expect(card.textContent).toContain('0 skills');
   });
 
-  it('renders Configured and Disabled status badges with matching data attribute', async () => {
+  it('renders Model configured and Disabled status badges with matching data attribute', async () => {
     render(<AgentsPage />);
     await waitFor(() => expect(screen.getByText('Nova Prime')).toBeDefined());
     const configured = document.querySelector('[data-agent-status="configured"]');
     const disabled = document.querySelector('[data-agent-status="disabled"]');
     expect(configured).not.toBeNull();
-    expect(configured?.textContent).toContain('Configured');
+    // The wording names what the API reported — a model id and provider — and
+    // stops short of calling the agent ready to run.
+    expect(configured?.textContent).toContain('Model configured');
     expect(disabled).not.toBeNull();
     expect(disabled?.textContent).toContain('Disabled');
   });
@@ -82,6 +84,13 @@ describe('AgentCard status resolution', () => {
   it('marks incomplete when model_id or provider missing', () => {
     expect(resolveAgentStatus({ is_active: true, model_id: 'x', provider: '' })).toBe('incomplete');
     expect(resolveAgentStatus({ is_active: true, model_id: '', provider: 'openai' })).toBe('incomplete');
+  });
+  it('reports an absent model field as unreported rather than incomplete', () => {
+    // A payload that omits the fields is not the same as one reporting them
+    // blank: the first is "we do not know", the second is "configured wrongly".
+    expect(resolveAgentStatus({ is_active: true })).toBe('unreported');
+    expect(resolveAgentStatus({ is_active: true, model_id: null, provider: null })).toBe('unreported');
+    expect(resolveAgentStatus({ is_active: true, model_id: 'x', provider: 'openai' })).toBe('configured');
   });
   it('disabled wins over configured', () => {
     expect(resolveAgentStatus({ is_active: false, model_id: 'x', provider: 'openai' })).toBe('disabled');

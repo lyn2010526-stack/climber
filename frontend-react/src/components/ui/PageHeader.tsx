@@ -10,6 +10,13 @@ interface PageHeaderProps {
   className?: string;
 }
 
+/**
+ * The page title is the brightest text on the screen, so it takes
+ * `--color-text-primary` and the largest heading rung. Everything under it
+ * steps down one level per rung: the description lands on the secondary text
+ * role one step below the title, and a breadcrumb trail drops to muted so the
+ * path is always the quietest thing in the header.
+ */
 export function PageHeader({
   title,
   description,
@@ -19,15 +26,14 @@ export function PageHeader({
   className
 }: PageHeaderProps) {
   return (
-    <header className={cn('mb-5 md:mb-6', className)}>
-      {/* Breadcrumbs */}
+    <header className={cn('mb-[var(--space-5)] md:mb-[var(--space-6)]', className)}>
       {breadcrumbs && breadcrumbs.length > 0 && (
-        <nav className="flex items-center gap-2 text-[var(--font-size-xs)] mb-3">
+        <nav className="mb-[var(--space-3)] flex items-center gap-[var(--space-2)] text-[length:var(--text-xs)]">
           {breadcrumbs.map((crumb, i) => (
             <React.Fragment key={i}>
-              {i > 0 && <span className="text-[var(--text-muted)]">/</span>}
+              {i > 0 && <span aria-hidden="true" className="text-[var(--color-text-muted)]">/</span>}
               <span
-                className={i === breadcrumbs.length - 1 ? 'text-[var(--text-primary)] font-medium' : 'text-[var(--text-muted)]'}
+                className={i === breadcrumbs.length - 1 ? 'font-medium text-[var(--color-text-secondary)]' : 'text-[var(--color-text-muted)]'}
               >
                 {crumb.label}
               </span>
@@ -36,23 +42,19 @@ export function PageHeader({
         </nav>
       )}
 
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
+      <div className="flex flex-col gap-[var(--space-4)] sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-[var(--space-3)]">
           {icon && (
-            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border" style={{
-              backgroundColor: 'var(--color-bg-surface-2)',
-              borderColor: 'var(--color-border-subtle)',
-              color: 'var(--color-text-secondary)'
-            }}>
+            <div className="mt-[var(--space-0-5)] shrink-0 text-[var(--color-text-muted)] [&>svg]:size-[var(--icon-lg)]">
               {icon}
             </div>
           )}
           <div>
-            <h1 className="text-xl font-semibold tracking-[-0.02em] leading-tight md:text-2xl" style={{ color: 'var(--color-text-primary)' }}>
+            <h1 className="text-[length:var(--text-xl)] font-semibold leading-[var(--leading-tight)] tracking-[-0.02em] text-[var(--color-text-primary)] md:text-[length:var(--text-2xl)]">
               {title}
             </h1>
             {description && (
-              <p className="mt-1 max-w-2xl text-sm leading-5" style={{ color: 'var(--color-text-secondary)' }}>
+              <p className="mt-[var(--space-1)] max-w-2xl text-[length:var(--text-sm)] leading-[var(--leading-normal)] text-[var(--color-text-secondary)]">
                 {description}
               </p>
             )}
@@ -60,7 +62,7 @@ export function PageHeader({
         </div>
 
         {actions && (
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex shrink-0 items-center gap-[var(--space-2)]">
             {actions}
           </div>
         )}

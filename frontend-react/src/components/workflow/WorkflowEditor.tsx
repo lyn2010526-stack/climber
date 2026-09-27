@@ -25,6 +25,7 @@ interface WorkflowEditorProps {
   initialNodes?: Node[];
   initialEdges?: Edge[];
   workflowId?: string;
+  workflowName?: string;
 }
 
 const NODE_PALETTE = [
@@ -42,11 +43,12 @@ export function WorkflowEditor({
   initialNodes = [],
   initialEdges = [],
   workflowId,
+  workflowName,
 }: WorkflowEditorProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const [workflowName, setWorkflowName] = useState('Untitled Workflow');
+  const [name, setName] = useState(workflowName || 'Untitled Workflow');
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,7 +115,7 @@ export function WorkflowEditor({
     setError(null);
     try {
       const payload = {
-        name: workflowName,
+         name: name.trim() || 'Untitled Workflow',
         nodes: nodes.map((n) => ({ id: n.id, type: n.type, data: n.data, position: n.position })),
         edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target, condition: (e as any).condition })),
       };
@@ -151,45 +153,46 @@ export function WorkflowEditor({
   };
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full min-h-0 flex-col md:flex-row">
       {/* Canvas */}
-      <div className="flex-1 flex flex-col">
+      <div className="min-h-[240px] min-w-0 flex-1 flex flex-col">
         {/* Toolbar */}
-         <div className="h-10 flex items-center px-4 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)]/50 gap-3">
+         <div className="min-h-12 shrink-0 flex items-center px-3 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] gap-2">
           <input
-            type="text"
-            value={workflowName}
-            onChange={(e) => setWorkflowName(e.target.value)}
-            className="text-xs font-medium text-[var(--color-text-primary)] bg-transparent border-none focus:outline-none"
+             type="text"
+             aria-label="Workflow name"
+             value={name}
+             onChange={(e) => setName(e.target.value)}
+            className="min-w-0 w-full rounded-[var(--radius-sm)] px-2 py-2 text-sm font-medium text-[var(--color-text-primary)] bg-transparent focus:outline-none focus:ring-1 focus:ring-[var(--color-border-strong)]"
           />
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             <button type="button"
               onClick={handleSave}
               disabled={saving}
-               className="flex items-center gap-1 px-2 py-1 text-[10px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] bg-[var(--color-bg-surface-elevated)] rounded transition-colors disabled:opacity-50"
+               className="flex min-h-11 md:min-h-8 items-center gap-1.5 px-3 text-xs text-[var(--color-text-primary)] border border-[var(--color-border-default)] hover:bg-[var(--color-bg-surface-2)] rounded-[var(--radius-sm)] disabled:opacity-50"
             >
-              <Save size={11} />
+              <Save size={14} />
               {saving ? '保存中...' : 'Save'}
             </button>
             <button type="button"
               onClick={handleRun}
               disabled={running || !workflowId}
-              className="flex items-center gap-1 px-2 py-1 text-[10px] text-white bg-blue-600 rounded hover:bg-blue-600/90 transition-colors disabled:opacity-50"
+              className="flex min-h-11 md:min-h-8 items-center gap-1.5 px-3 text-xs text-[var(--color-accent-text)] bg-[var(--color-accent)] rounded-[var(--radius-sm)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-disabled)] disabled:text-[var(--color-text-secondary)]"
             >
-              <Play size={11} />
+              <Play size={14} />
               {running ? '运行中...' : 'Run'}
             </button>
           </div>
         </div>
 
         {error && (
-          <div className="px-4 py-2 bg-red-500/10 border-b border-red-500/30 text-xs text-red-400">
+          <div role="alert" className="px-3 py-2 bg-[var(--color-error-subtle)] border-b border-[var(--color-border-subtle)] text-xs text-[var(--color-error)]">
             {error}
           </div>
         )}
 
         {/* Flow Canvas */}
-        <div ref={reactFlowWrapper} className="flex-1">
+        <div ref={reactFlowWrapper} className="min-h-0 flex-1">
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -202,35 +205,28 @@ export function WorkflowEditor({
             onDragOver={onDragOver}
             nodeTypes={nodeTypes}
             fitView
-             className="bg-[var(--color-bg-deep)]"
+             className="bg-[var(--color-bg-page)] [&_.react-flow__edge-path]:stroke-[var(--color-text-muted)]"
           >
-            <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="rgba(255,255,255,0.05)" />
+            <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="var(--color-border-strong)" />
              <Controls className="!bg-[var(--color-bg-surface)] !border-[var(--color-border-subtle)] !shadow-lg [&>button]:!bg-[var(--color-bg-surface)] [&>button]:!border-[var(--color-border-subtle)] [&>button]:!text-[var(--color-text-muted)] [&>button:hover]:!bg-[var(--color-bg-surface-elevated)]/50" />
             <MiniMap
-               className="!bg-[var(--color-bg-surface)] !border-[var(--color-border-subtle)]"
-              nodeColor={(n) => {
-                const colors: Record<string, string> = {
-                  input: '#6366f1',
-                  llm: '#a855f7',
-                  tool: '#10b981',
-                  condition: '#f59e0b',
-                  output: '#3b82f6',
-                };
-                return colors[n.type || ''] || '#64748b';
-              }}
+              className="hidden md:block !bg-[var(--color-bg-surface-1)] border !border-[var(--color-border-default)] !rounded-[var(--radius-sm)]"
+              style={{ width: 120, height: 80 }}
+              nodeColor="var(--color-text-muted)"
+              maskColor="var(--color-bg-surface-2)"
             />
           </ReactFlow>
         </div>
       </div>
 
        {/* Right Panel */}
-       <div className="w-64 border-l border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)]/30 flex flex-col">
+       <aside aria-label="Workflow configuration" className="h-[45%] min-h-0 w-full shrink-0 border-t md:border-t-0 md:border-l border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] flex flex-col md:h-full md:w-72 lg:w-80">
         {/* Node Palette */}
-         <div className="p-3 border-b border-[var(--color-border-subtle)]">
-           <h3 className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-2">
+         <div className="p-3 shrink-0 border-b border-[var(--color-border-subtle)]">
+           <h3 className="text-xs font-semibold text-[var(--color-text-secondary)] mb-2">
             Node Palette
           </h3>
-          <div className="space-y-1">
+          <div className="grid grid-cols-3 md:grid-cols-2 gap-1.5">
             {NODE_PALETTE.map(({ type, label, icon: Icon, description }) => (
               <div
                 key={type}
@@ -239,12 +235,12 @@ export function WorkflowEditor({
                   e.dataTransfer.setData('application/reactflow', type);
                   e.dataTransfer.effectAllowed = 'move';
                 }}
-                className="flex items-center gap-2 px-2 py-2 rounded-lg bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border-subtle)] cursor-grab hover:border-[var(--color-accent)]/30 transition-colors"
+                title={description}
+                className="flex items-center gap-2 px-2 py-2 rounded-[var(--radius-sm)] border border-[var(--color-border-default)] cursor-grab hover:bg-[var(--color-bg-surface-2)]"
               >
-                <Icon size={13} className="text-blue-400" />
+                <Icon size={14} className="shrink-0 text-[var(--color-text-secondary)]" />
                 <div className="flex-1 min-w-0">
-                   <p className="text-[11px] font-medium text-[var(--color-text-primary)]">{label}</p>
-                   <p className="text-[9px] text-[var(--color-text-muted)] truncate">{description}</p>
+                   <p className="truncate text-xs font-medium text-[var(--color-text-primary)]">{label}</p>
                 </div>
               </div>
             ))}
@@ -252,20 +248,21 @@ export function WorkflowEditor({
         </div>
 
         {/* Properties Panel */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1">
           {selectedNode ? (
             <PropertiesPanel
+              key={selectedNode.id}
               node={selectedNode}
               onUpdate={updateNodeData}
               onDelete={deleteSelectedNode}
             />
           ) : (
             <div className="p-4 text-center">
-                <p className="text-[10px] text-[var(--color-text-muted)]">选择节点以编辑属性</p>
+                <p className="text-xs text-[var(--color-text-muted)]">选择节点以编辑属性</p>
             </div>
           )}
         </div>
-      </div>
+      </aside>
     </div>
   );
 }

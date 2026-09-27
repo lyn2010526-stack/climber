@@ -1,4 +1,6 @@
 import { Component, type ReactNode } from 'react';
+import { AlertTriangle } from 'lucide-react';
+import i18n from '../i18n/config';
 
 interface Props {
   children: ReactNode;
@@ -32,16 +34,16 @@ export class ErrorBoundary extends Component<Props, State> {
 
       return (
         <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-          <div className="text-red-400 text-4xl mb-4">⚠</div>
-          <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-2">Something went wrong</h2>
+          <AlertTriangle size={40} className="mb-4 text-[var(--color-error)]" aria-hidden="true" />
+          <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-2">{i18n.t('error_boundary.title')}</h2>
           <p className="text-sm text-[var(--color-text-secondary)] mb-4 max-w-md">
-            {this.state.error?.message || 'An unexpected error occurred'}
+            {this.state.error?.message || i18n.t('error_boundary.description')}
           </p>
           <button type="button"
             onClick={() => this.setState({ hasError: false, error: null })}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm rounded transition-colors"
+            className="rounded bg-[var(--color-accent)] px-4 py-2 text-sm text-[var(--color-accent-text)] transition-colors hover:bg-[var(--color-accent-hover)]"
           >
-            Try Again
+            {i18n.t('error_boundary.retry')}
           </button>
         </div>
       );

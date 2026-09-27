@@ -120,7 +120,12 @@
     "memory": "메모리",
     "group": "그룹",
     "all": "전체",
-    "searching": "검색 중..."
+    "searching": "검색 중...",
+    "preview_only": {
+      "document": "미리보기만 지원 — 문서 청크에는 상세 페이지가 없습니다",
+      "memory": "미리보기만 지원 — 메모리에는 상세 페이지가 없습니다",
+      "group": "그룹에서 열기"
+    }
   },
   "navigation": {
     "dashboard": "대시보드",
@@ -206,11 +211,21 @@
     "clear_history": "기록 지우기",
     "start_conversation": "대화 시작",
     "no_messages": "메시지가 없습니다",
-    "typing": "입력 중..."
+    "typing": "입력 중...",
+    "aria_label": "채팅",
+    "input_placeholder": "메시지를 입력하세요...",
+    "empty_state_title": "대화 시작",
+    "suggestion_1": "이 작업 설명",
+    "suggestion_2": "현재 작업 영역 검토",
+    "suggestion_3": "다음 단계 계획",
+    "edit_message": "메시지 편집",
+    "wide_column": "넓은 열 사용",
+    "stop_generation": "생성 중지",
+    "table_of_contents": "목차"
   },
   "agents": {
     "title": "에이전트 관리",
-    "create_agent": "에이전트 생성",
+    "create_agent": "에이전트 만들기",
     "agent_name": "에이전트 이름",
     "agent_type": "에이전트 유형",
     "agent_status": "에이전트 상태",
@@ -234,6 +249,7 @@
     "agent_deleted": "에이전트가 성공적으로 삭제되었습니다",
     "card_aria_label": "에이전트 {{name}}",
     "status_configured": "설정됨",
+    "status_model_configured": "모델 구성됨",
     "status_incomplete": "설정 불완전",
     "status_disabled": "비활성화",
     "coming_soon_title": "곧 제공",
@@ -269,8 +285,7 @@
     "create_first": "첫 에이전트를 만들어 시작하세요.",
     "clear_search": "검색 지우기",
     "previous": "이전",
-    "next": "다음",
-    "create_agent": "에이전트 만들기"
+    "next": "다음"
   },
   "apiKeys": {
     "add_key": "새 키 추가",
@@ -325,7 +340,8 @@
     "role_participant": "참여자",
     "role_observer": "관찰자",
     "retry": "다시 시도",
-    "count": "워크플로 {{count}}개"
+    "count": "워크플로 {{count}}개",
+    "member_agent_id": "에이전트 ID"
   },
   "projects": {
     "title": "프로젝트 관리",
@@ -447,5 +463,91 @@
     "api_usage": "API 사용량",
     "download_report": " 보고서 다운로드",
     "log_out": "로그아웃"
+  },
+  "collaboration": {
+    "not_reported": "보고되지 않음", "heading_task": "그룹 작업", "back_to_list": "그룹으로 돌아가기", "topic_unset": "주제 보고되지 않음", "no_run_yet": "실행된 작업이 없습니다", "steps_progress": "{{done}} / {{total}} 단계", "task_id_label": "작업 ID", "result_heading": "결과", "new_task": "새 작업",
+    "task_status": { "pending": "대기 중", "running": "실행 중", "completed": "완료", "failed": "실패", "cancelled": "취소됨" }, "group_status": { "active": "활성" }, "cancel": { "action": "작업 취소", "cancelling": "취소 중..." },
+    "aria": { "task_status": "작업 상태", "group_discussion": "그룹 토론", "sidebar": "협업 사이드바", "loading_members": "멤버 로드 중" }, "members": { "empty": "멤버가 없습니다", "remove_named": "{{name}} 제거", "role": "역할", "adding": "추가 중...", "retry": "재시도" }, "sidebar": { "members": "멤버", "add_member": "멤버 추가", "submit_task": "작업 제출", "topic": "주제" },
+    "task": { "objective_label": "목표", "objective_placeholder": "작업 설명", "max_steps": "최대 단계", "submitting": "제출 중...", "submit": "작업 제출" }, "errors": { "load_groups": "그룹을 불러올 수 없습니다", "load_members": "멤버를 불러올 수 없습니다", "update_member": "멤버를 업데이트할 수 없습니다", "create_group": "그룹을 만들 수 없습니다" },
+    "groups": { "heading": "그룹", "create": "그룹 만들기", "name_label": "그룹 이름", "topic_label": "주제", "topic_placeholder": "선택적 주제", "template_hint": "기본 멤버 템플릿 사용", "reload": "다시 로드", "loading": "그룹 로드 중...", "empty": "그룹이 없습니다", "member_count": "멤버 {{count}}명", "member_count_unreported": "멤버 수가 보고되지 않음", "enter": "입장" }
+  },
+  "right_panel": {
+    "title": "실행 검사기",
+    "collapse_all": "모두 접기",
+    "expand_all": "모두 펼치기",
+    "groups": {
+      "overview": "세션",
+      "execution": "실행 과정",
+      "changes": "변경 및 파일",
+      "activity": "도구 활동"
+    },
+    "sections": {
+      "config": "설정",
+      "diff": "차이",
+      "dag": "DAG",
+      "trace": "추적",
+      "reasoning": "추론",
+      "files": "파일",
+      "toolcalls": "도구"
+    },
+    "status": {
+      "idle": "유휴",
+      "running": "실행 중",
+      "paused": "일시 정지",
+      "completed": "완료",
+      "error": "오류",
+      "pending": "대기 중",
+      "failed": "실패",
+      "stopped": "중지",
+      "unknown": "상태 미보고"
+    },
+    "summary": {
+      "untitled": "제목 없는 세션",
+      "no_session": "선택된 세션 없음",
+      "no_session_hint": "세션을 선택하거나 만들면 실행 요약이 표시됩니다",
+      "tokens": "토큰",
+      "token_of_limit": "{{used}} / {{limit}}",
+      "not_reported": "미보고",
+      "none": "없음"
+    },
+    "config": {
+      "title": "실행 설정",
+      "provider": "제공자",
+      "model": "모델",
+      "temperature": "온도",
+      "max_tokens": "최대 토큰",
+      "token_title": "토큰 예산",
+      "tokens_not_reported": "이 실행은 토큰 예산을 보고하지 않습니다",
+      "skills_title": "활성 스킬",
+      "no_skills": "활성 스킬 없음",
+      "tools_title": "활성 도구",
+      "no_tools": "활성 도구 없음"
+    },
+    "trace": {
+      "duration": "소요 시간",
+      "tokens": "토큰"
+    },
+    "files": {
+      "title": "파일 {{count}}개",
+      "chunks": "청크 {{count}}개",
+      "title_other": "파일 {{count}}개",
+      "chunks_other": "청크 {{count}}개"
+    },
+    "states": {
+      "loading": "실행 데이터를 불러오는 중",
+      "load_failed": "실행 데이터가 보고되지 않았습니다",
+      "load_failed_hint": "백엔드가 응답하지 않았습니다. 연결을 확인한 후 다시 시도하세요.",
+      "retry": "다시 시도",
+      "empty_dag": "실행 그래프 없음",
+      "empty_dag_hint": "실행이 계획을 시작하면 DAG가 표시됩니다.",
+      "empty_trace": "추적 데이터 없음",
+      "empty_trace_hint": "추적은 첫 모델 호출 이후에 표시됩니다.",
+      "empty_diff": "파일 변경 없음",
+      "empty_diff_hint": "이 실행의 변경 사항이 여기에 표시됩니다.",
+      "empty_documents": "문서 없음",
+      "empty_documents_hint": "이 실행이 읽은 파일이 여기에 표시됩니다.",
+      "empty_tools": "도구 활동 없음",
+      "empty_tools_hint": "이 실행의 도구 호출이 여기에 표시됩니다."
+    }
   }
 }
