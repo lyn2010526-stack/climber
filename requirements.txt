@@ -15,6 +15,7 @@ python-telegram-bot>=20.0
 aiocache>=0.12
 pytest>=8.0
 uvicorn>=0.22
+sse-starlette>=1.6
 sentence-transformers>=2.2.0
 cryptography>=41.0
 pyjwt>=2.8
