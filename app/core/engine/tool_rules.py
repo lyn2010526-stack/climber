@@ -134,13 +134,13 @@ class ToolRulesSolver:
         called_tools = {r.tool_name for r in self._call_history}
         for req in rule.requires:
             if req not in called_tools:
-                violated.append(f"{tool_name} requires {req} to have been called first")  # noqa: PERF401 # guard reads clearer as a loop than as a comprehension
+                violated.append(f"{tool_name} requires {req} to have been called first")  # guard reads clearer as a loop than as a comprehension
 
         # Check excludes constraints
         if batch:
             for exc in rule.excludes:
                 if exc in batch and exc != tool_name:
-                    violated.append(f"{tool_name} cannot be called together with {exc}")  # noqa: PERF401 # guard reads clearer as a loop than as a comprehension
+                    violated.append(f"{tool_name} cannot be called together with {exc}")  # guard reads clearer as a loop than as a comprehension
 
         if violated:
             return RulesCheckResult(

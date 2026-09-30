@@ -463,7 +463,7 @@ async def apply_patch(file_path: str, patch: str) -> str:
             # arguments; file_path arrives as a separate argv element, so an
             # agent cannot inject extra patch options, and the diff travels
             # through a private temp file rather than the command line.
-            result = subprocess.run(  # noqa: S603  # argv[0] is an absolute path from shutil.which()
+            result = subprocess.run(  # argv[0] is an absolute path from shutil.which()
                 [_PATCH_BIN, "-p1", "--dry-run", "-i", patch_file, file_path],
                 capture_output=True,
                 text=True,
@@ -472,7 +472,7 @@ async def apply_patch(file_path: str, patch: str) -> str:
             if result.returncode != 0:
                 return f"Patch dry-run failed:\n{result.stderr}"
 
-            result = subprocess.run(  # noqa: S603  # argv[0] is an absolute path from shutil.which()
+            result = subprocess.run(  # argv[0] is an absolute path from shutil.which()
                 [_PATCH_BIN, "-p1", "-i", patch_file, file_path],
                 capture_output=True,
                 text=True,
@@ -536,7 +536,7 @@ async def container_exec(container: str, command: str, workdir: str = "") -> str
         # workdir cannot smuggle extra docker flags. `command` is intentionally
         # a shell string executed *inside* the container, which is why this tool
         # is classified as a command tool in core/engine/validation.py.
-        result = subprocess.run(  # noqa: S603  # argv[0] is an absolute path from shutil.which()
+        result = subprocess.run(  # argv[0] is an absolute path from shutil.which()
             full_cmd,
             capture_output=True,
             text=True,

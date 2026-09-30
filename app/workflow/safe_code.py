@@ -52,7 +52,8 @@ _SAFE_NODES = (
     ast.comprehension,
 )
 
-_SAFE_CODE_NODES = _SAFE_NODES + (
+_SAFE_CODE_NODES = (
+    *_SAFE_NODES,
     ast.Module,
     ast.Assign, ast.AugAssign, ast.AnnAssign,
     ast.For, ast.While, ast.If, ast.Return,

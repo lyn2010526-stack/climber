@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import asyncio
 
-from app.core.engine.tool_capabilities import DEFAULT_ALLOWED_TOOLS, build_workflow_tool_validator
-from app.simulation.review import HarnessReviewer
 from app.tools import ToolRegistry
 from app.workflow import NodeStatus, NodeType, Workflow, WorkflowEdge, WorkflowNode
 from app.workflow.engine import WorkflowEngine
@@ -101,7 +99,7 @@ def test_simulation_node_default_denied_tool():
         result = await engine.execute(wf, user_inputs={"goal": "x"})
         return result, sim_node, fired
 
-    result, node, fired = asyncio.run(go())
+    _result, node, fired = asyncio.run(go())
     assert node.status == NodeStatus.COMPLETED
     assert node.output["rejected"] == 1
     assert node.output["accepted"] == 0
@@ -134,7 +132,7 @@ def test_simulation_node_capability_allowlist():
         result = await engine.execute(wf, user_inputs={"goal": "allow"})
         return result, sim_node
 
-    result, node = asyncio.run(go())
+    _result, node = asyncio.run(go())
     assert node.status == NodeStatus.COMPLETED
     assert node.output["reports"][0]["accepted_attempt"]["parameters"]["rate"] == 5.0
 

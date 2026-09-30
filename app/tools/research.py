@@ -68,7 +68,7 @@ _SESSION_ID = "research"
 class _NoRedirectHandler(HTTPRedirectHandler):
     """Keep urllib from following an unvalidated redirect target."""
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ARG002  # urllib HTTPRedirectHandler override
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # urllib HTTPRedirectHandler override
         return None
 
 
@@ -84,7 +84,7 @@ class _TextExtractor(HTMLParser):
         self._parts: list[str] = []
         self._skip = 0
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:  # noqa: ARG002  # HTMLParser handle_starttag callback
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:  # HTMLParser handle_starttag callback
         if tag in ("script", "style", "noscript", "svg"):
             self._skip += 1
         elif tag in ("p", "div", "br", "li", "h1", "h2", "h3", "h4", "tr"):

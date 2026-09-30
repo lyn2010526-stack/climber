@@ -5,13 +5,12 @@ from __future__ import annotations
 import asyncio
 import json
 
-from app.simulation.llm_planner import LLMExperimentPlanner
+from app.simulation.ledger import ExperimentLedger
 from app.simulation.orchestrator import (
     AggregateReviewContext,
     OrchestratorOptions,
     ScienceSimulationAgent,
 )
-from app.simulation.ledger import ExperimentLedger
 from app.tools import ToolRegistry
 
 
@@ -138,7 +137,7 @@ def test_orchestrator_aggregate_review_can_refine_once():
     """A custom aggregate reviewer can demand one refine round then pass."""
 
     async def go():
-        registry, client = _registry_with_mcp("ok")
+        registry, client = _registry_with_mcp("ok")  # noqa: RUF059 - bound here, asserted on by the caller
         calls = {"n": 0}
 
         async def reviewer(ctx: AggregateReviewContext) -> tuple[bool, str]:
@@ -165,7 +164,7 @@ def test_orchestrator_default_tool_selection():
     """Without default_tool, the selector picks the simulation tool."""
 
     async def go():
-        registry, client = _registry_with_mcp("ok")
+        registry, client = _registry_with_mcp("ok")  # noqa: RUF059 - bound here, asserted on by the caller
         # Register a second, non-simulation tool to force selection
         async def helper(**kwargs):
             return "helping"
@@ -185,7 +184,7 @@ def test_orchestrator_default_tool_selection():
 
 def test_orchestrator_ledger_persists_full_loop(tmp_path):
     async def go():
-        registry, client = _registry_with_mcp("ok")
+        registry, client = _registry_with_mcp("ok")  # noqa: RUF059 - bound here, asserted on by the caller
         ledger = ExperimentLedger(tmp_path)
         agent = ScienceSimulationAgent(
             registry,
@@ -196,12 +195,12 @@ def test_orchestrator_ledger_persists_full_loop(tmp_path):
         result = await agent.run("tune throughput")
         return result, ledger
 
-    result, ledger = asyncio.run(go())
+    _result, ledger = asyncio.run(go())
     records = ledger.read_all()
     types = {r["type"] for r in records}
     assert {"goal", "plan_round", "final_report"} <= types
     rounds = [r for r in records if r["type"] == "plan_round"]
     assert len(rounds) == 1
     assert rounds[0]["satisfied"] is True
-    final = [r for r in records if r["type"] == "final_report"][0]
+    final = next(r for r in records if r["type"] == "final_report")
     assert final["final_report"]["satisfied"] is True

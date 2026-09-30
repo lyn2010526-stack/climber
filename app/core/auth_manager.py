@@ -139,7 +139,7 @@ async def authenticate_user(username: str, password: str) -> dict[str, Any]:
     raise HTTPException(401, "Invalid credentials")
 
 
-async def get_current_user(request: Request) -> str:  # noqa: ARG001
+async def get_current_user(request: Request) -> str:
     """Extract current user id from the request-scoped principal."""
     from app.core.principal import get_context_principal
 
@@ -184,7 +184,7 @@ def _auto_privilege_allowed() -> bool:
 
 def require_admin():
     """Dependency factory that rejects callers without admin scope."""
-    async def _check(request: Request) -> dict[str, Any]:  # noqa: ARG001
+    async def _check(request: Request) -> dict[str, Any]:
         principal = _principal_dict()
         # Local mode (auth disabled) resolves to the seeded default identity.
         if _auto_privilege_allowed() and principal["id"] == "default-user":
@@ -197,7 +197,7 @@ def require_admin():
 
 def require_scopes(*required_scopes: str):
     """Dependency factory that enforces each required scope."""
-    async def _check(request: Request) -> dict[str, Any]:  # noqa: ARG001
+    async def _check(request: Request) -> dict[str, Any]:
         principal = _principal_dict()
         if _auto_privilege_allowed() and principal["id"] == "default-user":
             return {**principal, "scopes": list(required_scopes)}

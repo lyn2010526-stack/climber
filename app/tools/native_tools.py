@@ -127,7 +127,7 @@ async def take_screenshot(output_path: str = _DEFAULT_SCREENSHOT_PATH) -> str:
         # S603 audit: argv is the resolved binary plus the caller's destination
         # path as one argument. shell=False, so a crafted path is a path, never a
         # command word.
-        subprocess.run([_SCREENSHOT_BIN, output_path], check=True, timeout=10)  # noqa: S603  # argv[0] is an absolute path from shutil.which()
+        subprocess.run([_SCREENSHOT_BIN, output_path], check=True, timeout=10)  # argv[0] is an absolute path from shutil.which()
         return output_path
     except Exception as e:
         return f"Error taking screenshot: {redact_error_text(e)}"

@@ -83,7 +83,7 @@ class _MainContentParser(HTMLParser):
         self._suppress = 0
         self._depth = 0
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:  # noqa: ARG002
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self._depth += 1
         if tag in _NEGATIVE_TAGS:
             self._suppress += 1
@@ -152,7 +152,7 @@ class _PlainTextParser(HTMLParser):
         self.parts: list[str] = []
         self._suppress = 0
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:  # noqa: ARG002
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag in _NEGATIVE_TAGS:
             self._suppress += 1
 

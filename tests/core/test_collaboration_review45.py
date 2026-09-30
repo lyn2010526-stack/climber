@@ -28,7 +28,10 @@ with patch.dict(os.environ, {
     from app.core.collaboration import agent_runner, base, checkpoint, handoff, hierarchical
     from app.storage import Base
     from app.storage.models_groups import (
-        AgentGroup, AgentGroupMember, AgentGroupTask, AgentGroupTaskCheckpoint,
+        AgentGroup,
+        AgentGroupMember,
+        AgentGroupTask,
+        AgentGroupTaskCheckpoint,
     )
 
 

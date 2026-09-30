@@ -122,7 +122,7 @@ class MemFS:
             # literal argument lists in this file, so the only variable members
             # are a validated int and base_path-confined relative paths placed
             # after "--". shell=False, so no argument is re-parsed.
-            return subprocess.run(  # noqa: S603  # argv[0] is an absolute path from shutil.which()
+            return subprocess.run(  # argv[0] is an absolute path from shutil.which()
                 [_GIT_BIN, *args],
                 cwd=str(self._base_path),
                 capture_output=True,

@@ -261,7 +261,7 @@ class UserStore:
             result = session.execute(
                 select(ApiKey).where(
                     ApiKey.key_hash == key_hash,
-                    ApiKey.is_active == True,  # noqa: E712  # SQLAlchemy Boolean column comparison
+                    ApiKey.is_active.is_(True),
                 )
             )
             record = result.scalar_one_or_none()

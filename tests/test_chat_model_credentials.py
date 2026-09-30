@@ -3,7 +3,6 @@
 Run with unittest discovery to avoid the shared-database pytest conftest.
 No provider network traffic or real model credentials are used.
 """
-# ruff: noqa: PT009, PT027
 
 import unittest
 from types import SimpleNamespace

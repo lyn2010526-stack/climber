@@ -13,17 +13,19 @@ loop re-runs. Every round is recorded in the ledger.
 
 from __future__ import annotations
 
-import json
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from app.simulation.adjuster import ParameterAdjuster
 from app.simulation.harness import HarnessOptions, HarnessRunResult, SimulationHarness
-from app.simulation.ledger import ExperimentLedger
 from app.simulation.llm_planner import LLMExperimentPlanner
 from app.simulation.review import HarnessReviewer
+
+if TYPE_CHECKING:
+    from app.simulation.ledger import ExperimentLedger
 
 logger = structlog.get_logger()
 

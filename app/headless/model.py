@@ -25,7 +25,7 @@ class ModelError(Exception):
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ARG002  # urllib HTTPRedirectHandler override
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # urllib HTTPRedirectHandler override
         raise ModelError("Model endpoint redirects are disabled")
 
 
@@ -120,7 +120,7 @@ class ScriptedFakeModel:
             raise ValueError("Fake model script must be a JSON array of response envelopes")
         self.responses = iter(responses)
 
-    def complete(self, messages, tools, max_tokens, timeout):  # noqa: ARG002  # model adapter complete() interface
+    def complete(self, messages, tools, max_tokens, timeout):  # model adapter complete() interface
         try:
             return next(self.responses)
         except StopIteration:

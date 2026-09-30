@@ -13,7 +13,7 @@ import os
 import re
 import time
 from collections.abc import (
-    AsyncIterator,  # noqa: TC003  # no `from __future__ import annotations`; evaluated at runtime
+    AsyncIterator,  # no `from __future__ import annotations`; evaluated at runtime
 )
 from dataclasses import replace
 from typing import Any

@@ -23,7 +23,7 @@ from app.core.security_sandbox import SandboxConfig, SecuritySandbox
 
 
 class _StubRegistry:
-    def get_tool(self, name):  # noqa: D102
+    def get_tool(self, name):
         return None
 
 
@@ -114,7 +114,7 @@ def test_shell_command_still_hits_sandbox_hazard_policy():
     with tempfile.TemporaryDirectory() as workdir:
         sandbox = SecuritySandbox(SandboxConfig(workdir=workdir))
         validator = _validator(sandbox=sandbox, capabilities=["run_command"])
-        ok, reason = validator("run_command", {"command": "rm -rf /"})
+        ok, _reason = validator("run_command", {"command": "rm -rf /"})
         assert ok is False
 
 
@@ -146,6 +146,10 @@ async def test_workflow_engine_rejects_write_file_tool_node(tmp_path):
         sandbox = SecuritySandbox(SandboxConfig(workdir=str(tmp_path)))
         permission_overlay = None
 
+    from app.tools import register_builtins, tool_registry
+
+    register_builtins()
+
     workflow = Workflow(
         name="write-test",
         nodes=[
@@ -163,7 +167,7 @@ async def test_workflow_engine_rejects_write_file_tool_node(tmp_path):
         edges=[WorkflowEdge(source="start", target="t1")],
     )
 
-    engine = WorkflowEngine(_FakeAgentEngine())
+    engine = WorkflowEngine(_FakeAgentEngine(), tool_registry=tool_registry)
     result = await engine.execute(workflow, user_inputs={})
 
     node = workflow.get_node("t1")

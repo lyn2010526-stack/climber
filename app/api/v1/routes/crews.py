@@ -1,6 +1,6 @@
 """Crew CRUD and execution API endpoints."""
 
-# ruff: noqa: TC001  # FastAPI resolves route handler
+# FastAPI resolves route handler
 # annotations at runtime, so these names must stay importable at runtime.
 
 from __future__ import annotations

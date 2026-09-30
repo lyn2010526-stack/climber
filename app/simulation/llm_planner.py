@@ -23,8 +23,7 @@ from typing import Any
 
 import structlog
 
-from app.simulation.models import ExperimentSpec
-from app.simulation.planner import ExperimentPlan, ParamDim, plan_from_schema
+from app.simulation.planner import ExperimentPlan, plan_from_schema
 
 logger = structlog.get_logger()
 

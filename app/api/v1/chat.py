@@ -1,7 +1,6 @@
 """Session chat endpoint with SSE streaming."""
 
 # The existing engine exposes canonical state through these integration seams.
-# ruff: noqa: SLF001
 
 from __future__ import annotations
 

@@ -10,14 +10,12 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from app.simulation.adjuster import ParameterAdjuster
 from app.simulation.harness import HarnessOptions, SimulationHarness
 from app.simulation.ledger import ExperimentLedger
+from app.simulation.models import ExperimentSpec, Verdict
 from app.simulation.planner import (
     ExperimentPlan,
-    ParamDim,
     plan_from_schema,
 )
 from app.simulation.probes import (
@@ -27,7 +25,6 @@ from app.simulation.probes import (
     probe_convergence,
 )
 from app.simulation.review import HarnessReviewer, ParameterPolicy, ReviewContext
-from app.simulation.models import ExperimentSpec, Verdict
 from app.tools import ToolRegistry
 
 
@@ -46,6 +43,7 @@ class FakeSimTool:
             return "Error executing mesher: exception at cell 5, traceback"
         if self.behavior == "ok":
             return f"Simulation ok. throughput={float(kwargs.get('rate', 1.0)) * 2:.2f}"
+        return f"Simulation error: unknown behavior {self.behavior!r}"
 
     def make(self):
         return self._impl
@@ -227,7 +225,7 @@ def test_adjuster_stops_after_budget():
 
 def test_harness_accepts_good_simulation():
     async def go():
-        registry, fake = make_registry("ok")
+        registry, fake = make_registry("ok")  # noqa: RUF059 - returned to the caller for assertions
         harness = SimulationHarness(
             registry,
             options=HarnessOptions(max_rounds=3),
@@ -260,7 +258,7 @@ def test_harness_retries_then_gives_up_on_divergence():
         result = await harness.run_plan(plan, goal="tune")
         return result, fake
 
-    result, fake = asyncio.run(go())
+    result, fake = asyncio.run(go())  # noqa: RUF059 - bound by the inner closure and the caller
     assert result.rejected == 1
     report = result.reports[0]
     assert report.rounds_used == 3
@@ -338,7 +336,7 @@ def test_harness_marks_registry_error_as_failed_attempt():
 
 def test_harness_ledger_persists(tmp_path):
     async def go():
-        registry, fake = make_registry("ok")
+        registry, fake = make_registry("ok")  # noqa: RUF059 - returned to the caller for assertions
         ledger = ExperimentLedger(tmp_path)
         harness = SimulationHarness(
             registry,
@@ -352,7 +350,7 @@ def test_harness_ledger_persists(tmp_path):
         result = await harness.run_plan(plan, goal="persisted")
         return result, ledger
 
-    result, ledger = asyncio.run(go())
+    _result, ledger = asyncio.run(go())
     records = ledger.read_all()
     types = {r["type"] for r in records}
     assert {"goal", "attempt", "report"} <= types

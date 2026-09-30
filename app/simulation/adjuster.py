@@ -10,10 +10,11 @@ attempt budget is exhausted.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.simulation.models import ExperimentSpec
-from app.simulation.planner import ParamDim
+if TYPE_CHECKING:
+    from app.simulation.models import ExperimentSpec
+    from app.simulation.planner import ParamDim
 
 
 @dataclass
@@ -63,7 +64,7 @@ class ParameterAdjuster:
         return adjusted
 
     @classmethod
-    def from_plan_dims(cls, dims: list[ParamDim], max_steps: int = 8) -> "ParameterAdjuster":
+    def from_plan_dims(cls, dims: list[ParamDim], max_steps: int = 8) -> ParameterAdjuster:
         bounds: dict[str, tuple[float | None, float | None]] = {}
         adjustable: set[str] = set()
         for dim in dims:

@@ -8,7 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_manager import require_scopes
-from app.core.principal import CurrentPrincipal
+from app.core.principal import (
+    CurrentPrincipal,
+)
 from app.services.settings_service import SettingsService
 from app.storage import get_db
 

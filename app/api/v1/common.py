@@ -4,19 +4,21 @@ Provides common request parsing, database query helpers, and response formatting
 functions used across all route modules.
 """
 
-# ruff: noqa: TC003  # FastAPI resolves route handler
+# FastAPI resolves route handler
 # annotations at runtime, so these names must stay importable at runtime.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from fastapi import HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
 
 from app.core.principal import LOCAL_SUBJECT_ID, get_context_principal
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 DEFAULT_USER: str = LOCAL_SUBJECT_ID
 

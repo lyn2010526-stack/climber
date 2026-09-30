@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import re
 from collections.abc import (
-    Callable,  # noqa: TC003  # no `from __future__ import annotations`; evaluated at runtime
+    Callable,  # no `from __future__ import annotations`; evaluated at runtime
 )
 from typing import Any
 

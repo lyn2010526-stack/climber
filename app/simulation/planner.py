@@ -56,7 +56,7 @@ class ExperimentPlan:
     experiments: list[ExperimentSpec] = field(default_factory=list)
     total: int = 0
 
-    def build(self) -> "ExperimentPlan":
+    def build(self) -> ExperimentPlan:
         """Materialize the Cartesian sweep into concrete experiments."""
         if self.experiments:
             return self
@@ -69,10 +69,11 @@ class ExperimentPlan:
         combos = list(itertools.product(*axes)) if axes else [()]
         self.experiments = []
         for combo in combos:
-            params = dict(self.base_parameters)
-            for label, value in zip(labels, combo):
-                if value is not None:
-                    params[label] = value
+            params = self.base_parameters | {
+                label: value
+                for label, value in zip(labels, combo, strict=True)
+                if value is not None
+            }
             self.experiments.append(
                 ExperimentSpec(
                     tool_name=self.tool_name,

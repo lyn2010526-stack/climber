@@ -113,7 +113,7 @@ class FilePatchService:
             return "", f"Error previewing edit: {e!s}"
 
     @staticmethod
-    def validate_edit(file_path: str, old_string: str, new_string: str) -> tuple[bool, str]:  # noqa: ARG004  # patch-op interface
+    def validate_edit(file_path: str, old_string: str, new_string: str) -> tuple[bool, str]:  # patch-op interface
         """Validate that old_string exists and is unique enough for safe replacement.
 
         Checks:

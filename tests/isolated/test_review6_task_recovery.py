@@ -7,12 +7,12 @@ from __future__ import annotations
 import ast
 import asyncio
 import json
+import unittest
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-import unittest
 from unittest.mock import AsyncMock, patch
-from datetime import UTC, datetime
 
 from pydantic_settings import BaseSettings
 from sqlalchemy import select
@@ -376,12 +376,14 @@ class Review6RecoveryTests(unittest.IsolatedAsyncioTestCase):
             raise TimeoutError("synthetic step failed after write")
 
         self.manager.register("agent_run", scripted_handler)
-        with patch.object(task_worker, "task_manager", self.manager):
-            with self.assertRaisesRegex(RuntimeError, "Factory step 1 failed"):
-                await task_worker.handle_factory_run({
-                    "_task_id": "factory", "objective": "write once",
-                    "factory_skills": ["file_manager"], "tools": ["write_file"],
-                }, AsyncMock())
+        with (
+            patch.object(task_worker, "task_manager", self.manager),
+            self.assertRaisesRegex(RuntimeError, "Factory step 1 failed"),
+        ):
+            await task_worker.handle_factory_run({
+                "_task_id": "factory", "objective": "write once",
+                "factory_skills": ["file_manager"], "tools": ["write_file"],
+            }, AsyncMock())
         self.assertEqual(calls, [[], ["write_file"]])
         self.assertNotIn("task_retry", [e["type"] for e in self.manager._event_history["factory"]])
 

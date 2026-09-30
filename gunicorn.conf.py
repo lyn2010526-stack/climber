@@ -53,7 +53,7 @@ max_requests = int(os.getenv("GUNICORN_MAX_REQUESTS", "1000"))
 max_requests_jitter = int(os.getenv("GUNICORN_MAX_REQUESTS_JITTER", "50"))
 
 
-def on_starting(server):  # noqa: ARG001  # gunicorn hook signature
+def on_starting(server):  # gunicorn hook signature
     """Called just before the master process is initialized.
 
     Validates configuration and logs deployment parameters.
@@ -140,4 +140,4 @@ def post_fork_optimized(server, worker):
 
 
 # Override post_fork with optimized version
-post_fork = post_fork_optimized  # noqa: F811  # deliberate override of the hook above
+post_fork = post_fork_optimized  # noqa: F811 - deliberate override of the hook above

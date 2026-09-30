@@ -1,6 +1,6 @@
 """Reasoning API — multi-strategy reasoning endpoint with streaming support."""
 
-# ruff: noqa: TC001, TC002  # FastAPI resolves route handler annotations at
+# FastAPI resolves route handler annotations at
 # runtime, so these names must stay importable at runtime.
 
 from __future__ import annotations

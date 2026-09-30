@@ -29,8 +29,8 @@ def test_alembic_upgrade_head_succeeds_on_clean_sqlite(tmp_path: Path) -> None:
     # the script directory declares. Reading the head instead of pinning a
     # revision id keeps this regression test meaningful as migrations are added,
     # and the single-head assertion still fails on a re-introduced branch head.
-    from alembic.script import ScriptDirectory
     from alembic.config import Config
+    from alembic.script import ScriptDirectory
 
     script = ScriptDirectory.from_config(
         Config(str(Path(__file__).parents[2] / "alembic.ini"))

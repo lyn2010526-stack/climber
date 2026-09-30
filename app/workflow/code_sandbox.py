@@ -96,8 +96,8 @@ async def run_code_sandboxed(
             sys.executable,
             "-I",
             "-c",
-            "import sys; sys.path.insert(0, %r); "
-            "from app.workflow.code_sandbox import _child_main; _child_main()" % project_root,
+            f"import sys; sys.path.insert(0, {project_root!r}); "
+            "from app.workflow.code_sandbox import _child_main; _child_main()",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

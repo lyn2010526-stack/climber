@@ -9,8 +9,8 @@ accepting garbage.
 
 from __future__ import annotations
 
-import math
 import json
+import math
 import re
 from typing import Any
 

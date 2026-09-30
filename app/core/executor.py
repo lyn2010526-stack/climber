@@ -97,7 +97,7 @@ class CrewExecutorAdapter:
         """
         return bool(getattr(self._crew, "agents", None) or getattr(self._crew, "tasks", None))
 
-    async def execute(self, context: ExecutionContext, **kwargs: Any) -> ExecutionResult:  # noqa: ARG002
+    async def execute(self, context: ExecutionContext, **kwargs: Any) -> ExecutionResult:
         if not self.is_configured:
             error = (
                 "crew executor is registered with an unconfigured crew "

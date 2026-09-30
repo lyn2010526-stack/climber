@@ -16,9 +16,10 @@ import os
 import threading
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.simulation.models import ExperimentAttempt, ExperimentReport
+if TYPE_CHECKING:
+    from app.simulation.models import ExperimentAttempt, ExperimentReport
 
 _LEDGER_SCHEMA = "simulation-ledger-1.0"
 
@@ -105,16 +106,15 @@ class ExperimentLedger:
         record["_schema"] = _LEDGER_SCHEMA
         record["run_id"] = self.run_id
         line = json.dumps(record, ensure_ascii=False) + "\n"
-        with self._lock:
-            with open(self.path, "a", encoding="utf-8") as fh:
-                fh.write(line)
+        with self._lock, open(self.path, "a", encoding="utf-8") as fh:
+            fh.write(line)
 
     def read_all(self) -> list[dict[str, Any]]:
         """Read all records in write order."""
         if not self.path.exists():
             return []
         records: list[dict[str, Any]] = []
-        with open(self.path, "r", encoding="utf-8") as fh:
+        with open(self.path, encoding="utf-8") as fh:
             for line in fh:
                 line = line.strip()
                 if line:

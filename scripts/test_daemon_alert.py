@@ -149,7 +149,7 @@ class AlertSender:
         self,
         title: str,
         message: str,
-        metadata: dict[str, Any] | None,  # noqa: ARG002  # base notifier contract
+        metadata: dict[str, Any] | None,  # base notifier contract
     ) -> bool:
         """Send email alert."""
         try:

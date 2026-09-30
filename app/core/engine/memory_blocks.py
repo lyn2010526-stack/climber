@@ -188,7 +188,7 @@ class EntityExtractor:
     """
 
     # Simple patterns for entity extraction
-    PATTERNS = {  # noqa: RUF012  # read-only lookup table, never mutated
+    PATTERNS = {  # read-only lookup table, never mutated
         "person": r'\b([A-Z][a-z]+ [A-Z][a-z]+)\b',  # Full names
         "email": r'\b[\w.+-]+@[\w-]+\.[\w.-]+\b',
         "url": r'https?://[^\s<>\"\')\]]+',

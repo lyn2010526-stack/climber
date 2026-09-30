@@ -11,13 +11,11 @@ from __future__ import annotations
 import asyncio
 import json
 
-import pytest
-
 from app.simulation.harness import HarnessOptions, SimulationHarness
 from app.simulation.planner import plan_from_schema
 from app.simulation.review import HarnessReviewer, ParameterPolicy
 from app.tools import ToolRegistry
-from app.tools.builtins import simulate_experiment  # noqa: F401  (registers tool)
+from app.tools.builtins import simulate_experiment  # registers the tool as a side effect
 
 
 def make_registry() -> ToolRegistry:

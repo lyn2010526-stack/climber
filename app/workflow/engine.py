@@ -349,7 +349,7 @@ class WorkflowEngine:
 
             for edge in workflow.get_successors(current):
                 if edge.target != exclude_node and edge.target not in visited:
-                    queue.append(edge.target)  # noqa: PERF401 # BFS: queue mutation order is the algorithm
+                    queue.append(edge.target)  # BFS: queue mutation order is the algorithm
 
         return False
 
@@ -817,7 +817,7 @@ class WorkflowEngine:
 
         # Apply explicit input references (override auto-merged)
         for key, ref in node.inputs.items():
-            # Format: "node_id.output_key" or "node_id"  # noqa: ERA001  # documents the expected shape, not dead code
+            # Format: "node_id.output_key" or "node_id"  # documents the expected shape, not dead code
             if "." in ref:
                 node_id, output_key = ref.split(".", 1)
             else:

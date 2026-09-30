@@ -20,14 +20,13 @@ import asyncio
 import base64
 import importlib
 import json
-from pathlib import Path
 import sys
 import types
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import httpx
-
 
 PACKAGE = "_isolated_integration_http_contract"
 package = types.ModuleType(PACKAGE)

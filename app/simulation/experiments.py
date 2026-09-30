@@ -80,7 +80,7 @@ def run_heat_experiment(
     max_stable_dt = _CFL * cell_x * cell_x / (2.0 * alpha)
     cfl = dt / max_stable_dt
 
-    max_steps = int(math.ceil(t_final / dt))
+    max_steps = int(math.ceil(t_final / dt))  # noqa: RUF046 - math.ceil returns float; int() is required
     if max_steps > EXPERIMENT_MAX_STEPS:
         return _diverged(payload, started, "step budget exceeded")
 
@@ -145,7 +145,7 @@ def run_oscillator_experiment(
     if mass <= 0 or stiffness <= 0 or damping < 0 or dt <= 0 or duration <= 0:
         return _diverged(payload, started, "non-positive physical parameters")
 
-    steps = int(math.ceil(duration / dt))
+    steps = int(math.ceil(duration / dt))  # noqa: RUF046 - math.ceil returns float; int() is required
     if steps > EXPERIMENT_MAX_STEPS:
         return _diverged(payload, started, "step budget exceeded")
 
@@ -211,7 +211,7 @@ def run_logistic_experiment(
     if growth_rate < 0 or carrying_capacity <= 0 or initial_population < 0 or dt <= 0 or duration <= 0:
         return _diverged(payload, started, "non-positive model parameters")
 
-    steps = int(math.ceil(duration / dt))
+    steps = int(math.ceil(duration / dt))  # noqa: RUF046 - math.ceil returns float; int() is required
     if steps > EXPERIMENT_MAX_STEPS:
         return _diverged(payload, started, "step budget exceeded")
 

@@ -22,8 +22,13 @@ from app.core.engine.run_storage import RunStorage
 from app.core.engine.session_runner import merge_stream_chunk, response_usage
 from app.core.recovery import RecoveryManager
 from app.core.session import AgentSession, SessionConfig
-from app.middleware.metrics import (ACTIVE_SESSIONS, AGENT_RUN_TOTAL, TOKEN_USAGE,
-                                    TOOL_CALL_LATENCY, TOOL_CALL_TOTAL)
+from app.middleware.metrics import (
+    ACTIVE_SESSIONS,
+    AGENT_RUN_TOTAL,
+    TOKEN_USAGE,
+    TOOL_CALL_LATENCY,
+    TOOL_CALL_TOTAL,
+)
 from app.storage import Base
 from app.storage.database import Agent, CheckpointRecord, Message, Session, Turn, UsageLog
 from app.storage.models_cost import CostRecord

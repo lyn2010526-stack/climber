@@ -5,7 +5,6 @@ No tests/conftest.py, shared database, real provider key or external request.
 """
 
 # This suite deliberately avoids pytest and its shared-database conftest.
-# ruff: noqa: PT009, PT027
 
 import asyncio
 import socket

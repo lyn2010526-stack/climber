@@ -7,8 +7,7 @@ promissions, and tool routing.
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Callable  # noqa: TC003
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -20,6 +19,9 @@ from app.tools.mcp_models import (
     MCPToolResult,
 )
 from app.utils.ssrf import blocked_reason
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 try:  # optional dependency — keeps import safe when mcp is not installed
     from mcp import ClientSession
@@ -277,7 +279,7 @@ class MCPClient:
 
             result = await self.session.list_tools(**kwargs)
             for t in result.tools:
-                all_tools.append(  # noqa: PERF401
+                all_tools.append(
                     MCPTool(
                         name=t.name,
                         title=getattr(t, "title", None),
@@ -307,7 +309,7 @@ class MCPClient:
             result = await self.session.call_tool(name, arguments)
             content = []
             for item in result.content:
-                content.append(  # noqa: PERF401
+                content.append(
                     MCPContent(
                         type=getattr(item, "type", "text"),
                         text=getattr(item, "text", None),
@@ -362,7 +364,7 @@ class MCPClient:
         result = await self.session.list_resources()
         resources = []
         for r in result.resources:
-            resources.append(  # noqa: PERF401
+            resources.append(
                 MCPResource(
                     uri=r.uri,
                     name=r.name,

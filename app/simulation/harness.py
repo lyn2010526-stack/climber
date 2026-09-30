@@ -13,21 +13,23 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from app.core.parallel import ParallelToolExecutor
 from app.simulation.adjuster import ParameterAdjuster
-from app.simulation.ledger import ExperimentLedger
 from app.simulation.models import (
     ExperimentAttempt,
     ExperimentReport,
     ExperimentSpec,
     Verdict,
 )
-from app.simulation.planner import ExperimentPlan
 from app.simulation.review import HarnessReviewer, ReviewContext
+
+if TYPE_CHECKING:
+    from app.simulation.ledger import ExperimentLedger
+    from app.simulation.planner import ExperimentPlan
 
 logger = structlog.get_logger()
 

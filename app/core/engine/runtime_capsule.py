@@ -190,7 +190,7 @@ class RuntimeStateCapsule:
             # S603 audit: argv is fully fixed (binary + "status" +
             # "--porcelain") and the captured output is parsed as data, never
             # executed, so nothing caller-supplied reaches the command.
-            result = subprocess.run(  # noqa: S603  # argv[0] is an absolute path from shutil.which()
+            result = subprocess.run(  # argv[0] is an absolute path from shutil.which()
                 [_GIT_BIN, "status", "--porcelain"],
                 cwd=self._workdir,
                 capture_output=True,

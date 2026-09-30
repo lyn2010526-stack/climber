@@ -146,7 +146,7 @@ async def get_stats() -> dict[str, Any]:
 
 @router.get("/profile")
 @router.get("/profile/")
-async def get_profile(request: Request) -> dict[str, Any]:  # noqa: ARG001
+async def get_profile(request: Request) -> dict[str, Any]:
     """Get the current user profile."""
     from app.core.principal import get_context_principal
 

@@ -244,7 +244,9 @@ async def _run_scheduler(scheduler):
 
 def _wire_auto_loop_runner(auto_loop_engine) -> None:
     """Wire owner-configured agent execution and persist reported progress."""
-    from app.core.auto_loop import AutoLoopRecord
+    from app.core.auto_loop import (
+        AutoLoopRecord,
+    )
     from app.core.task_worker import handle_agent_run, resolve_owner_agent_payload
 
     async def autonomous_runner(record: AutoLoopRecord) -> None:
@@ -252,6 +254,7 @@ def _wire_auto_loop_runner(auto_loop_engine) -> None:
 
         async def on_progress(step: int, total: int, message: str = "") -> None:
             import time
+
             from app.core.auto_loop import AutoLoopTaskStatus
 
             record.current_step = step
@@ -423,11 +426,8 @@ if FRONTEND_DIR.exists():
         if response.status_code == 404:
             path = request.url.path
             if (
-                path.startswith("/api/")
-                or path.startswith("/docs")
-                or path == "/openapi.json"
-                or path == "/health"
-                or path.startswith("/_test/")
+                path.startswith(("/api/", "/docs", "/_test/"))
+                or path in ("/openapi.json", "/health")
             ):
                 return response
             file_path = (FRONTEND_DIR / path.lstrip("/")).resolve()

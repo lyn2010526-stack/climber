@@ -11,7 +11,11 @@ from app.core.engine.safety import setup_default_permissions, validate_tool_call
 from app.core.interfaces import ExecutionResult, ExecutionStatus
 from app.core.security import DockerSandbox
 from app.core.security_sandbox import (
-    AgentMode, PermissionLevel, PermissionOverlay, PermissionRule, SecuritySandbox,
+    AgentMode,
+    PermissionLevel,
+    PermissionOverlay,
+    PermissionRule,
+    SecuritySandbox,
 )
 from app.tools import builtins
 from app.utils.ssrf import blocked_reason
@@ -148,8 +152,7 @@ class FetchUrlTests(unittest.IsolatedAsyncioTestCase):
             return handler(request)
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(dispatch))
-        factory = self.enterContext(patch.object(builtins.httpx, "AsyncClient", return_value=client))
-        return factory
+        return self.enterContext(patch.object(builtins.httpx, "AsyncClient", return_value=client))
 
     async def test_success_keeps_output_limit_and_timeout(self):
         factory = self.client(lambda request: httpx.Response(200, text="x" * 6000))
