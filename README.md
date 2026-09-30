@@ -125,6 +125,14 @@ INITIAL_ADMIN_PASSWORD=
 
 本地开发模式默认关闭认证；`production` 和 `staging` 会自动启用认证。启用认证后，受保护 API 支持 `X-API-Key` 和 `Authorization: Bearer <token>`。生产部署需要由部署者提供认证入口和 HTTPS，当前 SPA 不承诺开箱即用的生产登录页面。
 
+`APP_SECRET_KEY` 在 `production` 和 `staging` 下必须至少 16 个字符，且不能是 `.env.example` 或文档中公开的占位值（如 `change-me-in-production`）。该密钥同时用于签发令牌和加密已存储的第三方模型 API Key，使用占位值会让这些凭据可被公开解密。生成方式：
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+本地开发留空即可，此时使用内置的开发密钥。
+
 应用数据默认保存在本地或自有基础设施。启用外部 LLM、MCP Server、Telegram、搜索、天气、翻译或其他集成后，相应请求内容和凭据会按照配置发送到第三方服务。不要把真实密钥提交到仓库、前端代码或日志中。
 
 ## 架构与项目结构

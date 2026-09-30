@@ -11,6 +11,55 @@ from pydantic_settings import BaseSettings
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
+# Values that look like a secret but are published in this repository, in
+# .env.example, or in setup guides. Accepting one of these leaves the signing
+# key publicly known, so they are treated as "no key configured".
+_PLACEHOLDER_SECRETS = frozenset(
+    {
+        "change-me-in-production",
+        "change_me_in_production",
+        "changeme",
+        "change-me",
+        "changethis",
+        "change_this",
+        "your-secret-key",
+        "your_secret_key",
+        "your-secret-key-here",
+        "your_secret_key_here",
+        "secret",
+        "secret-key",
+        "secretkey",
+        "replace-me",
+        "replaceme",
+        "todo",
+        "xxx",
+        "placeholder",
+        "example",
+    }
+)
+MIN_SECRET_LENGTH = 16
+
+SECRET_GENERATION_HINT = (
+    "Generate a real secret, e.g. `python -c \"import secrets;"
+    " print(secrets.token_urlsafe(48))\"`"
+)
+
+
+def is_placeholder_secret(value: str) -> bool:
+    """Return True when a configured secret is unusable as a signing key.
+
+    A truthy placeholder used to short-circuit the boot checks, so copying
+    `.env.example` straight to `.env` passed validation while leaving a
+    publicly known string in charge of signing tokens and of the Fernet key
+    that encrypts stored third-party provider credentials.
+    """
+    candidate = (value or "").strip().lower()
+    if not candidate:
+        return True
+    if candidate in _PLACEHOLDER_SECRETS:
+        return True
+    return len(candidate) < MIN_SECRET_LENGTH
+
 
 class Settings(BaseSettings):
     app_env: str = Field(default="local")
@@ -145,6 +194,10 @@ class Settings(BaseSettings):
         if is_deployed and not self.enable_auth:
             raise ValueError("ENABLE_AUTH must be true in production and staging environments")
         if self.app_secret_key:
+            if is_placeholder_secret(self.app_secret_key) and is_deployed:
+                raise ValueError(
+                    f"APP_SECRET_KEY is still a placeholder value. {SECRET_GENERATION_HINT}"
+                )
             return self
         if self.app_testing or environment in {"local", "development", "test", "testing"}:
             self.app_secret_key = "agent-engine-local-persistent-development-key"
