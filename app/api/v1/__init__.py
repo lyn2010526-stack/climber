@@ -25,6 +25,7 @@ from app.api.v1 import workflows as workflows_router
 from app.api.v1.routes.arcbench import router as arcbench_router
 from app.api.v1.routes.research import router as research_router
 from app.core.reasoning import api as reasoning_router
+from app.core.security import api as security_router
 
 router = APIRouter()
 router.include_router(chat_router.router, prefix="/sessions", tags=["sessions"])
@@ -42,6 +43,7 @@ router.include_router(notifications_router.router, prefix="/notifications", tags
 router.include_router(doctor_router.router, prefix="/doctor", tags=["doctor"])
 router.include_router(reasoning_router.router, prefix="/reason", tags=["reasoning"])
 router.include_router(permissions_router.router, prefix="/permissions", tags=["permissions"])
+router.include_router(security_router.router, prefix="/security", tags=["security"])
 router.include_router(arcbench_router, tags=["arcbench"])
 router.include_router(research_router, tags=["research"])
 

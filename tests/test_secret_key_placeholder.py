@@ -22,7 +22,10 @@ STRONG = "k3M9xQ2vLp7Rt4wYzA8bN1cD6fH0jS5uE2gV7nI4oP1l"
 
 
 def build(**overrides) -> Settings:
-    base = {"app_env": "production", "app_secret_key": STRONG}
+    # APP_TESTING is forced on by tests/conftest.py, and it suppresses the
+    # APP_ENV-derived ENABLE_AUTH default, so a production build must state the
+    # flag explicitly to reach the secret checks at all.
+    base = {"app_env": "production", "app_secret_key": STRONG, "enable_auth": True}
     return Settings(**{**base, **overrides})
 
 
@@ -98,5 +101,22 @@ class TestExistingGuardsStillHold:
             build(enable_auth=False)
 
     def test_production_without_secret_still_fails(self):
+        # app_testing=True short-circuits to the development fallback, so a
+        # production run must opt out of it to reach the secret requirement.
         with pytest.raises(ValidationError, match="APP_SECRET_KEY"):
-            build(app_secret_key="")
+            Settings(
+                app_env="production",
+                app_secret_key="",
+                enable_auth=True,
+                app_testing=False,
+            )
+
+    def test_local_env_without_secret_gets_fallback(self):
+        # Outside local/testing, an empty secret has no fallback to fall back to.
+        with pytest.raises(ValidationError):
+            Settings(
+                app_env="staging",
+                app_secret_key="",
+                enable_auth=True,
+                app_testing=False,
+            )

@@ -53,7 +53,16 @@ async def resolve_permission(request: PermissionResolveRequest, _user: str = Dep
 
 
 @router.get("/config")
-async def get_permission_config():
+async def get_permission_config(_auth: dict = Depends(require_admin())):
+    # Reading the policy discloses the enforced mode together with the
+    # allowed_tools/denied_tools allow- and deny-lists, so this endpoint carries
+    # the same admin gate as the write path below. The path is absent from
+    # `auth_public_endpoints` and from the middleware's public prefixes, and the
+    # frontend reaches it through the authenticated API client, so nothing here
+    # is designed to be readable anonymously.
+    # `require_admin` is a dependency factory: it has to be called here, and
+    # passing the bare function would hand FastAPI a callable that only builds
+    # the checker without ever running it, leaving the route unauthenticated.
     engine = get_engine()
     config = engine.get_permission_config()
 
@@ -76,7 +85,7 @@ async def get_permission_config():
 @router.put("/config")
 async def update_permission_config(
     update: PermissionConfigUpdate,
-    current_user: dict = Depends(require_admin),
+    _auth: dict = Depends(require_admin()),
 ):
     engine = get_engine()
     current = engine.get_permission_config()

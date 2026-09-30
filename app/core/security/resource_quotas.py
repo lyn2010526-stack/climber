@@ -111,9 +111,9 @@ class QuotaManager:
 
     def get_all_quotas(self) -> dict[str, dict[str, Any]]:
         """Get all agent quotas as dict."""
-        result = {"_default": self._quota_to_dict(self._default_quota)}
+        result = {"_default": self.quota_to_dict(self._default_quota)}
         for agent_id, quota in self._agent_quotas.items():
-            result[agent_id] = self._quota_to_dict(quota)
+            result[agent_id] = self.quota_to_dict(quota)
         return result
 
     def get_all_usage(self) -> dict[str, dict[str, Any]]:
@@ -130,7 +130,7 @@ class QuotaManager:
         return result
 
     @staticmethod
-    def _quota_to_dict(quota: ResourceQuota) -> dict[str, Any]:
+    def quota_to_dict(quota: ResourceQuota) -> dict[str, Any]:
         return {
             "cpu_cores": quota.cpu_cores,
             "memory_mb": quota.memory_mb,

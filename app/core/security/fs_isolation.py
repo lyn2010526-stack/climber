@@ -47,6 +47,26 @@ class FSIsolationManager:
         self.config = config or FSIsolationConfig()
         self._temp_dirs: list[str] = []
 
+    def set_config(self, config: FSIsolationConfig) -> None:
+        """Replace the active isolation policy.
+
+        Blocked paths are merged with the built-in defaults so a configuration
+        update can never widen access to the protected system locations.
+        """
+        merged = FSIsolationConfig(
+            allowed_paths=list(config.allowed_paths),
+            blocked_paths=sorted({
+                *FSIsolationConfig().blocked_paths,
+                *(p for p in config.blocked_paths if p),
+            }),
+            read_only_paths=list(config.read_only_paths),
+            temp_dir=config.temp_dir,
+            max_file_size_mb=config.max_file_size_mb,
+            allowed_extensions=list(config.allowed_extensions),
+        )
+        self.config = merged
+        logger.info("fs_config_updated", allowed_paths=len(merged.allowed_paths))
+
     def validate_path(self, path: str) -> tuple[bool, str]:
         """Validate path against isolation rules. Returns (ok, reason)."""
         if not path:

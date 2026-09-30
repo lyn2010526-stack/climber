@@ -14,6 +14,7 @@ import httpx
 from sqlalchemy import select
 
 from app.core.di import resolve as di_resolve
+from app.core.security.network_allowlist import network_allowlist
 from app.tools import tool
 from app.utils.ssrf import blocked_reason
 
@@ -53,6 +54,22 @@ def _safe_eval_math(expression: str, local_vars: dict[str, Any]) -> Any:
 from app.tools import browser_tools  # noqa: E402, F401
 
 
+def _outbound_denial(url: str) -> str:
+    """Return why an outbound request is denied, or an empty string when allowed.
+
+    Every tool that talks to the network goes through here before opening a
+    connection: the SSRF layer rejects loopback, private, link-local and cloud
+    metadata destinations, and the network allowlist applies its domain policy.
+    """
+    reason = blocked_reason(url)
+    if reason:
+        return reason
+    allowed, allowlist_reason = network_allowlist.check_url(url)
+    if not allowed:
+        return f"blocked by network allowlist: {allowlist_reason}"
+    return ""
+
+
 @tool(description="Get the current date and time")
 async def get_datetime() -> str:
     return datetime.now().isoformat()
@@ -61,7 +78,7 @@ async def get_datetime() -> str:
 @tool(description="Fetch content from a URL")
 async def fetch_url(url: str) -> str:
     try:
-        reason = blocked_reason(url)
+        reason = _outbound_denial(url)
         if reason:
             return f"Error fetching URL: {reason}"
         async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
@@ -73,7 +90,7 @@ async def fetch_url(url: str) -> str:
                 if redirects == 5:
                     return "Error fetching URL: too many redirects (maximum 5)"
                 current_url = urllib.parse.urljoin(str(resp.url), resp.headers["location"])
-                reason = blocked_reason(current_url)
+                reason = _outbound_denial(current_url)
                 if reason:
                     return f"Error fetching URL: redirect blocked: {reason}"
             resp.raise_for_status()
@@ -89,7 +106,7 @@ async def fetch_url(url: str) -> str:
 async def web_search(query: str) -> str:
     try:
         url = f"https://lite.duckduckgo.com/lite/?q={urllib.parse.quote(query)}"
-        reason = blocked_reason(url)
+        reason = _outbound_denial(url)
         if reason:
             return f"Search error: {reason}"
         async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
@@ -120,6 +137,9 @@ async def calculator(expression: str) -> str:
 async def get_weather(city: str) -> str:
     try:
         url = f"https://wttr.in/{urllib.parse.quote(city)}?format=j1"
+        reason = _outbound_denial(url)
+        if reason:
+            return f"Weather error: {reason}"
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(url)
             resp.raise_for_status()
@@ -181,6 +201,9 @@ async def run_command(command: str) -> str:
 async def generate_image(prompt: str) -> str:
     try:
         url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&nologo=true"
+        reason = _outbound_denial(url)
+        if reason:
+            return f"Image generation error: {reason}"
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.get(url)
             if resp.status_code == 200:
@@ -196,6 +219,9 @@ async def translate(text: str, target_language: str = "en", source_language: str
     try:
         # Use LibreTranslate public instance or similar
         url = "https://libretranslate.de/translate"
+        reason = _outbound_denial(url)
+        if reason:
+            return f"Translation error: {reason}"
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(url, json={
                 "q": text,
@@ -215,6 +241,9 @@ async def translate(text: str, target_language: str = "en", source_language: str
 async def wikipedia_summary(topic: str) -> str:
     try:
         url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(topic)}"
+        reason = _outbound_denial(url)
+        if reason:
+            return f"Wikipedia error: {reason}"
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(url, headers={"User-Agent": "AgentEngine/0.1"})
             if resp.status_code == 200:

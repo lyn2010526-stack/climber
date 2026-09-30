@@ -3,7 +3,7 @@
 Provides REST endpoints for managing security configuration:
 - Resource quotas
 - File system isolation config
-- Network allowlist
+- Network allowlist (allowlisted domains and domain scoping mode)
 All endpoints require admin authentication.
 """
 
@@ -11,14 +11,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
+from app.core.auth_manager import require_admin
 from app.core.security.fs_isolation import FSIsolationConfig, FSIsolationManager
 from app.core.security.network_allowlist import network_allowlist
 from app.core.security.resource_quotas import ResourceQuota, quota_manager
 
-router = APIRouter(prefix="/api/v1/security", tags=["security"])
+router = APIRouter(tags=["security"], dependencies=[Depends(require_admin())])
+
+fs_isolation_manager = FSIsolationManager()
 
 
 # --- Request/Response Models ---
@@ -44,6 +47,10 @@ class DomainRequest(BaseModel):
     domain: str
 
 
+class DomainPolicyRequest(BaseModel):
+    strict_domain_mode: bool
+
+
 # --- Quota Endpoints ---
 
 
@@ -66,7 +73,11 @@ async def update_quota(
         network_kbps=request.network_kbps,
     )
     quota_manager.set_quota(request.agent_id, quota)
-    return {"status": "updated", "agent_id": request.agent_id, "quota": quota_manager._quota_to_dict(quota)}
+    return {
+        "status": "updated",
+        "agent_id": request.agent_id,
+        "quota": quota_manager.quota_to_dict(quota),
+    }
 
 
 # --- FS Config Endpoints ---
@@ -74,7 +85,7 @@ async def update_quota(
 
 @router.get("/fs-config")
 async def get_fs_config() -> dict[str, Any]:
-    config = FSIsolationManager().config
+    config = fs_isolation_manager.config
     return {
         "allowed_paths": config.allowed_paths,
         "blocked_paths": config.blocked_paths,
@@ -95,11 +106,10 @@ async def update_fs_config(
         max_file_size_mb=request.max_file_size_mb,
         allowed_extensions=request.allowed_extensions,
     )
-    manager = FSIsolationManager(config)
+    fs_isolation_manager.set_config(config)
     return {"status": "updated", "config": {
-        "allowed_paths": manager.config.allowed_paths,
-        "blocked_paths": manager.config.blocked_paths,
-        "read_only_paths": manager.config.read_only_paths,
+        "allowed_paths": fs_isolation_manager.config.allowed_paths,
+        "blocked_paths": fs_isolation_manager.config.blocked_paths,
     }}
 
 
@@ -109,6 +119,19 @@ async def update_fs_config(
 @router.get("/network-allowlist")
 async def get_network_allowlist() -> dict[str, Any]:
     return {
+        "allowed_domains": network_allowlist.get_allowed_domains(),
+        "strict_domain_mode": network_allowlist.strict_domain_mode,
+    }
+
+
+@router.put("/network-allowlist/policy")
+async def update_network_allowlist_policy(
+    request: DomainPolicyRequest,
+) -> dict[str, Any]:
+    network_allowlist.strict_domain_mode = request.strict_domain_mode
+    return {
+        "status": "updated",
+        "strict_domain_mode": network_allowlist.strict_domain_mode,
         "allowed_domains": network_allowlist.get_allowed_domains(),
     }
 
