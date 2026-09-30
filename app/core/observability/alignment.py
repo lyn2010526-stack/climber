@@ -15,6 +15,47 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from app.core.instruction.understanding import (
+    InstructionUnderstanding,
+    understand_instruction,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class InstructionGoalValidation:
+    """Public validation metadata for an understood instruction."""
+
+    status: str
+    goal: str | None
+    confidence: float
+    needs_clarification: bool
+    clarification_questions: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "goal": self.goal,
+            "confidence": self.confidence,
+            "needs_clarification": self.needs_clarification,
+            "clarification_questions": list(self.clarification_questions),
+        }
+
+
+def validate_instruction_goal(
+    raw_text: str,
+    understanding: InstructionUnderstanding | None = None,
+) -> InstructionGoalValidation:
+    """Validate that an instruction has an actionable main goal."""
+    result = understanding or understand_instruction(raw_text)
+    needs_clarification = result.goal_missing or bool(result.ambiguities)
+    return InstructionGoalValidation(
+        status="blocked" if result.goal_missing else ("needs_clarification" if needs_clarification else "ready"),
+        goal=result.main_goal,
+        confidence=result.confidence,
+        needs_clarification=needs_clarification,
+        clarification_questions=result.clarification_questions,
+    )
+
 
 @dataclass
 class AlignmentCheck:

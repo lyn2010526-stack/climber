@@ -1,0 +1,49 @@
+"""Contract tests for the versioned built-in prompt layer."""
+
+import pytest
+
+from app.core.prompts import (
+    PromptVersionError,
+    build_injected_prompt,
+    list_versions,
+    resolve_active_prompt,
+    validate_prompt_contract,
+)
+
+
+def test_active_version_is_selected_and_versions_include_history():
+    prompt = resolve_active_prompt("core.system")
+    assert prompt.version == "1.0.0"
+    versions = list_versions("core.system")
+    assert {item["version"] for item in versions} == {"1.0.0", "0.9.0"}
+    assert any(item["status"] == "deprecated" for item in versions)
+
+
+def test_deprecated_version_is_rejected_for_rollback_until_promoted():
+    with pytest.raises(PromptVersionError, match="deprecated"):
+        resolve_active_prompt("core.system", "0.9.0")
+
+
+def test_injection_contains_every_mandatory_core_section_and_hides_chain_of_thought():
+    bundle = build_injected_prompt(task_type="implementation")
+    prompt = bundle["system_prompt"]
+    for section in ("ROLE_AND_SCOPE", "TASK_WORKFLOW", "TOOL_CONTRACT", "PROGRESS_REPORTING", "VALIDATION_AND_RECOVERY", "SAFE_OUTPUT"):
+        assert f"[{section}]" in prompt
+    assert "chain-of-thought" in prompt
+    assert "private scratch work" in prompt
+    assert "system_prompt" not in bundle["metadata"]
+
+
+def test_tool_contract_validation_reports_missing_and_wrong_contract():
+    errors = validate_prompt_contract(
+        {"body": "[ROLE_AND_SCOPE] x", "sections": ("ROLE_AND_SCOPE",), "version": "1.0.0", "source": "test", "tool_contract_version": "0.1"}
+    )
+    assert any("missing sections" in error for error in errors)
+    assert "unsupported tool contract version" in errors
+
+
+def test_model_adaptation_is_selected_without_external_dependencies():
+    bundle = build_injected_prompt(model_id="qwen", task_type="review")
+    assert "MODEL_ADAPTATION" in bundle["system_prompt"]
+    assert "JSON-compatible tool arguments" in bundle["system_prompt"]
+    assert "validation_summary" in bundle["metadata"]["visible_event_fields"]
