@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -7,6 +9,7 @@ import app.core.prompts.evolution as evolution_module
 from app.core.prompts.evolution import (
     EvolutionConfig,
     FitnessWeights,
+    LLMOperator,
     PromptEvolutionEngine,
     PromptGenome,
     aggregate_scores,
@@ -293,3 +296,200 @@ async def test_save_and_load_population_round_trip() -> None:
     latest = await load_population("user-evo", session_factory=sessions)
     assert [genome.id for genome in latest] == ["child_1"]
     assert latest[0].generation == latest_generation + 1
+
+
+def test_score_cache_dedupes_evaluator_calls() -> None:
+    calls: list[str] = []
+
+    def counting_evaluator(genome: PromptGenome) -> dict[str, float]:
+        calls.append(genome.prompt_text)
+        return clarity_evaluator(genome)
+
+    config = EvolutionConfig(
+        population_size=2, elite_count=0, crossover_rate=0.0, mutation_rate=0.0, random_seed=13
+    )
+    population = [make_genome("duplicate prompt"), make_genome("duplicate prompt")]
+    next_generation = PromptEvolutionEngine(config).evolve(population, counting_evaluator)
+    assert calls == ["duplicate prompt"]
+    assert len(next_generation) == 2
+    assert all(genome.scores == clarity_evaluator(population[0]) for genome in next_generation)
+
+
+def test_score_cache_is_reused_across_generations() -> None:
+    calls: list[str] = []
+
+    def counting_evaluator(genome: PromptGenome) -> dict[str, float]:
+        calls.append(genome.prompt_text)
+        return clarity_evaluator(genome)
+
+    config = EvolutionConfig(
+        population_size=3,
+        elite_count=1,
+        crossover_rate=0.0,
+        mutation_rate=0.0,
+        max_generations=3,
+        min_improvement=0.0,
+        random_seed=17,
+    )
+    population = [
+        make_genome("shared prompt"),
+        make_genome("shared prompt"),
+        make_genome("other prompt"),
+    ]
+    _population, history = PromptEvolutionEngine(config).run_evolution(population, counting_evaluator)
+    assert len(history) == 3
+    assert sorted(calls) == ["other prompt", "shared prompt"]
+
+
+def test_replace_if_better_keeps_parent_when_child_not_better() -> None:
+    config = EvolutionConfig(
+        population_size=2,
+        elite_count=0,
+        crossover_rate=0.0,
+        mutation_rate=1.0,
+        random_seed=14,
+        replace_if_better=True,
+    )
+    population = [make_genome("do stuff"), make_genome("more stuff")]
+    engine = PromptEvolutionEngine(config)
+    next_generation = engine.evolve(population, clarity_evaluator)
+    improved = next_generation[0]
+    assert improved.id.startswith("m_")
+    assert engine.composite(improved) == pytest.approx(2.5)
+    rejected_slot = next_generation[1]
+    assert rejected_slot.id in {genome.id for genome in population}
+    assert engine.composite(rejected_slot) == pytest.approx(1.0)
+
+
+def test_replace_if_better_disabled_always_takes_child() -> None:
+    config = EvolutionConfig(
+        population_size=2, elite_count=0, crossover_rate=0.0, mutation_rate=1.0, random_seed=14
+    )
+    population = [make_genome("do stuff"), make_genome("more stuff")]
+    next_generation = PromptEvolutionEngine(config).evolve(population, clarity_evaluator)
+    assert all(genome.id.startswith("m_") for genome in next_generation)
+
+
+def test_replace_if_better_accepts_improved_child() -> None:
+    config = EvolutionConfig(
+        population_size=2,
+        elite_count=0,
+        crossover_rate=0.0,
+        mutation_rate=0.0,
+        random_seed=7,
+        replace_if_better=True,
+    )
+    strong = make_genome("Verify the goal before acting")
+    weak = make_genome("do stuff")
+    engine = PromptEvolutionEngine(config)
+    next_generation = engine.evolve([strong, weak], clarity_evaluator)
+    assert [genome.id for genome in next_generation] == [strong.id, strong.id]
+
+
+def test_bootstrap_paraphrase_expands_seed_diversity() -> None:
+    seed_prompt = "alpha line\nbeta line\ngamma line\ndelta line"
+    paraphrased = bootstrap_population(seed_prompt, 7, random_seed=9, paraphrase=True)
+    plain = bootstrap_population(seed_prompt, 7, random_seed=9)
+    paraphrase_texts = [genome.prompt_text for genome in paraphrased]
+    variants = [genome.prompt_text for genome in paraphrased if genome.id.startswith("p_")]
+    assert len(set(variants)) == len(variants) > 0
+    assert all(text != seed_prompt for text in variants)
+    assert len(set(paraphrase_texts)) > len({genome.prompt_text for genome in plain})
+    for genome in paraphrased:
+        if genome.id.startswith("p_"):
+            assert genome.generation == 1
+            assert genome.parent_ids == ("seed_0",)
+            assert genome.model_params == {}
+
+
+def test_bootstrap_paraphrase_prefixes_single_line_seed() -> None:
+    population = bootstrap_population("Please do it.", 3, paraphrase=True, random_seed=3)
+    paraphrased = population[1].prompt_text
+    assert paraphrased.endswith("Please do it.")
+    assert paraphrased != "Please do it."
+    assert paraphrased.split(" ", 1)[0] in {"Please", "Kindly", "Remember to", "Always"}
+
+
+def test_bootstrap_population_paraphrase_is_deterministic() -> None:
+    def snapshot(population: list[PromptGenome]) -> list[tuple[object, ...]]:
+        return [
+            (genome.id, genome.prompt_text, dict(genome.model_params), genome.parent_ids)
+            for genome in population
+        ]
+
+    first = snapshot(bootstrap_population("a\nb\nc\nd", 5, random_seed=11, paraphrase=True))
+    second = snapshot(bootstrap_population("a\nb\nc\nd", 5, random_seed=11, paraphrase=True))
+    assert first == second
+
+
+def test_run_evolution_resume_continues_history() -> None:
+    population = [make_genome("plain prompt"), make_genome("another plain prompt")]
+    checkpoint_engine = PromptEvolutionEngine(
+        EvolutionConfig(
+            population_size=4, elite_count=1, max_generations=2, min_improvement=0.0, random_seed=23
+        )
+    )
+    population, checkpoint_history = checkpoint_engine.run_evolution(population, clarity_evaluator)
+    assert len(checkpoint_history) == 2
+
+    resume_engine = PromptEvolutionEngine(
+        EvolutionConfig(
+            population_size=4, elite_count=1, max_generations=4, min_improvement=0.0, random_seed=23
+        )
+    )
+    population, history = resume_engine.run_evolution(
+        population, clarity_evaluator, history=checkpoint_history
+    )
+    assert len(history) == 4
+    assert history[:2] == checkpoint_history
+
+    calls: list[str] = []
+
+    def counting_evaluator(genome: PromptGenome) -> dict[str, float]:
+        calls.append(genome.prompt_text)
+        return clarity_evaluator(genome)
+
+    _population, exhausted = resume_engine.run_evolution(
+        population, counting_evaluator, history=[0.0, 0.0, 0.0, 0.0]
+    )
+    assert exhausted == [0.0, 0.0, 0.0, 0.0]
+    assert calls == []
+
+
+def test_llm_operator_none_preserves_default_behavior() -> None:
+    base = EvolutionConfig(random_seed=42, max_generations=3)
+    explicit = EvolutionConfig(random_seed=42, max_generations=3, llm_operator=None)
+    population_a = [make_genome("plain prompt one"), make_genome("plain prompt two")]
+    population_b = [make_genome("plain prompt one"), make_genome("plain prompt two")]
+    result_a, history_a = PromptEvolutionEngine(base).run_evolution(population_a, clarity_evaluator)
+    result_b, history_b = PromptEvolutionEngine(explicit).run_evolution(population_b, clarity_evaluator)
+    assert history_a == history_b
+    assert [genome.to_dict() for genome in result_a] == [genome.to_dict() for genome in result_b]
+
+
+def test_llm_operator_generates_child_prompts() -> None:
+    operator_calls: list[tuple[str, ...]] = []
+
+    def template_operator(parents: Sequence[PromptGenome]) -> str:
+        operator_calls.append(tuple(parent.id for parent in parents))
+        return "LLM craft: " + parents[0].prompt_text
+
+    operator: LLMOperator = template_operator
+    config = EvolutionConfig(
+        population_size=3,
+        elite_count=1,
+        crossover_rate=1.0,
+        mutation_rate=0.0,
+        random_seed=31,
+        llm_operator=operator,
+    )
+    population = [make_genome("parent one"), make_genome("parent two")]
+    next_generation = PromptEvolutionEngine(config).evolve(population, clarity_evaluator)
+    assert len(operator_calls) == 2
+    assert all(len(parent_ids) == 2 for parent_ids in operator_calls)
+    children = [genome for genome in next_generation if genome.id.startswith("o_")]
+    assert len(children) == 2
+    for genome in children:
+        assert genome.prompt_text.startswith("LLM craft: ")
+        assert genome.parent_ids in operator_calls
+        assert genome.scores == clarity_evaluator(genome)
