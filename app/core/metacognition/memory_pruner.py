@@ -12,6 +12,12 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.core.metacognition.safety_gate import (
+    DEFAULT_HALF_LIFE_DAYS,
+    DEFAULT_SURVIVAL_THRESHOLD,
+    coupled_decay,
+)
+
 
 @dataclass
 class MemoryEntry:
@@ -82,15 +88,26 @@ class LongTermMemoryPruner:
             entry.last_accessed = time.time()
         return entry
 
-    def prune(self, force: bool = False) -> PruneResult:
-        """Run full pruning pipeline."""
+    def prune(
+        self,
+        force: bool = False,
+        *,
+        survival_threshold: float = DEFAULT_SURVIVAL_THRESHOLD,
+    ) -> PruneResult:
+        """Run full pruning pipeline.
+
+        Low-value removal candidates must additionally fall below
+        ``survival_threshold`` on the write-frequency-coupled decay curve
+        before they are actually removed; candidates whose coupled survival
+        is still at or above the threshold survive this round.
+        """
         original_count = len(self._memories)
         removed_ids: list[str] = []
         merged_groups: list[list[str]] = []
 
         # Step 1: Remove low-value old memories
         if force or len(self._memories) > self._max_entries:
-            removed_ids = self._remove_low_value()
+            removed_ids = self._remove_low_value(survival_threshold)
 
         # Step 2: Merge similar memories
         merged_groups = self._merge_similar()
@@ -114,8 +131,37 @@ class LongTermMemoryPruner:
             merged_groups=merged_groups,
         )
 
-    def _remove_low_value(self) -> list[str]:
-        """Remove memories with lowest decayed importance."""
+    def coupled_survival(
+        self,
+        entry: MemoryEntry,
+        *,
+        half_life_days: float = DEFAULT_HALF_LIFE_DAYS,
+    ) -> float:
+        """Coupled forgetting score for one entry.
+
+        Write frequency (accesses per day, age floored at one day) feeds the
+        coupled decay curve so frequently written entries decay more slowly
+        and survive pruning longer.
+        """
+        write_frequency = entry.access_count / max(entry.age_days, 1.0)
+        return coupled_decay(
+            entry.age_days,
+            write_frequency,
+            entry.importance,
+            half_life_days=half_life_days,
+        )
+
+    def _remove_low_value(
+        self,
+        survival_threshold: float = DEFAULT_SURVIVAL_THRESHOLD,
+    ) -> list[str]:
+        """Remove lowest decayed-importance memories failing coupled survival.
+
+        Candidates are still ordered by decayed importance, but an entry is
+        only removed when its coupled survival score (decay coupled to write
+        frequency) falls below ``survival_threshold``. Frequently written
+        memories therefore decay first and get forgotten last.
+        """
         removed = []
         target_size = int(self._max_entries * 0.8)
 
@@ -130,6 +176,11 @@ class LongTermMemoryPruner:
 
         to_remove = len(self._memories) - target_size
         for _, mid in scored[:to_remove]:
+            entry = self._memories.get(mid)
+            if entry is None:
+                continue
+            if self.coupled_survival(entry) >= survival_threshold:
+                continue
             del self._memories[mid]
             removed.append(mid)
 
