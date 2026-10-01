@@ -507,6 +507,79 @@ def _step_has_side_effects(step_payload: dict[str, Any]) -> bool:
     return any(str(tool) in _SIDE_EFFECT_TOOLS for tool in tools)
 
 
+# Permission modes that map to the read-only tier in the existing permission
+# evaluation chain (see TIER_MODES in app/api/v1/routes/reasoning.py).
+_READ_ONLY_PERMISSION_MODES = frozenset({"plan", "strict"})
+
+
+def _precheck_plan_steps(steps: list[dict[str, Any]], permission_mode: str) -> list[dict[str, Any]]:
+    """Batch-precheck every planned step once, before execution starts.
+
+    Moves the "intercept at run time" gate earlier: each step is checked for
+    (a) tool names outside the factory tool whitelist and (b) side-effect tools
+    under a read-only permission mode. Pure function — no IO, no payload — so
+    plan dicts can be unit tested directly (sandbox review 5.2 item 3).
+    """
+    from app.core.permission_rules import normalize_tool_name
+
+    known_tools = frozenset(
+        normalized
+        for tool_list in _FACTORY_SKILL_TOOLS.values()
+        for tool in tool_list
+        for normalized in (tool, normalize_tool_name(tool))
+    )
+    read_only = str(permission_mode).strip().lower() in _READ_ONLY_PERMISSION_MODES
+    prechecks: list[dict[str, Any]] = []
+    for position, step in enumerate(steps, start=1):
+        index = int(step.get("step", position))
+        tools = [str(tool) for tool in (step.get("tools") or [])]
+        reasons: list[str] = [
+            f"Unknown tool: {tool}"
+            for tool in tools
+            if normalize_tool_name(tool) not in known_tools
+        ]
+        if read_only:
+            reasons.extend(
+                f"Read-only permission mode blocks side-effect tool: {tool}"
+                for tool in tools
+                if str(tool) in _SIDE_EFFECT_TOOLS
+            )
+        prechecks.append({
+            "index": index,
+            "tools": tools,
+            "blocked": bool(reasons),
+            "reasons": reasons,
+        })
+    return prechecks
+
+
+def _factory_permission_mode(payload: dict[str, Any]) -> str:
+    """Resolve the permission mode governing this factory run.
+
+    The factory call chain carries no agent session, so the mode is read from
+    the caller's payload when present; otherwise the permissive auto default
+    applies and the fallback is announced in the log.
+    """
+    from app.core.permission_rules import PermissionMode
+
+    raw = str(payload.get("permission_mode", "") or "").strip()
+    if raw:
+        try:
+            return PermissionMode(raw.lower()).value
+        except ValueError:
+            logger.warning(
+                "factory_permission_mode_invalid",
+                requested=raw,
+                fallback=PermissionMode.AUTO.value,
+            )
+            return PermissionMode.AUTO.value
+    logger.warning(
+        "factory_permission_mode_missing",
+        fallback=PermissionMode.AUTO.value,
+    )
+    return PermissionMode.AUTO.value
+
+
 def _check_objective(objective: str) -> dict[str, Any]:
     """Validate the run's main goal before any model or tool call.
 
@@ -748,9 +821,36 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
         ]
     })
 
+    # Plan-stage batch precheck: unknown tools and side-effect tools under a
+    # read-only permission mode are flagged once, up front, instead of being
+    # caught one by one at execution time (sandbox review 5.2 item 3).
+    permission_mode = _factory_permission_mode(payload)
+    precheck_by_step = {
+        precheck["index"]: precheck
+        for precheck in _precheck_plan_steps(plan, permission_mode)
+    }
+
     results: list[dict[str, Any]] = []
     for index, step in enumerate(plan, start=1):
         step_id = f"{task_id}:{index}"
+        precheck = precheck_by_step.get(index) or {"blocked": False, "reasons": []}
+        if precheck["blocked"]:
+            # A blocked step is recorded with the same step-failure structure as
+            # an execution failure, but the run continues with the remaining steps.
+            error = f"Step blocked by plan precheck ({'; '.join(precheck['reasons'])})"
+            logger.warning(
+                "factory_step_blocked",
+                task_id=task_id,
+                step=index,
+                reasons=precheck["reasons"],
+            )
+            await task_manager.emit_event(task_id, "task_failed", {
+                "task_id": step_id,
+                "step": index,
+                "error": error,
+            })
+            results.append({"step": index, "action": step["action"], "output": "", "blocked": True})
+            continue
         await task_manager.emit_event(task_id, "task_start", {
             "task_id": step_id,
             "step": index,

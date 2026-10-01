@@ -14,7 +14,7 @@ import httpx
 
 from app.core.di import resolve as di_resolve
 from app.core.security.network_allowlist import network_allowlist
-from app.tools import tool
+from app.tools import native_tools, tool
 from app.utils.ssrf import blocked_reason
 
 _SAFE_EVAL_BUILTINS = {
@@ -67,6 +67,15 @@ def _outbound_denial(url: str) -> str:
     if not allowed:
         return f"blocked by network allowlist: {allowlist_reason}"
     return ""
+
+
+def _validated_path(path: str, writable: bool) -> tuple[bool, str]:
+    """Check a filesystem path against the shared native_tools path policy.
+
+    Accessing the validator through the module keeps the lookup dynamic and
+    avoids importing a private name directly from a sibling module.
+    """
+    return native_tools._validate_file_path(path, writable=writable)  # noqa: SLF001
 
 
 @tool(description="Get the current date and time")
@@ -158,6 +167,9 @@ async def get_weather(city: str) -> str:
 
 @tool(description="Read content from a file on the local filesystem. Use when the user wants to view, analyze, or reference an existing file. Returns up to 10,000 characters.")
 async def read_file(path: str) -> str:
+    valid, reason = _validated_path(path, writable=False)
+    if not valid:
+        return f"Error reading file: {reason}"
     try:
         with open(path, encoding="utf-8") as f:
             content = f.read()
@@ -168,6 +180,9 @@ async def read_file(path: str) -> str:
 
 @tool(description="Write content to a file on the local filesystem. Use when the user wants to create a new file or overwrite an existing one. Automatically creates parent directories if needed.")
 async def write_file(path: str, content: str) -> str:
+    valid, reason = _validated_path(path, writable=True)
+    if not valid:
+        return f"Error writing file: {reason}"
     try:
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
@@ -510,6 +525,42 @@ async def stream_command(command: str, timeout: int = 120, workdir: str = "") ->
         return f"Error executing command: {e!s}"
 
 
+# Dangerous shell patterns rejected before container_exec hands a command to
+# `docker exec ... sh -c`; follows the SandboxConfig.blocked_patterns style in
+# app/core/sandbox.py while staying import-free to avoid DI side effects.
+_CONTAINER_EXEC_BLOCKED_PATTERNS: frozenset[str] = frozenset((
+    r";",                            # semicolon command chaining
+    r"`",                            # backtick command substitution
+    r"\$\(",                         # $() command substitution
+    r"&&",                           # logical AND chaining
+    r"\|\|",                         # logical OR chaining
+    r"\|\s*(ba|z|da|k)?sh\b",        # piping into a shell
+    r"\brm\s+(-\w+\s+)*-\w*[rR]\w*",  # recursive rm (rm -rf and friends)
+    r"sudo\s+",                      # privilege escalation
+    r"chmod\s+777",                  # world-writable permissions
+    r"chown\s+root",                 # ownership change to root
+    r"curl\s+.*\|\s*sh",             # remote script execution
+    r"wget\s+.*\|\s*sh",             # remote script execution
+    r"dd\s+if=",                     # raw disk writes
+    r"mkfs\.",                       # filesystem creation
+    r"fdisk",                        # disk partitioning
+    r":\(\)\{.*\|.*\};",             # fork bomb
+    r">\s*/dev/sd",                  # raw device overwrite
+    r"shutdown",                     # power control
+    r"reboot",                       # power control
+    r"init\s+[06]",                  # runlevel switch
+    r"kill\s+-9\s+1",                # killing init
+))
+
+
+def _container_command_blocked(command: str) -> str:
+    """Return the first dangerous pattern matched by the command, or "" if safe."""
+    for pattern in _CONTAINER_EXEC_BLOCKED_PATTERNS:
+        if re.search(pattern, command, re.IGNORECASE):
+            return pattern
+    return ""
+
+
 @tool(
     description="Execute a command inside a container using Docker. Requires Docker to be installed and running.",
     parameters={
@@ -526,6 +577,10 @@ async def container_exec(container: str, command: str, workdir: str = "") -> str
     """Execute a command inside a Docker container."""
     try:
         import subprocess
+
+        blocked_pattern = _container_command_blocked(command)
+        if blocked_pattern:
+            return f"Command rejected: dangerous pattern detected ({blocked_pattern})"
 
         full_cmd = ["docker", "exec"]
         if workdir:

@@ -20,6 +20,7 @@ import subprocess
 
 import structlog
 
+from app.core.resource_limits import build_preexec
 from app.tools import tool
 
 logger = structlog.get_logger()
@@ -67,6 +68,7 @@ async def native_run(command: str, timeout: int = 120, cwd: str | None = None) -
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
+            preexec_fn=build_preexec(),
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         output = stdout.decode("utf-8", errors="replace")[:10000]
