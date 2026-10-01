@@ -17,6 +17,7 @@ from app.api.v1 import mcp as mcp_router
 from app.api.v1 import model_discovery as model_discovery_router
 from app.api.v1 import notifications as notifications_router
 from app.api.v1 import permissions as permissions_router
+from app.api.v1 import profile as profile_router
 from app.api.v1 import prompt_templates as prompt_templates_router
 from app.api.v1 import scheduler as scheduler_router
 from app.api.v1 import sessions as sessions_router
@@ -45,6 +46,7 @@ router.include_router(
     prefix="/instruction-traces",
     tags=["instruction-traces"],
 )
+router.include_router(profile_router.router, prefix="/profile", tags=["profile"])
 router.include_router(notifications_router.router, prefix="/notifications", tags=["notifications"])
 router.include_router(doctor_router.router, prefix="/doctor", tags=["doctor"])
 router.include_router(reasoning_router.router, prefix="/reason", tags=["reasoning"])
