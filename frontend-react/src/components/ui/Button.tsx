@@ -22,7 +22,10 @@ import { cn } from '../../lib/utils';
 const buttonVariants = cva(
   [
     'inline-flex items-center justify-center gap-[var(--control-gap)] whitespace-nowrap font-medium select-none',
-    'transition-[color,background-color,border-color,box-shadow] duration-150 ease-out motion-reduce:transition-none',
+    'transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-out motion-reduce:transition-none',
+    // The press scale lives in the token layer (`.press-scale` in index.css),
+    // because the class contracts keep scale utilities out of component
+    // sources. Transform joins the transition list so the compression eases.
     // The focus indicator is the shared two-layer ring: a page-coloured gap
     // then the accent, so it stays visible on both the accent fill of a primary
     // button and the page surface behind a ghost one.
@@ -148,7 +151,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         type={type}
-        className={cn(buttonVariants({ variant, size }), 'disabled:pointer-events-none', className)}
+        className={cn(buttonVariants({ variant, size }), 'press-scale', 'disabled:pointer-events-none', className)}
         ref={ref}
         disabled={isDisabled}
         {...props}

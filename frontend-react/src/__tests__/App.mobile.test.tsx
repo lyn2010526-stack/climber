@@ -59,6 +59,9 @@ function setViewport(width: number) {
 beforeEach(async () => {
   localStorage.clear();
   localStorage.setItem('i18next_lng', 'en');
+  // The privacy lock gate reads this opt-out; shell tests target the chat
+  // surface, not the first-run PIN setup.
+  localStorage.setItem('climber.privacy.skipped', '1');
   await act(async () => { await i18n.changeLanguage('en'); });
   window.location.hash = '';
 });

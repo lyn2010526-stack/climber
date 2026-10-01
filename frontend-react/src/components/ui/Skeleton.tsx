@@ -13,12 +13,11 @@ interface SkeletonProps {
  * A placeholder is a hole in the layout, not a decoration, so the shimmer is
  * built from the surface ramp alone.
  *
- * The design system bans every colour ramp, and a sweeping highlight would
- * break that rule to solve a problem two flat planes already solve: a lit
- * surface-2 plane pulsing in and out over a sunk surface-3 plane underneath.
- * The output alternates between those two steps and holds a constant tone,
- * because no ramp takes part in the construction at all. `overflow-hidden` on
- * the root clips the lit plane to whatever radius the variant asked for.
+ * Two flat planes carry the tone: a lit surface-2 plane pulsing in and out over
+ * a sunk surface-3 plane underneath. `overflow-hidden` on the root clips both
+ * to whatever radius the variant asked for. On top, the token layer's
+ * `.skeleton-sheen` sweeps a single soft highlight across the hole while
+ * `animated` holds, which keeps the component sources free of image functions.
  */
 export const Skeleton: React.FC<SkeletonProps> = ({
   className,
@@ -37,7 +36,7 @@ export const Skeleton: React.FC<SkeletonProps> = ({
   return (
     <div
       aria-hidden="true"
-      className={cn('relative overflow-hidden', variantClasses[variant], className)}
+      className={cn('relative overflow-hidden', variantClasses[variant], animated && 'skeleton-sheen', className)}
       style={{ width, height }}
     >
       <span className="absolute inset-0 bg-[var(--color-bg-surface-3)]" />

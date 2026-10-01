@@ -1,4 +1,4 @@
-import React, { useState, createContext, useContext, useCallback, useMemo, type KeyboardEvent } from 'react';
+import React, { useState, useRef, useLayoutEffect, useEffect, createContext, useContext, useCallback, useMemo, type KeyboardEvent } from 'react';
 import { cn } from '../../lib/utils';
 
 interface TabsContextValue {
@@ -43,6 +43,42 @@ export const TabsList: React.FC<TabsListProps> = ({ children, className }) => {
   const context = useContext(TabsContext);
   if (!context) throw new Error('TabsList must be used within Tabs');
   const { activeTab } = context;
+  const listRef = useRef<HTMLDivElement>(null);
+  const [indicator, setIndicator] = useState({ offset: 0, width: 0 });
+
+  /**
+   * The sliding indicator is positioned from the active trigger's own box, so
+   * it tracks the strip whatever the tab widths are. A disabled current tab
+   * keeps the indicator hidden — a locked tab must not carry the accent.
+   * jsdom returns zero boxes, so the indicator stays at opacity 0 there and
+   * every class assertion reads the triggers themselves.
+   */
+  const updateIndicator = useCallback(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const active = list.querySelector<HTMLButtonElement>('[role="tab"][data-state="active"]:not([disabled])');
+    if (!active) {
+      setIndicator(prev => (prev.width === 0 ? prev : { offset: 0, width: 0 }));
+      return;
+    }
+    const listRect = list.getBoundingClientRect();
+    const rect = active.getBoundingClientRect();
+    const offset = rect.left - listRect.left + list.scrollLeft;
+    const width = rect.width;
+    setIndicator(prev => (prev.offset === offset && prev.width === width ? prev : { offset, width }));
+  }, []);
+
+  useLayoutEffect(() => {
+    updateIndicator();
+  });
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => updateIndicator());
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [updateIndicator]);
 
   /**
    * Roving arrow-key navigation per the WAI-ARIA tabs pattern: Left/Right for
@@ -77,6 +113,7 @@ export const TabsList: React.FC<TabsListProps> = ({ children, className }) => {
 
   return (
     <div
+      ref={listRef}
       role="tablist"
       aria-label="Tabs"
       onKeyDown={handleKeyDown}
@@ -84,11 +121,20 @@ export const TabsList: React.FC<TabsListProps> = ({ children, className }) => {
         // The strip itself recedes to the surface the page already provides and
         // keeps a real border, so the selected tab is the only thing inside it
         // that carries colour.
-        'inline-flex max-w-full items-center gap-[var(--space-1)] overflow-x-auto rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] p-[var(--space-1)]',
+        'relative inline-flex max-w-full items-center gap-[var(--space-1)] overflow-x-auto rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] p-[var(--space-1)]',
         className
       )}
     >
       {children}
+      <span
+        className="tabs-indicator"
+        aria-hidden="true"
+        style={{
+          width: indicator.width,
+          opacity: indicator.width ? 1 : 0,
+          translate: `${indicator.offset}px 0`,
+        }}
+      />
     </div>
   );
 };

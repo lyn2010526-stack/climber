@@ -20,6 +20,8 @@ import { useSidebarState } from './layout/useSidebarState';
 import { NAV_ITEM_IDS, MOBILE_ADAPTED_PAGE_IDS } from './navigation/navConfig';
 import type { Page } from './navigation/navConfig';
 import { SidebarNavigation } from './layout/SidebarNavigation';
+import { AppLockGate } from './components/privacy';
+import { BootSplash } from './components/shell/BootSplash';
 
 const WorkspaceLayout = lazy(() => import('./components/workspace/WorkspaceLayout').then(m => ({ default: m.WorkspaceLayout })));
 const AgentsPage = lazy(() => import('./pages/AgentsPage').then(m => ({ default: m.AgentsPage })));
@@ -75,6 +77,7 @@ export default function App() {
   const { open: sidebarOpen, toggle: toggleSidebar } = useSidebarState();
   const [activeOverlay, setActiveOverlay] = useState<'search' | 'commands' | null>(null);
   const isMobile = useIsMobile();
+  const [booted, setBooted] = useState(false);
 
   useEffect(() => {
     const onHashChange = () => setCurrentPage(getPageFromHash());
@@ -143,7 +146,8 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--color-bg-page)' }}>
+    <AppLockGate>
+      <div className="app-shell flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--color-bg-page)' }}>
       {isMobile ? (
         <AdaptiveMobileLayout currentPage={currentPage} onNavigate={(page) => navigate(page as Page)}>
           <Suspense fallback={<PageFallback />}>
@@ -250,6 +254,8 @@ export default function App() {
         onNavigate={target => navigate(target.page)}
       />
       <CommandPalette isOpen={activeOverlay === 'commands'} onClose={() => setActiveOverlay(null)} onNavigate={(page) => navigate(page as Page)} />
-    </div>
+      </div>
+      {!booted && <BootSplash onDone={() => setBooted(true)} />}
+    </AppLockGate>
   );
 }

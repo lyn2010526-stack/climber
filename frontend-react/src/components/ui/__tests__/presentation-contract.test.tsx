@@ -77,10 +77,11 @@ describe('Slate presentation contract', () => {
     expect(screen.getByText('Info')).toHaveClass('text-[var(--color-info)]', 'bg-[var(--color-info-subtle)]');
   });
 
-  it('uses a solid streaming cursor with a running indicator', () => {
+  it('uses a solid streaming cursor with a breathing animation', () => {
     const { container } = render(<StreamingCursor />);
-    expect(container.firstElementChild).toHaveStyle({ backgroundColor: 'var(--color-accent-foreground)' });
-    expect(container.firstElementChild).toHaveStyle({ animation: 'cursorBlink 1s step-end infinite' });
+    const bar = container.querySelector('[data-cursor-bar]')!;
+    expect(bar).toHaveStyle({ backgroundColor: 'var(--color-accent-foreground)' });
+    expect(bar).toHaveStyle({ animation: 'climberCursorBreathe 1.4s ease-in-out infinite' });
     expect(container.innerHTML).not.toContain('gradient');
   });
 

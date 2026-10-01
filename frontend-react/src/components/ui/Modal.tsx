@@ -189,7 +189,7 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(({
         data-modal-overlay=""
         data-state="open"
         data-depth={depth}
-        className={cn('absolute inset-0 motion-reduce:animate-none', rung.scrim)}
+        className={cn('absolute inset-0 animate-fadeIn motion-reduce:animate-none', rung.scrim)}
         onClick={closeOnOverlay ? onClose : undefined}
         aria-hidden="true"
       />
@@ -208,7 +208,10 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(({
           'relative w-full border',
           rung.panel,
           rung.edge,
-          'rounded-[var(--radius-xl)] max-h-[90vh] overflow-hidden flex flex-col',
+          // The iOS corner rung (20px) reads softer than the generic xl rung at
+          // dialog scale, and the spring entrance lives in the token layer as
+          // `.modal-panel-in` — the scrim stays alpha-only by contract.
+          'rounded-[var(--radius-ios-lg)] max-h-[90vh] overflow-hidden flex flex-col modal-panel-in',
           rung.shadow,
           'focus-visible:outline-none',
           sizeClasses[size],

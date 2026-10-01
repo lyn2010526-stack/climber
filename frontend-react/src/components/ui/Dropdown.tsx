@@ -22,7 +22,7 @@ export interface DropdownProps {
  * panel look.
  */
 const menuPanel =
-  'absolute z-[var(--z-dropdown)] min-w-[180px] rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] p-[var(--space-1)] shadow-[var(--shadow-lg)]';
+  'absolute z-[var(--z-dropdown)] min-w-[180px] rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] p-[var(--space-1)] shadow-[var(--shadow-lg)] dropdown-panel-in';
 
 /**
  * Everything a menu row is, minus its colour: the geometry, the short
