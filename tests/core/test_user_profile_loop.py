@@ -2,8 +2,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.core.profile import ProfileEvent, ProfileLoopService, PrivacyBoundaryError
-
+from app.core.profile import PrivacyBoundaryError, ProfileEvent, ProfileLoopService
+from app.core.profile.loop import OnlineKMeans, embed_event
 
 NOW = datetime(2026, 9, 30, tzinfo=UTC)
 
@@ -88,3 +88,95 @@ def test_external_privacy_sources_are_rejected() -> None:
     service = ProfileLoopService()
     with pytest.raises(PrivacyBoundaryError):
         service.record(event(source="purchase_history"))
+
+
+# --- Feature hashing embedding -------------------------------------------------
+
+
+def test_embed_event_is_deterministic_and_unit_normalized() -> None:
+    vector_a = embed_event(event(task_type="coding", tool="terminal"))
+    vector_b = embed_event(event(task_type="coding", tool="terminal"))
+    assert vector_a == vector_b
+    norm = sum(component * component for component in vector_a) ** 0.5
+    assert norm == pytest.approx(1.0, abs=1e-9)
+
+
+def test_embed_event_differs_for_different_events() -> None:
+    coding_vector = embed_event(event(task_type="coding", tool="terminal"))
+    browsing_vector = embed_event(event(task_type="browsing", tool="browser"))
+    assert coding_vector != browsing_vector
+
+
+def test_embed_event_respects_requested_dimension() -> None:
+    vector = embed_event(event(), dim=6)
+    assert len(vector) == 6
+
+
+# --- Incremental online clustering ---------------------------------------------
+
+
+def test_online_kmeans_seeds_distinct_clusters_before_updating() -> None:
+    model = OnlineKMeans(k=2, dim=3)
+    first_id, first_distance = model.partial_fit((1.0, 0.0, 0.0))
+    second_id, second_distance = model.partial_fit((0.0, 1.0, 0.0))
+    assert {first_id, second_id} == {0, 1}
+    assert first_distance == 0.0
+    assert second_distance == 0.0
+    assert model.is_seeded is True
+
+
+def test_online_kmeans_assigns_nearest_centroid_after_seeding() -> None:
+    model = OnlineKMeans(k=2, dim=2)
+    model.partial_fit((1.0, 0.0))
+    model.partial_fit((0.0, 1.0))
+    cluster_id, _distance = model.partial_fit((0.9, 0.1))
+    assert cluster_id == 0
+
+
+def test_online_kmeans_updates_centroid_toward_new_points() -> None:
+    model = OnlineKMeans(k=1, dim=1)
+    model.partial_fit((0.0,))
+    for _ in range(50):
+        model.partial_fit((1.0,))
+    cluster_id, distance = model.partial_fit((1.0,))
+    assert cluster_id == 0
+    assert distance < 0.1
+
+
+def test_online_kmeans_rejects_mismatched_dimension() -> None:
+    model = OnlineKMeans(k=1, dim=2)
+    with pytest.raises(ValueError, match="dimensional vector"):
+        model.partial_fit((1.0,))
+
+
+def test_online_kmeans_rejects_non_positive_weight() -> None:
+    model = OnlineKMeans(k=1, dim=1)
+    with pytest.raises(ValueError, match="weight must be positive"):
+        model.partial_fit((1.0,), weight=0.0)
+
+
+# --- Persona clustering integrated into the profile summary --------------------
+
+
+def test_summary_exposes_persona_cluster_after_recording() -> None:
+    service = ProfileLoopService(persona_clusters=2)
+    service.record(event(task_type="coding", tool="terminal"))
+    summary = service.summary(as_of=NOW)
+    assert summary.persona_cluster is not None
+    assert 0.0 <= summary.persona_cluster_confidence <= 1.0
+
+
+def test_disabled_mode_leaves_persona_cluster_unset() -> None:
+    service = ProfileLoopService(enabled=False)
+    service.record(event())
+    summary = service.summary(as_of=NOW)
+    assert summary.persona_cluster is None
+    assert summary.persona_cluster_confidence == 0.0
+
+
+def test_repeated_similar_events_raise_persona_cluster_confidence() -> None:
+    service = ProfileLoopService(persona_clusters=3)
+    for _ in range(20):
+        service.record(event(task_type="coding", tool="terminal", occurred_at=NOW))
+    summary = service.summary(as_of=NOW)
+    assert summary.persona_cluster_confidence > 0.3
