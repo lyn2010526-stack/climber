@@ -85,6 +85,7 @@ class AgentEngine:
         self.resource_tracker = ResourceTracker()
         self.memory_service = PersistentMemoryService()
         self.tool_prioritizer = ToolPrioritizer()
+        self._dual_loop: Any = None
         self.reasoning = None
         self._init_debug_loop()
         self._init_sandbox()
@@ -326,6 +327,7 @@ class AgentEngine:
         if not resuming:
             await self._inject_memory_context(session, message)
             await self._inject_core_memory(session)
+            await self._inject_profile_context(session, message)
 
         session._last_result = None
         session._run_status_override = None
@@ -352,13 +354,19 @@ class AgentEngine:
                 await session.state_machine.transition(TaskState.FAILED, trigger="unhandled_error")
             yield AgentEvent(type=AgentEventType.ERROR, data={"error": str(e)})
             self._send_failure_notification(session, str(e))
+            self._record_profile_outcome(session, message)
+            self._tick_evolution(session)
             return
 
         if session.status.value == "failed" and session._run_status_override is None:
+            self._record_profile_outcome(session, message)
+            self._tick_evolution(session)
             return
 
         await self._store_episodic_memory(session, message)
         self._trigger_memory_reflection(session)
+        self._record_profile_outcome(session, message)
+        self._tick_evolution(session)
         result = session._last_result
         yield AgentEvent(type=AgentEventType.DONE, data={
             "status": session._run_status_override or session.status.value,
@@ -904,7 +912,9 @@ class AgentEngine:
             self._background_tasks.add(task)
             task.add_done_callback(self._background_tasks.discard)
         except Exception:
-            pass
+            close = getattr(coro, "close", None)
+            if callable(close):
+                close()
 
     async def _inject_memory_context(self, session: AgentSession, message: str) -> None:
         """Inject relevant memories into session context.
@@ -950,6 +960,121 @@ class AgentEngine:
                     session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": core_marker + "\n" + core_memory_xml})
         except Exception:
             pass
+
+    def _dual_loop_coordinator(self) -> Any:
+        """Lazily build the dual-loop coordinator; None when unavailable.
+
+        Returns:
+            The DualLoopCoordinator instance, or None if the module cannot be
+            imported or constructed.
+        """
+        coordinator = getattr(self, "_dual_loop", None)
+        if coordinator is None:
+            try:
+                from app.core.engine.dual_loop import DualLoopCoordinator
+                coordinator = DualLoopCoordinator()
+                self._dual_loop = coordinator
+            except Exception:
+                return None
+        return coordinator
+
+    async def _inject_profile_context(self, session: AgentSession, message: str) -> None:
+        """Inject the user-profile context into session context (dual loop 1).
+
+        Args:
+            session: The agent session.
+            message: The user query the profile is adapted to.
+        """
+        try:
+            coordinator = self._dual_loop_coordinator()
+            if coordinator is None:
+                return
+            user_id = getattr(session, "user_id", None) or "local"
+            profile_context = await coordinator.profile_context(user_id, message)
+            if profile_context:
+                profile_marker = "<!-- PROFILE_CONTEXT -->"
+                for i, msg in enumerate(session.messages):
+                    if msg.get("content", "").startswith(profile_marker):
+                        session.messages[i] = {"role": MessageRole.SYSTEM, "content": profile_marker + "\n" + profile_context}
+                        break
+                else:
+                    session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": profile_marker + "\n" + profile_context})
+        except Exception:
+            pass
+
+    def _record_profile_outcome(self, session: AgentSession, message: str) -> None:
+        """Feed the finished run back into the user profile (fire-and-forget).
+
+        Args:
+            session: The agent session.
+            message: The user instruction of this run.
+        """
+        try:
+            coordinator = self._dual_loop_coordinator()
+            if coordinator is None:
+                return
+            from app.core.task_state_machine import TaskState
+            outcome = "success" if session.state_machine.state == TaskState.COMPLETED else "failure"
+            metrics = getattr(session, "metrics", None)
+            user_id = getattr(session, "user_id", None) or "local"
+            self._spawn(
+                coordinator.record_run_outcome(
+                    user_id,
+                    message,
+                    outcome=outcome,
+                    interrupted=bool(getattr(session, "_stop_requested", False)),
+                    retried=bool(int(getattr(metrics, "retry_count", 0) or 0) > 0),
+                    reasoning_level=self._current_reasoning_level(session),
+                    tool=self._last_tool_name(session),
+                )
+            )
+        except Exception:
+            pass
+
+    def _tick_evolution(self, session: AgentSession) -> None:
+        """Advance the genetic evolution tick counter (fire-and-forget).
+
+        Args:
+            session: The agent session.
+        """
+        try:
+            coordinator = self._dual_loop_coordinator()
+            if coordinator is None:
+                return
+            user_id = getattr(session, "user_id", None) or "local"
+            self._spawn(coordinator.evolution_tick(user_id))
+        except Exception:
+            pass
+
+    @staticmethod
+    def _current_reasoning_level(session: AgentSession) -> str:
+        """Read this run's reasoning level, falling back to "standard"."""
+        context = getattr(session, "context", None)
+        if isinstance(context, dict):
+            context_data = context.get("context_data")
+            if isinstance(context_data, dict):
+                level = context_data.get("reasoning_level")
+                if isinstance(level, str) and level:
+                    return level
+            level = context.get("reasoning_level")
+            if isinstance(level, str) and level:
+                return level
+        return "standard"
+
+    @staticmethod
+    def _last_tool_name(session: AgentSession) -> str | None:
+        """Name of the last tool executed in this run, or None."""
+        for msg in reversed(getattr(session, "messages", []) or []):
+            if not isinstance(msg, dict):
+                continue
+            tool_calls = msg.get("tool_calls")
+            if not tool_calls:
+                continue
+            first = tool_calls[0] if isinstance(tool_calls[0], dict) else {}
+            name = (first.get("function") or {}).get("name")
+            if name:
+                return str(name)
+        return None
 
     async def _store_episodic_memory(self, session: AgentSession, message: str) -> None:
         """Store important interaction in episodic memory.
