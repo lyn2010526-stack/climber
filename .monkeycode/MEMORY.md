@@ -208,3 +208,13 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
 - Category: Troubleshooting & Debugging
 - Instructions:
   - app/services/ollama_queue.py 存在既有 bug：对 stdlib logger 传结构化 kwargs（`logger.info(..., request_id=..., queue_size=...)`）会在运行时抛 TypeError；写涉及离线队列的测试需 stub `app.services.ollama_queue.logger`，修复产品代码时改为 structlog 或去掉 kwargs。
+
+[项目知识摘要]
+- Date: 2026-10-01
+- Context: Agent 在 climber 仓执行全量回归与文档解析时发现
+- Category: Build Methods|Environment Configuration
+- Instructions:
+  - climber 仓验证基线：后端 `python3 -m pytest tests/ -q`（工作目录 /workspace/climber，2026-10-01 时点 1150 passed）；环境无 `python`、无 `uv`，只有 `python3`。
+  - docparse 服务对 33 页 DOCX 附件（缓存于 .monkeycode-tmp-files/）两次解析均 failed（document_id 13903/13907），大文档需请用户直接贴文本。
+  - ruff 全仓检查会命中大量既有基线错误（app/ 下约 864 个），只对本次改动的文件做 ruff check，不做全仓断言。
+  - 算法层深挖文档位于 docs/references/deep-dives/（9 篇），移植方案见各文档"Climber 映射"与"可借鉴/不采用"节；NeMo/Zep/OpenSandbox/HyperAgents 四篇标注"未读源码"，其移植项均为"待评估"，不要直接实现。
