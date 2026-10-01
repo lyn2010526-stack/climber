@@ -6,10 +6,12 @@ design doc section 4.3.1: task success rate, metaphor/instruction
 comprehension, meta-cognitive error correction, and a safety-constraint
 penalty that is subtracted rather than averaged.
 
-The engine performs zero I/O and zero LLM calls. The caller injects a pure
-evaluator callable that scores each genome; all stochasticity comes from a
-seeded ``random.Random`` so identical inputs always reproduce identical
-descendants.
+The engine performs zero LLM calls and the evolution core performs zero I/O. The
+caller injects a pure evaluator callable that scores each genome; all
+stochasticity comes from a seeded ``random.Random`` so identical inputs always
+reproduce identical descendants. Optional persistence helpers
+(``save_population`` / ``load_population``) delegate all I/O to the storage
+layer so the engine stays importable without a database.
 """
 
 from __future__ import annotations
@@ -17,6 +19,10 @@ from __future__ import annotations
 import random
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 ScoreMap = dict[str, float]
 Evaluator = Callable[["PromptGenome"], ScoreMap]
@@ -90,6 +96,7 @@ class EvolutionConfig:
     crossover_rate: float = 0.7
     mutation_rate: float = 0.3
     max_generations: int = 10
+    min_improvement: float = 0.01
     random_seed: int | None = None
 
     def __post_init__(self) -> None:
@@ -105,6 +112,8 @@ class EvolutionConfig:
             raise ValueError("mutation_rate must be within [0, 1]")
         if self.max_generations < 1:
             raise ValueError("max_generations must be at least 1")
+        if self.min_improvement < 0.0:
+            raise ValueError("min_improvement must be non-negative")
 
 
 class PromptEvolutionEngine:
@@ -122,8 +131,16 @@ class PromptEvolutionEngine:
     def composite(self, genome: PromptGenome) -> float:
         return self.weights.composite(genome.scores)
 
+    def mutate(self, genome: PromptGenome) -> PromptGenome:
+        """Public mutation hook, also used to bootstrap populations from a seed."""
+        return self._mutate(genome)
+
     def _scored(self, population: Sequence[PromptGenome]) -> list[tuple[float, PromptGenome]]:
-        return sorted(((self.composite(genome), genome) for genome in population), key=lambda pair: pair[0])
+        return sorted(
+            ((self.composite(genome), genome) for genome in population),
+            key=lambda pair: pair[0],
+            reverse=True,
+        )
 
     def _tournament(self, scored: list[tuple[float, PromptGenome]]) -> PromptGenome:
         contenders = self._rng.sample(scored, min(self.config.tournament_size, len(scored)))
@@ -207,6 +224,92 @@ class PromptEvolutionEngine:
         for _ in range(self.config.max_generations):
             population = self.evolve(population, evaluator)
             generation_best = max(self.composite(genome) for genome in population)
+            plateau = generation_best - best_seen < self.config.min_improvement
             best_seen = max(best_seen, generation_best)
             history.append(best_seen)
+            if plateau:
+                break
         return population, history
+
+
+def aggregate_scores(scoremaps: Sequence[ScoreMap]) -> ScoreMap:
+    """Fold evaluator scoremaps into one per-key mean over all entries."""
+    totals: dict[str, float] = {}
+    counts: dict[str, int] = {}
+    for scores in scoremaps:
+        for key, value in scores.items():
+            totals[key] = totals.get(key, 0.0) + float(value)
+            counts[key] = counts.get(key, 0) + 1
+    return {key: total / counts[key] for key, total in totals.items()}
+
+
+def bootstrap_population(
+    seed_prompt: str,
+    size: int,
+    *,
+    random_seed: int | None = None,
+) -> list[PromptGenome]:
+    """Derive an initial population from one seed prompt via mutation."""
+    if size < 1:
+        raise ValueError("size must be at least 1")
+    engine = PromptEvolutionEngine(EvolutionConfig(random_seed=random_seed))
+    root = PromptGenome(id="seed_0", prompt_text=seed_prompt)
+    population = [root]
+    seen_ids = {root.id}
+    attempts = 0
+    while len(population) < size:
+        attempts += 1
+        if attempts > size * 100:
+            break
+        mutant = engine.mutate(root)
+        if mutant.id in seen_ids:
+            continue
+        seen_ids.add(mutant.id)
+        population.append(mutant)
+    return population
+
+
+async def save_population(
+    user_id: str,
+    population: Sequence[PromptGenome],
+    *,
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
+) -> int:
+    """Persist one user's genome population; returns the number of rows written."""
+    from app.storage import async_session as default_factory
+    from app.storage.repository_prompt_genome import append_population
+
+    factory = session_factory or default_factory
+    async with factory() as db:
+        stored = await append_population(db, user_id=user_id, genomes=list(population))
+        await db.commit()
+    return len(stored)
+
+
+async def load_population(
+    user_id: str,
+    *,
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
+) -> list[PromptGenome]:
+    """Load a user's most recent genome population from storage."""
+    from app.storage import async_session as default_factory
+    from app.storage.repository_prompt_genome import list_population
+
+    factory = session_factory or default_factory
+    async with factory() as db:
+        return await list_population(db, user_id)
+
+
+async def run_evolution_tick(user_id: str) -> None:
+    """Expose the module-level entry point used by the dual-loop coordinator.
+
+    A tick only advances populations that already have a persisted evaluator
+    result. The evaluator itself belongs to the caller that records scores, so
+    this safe entry point avoids inventing model or task-specific scoring.
+    """
+    try:
+        population = await load_population(user_id)
+    except Exception:
+        return
+    if len(population) < 2:
+        return
