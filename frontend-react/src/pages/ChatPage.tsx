@@ -48,7 +48,7 @@ export function ChatPage() {
           onSend={handleSend}
           onStop={handleStop}
           isLoading={isStreaming}
-          error={error}
+          error={error ?? undefined}
           onRetry={retry}
           emptyStateTitle={t('chat.empty_state_title')}
           emptyStateDescription=""
