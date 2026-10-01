@@ -233,6 +233,7 @@ async def test_factory_run_streams_agent_output(client, monkeypatch: pytest.Monk
         return {
             "objective": data["goal"],
             "user_id": user_id,
+            "agent_id": None,
             "provider": "openai",
             "model": "test-model",
             "api_key": "test-key",
@@ -286,6 +287,7 @@ async def test_factory_retries_failed_step(client, monkeypatch: pytest.MonkeyPat
         return {
             "objective": data["goal"],
             "user_id": user_id,
+            "agent_id": None,
             "provider": "openai",
             "model": "test-model",
             "api_key": "test-key",
@@ -337,7 +339,8 @@ async def test_agent_run_handler_consumes_engine_events(monkeypatch: pytest.Monk
         async def run(self, session, message):
             yield AgentEvent(type=AgentEventType.THINKING, data={"iteration": 1})
             yield AgentEvent(type=AgentEventType.TEXT, data={"content": "answer"})
-            yield AgentEvent(type=AgentEventType.DONE, data={})
+            # Real AgentEngine's DONE event carries status (agent_engine.py run_agent).
+            yield AgentEvent(type=AgentEventType.DONE, data={"status": "completed"})
 
     monkeypatch.setattr(agent_engine_module, "AgentEngine", _FakeEngine)
 

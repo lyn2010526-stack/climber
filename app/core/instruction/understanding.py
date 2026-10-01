@@ -24,6 +24,36 @@ _TARGET_PREFIXES = (
 )
 _METAPHOR_MARKERS = ("磨亮", "点燃", "开门", "铺路", "破冰", "降温", "加速", "收口", "抬头")
 
+# Lines that are conversational fillers rather than instructions. Anything not
+# in this set is treated as carrying the user's goal.
+_ACKNOWLEDGEMENTS = frozenset(
+    {
+        "继续",
+        "好的",
+        "好",
+        "嗯",
+        "哦",
+        "行",
+        "可以",
+        "ok",
+        "okay",
+        "yes",
+        "no",
+        "thanks",
+        "thank you",
+        "hello",
+        "hi",
+        "hey",
+        "你好",
+        "在吗",
+        "继续吧",
+        "接着来",
+        "go on",
+        "next",
+        "下一步",
+    }
+)
+
 
 @dataclass(frozen=True, slots=True)
 class InstructionCandidate:
@@ -126,14 +156,27 @@ class InstructionUnderstandingService:
         )
 
     def _target_candidates(self, raw_text: str) -> list[InstructionCandidate]:
+        """Treat every content line as a goal candidate unless it is an ack.
+
+        A whitelist of action verbs both missed legitimate goals ("写一个快速
+        排序", "ship it") and could never cover every language, so the rule is
+        inverted: a line the user typed is their instruction. Only greetings,
+        acknowledgements and other pure conversational fillers carry no goal,
+        and prefix matches still raise confidence because an explicit action
+        verb makes the goal unambiguous.
+        """
         lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
         candidates: list[InstructionCandidate] = []
         for line in lines:
+            if line.lower().rstrip("！!？?。.~") in _ACKNOWLEDGEMENTS:
+                continue
             first_word = line.split(maxsplit=1)[0].lower().rstrip("：:")
             if any(line.lower().startswith(prefix.lower()) for prefix in _TARGET_PREFIXES):
                 candidates.append(InstructionCandidate(line, "deterministic", 0.86))
             elif first_word in {"请", "please", "帮我", "help"} and len(line) > len(first_word) + 1:
                 candidates.append(InstructionCandidate(line, "deterministic", 0.72))
+            else:
+                candidates.append(InstructionCandidate(line, "deterministic", 0.6))
         return candidates
 
     def _extract_constraints(self, raw_text: str) -> list[str]:

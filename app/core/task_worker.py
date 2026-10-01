@@ -5,8 +5,8 @@ import asyncio
 import json
 import uuid
 from collections import OrderedDict, defaultdict, deque
-from collections.abc import Callable, Coroutine
-from contextlib import suppress
+from collections.abc import AsyncIterator, Callable, Coroutine
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -14,6 +14,7 @@ from typing import Any
 
 import structlog
 
+from app.config import settings
 from app.storage import async_session
 from app.storage.models_platform import AutoLoopTask
 
@@ -101,13 +102,29 @@ class TaskInfo:
 class TaskManager:
     """Manages task lifecycle: submit, execute, track, cancel."""
 
-    def __init__(self, max_workers: int = 3):
+    def __init__(self, max_workers: int | None = None, max_task_retries: int = 2):
         self._handlers: dict[str, Callable[..., Coroutine]] = {}
-        self._semaphore = asyncio.Semaphore(max_workers)
+        self._max_workers = settings.max_concurrent_subtasks if max_workers is None else max_workers
+        self._max_task_retries = max(0, max_task_retries)
+        self._semaphore = asyncio.Semaphore(self._max_workers)
         self._active_tasks: dict[str, asyncio.Task] = {}
         self._progress_callbacks: list[Callable[[str, dict], Coroutine]] = []
         self._event_history: OrderedDict[str, deque[dict[str, Any]]] = OrderedDict()
         self._event_subscribers: dict[str, set[asyncio.Queue[dict[str, Any]]]] = defaultdict(set)
+
+    @property
+    def max_workers(self) -> int:
+        return self._max_workers
+
+    @property
+    def max_task_retries(self) -> int:
+        return self._max_task_retries
+
+    @asynccontextmanager
+    async def slot(self) -> AsyncIterator[None]:
+        """Hold one execution slot so parallel task runs stay within the limit."""
+        async with self._semaphore:
+            yield
 
     def register(self, task_type: str, handler: Callable[..., Coroutine]) -> None:
         self._handlers[task_type] = handler
@@ -322,7 +339,7 @@ class TaskManager:
     ) -> None:
         from sqlalchemy import update
 
-        async with self._semaphore:
+        async with self.slot():
             now = datetime.now(UTC)
             handler = self._handlers[task_type]
 
@@ -397,19 +414,123 @@ class TaskManager:
             except Exception as exc:
                 error = f"Task execution failed ({type(exc).__name__}); manual review required before resubmission"
                 logger.error("task_failed", task_id=task_id, error=error)
+                await self._retry_or_fail(task_id, task_type, owner_id, payload, handler, error, exc)
+
+    async def _retry_or_fail(
+        self,
+        task_id: str,
+        task_type: str,
+        owner_id: str,
+        payload: dict[str, Any],
+        handler: Callable[..., Coroutine],
+        error: str,
+        exc: Exception,
+    ) -> None:
+        """Retry a failed task run before marking it failed.
+
+        Transient model/tool failures are the common case (a user asked for
+        retries explicitly), so a run gets ``max_task_retries`` re-executions;
+        each one is announced on the progress stream as ``task_retry`` so the
+        frontend can show that the task is retrying rather than dead. Once the
+        budget is spent the task is recorded as failed for manual review.
+        """
+        attempts = 0
+        last_error = error
+        while attempts < self._max_task_retries:
+            attempts += 1
+            await self._emit_progress(
+                task_id,
+                {
+                    "type": "task_retry",
+                    "attempt": attempts,
+                    "max_retries": self._max_task_retries,
+                    "error": last_error,
+                },
+            )
+            try:
+                runtime_payload = {**payload, "user_id": owner_id, "_task_id": task_id}
+                if resolve_credentials and task_type in {"agent_run", "factory_run"}:
+                    runtime_payload = await resolve_owner_agent_payload(owner_id, payload)
+                result = await handler(payload=runtime_payload, on_progress=lambda *_: asyncio.sleep(0))
                 async with async_session() as session:
                     record = await session.get(AutoLoopTask, task_id)
                     if record:
-                        record.status = TaskStatus.FAILED.value
-                        record.error = error
+                        record.status = TaskStatus.COMPLETED.value
+                        record.result = result if isinstance(result, dict) else {"output": str(result)}
+                        record.error = None
                         record.finished_at = datetime.now(UTC)
                         await session.commit()
-                await self._emit_progress(task_id, {"status": "failed", "error": error})
+                await self._emit_progress(task_id, {"status": TaskStatus.COMPLETED.value, "result": result})
+                return
+            except Exception as retry_exc:  # noqa: BLE001
+                last_error = f"Retry {attempts}/{self._max_task_retries} failed ({type(retry_exc).__name__})"
+                logger.warning(
+                    "task_retry_failed",
+                    task_id=task_id,
+                    attempt=attempts,
+                    error=last_error,
+                )
+
+        async with async_session() as session:
+            record = await session.get(AutoLoopTask, task_id)
+            if record:
+                record.status = TaskStatus.FAILED.value
+                record.error = last_error
+                record.finished_at = datetime.now(UTC)
+                await session.commit()
+        await self._emit_progress(task_id, {"status": "failed", "error": last_error})
 
     async def _emit_progress(self, task_id: str, data: dict) -> None:
         for cb in self._progress_callbacks:
             with suppress(Exception):
                 await cb(task_id, data)
+
+
+def _check_objective(objective: str) -> dict[str, Any]:
+    """Validate the run's main goal before any model or tool call.
+
+    A run whose goal cannot be pinned down is stopped here: executing with no
+    main goal is exactly how a task drifts away from what the user asked for.
+    needs_clarification keeps running — the caller's objective is authoritative
+    — but the verdict is surfaced so downstream progress events can carry it.
+    """
+    from app.core.observability.alignment import validate_instruction_goal
+
+    try:
+        verdict = validate_instruction_goal(objective)
+    except Exception as exc:  # noqa: BLE001 - validation must never kill the worker
+        logger.warning("objective_validation_failed", error=str(exc))
+        return {"status": "ready", "goal_preserved": None, "plain_reason": None}
+    if verdict.status == "blocked":
+        return {
+            "status": "blocked",
+            "goal_preserved": False,
+            "plain_reason": (
+                "这个任务没有说清楚要达成什么目标，先补充目标再执行，"
+                "避免跑偏。"
+            ),
+        }
+    return {"status": verdict.status, "goal_preserved": True, "plain_reason": None}
+
+
+def _injected_system_prompt(payload: dict[str, Any]) -> str:
+    """Prefer an explicit caller prompt, else inject the active core prompt.
+
+    Callers that pass system_prompt are honoured unchanged (e.g. the factory
+    planner speaks JSON only). Everyone else gets the versioned core prompt so
+    a task never runs without the mandatory instructions.
+    """
+    explicit = str(payload.get("system_prompt", "")).strip()
+    if explicit:
+        return explicit
+    try:
+        from app.core.prompts import build_injected_prompt
+
+        bundle = build_injected_prompt(task_type="implementation", model_id=str(payload.get("model", "")))
+        return str(bundle["system_prompt"])
+    except Exception as exc:  # noqa: BLE001 - a prompt failure must not stop the run
+        logger.warning("core_prompt_injection_failed", error=str(exc))
+        return ""
 
 
 async def handle_agent_run(payload: dict[str, Any], on_progress) -> dict[str, Any]:
@@ -419,6 +540,11 @@ async def handle_agent_run(payload: dict[str, Any], on_progress) -> dict[str, An
     objective = payload.get("objective", "")
     if not objective.strip():
         raise ValueError("objective is required")
+
+    goal_check = _check_objective(objective)
+    if goal_check["status"] == "blocked":
+        raise ValueError(goal_check["plain_reason"])
+
     max_steps = int(payload.get("max_steps", 10))
     try:
         engine = di_resolve("AgentEngine")
@@ -431,7 +557,7 @@ async def handle_agent_run(payload: dict[str, Any], on_progress) -> dict[str, An
         model_id=str(payload.get("model", "gpt-4o-mini")),
         api_key=str(payload.get("api_key", "")),
         base_url=payload.get("base_url"),
-        system_prompt=str(payload.get("system_prompt", "")),
+        system_prompt=_injected_system_prompt(payload),
         tools=payload.get("tools") or [],
     )
     session.max_iterations = max_steps
@@ -552,8 +678,13 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
     goal = str(payload.get("objective", "")).strip()
     if not goal:
         raise ValueError("objective is required")
+
+    goal_check = _check_objective(goal)
+    if goal_check["status"] == "blocked":
+        raise ValueError(goal_check["plain_reason"])
+
     skills = [str(skill) for skill in payload.get("factory_skills", [])]
-    await task_manager.emit_event(task_id, "factory_start", {"task_id": task_id})
+    await task_manager.emit_event(task_id, "factory_start", {"task_id": task_id, "goal_preserved": goal_check["goal_preserved"]})
     await task_manager.emit_event(task_id, "planning", {"message": "Creating execution plan"})
     agent_handler = task_manager._handlers["agent_run"]
     planner_payload = {
@@ -611,28 +742,45 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
             "max_steps": min(int(payload.get("max_steps", 10)), 6),
         }
         step_payload.pop("_task_id", None)
-        try:
-            async def _step_progress(current: int, total: int, message: str = "", _step_id: str = step_id, _index: int = index) -> None:
-                await task_manager.emit_event(task_id, "progress", {
-                    "task_id": _step_id,
-                    "step": _index,
-                    "current": current,
-                    "total": total,
-                    "message": message,
-                })
-
-            result = await agent_handler(payload=step_payload, on_progress=_step_progress)
-            output = result.get("output", "") if isinstance(result, dict) else str(result)
-            results.append({"step": index, "action": step["action"], "output": output})
-            await task_manager.emit_event(task_id, "task_complete", {
-                "task_id": step_id,
-                "step": index,
-                "result": output,
+        async def _step_progress(current: int, total: int, message: str = "", _step_id: str = step_id, _index: int = index) -> None:
+            await task_manager.emit_event(task_id, "progress", {
+                "task_id": _step_id,
+                "step": _index,
+                "current": current,
+                "total": total,
+                "message": message,
             })
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            error = f"Step execution failed ({type(exc).__name__})"
+
+        # A failed step is retried before the run gives up: transient model/tool
+        # errors are common, and each retry is announced so the UI can show the
+        # step as retrying rather than silently dead.
+        last_error: Exception | None = None
+        for attempt in range(1, task_manager.max_task_retries + 2):
+            try:
+                result = await agent_handler(payload=step_payload, on_progress=_step_progress)
+                output = result.get("output", "") if isinstance(result, dict) else str(result)
+                results.append({"step": index, "action": step["action"], "output": output})
+                await task_manager.emit_event(task_id, "task_complete", {
+                    "task_id": step_id,
+                    "step": index,
+                    "result": output,
+                })
+                last_error = None
+                break
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                last_error = exc
+                if attempt <= task_manager.max_task_retries:
+                    await task_manager.emit_event(task_id, "task_retry", {
+                        "task_id": step_id,
+                        "step": index,
+                        "retries": attempt,
+                        "error": str(exc),
+                    })
+                    await asyncio.sleep(0.5)
+        if last_error is not None:
+            error = f"Step execution failed ({type(last_error).__name__})"
             await task_manager.emit_event(task_id, "task_failed", {
                 "task_id": step_id,
                 "step": index,
@@ -699,7 +847,7 @@ async def handle_workflow(payload: dict[str, Any], on_progress) -> dict[str, Any
     return result
 
 
-task_manager = TaskManager(max_workers=3)
+task_manager = TaskManager(max_workers=settings.max_concurrent_subtasks)
 task_manager.register("agent_run", handle_agent_run)
 task_manager.register("factory_run", handle_factory_run)
 task_manager.register("data_processing", handle_data_processing)
