@@ -47,6 +47,7 @@ from app.core.resilience import (
 from app.core.session import AgentSession, SessionConfig
 from app.core.tool_prioritizer import ToolPrioritizer
 from app.models.registry import ModelRegistry
+from app.models.vision import build_user_content, content_text
 from app.tools import ToolRegistry
 
 
@@ -238,12 +239,16 @@ class AgentEngine:
         self._sessions[sid] = session
         return session
 
-    async def run(self, session: AgentSession, message: str) -> AsyncIterator[AgentEvent]:
+    async def run(
+        self, session: AgentSession, message: str, images: list[str] | None = None,
+    ) -> AsyncIterator[AgentEvent]:
         """Run the agent engine for a session and message.
 
         Args:
             session: The agent session.
             message: The user message.
+            images: Optional image references (base64 data URLs or http(s) URLs);
+                when present the user message is built as OpenAI vision content parts.
 
         Yields:
             AgentEvent instances during execution.
@@ -260,7 +265,7 @@ class AgentEngine:
             async with lock:
                 terminal = []
                 async with track_run(session, self._run_store):
-                    async with contextlib.aclosing(self._run_locked(session, message)) as events:
+                    async with contextlib.aclosing(self._run_locked(session, message, images)) as events:
                         async for event in events:
                             if event.type in {AgentEventType.DONE, AgentEventType.ERROR}:
                                 terminal.append(event)
@@ -295,7 +300,9 @@ class AgentEngine:
                 "cost_status": cost_status,
                 "usage_status": getattr(session, "_run_usage_status", "unknown")}
 
-    async def _run_locked(self, session: AgentSession, message: str) -> AsyncIterator[AgentEvent]:
+    async def _run_locked(
+        self, session: AgentSession, message: str, images: list[str] | None = None,
+    ) -> AsyncIterator[AgentEvent]:
         """Internal run method - executes under session lock."""
         current = session.state_machine.state
         from app.core.task_state_machine import TaskState
@@ -307,8 +314,12 @@ class AgentEngine:
         if not resuming:
             session._stop_requested = False
             session._last_iteration = 0
-            session.messages.append({"role": MessageRole.USER, "content": message})
-            await persist_message(session.session_id, MessageRole.USER, content=message)
+            content = build_user_content(message, images)
+            session.messages.append({"role": MessageRole.USER, "content": content})
+            await persist_message(
+                session.session_id, MessageRole.USER,
+                content=message, images=images,
+            )
 
         self._set_agent_mode(session)
         self._send_start_notification(session)
@@ -377,7 +388,10 @@ class AgentEngine:
             api_key=session.api_key,
             base_url=session.base_url,
         )
-        tools = build_tools(self.tool_registry, session.tools, self.tool_prioritizer, task_description=session.messages[-1].get("content", "") if session.messages else "")
+        tools = build_tools(
+            self.tool_registry, session.tools, self.tool_prioritizer,
+            task_description=content_text(session.messages[-1].get("content", "")) if session.messages else "",
+        )
         result: ChatResult | None = None
 
         while iteration < session.max_iterations and not session._stop_requested:

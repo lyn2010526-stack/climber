@@ -10,6 +10,7 @@ import httpx
 
 from app.core import ChatResult
 from app.models import ModelAdapter, ModelCapability
+from app.models.vision import degrade_image_parts
 from app.services.ollama_queue import ollama_offline_queue
 
 
@@ -76,6 +77,8 @@ class OllamaAdapter(ModelAdapter):
         tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[ChatResult]:
+        # Ollama models have no image mapping here; vision parts degrade to text.
+        messages = degrade_image_parts(messages, provider=self.provider, model_id=self._model_id)
         payload: dict[str, Any] = {
             "model": self._model_id,
             "messages": messages,
@@ -131,6 +134,8 @@ class OllamaAdapter(ModelAdapter):
         tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> ChatResult:
+        # Ollama models have no image mapping here; vision parts degrade to text.
+        messages = degrade_image_parts(messages, provider=self.provider, model_id=self._model_id)
         payload: dict[str, Any] = {
             "model": self._model_id,
             "messages": messages,

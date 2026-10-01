@@ -14,6 +14,7 @@ import structlog
 
 from app.core import ChatResult
 from app.models import ModelAdapter, ModelCapability
+from app.models.vision import degrade_image_parts
 
 logger = structlog.get_logger()
 
@@ -42,6 +43,12 @@ class OpenAIAdapter(ModelAdapter):
         stream: bool = False,
         **kwargs: Any,
     ) -> dict[str, Any]:
+        if not self.capabilities.vision:
+            # Providers/models without image support get plain text; the request
+            # still completes (with a warning) instead of failing on image parts.
+            messages = degrade_image_parts(
+                messages, provider=getattr(self, "provider", "openai"), model_id=self._model_id,
+            )
         payload: dict[str, Any] = {
             "model": self._model_id,
             "messages": messages,
@@ -412,11 +419,14 @@ class OpenAIAdapter(ModelAdapter):
     def capabilities(self) -> ModelCapability:
         if self._capabilities is not None:
             return self._capabilities
+        # The default chat models (gpt-4o family) accept OpenAI vision parts;
+        # text-only models should be registered with vision=False so image
+        # parts degrade to plain text before the request is built.
         return ModelCapability(
             chat=True,
             streaming=True,
             tools=True,
-            vision=False,
+            vision=True,
             embedding=False,
             max_tokens=128000,
         )

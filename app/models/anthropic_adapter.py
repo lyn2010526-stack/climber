@@ -11,6 +11,7 @@ import structlog
 
 from app.core import ChatResult
 from app.models import ModelAdapter, ModelCapability
+from app.models.vision import is_image_reference, split_data_url
 
 logger = structlog.get_logger()
 
@@ -120,10 +121,45 @@ class AnthropicAdapter(ModelAdapter):
                 converted.append({"role": "assistant", "content": anthropic_content})
                 continue
 
-            converted.append({"role": role, "content": content or ""})
+            converted.append({"role": role, "content": self._convert_content(content)})
 
         system = "\n\n".join(system_parts) if system_parts else None
         return system, converted
+
+    def _convert_content(self, content: Any) -> Any:
+        """Map OpenAI vision content parts to Anthropic blocks; text passes through."""
+        if not isinstance(content, list):
+            return content or ""
+        blocks: list[dict[str, Any]] = []
+        for part in content:
+            if isinstance(part, str):
+                blocks.append({"type": "text", "text": part})
+                continue
+            if not isinstance(part, dict):
+                continue
+            part_type = part.get("type")
+            if part_type == "text":
+                blocks.append({"type": "text", "text": str(part.get("text", ""))})
+            elif part_type == "image_url":
+                source = self._image_source(str((part.get("image_url") or {}).get("url", "")))
+                if source is not None:
+                    blocks.append({"type": "image", "source": source})
+                else:
+                    logger.warning(
+                        "chat_image_part_unmapped", provider=self.provider, url_prefix=str(part)[:32],
+                    )
+        return blocks or [{"type": "text", "text": ""}]
+
+    @staticmethod
+    def _image_source(url: str) -> dict[str, Any] | None:
+        """Convert an image reference into an Anthropic image source block."""
+        split = split_data_url(url)
+        if split is not None:
+            media_type, payload = split
+            return {"type": "base64", "media_type": media_type, "data": payload}
+        if is_image_reference(url):
+            return {"type": "url", "url": url}
+        return None
 
     def _convert_tools(self, tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
         result = []

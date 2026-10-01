@@ -21,6 +21,7 @@ from app.core.auth import get_current_user
 from app.core.di import resolve as di_resolve
 from app.core.recovery import RecoveryManager
 from app.models.registry import MODEL_ALIASES, ModelRegistry
+from app.models.vision import validate_images
 from app.storage import async_session
 from app.storage.database import Agent as AgentModel
 from app.storage.database import Session as SessionModel
@@ -73,6 +74,8 @@ def get_engine() -> AgentEngine:
 
 class ChatRequest(BaseModel):
     message: str
+    # Optional image references (base64 data URLs or http(s) URLs) for multimodal chat.
+    images: list[str] | None = None
 
 
 @router.post("/{session_id}/chat")
@@ -81,6 +84,10 @@ async def chat(
     request: ChatRequest,
     user_id: str = Depends(get_current_user),
 ):
+    try:
+        images = validate_images(request.images)
+    except ValueError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
     # Always resolve persisted ownership and credentials, including warm sessions.
     async with async_session() as db:
         row = await db.scalar(select(SessionModel).where(
@@ -154,7 +161,12 @@ async def chat(
 
     async def _stream() -> Any:
         try:
-            async for event in engine.run(session, request.message):
+            # Only pass the new field when present so engines predating images keep working.
+            runner = (
+                engine.run(session, request.message, images=images)
+                if images else engine.run(session, request.message)
+            )
+            async for event in runner:
                 yield event.to_sse()
         except Exception as e:
             import structlog

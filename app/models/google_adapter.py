@@ -7,9 +7,13 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
+import structlog
 
 from app.core import ChatResult
 from app.models import ModelAdapter, ModelCapability
+from app.models.vision import is_image_reference, split_data_url
+
+logger = structlog.get_logger()
 
 
 class GoogleGeminiAdapter(ModelAdapter):
@@ -50,6 +54,44 @@ class GoogleGeminiAdapter(ModelAdapter):
             max_tokens=8192,
         )
 
+    @staticmethod
+    def _convert_content(content: Any) -> list[dict[str, Any]]:
+        """Map OpenAI vision content parts to Gemini parts; text becomes one text part."""
+        if not isinstance(content, list):
+            return [{"text": content or ""}]
+        parts: list[dict[str, Any]] = []
+        for part in content:
+            if isinstance(part, str):
+                parts.append({"text": part})
+                continue
+            if not isinstance(part, dict):
+                continue
+            part_type = part.get("type")
+            if part_type == "text":
+                parts.append({"text": str(part.get("text", ""))})
+            elif part_type == "image_url":
+                image_part = GoogleGeminiAdapter._gemini_image_part(
+                    str((part.get("image_url") or {}).get("url", ""))
+                )
+                if image_part is not None:
+                    parts.append(image_part)
+                else:
+                    logger.warning(
+                        "chat_image_part_unmapped", provider="google", url_prefix=str(part)[:32],
+                    )
+        return parts or [{"text": ""}]
+
+    @staticmethod
+    def _gemini_image_part(url: str) -> dict[str, Any] | None:
+        """Convert an image reference into a Gemini inline/file part."""
+        split = split_data_url(url)
+        if split is not None:
+            media_type, payload = split
+            return {"inline_data": {"mime_type": media_type, "data": payload}}
+        if is_image_reference(url):
+            return {"file_data": {"file_uri": url}}
+        return None
+
     async def stream_chat(
         self,
         messages: list[dict[str, Any]],
@@ -86,10 +128,7 @@ class GoogleGeminiAdapter(ModelAdapter):
                 continue
 
             gemini_role = "user" if role == "user" else "model"
-            contents.append({
-                "role": gemini_role,
-                "parts": [{"text": content or ""}],
-            })
+            contents.append({"role": gemini_role, "parts": self._convert_content(content)})
 
         payload: dict[str, Any] = {
             "contents": contents,
