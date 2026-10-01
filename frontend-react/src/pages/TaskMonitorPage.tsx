@@ -8,6 +8,8 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Input } from '../components/ui/Input';
+import { EmptyState } from '../components/ui/EmptyState';
+import { SkeletonList } from '../components/ui/Skeleton';
 
 function TaskListItem({ task, isSelected, onClick }: { task: TaskSummary; isSelected: boolean; onClick: () => void }) {
   const { t } = useI18n();
@@ -163,11 +165,15 @@ export default function TaskMonitorPage() {
               <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">{t('task_monitor.list_error_hint')}</p>
             </div>
           ) : listLoading ? (
-            <p role="status" className="p-6 text-center text-xs text-[var(--color-text-muted)]">{t('common.loading_data')}</p>
-          ) : tasks.length === 0 ? (
-            <div className="p-6 text-center">
-              <p className="text-xs text-[var(--color-text-muted)]">{t('task_monitor.empty')}</p>
+            <div role="status" className="p-4">
+              <SkeletonList count={2} />
             </div>
+          ) : tasks.length === 0 ? (
+            <EmptyState
+              className="min-h-0 py-8 px-4"
+              icon="inbox"
+              title={t('task_monitor.empty')}
+            />
           ) : null}
           {!listError && tasks.map(task => (
             <TaskListItem
@@ -235,7 +241,11 @@ export default function TaskMonitorPage() {
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center">
-            <p role="status" className="p-4 text-xs text-[var(--color-text-muted)]">{detailLoading ? t('common.loading') : t('common.select')}</p>
+            <EmptyState
+              className="min-h-0"
+              icon={detailLoading ? 'queued' : 'inbox'}
+              title={detailLoading ? t('common.loading') : t('common.select')}
+            />
           </div>
         )}
       </div>

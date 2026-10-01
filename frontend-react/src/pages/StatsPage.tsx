@@ -59,28 +59,30 @@ export function StatsPage() {
           }
         />
 
-        {error && (
-          <Card variant="default" className="mb-6 border-[var(--color-error)]/30">
-            <CardContent className="p-4 flex items-center gap-3">
-              <AlertCircle size={18} className="text-[var(--color-error)] shrink-0" />
-              <p className="text-sm text-[var(--color-error)] flex-1">{error}</p>
-              <Button variant="outline" size="sm" onClick={loadStats}>重试</Button>
-            </CardContent>
-          </Card>
-        )}
+        <div className="space-y-4">
+          {error && (
+            <Card variant="default" className="border-[var(--color-error)]/30">
+              <CardContent className="p-4 flex items-center gap-3">
+                <AlertCircle size={18} className="text-[var(--color-error)] shrink-0" />
+                <p className="text-sm text-[var(--color-error)] flex-1">{error}</p>
+                <Button variant="outline" size="sm" onClick={loadStats}>重试</Button>
+              </CardContent>
+            </Card>
+          )}
 
-        <dl aria-busy={loading} className="grid grid-cols-2 lg:grid-cols-4 gap-px overflow-hidden rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-border-subtle)]">
-          {CARDS.map((card) => {
-                const Icon = card.icon;
-                const value = stats?.[card.key as keyof StatsData];
-                return (
-                  <div key={card.key} className="bg-[var(--color-bg-surface-1)] p-4">
-                    <dt className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]"><Icon size={14} />{card.label}</dt>
-                    <dd className="mt-2 text-2xl font-semibold tabular-nums text-[var(--color-text-primary)]">{loading ? '…' : value?.toLocaleString() ?? '—'}</dd>
-                  </div>
-                );
-              })}
-        </dl>
+          <dl aria-busy={loading} className="grid grid-cols-2 lg:grid-cols-4 gap-px overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-border-subtle)]">
+            {CARDS.map((card) => {
+              const Icon = card.icon;
+              const value = stats?.[card.key as keyof StatsData];
+              return (
+                <div key={card.key} className="bg-[var(--color-bg-surface-1)] p-4">
+                  <dt className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]"><Icon size={14} />{card.label}</dt>
+                  <dd className="mt-2 text-2xl font-semibold tabular-nums text-[var(--color-text-primary)]">{loading ? '…' : value?.toLocaleString() ?? '—'}</dd>
+                </div>
+              );
+            })}
+          </dl>
+        </div>
       </div>
     </div>
   );

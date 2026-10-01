@@ -9,6 +9,10 @@ import {
   taskStatusColor,
   taskStatusLabel,
 } from '../components/collaboration/taskStatus';
+import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { EmptyState } from '../components/ui/EmptyState';
+import { SkeletonList } from '../components/ui/Skeleton';
 
 const taskOutput = (task: TaskDetail | null): string => {
   if (!task?.result) return '';
@@ -80,10 +84,11 @@ export function TaskHistoryPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
-          <span role="status" className="text-sm text-[var(--color-text-muted)]">{t('common.loading')}</span>
+      <div className="h-full min-h-0 min-w-0 flex flex-col text-[var(--color-text-primary)]" aria-busy="true">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4">
+          <div role="status" aria-label={t('common.loading')}>
+            <SkeletonList count={3} />
+          </div>
         </div>
       </div>
     );
@@ -105,7 +110,7 @@ export function TaskHistoryPage() {
           <span className="text-xs text-[var(--color-text-secondary)]">{t('task_history.detail_heading')}</span>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          <div className="space-y-2">
+          <Card padding="md" className="space-y-2">
             <h3 className="text-sm font-medium text-[var(--color-text-primary)]">{selectedTask.objective}</h3>
             <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--color-text-muted)]">
               <span className="font-mono break-all">ID: {selectedTask.task_id}</span>
@@ -118,7 +123,7 @@ export function TaskHistoryPage() {
                 {taskStatusLabel(selectedTask.status, t)}
               </span>
             </div>
-          </div>
+          </Card>
           {error && <p role="alert" className="text-xs text-[var(--color-error)]">{t('common.error')} · {t('common.try_again')}</p>}
           {output && (
             <div className="space-y-2">
@@ -139,15 +144,19 @@ export function TaskHistoryPage() {
                   </button>
                 </div>
               </div>
-              <pre className="p-3 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-md text-xs text-[var(--color-text-primary)] whitespace-pre-wrap break-words font-mono">
-                {output}
-              </pre>
+              <Card padding="none" className="overflow-hidden">
+                <pre className="p-3 bg-[var(--color-bg-surface-1)] text-xs text-[var(--color-text-primary)] whitespace-pre-wrap break-words font-mono">
+                  {output}
+                </pre>
+              </Card>
             </div>
           )}
           {selectedTask.error && (
-            <pre className="p-3 bg-[var(--color-bg-surface-1)] border border-[var(--color-border-subtle)] rounded-md text-xs text-[var(--color-error)] whitespace-pre-wrap break-words font-mono">
-              {selectedTask.error}
-            </pre>
+            <Card padding="none" className="overflow-hidden border-[var(--color-error)]/30">
+              <pre className="p-3 bg-[var(--color-bg-surface-1)] text-xs text-[var(--color-error)] whitespace-pre-wrap break-words font-mono">
+                {selectedTask.error}
+              </pre>
+            </Card>
           )}
         </div>
       </div>
@@ -158,7 +167,7 @@ export function TaskHistoryPage() {
     <div className="h-full min-h-0 min-w-0 flex flex-col text-[var(--color-text-primary)]">
       <div className="px-4 py-3 border-b border-[var(--color-border-subtle)] flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold">{t('navigation.task_history')} <span className="ml-2 font-normal text-[var(--color-text-muted)] tabular-nums">{filteredTasks.length} / {tasks.length}</span></h2>
-        <button type="button" onClick={loadTasks} className="inline-flex items-center gap-2 rounded-md border border-[var(--color-border-subtle)] px-3 py-2 text-xs hover:bg-[var(--color-bg-surface-2)]"><RefreshCw size={14} />{t('common.refresh')}</button>
+        <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={loadTasks}>{t('common.refresh')}</Button>
       </div>
       <div className="flex flex-wrap gap-2 px-4 py-2 border-b border-[var(--color-border-subtle)]">
         <input aria-label={t('common.search')} placeholder={t('common.search')} value={query} onChange={event => setQuery(event.target.value)} className="min-w-0 flex-1 rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-3 py-2 text-xs" />
@@ -182,7 +191,15 @@ export function TaskHistoryPage() {
             </tr>)}
           </tbody>
         </table>
-        {!error && filteredTasks.length === 0 && <p className="p-8 text-center text-xs text-[var(--color-text-muted)]">{t(tasks.length ? 'common.no_results' : 'common.no_data')}</p>}
+        {!error && filteredTasks.length === 0 && (
+          <Card padding="none" className="m-4 overflow-hidden">
+            <EmptyState
+              className="w-full"
+              icon="search"
+              title={t(tasks.length ? 'common.no_results' : 'common.no_data')}
+            />
+          </Card>
+        )}
       </div>
     </div>
   );

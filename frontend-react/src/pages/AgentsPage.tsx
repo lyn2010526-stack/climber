@@ -10,6 +10,8 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { Dropdown } from '../components/ui/Dropdown';
 import { ConfirmDialog } from '../components/ui/Modal';
 import { PageHeader } from '../components/ui/PageHeader';
+import { Card } from '../components/ui/Card';
+import { SkeletonList } from '../components/ui/Skeleton';
 import { resolveAgentStatus, type AgentStatus, type AgentStatusFields } from '../components/agents/AgentStatusBadge';
 import { toggleListItem } from '../lib/listSelection';
 
@@ -441,14 +443,15 @@ export function AgentsPage() {
           }
         />
 
+        <div className="space-y-4">
         {showForm && (
-          <div className="mb-4">
+          <div>
             <CreateAgentForm onClose={() => setShowForm(false)} onSuccess={() => { setShowForm(false); loadAgents(); }} />
           </div>
         )}
 
         {error && (
-          <div role="alert" className="mb-4 flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] p-3">
+          <div role="alert" className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] p-3">
             <AlertCircle size={16} aria-hidden="true" className="shrink-0 text-[var(--color-error)]" />
             <p className="flex-1 text-sm text-[var(--color-error)]">{error}</p>
             <Button variant="ghost" size="sm" onClick={loadAgents} icon={<RefreshCw size={14} />}>
@@ -458,7 +461,7 @@ export function AgentsPage() {
         )}
 
         {!loading && agents.length > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="w-full max-w-xs">
               <Input
                 size="sm"
@@ -493,32 +496,27 @@ export function AgentsPage() {
         )}
 
         {loading && (
-          <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]" aria-busy="true" aria-label={t('agents.loading_aria_label')}>
-            {[1, 2, 3].map(i => (
-              <div key={i} className="flex items-center gap-3 border-b border-[var(--color-border-subtle)] px-3 py-2.5 last:border-b-0 md:px-4">
-                <div className="h-3.5 w-3.5 shrink-0 rounded skeleton-shimmer" style={{ animationDelay: `${i * 100}ms` }} />
-                <div className="h-3.5 flex-1 rounded skeleton-shimmer" style={{ animationDelay: `${i * 100}ms` }} />
-                <div className="hidden h-3.5 w-24 shrink-0 rounded skeleton-shimmer md:block" style={{ animationDelay: `${i * 100}ms` }} />
-                <div className="h-3.5 w-16 shrink-0 rounded skeleton-shimmer" style={{ animationDelay: `${i * 100}ms` }} />
-              </div>
-            ))}
+          <div aria-busy="true" aria-label={t('agents.loading_aria_label')}>
+            <SkeletonList count={3} />
           </div>
         )}
 
         {showList && filteredAgents.length > 0 && (
-          <ul
-            className="divide-y divide-[var(--color-border-subtle)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]"
-            aria-live="polite"
-            aria-label={t('agents.resources')}
-          >
-            {filteredAgents.map(agent => (
-              <AgentCard key={agent.id} agent={agent} onDelete={deleteAgent} />
-            ))}
-          </ul>
+          <Card padding="none" className="overflow-hidden">
+            <ul
+              className="divide-y divide-[var(--color-border-subtle)]"
+              aria-live="polite"
+              aria-label={t('agents.resources')}
+            >
+              {filteredAgents.map(agent => (
+                <AgentCard key={agent.id} agent={agent} onDelete={deleteAgent} />
+              ))}
+            </ul>
+          </Card>
         )}
 
         {showList && filteredAgents.length === 0 && (
-          <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]">
+          <Card padding="none" className="overflow-hidden">
             <EmptyState
               className="w-full"
               icon={<Search size={20} aria-hidden="true" />}
@@ -541,8 +539,9 @@ export function AgentsPage() {
                 )
               }
             />
-          </div>
+          </Card>
         )}
+        </div>
       </div>
     </div>
   );

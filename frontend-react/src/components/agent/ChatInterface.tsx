@@ -3,7 +3,8 @@ import { Send, Square, ArrowDown, CircleAlert } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 import { api } from '../../api';
-import { MessageActions, MessageContent } from '../chat/MessageContent';
+import { MessageActions } from '../chat/MessageContent';
+import { MessageBubble } from '../chat/MessageBubble';
 import { MarkdownRenderer } from '../chat/MarkdownRenderer';
 import { ChatEmptyState } from './ChatEmptyState';
 import { ThinkingDetails } from '../chat/ThinkingDetails';
@@ -13,6 +14,8 @@ import { FloatingPermissionDialog } from './FloatingPermissionDialog';
 import type { PermissionRequest } from './FloatingPermissionDialog';
 import { SlashCommandMenu } from '../chat/SlashCommandMenu';
 import { ChatComposerTools } from '../chat/ChatComposerTools';
+import { ImageAttachmentBar } from '../multimodal/ImageAttachmentBar';
+import type { ImageAttachment } from '../multimodal/attachments';
 import { useChatVisuals } from '../../hooks/useChatVisuals';
 import {
   FALLBACK_COMMANDS,
@@ -65,7 +68,7 @@ interface Message {
 
 interface ChatInterfaceProps {
   messages: Message[];
-  onSend: (message: string) => void;
+  onSend: (message: string, attachments?: string[]) => void;
   onStop?: () => void;
   isLoading?: boolean;
   /** Session id used by slash-command execution and server-side interrupts. */
@@ -108,6 +111,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     t('chat.suggestion_3'),
   ];
   const [input, setInput] = useState('');
+  const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
   const [editState, setEditState] = useState<EditState>(null);
   // Transcript display preferences. One hook instance per composer: the value
   // is passed down to ChatComposerTools so both composers read the same flags.
@@ -306,13 +310,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       if (commandRunning) return;
       runSlashCommand(text);
     } else {
-      onSend(text);
+      const images = attachments.filter(a => a.status === 'ready' && a.url).map(a => a.url);
+      if (images.length) {
+        onSend(text, images);
+      } else {
+        onSend(text);
+      }
+      setAttachments([]);
     }
     setInput('');
     setSlashDismissed(false);
     setSlashActiveIndex(0);
     if (inputRef.current) inputRef.current.style.height = 'auto';
-  }, [canSubmit, input, isExactCommand, onSend, runSlashCommand, commandRunning]);
+  }, [canSubmit, input, isExactCommand, onSend, runSlashCommand, commandRunning, attachments]);
 
   const acceptSlashCompletion = useCallback((command: SlashCommandInfo) => {
     const needsArg = command.args.some(arg => arg.required);
@@ -432,15 +442,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     );
   };
 
-  const renderMessage = (msg: Message) => {
+  const renderMessage = (msg: Message, previous?: Message) => {
     const rowWidth = getReadingWidthClass({
       fullWidth,
       hasParallelContent: hasParallelToolContent(msg.toolCalls?.length),
     });
+    // 连续同角色消息合并视觉：行距收紧，读成一组。
+    const merged = previous?.role === msg.role;
+    const rhythm = merged ? 'pb-2' : 'pb-5';
     if (editState?.messageId === msg.id) {
       const alignEnd = msg.role === 'user';
       return (
-        <div className={cn('flex w-full min-w-0', alignEnd ? 'justify-end' : 'justify-start', rowWidth)}>
+        <div className={cn('flex w-full min-w-0', alignEnd ? 'justify-end' : 'justify-start', rowWidth, rhythm)}>
           {/* Editing takes the whole column: the composer this replaces is
               full width, and a fit-to-content box would clip what is typed. */}
           <div className="flex w-full min-w-0 flex-col gap-2">
@@ -470,11 +483,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
 
     return (
-      <MessageContent
-        className={rowWidth}
-        role={msg.role}
-        content={msg.content}
-        timestamp={msg.timestamp}
+      <MessageBubble
+        className={cn(rowWidth, rhythm)}
+        message={msg}
+        showAvatar={!merged}
+        merged={merged}
         body={renderMessageBody(msg)}
         actions={
           msg.role === 'assistant' && msg.content ? (
@@ -531,19 +544,19 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             />
           )}
           {!isEmpty && (
-            <div data-transcript className="flex flex-col gap-5">
-              {messages.map(msg => (
-                <React.Fragment key={msg.id}>{renderMessage(msg)}</React.Fragment>
+            <div data-transcript className="flex flex-col">
+              {messages.map((msg, idx) => (
+                <React.Fragment key={msg.id}>{renderMessage(msg, idx > 0 ? messages[idx - 1] : undefined)}</React.Fragment>
               ))}
             </div>
           )}
           {/* Slash-command turns render after the transcript: their replies are
               command receipts (help text, model switches), not model turns. */}
           {commandTurns.length > 0 && (
-            <div data-slash-transcript className="flex flex-col gap-5">
-              {commandTurns.map(msg => (
+            <div data-slash-transcript className="flex flex-col">
+              {commandTurns.map((msg, idx) => (
                 <React.Fragment key={msg.id}>
-                  {renderMessage({ ...msg, role: msg.role })}
+                  {renderMessage({ ...msg, role: msg.role }, idx > 0 ? commandTurns[idx - 1] : undefined)}
                 </React.Fragment>
               ))}
             </div>
@@ -598,6 +611,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             visuals={visuals}
             setShowToolCalls={setShowToolCalls}
             setShowThinking={setShowThinking}
+            className="mb-1.5"
+          />
+          <ImageAttachmentBar
+            attachments={attachments}
+            onChange={setAttachments}
+            disabled={!!isLoading}
             className="mb-1.5"
           />
           <div

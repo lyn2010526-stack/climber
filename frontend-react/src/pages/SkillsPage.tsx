@@ -7,6 +7,8 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { EmptyState } from '../components/ui/EmptyState';
+import { Card } from '../components/ui/Card';
+import { SkeletonList } from '../components/ui/Skeleton';
 
 interface Skill {
   id: number;
@@ -100,8 +102,9 @@ export function SkillsPage() {
           }
         />
 
+        <div className="space-y-4">
         {showList && skills.length > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="w-full max-w-xs">
               <Input
                 size="sm"
@@ -148,7 +151,7 @@ export function SkillsPage() {
         )}
 
         {(error || toggleError) && (
-          <div role="alert" className="mb-3 flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] p-3">
+          <div role="alert" className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] p-3">
             <AlertCircle size={16} aria-hidden="true" className="shrink-0 text-[var(--color-error)]" />
             <p className="flex-1 text-sm text-[var(--color-error)]">{error || toggleError}</p>
             {error && (
@@ -160,20 +163,13 @@ export function SkillsPage() {
         )}
 
         {loading && (
-          <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]" aria-busy="true" aria-label={t('common.loading')}>
-            {[1, 2, 3].map(i => (
-              <div key={i} className="flex items-center gap-3 border-b border-[var(--color-border-subtle)] px-3 py-2.5 last:border-b-0 md:px-4">
-                <div className="h-3.5 w-3.5 shrink-0 rounded skeleton-shimmer" style={{ animationDelay: `${i * 100}ms` }} />
-                <div className="h-3.5 flex-1 rounded skeleton-shimmer" style={{ animationDelay: `${i * 100}ms` }} />
-                <div className="hidden h-3.5 w-24 shrink-0 rounded skeleton-shimmer md:block" style={{ animationDelay: `${i * 100}ms` }} />
-                <div className="h-3.5 w-16 shrink-0 rounded skeleton-shimmer" style={{ animationDelay: `${i * 100}ms` }} />
-              </div>
-            ))}
+          <div aria-busy="true" aria-label={t('common.loading')}>
+            <SkeletonList count={3} />
           </div>
         )}
 
         {showList && filtered.length === 0 && (
-          <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]">
+          <Card padding="none" className="overflow-hidden">
             <EmptyState
               className="w-full"
               icon={hasFilters ? <Search size={20} aria-hidden="true" /> : <Package size={20} aria-hidden="true" />}
@@ -184,11 +180,12 @@ export function SkillsPage() {
                 </Button>
               ) : undefined}
             />
-          </div>
+          </Card>
         )}
 
         {showList && filtered.length > 0 && (
-          <ul className="divide-y divide-[var(--color-border-subtle)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]" aria-label={t('navigation.skills')}>
+          <Card padding="none" className="overflow-hidden">
+            <ul className="divide-y divide-[var(--color-border-subtle)]" aria-label={t('navigation.skills')}>
             {filtered.map(skill => {
               const fileName = (skill.path || '').split('/').filter(Boolean).pop();
               return (
@@ -227,7 +224,9 @@ export function SkillsPage() {
               );
             })}
           </ul>
+          </Card>
         )}
+        </div>
       </div>
     </div>
   );

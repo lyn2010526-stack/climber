@@ -110,8 +110,7 @@ describe('editing claims the whole column', () => {
     const userRow = container.querySelectorAll('[data-transcript] > div')[0]!;
     expect(userRow.textContent).toContain('Review this repository');
     const fitted = userRow.firstElementChild!;
-    expect(fitted.classList.contains('sm:max-w-[85%]')).toBe(true);
-    expect(fitted.classList.contains('max-w-[90%]')).toBe(true);
+    expect(fitted.classList.contains('max-w-[85%]')).toBe(true);
 
     fireEvent.click(screen.getAllByRole('button', { title: '编辑' })[0]!);
     const editor = screen.getByRole('textbox', { name: i18n.t('chat.edit_message') });
@@ -120,7 +119,6 @@ describe('editing claims the whole column', () => {
     // hides the text the user is rewriting.
     const editingBox = editor.closest('div')!.parentElement!;
     expect(editingBox.classList.contains('w-full')).toBe(true);
-    expect(editingBox.classList.contains('max-w-[90%]')).toBe(false);
-    expect(editingBox.classList.contains('sm:max-w-[85%]')).toBe(false);
+    expect(editingBox.classList.contains('max-w-[85%]')).toBe(false);
   });
 });

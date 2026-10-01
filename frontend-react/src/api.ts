@@ -417,19 +417,31 @@ class ApiClient {
   }
 
   // Chat (SSE)
+  /**
+   * POST /api/v1/sessions/{sessionId}/chat.
+   *
+   * `options.attachments` carries optional image references (base64 data URLs
+   * or http(s) URLs) sent as the backend `images` field; omitted entirely when
+   * empty so older payloads stay byte-identical.
+   */
   chatStream(
     sessionId: string,
     message: string,
     onEvent: (event: ChatStreamEvent) => void,
-    options: { idleTimeoutMs?: number } = {},
+    options: { idleTimeoutMs?: number; attachments?: string[] } = {},
   ): () => void {
     const url = `${BASE_URL}/sessions/${sessionId}/chat`;
     const abortController = new AbortController();
 
+    const payload: Record<string, unknown> = { message };
+    if (options.attachments?.length) {
+      payload.images = options.attachments;
+    }
+
     fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify(payload),
       signal: abortController.signal,
     }).then(async (response) => {
       if (!response.ok) {

@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { User, Bot, Copy, Check, ThumbsUp, ThumbsDown, RotateCcw, Edit3, Quote, Trash2 } from 'lucide-react';
+import { User } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { formatTime } from '../../i18n/utils';
+import { ClimberMark } from '../brand/ClimberMark';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { StreamingCursor } from './StreamingCursor';
 
@@ -20,187 +20,103 @@ export interface Message {
   }>;
   reasoning?: string;
   timestamp?: Date | string | number;
+  /** 这一轮以失败收尾，行内可给出补救入口。 */
+  failed?: boolean;
+  /** 用户主动中断了这一轮。 */
+  interrupted?: boolean;
   isStreaming?: boolean;
 }
 
 interface MessageBubbleProps {
   message: Message;
-  onCopy?: (content: string) => void;
-  onEdit?: (id: string, content: string) => void;
-  onRegenerate?: (id: string) => void;
-  onQuote?: (content: string) => void;
-  onDelete?: (id: string) => void;
-  onFeedback?: (id: string, type: 'up' | 'down') => void;
+  /** 调用方拼装好的正文（工具卡、思考流、正文与光标）；缺省时按角色渲染。 */
+  body?: React.ReactNode | undefined;
+  actions?: React.ReactNode | undefined;
+  /**
+   * 连续同角色消息合并视觉：后一条隐藏头像列，但保留占位宽度，
+   * 让同一段落里的行首始终对齐。
+   */
+  showAvatar?: boolean;
+  /** 与上一条同角色：收紧上下节奏，读成一组。 */
+  merged?: boolean;
+  /** 调用方决定的阅读列宽。 */
+  className?: string;
 }
 
+/**
+ * 一条消息行。
+ *
+ * 助手行带 ClimberMark 头像列，正文平铺全宽：答案是内容本身，气泡会与
+ * 答案自带的代码块、表格抢焦点。用户行是右对齐的浅色气泡：短输入，
+ * 读回来用。时间戳与操作按钮悬浮出现，meta 行常驻占位高度，
+ * 悬停显隐永远不会推动布局。
+ */
 export function MessageBubble({
   message,
-  onCopy,
-  onEdit,
-  onRegenerate,
-  onQuote,
-  onDelete,
-  onFeedback,
+  body,
+  actions,
+  showAvatar = true,
+  merged = false,
+  className,
 }: MessageBubbleProps) {
-  const [copied, setCopied] = useState(false);
-  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
   const timeStr = message.timestamp ? formatTime(message.timestamp) : '';
 
-  const handleCopy = () => {
-    onCopy?.(message.content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleFeedback = (type: 'up' | 'down') => {
-    const next = feedback === type ? null : type;
-    setFeedback(next);
-    if (next) onFeedback?.(message.id, next);
-  };
-
   return (
     <div
-      className={cn(
-        'group relative flex gap-3 message-enter',
-        isUser ? 'flex-row-reverse ml-auto' : 'mr-auto',
-      )}
-      style={{ maxWidth: '85%' }}
+      data-message-bubble
+      className={cn('group flex w-full min-w-0 items-start gap-2.5', isUser && 'justify-end', className)}
     >
-      {/* Avatar */}
-      <div className="shrink-0 mt-0.5">
-        <div
-          className={cn(
-            'flex items-center justify-center w-8 h-8 rounded-xl',
-            isUser
-              ? 'bg-[var(--color-accent)]'
-              : 'bg-[var(--color-bg-surface-3)]',
-          )}
-        >
-          {isUser ? (
-            <User size={15} className="text-white" />
-          ) : (
-            <Bot size={15} className="text-[var(--color-text-primary)]" />
+      {isAssistant && (
+        <div data-avatar-col className="w-7 shrink-0" aria-hidden={!showAvatar}>
+          {showAvatar && (
+            <div
+              data-avatar
+              className="flex size-7 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] text-[var(--color-accent-foreground)]"
+            >
+              <ClimberMark size={15} />
+            </div>
           )}
         </div>
-      </div>
-
-      {/* Content */}
-      <div className={cn('flex flex-col gap-1 min-w-0 flex-1', isUser ? 'items-end' : 'items-start')}>
-        {/* Bubble */}
+      )}
+      {!isUser && !isAssistant && <div data-avatar-col className="w-7 shrink-0" aria-hidden="true" />}
+      <div
+        data-message-column
+        className={cn(
+          'flex min-w-0 flex-col',
+          isUser ? 'w-fit max-w-[85%] items-end' : 'min-w-0 flex-1 items-start',
+        )}
+      >
         <div
+          data-message-body
           className={cn(
-            'px-4 py-3 text-sm leading-[1.6]',
-            isUser
-              ? 'bg-[var(--color-accent)] text-[var(--color-accent-text)] rounded-2xl rounded-br-lg'
-              : 'bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] text-[var(--color-text-primary)] rounded-2xl rounded-tl-lg',
+            'min-w-0 max-w-full break-words text-sm leading-relaxed text-[var(--color-text-primary)]',
+            isUser &&
+              'rounded-2xl rounded-br-md bg-[var(--color-accent-subtle)] px-4 py-2.5 whitespace-pre-wrap',
           )}
-          style={{
-            boxShadow: 'var(--shadow-panel)',
-          }}
         >
-          {isUser ? (
-            <span className="whitespace-pre-wrap">{message.content}</span>
-          ) : (
-            <>
-              <MarkdownRenderer content={message.content} />
-              {message.isStreaming && <StreamingCursor />}
-            </>
+          {body ?? (isUser ? message.content : <MarkdownRenderer content={message.content} />)}
+          {message.isStreaming && (
+            <span data-streaming-cursor>
+              <StreamingCursor />
+            </span>
           )}
         </div>
-
-        {/* Meta row: timestamp + actions */}
-        <div
-          className={cn(
-            'flex items-center gap-1.5 px-1 min-h-[20px]',
-            isUser ? 'flex-row-reverse' : '',
-          )}
-        >
-          {timeStr && (
-            <span className="text-[10px] text-[var(--color-text-muted)]">{timeStr}</span>
-          )}
-
-          {/* Action buttons - visible on hover */}
+        {(timeStr || actions) && (
           <div
+            data-message-meta
             className={cn(
-              'flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200',
+              'flex min-h-[26px] w-full items-center gap-2 px-1 pt-1 text-xs text-[var(--color-text-muted)]',
+              'transition-opacity duration-150 ease-out [@media(hover:hover)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none',
+              isUser ? 'flex-row-reverse justify-end' : 'justify-start',
+              merged && 'min-h-[22px]',
             )}
           >
-            <button type="button"
-              onClick={handleCopy}
-              className="p-1 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-3)] transition-colors"
-              title="复制"
-            >
-              {copied ? <Check size={12} className="text-[var(--color-success)]" /> : <Copy size={12} />}
-            </button>
-
-            {isAssistant && onRegenerate && (
-              <button type="button"
-                onClick={() => onRegenerate(message.id)}
-                className="p-1 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-3)] transition-colors"
-                title="重新生成"
-              >
-                <RotateCcw size={12} />
-              </button>
-            )}
-
-            {isUser && onEdit && (
-              <button type="button"
-                onClick={() => onEdit(message.id, message.content)}
-                className="p-1 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-3)] transition-colors"
-                title="编辑"
-              >
-                <Edit3 size={12} />
-              </button>
-            )}
-
-            {onQuote && (
-              <button type="button"
-                onClick={() => onQuote(message.content)}
-                className="p-1 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-3)] transition-colors"
-                title="引用"
-              >
-                <Quote size={12} />
-              </button>
-            )}
-
-            {isAssistant && onFeedback && (
-              <>
-                <button type="button"
-                  onClick={() => handleFeedback('up')}
-                  className={cn(
-                    'p-1 rounded-md hover:bg-[var(--color-bg-surface-3)] transition-colors',
-                    feedback === 'up' ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-success)]',
-                  )}
-                  title="有用"
-                >
-                  <ThumbsUp size={12} />
-                </button>
-                <button type="button"
-                  onClick={() => handleFeedback('down')}
-                  className={cn(
-                    'p-1 rounded-md hover:bg-[var(--color-bg-surface-3)] transition-colors',
-                    feedback === 'down' ? 'text-[var(--color-error)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-error)]',
-                  )}
-                  title="无用"
-                >
-                  <ThumbsDown size={12} />
-                </button>
-              </>
-            )}
-
-            {onDelete && (
-              <button type="button"
-                onClick={() => onDelete(message.id)}
-                className="p-1 rounded-md text-[var(--color-text-muted)] hover:text-[var(--color-error)] hover:bg-[var(--color-error-subtle)] transition-colors"
-                title="删除"
-              >
-                <Trash2 size={12} />
-              </button>
-            )}
+            {timeStr && <time dateTime={new Date(message.timestamp!).toISOString()}>{timeStr}</time>}
+            {actions}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

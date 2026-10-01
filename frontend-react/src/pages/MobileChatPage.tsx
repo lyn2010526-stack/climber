@@ -8,9 +8,13 @@ export function MobileChatPage() {
   const { sessionId, creationError } = useDefaultSession();
   const { messages, isStreaming, error, sendMessage, stopStreaming, refresh } = useChat(sessionId);
 
-  const handleSend = useCallback(async (message: string) => {
+  const handleSend = useCallback(async (message: string, attachments?: string[]) => {
     if (!sessionId) throw new Error(creationError || '会话尚未就绪，请稍后重试');
-    await sendMessage(message);
+    if (attachments?.length) {
+      await sendMessage(message, attachments);
+    } else {
+      await sendMessage(message);
+    }
     void cacheManager.set(`last_message_${sessionId}`, {
       text: message,
       timestamp: Date.now(),

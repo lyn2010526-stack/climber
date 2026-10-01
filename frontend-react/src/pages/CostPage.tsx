@@ -5,6 +5,8 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
+import { EmptyState } from '../components/ui/EmptyState';
+import { SkeletonList } from '../components/ui/Skeleton';
 import { useI18n } from '../i18n/utils';
 import { formatNumber } from '../i18n/utils';
 
@@ -91,7 +93,7 @@ export default function CostPage() {
         />
 
         {error && (
-          <Card variant="default" className="mb-6 border-[var(--color-error)]/30">
+          <Card variant="default" className="border-[var(--color-error)]/30">
             <CardContent className="p-4 flex items-center gap-3">
               <AlertTriangle size={18} className="text-[var(--color-warning)] shrink-0" />
               <p className="text-sm text-[var(--color-text-secondary)] flex-1">{error}</p>
@@ -101,10 +103,12 @@ export default function CostPage() {
         )}
 
         {loading ? (
-          <p role="status" className="py-4 text-sm text-[var(--color-text-muted)]">{t('common.loading_data')}</p>
+          <div role="status" aria-label={t('common.loading_data')} className="mt-4">
+            <SkeletonList count={3} />
+          </div>
         ) : (
-          <>
-            <dl className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-px overflow-hidden rounded-lg border border-[var(--color-border-subtle)] bg-[var(--color-border-subtle)]">
+          <div className="space-y-4">
+            <dl className="grid grid-cols-1 sm:grid-cols-3 gap-px overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-border-subtle)]">
               {[
                 [t('cost.totals.total_cost'), costData?.total_cost != null ? `$${costData.total_cost.toFixed(4)}` : '—'],
                 [t('cost.totals.total_tokens'), costData?.total_tokens != null ? formatNumber(costData.total_tokens) : '—'],
@@ -113,7 +117,7 @@ export default function CostPage() {
             </dl>
 
             {budget && (
-              <Card variant="default" className="mb-4">
+              <Card variant="default">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{t('cost.budget.usage')}</h3>
@@ -139,7 +143,8 @@ export default function CostPage() {
             )}
 
             {costData?.by_model && costData.by_model.length > 0 ? (
-              <section className="overflow-hidden rounded-lg border border-[var(--color-border-subtle)]">
+              <Card variant="default" padding="none" className="overflow-hidden">
+                <CardContent>
                   <h3 className="px-3 py-3 text-sm font-semibold text-[var(--color-text-primary)]">{t('cost.by_model')}</h3>
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[480px] text-left text-sm text-[var(--color-text-primary)]">
@@ -151,9 +156,18 @@ export default function CostPage() {
                       </tbody>
                     </table>
                   </div>
-              </section>
-            ) : costData ? <p className="py-4 text-sm text-[var(--color-text-muted)]">{t('cost.no_model_usage')}</p> : null}
-          </>
+                </CardContent>
+              </Card>
+            ) : costData ? (
+              <Card variant="default" padding="none" className="overflow-hidden">
+                <EmptyState
+                  className="w-full"
+                  icon="file"
+                  title={t('cost.no_model_usage')}
+                />
+              </Card>
+            ) : null}
+          </div>
         )}
       </div>
     </div>

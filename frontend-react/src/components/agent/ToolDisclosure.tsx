@@ -1,7 +1,48 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
+import { useI18n } from '../../i18n';
 import { cn } from '../../lib/utils';
+
+/**
+ * Copy an exact payload to the clipboard. The text it copies is decided by the
+ * caller, so the button on a clipped preview can carry the full payload
+ * instead of the clip. The confirmation is a swap of the glyph and the label,
+ * not a toast, and it reverts on its own.
+ */
+export function ToolCopyButton({ text, className }: { text: string; className?: string }) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+  const revert = useRef<number | undefined>(undefined);
+
+  const handleCopy = () => {
+    try {
+      void navigator.clipboard?.writeText(text);
+      setCopied(true);
+      window.clearTimeout(revert.current);
+      revert.current = window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      // A blocked clipboard costs the confirmation, never the render.
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      aria-label={copied ? t('tool_call.copied') : t('tool_call.copy')}
+      title={copied ? t('tool_call.copied') : t('tool_call.copy')}
+      className={cn(
+        'inline-flex size-[var(--space-6)] shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] motion-reduce:transition-none',
+        className,
+      )}
+    >
+      {copied
+        ? <Check size={12} aria-hidden="true" className="text-[var(--color-success)]" />
+        : <Copy size={12} aria-hidden="true" />}
+    </button>
+  );
+}
 
 /**
  * Monospace block for tool payloads, the deepest layer of a tool card. The
@@ -15,25 +56,33 @@ import { cn } from '../../lib/utils';
  *
  * Content is always fully present in the DOM and reachable by keyboard: the
  * block scrolls instead of clipping, and long lines wrap rather than pushing
- * the layout wide.
+ * the layout wide. `copyable` adds an overlay copy button; it costs no layout
+ * and copies `copyText` when one is given, so a clipped preview still copies
+ * the whole payload.
  */
 export function ToolCodeBlock({
   children,
   className,
   tone = 'default',
   label,
+  copyable = false,
+  copyText,
 }: {
   children: string;
   className?: string;
   tone?: 'default' | 'error';
   label?: string;
+  /** Render an overlay copy button for this payload. */
+  copyable?: boolean;
+  /** The text the copy button carries. Omitted, it copies `children`. */
+  copyText?: string;
 }) {
-  return (
+  const block = (
     <pre
       tabIndex={0}
       aria-label={label}
       className={cn(
-        'mt-[var(--space-1)] max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-md)] border p-[var(--space-2-5)] font-mono text-[length:var(--text-2xs)]',
+        'mt-[var(--space-1)] max-h-48 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-md)] border p-[var(--space-2-5)] font-mono text-[length:var(--text-2xs)]',
         tone === 'error'
           ? 'border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] text-[var(--color-error)]'
           : 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-3)] text-[var(--color-text-secondary)]',
@@ -42,6 +91,16 @@ export function ToolCodeBlock({
     >
       {children}
     </pre>
+  );
+  if (!copyable) return block;
+  return (
+    <div className="group relative">
+      {block}
+      <ToolCopyButton
+        text={copyText ?? children}
+        className="absolute end-[var(--space-2)] top-[var(--space-2)] bg-[var(--color-bg-surface-1)]/85 backdrop-blur-sm"
+      />
+    </div>
   );
 }
 

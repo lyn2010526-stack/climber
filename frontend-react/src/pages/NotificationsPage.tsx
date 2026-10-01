@@ -48,7 +48,7 @@ export function NotificationsPage() {
           icon={<Bell size={20} />}
         />
 
-        <div className="space-y-3">
+        <div className="space-y-4">
           <Card variant="default">
             <CardContent className="p-4">
               <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">
@@ -104,11 +104,16 @@ export function NotificationsPage() {
           </Card>
 
           {result && (
-            <div role="status" aria-live="polite" className={`rounded-lg p-3 flex items-center gap-3 border ${
-              result.ok
-                ? 'bg-[var(--color-success)]/10 border-[var(--color-success)]/30'
-                : 'bg-[var(--color-error)]/10 border-[var(--color-error)]/30'
-            }`}>
+            <Card
+              padding="none"
+              role="status"
+              aria-live="polite"
+              className={`flex items-center gap-3 p-3 ${
+                result.ok
+                  ? 'border-[var(--color-success)]/30 bg-[var(--color-success)]/10'
+                  : 'border-[var(--color-error)]/30 bg-[var(--color-error)]/10'
+              }`}
+            >
               {result.ok ? (
                 <CheckCircle size={18} className="text-[var(--color-success)] shrink-0" />
               ) : (
@@ -117,7 +122,7 @@ export function NotificationsPage() {
               <p className={`text-sm ${result.ok ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}>
                 {result.ok ? '通知已发送' : `发送失败: ${result.error || '未知错误'}`}
               </p>
-            </div>
+            </Card>
           )}
 
           <p className="text-xs text-[var(--color-text-muted)]">通知由后端主机发送，显示结果取决于该主机的桌面通知支持。</p>

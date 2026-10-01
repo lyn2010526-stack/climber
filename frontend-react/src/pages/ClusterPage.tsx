@@ -16,6 +16,9 @@ import { groupStatusLabel } from '../components/collaboration/taskStatus';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { PageHeader } from '../components/ui/PageHeader';
+import { Card } from '../components/ui/Card';
+import { EmptyState } from '../components/ui/EmptyState';
+import { SkeletonList } from '../components/ui/Skeleton';
 
 const MEMBER_ROLES = [
   'worker',
@@ -104,7 +107,7 @@ function MemberPanel({
           <p role="alert" className="text-xs text-[var(--color-error)]">
             {loadError}
           </p>
-          <Button variant="ghost" size="xs" className="mt-1" onClick={onRetry}>
+          <Button variant="ghost" size="xs" className="mt-1" aria-label={t('collaboration.members.reload')} onClick={onRetry}>
             {t('collaboration.members.retry')}
           </Button>
         </div>
@@ -238,7 +241,7 @@ export function ClusterPage() {
     <div className="h-full overflow-y-auto text-[var(--color-text-primary)]">
       <div className="mx-auto max-w-6xl p-4 md:p-6 lg:p-8">
         {activeGroup ? <>
-          <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />} onClick={leaveGroup}>{t('collaboration.back_to_list')}</Button>
+          <Button variant="ghost" size="sm" icon={<ArrowLeft size={14} />} aria-label={t('collaboration.back_to_group_list')} onClick={leaveGroup}>{t('collaboration.back_to_list')}</Button>
           <h1 className="mt-4 text-xl font-semibold break-words">{activeGroup.name}</h1>
 
           <div className="mt-6 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(240px,320px)]">
@@ -328,15 +331,28 @@ export function ClusterPage() {
             <div className="flex justify-end gap-2"><Button type="button" variant="ghost" size="sm" onClick={() => setShowCreate(false)}>{t('common.cancel')}</Button><Button type="submit" size="sm" disabled={saving || !name.trim()}>{t('common.create')}</Button></div>
           </form>}
           {error && <div role="alert" className="mb-4 text-sm text-[var(--color-error)]"><p>{error}</p><Button variant="ghost" size="sm" onClick={loadGroups}>{t('collaboration.groups.reload')}</Button></div>}
-          {loading ? <p role="status" className="py-6 text-sm">{t('collaboration.groups.loading')}</p> : groups.length === 0 && !error ? <p className="py-8 text-sm text-[var(--color-text-muted)]">{t('collaboration.groups.empty')}</p> : <div className="divide-y divide-[var(--color-border-subtle)]">
-            {groups.map(group => <div key={group.id} className="flex flex-wrap items-center gap-4 py-5">
-              <div className="min-w-0 flex-1"><h2 className="break-words text-sm font-semibold">{group.name}</h2>              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                {group.member_count > 0 ? t('collaboration.groups.member_count', { count: group.member_count }) : t('collaboration.groups.member_count_unreported')} ·{' '}
-                {groupStatusLabel(group.status, t)}
-              </p></div>
-              <Button size="sm" variant="outline" onClick={() => openGroup(group)}>{t('collaboration.groups.enter')}</Button>
-            </div>)}
-          </div>}
+          {loading ? <div role="status" aria-label={t('collaboration.groups.loading')} className="py-4"><SkeletonList count={3} /></div> : groups.length === 0 && !error ? (
+            <Card padding="none" className="overflow-hidden">
+              <EmptyState
+                className="w-full"
+                icon={<Users size={20} />}
+                title={t('collaboration.groups.empty')}
+                action={<Button size="sm" icon={<Plus size={14} />} onClick={() => setShowCreate(true)}>{t('collaboration.groups.create')}</Button>}
+              />
+            </Card>
+          ) : (
+            <Card padding="none" className="overflow-hidden">
+              <div className="divide-y divide-[var(--color-border-subtle)]">
+                {groups.map(group => <div key={group.id} className="flex flex-wrap items-center gap-4 px-4 py-4">
+                  <div className="min-w-0 flex-1"><h2 className="break-words text-sm font-semibold">{group.name}</h2>              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                    {group.member_count > 0 ? t('collaboration.groups.member_count', { count: group.member_count }) : t('collaboration.groups.member_count_unreported')} ·{' '}
+                    {groupStatusLabel(group.status, t)}
+                  </p></div>
+                  <Button size="sm" variant="outline" onClick={() => openGroup(group)}>{t('collaboration.groups.enter')}</Button>
+                </div>)}
+              </div>
+            </Card>
+          )}
         </>}
       </div>
     </div>

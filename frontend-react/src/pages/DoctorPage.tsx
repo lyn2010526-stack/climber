@@ -68,17 +68,19 @@ export function DoctorPage() {
         />
 
         {error && (
-          <div className="bg-[var(--color-error)]/10 border border-[var(--color-error)]/30 rounded-xl p-4 mb-6 flex items-center gap-3">
-            <AlertCircle size={18} className="text-[var(--color-error)] shrink-0" />
-            <p className="text-sm text-[var(--color-error)] flex-1">{error}</p>
-          </div>
+          <Card variant="default" className="border-[var(--color-error)]/30">
+            <CardContent className="p-4 flex items-center gap-3">
+              <AlertCircle size={18} className="text-[var(--color-error)] shrink-0" />
+              <p role="alert" className="text-sm text-[var(--color-error)] flex-1">{error}</p>
+            </CardContent>
+          </Card>
         )}
 
         {loading && <SkeletonList count={3} />}
 
         {!loading && !error && (
-          <>
-            <div role="status" className="mb-4 flex flex-wrap items-center gap-3 border-b border-[var(--color-border-subtle)] pb-3">
+          <div className="space-y-4">
+            <div role="status" className="flex flex-wrap items-center gap-3 border-b border-[var(--color-border-subtle)] pb-3">
                 <div className="flex-1">
                   <p className="text-sm font-medium text-[var(--color-text-primary)]">
                     {checks.length === 0 ? '未返回诊断检查项' : healthy === null ? '诊断状态未知' : healthy && failCount === 0 ? '本次诊断通过' : '本次诊断存在异常'}
@@ -104,7 +106,7 @@ export function DoctorPage() {
                 const sectionPass = sectionChecks.filter(c => c.ok).length;
                 return (
                   <Card key={section} variant="default">
-                    <CardContent className="p-3">
+                    <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
                           {section}
@@ -138,7 +140,7 @@ export function DoctorPage() {
                 );
               })}
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>
