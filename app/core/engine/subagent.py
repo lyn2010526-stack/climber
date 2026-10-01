@@ -2,7 +2,7 @@
 
 Features:
 - Depth limit (default 3) — prevents unbounded recursion
-- Concurrency limit (default 5) — caps parallel sub-agents
+- Concurrency limit (default: max_concurrent_subtasks) — caps parallel sub-agents
 - Orphan cleanup — detects and terminates stale runs
 - Per-member token/cost tracking
 - Cascade cancellation — parent cancellation propagates to children
@@ -20,7 +20,7 @@ from typing import Any
 
 import structlog
 
-logger = structlog.get_logger()
+from app.config import settings
 
 logger = structlog.get_logger()
 
@@ -112,24 +112,27 @@ class SubagentRecord:
 class SubagentManager:
     """Manages sub-agent lifecycle with depth limits, concurrency control, and cleanup.
 
-    Reference: OpenSquilla SubagentManager — depth_limit=3, concurrency_limit=5.
+    Reference: OpenSquilla SubagentManager — depth_limit=3, concurrency from
+    ``settings.max_concurrent_subtasks``.
     """
 
     def __init__(
         self,
         *,
         depth_limit: int = 3,
-        concurrency_limit: int = 5,
+        concurrency_limit: int | None = None,
         orphan_timeout: float = 300.0,
         enable_cascade_cancel: bool = True,
     ):
         self._depth_limit = depth_limit
-        self._concurrency_limit = concurrency_limit
+        self._concurrency_limit = (
+            settings.max_concurrent_subtasks if concurrency_limit is None else concurrency_limit
+        )
         self._orphan_timeout = orphan_timeout
         self._enable_cascade_cancel = enable_cascade_cancel
 
         self._records: dict[str, SubagentRecord] = {}
-        self._semaphore = asyncio.Semaphore(concurrency_limit)
+        self._semaphore = asyncio.Semaphore(self._concurrency_limit)
         self._running_count = 0
         self._cancel_events: dict[str, asyncio.Event] = {}
 

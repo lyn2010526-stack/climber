@@ -32,22 +32,6 @@ async def _get_or_create_page(session_id: str):
     return await context.new_page()
 
 
-async def close_session(session_id: str) -> None:
-    """Close a single browser session."""
-    await get_browser_pool().release(session_id)
-
-
-async def close_all_sessions() -> None:
-    """Close all browser sessions (app shutdown)."""
-    await get_browser_pool().close_all()
-
-
-def browser_pool_stats() -> dict[str, Any]:
-    """Expose pool state for the health endpoint."""
-    return get_browser_pool().stats()
-
-
-
 @tool(description="Navigate to a URL and return the page title and content summary.")
 async def browser_navigate(url: str, session_id: str = "default") -> str:
     """Navigate to URL in browser."""

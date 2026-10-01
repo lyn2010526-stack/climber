@@ -305,7 +305,7 @@ async def _collect_browser(candidates: list[str], query: str, timeout_s: int) ->
                 findings.append(finding)
     finally:
         with contextlib.suppress(Exception):
-            await browser_tools.close_all_sessions()
+            await browser_tools.get_browser_pool().close_all()
     return findings
 
 

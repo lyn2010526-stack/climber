@@ -1,5 +1,9 @@
 """Skill definitions — builtin SkillInfo registry and handler mapping."""
 
+from collections.abc import Callable
+
+import structlog
+
 from app.skills.builtins import (
     skill_backend_engineer,
     skill_code_reviewer,
@@ -21,7 +25,9 @@ from app.skills.builtins import (
     skill_tdd_engineer,
     skill_tech_researcher,
 )
-from app.skills.registry import SkillCategory, SkillInfo
+from app.skills.registry import SkillCategory, SkillInfo, SkillRegistry
+
+logger = structlog.get_logger()
 
 BUILTIN_SKILLS = [
     SkillInfo(
@@ -354,7 +360,7 @@ Templates: technical design, API docs, README, runbook, postmortem""",
     ),
 ]
 
-BUILTIN_HANDLER_MAP = {
+BUILTIN_HANDLER_MAP: dict[str, Callable] = {
     "recursive_research": skill_recursive_research,
     "task_decomposition": skill_task_decomposition,
     "self_evolving": skill_self_evolving,
@@ -375,3 +381,40 @@ BUILTIN_HANDLER_MAP = {
     "incident_analyzer": skill_incident_analyzer,
     "dependency_auditor": skill_dependency_auditor,
 }
+
+
+def builtin_skill_ids() -> list[str]:
+    """Return the declared IDs of every builtin skill, in definition order."""
+    return [info.id for info in BUILTIN_SKILLS]
+
+
+def register_builtin_skills(registry: SkillRegistry) -> int:
+    """Register the builtin skills and their handlers into a registry.
+
+    Idempotent: a skill already backed by a handler is left untouched, so
+    repeated calls neither duplicate entries nor re-run handlers. A skill
+    that cannot be registered is logged and skipped so one bad definition
+    never blocks the rest.
+
+    Returns:
+        The number of skills newly registered by this call.
+    """
+    registered = 0
+    for info in BUILTIN_SKILLS:
+        if registry.get_handler(info.id) is not None:
+            continue
+        handler = BUILTIN_HANDLER_MAP.get(info.id)
+        if handler is None:
+            logger.warning("builtin_skill_handler_missing", skill_id=info.id)
+            continue
+        try:
+            registry.register(info, handler)
+        except Exception as exc:
+            logger.warning(
+                "builtin_skill_registration_failed", skill_id=info.id, error=str(exc)
+            )
+            continue
+        registered += 1
+    if registered:
+        logger.info("builtin_skills_registered", count=registered)
+    return registered

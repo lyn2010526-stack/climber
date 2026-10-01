@@ -24,6 +24,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.core.collaboration.agent_runner import run_agent_with_retry
 from app.core.collaboration.checkpoint import load_latest_checkpoint, resume_from_checkpoint
 from app.core.collaboration.group_chat import run_group_chat_process
@@ -50,12 +51,16 @@ class GroupCollaborationEngine:
         self,
         model_registry: Any,
         tool_registry: Any,
-        max_concurrent_tasks: int = 10,
+        max_concurrent_tasks: int | None = None,
     ) -> None:
         self.model_registry = model_registry
         self.tool_registry = tool_registry
-        self._max_concurrent = max_concurrent_tasks
-        self._task_semaphore = asyncio.Semaphore(max_concurrent_tasks)
+        self._max_concurrent = (
+            settings.max_concurrent_subtasks
+            if max_concurrent_tasks is None
+            else max_concurrent_tasks
+        )
+        self._task_semaphore = asyncio.Semaphore(self._max_concurrent)
         self._review_states: dict[str, dict[str, str]] = {}
         self._running_tasks: dict[str, asyncio.Task] = {}
 

@@ -64,15 +64,6 @@ class ToolRegistry:
         )
         logger.info("MCP tool registered", name=name, server=mcp_client.name)
 
-    def unregister(self, name: str) -> bool:
-        """Remove a tool from the registry."""
-        if name in self._tools:
-            del self._tools[name]
-            del self._definitions[name]
-            logger.info("Tool unregistered", name=name)
-            return True
-        return False
-
     def tool(
         self,
         name: str | None = None,
@@ -180,10 +171,10 @@ class ToolRegistry:
 
 
 class ToolRegistryProvider:
-    """Provides isolated tool registry instances.
+    """Provides the global tool registry instance.
 
-    Use get_registry() for the global default, or create_isolated()
-    for test/tenant-specific registries.
+    Use get_registry() for the shared default registry; each module-level
+    accessor below delegates here so the singleton lives in one place.
     """
 
     _global: ToolRegistry | None = None
@@ -194,21 +185,9 @@ class ToolRegistryProvider:
             cls._global = ToolRegistry()
         return cls._global
 
-    @classmethod
-    def create_isolated(cls) -> ToolRegistry:
-        return ToolRegistry()
-
-    @classmethod
-    def reset_global(cls) -> None:
-        cls._global = None
-
 
 def get_tool_registry() -> ToolRegistry:
     return ToolRegistryProvider.get_registry()
-
-
-def create_isolated_registry() -> ToolRegistry:
-    return ToolRegistryProvider.create_isolated()
 
 
 tool_registry = ToolRegistryProvider.get_registry()

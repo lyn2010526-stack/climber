@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import structlog
 from dotenv import load_dotenv
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
+
+logger = structlog.get_logger()
 
 # Values that look like a secret but are published in this repository, in
 # .env.example, or in setup guides. Accepting one of these leaves the signing
@@ -38,6 +41,11 @@ _PLACEHOLDER_SECRETS = frozenset(
     }
 )
 MIN_SECRET_LENGTH = 16
+
+# Agent subtask concurrency. The default is the tuned single-node value; the
+# ceiling is the hard bound one node may ever run, whatever an operator sets.
+DEFAULT_MAX_CONCURRENT_SUBTASKS = 3
+MAX_CONCURRENT_SUBTASKS_CEILING = 18
 
 SECRET_GENERATION_HINT = (
     "Generate a real secret, e.g. `python -c \"import secrets;"
@@ -137,6 +145,9 @@ class Settings(BaseSettings):
     tool_timeout: int = Field(default=60)
     max_tool_retries: int = Field(default=2)
 
+    # Parallel subtasks a single run may execute. Default 3, hard ceiling 18.
+    max_concurrent_subtasks: int = Field(default=DEFAULT_MAX_CONCURRENT_SUBTASKS)
+
     telegram_bot_token: str = Field(default="")
 
     # API key rotation
@@ -171,6 +182,20 @@ class Settings(BaseSettings):
             "author": "climber",
         },
     ])
+
+    @field_validator("max_concurrent_subtasks", mode="after")
+    @classmethod
+    def _clamp_max_concurrent_subtasks(cls, value: int) -> int:
+        """Clamp into [1, ceiling] instead of failing, logging what was applied."""
+        applied = min(max(value, 1), MAX_CONCURRENT_SUBTASKS_CEILING)
+        if applied != value:
+            logger.warning(
+                "max_concurrent_subtasks_clamped",
+                requested=value,
+                applied=applied,
+                ceiling=MAX_CONCURRENT_SUBTASKS_CEILING,
+            )
+        return applied
 
     @property
     def auth_public_endpoints_set(self) -> set[str]:

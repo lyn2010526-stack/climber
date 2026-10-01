@@ -212,9 +212,3 @@ def get_browser_pool() -> BrowserPool:
     if _pool is None:
         _pool = BrowserPool()
     return _pool
-
-
-def reset_browser_pool() -> None:
-    """Test helper: drop the global pool without closing it."""
-    global _pool
-    _pool = None
