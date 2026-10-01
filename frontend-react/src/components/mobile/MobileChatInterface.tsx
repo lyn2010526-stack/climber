@@ -2,6 +2,8 @@ import { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { ArrowDown, Send, Square, Loader2, RefreshCw } from 'lucide-react';
 import { formatTime } from '../../i18n/utils';
 import type { Message } from '../../useChat';
+import { ChatComposerTools } from '../chat/ChatComposerTools';
+import { useChatVisuals } from '../../hooks/useChatVisuals';
 
 interface MobileChatInterfaceProps {
   messages: Message[];
@@ -12,6 +14,8 @@ interface MobileChatInterfaceProps {
   onRefresh?: () => void | Promise<void>;
   disabled?: boolean;
   error?: string | null;
+  /** Session id for the composer tools (model, thinking level, display switches). */
+  sessionId?: string | null;
   emptyStateTitle?: string;
 }
 
@@ -33,13 +37,16 @@ function isSafariEngine(): boolean {
 
 export function MobileChatInterface({
   messages, onSend, onStop, isLoading, isRefreshing, onRefresh,
-  disabled, error, emptyStateTitle = '新对话',
+  disabled, error, sessionId, emptyStateTitle = '新对话',
 }: MobileChatInterfaceProps) {
   const [input, setInput] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [awayFromBottom, setAwayFromBottom] = useState(false);
   const [missedCount, setMissedCount] = useState(0);
+  // Transcript display preferences. One hook instance here; the flags gate
+  // reasoning and tool-call rendering and feed ChatComposerTools.
+  const { visuals, setShowToolCalls, setShowThinking } = useChatVisuals();
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -166,8 +173,8 @@ export function MobileChatInterface({
               <p className="mb-1 text-xs text-[var(--color-text-muted)]">{{ user: '你', assistant: 'Climber', system: '系统', tool: message.tool_name || '工具' }[message.role]}</p>
               {message.content && <p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>}
               {message.timestamp && <p className="mt-1 text-xs text-[var(--color-text-muted)]">{formatTime(message.timestamp)}</p>}
-              {message.reasoning && <details className="mt-2 text-sm"><summary className="min-h-11 cursor-pointer py-3 text-[var(--color-text-muted)]">思考过程</summary><p className="whitespace-pre-wrap">{message.reasoning}</p></details>}
-              {message.toolCalls?.map(tool => <details key={tool.id} className="mt-2 rounded-lg border border-[var(--color-border-subtle)] px-3 text-sm">
+              {message.reasoning && visuals.showThinking && <details className="mt-2 text-sm"><summary className="min-h-11 cursor-pointer py-3 text-[var(--color-text-muted)]">思考过程</summary><p className="whitespace-pre-wrap">{message.reasoning}</p></details>}
+              {visuals.showToolCalls && message.toolCalls?.map(tool => <details key={tool.id} className="mt-2 rounded-lg border border-[var(--color-border-subtle)] px-3 text-sm">
                 <summary className="min-h-11 cursor-pointer py-3">{tool.name} · {tool.error ? '失败' : tool.status === 'running' ? '运行中' : tool.status === 'success' ? '完成' : tool.status === 'error' ? '失败' : '工具调用'}</summary>
                 <pre className="max-h-48 overflow-auto pb-3 text-xs">{JSON.stringify(tool.arguments, null, 2)}</pre>
                 {(tool.error || tool.result) && <pre className="max-h-64 overflow-auto whitespace-pre-wrap pb-3 text-xs">{tool.error || tool.result}</pre>}
@@ -186,6 +193,14 @@ export function MobileChatInterface({
       <form onSubmit={handleSubmit} className="mobile-composer shrink-0 border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] p-3"
         style={{ paddingBottom: `${COMPOSER_PADDING}px`, paddingLeft: 'max(12px, env(safe-area-inset-left, 0px))', paddingRight: 'max(12px, env(safe-area-inset-right, 0px))' }}>
         {(error || sendError) && <p role="alert" className="mb-2 max-h-20 overflow-auto text-sm text-[var(--color-error)] [overflow-wrap:anywhere]">{error || sendError}</p>}
+        <ChatComposerTools
+          sessionId={sessionId ?? null}
+          compact
+          visuals={visuals}
+          setShowToolCalls={setShowToolCalls}
+          setShowThinking={setShowThinking}
+          className="mb-2"
+        />
         <div className="flex items-end gap-2">
           <textarea ref={inputRef} value={input} onChange={event => setInput(event.target.value)}
             onCompositionStart={() => { composingRef.current = true; }}

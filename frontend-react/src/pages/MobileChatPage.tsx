@@ -34,6 +34,7 @@ export function MobileChatPage() {
         isLoading={isStreaming}
         disabled={!sessionId}
         error={error || creationError}
+        sessionId={sessionId}
         onRefresh={refresh}
       />
     </div>

@@ -360,6 +360,62 @@ class ApiClient {
     return response.messages;
   }
 
+  /** GET /api/v1/sessions/{sessionId}; `provider`/`model_id` are the effective model binding. */
+  async getSession(sessionId: string): Promise<{ id: string; provider?: string | null; model_id?: string | null }> {
+    return this.request(`/sessions/${sessionId}`);
+  }
+
+  /**
+   * POST /api/v1/sessions/{sessionId}/slash with `/model provider:model_id`.
+   *
+   * The slash command is the only server-side write path for a session's
+   * model binding (it persists `model_settings` and rebinds a warm session).
+   * Replies are always SSE: synthetic `text`/`done` frames on success, an
+   * `error` frame (`data.error`) when the command failed.
+   */
+  async setSessionModel(sessionId: string, provider: string, modelId: string): Promise<{ provider: string; modelId: string }> {
+    const response = await fetch(`${BASE_URL}/sessions/${sessionId}/slash`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...this.getAuthHeaders() },
+      body: JSON.stringify({ message: `/model ${provider}:${modelId}` }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new ApiRequestError(response.status, error.detail || `HTTP ${response.status}`);
+    }
+    if (!response.body) {
+      throw new Error('The server returned an empty response body.');
+    }
+
+    let errorMessage = '';
+    let applied: { provider: string; modelId: string } | null = null;
+    await readSSEStream(response.body, (frame) => {
+      const payload = frame.data && typeof frame.data === 'object' ? (frame.data as Record<string, unknown>) : {};
+      const name = (typeof payload.type === 'string' && payload.type) || frame.event;
+      if (name === 'error') {
+        for (const key of ['error', 'detail', 'message']) {
+          const value = payload[key];
+          if (typeof value === 'string' && value.length > 0) {
+            errorMessage = value;
+            break;
+          }
+        }
+        return;
+      }
+      if (name === 'done') {
+        const donePayload =
+          payload.payload && typeof payload.payload === 'object' ? (payload.payload as Record<string, unknown>) : {};
+        const doneProvider = typeof donePayload.provider === 'string' ? donePayload.provider : provider;
+        const doneModelId = typeof donePayload.model_id === 'string' ? donePayload.model_id : modelId;
+        applied = { provider: doneProvider, modelId: doneModelId };
+      }
+    });
+
+    if (errorMessage) throw new Error(errorMessage);
+    return applied ?? { provider, modelId };
+  }
+
   // Chat (SSE)
   chatStream(
     sessionId: string,
@@ -896,6 +952,31 @@ class ApiClient {
     tool_states: Array<{ tool: string; decision: string }>;
   }> {
     return this.request('/reasoning/permission-tiers');
+  }
+
+  /** GET /api/v1/reasoning/levels — catalog of the three session thinking levels. */
+  async getThinkingLevels(): Promise<{
+    levels: Array<{ id: string; max_tokens?: number | null; temperature?: number | null; reasoning_effort?: string | null }>;
+    default: string;
+  }> {
+    return this.request('/reasoning/levels');
+  }
+
+  /** GET /api/v1/reasoning/sessions/{sessionId}/reasoning-level. */
+  async getSessionThinkingLevel(sessionId: string): Promise<{ session_id: string; level: string }> {
+    return this.request(`/reasoning/sessions/${sessionId}/reasoning-level`);
+  }
+
+  /**
+   * PUT /api/v1/reasoning/sessions/{sessionId}/reasoning-level.
+   * `level` is one of `low|medium|high`; the server persists it on the
+   * session's `context_data.reasoning_level`.
+   */
+  async updateSessionThinkingLevel(sessionId: string, level: string): Promise<{ session_id: string; level: string; updated?: boolean }> {
+    return this.request(`/reasoning/sessions/${sessionId}/reasoning-level`, {
+      method: 'PUT',
+      body: JSON.stringify({ level }),
+    });
   }
 
   // Auth

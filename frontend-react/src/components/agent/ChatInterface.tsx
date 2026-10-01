@@ -12,6 +12,8 @@ import { ThinkingIndicator } from './ThinkingIndicator';
 import { FloatingPermissionDialog } from './FloatingPermissionDialog';
 import type { PermissionRequest } from './FloatingPermissionDialog';
 import { SlashCommandMenu } from '../chat/SlashCommandMenu';
+import { ChatComposerTools } from '../chat/ChatComposerTools';
+import { useChatVisuals } from '../../hooks/useChatVisuals';
 import {
   FALLBACK_COMMANDS,
   cancelSessionTurn,
@@ -107,6 +109,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   ];
   const [input, setInput] = useState('');
   const [editState, setEditState] = useState<EditState>(null);
+  // Transcript display preferences. One hook instance per composer: the value
+  // is passed down to ChatComposerTools so both composers read the same flags.
+  const { visuals, setShowToolCalls, setShowThinking } = useChatVisuals();
   // Slash-command autocomplete state. The menu is visible while the input is
   // a "/"-prefixed token that still matches at least one registered command.
   const [slashCatalog, setSlashCatalog] = useState<SlashCommandInfo[]>(FALLBACK_COMMANDS);
@@ -396,12 +401,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     return (
       <>
         {isAwaitingFirstToken && <ThinkingIndicator compact />}
-        {msg.reasoning && (
+        {msg.reasoning && visuals.showThinking && (
           <ThinkingDetails isComplete={!isActive} defaultOpen={!msg.content}>
             {msg.reasoning}
           </ThinkingDetails>
         )}
-        {msg.toolCalls?.length ? (
+        {msg.toolCalls?.length && visuals.showToolCalls ? (
           <div className={cn(isUser ? 'my-1' : 'mb-2', 'w-full')}>
             <ToolCallVisualization
               calls={msg.toolCalls.map(toolCall => ({
@@ -584,6 +589,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         className={cn('border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] py-3', GUTTER)}
       >
         <div className={composerWidth}>
+          {/* Session-level composer controls: model, thinking level, transcript
+              display switches. One row above the input, inside the same
+              reading column as the composer. */}
+          <ChatComposerTools
+            sessionId={sessionId ?? null}
+            disabled={!!isLoading}
+            visuals={visuals}
+            setShowToolCalls={setShowToolCalls}
+            setShowThinking={setShowThinking}
+            className="mb-1.5"
+          />
           <div
             className="relative rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] transition-colors duration-150 focus-within:border-[var(--color-border-accent)] motion-reduce:transition-none"
           >
