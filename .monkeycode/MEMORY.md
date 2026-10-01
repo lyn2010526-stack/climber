@@ -192,3 +192,19 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 多个子任务必须并发执行（用户明示"并发8个子任务"级别：能拆尽拆、一次拉满并行），不要串行逐项处理。
   - 执行前先读用户的设计文档（docs/DESIGN.md 及其提供的完整资料），按文档要求与功能清单落地，做完为止。
   - 用户要求报错时完整贴出原始信息再分析；对任务要"全部拉全"，不要只问不做。
+
+[项目知识摘要]
+- Date: 2026-10-01
+- Context: Agent 在执行 iOS 风格 UI 打磨任务时发现（frontend-react 呈现契约测试）
+- Category: Troubleshooting & Debugging
+- Instructions:
+  - ui 契约测试（presentation-contract / control-restraint / overlay-empty-state）用正则扫描源码与 index.css，注释里的字面量也会命中；在 src 内写注释、文档、类名时避免出现 banned 模式原文（如 press/scale 组合的 `:scale-` 形式、backdrop-blur、gradient 等词，Skeleton.tsx 源码禁含 "gradient" 一词）。
+  - index.css 中动画若与 Tailwind v4 的 translate-*/scale-* 工具类同元素叠加，keyframes 应使用独立变换属性 `scale` / `translate` 而非 `transform`，避免 fill 状态覆盖工具类。
+   - Modal 遮罩按契约只能用 alpha 调光（scrim 类名与 innerHTML 禁含 blur/backdrop/gradient），毛玻璃效果只能进 index.css 的 .glass-panel 工具类供调用方选择。
+
+[项目知识摘要]
+- Date: 2026-10-01
+- Context: Agent 在编写 chat 图片消息测试时发现（OllamaAdapter 离线队列路径）
+- Category: Troubleshooting & Debugging
+- Instructions:
+  - app/services/ollama_queue.py 存在既有 bug：对 stdlib logger 传结构化 kwargs（`logger.info(..., request_id=..., queue_size=...)`）会在运行时抛 TypeError；写涉及离线队列的测试需 stub `app.services.ollama_queue.logger`，修复产品代码时改为 structlog 或去掉 kwargs。
