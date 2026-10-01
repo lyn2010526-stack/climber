@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.tools import ToolRegistry
+if TYPE_CHECKING:
+    from app.tools import ToolRegistry
 
 
 @dataclass
@@ -23,13 +25,24 @@ class ToolExecutionResult:
 
 
 # Validator callback: (tool_name, arguments) -> (allowed, reason)
-Validator = Callable[[str, dict[str, Any]], tuple[bool, str]]
+# `Validator` remains the sync alias so existing registrars are unaffected;
+# executors may also be given an async callable via `ValidatorLike`.
+SyncValidator = Callable[[str, dict[str, Any]], tuple[bool, str]]
+AsyncValidator = Callable[[str, dict[str, Any]], Coroutine[Any, Any, tuple[bool, str]]]
+Validator = SyncValidator
+ValidatorLike = SyncValidator | AsyncValidator
 
 
 class ParallelToolExecutor:
     """Execute multiple tool calls in parallel or sequential."""
 
-    def __init__(self, registry: ToolRegistry, timeout_per_tool: float = 30.0, validator: Validator | None = None, session: Any = None):
+    def __init__(
+        self,
+        registry: ToolRegistry,
+        timeout_per_tool: float = 30.0,
+        validator: ValidatorLike | None = None,
+        session: Any = None,
+    ):
         self._registry = registry
         self._timeout = timeout_per_tool
         self._validator = validator
@@ -72,7 +85,12 @@ class ParallelToolExecutor:
         # Pre-execution safety check
         if self._validator is not None:
             try:
-                allowed, reason = self._validator(name, arguments)
+                if inspect.iscoroutinefunction(self._validator):
+                    allowed, reason = await self._validator(name, arguments)
+                else:
+                    # Sync validators (e.g. guardrails-ai Validator.validate) must not
+                    # block the event loop, so they run in the default thread pool.
+                    allowed, reason = await asyncio.to_thread(self._validator, name, arguments)
             except Exception as e:
                 return ToolExecutionResult(tool_name=name, error=f"validator error: {e}", success=False, duration_ms=0, tool_call_id=tool_call_id)
             if not allowed:
