@@ -176,6 +176,22 @@ async def lifespan(app: FastAPI):
             logger.info("memory_relief_applied", browser_sessions_reclaimed=reclaimed)
 
         guardian.register_relief(_relieve_memory)
+
+        async def _evict_caches() -> None:
+            try:
+                from app.skills.memory_manager import persistent_memory
+
+                cleared = persistent_memory.clear()
+                logger.info("memory_relief_caches_evicted", cache="persistent_memory", entries=cleared)
+            except Exception as exc:
+                logger.warning("memory_relief_cache_evict_failed", cache="persistent_memory", error=str(exc))
+            try:
+                di_resolve("AgentEngine").tool_prioritizer.clear_caches()
+                logger.info("memory_relief_caches_evicted", cache="tool_prioritizer")
+            except Exception as exc:
+                logger.warning("memory_relief_cache_evict_failed", cache="tool_prioritizer", error=str(exc))
+
+        guardian.register_relief(_evict_caches)
         await guardian.start()
 
         try:

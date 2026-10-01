@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 import uuid
+from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
+
+_CACHE_MAX_ENTRIES = 2000
 
 
 class MemoryType(StrEnum):
@@ -30,7 +33,7 @@ class PersistentMemory:
     """Simple persistent memory store."""
 
     def __init__(self):
-        self._cache: list[MemoryEntry] = []
+        self._cache: deque[MemoryEntry] = deque(maxlen=_CACHE_MAX_ENTRIES)
 
     def store(self, content: str, memory_type: MemoryType = MemoryType.FACT, source: str = "system", **kwargs) -> MemoryEntry:
         entry = MemoryEntry(
@@ -45,7 +48,7 @@ class PersistentMemory:
         return entry
 
     def recall(self, query: str = "", limit: int = 10, memory_type: MemoryType | None = None) -> list[MemoryEntry]:
-        results = self._cache
+        results = list(self._cache)
         if memory_type:
             results = [e for e in results if e.memory_type == memory_type]
         if query:

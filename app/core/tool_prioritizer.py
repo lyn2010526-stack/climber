@@ -5,13 +5,59 @@
 from __future__ import annotations
 
 import re
-from collections import defaultdict
+from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 logger = structlog.get_logger()
+
+_MAX_CACHE_ENTRIES = 500
+
+
+class _LRUCache:
+    """OrderedDict-backed cache with a hard entry cap; oldest entries evicted first."""
+
+    def __init__(self, max_entries: int = _MAX_CACHE_ENTRIES) -> None:
+        self._entries: OrderedDict[str, Any] = OrderedDict()
+        self._max_entries = max_entries
+
+    def get_or_create(self, key: str, factory: Callable[[], Any]) -> Any:
+        if key in self._entries:
+            self._entries.move_to_end(key)
+            return self._entries[key]
+        entry = factory()
+        self._entries[key] = entry
+        self._evict_overflow()
+        return entry
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if key not in self._entries:
+            return default
+        self._entries.move_to_end(key)
+        return self._entries[key]
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        self._entries[key] = value
+        self._entries.move_to_end(key)
+        self._evict_overflow()
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._entries
+
+    def __len__(self) -> int:
+        return len(self._entries)
+
+    def clear(self) -> None:
+        self._entries.clear()
+
+    def _evict_overflow(self) -> None:
+        while len(self._entries) > self._max_entries:
+            self._entries.popitem(last=False)
 
 
 def _tokenize(text: str) -> set[str]:
@@ -47,8 +93,8 @@ class ToolPrioritizer:
     """
 
     def __init__(self) -> None:
-        self._stats: dict[str, ToolStats] = defaultdict(ToolStats)
-        self._description_cache: dict[str, str] = {}
+        self._stats: _LRUCache = _LRUCache()
+        self._description_cache: _LRUCache = _LRUCache()
 
     def rank_tools(self, task_description: str, tools: list[dict[str, Any]]) -> list[str]:
         """Return tool names sorted by descending priority."""
@@ -60,7 +106,7 @@ class ToolPrioritizer:
             if not name:
                 continue
             self._description_cache[name] = desc
-            stats = self._stats[name]
+            stats: ToolStats = self._stats.get_or_create(name, ToolStats)
             if desc:
                 stats.description_length = max(stats.description_length, len(desc))
             relevance = _jaccard(tokens, _tokenize(desc))
@@ -78,7 +124,7 @@ class ToolPrioritizer:
 
     def record_outcome(self, tool_name: str, success: bool, duration_ms: float, tokens: int = 0) -> None:
         """Update stats after a tool execution."""
-        stats = self._stats[tool_name]
+        stats: ToolStats = self._stats.get_or_create(tool_name, ToolStats)
         stats.attempts += 1
         if success:
             stats.successes += 1
@@ -87,7 +133,9 @@ class ToolPrioritizer:
 
     def get_stats(self, tool_name: str) -> dict[str, Any]:
         """Return learned stats for a tool."""
-        stats = self._stats.get(tool_name, ToolStats())
+        stats = self._stats.get(tool_name)
+        if stats is None:
+            stats = ToolStats()
         if stats.attempts > 0:
             return {
                 "attempts": stats.attempts,
@@ -95,3 +143,8 @@ class ToolPrioritizer:
                 "avg_duration_ms": stats.total_duration_ms / stats.attempts,
             }
         return {"attempts": 0, "success_rate": None, "avg_duration_ms": None}
+
+    def clear_caches(self) -> None:
+        """Drop learned stats and description caches to reclaim memory."""
+        self._stats.clear()
+        self._description_cache.clear()

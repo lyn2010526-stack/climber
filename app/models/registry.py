@@ -48,12 +48,17 @@ MODEL_ALIASES: dict[str, tuple[str, str]] = {
 }
 
 
+# Soft cap on the size of ``ModelRegistry._models``; crossing it logs a warning once.
+_MODELS_SOFT_LIMIT = 200
+
+
 class ModelRegistry:
     """In-memory registry of configured models. Later backed by database."""
 
     def __init__(self):
         self._models: dict[str, ModelAdapter] = {}
         self._user_keys: dict[str, dict[str, dict[str, str]]] = {}
+        self._size_warning_emitted = False
 
     def register_model(
         self,
@@ -169,12 +174,52 @@ class ModelRegistry:
             adapter = adapter_cls(**kwargs)
             self._models[cache_key] = adapter
 
+        if len(self._models) > _MODELS_SOFT_LIMIT and not self._size_warning_emitted:
+            self._size_warning_emitted = True
+            logger.warning(
+                "model_registry_soft_limit_exceeded",
+                count=len(self._models),
+                limit=_MODELS_SOFT_LIMIT,
+            )
+        elif len(self._models) <= _MODELS_SOFT_LIMIT:
+            self._size_warning_emitted = False
+
         logger.info(
             "Multiple keys registered",
             provider=provider,
             model=model_id,
             count=len(api_keys),
         )
+
+    def unregister_key(self, provider: str, model_id: str, idx: int | None = None) -> int:
+        """Remove adapters registered via ``register_keys`` for a provider/model.
+
+        Uses the same ``{provider}:{model_id}:key:{idx}`` cache key rule. With
+        ``idx`` a single suffixed entry is removed; with ``None`` every suffixed
+        entry for the provider/model is removed. Returns the number removed.
+        """
+        prefix = f"{provider}:{model_id}:key:"
+        if idx is not None:
+            target = f"{prefix}{idx}"
+            if self._models.pop(target, None) is None:
+                return 0
+            removed = 1
+        else:
+            stale = [key for key in self._models if key.startswith(prefix)]
+            for key in stale:
+                del self._models[key]
+            removed = len(stale)
+
+        if len(self._models) <= _MODELS_SOFT_LIMIT:
+            self._size_warning_emitted = False
+
+        logger.info(
+            "Keys unregistered",
+            provider=provider,
+            model=model_id,
+            count=removed,
+        )
+        return removed
 
     def list_models(self) -> list[dict[str, Any]]:
         """List all registered models."""
