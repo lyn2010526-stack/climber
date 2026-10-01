@@ -11,6 +11,15 @@ from pydantic import BaseModel
 
 logger = structlog.get_logger()
 
+# Inventory-only marker for native tools superseded by controlled built-ins.
+# Registration and execution remain unchanged.
+DEPRECATED_TOOL_NAMES: frozenset[str] = frozenset({
+    "native_read_file",
+    "native_write_file",
+    "native_list_dir",
+    "native_web_search",
+})
+
 
 class ToolDefinition(BaseModel):
     name: str

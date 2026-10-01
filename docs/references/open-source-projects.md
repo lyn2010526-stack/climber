@@ -64,21 +64,21 @@
 | 38 | LongMem | https://github.com/11data/longmem | 超长上下文归档、消息时序压缩 | 永久指令轨迹持久化系统（设计 1.1），指令表已落地，时序压缩算法待补 | 🔧 |
 | 39 | Recall | https://github.com/RecallWorks/Recall | 图结构时序记忆，区分会话记忆/长期记忆 | `MemoryRecord` 表已区分记忆类型，图结构关联待补 | 🔧 |
 | 40 | AutoMemory | https://github.com/autoLearnMem/AutoMem | 自动提取用户特征，弱监督更新记忆库 | `app/core/profile/loop.py` 弱监督校准（`_FeatureStats.calibration`）已落地 | ✅ |
-| 41 | Zep | https://github.com/getzep/zep | Agent 长期记忆，时序加权记忆召回 | `ProfileLoopService._weight()` 指数时序衰减已落地；记忆召回加权待接入检索链路 | 🔧 |
+| 41 | Zep | https://github.com/getzep/zep（产品文档：https://help.getzep.com；开源时序图谱：https://github.com/getzep/graphiti） | Zep 主仓库是 Zep Cloud 示例、集成与工具仓库；Community Edition 已移入 `legacy/` 并标记弃用；Graphiti 是其开源时序上下文图框架 | `ProfileLoopService._weight()` 指数时序衰减已落地；借鉴时序事实有效期、关系召回与评估 harness，接入前评估托管依赖、数据边界和 Graphiti 自托管成本 | 🔧 |
 
 ## 五、自进化｜遗传算法｜沙箱 & 权限安全（9 个）— 智能进化闭环 + 安全体系
 
 | # | 项目 | 地址 | 提炼要点 | Climber 对应模块 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| 42 | EvoGPT | https://github.com/evo-gpt/EvoGPT | 提示词遗传进化，种群交叉变异、适应度评估 | 多目标遗传进化算法（设计 4.3.1，阶段 3），尚未开始 | 📋 |
-| 43 | PromptEvolver (EvoPrompt) | https://github.com/beeevita/EvoPrompt | 提示策略自动迭代优化 | 同上，`app/core/prompts/registry.py` 当前仅做版本化管理，无自动进化 | 📋 |
-| 44 | PyEvolution | https://github.com/PyEvolution/PyEvolution | 遗传算法底层算子，规则/拓扑进化 | 神经网络拓扑变异/交叉算法（设计 4.3.2，阶段 4） | 📋 |
-| 45 | E2B-Sandbox | https://github.com/e2b-dev/E2B | AI Agent 隔离微 VM 沙箱环境 | `app/core/sandbox.py`（子进程级隔离，非微 VM；资源限制/命令黑名单已实现） | 🔧 |
-| 46 | OpenSandbox（阿里） | https://github.com/alibaba/OpenSandbox | 通用 AI 沙箱、分级权限执行 | 三级权限 + 沙箱联动（`permission_rules.py` + `sandbox.py`），分级权限已落地但未与沙箱执行器直接绑定 | 🔧 |
-| 47 | Guardrails-AI | https://github.com/guardrails-ai/guardrails | LLM 输入输出校验、约束违规行为 | `app/core/collaboration/guardrails.py`（群协作输出校验已实现，非通用 LLM I/O 校验） | 🔧 |
-| 48 | HyperAgents (Meta) | https://github.com/facebookresearch/HyperAgents | Meta-Agent 打补丁自我迭代进化 | `app/core/metacognition/self_refactor.py`（Skill 自我精简/合并已实现原型） | 🔧 |
-| 49 | NeMo-Guardrails | https://github.com/NVIDIA/NeMo-Guardrails | 英伟达安全护栏，对话流管控 | 对话流级安全护栏，当前仅群协作场景覆盖（同 #47），通用对话流待补 | 📋 |
-| 50 | Rebuff（仓库已归档，仅学习参考） | https://github.com/protectai/rebuff | 提示注入检测 | 提示注入检测，尚未落地（可并入 `guardrails.py` 扩展） | 📋 |
+| 42 | EvoGPT | https://github.com/evo-gpt/EvoGPT（本次访问返回 404，真实地址未核实） | 原索引描述为提示词遗传进化；官方仓库身份、许可证、能力和维护状态均未核实 | 仅保留待确认线索；获得可信地址和许可证证据后再评估交叉、变异、适应度接口 | 📋 |
+| 43 | PromptEvolver (EvoPrompt) | https://github.com/beeevita/EvoPrompt | 官方 README 将其标为 ICLR 2024 论文实现，代码展示 GA/DE 提示词种群初始化、演化、评估与更新；仓库可访问，当前维护强度未核实 | 作为阶段 3 实验参考：抽象 population/evaluator/selection 契约，隔离其数据集、配置和密钥 | 📋 |
+| 44 | PyEvolution | https://github.com/PyEvolution/PyEvolution（本次访问返回 404，真实地址未核实） | 原索引描述为遗传算法底层算子；官方仓库身份、许可证、能力和维护状态均未核实 | 暂不作为依赖；获得可信地址、许可证和 API 证据后再评估拓扑变异/交叉借鉴 | 📋 |
+| 45 | E2B-Sandbox | https://github.com/e2b-dev/E2B | 官方 README 定位为云端隔离沙箱基础设施，提供 JavaScript/Python SDK、命令执行、Code Interpreter 和 Desktop 能力；仓库可访问，维护状态未核实 | `app/core/sandbox.py` 仍是子进程级隔离，保留与 E2B 微 VM/云端边界的能力差异；暂不引入依赖 | 🔧 |
+| 46 | OpenSandbox | https://github.com/opensandbox-group/OpenSandbox | 官方 README 提供 Docker 本地启动、Kubernetes 部署、统一生命周期 API、命令/文件/浏览器执行、出口策略和 Credential Vault；仓库可访问，维护状态未核实 | 三级权限 + 沙箱联动（`permission_rules.py` + `sandbox.py`），仅借鉴生命周期、出口策略和凭据隔离契约 | 🔧 |
+| 47 | Guardrails-AI | https://github.com/guardrails-ai/guardrails | 官方 README 提供 Input/Output Guards、Hub validators 和结构化数据生成；仓库可访问，维护状态未核实 | `app/core/collaboration/guardrails.py` 继续限定为群协作输出校验，暂不扩展为通用 LLM I/O 层 | 🔧 |
+| 48 | HyperAgents (Meta) | https://github.com/facebookresearch/HyperAgents | 官方 README 定位为可自我改进的 Agent，并明确警告执行不可信模型生成代码；仓库可访问，维护状态未核实 | `app/core/metacognition/self_refactor.py` 保留 Skill 自我精简/合并原型；实验必须隔离并审计 | 🔧 |
+| 49 | NeMo-Guardrails | https://github.com/NVIDIA-NeMo/Guardrails | 官方 README 明确支持 input、dialog、retrieval、execution、output 五类 rails；仓库可访问，develop 为开发线，最新发布版本以官方页面为准 | 以 rail 分层作为设计参考；Climber 当前仅覆盖群协作校验，通用对话流和工具执行层待评估 | 📋 |
+| 50 | Rebuff（仓库已归档，仅学习参考） | https://github.com/protectai/rebuff | GitHub 明确标记仓库于 2025-05-16 归档且只读；README 描述启发式、LLM、向量库和 canary 四层提示注入检测；能力仅作历史参考 | 借鉴分层检测和 canary 概念，不引入代码或依赖；提示注入检测仍待并入 `guardrails.py` | 📋 |
 
 ## 使用指引（设计文档原文）
 
@@ -111,6 +111,6 @@
 ## 阶段路线对照（设计文档第八节）
 
 - **阶段 1 基座工程**：上表 ✅/🔧 项 + 迁移链修复 + 死代码清理 ← 当前进行中
-- **阶段 2 画像算法**：时序加权衰减 ✅、弱监督校准 ✅、特征嵌入降维 ✅（`embed_event`）、增量在线聚类 ✅（`OnlineKMeans`）算法本体均已在 `app/core/profile/loop.py` 落地；**仍缺持久化层与业务调用链接入**（无数据库表、无 API、无 engine 调用点）
-- **阶段 3 遗传进化过渡**：提示词 & 参数种群进化（`app/core/prompts/` + 评估器），参考 EvoGPT/EvoPrompt/PyEvolution，尚未开始
+- **阶段 2 画像算法**：时序加权衰减 ✅、弱监督校准 ✅、特征嵌入降维 ✅（`embed_event`）、增量在线聚类 ✅（`OnlineKMeans`）算法本体均已在 `app/core/profile/loop.py` 落地；画像数据的跨会话持久化与业务调用链已具备项目级承载，后续工作聚焦画像算法输出接入意图理解、检索排序和回归评估闭环
+- **阶段 3 遗传进化过渡**：提示词 & 参数种群进化（`app/core/prompts/` + 评估器），当前仅以已核实的 EvoPrompt 作为实验参考；EvoGPT 与 PyEvolution 地址未核实，尚未开始
 - **阶段 4 agi-core**：世界模型 + 因果挖掘 + 神经进化（`ReasonWorld`/`SocraticAgents`/`CausalGraphGen`/`PyMC` 等结构参考），`app/core/metacognition/` 已有 causal/hypothesis/monitor 原型，尚未组成完整世界模型闭环
