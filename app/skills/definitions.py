@@ -41,7 +41,9 @@ BUILTIN_SKILLS = [
 - Cross-reference at least 2 independent sources
 - Rate confidence: HIGH / MEDIUM / LOW
 - Distinguish facts from opinions
-- Flag outdated or unverifiable claims""",
+- Flag outdated or unverifiable claims
+- When strong sources disagree, report the minority position with its evidence
+- Separate what a source states from what you infer; label every inference""",
         tools=["web_search", "fetch_url", "wikipedia_summary"],
         tags=["research", "deep", "synthesis"],
     ),
@@ -57,7 +59,9 @@ BUILTIN_SKILLS = [
 - Map dependencies (DAG, no cycles)
 - Identify parallelization opportunities
 - Set milestones at 25/50/75/100%
-- Estimate effort (S/M/L) for each task""",
+- Estimate effort (S/M/L) for each task
+- Attach a confidence rating to every estimate and name the assumption it rests on
+- Keep rejected decompositions visible with the reason each was rejected""",
         tags=["planning", "milestones", "project-management"],
     ),
     SkillInfo(
@@ -72,7 +76,9 @@ BUILTIN_SKILLS = [
 - Test changes one variable at a time
 - Measure before/after to validate improvements
 - Keep a changelog of adaptations
-- Never remove safety constraints during self-modification""",
+- Never remove safety constraints during self-modification
+- Score improvement on a continuous before/after scale, never as bare success/failure
+- For each hypothesis, state the evidence that would falsify it""",
         tags=["evolution", "adaptation", "meta-learning"],
     ),
     SkillInfo(
@@ -87,7 +93,9 @@ BUILTIN_SKILLS = [
 - Log decisions and their rationale
 - Capture lessons from errors
 - Recall relevant context before responding
-- Consolidate and prune outdated memories""",
+- Consolidate and prune outdated memories
+- Record a confidence level with every stored fact and mark guesses as unverified
+- Keep conflicting memories side by side instead of silently overwriting one""",
         tags=["memory", "persistence", "context"],
     ),
     SkillInfo(
@@ -102,7 +110,9 @@ BUILTIN_SKILLS = [
 - Accessibility: semantic HTML, ARIA, keyboard navigation, contrast
 - Performance: code splitting, lazy loading, memoization
 - State management: local vs server state, proper caching
-- Error boundaries, loading states, retry mechanisms""",
+- Error boundaries, loading states, retry mechanisms
+- State your confidence in layout and state choices; name the constraint each assumes
+- When two designs both work, keep the rejected one's trade-off visible""",
         tools=["read_file", "write_file", "run_command"],
         tags=["frontend", "react", "ui", "css"],
     ),
@@ -118,7 +128,9 @@ BUILTIN_SKILLS = [
 - Error handling: domain exceptions, global handler middleware
 - Data layer: repository pattern, migrations, indexing
 - Security: authN/authZ, rate limiting, CORS, injection prevention
-- Observability: structured logging, metrics, tracing""",
+- Observability: structured logging, metrics, tracing
+- Flag uncertain designs (races, consistency, idempotency) with a confidence level
+- Report endpoints as implemented / tested / verified, never a bare done""",
         tools=["read_file", "write_file", "run_command"],
         tags=["backend", "api", "security", "database"],
     ),
@@ -134,7 +146,9 @@ BUILTIN_SKILLS = [
 - Query optimization: EXPLAIN ANALYZE, no SELECT *, proper JOINs
 - Migrations: backward-compatible, idempotent, rollback plan
 - Security: least privilege, encrypted sensitive columns, parameterized queries
-- Scalability: read replicas, partitioning, archival strategy""",
+- Scalability: read replicas, partitioning, archival strategy
+- Base performance claims on measured plans; label unverified estimates with confidence
+- Keep rejected schema options and their trade-offs visible for future migrations""",
         tools=["read_file", "write_file", "run_command"],
         tags=["database", "sql", "optimization", "scaling"],
     ),
@@ -150,7 +164,9 @@ BUILTIN_SKILLS = [
 - K8s: resource limits, HPA, probes, ConfigMaps/Secrets
 - CI/CD: lint→test→build→deploy, automated rollback
 - Observability: centralized logging, metrics, alerting
-- Security: image scanning, secret management, network policies""",
+- Security: image scanning, secret management, network policies
+- Treat untested pipeline changes as low confidence; say what was verified vs assumed
+- Name the rollback path before declaring a deploy complete""",
         tools=["read_file", "write_file", "run_command"],
         tags=["devops", "docker", "kubernetes", "ci-cd"],
     ),
@@ -166,7 +182,9 @@ BUILTIN_SKILLS = [
 - PR quality: clear description, linked issues, test evidence
 - Conflict resolution: understand both sides, preserve intent
 - Never force push to shared branches
-- Atomic commits: one logical change per commit""",
+- Atomic commits: one logical change per commit
+- In conflicts, surface the losing side's intent in the commit message or PR
+- Grade merge confidence (clean / risky / needs human) instead of a binary claim""",
         tools=["run_command"],
         tags=["git", "version-control", "workflow"],
     ),
@@ -184,7 +202,10 @@ BUILTIN_SKILLS = [
 4. **Maintainability** — SRP, clarity, naming, testability?
 5. **Style** — Formatting, types, docs, dead code?
 
-For each issue: [SEVERITY] [DIMENSION] Description + fix""",
+For each issue: [CONFIDENCE 0.0-1.0] [SEVERITY 1-5] [DIMENSION] Description + fix
+- Rate severity on a continuous scale; never compress findings into pass/fail
+- Mark inferred issues as inferred; keep proven and speculative findings apart
+- If a rejected concern is debatable, record the objection with its reasoning""",
         tools=["read_file"],
         tags=["review", "quality", "security"],
     ),
@@ -208,7 +229,10 @@ A10: SSRF
 
 Plus: secrets in code, insecure deserialization, path traversal, rate limiting.
 
-For each finding: [SEVERITY] OWASP category, impact, remediation code""",
+For each finding: [SEVERITY] OWASP category, likelihood 0.0-1.0, evidence
+strength (proven / suspected / theoretical), impact, remediation code
+- Keep low-likelihood findings visible with their conditions; never drop them
+- Say explicitly when a potential issue is unverified and needs runtime access""",
         tools=["read_file"],
         tags=["security", "audit", "owasp"],
     ),
@@ -231,7 +255,10 @@ Rules:
 - Coverage target: >80% for critical paths
 - Naming: test_<unit>_<scenario>_<expected>
 
-Each deliverable: test suite + implementation + coverage""",
+Each deliverable: test suite + implementation + coverage
+- Report coverage as the measured number; below target, name the untested paths
+- When a test passes suspiciously easily, lower confidence and hunt the missing
+  edge case before moving on""",
         tools=["read_file", "write_file", "run_command"],
         tags=["tdd", "testing", "quality"],
     ),
@@ -253,7 +280,11 @@ Methodology:
 Common categories: SyntaxError, TypeError, IndexError, AttributeError,
 ImportError, ValueError, LogicError (hardest — runs but wrong output)
 
-Output: root cause + fix + prevention test""",
+Output: root cause + fix + prevention test
+- Attach a confidence level to each root-cause claim; a fix that removes the
+  symptom with the cause unproven stays low confidence
+- List discarded hypotheses with their evidence; they rule out bug classes
+- State what remains unexplained instead of closing the bug on a passing test""",
         tools=["read_file", "write_file", "run_command"],
         tags=["debugging", "troubleshooting", "root-cause"],
     ),
@@ -269,7 +300,9 @@ Output: root cause + fix + prevention test""",
 - Distinguish correlation from causation
 - State assumptions explicitly
 - Recommend appropriate visualizations
-- Provide actionable insights, not just descriptions""",
+- Provide actionable insights, not just descriptions
+- Quantify uncertainty (sample size, variance, confidence) with every insight
+- Present minority patterns and outliers as findings, never wash them into averages""",
         tools=["calculator", "json_get", "read_file"],
         tags=["data", "statistics", "visualization"],
     ),
@@ -286,7 +319,9 @@ Output: root cause + fix + prevention test""",
 - Compare alternatives objectively
 - Distinguish stable features from experimental
 - Provide concrete code examples
-- Cite sources with URLs""",
+- Cite sources with URLs
+- Score alternatives on explicit criteria; keep the losing option's advantages visible
+- Mark version-specific or soon-to-change advice with a confidence level""",
         tools=["web_search", "fetch_url"],
         tags=["research", "technology", "comparison"],
     ),
@@ -305,7 +340,10 @@ Output: root cause + fix + prevention test""",
 - Table of contents for long documents
 - Audience-aware (beginner vs expert)
 
-Templates: technical design, API docs, README, runbook, postmortem""",
+Templates: technical design, API docs, README, runbook, postmortem
+- Flag behavior inferred from code as inferred, with the file and line that proves it
+- Where behavior is uncertain, write the uncertainty into the doc instead of a
+  confident wrong statement""",
         tools=["read_file", "write_file"],
         tags=["documentation", "writing", "templates"],
     ),
@@ -321,7 +359,9 @@ Templates: technical design, API docs, README, runbook, postmortem""",
 - Deduplicate overlapping content
 - Filter low-value content (boilerplate, indexes)
 - Normalize encoding and whitespace
-- Build search index with keyword + semantic tags""",
+- Build search index with keyword + semantic tags
+- Preserve conflicting passages with their metadata; dedupe near-identical text only
+- Keep per-chunk confidence so retrieval can weigh evidence quality""",
         tools=["read_file", "write_file"],
         tags=["rag", "knowledge-base", "indexing"],
     ),
@@ -338,7 +378,10 @@ Templates: technical design, API docs, README, runbook, postmortem""",
 - Apply 5 Whys for root cause
 - Define immediate fix + long-term prevention
 - Create action items with owners and deadlines
-- Update runbooks to prevent recurrence""",
+- Update runbooks to prevent recurrence
+- Rank competing root-cause hypotheses with likelihoods; keep minority hypotheses
+  on the record until evidence closes them
+- Mark timeline entries as confirmed or inferred; name the evidence for each link""",
         tools=["read_file", "run_command"],
         tags=["incident", "postmortem", "root-cause"],
     ),
@@ -354,7 +397,10 @@ Templates: technical design, API docs, README, runbook, postmortem""",
 - Assess freshness and maintenance status
 - Verify license compatibility
 - Identify unused or redundant packages
-- Recommend upgrades, replacements, removals""",
+- Recommend upgrades, replacements, removals
+- Express each risk as likelihood times impact, with the advisory ID or repro cited
+- Keep flagged-but-disputed advisories visible with your confidence instead of
+  silently dismissing them""",
         tools=["read_file", "run_command"],
         tags=["dependencies", "security", "audit"],
     ),

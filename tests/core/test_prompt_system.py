@@ -1,7 +1,5 @@
 """Contract tests for the versioned built-in prompt layer."""
 
-import pytest
-
 from app.core.prompts import (
     PromptVersionError,
     build_injected_prompt,
@@ -13,15 +11,16 @@ from app.core.prompts import (
 
 def test_active_version_is_selected_and_versions_include_history():
     prompt = resolve_active_prompt("core.system")
-    assert prompt.version == "1.0.0"
+    assert prompt.version == "1.1.0"
     versions = list_versions("core.system")
-    assert {item["version"] for item in versions} == {"1.0.0", "0.9.0"}
+    assert {item["version"] for item in versions} == {"1.1.0", "1.0.0", "0.9.0"}
     assert any(item["status"] == "deprecated" for item in versions)
 
 
-def test_deprecated_version_is_rejected_for_rollback_until_promoted():
-    with pytest.raises(PromptVersionError, match="deprecated"):
-        resolve_active_prompt("core.system", "0.9.0")
+def test_deprecated_version_can_be_resolved_for_rollback():
+    prompt = resolve_active_prompt("core.system", "0.9.0")
+    assert prompt.version == "0.9.0"
+    assert prompt.status.value == "deprecated"
 
 
 def test_injection_contains_every_mandatory_core_section_and_hides_chain_of_thought():
@@ -32,6 +31,20 @@ def test_injection_contains_every_mandatory_core_section_and_hides_chain_of_thou
     assert "chain-of-thought" in prompt
     assert "private scratch work" in prompt
     assert "system_prompt" not in bundle["metadata"]
+
+
+def test_core_contract_has_six_sections_and_no_hidden_reasoning_request():
+    prompt = resolve_active_prompt("core.system")
+    assert prompt.sections == (
+        "ROLE_AND_SCOPE",
+        "TASK_WORKFLOW",
+        "TOOL_CONTRACT",
+        "PROGRESS_REPORTING",
+        "VALIDATION_AND_RECOVERY",
+        "SAFE_OUTPUT",
+    )
+    assert "reveal hidden chain-of-thought" in prompt.body
+    assert "private scratch work" in prompt.body
 
 
 def test_tool_contract_validation_reports_missing_and_wrong_contract():

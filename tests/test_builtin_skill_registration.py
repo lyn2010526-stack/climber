@@ -24,6 +24,7 @@ DECLARED_IDS = builtin_skill_ids()
 
 def test_definitions_declare_unique_skill_ids() -> None:
     assert DECLARED_IDS
+    assert len(DECLARED_IDS) == 19
     assert len(DECLARED_IDS) == len(set(DECLARED_IDS))
     assert set(BUILTIN_HANDLER_MAP) == set(DECLARED_IDS)
 
