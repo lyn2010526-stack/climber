@@ -889,6 +889,15 @@ class ApiClient {
     });
   }
 
+  /** GET /api/v1/reasoning/permission-tiers. Admin-gated three-tier view. */
+  async getPermissionTiers(): Promise<{
+    tiers: Array<{ id: string; mode: string }>;
+    current: { mode: string | null; tier: string | null };
+    tool_states: Array<{ tool: string; decision: string }>;
+  }> {
+    return this.request('/reasoning/permission-tiers');
+  }
+
   // Auth
   async login(username: string, password: string) {
     const response = await fetch(`${BASE_URL}/auth/login`, {

@@ -271,12 +271,23 @@ async def test_factory_run_streams_agent_output(client, monkeypatch: pytest.Monk
 
 
 async def test_factory_retries_failed_step(client, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Transient failures on read-only steps retry (and emit task_retry).
+
+    The retry exemption for side-effect tools (write_file, run_command, ...)
+    is a separate safety contract — see
+    ``tests/isolated/test_review6_task_recovery.py::test_factory_side_effect_step_is_not_retried``.
+    This test therefore exercises the retry path with a read-only tool.
+    """
     attempts = 0
 
     async def _flaky_handler(payload, on_progress):
         nonlocal attempts
         attempts += 1
-        if payload["objective"] == "recover this" and attempts == 2:
+        # Call order: planner call, then one call per fallback-plan step
+        # ("Inspect..." for code_reviewer, then the execution step whose
+        # objective is the goal itself). Fail the execution step exactly once;
+        # later retries succeed, proving the step recovered.
+        if payload["objective"] == "recover this" and attempts in (2, 3):
             raise RuntimeError("temporary model failure")
         return {"output": "recovered"}
 
@@ -293,7 +304,7 @@ async def test_factory_retries_failed_step(client, monkeypatch: pytest.MonkeyPat
             "api_key": "test-key",
             "base_url": None,
             "system_prompt": "test",
-            "tools": ["run_command"],
+            "tools": ["read_file"],
             "factory_skills": data.get("skills", []),
             "max_steps": 10,
         }
@@ -302,7 +313,7 @@ async def test_factory_retries_failed_step(client, monkeypatch: pytest.MonkeyPat
     monkeypatch.setitem(task_manager._handlers, "agent_run", _flaky_handler)
     resp = await client.post(
         "/api/v1/skills/autonomous/run",
-        json={"goal": "recover this", "skills": ["code_executor"]},
+        json={"goal": "recover this", "skills": ["code_reviewer"]},
     )
     assert resp.status_code == 200
     assert '"type": "task_retry"' in resp.text

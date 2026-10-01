@@ -620,6 +620,17 @@ function SecuritySection() {
   const [pwdError, setPwdError] = useState<string | null>(null);
   const [pwdOk, setPwdOk] = useState(false);
 
+  // Backend modes mapped to the three plain-language levels: plan = read-only,
+  // default = partial modification, auto = full access.
+  const PERMISSION_LEVELS = [
+    { mode: 'plan', labelKey: 'permission_level_readonly', descKey: 'permission_level_readonly_desc' },
+    { mode: 'default', labelKey: 'permission_level_partial', descKey: 'permission_level_partial_desc' },
+    { mode: 'auto', labelKey: 'permission_level_full', descKey: 'permission_level_full_desc' },
+  ] as const;
+  const [permMode, setPermMode] = useState<string | null>(null);
+  const [permSaving, setPermSaving] = useState<string | null>(null);
+  const [permError, setPermError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -631,9 +642,24 @@ function SecuritySection() {
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+    try {
+      const perm = await api.getPermissionTiers();
+      // `tier` is the backend-normalized three-tier id; fall back to mapping
+      // the raw mode for older backends that only expose `mode`.
+      const tier = perm?.current?.tier;
+      const mode = perm?.current?.mode;
+      const modeToLevel: Record<string, string> = {
+        plan: 'plan', strict: 'plan',
+        default: 'default', acceptEdits: 'default',
+        auto: 'auto', bypass: 'auto',
+      };
+      setPermMode(tier ? ({ read_only: 'plan', partial: 'default', full: 'auto' } as const)[tier] ?? null
+        : modeToLevel[mode ?? ''] ?? null);
+    } catch {
+      // A non-admin account cannot read the policy; the selector stays hidden.
+      setPermMode(null);
+    }
+  }, []);  useEffect(() => { load(); }, [load]);
 
   const handleChangePassword = async () => {
     if (pwdSaving) return;
@@ -657,6 +683,20 @@ function SecuritySection() {
       setPwdError(e instanceof Error ? e.message : '修改密码失败');
     } finally {
       setPwdSaving(false);
+    }
+  };
+
+  const handlePermissionChange = async (mode: string) => {
+    if (permSaving) return;
+    setPermSaving(mode);
+    setPermError(null);
+    try {
+      await api.updatePermissionConfig({ mode });
+      setPermMode(mode);
+    } catch (e) {
+      setPermError(e instanceof Error ? e.message : '权限等级更新失败');
+    } finally {
+      setPermSaving(null);
     }
   };
 
@@ -707,6 +747,45 @@ function SecuritySection() {
           </Badge>
         </div>
       </SectionCard>
+
+      {permMode !== null && (
+        <SectionCard title={t('settings.permission_mode')} description={t('settings.permission_mode_desc')}>
+          <div className="space-y-2">
+            {PERMISSION_LEVELS.map((level) => {
+              const selected = permMode === level.mode;
+              const busy = permSaving === level.mode;
+              return (
+                <button
+                  key={level.mode}
+                  type="button"
+                  disabled={permSaving !== null}
+                  onClick={() => { void handlePermissionChange(level.mode); }}
+                  aria-pressed={selected}
+                  className={cn(
+                    'w-full text-left p-3 rounded-xl border transition-colors',
+                    selected
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary-subtle,var(--color-bg-surface-2))]'
+                      : 'border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-surface-2)]',
+                    permSaving !== null && !busy && 'opacity-60'
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <Shield size={16} className={selected ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'} />
+                    <span className="text-sm font-medium text-[var(--color-text-primary)]">
+                      {t(`settings.${level.labelKey}`)}
+                    </span>
+                    {selected && <Badge variant="success" className="ml-auto">✓</Badge>}
+                  </div>
+                  <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                    {t(`settings.${level.descKey}`)}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+          {permError && <p role="alert" className="text-xs text-[var(--color-error)] mt-2">{permError}</p>}
+        </SectionCard>
+      )}
 
       <SectionCard title="修改密码" description="定期更换密码以保障账户安全">
         {!showPwdForm ? (

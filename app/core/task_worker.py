@@ -414,7 +414,10 @@ class TaskManager:
             except Exception as exc:
                 error = f"Task execution failed ({type(exc).__name__}); manual review required before resubmission"
                 logger.error("task_failed", task_id=task_id, error=error)
-                await self._retry_or_fail(task_id, task_type, owner_id, payload, handler, error, exc)
+                await self._retry_or_fail(
+                    task_id, task_type, owner_id, payload, handler, error, exc,
+                    resolve_credentials=resolve_credentials,
+                )
 
     async def _retry_or_fail(
         self,
@@ -425,6 +428,8 @@ class TaskManager:
         handler: Callable[..., Coroutine],
         error: str,
         exc: Exception,
+        *,
+        resolve_credentials: bool = False,
     ) -> None:
         """Retry a failed task run before marking it failed.
 
@@ -484,6 +489,22 @@ class TaskManager:
         for cb in self._progress_callbacks:
             with suppress(Exception):
                 await cb(task_id, data)
+
+
+# Tools that leave durable traces (files, emails, money, remote state). A step
+# whose payload requests any of them has already *acted* once it ran — rerunning
+# the whole step would repeat the side effect (double-write, double-send), so
+# task-level retries must never apply to it. Read-only steps stay retryable.
+_SIDE_EFFECT_TOOLS = frozenset({
+    "write_file", "edit_file", "append_file", "file_delete",
+    "run_command", "http_request", "web_search", "fetch", "post_message",
+})
+
+
+def _step_has_side_effects(step_payload: dict[str, Any]) -> bool:
+    """True when the step's tool list touches any durable-action tool."""
+    tools = step_payload.get("tools") or []
+    return any(str(tool) in _SIDE_EFFECT_TOOLS for tool in tools)
 
 
 def _check_objective(objective: str) -> dict[str, Any]:
@@ -753,7 +774,10 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
 
         # A failed step is retried before the run gives up: transient model/tool
         # errors are common, and each retry is announced so the UI can show the
-        # step as retrying rather than silently dead.
+        # step as retrying rather than silently dead. Steps whose tools have
+        # durable side effects are exempt — the step already acted, so a retry
+        # would repeat real-world actions (see review6 regression contract).
+        _retryable = not _step_has_side_effects(step_payload)
         last_error: Exception | None = None
         for attempt in range(1, task_manager.max_task_retries + 2):
             try:
@@ -771,6 +795,10 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
                 raise
             except Exception as exc:
                 last_error = exc
+                if not _retryable:
+                    # The step already acted on the world; rerunning it would
+                    # repeat the side effect. Give up on this step immediately.
+                    break
                 if attempt <= task_manager.max_task_retries:
                     await task_manager.emit_event(task_id, "task_retry", {
                         "task_id": step_id,
@@ -779,6 +807,8 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
                         "error": str(exc),
                     })
                     await asyncio.sleep(0.5)
+                else:
+                    break
         if last_error is not None:
             error = f"Step execution failed ({type(last_error).__name__})"
             await task_manager.emit_event(task_id, "task_failed", {

@@ -549,5 +549,21 @@
       "empty_tools": "Aucune activité d'outil",
       "empty_tools_hint": "Les appels d'outils de cette exécution apparaîtront ici."
     }
+  },
+  "slash": {
+    "menu_label": "Commandes slash",
+    "menu_title": "Commandes",
+    "hint": "↑↓ naviguer · Tab compléter · Échap fermer",
+    "unknown_command": "Commande inconnue — Entrée enverra le texte tel quel à l'agent",
+    "commands": {
+      "help": "Affiche les commandes slash disponibles et leur usage.",
+      "model": "Affiche ou change le modèle de la session (fournisseur:model_id).",
+      "level": "Affiche ou définit le niveau de raisonnement (auto, tree, deep, debate).",
+      "clear": "Efface tous les messages de la session en cours.",
+      "retry": "Relance le dernier message utilisateur comme un nouveau tour.",
+      "stop": "Interrompt le tour en cours d'exécution.",
+      "status": "Affiche l'état de la session, le modèle, les itérations et les tokens."
+    }
   }
 }
+

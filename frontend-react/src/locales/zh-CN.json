@@ -371,6 +371,15 @@
     "appearance": "外观",
     "notifications": "通知",
     "security": "安全",
+    "permission_mode": "Agent 权限等级",
+    "permission_mode_desc": "控制 Agent 能对你的电脑做什么",
+    "permission_mode_updated": "权限等级已更新",
+    "permission_level_readonly": "仅访问不修改",
+    "permission_level_readonly_desc": "Agent 只能看文件和搜索内容，不会改动任何东西",
+    "permission_level_partial": "部分修改",
+    "permission_level_partial_desc": "Agent 可以读写文件，但高危操作会先征求你的同意",
+    "permission_level_full": "允许完全访问且修改",
+    "permission_level_full_desc": "Agent 可以自主执行所有操作，只有极端危险命令才会询问你",
     "privacy": "隐私",
     "integrations": "集成",
     "advanced": "高级",
@@ -549,5 +558,21 @@
       "empty_tools": "暂无工具活动",
       "empty_tools_hint": "本次运行的工具调用会显示在这里。"
     }
+  },
+  "slash": {
+    "menu_label": "斜杠命令",
+    "menu_title": "命令",
+    "hint": "↑↓ 选择 · Tab 补全 · Esc 关闭",
+    "unknown_command": "未知命令 — 按回车将原样发送给智能体",
+    "commands": {
+      "help": "显示可用的斜杠命令与用法。",
+      "model": "查看或切换会话模型（provider:model_id）。",
+      "level": "查看或设置推理等级（auto、tree、deep、debate）。",
+      "clear": "清空当前会话的全部消息。",
+      "retry": "将上一条用户消息作为全新一轮重新发送。",
+      "stop": "中断当前正在运行的回合。",
+      "status": "显示会话状态、模型、迭代与令牌计数。"
+    }
   }
 }
+

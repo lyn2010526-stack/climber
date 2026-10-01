@@ -549,5 +549,21 @@
       "empty_tools": "Keine Werkzeugaktivität",
       "empty_tools_hint": "Werkzeugaufrufe dieses Laufs erscheinen hier."
     }
+  },
+  "slash": {
+    "menu_label": "Schrägstrich-Befehle",
+    "menu_title": "Befehle",
+    "hint": "↑↓ auswählen · Tab vervollständigen · Esc schließen",
+    "unknown_command": "Unbekannter Befehl — Enter sendet ihn unverändert an den Agenten",
+    "commands": {
+      "help": "Zeigt verfügbare Schrägstrich-Befehle und ihre Nutzung.",
+      "model": "Zeigt oder wechselt das Sitzungsmodell (provider:model_id).",
+      "level": "Zeigt oder setzt die Reasoning-Stufe (auto, tree, deep, debate).",
+      "clear": "Löscht alle Nachrichten der aktuellen Sitzung.",
+      "retry": "Führt die letzte Benutzernachricht als neuen Durchlauf erneut aus.",
+      "stop": "Bricht den laufenden Durchlauf ab.",
+      "status": "Zeigt Sitzungsstatus, Modell, Iterationen und Token-Zähler."
+    }
   }
 }
+

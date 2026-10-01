@@ -15,10 +15,12 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.v1.routes.agents import router as agents_router
+from app.api.v1.routes.chat_commands import router as chat_commands_router
 from app.api.v1.routes.crews import router as crews_router
 from app.api.v1.routes.groups import router as groups_router
 from app.api.v1.routes.integrations import router as integrations_router
 from app.api.v1.routes.misc import router as misc_router
+from app.api.v1.routes.reasoning import router as reasoning_router
 from app.api.v1.routes.skills import router as skills_router
 from app.api.v1.routes.tasks import router as tasks_router
 from app.api.v1.routes.websocket import websocket_router
@@ -34,6 +36,9 @@ router.include_router(groups_router)
 router.include_router(tasks_router)
 router.include_router(misc_router)
 router.include_router(integrations_router)
+router.include_router(reasoning_router)
+# Chat slash commands: parse/execute/interrupt/retry for the session chat.
+router.include_router(chat_commands_router)
 
 # Expose WebSocket routes directly (not via include_router) so they appear as
 # concrete APIWebSocketRoute entries on this router for runtime inspection.

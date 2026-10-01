@@ -549,5 +549,21 @@
       "empty_tools": "Sin actividad de herramientas",
       "empty_tools_hint": "Las llamadas a herramientas de esta ejecución aparecerán aquí."
     }
+  },
+  "slash": {
+    "menu_label": "Comandos de barra",
+    "menu_title": "Comandos",
+    "hint": "↑↓ navegar · Tab completar · Esc cerrar",
+    "unknown_command": "Comando desconocido — Enter lo envía al agente tal cual",
+    "commands": {
+      "help": "Muestra los comandos de barra disponibles y su uso.",
+      "model": "Muestra o cambia el modelo de la sesión (proveedor:modelo).",
+      "level": "Muestra o define el nivel de razonamiento (auto, tree, deep, debate).",
+      "clear": "Borra todos los mensajes de la sesión actual.",
+      "retry": "Reejecuta el último mensaje del usuario como un turno nuevo.",
+      "stop": "Interrumpe el turno en curso.",
+      "status": "Muestra estado de la sesión, modelo, iteraciones y tokens."
+    }
   }
 }
+

@@ -370,6 +370,15 @@
     "appearance": "Appearance",
     "notifications": "Notifications",
     "security": "Security",
+    "permission_mode": "Agent Permission Level",
+    "permission_mode_desc": "Controls what the Agent is allowed to do on your machine",
+    "permission_mode_updated": "Permission level updated",
+    "permission_level_readonly": "Read-only access",
+    "permission_level_readonly_desc": "The Agent can view files and search, but changes nothing",
+    "permission_level_partial": "Partial modification",
+    "permission_level_partial_desc": "The Agent can read and write files, but asks before risky operations",
+    "permission_level_full": "Full access and modification",
+    "permission_level_full_desc": "The Agent acts on its own; only extremely dangerous commands require confirmation",
     "privacy": "Privacy",
     "integrations": "Integrations",
     "advanced": "Advanced",
@@ -561,5 +570,21 @@
       "empty_tools": "No tool activity",
       "empty_tools_hint": "Tool calls this run makes will show up here."
     }
+  },
+  "slash": {
+    "menu_label": "Slash commands",
+    "menu_title": "Commands",
+    "hint": "↑↓ navigate · Tab complete · Esc close",
+    "unknown_command": "Unknown command — press Enter to send it to the agent",
+    "commands": {
+      "help": "Show available slash commands and usage.",
+      "model": "Show or switch the session model (provider:model_id).",
+      "level": "Show or set the reasoning level (auto, tree, deep, debate).",
+      "clear": "Clear all messages in the current session.",
+      "retry": "Re-run the last user message as a fresh streaming turn.",
+      "stop": "Interrupt the turn that is currently running.",
+      "status": "Show session status, model, iteration and token counters."
+    }
   }
 }
+
