@@ -2,13 +2,15 @@
 
 Pure, deterministic screening and scoring primitives for the safety layer.
 ``screen`` scans text against known risk patterns (credential exposure,
-destructive commands, privilege escalation, injection payloads) and returns a
-``SafetyVerdict`` with an accumulated penalty. ``gated_fitness`` couples the
-composite fitness contract to that verdict so dangerous content can never
-raise fitness. ``damped_boost`` adds damping to self-reinforcing score boosts
-so repeated positive feedback cannot explode a metric. ``coupled_decay``
-couples forgetting with decay: frequently written memories decay along a
-stretched half-life, and only survivors of that curve stay out of prune lists.
+destructive commands, privilege escalation, prompt-injection phrases,
+injection payloads) and returns a ``SafetyVerdict`` with an accumulated
+penalty; a canary leak event adds a fixed penalty boost. ``gated_fitness``
+couples the composite fitness contract to that verdict so dangerous content
+can never raise fitness. ``damped_boost`` adds damping to self-reinforcing
+score boosts so repeated positive feedback cannot explode a metric.
+``coupled_decay`` couples forgetting with decay: frequently written memories
+decay along a stretched half-life, and only survivors of that curve stay out
+of prune lists.
 
 The module performs zero I/O and zero LLM calls; identical inputs always
 produce identical outputs.
@@ -21,6 +23,7 @@ import re
 from dataclasses import dataclass
 
 BLOCK_THRESHOLD: float = 0.5
+CANARY_LEAK_PENALTY: float = 0.5
 MAX_CONSECUTIVE_BOOSTS: int = 5
 DEFAULT_SURVIVAL_THRESHOLD: float = 0.15
 DEFAULT_HALF_LIFE_DAYS: float = 30.0
@@ -90,6 +93,22 @@ _RISK_DEFINITIONS: tuple[tuple[str, str, float], ...] = (
         r"(?:\.\./){2,}\s*(?:etc|proc|windows|boot)|%2e%2e%2f%2e%2e",
         0.45,
     ),
+    (
+        "prompt_injection_phrase",
+        r"\bignore\s+(?:all\s+)?(?:previous|prior|above)\s+(?:instructions|rules)\b"
+        r"|\bdisregard\s+.{0,20}?(?:rules|instructions)\b"
+        r"|\breveal\s+(?:your\s+)?(?:system\s+)?prompt\b"
+        r"|\b(?:print|show|repeat)\s+(?:your\s+)?(?:system\s+)?(?:prompt|instructions)\b"
+        r"|\byou\s+are\s+now\b"
+        r"|\bpretend\s+to\s+be\b"
+        r"|\boverride\s+(?:the\s+)?(?:safety|security|guardrails?)\b"
+        r"|忽略(?:之前|以上|先前)的?(?:指令|规则|设定)"
+        r"|无视(?:之前|以上)?.{0,10}?(?:指令|规则)"
+        r"|(?:透露|泄露)(?:你的)?(?:系统)?提示词"
+        r"|你的(?:系统)?提示词是什么"
+        r"|扮演",
+        0.6,
+    ),
 )
 
 RISK_PATTERNS: tuple[tuple[str, float], ...] = tuple(
@@ -126,21 +145,25 @@ class SafetyVerdict:
             raise ValueError("penalty must be within [0, 1]")
 
 
-def screen(text: str) -> SafetyVerdict:
+def screen(text: str, *, canary_leaked: bool = False) -> SafetyVerdict:
     """Scan text against known risk patterns and accumulate penalties.
 
     Every matching pattern adds its weight to the penalty, capped at 1.0.
-    The content is rejected once the accumulated penalty reaches
+    A canary leak event adds ``CANARY_LEAK_PENALTY`` on top of pattern
+    matches, so a leaked canary alone reaches ``BLOCK_THRESHOLD`` and fails
+    closed. The content is rejected once the accumulated penalty reaches
     ``BLOCK_THRESHOLD``.
     """
-    if not text:
-        return SafetyVerdict(allowed=True, penalty=0.0, reasons=())
     reasons: list[str] = []
     penalty = 0.0
-    for label, pattern, weight in _COMPILED_RISK_PATTERNS:
-        if pattern.search(text):
-            reasons.append(label)
-            penalty += weight
+    if canary_leaked:
+        reasons.append("canary_leak")
+        penalty += CANARY_LEAK_PENALTY
+    if text:
+        for label, pattern, weight in _COMPILED_RISK_PATTERNS:
+            if pattern.search(text):
+                reasons.append(label)
+                penalty += weight
     penalty = round(min(1.0, penalty), 6)
     return SafetyVerdict(
         allowed=penalty < BLOCK_THRESHOLD,
