@@ -36,6 +36,7 @@ export function ChatPage() {
       )}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <ChatInterface
+          sessionId={sessionId}
           messages={messages}
           onSend={handleSend}
           onStop={handleStop}

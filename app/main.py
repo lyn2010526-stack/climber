@@ -65,6 +65,7 @@ def _register_core_services() -> None:
     from app.core.skill_composition import SkillComposer
     from app.models.registry import ModelRegistry
     from app.multi_agent.crew import Crew
+    from app.skills.definitions import register_builtin_skills
     from app.skills.registry import LegacySkillRegistry, SkillRegistry
     from app.tools import tool_registry as global_tool_registry
     from app.tools.mcp_client import MCPRegistry
@@ -72,6 +73,10 @@ def _register_core_services() -> None:
 
     model_registry = ModelRegistry()
     skill_registry = SkillRegistry()
+    try:
+        register_builtin_skills(skill_registry)
+    except Exception as exc:
+        logger.warning("Builtin skill registration failed", error=str(exc))
     tool_registry_instance = global_tool_registry
     mcp_registry_instance = MCPRegistry()
     sandbox = SandboxExecutor(SandboxConfig())

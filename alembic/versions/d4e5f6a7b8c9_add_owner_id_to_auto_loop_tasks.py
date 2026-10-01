@@ -21,7 +21,10 @@ def upgrade() -> None:
         sa.Column("owner_id", sa.String(length=36), nullable=False, server_default="default-user"),
     )
     op.create_index("ix_auto_loop_tasks_owner_id", "auto_loop_tasks", ["owner_id"])
-    op.alter_column("auto_loop_tasks", "owner_id", server_default=None)
+    # DROP DEFAULT is not valid SQLite DDL; batch mode rebuilds the table so the
+    # final schema matches the ORM across backends.
+    with op.batch_alter_table("auto_loop_tasks") as batch:
+        batch.alter_column("owner_id", existing_type=sa.String(length=36), server_default=None)
 
 
 def downgrade() -> None:

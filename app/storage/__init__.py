@@ -153,6 +153,7 @@ async def init_db() -> None:
         models_feedback,  # noqa: F401
         models_files,  # noqa: F401
         models_groups,  # noqa: F401
+        models_instruction_traces,  # noqa: F401
         models_memory,  # noqa: F401
         models_platform,  # noqa: F401
         models_plugins,  # noqa: F401

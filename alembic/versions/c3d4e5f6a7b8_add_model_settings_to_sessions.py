@@ -25,7 +25,10 @@ def upgrade() -> None:
             'sessions',
             sa.Column('model_settings', sa.JSON(), nullable=False, server_default='{}'),
         )
-        op.alter_column('sessions', 'model_settings', server_default=None)
+        # DROP DEFAULT is not valid SQLite DDL; batch mode rebuilds the table so
+        # the final schema matches the ORM across backends.
+        with op.batch_alter_table('sessions') as batch:
+            batch.alter_column('model_settings', existing_type=sa.JSON(), server_default=None)
 
 
 def downgrade() -> None:

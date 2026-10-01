@@ -12,6 +12,7 @@ from app.api.v1 import doctor as doctor_router
 from app.api.v1 import documents as documents_router
 from app.api.v1 import feedback as feedback_router
 from app.api.v1 import generic as generic_router
+from app.api.v1 import instruction_traces as instruction_traces_router
 from app.api.v1 import mcp as mcp_router
 from app.api.v1 import model_discovery as model_discovery_router
 from app.api.v1 import notifications as notifications_router
@@ -39,6 +40,11 @@ router.include_router(api_keys_router.router, prefix="/api-keys", tags=["api-key
 router.include_router(model_discovery_router.router)
 router.include_router(documents_router.router, prefix="/documents", tags=["documents"])
 router.include_router(feedback_router.router, prefix="/feedback", tags=["feedback"])
+router.include_router(
+    instruction_traces_router.router,
+    prefix="/instruction-traces",
+    tags=["instruction-traces"],
+)
 router.include_router(notifications_router.router, prefix="/notifications", tags=["notifications"])
 router.include_router(doctor_router.router, prefix="/doctor", tags=["doctor"])
 router.include_router(reasoning_router.router, prefix="/reason", tags=["reasoning"])

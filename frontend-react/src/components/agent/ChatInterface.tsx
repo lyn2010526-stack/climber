@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { Send, Square, ArrowDown, CircleAlert } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
@@ -11,6 +11,17 @@ import { StreamingCursor } from '../chat/StreamingCursor';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { FloatingPermissionDialog } from './FloatingPermissionDialog';
 import type { PermissionRequest } from './FloatingPermissionDialog';
+import { SlashCommandMenu } from '../chat/SlashCommandMenu';
+import {
+  FALLBACK_COMMANDS,
+  cancelSessionTurn,
+  completionsFor,
+  executeSlashCommand,
+  extractCommandHead,
+  findCommand,
+  resolveCommand,
+  type SlashCommandInfo,
+} from '../chat/slashCommands';
 import { useI18n } from '../../i18n';
 import { getReadingWidthClass, hasParallelToolContent, useMaximizeChatSpace } from './readingWidth';
 import { ToolCallVisualization, type ToolCall as VisualToolCall } from './ToolCallVisualization';
@@ -55,6 +66,8 @@ interface ChatInterfaceProps {
   onSend: (message: string) => void;
   onStop?: () => void;
   isLoading?: boolean;
+  /** Session id used by slash-command execution and server-side interrupts. */
+  sessionId?: string | null;
   /** A failure the caller actually observed. Renders an error row, nothing else. */
   error?: string;
   /** Only rendered alongside `error`; without a handler there is no retry button. */
@@ -74,6 +87,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onSend,
   onStop,
   isLoading,
+  sessionId,
   error,
   onRetry,
   className,
@@ -93,6 +107,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   ];
   const [input, setInput] = useState('');
   const [editState, setEditState] = useState<EditState>(null);
+  // Slash-command autocomplete state. The menu is visible while the input is
+  // a "/"-prefixed token that still matches at least one registered command.
+  const [slashCatalog, setSlashCatalog] = useState<SlashCommandInfo[]>(FALLBACK_COMMANDS);
+  const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+  const [slashDismissed, setSlashDismissed] = useState(false);
   /**
    * One reading column for the transcript and the composer, decided by
    * {@link getReadingWidthClass}: a turn carrying parallel tool output needs
@@ -119,6 +138,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const showEmptyState = isEmpty && !isLoading && !error;
   const conversationIsWide = messages.some(message => hasParallelToolContent(message.toolCalls?.length));
   const composerWidth = getReadingWidthClass({ fullWidth, hasParallelContent: conversationIsWide });
+
+  // ---- Slash commands: derived autocomplete state -------------------------
+  const slashHead = extractCommandHead(input);
+  const slashQuery = slashHead ?? '';
+  const slashCompletions = useMemo(
+    () => (slashHead === null ? [] : completionsFor(slashCatalog, slashQuery, !!isLoading)),
+    [slashCatalog, slashHead, slashQuery, isLoading],
+  );
+  const slashMenuVisible =
+    slashHead !== null && !slashDismissed && slashCompletions.length > 0;
+  // Exact-match check used on submit: "/help" is a command, "/etc/hosts" is not.
+  const isExactCommand = useCallback(
+    (value: string) => resolveCommand(slashCatalog, value) !== null,
+    [slashCatalog],
+  );
+  const activeSlashCommand = slashHead === null ? undefined : findCommand(slashCatalog, slashHead);
+  const activeSlashError =
+    activeSlashCommand && slashCompletions.length === 0 && !isLoading
+      ? t('slash.unknown_command', { defaultValue: '未知命令' })
+      : null;
 
   const permissionRequests = (providedPermissionRequests ?? messages.flatMap(message =>
     (message.toolCalls ?? []).flatMap(toolCall => {
@@ -189,17 +228,95 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   }, [editState, editContent, onSend, isLoading]);
 
-  const canSubmit = !!input.trim() && !isLoading;
+  const canSubmit = !!input.trim() && (!isLoading || (activeSlashCommand?.allowed_while_streaming ?? false));
+
+  // ---- Slash command execution -------------------------------------------
+  // Command turns live in component state (not useChat) so the regular send
+  // path stays untouched; replies are appended after the transcript.
+  const [commandTurns, setCommandTurns] = useState<Message[]>([]);
+  const [commandRunning, setCommandRunning] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    // The backend catalog is authoritative; silently keep the fallback on error.
+    fetch('/api/v1/chat-commands', { headers: { Accept: 'application/json' } })
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (active && data?.commands?.length) setSlashCatalog(data.commands as SlashCommandInfo[]);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  const appendCommandMessage = useCallback((message: Message) => {
+    setCommandTurns(prev => [...prev, message]);
+  }, []);
+
+  const runSlashCommand = useCallback((raw: string) => {
+    const text = raw.trim();
+    appendCommandMessage({
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: text,
+      timestamp: new Date(),
+    });
+    const assistantId = `assistant-${Date.now()}`;
+    appendCommandMessage({
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      toolCalls: [],
+      timestamp: new Date(),
+    });
+    setCommandRunning(true);
+    const upsert = (mutate: (msg: Message) => Message) => {
+      setCommandTurns(prev => prev.map(msg => (msg.id === assistantId ? mutate(msg) : msg)));
+    };
+    executeSlashCommand(sessionId ?? '', text, event => {
+      switch (event.type) {
+        case 'text':
+          upsert(msg => ({ ...msg, content: msg.content + event.delta }));
+          break;
+        case 'error':
+          upsert(msg => ({ ...msg, content: msg.content + `\n[Error: ${event.message}]` }));
+          setCommandRunning(false);
+          break;
+        case 'done':
+          setCommandRunning(false);
+          break;
+        default:
+          break;
+      }
+    });
+  }, [appendCommandMessage, sessionId]);
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (canSubmit) {
-      followOutput.current = true;
-      onSend(input.trim());
-      setInput('');
-      if (inputRef.current) inputRef.current.style.height = 'auto';
+    if (!canSubmit) return;
+    followOutput.current = true;
+    const text = input.trim();
+    // An exact command invocation goes to the slash endpoint; everything else
+    // (including unknown "/..." text like "/etc/hosts") goes to the agent.
+    if (isExactCommand(text)) {
+      if (commandRunning) return;
+      runSlashCommand(text);
+    } else {
+      onSend(text);
     }
-  }, [canSubmit, input, onSend]);
+    setInput('');
+    setSlashDismissed(false);
+    setSlashActiveIndex(0);
+    if (inputRef.current) inputRef.current.style.height = 'auto';
+  }, [canSubmit, input, isExactCommand, onSend, runSlashCommand, commandRunning]);
+
+  const acceptSlashCompletion = useCallback((command: SlashCommandInfo) => {
+    const needsArg = command.args.some(arg => arg.required);
+    const suffix = needsArg ? ' ' : '';
+    setInput(`/${command.name}${suffix}`);
+    setSlashDismissed(!needsArg);
+    setSlashActiveIndex(0);
+    inputRef.current?.focus();
+  }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     // A candidate Enter that belongs to an IME candidate window has to reach the
@@ -207,10 +324,39 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     if (composing.current || e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
     // The confirming key of a composition arrives as "Process" on some engines.
     if (e.nativeEvent.key === 'Process') return;
+    if (slashMenuVisible) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashActiveIndex(i => (i + 1) % slashCompletions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashActiveIndex(i => (i - 1 + slashCompletions.length) % slashCompletions.length);
+        return;
+      }
+      // Enter on the menu completes the command; it never sends mid-menu.
+      const highlighted = slashCompletions[slashActiveIndex] ?? slashCompletions[0];
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (highlighted) acceptSlashCompletion(highlighted);
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        if (highlighted) acceptSlashCompletion(highlighted);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSlashDismissed(true);
+        return;
+      }
+    }
     if (e.key !== 'Enter' || e.shiftKey) return;
     e.preventDefault();
     handleSubmit(e);
-  }, [handleSubmit]);
+  }, [handleSubmit, slashMenuVisible, slashCompletions, slashActiveIndex, acceptSlashCompletion]);
 
   const autoGrow = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const el = e.target;
@@ -219,6 +365,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     // box the user can scroll stops where the scripted growth stops.
     el.style.height = Math.min(el.scrollHeight, COMPOSER_MAX_HEIGHT_PX) + 'px';
   }, []);
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    setSlashDismissed(false);
+    setSlashActiveIndex(0);
+    autoGrow(e);
+  }, [autoGrow]);
 
   const fillFromSuggestion = useCallback((suggestion: string) => {
     setInput(suggestion);
@@ -379,6 +532,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               ))}
             </div>
           )}
+          {/* Slash-command turns render after the transcript: their replies are
+              command receipts (help text, model switches), not model turns. */}
+          {commandTurns.length > 0 && (
+            <div data-slash-transcript className="flex flex-col gap-5">
+              {commandTurns.map(msg => (
+                <React.Fragment key={msg.id}>
+                  {renderMessage({ ...msg, role: msg.role })}
+                </React.Fragment>
+              ))}
+            </div>
+          )}
           {/* The failure is the newest event, so it follows the turns it ended. */}
           {error && (
             <div
@@ -421,23 +585,40 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       >
         <div className={composerWidth}>
           <div
-            className="rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] transition-colors duration-150 focus-within:border-[var(--color-border-accent)] motion-reduce:transition-none"
+            className="relative rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] transition-colors duration-150 focus-within:border-[var(--color-border-accent)] motion-reduce:transition-none"
           >
+            <SlashCommandMenu
+              items={slashCompletions}
+              activeIndex={Math.min(slashActiveIndex, Math.max(slashCompletions.length - 1, 0))}
+              onSelect={acceptSlashCompletion}
+              onHover={setSlashActiveIndex}
+              visible={slashMenuVisible}
+            />
             <textarea
               ref={inputRef}
               value={input}
-              onChange={e => { setInput(e.target.value); autoGrow(e); }}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               onCompositionStart={() => { composing.current = true; }}
               onCompositionEnd={() => { composing.current = false; }}
               placeholder={resolvedPlaceholder}
               aria-label={resolvedPlaceholder}
+              aria-autocomplete="list"
+              aria-expanded={slashMenuVisible}
+              aria-controls="slash-command-menu"
+              role="combobox"
               className={cn('block min-h-[var(--space-6)] w-full resize-none bg-transparent px-3 py-2.5 text-[length:var(--text-sm)] leading-6 text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none', COMPOSER_MAX_HEIGHT)}
               rows={1}
             />
             <div className="flex items-center justify-between gap-3 px-2 pb-2">
               <p className="min-w-0 truncate text-xs text-[var(--color-text-muted)]">
-                {isLoading ? t('common.loading') : `Enter ${t('chat.send')} · Shift + Enter`}
+                {slashMenuVisible
+                  ? t('slash.hint', { defaultValue: '↑↓ 选择 · Tab 补全 · Esc 关闭' })
+                  : activeSlashError
+                    ? activeSlashError
+                    : isLoading
+                      ? t('common.loading')
+                      : `Enter ${t('chat.send')} · Shift + Enter`}
               </p>
               {/* One slot, one control: stopping and sending are the same button
                   in two states, so a run in flight can never be answered by a
@@ -457,7 +638,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     variant="secondary"
                     size="icon"
                      aria-label={t('chat.stop_generation', { defaultValue: '停止生成' })}
-                    onClick={onStop}
+                    onClick={() => {
+                      // Local abort plus a server-side interrupt request: the
+                      // engine unwinds at its next cooperative stop checkpoint.
+                      if (sessionId) cancelSessionTurn(sessionId);
+                      onStop?.();
+                    }}
                     disabled={!onStop}
                     className="shrink-0"
                   >
