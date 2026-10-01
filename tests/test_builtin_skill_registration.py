@@ -24,9 +24,19 @@ DECLARED_IDS = builtin_skill_ids()
 
 def test_definitions_declare_unique_skill_ids() -> None:
     assert DECLARED_IDS
-    assert len(DECLARED_IDS) == 19
+    assert len(DECLARED_IDS) == 22
     assert len(DECLARED_IDS) == len(set(DECLARED_IDS))
     assert set(BUILTIN_HANDLER_MAP) == set(DECLARED_IDS)
+
+
+def test_discipline_skills_are_declared_with_expected_tags() -> None:
+    by_id = {info.id: info for info in BUILTIN_SKILLS}
+    assert {"verification", "quality"} <= set(by_id["verification_discipline"].tags)
+    assert {"search", "research"} <= set(by_id["search_discipline"].tags)
+    assert {"ui", "design"} <= set(by_id["ui_design_discipline"].tags)
+    assert by_id["verification_discipline"].name
+    assert by_id["search_discipline"].system_prompt
+    assert by_id["ui_design_discipline"].system_prompt
 
 
 def test_registration_covers_every_declared_skill() -> None:

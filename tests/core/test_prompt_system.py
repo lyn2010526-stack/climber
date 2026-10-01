@@ -1,7 +1,6 @@
 """Contract tests for the versioned built-in prompt layer."""
 
 from app.core.prompts import (
-    PromptVersionError,
     build_injected_prompt,
     list_versions,
     resolve_active_prompt,
@@ -11,10 +10,12 @@ from app.core.prompts import (
 
 def test_active_version_is_selected_and_versions_include_history():
     prompt = resolve_active_prompt("core.system")
-    assert prompt.version == "1.1.0"
+    assert prompt.version == "1.2.0"
     versions = list_versions("core.system")
-    assert {item["version"] for item in versions} == {"1.1.0", "1.0.0", "0.9.0"}
+    assert {item["version"] for item in versions} == {"1.2.0", "1.1.0", "1.0.0", "0.9.0"}
     assert any(item["status"] == "deprecated" for item in versions)
+    active = [item for item in versions if item["status"] == "active"]
+    assert [item["version"] for item in active] == ["1.2.0"]
 
 
 def test_deprecated_version_can_be_resolved_for_rollback():
@@ -22,18 +23,32 @@ def test_deprecated_version_can_be_resolved_for_rollback():
     assert prompt.version == "0.9.0"
     assert prompt.status.value == "deprecated"
 
+    previous = resolve_active_prompt("core.system", "1.1.0")
+    assert previous.version == "1.1.0"
+    assert previous.status.value == "deprecated"
+
 
 def test_injection_contains_every_mandatory_core_section_and_hides_chain_of_thought():
     bundle = build_injected_prompt(task_type="implementation")
     prompt = bundle["system_prompt"]
-    for section in ("ROLE_AND_SCOPE", "TASK_WORKFLOW", "TOOL_CONTRACT", "PROGRESS_REPORTING", "VALIDATION_AND_RECOVERY", "SAFE_OUTPUT"):
+    for section in (
+        "ROLE_AND_SCOPE",
+        "TASK_WORKFLOW",
+        "TOOL_CONTRACT",
+        "PROGRESS_REPORTING",
+        "VALIDATION_AND_RECOVERY",
+        "SAFE_OUTPUT",
+        "AUTHORIZATION_AND_RISK",
+        "ENGINEERING_DISCIPLINE",
+        "RESEARCH_AND_KNOWLEDGE",
+    ):
         assert f"[{section}]" in prompt
     assert "chain-of-thought" in prompt
     assert "private scratch work" in prompt
     assert "system_prompt" not in bundle["metadata"]
 
 
-def test_core_contract_has_six_sections_and_no_hidden_reasoning_request():
+def test_core_contract_declares_all_sections_and_no_hidden_reasoning_request():
     prompt = resolve_active_prompt("core.system")
     assert prompt.sections == (
         "ROLE_AND_SCOPE",
@@ -42,6 +57,9 @@ def test_core_contract_has_six_sections_and_no_hidden_reasoning_request():
         "PROGRESS_REPORTING",
         "VALIDATION_AND_RECOVERY",
         "SAFE_OUTPUT",
+        "AUTHORIZATION_AND_RISK",
+        "ENGINEERING_DISCIPLINE",
+        "RESEARCH_AND_KNOWLEDGE",
     )
     assert "reveal hidden chain-of-thought" in prompt.body
     assert "private scratch work" in prompt.body
