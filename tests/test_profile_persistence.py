@@ -38,6 +38,17 @@ async def test_record_then_summary_reflects_event() -> None:
     assert summary.enabled is True
     assert summary.success_rate == 1.0
     assert summary.task_preferences.get("refactor", 0.0) > 0.0
+    assert summary.prompt_hints
+
+
+async def test_record_run_persists_run_outcome() -> None:
+    user = _user()
+    store = ProfileStore()
+    await store.record_run(user, instruction="fix the login bug", outcome="success")
+    await store.record_run(user, instruction="retry deploy", outcome="failure", retried=True)
+    summary = await store.summary(user)
+    assert summary.success_rate == pytest.approx(0.5)
+    assert summary.retry_rate == pytest.approx(0.5)
 
 
 async def test_summary_replays_from_database_not_memory() -> None:
@@ -82,6 +93,18 @@ async def test_snapshot_is_persisted_and_readable() -> None:
         assert snapshot.payload["success_rate"] == summary.success_rate
         assert snapshot.payload["task_preferences"] == summary.task_preferences
         assert snapshot.payload["retry_rate"] == summary.retry_rate
+
+
+async def test_summary_snapshot_blends_with_previous_snapshot() -> None:
+    user = _user()
+    store = ProfileStore()
+    await store.record_event(user, instruction="ship", task_type="coding", outcome="success")
+    first = await store.summary(user)
+    await store.record_event(user, instruction="review", task_type="review", outcome="failure")
+    second = await store.summary(user)
+    assert second.success_rate == pytest.approx(first.success_rate * 0.7 + 0.5 * 0.3)
+    assert second.task_preferences["coding"] > 0.0
+    assert second.task_preferences["review"] > 0.0
 
 
 async def test_upsert_snapshot_folds_into_one_row() -> None:

@@ -71,6 +71,68 @@ class ProfileSummary:
     enabled: bool
     persona_cluster: int | None = None
     persona_cluster_confidence: float = 0.0
+    prompt_hints: tuple[str, ...] = ()
+
+    @staticmethod
+    def blend(
+        current: ProfileSummary | None,
+        incoming: ProfileSummary,
+        alpha: float = 0.3,
+    ) -> ProfileSummary:
+        """Blend an incoming summary into the current summary."""
+        return blend(current, incoming, alpha=alpha)
+
+
+def blend(
+    current: ProfileSummary | None,
+    incoming: ProfileSummary,
+    alpha: float = 0.3,
+) -> ProfileSummary:
+    """Smoothly merge two summaries, weighting ``incoming`` by ``alpha``."""
+    if not 0.0 <= alpha <= 1.0:
+        raise ValueError("alpha must be between 0 and 1")
+    if current is None:
+        return incoming
+
+    def merge_preferences(
+        previous: dict[str, float], latest: dict[str, float]
+    ) -> dict[str, float]:
+        keys = previous.keys() | latest.keys()
+        return {
+            key: round(
+                max(
+                    0.0001 if key in latest and latest[key] > 0.0 else 0.0,
+                    previous.get(key, 0.0) * (1 - alpha) + latest.get(key, 0.0) * alpha,
+                ),
+                4,
+            )
+            for key in keys
+        }
+
+    def merge_number(previous: float, latest: float) -> float:
+        return round(previous * (1 - alpha) + latest * alpha, 4)
+
+    task_preferences = merge_preferences(current.task_preferences, incoming.task_preferences)
+    tool_preferences = merge_preferences(current.tool_preferences, incoming.tool_preferences)
+    reasoning_preferences = merge_preferences(
+        current.reasoning_preferences, incoming.reasoning_preferences
+    )
+    return ProfileSummary(
+        task_preferences=task_preferences,
+        tool_preferences=tool_preferences,
+        reasoning_preferences=reasoning_preferences,
+        retry_rate=merge_number(current.retry_rate, incoming.retry_rate),
+        interruption_rate=merge_number(current.interruption_rate, incoming.interruption_rate),
+        success_rate=merge_number(current.success_rate, incoming.success_rate),
+        confidence=merge_number(current.confidence, incoming.confidence),
+        provenance=incoming.provenance,
+        enabled=incoming.enabled,
+        persona_cluster=incoming.persona_cluster,
+        persona_cluster_confidence=merge_number(
+            current.persona_cluster_confidence, incoming.persona_cluster_confidence
+        ),
+        prompt_hints=_prompt_hints(task_preferences, tool_preferences, reasoning_preferences),
+    )
 
 
 def embed_event(event: ProfileEvent, *, dim: int = 12) -> tuple[float, ...]:
@@ -226,7 +288,7 @@ class ProfileLoopService:
     def summary(self, *, as_of: datetime | None = None) -> ProfileSummary:
         """Return normalized preferences and calibrated confidence."""
         if not self.enabled:
-            return ProfileSummary({}, {}, {}, 0.0, 0.0, 0.0, 0.0, (), False)
+            return ProfileSummary({}, {}, {}, 0.0, 0.0, 0.0, 0.0, (), False, prompt_hints=())
 
         reference = _utc(as_of or datetime.now(UTC))
         task, tools, reasoning = {}, {}, {}
@@ -244,10 +306,13 @@ class ProfileLoopService:
                 _add_signal(tools, event.tool, weight, signal)
 
         sample_confidence = min(1.0, total / 5.0)
+        task_preferences = _normalize(task)
+        tool_preferences = _normalize(tools)
+        reasoning_preferences = _normalize(reasoning)
         return ProfileSummary(
-            task_preferences=_normalize(task),
-            tool_preferences=_normalize(tools),
-            reasoning_preferences=_normalize(reasoning),
+            task_preferences=task_preferences,
+            tool_preferences=tool_preferences,
+            reasoning_preferences=reasoning_preferences,
             retry_rate=_ratio(retries, total),
             interruption_rate=_ratio(interruptions, total),
             success_rate=_ratio(success, total),
@@ -262,6 +327,7 @@ class ProfileLoopService:
             enabled=True,
             persona_cluster=self._persona_cluster_id(),
             persona_cluster_confidence=self._persona_cluster_confidence(),
+            prompt_hints=_prompt_hints(task_preferences, tool_preferences, reasoning_preferences),
         )
 
     def _persona_cluster_id(self) -> int | None:
@@ -345,7 +411,12 @@ def _normalize(values: dict[str, _FeatureStats]) -> dict[str, float]:
     total_weight = sum(item.weight for item in values.values())
     return {
         key: round(
-            (item.weight / total_weight) * (0.5 + 0.5 * item.calibration) * (2 * item.calibration),
+            max(
+                0.0001,
+                (item.weight / total_weight)
+                * (0.5 + 0.5 * item.calibration)
+                * (2 * item.calibration),
+            ),
             4,
         )
         for key, item in values.items()
@@ -358,3 +429,18 @@ def _ratio(numerator: float, denominator: float) -> float:
 
 def _top(values: dict[str, float]) -> str | None:
     return max(values, key=values.get) if values else None
+
+
+def _prompt_hints(
+    task_preferences: dict[str, float],
+    tool_preferences: dict[str, float],
+    reasoning_preferences: dict[str, float],
+) -> tuple[str, ...]:
+    hints: list[str] = []
+    if task := _top(task_preferences):
+        hints.append(f"Prefer task style: {task}")
+    if tool := _top(tool_preferences):
+        hints.append(f"Consider tool: {tool}")
+    if reasoning := _top(reasoning_preferences):
+        hints.append(f"Use reasoning level: {reasoning}")
+    return tuple(hints)

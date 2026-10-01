@@ -2,7 +2,13 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.core.profile import PrivacyBoundaryError, ProfileEvent, ProfileLoopService
+from app.core.profile import (
+    PrivacyBoundaryError,
+    ProfileEvent,
+    ProfileLoopService,
+    ProfileSummary,
+    blend,
+)
 from app.core.profile.loop import OnlineKMeans, embed_event
 
 NOW = datetime(2026, 9, 30, tzinfo=UTC)
@@ -82,6 +88,30 @@ def test_current_instruction_has_priority_over_profile_hint() -> None:
     assert context["current_instruction"] == "请使用浏览器完成当前任务"
     assert context["profile_may_not_override_current_instruction"] is True
     assert context["profile_role"] == "auxiliary_context"
+
+
+def test_summary_exposes_prompt_hints() -> None:
+    service = ProfileLoopService()
+    service.record(event(task_type="coding", tool="terminal", reasoning_level="deep"))
+    summary = service.summary(as_of=NOW)
+    assert summary.prompt_hints == (
+        "Prefer task style: coding",
+        "Consider tool: terminal",
+        "Use reasoning level: deep",
+    )
+
+
+def test_blend_smooths_numeric_and_preference_values() -> None:
+    current = ProfileSummary(
+        {"coding": 1.0}, {}, {}, 0.0, 0.0, 0.0, 0.2, ("old",), True
+    )
+    incoming = ProfileSummary(
+        {"coding": 0.0, "review": 1.0}, {}, {}, 1.0, 0.5, 1.0, 1.0, ("new",), True
+    )
+    merged = blend(current, incoming)
+    assert merged.task_preferences == {"coding": 0.7, "review": 0.3}
+    assert merged.retry_rate == 0.3
+    assert merged.confidence == 0.44
 
 
 def test_external_privacy_sources_are_rejected() -> None:

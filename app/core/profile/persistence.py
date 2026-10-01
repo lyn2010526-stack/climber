@@ -12,17 +12,23 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
-from app.core.profile import PrivacyBoundaryError, ProfileEvent, ProfileLoopService
+from app.core.profile import (
+    PrivacyBoundaryError,
+    ProfileEvent,
+    ProfileLoopService,
+    ProfileSummary,
+    blend,
+)
 from app.storage import async_session
 from app.storage.repository_user_profile import (
     DEFAULT_SOURCE,
     append_event,
+    get_snapshot,
     list_events,
     upsert_snapshot,
 )
 
 if TYPE_CHECKING:
-    from app.core.profile import ProfileSummary
     from app.storage.models_user_profile import UserProfileEvent
 
 REPLAY_EVENT_LIMIT = 10_000
@@ -90,11 +96,37 @@ class ProfileStore:
             await db.commit()
         return row
 
+    async def record_run(
+        self,
+        user_id: str,
+        *,
+        instruction: str,
+        outcome: str,
+        task_type: str = "general",
+        **event_fields: Any,
+    ) -> UserProfileEvent:
+        """Record a completed run using the profile event contract."""
+        return await self.record_event(
+            user_id,
+            instruction=instruction,
+            task_type=task_type,
+            outcome=outcome,
+            **event_fields,
+        )
+
     async def summary(self, user_id: str) -> ProfileSummary:
         """Rebuild the summary from the stored event log and refresh the snapshot."""
         service = await self._load_service(user_id)
         result = service.summary()
         async with async_session() as db:
+            previous = await get_snapshot(db, user_id)
+            if previous is not None:
+                payload = dict(previous.payload)
+                payload.setdefault("prompt_hints", ())
+                payload["provenance"] = tuple(payload.get("provenance", ()))
+                payload["prompt_hints"] = tuple(payload["prompt_hints"])
+                previous_summary = ProfileSummary(**payload)
+                result = blend(previous_summary, result)
             await upsert_snapshot(
                 db,
                 user_id=user_id,
