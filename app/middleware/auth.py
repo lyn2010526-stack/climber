@@ -107,8 +107,18 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     def _is_public_path(self, path: str) -> bool:
         """Check if path matches public patterns."""
-        public_prefixes = ["/static/", "/assets/", "/favicon", "/docs", "/openapi", "/auth/health"]
-        public_exact_suffixes = ("/auth/login", "/auth/refresh")
+        public_prefixes = [
+            "/static/",
+            "/assets/",
+            "/favicon",
+            "/docs",
+            "/openapi",
+            "/auth/health",
+            # The /auth mount only serves static login/key pages; API auth
+            # endpoints live under /api/v1/auth/* and are gated separately.
+            "/auth/",
+        ]
+        public_exact_suffixes = ("/auth/login", "/auth/refresh", "/auth/health")
         if any(path.startswith(prefix) for prefix in public_prefixes):
             return True
         return any(path.endswith(suffix) for suffix in public_exact_suffixes)

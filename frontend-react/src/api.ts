@@ -1,4 +1,4 @@
-import { API_BASE_URL as BASE_URL, getAuthHeaders } from './lib/api-client';
+import { API_BASE_URL as BASE_URL, getAuthHeaders, REFRESH_KEY, TOKEN_KEY, USER_KEY } from './lib/api-client';
 import { normalizeChatEvent, type ChatStreamEvent, type RawSSEEvent } from './types/chatEvents';
 
 export interface ApiError {
@@ -260,7 +260,7 @@ class ApiClient {
   }
 
   private async refreshToken(): Promise<string | null> {
-    const refreshToken = this.readStorage('refresh_token');
+    const refreshToken = this.readStorage(REFRESH_KEY);
     if (!refreshToken) return null;
 
     try {
@@ -274,7 +274,10 @@ class ApiClient {
 
       const data = await response.json();
       if (!data.access_token) return null;
-      this.writeStorage('auth_token', data.access_token);
+      this.writeStorage(TOKEN_KEY, data.access_token);
+      if (data.refresh_token) {
+        this.writeStorage(REFRESH_KEY, data.refresh_token);
+      }
       return data.access_token;
     } catch {
       return null;
@@ -302,9 +305,9 @@ class ApiClient {
           headers,
         });
       } else {
-        this.removeStorage('auth_token');
-        this.removeStorage('refresh_token');
-        this.removeStorage('user_info');
+        this.removeStorage(TOKEN_KEY);
+        this.removeStorage(REFRESH_KEY);
+        this.removeStorage(USER_KEY);
         throw new Error('Authentication required');
       }
     }
@@ -909,9 +912,9 @@ class ApiClient {
     } catch {
       // Ignore logout errors
     }
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user_info');
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem(USER_KEY);
   }
 
   async getCurrentUser() {

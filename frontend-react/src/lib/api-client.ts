@@ -1,5 +1,11 @@
 export const API_BASE_URL = '/api/v1';
 
+// Shared storage keys. The legacy auth pages (app/static/auth/*.html) write
+// the same keys, so a login there hands the session straight to this app.
+export const TOKEN_KEY = 'auth_token';
+export const REFRESH_KEY = 'refresh_token';
+export const USER_KEY = 'user_info';
+
 function normalizePath(url: string): string {
   const path = url.startsWith('/') ? url : `/${url}`;
   return path.replace(/^\/api(?:\/v1)?(?=\/|[?#]|$)/, '');
@@ -7,7 +13,7 @@ function normalizePath(url: string): string {
 
 function getToken(): string | null {
   try {
-    return localStorage.getItem('auth_token');
+    return localStorage.getItem(TOKEN_KEY);
   } catch {
     return null;
   }

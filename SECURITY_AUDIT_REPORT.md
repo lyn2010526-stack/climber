@@ -26,7 +26,7 @@
 
 **位置**: `/workspace/agent-engine/.env`
 ```env
-STEPFUN_API_KEY=***REDACTED***
+STEPFUN_API_KEY=sk-***REDACTED-key-was-leaked-rotate-immediately***
 ```
 
 该密钥以明文形式存储在 .env 文件中。如果该文件被提交到版本控制系统或泄露，攻击者可直接获取该密钥访问 StepFun API 服务。

@@ -70,6 +70,9 @@ class RefreshTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+    # Rotated on every refresh so a long-lived browser session never reuses
+    # the same refresh token for its full 7-day lifetime.
+    refresh_token: str | None = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -130,10 +133,12 @@ async def refresh_token(payload: RefreshTokenRequest) -> RefreshTokenResponse:
         scopes = auth_manager.scopes_for_role(user.role)
 
     new_token = auth_manager.create_access_token(user_id, scopes)
+    new_refresh = auth_manager.create_refresh_token(user_id, scopes)
 
     return RefreshTokenResponse(
         access_token=new_token,
         expires_in=60 * 60,
+        refresh_token=new_refresh,
     )
 
 

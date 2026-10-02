@@ -128,7 +128,10 @@ async def lifespan(app: FastAPI):
             await init_db()
             health = await db_health()
             logger.info("Database ready", backend=health.get("backend"), journal_mode=health.get("journal_mode"))
+        except Exception as e:
+            logger.warning("Database initialization failed", error=str(e))
 
+        try:
             from app.core.auth_manager import initialize_auth_system
 
             admin_creds = await initialize_auth_system()
@@ -139,8 +142,12 @@ async def lifespan(app: FastAPI):
                     admin_password_set=True,
                     bootstrap_password_generated=admin_creds.get("bootstrap_generated", False),
                 )
+        except RuntimeError:
+            # A missing INITIAL_ADMIN_PASSWORD leaves the deployment without any
+            # admin account; keep starting and every login fails silently.
+            raise
         except Exception as e:
-            logger.warning("Database initialization failed", error=str(e))
+            logger.warning("Auth system initialization failed", error=str(e))
 
         redis = await get_redis()
         if redis:

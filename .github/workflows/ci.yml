@@ -344,7 +344,22 @@ jobs:
 
       - name: Verify frontend image
         run: |
-          docker run --rm agent-engine-frontend:ci-test node -e "console.log('Frontend image OK')"
+          # The final layer is nginx:1.27-alpine, which has no node binary;
+          # validate the config and serve a request instead.
+          docker run --rm --entrypoint nginx agent-engine-frontend:ci-test -t
+          docker run --rm -d --name fe-verify -p 8080:80 agent-engine-frontend:ci-test
+          for i in 1 2 3 4 5; do
+            if curl -fsS http://127.0.0.1:8080/ >/dev/null 2>&1; then
+              echo "Frontend image OK"
+              docker rm -f fe-verify >/dev/null
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Frontend image FAILED to serve"
+          docker logs fe-verify || true
+          docker rm -f fe-verify >/dev/null
+          exit 1
 
   # ===========================================================================
   # Stage 7: Quality Gate
