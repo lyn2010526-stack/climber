@@ -1,5 +1,10 @@
 # Best Practices Integration - Final Summary Report
 
+> **历史研究文档**：本文为早期研究阶段的记录，其中声称"已完成"的
+> 实现文件（如 `app/core/multi_agent/`）与勾选项与当前代码库不一致，
+> 请以仓库实际代码为准；多智能体 API 以 `app/multi_agent`（Crew/Flow）
+> 为准。本文不再作为进度依据维护。
+
 ## Executive Summary
 
 本报告总结了基于对 10 个顶尖 AI 编程工具深度研究后，将最佳实践集成到 agent-engine 项目的完整实施过程。

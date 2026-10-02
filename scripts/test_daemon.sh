@@ -111,10 +111,10 @@ view_logs() {
 
 view_results() {
     if [ -f "${RESULTS_FILE}" ]; then
-        python3 << 'PYEOF'
-import json
+        python3 << PYEOF
+import json, os
 
-results_file = "/workspace/agent-engine/logs/test_daemon_results.json"
+results_file = os.environ.get("RESULTS_FILE", "${RESULTS_FILE}")
 
 try:
     with open(results_file) as f:

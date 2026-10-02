@@ -402,7 +402,7 @@ GET /api/v1/permissions/config
 **响应**:
 ```json
 {
-  "mode": "standard",
+  "mode": "default",
   "rules": [
     {"decision": "allow", "tool": "read_file", "pattern": null},
     {"decision": "deny", "tool": "shell_exec", "pattern": "rm -rf"}
@@ -421,7 +421,7 @@ PUT /api/v1/permissions/config
 **请求体**:
 ```json
 {
-  "mode": "standard",
+  "mode": "default",
   "rules": [...],
   "allowed_tools": [...],
   "denied_tools": [...]

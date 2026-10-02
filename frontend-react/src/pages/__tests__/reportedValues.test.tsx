@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { EvalDashboard } from '../../components/eval/EvalDashboard';
 import { FactoryModePage } from '../FactoryModePage';
 import PluginPage from '../PluginPage';
+import i18n from '../../i18n';
 
 vi.mock('../../api', () => ({
   api: {
@@ -56,15 +57,15 @@ async function runEvaluation() {
   render(<EvalDashboard />);
   await screen.findByText('Suite');
   fireEvent.click(screen.getByText('Suite'));
-  fireEvent.click(screen.getByText('运行评估'));
+  fireEvent.click(screen.getByText(i18n.t('eval.run')));
 }
 
 describe('EvalDashboard reports runs the backend never executed', () => {
   it('does not render a 0% pass rate for a run that executed no cases', async () => {
     await runEvaluation();
 
-    expect(await screen.findByText(/本次运行未上报任何用例/)).toBeInTheDocument();
-    expect(screen.queryByText('通过率')).not.toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('eval.run_no_cases', { total: 0 }))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('eval.pass_rate'))).not.toBeInTheDocument();
     expect(screen.queryByText('0%')).not.toBeInTheDocument();
   });
 
@@ -73,7 +74,7 @@ describe('EvalDashboard reports runs the backend never executed', () => {
 
     // `POST /eval/run` stores results_json but omits it from the response, so an
     // absent `results` field is the normal case and must be stated, not implied.
-    expect(await screen.findByText('接口未返回逐用例结果')).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('eval.no_case_results'))).toBeInTheDocument();
   });
 
   it('renders the real pass rate once a run reports executed cases', async () => {
@@ -93,7 +94,7 @@ describe('EvalDashboard reports runs the backend never executed', () => {
     await runEvaluation();
 
     expect(await screen.findByText('75%')).toBeInTheDocument();
-    expect(screen.queryByText(/本次运行未上报任何用例/)).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('eval.run_no_cases', { total: 4 }))).not.toBeInTheDocument();
   });
 
   it('reports a failed dataset request instead of an empty dataset list', async () => {
@@ -101,8 +102,8 @@ describe('EvalDashboard reports runs the backend never executed', () => {
 
     render(<EvalDashboard />);
 
-    expect(await screen.findByText(/数据集列表未上报/)).toBeInTheDocument();
-    expect(screen.queryByText('暂无数据集')).not.toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('eval.datasets_not_reported', { detail: 'down' }))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('eval.datasets_empty'))).not.toBeInTheDocument();
   });
 
   it('reports a failed agent request instead of offering an empty selector', async () => {
@@ -110,8 +111,8 @@ describe('EvalDashboard reports runs the backend never executed', () => {
 
     render(<EvalDashboard />);
 
-    expect(await screen.findByText(/智能体列表未上报/)).toBeInTheDocument();
-    expect(screen.queryByText('请选择智能体')).not.toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('eval.agents_not_reported', { detail: 'down' }))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('eval.select_agent'))).not.toBeInTheDocument();
   });
 });
 
@@ -120,13 +121,13 @@ describe('FactoryModePage measures nothing the backend did not report', () => {
     vi.mocked(api.getTask).mockResolvedValue({ task_id: 't1', status: 'completed' } as never);
 
     render(<FactoryModePage />);
-    const textarea = screen.getByPlaceholderText('描述你想要智能体完成的目标...');
+    const textarea = screen.getByPlaceholderText(i18n.t('factory_mode.goal_placeholder'));
     fireEvent.change(textarea, { target: { value: 'build a demo' } });
-    fireEvent.click(screen.getByText('开始执行'));
+    fireEvent.click(screen.getByText(i18n.t('factory_mode.start')));
 
-    expect(await screen.findByText('运行时长未上报')).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('factory_mode.duration_not_reported'))).toBeInTheDocument();
     // No locally ticking clock: a browser-side counter never appears.
-    expect(screen.queryByText(/已运行 00:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('factory_mode.running_for', { clock: '00:' }), { exact: false })).not.toBeInTheDocument();
   });
 
   it('shows the duration the backend recorded from its own start and finish stamps', async () => {
@@ -142,14 +143,14 @@ describe('FactoryModePage measures nothing the backend did not report', () => {
     } as never);
 
     render(<FactoryModePage />);
-    const textarea = screen.getByPlaceholderText('描述你想要智能体完成的目标...');
+    const textarea = screen.getByPlaceholderText(i18n.t('factory_mode.goal_placeholder'));
     fireEvent.change(textarea, { target: { value: 'build a demo' } });
-    fireEvent.click(screen.getByText('开始执行'));
+    fireEvent.click(screen.getByText(i18n.t('factory_mode.start')));
 
     const call = vi.mocked(api.runAutonomousSkillStream).mock.calls[0];
     await act(async () => { (call[2] as () => void)(); });
 
-    expect(await screen.findByText(/已运行 02:30/)).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('factory_mode.running_for', { clock: '02:30' }), { exact: false })).toBeInTheDocument();
   });
 
   it('does not mark every stage complete just because the run ended', async () => {
@@ -160,9 +161,9 @@ describe('FactoryModePage measures nothing the backend did not report', () => {
     });
 
     render(<FactoryModePage />);
-    const textarea = screen.getByPlaceholderText('描述你想要智能体完成的目标...');
+    const textarea = screen.getByPlaceholderText(i18n.t('factory_mode.goal_placeholder'));
     fireEvent.change(textarea, { target: { value: 'build a demo' } });
-    fireEvent.click(screen.getByText('开始执行'));
+    fireEvent.click(screen.getByText(i18n.t('factory_mode.start')));
 
     const call = vi.mocked(api.runAutonomousSkillStream).mock.calls[0];
     await act(async () => {
@@ -172,12 +173,12 @@ describe('FactoryModePage measures nothing the backend did not report', () => {
 
     // The synthesis badge exists; the run reported no synthesize event, so it
     // must not carry the success styling that a completed stage gets.
-    const synthesis = await screen.findByText('综合');
-    const badge = synthesis.closest('div');
+    const synthesis = await screen.findByText(i18n.t('factory_mode.stage.synthesize'));
+    const badge = synthesis.closest('span');
     expect(badge?.className).not.toContain('--color-success');
     // The two stages the stream did report past stay marked done.
-    const planning = screen.getByText('规划');
-    expect(planning.closest('div')?.className).toContain('--color-success');
+    const planning = screen.getByText(i18n.t('factory_mode.stage.plan'));
+    expect(planning.closest('span')?.className).toContain('--color-success');
   });
 });
 
@@ -189,7 +190,7 @@ describe('PluginPage reports statuses the backend never declared', () => {
 
     render(<PluginPage />);
 
-    expect(await screen.findByText('状态未上报')).toBeInTheDocument();
-    expect(screen.queryByText('已安装')).not.toBeInTheDocument();
+    expect(within(await screen.findByRole('status')).getByText(i18n.t('plugins.status.unknown', { defaultValue: 'Unreported' }))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('plugins.status.installed', { defaultValue: 'Installed' }))).not.toBeInTheDocument();
   });
 });

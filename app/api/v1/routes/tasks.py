@@ -27,6 +27,9 @@ class TaskResponse(BaseModel):
     total_steps: int = 0
     result: Any = None
     error: str | None = None
+    created_at: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
 
 
 _ws_clients: list[WebSocket] = []

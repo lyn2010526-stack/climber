@@ -58,16 +58,16 @@ describe('MCP compact list', () => {
     render(<MCPPage />);
     await screen.findByText('Filesystem');
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), { target: { value: 'postgres' } });
+    fireEvent.change(screen.getByRole('textbox', { name: i18n.t('common.search') }), { target: { value: 'postgres' } });
     expect(screen.queryByText('Filesystem')).toBeNull();
     expect(screen.getByText('Postgres')).toBeDefined();
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), { target: { value: '' } });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Filter' }), { target: { value: 'Data' } });
+    fireEvent.change(screen.getByRole('textbox', { name: i18n.t('common.search') }), { target: { value: '' } });
+    fireEvent.change(screen.getByRole('combobox', { name: i18n.t('common.filter') }), { target: { value: 'Data' } });
     expect(screen.queryByText('Filesystem')).toBeNull();
     expect(screen.getByText('Postgres')).toBeDefined();
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Filter' }), { target: { value: '' } });
+    fireEvent.change(screen.getByRole('combobox', { name: i18n.t('common.filter') }), { target: { value: '' } });
     fireEvent.click(screen.getByRole('checkbox'));
     expect(screen.queryByText('Postgres')).toBeNull();
     expect(screen.getByText('Filesystem')).toBeDefined();
@@ -76,17 +76,17 @@ describe('MCP compact list', () => {
   it('shows a no-results state that clears every active filter', async () => {
     render(<MCPPage />);
     await screen.findByText('Filesystem');
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), { target: { value: 'nothing-matches' } });
-    expect(screen.getByText('No results')).toBeDefined();
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    fireEvent.change(screen.getByRole('textbox', { name: i18n.t('common.search') }), { target: { value: 'nothing-matches' } });
+    expect(screen.getByText(i18n.t('common.no_results'))).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.clear') }));
     expect(rows()).toHaveLength(2);
   });
 
   it('reports an empty catalog separately from a filtered miss', async () => {
     vi.mocked(api.listMCPServers).mockResolvedValue([] as any);
     render(<MCPPage />);
-    expect(await screen.findByText('No data available')).toBeDefined();
-    expect(screen.queryByText('No results')).toBeNull();
+    expect(await screen.findByText(i18n.t('common.no_data'))).toBeDefined();
+    expect(screen.queryByText(i18n.t('common.no_results'))).toBeNull();
   });
 
   it('keeps the install and uninstall contracts and surfaces failures', async () => {
@@ -130,7 +130,7 @@ describe('MCP compact list', () => {
     vi.mocked(api.listMCPServers).mockRejectedValueOnce(new Error('Catalog offline'));
     render(<MCPPage />);
     expect(await screen.findByRole('alert')).toHaveTextContent('Catalog offline');
-    fireEvent.click(screen.getByRole('button', { name: /Retry/ }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }));
     expect(await screen.findByText('Filesystem')).toBeDefined();
     expect(api.listMCPServers).toHaveBeenCalledTimes(2);
   });
@@ -143,8 +143,8 @@ describe('Plugins compact list', () => {
     expect(rows()).toHaveLength(2);
     const enabled = document.querySelector('[data-plugin-status="enabled"]');
     const installed = document.querySelector('[data-plugin-status="installed"]');
-    expect(enabled?.textContent).toContain('已启用');
-    expect(installed?.textContent).toContain('已安装');
+    expect(enabled?.textContent).toContain(i18n.t('plugins.status.enabled', { defaultValue: 'Enabled' }));
+    expect(installed?.textContent).toContain(i18n.t('plugins.status.installed', { defaultValue: 'Installed' }));
     expect(enabled?.querySelector('svg')).not.toBeNull();
   });
 
@@ -152,9 +152,9 @@ describe('Plugins compact list', () => {
     render(<PluginsPage />);
     await screen.findByText('Filesystem');
     fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
-    expect(screen.getByText('未找到插件')).toBeDefined();
-    fireEvent.click(screen.getByRole('button', { name: 'All' }));
-    fireEvent.click(screen.getByRole('button', { name: /^已启用/ }));
+    expect(screen.getByText(i18n.t('plugins.empty_title'))).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.all') }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('plugins.category_installed', { count: 1 }) }));
     expect(screen.getByText('Filesystem')).toBeDefined();
     expect(screen.queryByText('Summarizer')).toBeNull();
   });
@@ -163,8 +163,8 @@ describe('Plugins compact list', () => {
     vi.mocked(api.disablePlugin).mockResolvedValue({} as any);
     render(<PluginsPage />);
     await screen.findByText('Filesystem');
-    expect(screen.queryByRole('button', { name: 'Remove Filesystem' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '禁用' }));
+    expect(screen.queryByRole('button', { name: `${i18n.t('common.remove')} Filesystem` })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('plugins.disable', { defaultValue: 'Disable' }) }));
     await waitFor(() => expect(api.disablePlugin).toHaveBeenCalledWith('plugin-1'));
   });
 
@@ -172,22 +172,22 @@ describe('Plugins compact list', () => {
     vi.mocked(api.disablePlugin).mockRejectedValueOnce(new Error('Disable unavailable')).mockResolvedValueOnce({} as any);
     render(<PluginsPage />);
     await screen.findByText('Filesystem');
-    fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('plugins.disable', { defaultValue: 'Disable' }) }));
     expect((await screen.findAllByRole('alert'))[0]).toHaveTextContent('Disable unavailable');
     expect(screen.getByText('Filesystem')).toBeDefined();
     const row = screen.getByText('Filesystem').closest('li')!;
-    fireEvent.click(within(row).getByRole('button', { name: 'Retry' }));
+    fireEvent.click(within(row).getByRole('button', { name: i18n.t('common.retry') }));
     await waitFor(() => expect(api.disablePlugin).toHaveBeenCalledTimes(2));
   });
 
   it('exposes details and configuration fields behind a single disclosure', async () => {
     render(<PluginsPage />);
     await screen.findByText('Filesystem');
-    const toggle = screen.getAllByRole('button', { name: /详情与配置/ })[0]!;
+    const toggle = screen.getAllByRole('button', { name: i18n.t('plugins.details_action') })[0]!;
     expect(document.getElementById('plugin-detail-plugin-1')).toBeNull();
     fireEvent.click(toggle);
     const panel = document.getElementById('plugin-detail-plugin-1')!;
-    expect(within(panel).getByText('来源')).toBeDefined();
+    expect(within(panel).getByText(i18n.t('plugins.detail_source'))).toBeDefined();
     expect(within(panel).getByText(/root/)).toBeDefined();
   });
 
@@ -195,11 +195,11 @@ describe('Plugins compact list', () => {
     vi.mocked(api.importPlugin).mockResolvedValue({} as any);
     render(<PluginsPage />);
     await screen.findByText('Filesystem');
-    fireEvent.click(screen.getByRole('button', { name: '导入插件' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('plugins.import_action') }));
     const dialog = screen.getByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('源地址'), { target: { value: 'https://example.test/plugin.json' } });
-    fireEvent.change(within(dialog).getByLabelText('类型'), { target: { value: 'prompt' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: '导入' }));
+    fireEvent.change(within(dialog).getByLabelText(i18n.t('plugins.import_url_label')), { target: { value: 'https://example.test/plugin.json' } });
+    fireEvent.change(within(dialog).getByLabelText(i18n.t('plugins.import_type_label')), { target: { value: 'prompt' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: i18n.t('plugins.import_submit') }));
     await waitFor(() => expect(api.importPlugin).toHaveBeenCalledWith('https://example.test/plugin.json', '', 'prompt'));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
@@ -210,10 +210,10 @@ describe('Plugin management compact list', () => {
     vi.mocked(api.importPlugin).mockResolvedValue({} as any);
     render(<PluginPage />);
     await screen.findByText('Filesystem');
-    fireEvent.click(screen.getByRole('button', { name: '导入插件' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('plugins.import_action') }));
     const dialog = screen.getByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('插件源地址'), { target: { value: 'https://example.test/p.json' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: '导入' }));
+    fireEvent.change(within(dialog).getByLabelText(i18n.t('plugins.import_source_label')), { target: { value: 'https://example.test/p.json' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: i18n.t('plugins.import_submit') }));
     await waitFor(() => expect(api.importPlugin).toHaveBeenCalledWith('https://example.test/p.json', ''));
   });
 
@@ -222,11 +222,11 @@ describe('Plugin management compact list', () => {
     vi.mocked(api.uninstallPlugin).mockResolvedValue({} as any);
     render(<PluginPage />);
     await screen.findByText('Filesystem');
-    fireEvent.click(screen.getByRole('button', { name: '启用' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('plugins.enable', { defaultValue: 'Enable' }) }));
     await waitFor(() => expect(api.enablePlugin).toHaveBeenCalledWith('plugin-2'));
-    fireEvent.click(screen.getByRole('button', { name: '禁用' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('plugins.disable', { defaultValue: 'Disable' }) }));
     await waitFor(() => expect(api.disablePlugin).toHaveBeenCalledWith('plugin-1'));
-    fireEvent.click(screen.getByRole('button', { name: 'Remove Summarizer' }));
+    fireEvent.click(screen.getByRole('button', { name: `${i18n.t('common.remove')} Summarizer` }));
     await waitFor(() => expect(api.uninstallPlugin).toHaveBeenCalledWith('plugin-2'));
     expect(rows()).toHaveLength(1);
   });
@@ -234,11 +234,11 @@ describe('Plugin management compact list', () => {
   it('separates a filtered miss from an empty install list', async () => {
     render(<PluginPage />);
     await screen.findByText('Filesystem');
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), { target: { value: 'zzz' } });
-    expect(screen.getByText('没有匹配的插件')).toBeDefined();
+    fireEvent.change(screen.getByRole('textbox', { name: i18n.t('common.search') }), { target: { value: 'zzz' } });
+    expect(screen.getByText(i18n.t('plugins.manage_empty_filtered_title'))).toBeDefined();
     vi.mocked(api.listPlugins).mockResolvedValue([] as any);
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
-    fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
-    expect(await screen.findByText('尚未安装任何插件')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.clear') }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.refresh') }));
+    expect(await screen.findByText(i18n.t('plugins.manage_empty_title'))).toBeDefined();
   });
 });

@@ -21,8 +21,8 @@ PASS=0
 FAIL=0
 
 info() { echo -e "\n${BLUE}=== $* ===${NC}"; }
-success() { echo -e "${GREEN}[PASS]${NC} $*"; ((PASS++)); }
-error() { echo -e "${RED}[FAIL]${NC} $*"; ((FAIL++)); }
+success() { echo -e "${GREEN}[PASS]${NC} $*"; PASS=$((PASS+1)); }
+error() { echo -e "${RED}[FAIL]${NC} $*"; FAIL=$((FAIL+1)); }
 
 cd "${PROJECT_ROOT}"
 

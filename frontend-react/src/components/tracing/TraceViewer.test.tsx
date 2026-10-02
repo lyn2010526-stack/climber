@@ -3,6 +3,7 @@ import { render, screen, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TraceViewer from './TraceViewer';
 import { api } from '../../api';
+import i18n from '../../i18n';
 
 vi.mock('../../api', () => ({
   api: {
@@ -65,9 +66,8 @@ const STATS = {
   error_count: 1,
 };
 
-/** i18n keys this project does not translate fall back to the key itself. */
 function key(name: string) {
-  return name;
+  return i18n.t(name);
 }
 
 describe('TraceViewer', () => {

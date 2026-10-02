@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, type SessionMessage } from './api';
 import { useChat } from './useChat';
 
-vi.mock('./api', () => ({ api: { getSessionMessages: vi.fn() } }));
+vi.mock('./api', () => ({ api: { getSessionMessages: vi.fn(), chatStream: vi.fn() } }));
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -25,6 +25,22 @@ function history(id: string): SessionMessage[] {
 beforeEach(() => vi.resetAllMocks());
 
 describe('useChat history lifecycle', () => {
+  it.each(['command', 'file_read', 'unexpected_action'])('normalizes approval action %s', async (action) => {
+    vi.mocked(api.getSessionMessages).mockResolvedValue([]);
+    vi.mocked(api.chatStream).mockImplementation((_session, _content, onEvent) => {
+      onEvent({ type: 'tool_call', toolCall: {
+        id: 'approval-call', name: 'test-tool', arguments: {}, requiresApproval: true, action,
+      } });
+      return vi.fn();
+    });
+    const { result } = renderHook(() => useChat('a'));
+    await act(async () => {});
+    await act(async () => { await result.current.sendMessage('hello'); });
+    const toolCall = result.current.messages.at(-1)?.toolCalls?.[0];
+    expect(toolCall?.requiresApproval).toBe(true);
+    expect(toolCall?.action).toBe(action === 'unexpected_action' ? undefined : action);
+  });
+
   it('clears old messages immediately while the next session loads', async () => {
     vi.mocked(api.getSessionMessages)
       .mockResolvedValueOnce(history('a'))

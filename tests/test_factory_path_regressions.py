@@ -226,7 +226,7 @@ async def test_factory_run_streams_agent_output(client, monkeypatch: pytest.Monk
         await on_progress(2, 2, "done")
         return {"output": f"finished: {payload['objective']}"}
 
-    from app.api.v1 import skills_router
+    from app.api.v1.routes import skills as skills_router
     from app.core.task_worker import task_manager
 
     async def _factory_payload(user_id, data):
@@ -279,7 +279,7 @@ async def test_factory_retries_failed_step(client, monkeypatch: pytest.MonkeyPat
             raise RuntimeError("temporary model failure")
         return {"output": "recovered"}
 
-    from app.api.v1 import skills_router
+    from app.api.v1.routes import skills as skills_router
     from app.core.task_worker import task_manager
 
     async def _factory_payload(user_id, data):

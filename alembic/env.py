@@ -30,6 +30,11 @@ from app.storage import (
     models_skills,  # noqa: F401
     models_traces,  # noqa: F401
 )
+# Models defined outside app/storage must also be imported so their tables land
+# in Base.metadata; otherwise autogenerate silently omits them from migrations.
+import app.models.users  # noqa: E402, F401
+import app.core.memory.persona  # noqa: E402, F401
+import app.core.memory.lifecycle  # noqa: E402, F401
 from app.config import settings
 
 config = context.config

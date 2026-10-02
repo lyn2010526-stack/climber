@@ -11,7 +11,7 @@ vi.mock('../../../../api', () => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(api.getClusterStatus).mockResolvedValue({ plan: [] });
+  vi.mocked(api.getClusterStatus).mockResolvedValue({ nodes: [] });
 });
 
 describe('inspector data fidelity', () => {
@@ -75,10 +75,11 @@ describe('inspector data fidelity', () => {
   });
 
   it('tints a plan step only from a status its own payload reports', async () => {
-    vi.mocked(api.getClusterStatus).mockResolvedValue({ plan: [
-      { id: 'done', description: 'Settled', status: 'completed' },
-      { id: 'live', description: 'In flight', status: 'running' },
-      { id: 'odd', description: 'Unheard of', status: 'zzz' },
+    // Mirrors the real GET /cluster/status payload: {status,total_nodes,online_nodes,nodes}.
+    vi.mocked(api.getClusterStatus).mockResolvedValue({ nodes: [
+      { id: 'done', name: 'Settled', status: 'completed' },
+      { id: 'live', name: 'In flight', status: 'running' },
+      { id: 'odd', name: 'Unheard of', status: 'zzz' },
     ] });
     const { container } = render(<DagSection />);
     await screen.findByText('Settled');

@@ -602,8 +602,8 @@ async def _update_task_status(task_id: str, status: str) -> None:
             if t:
                 t.status = status
                 await db.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error("group_task_status_update_failed", task_id=task_id, status=status, error=str(e))
 
 
 async def _select_worker(task: Any) -> Any | None:

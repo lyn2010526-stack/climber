@@ -249,8 +249,6 @@ async def update_group_member(
             member.status = data["status"]
         if "is_worker" in data:
             member.is_worker = bool(data["is_worker"])
-        if "current_task_id" in data:
-            member.current_task_id = data["current_task_id"]
         await db.commit()
         return _member_dict(member)
 
@@ -318,7 +316,6 @@ def _member_dict(m: AgentGroupMember) -> dict[str, Any]:
         "tools": m.tools,
         "message_count": m.message_count,
         "last_active": m.last_active.isoformat() if m.last_active else None,
-        "current_task_id": getattr(m, "current_task_id", None),
     }
 
 

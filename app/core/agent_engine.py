@@ -168,7 +168,7 @@ class AgentEngine:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(config.to_dict(), f, ensure_ascii=False, indent=2)
         except Exception:
-            pass
+            logger.warning("persist permission config failed", exc_info=True)
 
     def _setup_default_permissions(self) -> None:
         """Setup default permission overlay, mirroring permission_rules DEFAULT mode."""
@@ -843,7 +843,7 @@ class AgentEngine:
             from app.core.file_patch import set_current_agent_mode
             set_current_agent_mode(session.mode)
         except Exception:
-            pass
+            logger.warning("set current agent mode failed", exc_info=True)
 
     def _send_start_notification(self, session: AgentSession) -> None:
         """Send notification when agent starts.
@@ -855,7 +855,7 @@ class AgentEngine:
             from app.services.notifications import notification_service
             self._spawn(notification_service.agent_message(session.agent_id or "Agent", "开始执行任务..."))
         except Exception:
-            pass
+            logger.debug("notification dispatch failed", exc_info=True)
 
     def _send_completion_notification(self, session: AgentSession, result: Any) -> None:
         """Send notification when agent completes.
@@ -868,7 +868,7 @@ class AgentEngine:
             from app.services.notifications import notification_service
             self._spawn(notification_service.task_complete(f"Agent {session.agent_id}", result.content[:100] if result and result.content else None))
         except Exception:
-            pass
+            logger.debug("notification dispatch failed", exc_info=True)
 
     def _send_failure_notification(self, session: AgentSession, error: str) -> None:
         """Send notification when agent fails.
@@ -881,7 +881,7 @@ class AgentEngine:
             from app.services.notifications import notification_service
             self._spawn(notification_service.task_failed(f"Agent {session.agent_id}", error))
         except Exception:
-            pass
+            logger.debug("notification dispatch failed", exc_info=True)
 
     def _spawn(self, coro: Any) -> None:
         """Run a fire-and-forget task while holding a reference until it finishes."""
@@ -890,7 +890,7 @@ class AgentEngine:
             self._background_tasks.add(task)
             task.add_done_callback(self._background_tasks.discard)
         except Exception:
-            pass
+            logger.debug("notification dispatch failed", exc_info=True)
 
     async def _inject_memory_context(self, session: AgentSession, message: str) -> None:
         """Inject relevant memories into session context.
@@ -914,7 +914,7 @@ class AgentEngine:
                 else:
                     session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": memory_marker + "\n" + memory_context})
         except Exception:
-            pass
+            logger.warning("inject session memory failed", exc_info=True)
 
     async def _inject_core_memory(self, session: AgentSession) -> None:
         """Inject core memory blocks into session context.
@@ -935,7 +935,7 @@ class AgentEngine:
                 else:
                     session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": core_marker + "\n" + core_memory_xml})
         except Exception:
-            pass
+            logger.warning("inject core memory failed", exc_info=True)
 
     async def _store_episodic_memory(self, session: AgentSession, message: str) -> None:
         """Store important interaction in episodic memory.
@@ -955,7 +955,7 @@ class AgentEngine:
                     importance=0.7,
                 )
         except Exception:
-            pass
+            logger.debug("notification dispatch failed", exc_info=True)
 
     def _trigger_memory_reflection(self, session: AgentSession) -> None:
         """Trigger memory reflection (fire-and-forget).
@@ -967,7 +967,7 @@ class AgentEngine:
             from app.core.memory_reflection import memory_reflection
             self._spawn(memory_reflection.maybe_reflect(session.user_id))
         except Exception:
-            pass
+            logger.debug("notification dispatch failed", exc_info=True)
 
     def resolve_permission(self, tool_call_id: str, decision: str) -> bool:
         """Resolve a pending permission request.

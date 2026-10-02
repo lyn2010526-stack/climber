@@ -6,6 +6,8 @@ services:
     build:
       context: .
       target: web
+    # Pull target for CD deploys; local `up -d` still builds and tags this name.
+    image: ghcr.io/lyn2010526-stack/climber-web:${IMAGE_TAG:-local}
     ports:
       - "8000:80"
     depends_on:
@@ -22,6 +24,9 @@ services:
     build:
       context: .
       target: api
+    # Pull target for CD deploys (cd.yml exports IMAGE_TAG before pulling).
+    # Local `up -d` still builds via target: api and tags it with this name.
+    image: ghcr.io/lyn2010526-stack/climber:${IMAGE_TAG:-local}
     expose:
       - "8000"
     environment:
@@ -30,7 +35,10 @@ services:
       - APP_ENV=production
       - APP_DEBUG=false
       - APP_SECRET_KEY=${APP_SECRET_KEY:?APP_SECRET_KEY is required in production}
-      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
+      # Required on first startup: without it the admin account is never created.
+      # `:?` fails at compose parse time with a clear message instead of the
+      # api container crash-looping on the auth bootstrap RuntimeError.
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:?INITIAL_ADMIN_PASSWORD is required before first startup}
     volumes:
       - ./data:/app/data
     depends_on:

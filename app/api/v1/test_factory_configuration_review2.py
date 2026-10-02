@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, Mock, patch
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.api.v1 import skills_router as factory
+from app.api.v1.routes import skills as factory
 from app.core.api_key_crypto import encrypt_api_key
 from app.storage.database import Agent, ApiKey
 

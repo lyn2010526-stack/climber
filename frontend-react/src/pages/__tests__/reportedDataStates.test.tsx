@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import i18n from '../../i18n';
 import { api } from '../../api';
 import { useWorkspaceStore } from '../../store/workspace';
@@ -78,7 +78,7 @@ describe('SessionSidebar distinguishes a failed list from an empty list', () => 
 
     expect(await screen.findByText('会话列表未上报')).toBeInTheDocument();
     // The heading count must not claim the backend holds no sessions.
-    const heading = screen.getByRole('heading', { name: /Sessions|会话/ });
+    const heading = screen.getByRole('heading', { name: i18n.t('navigation.sessions') });
     expect(heading.parentElement?.textContent).not.toMatch(/^Sessions0/);
   });
 
@@ -110,8 +110,8 @@ describe('PluginsPage reports statuses the backend never declared', () => {
 
     render(<PluginsPage />);
 
-    expect(await screen.findByText('状态未上报')).toBeInTheDocument();
-    expect(screen.queryByText('已安装')).not.toBeInTheDocument();
+    expect(within(await screen.findByRole('status')).getByText(i18n.t('plugins.status.unknown', { defaultValue: 'Unreported' }))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('plugins.status.installed', { defaultValue: 'Installed' }))).not.toBeInTheDocument();
   });
 
   it('keeps a missing status field on the not-reported path', async () => {
@@ -121,7 +121,7 @@ describe('PluginsPage reports statuses the backend never declared', () => {
 
     render(<PluginsPage />);
 
-    expect(await screen.findByText('状态未上报')).toBeInTheDocument();
+    expect(within(await screen.findByRole('status')).getByText(i18n.t('plugins.status.unknown', { defaultValue: 'Unreported' }))).toBeInTheDocument();
   });
 
   it('still names the statuses the backend does declare', async () => {
@@ -132,9 +132,9 @@ describe('PluginsPage reports statuses the backend never declared', () => {
 
     render(<PluginsPage />);
 
-    expect(await screen.findByText('已启用')).toBeInTheDocument();
-    expect(screen.getByText('已禁用')).toBeInTheDocument();
-    expect(screen.queryByText('状态未上报')).not.toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('plugins.status.enabled', { defaultValue: 'Enabled' }))).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('plugins.status.disabled', { defaultValue: 'Disabled' }))).toBeInTheDocument();
+    expect(screen.queryByText(i18n.t('plugins.status.unknown', { defaultValue: 'Unreported' }))).not.toBeInTheDocument();
   });
 });
 
@@ -152,7 +152,7 @@ describe('WorkflowsPage stops painting every status as a success', () => {
 
     render(<WorkflowsPage />);
 
-    expect(await screen.findByText('Never run')).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('workflows.status.never_run'))).toBeInTheDocument();
     expect(document.querySelector('[data-workflow-status="never_run"]')).not.toBeNull();
   });
 
@@ -161,7 +161,7 @@ describe('WorkflowsPage stops painting every status as a success', () => {
 
     render(<WorkflowsPage />);
 
-    expect(await screen.findByText('Status not reported')).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('workflows.status.unknown'))).toBeInTheDocument();
     expect(document.querySelector('[data-workflow-status="teleported"]')).not.toBeNull();
   });
 
@@ -170,8 +170,8 @@ describe('WorkflowsPage stops painting every status as a success', () => {
 
     render(<WorkflowsPage />);
 
-    expect(await screen.findByText('Completed')).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('workflows.status.completed'))).toBeInTheDocument();
     expect(screen.queryByText('0 runs')).not.toBeInTheDocument();
-    expect(screen.getByText('Not reported')).toBeInTheDocument();
+    expect(screen.getByText(i18n.t('collaboration.not_reported'))).toBeInTheDocument();
   });
 });

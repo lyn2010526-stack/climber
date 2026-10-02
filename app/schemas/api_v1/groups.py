@@ -34,4 +34,3 @@ class GroupMemberUpdateRequest(StrictRequest):
     role: str | None = None
     status: str | None = None
     is_worker: bool | None = None
-    current_task_id: str | None = None

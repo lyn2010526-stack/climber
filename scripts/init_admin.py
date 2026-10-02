@@ -2,7 +2,7 @@
 """Initialize the first admin user and API key."""
 
 import sys
-sys.path.insert(0, '/workspace/agent-engine')
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent.parent))
 
 from app.middleware.auth import get_user_store
 

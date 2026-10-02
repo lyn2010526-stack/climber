@@ -115,13 +115,15 @@
                     throw new Error(data.detail || '登录失败');
                 }
 
-                // Store token in localStorage
-                localStorage.setItem('access_token', data.access_token);
-                localStorage.setItem('user_id', data.user_id);
-                localStorage.setItem('scopes', JSON.stringify(data.scopes));
+                // Unified storage keys shared with the React app (api-client.ts).
+                localStorage.setItem('auth_token', data.access_token);
+                localStorage.setItem('refresh_token', data.refresh_token);
+                if (data.user) {
+                    localStorage.setItem('user_info', JSON.stringify(data.user));
+                }
 
                 // Redirect to dashboard
-                window.location.href = '/auth/keys';
+                window.location.href = '/auth/keys.html';
             } catch (error) {
                 errorAlert.textContent = error.message;
                 errorAlert.classList.remove('hidden');

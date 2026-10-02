@@ -17,7 +17,7 @@ from app.api.v1.sessions import _clean_model_settings, resolve_model_credential
 from app.core import AgentEvent, AgentEventType
 from app.core.agent_engine import AgentEngine
 from app.core.api_key_crypto import decrypt_api_key
-from app.core.auth import get_current_user
+from app.core.auth_manager import get_current_user
 from app.core.di import resolve as di_resolve
 from app.core.recovery import RecoveryManager
 from app.models.registry import MODEL_ALIASES, ModelRegistry

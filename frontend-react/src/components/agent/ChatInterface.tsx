@@ -135,7 +135,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   )).filter(request => !resolvedPermissionIds.has(request.id));
 
   const handleApprovePermission = useCallback(async (id: string) => {
-    await api.resolvePermission(id, 'allow' as Parameters<typeof api.resolvePermission>[1]);
+    await api.resolvePermission(id, 'allow');
     setResolvedPermissionIds(prev => new Set(prev).add(id));
   }, []);
 

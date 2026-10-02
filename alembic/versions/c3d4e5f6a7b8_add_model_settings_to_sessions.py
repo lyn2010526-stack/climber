@@ -25,7 +25,10 @@ def upgrade() -> None:
             'sessions',
             sa.Column('model_settings', sa.JSON(), nullable=False, server_default='{}'),
         )
-        op.alter_column('sessions', 'model_settings', server_default=None)
+        # SQLite has no ALTER COLUMN; batch mode recreates the table there and
+        # passes through to a plain ALTER on PostgreSQL.
+        with op.batch_alter_table('sessions') as batch:
+            batch.alter_column('model_settings', server_default=None)
 
 
 def downgrade() -> None:

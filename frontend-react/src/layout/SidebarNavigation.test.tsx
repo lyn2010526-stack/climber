@@ -12,7 +12,8 @@ describe('SidebarNavigation', () => {
     expect(screen.getAllByRole('heading').map(heading => heading.textContent)).toEqual(['工作', '资源', '管理运维']);
     expect(screen.getAllByRole('button')).toHaveLength(ALL_NAV_ITEMS_BASE.length);
     expect(within(screen.getByRole('region', { name: '资源' })).getByRole('button', { name: 'navigation.skills' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'API Access' })).toHaveAttribute('aria-current', 'page');
+    const platformTokens = ALL_NAV_ITEMS_BASE.find(item => item.id === 'authapikeys')!;
+    expect(screen.getByRole('button', { name: platformTokens.labelKey! })).toHaveAttribute('aria-current', 'page');
     for (const item of ALL_NAV_ITEMS_BASE) {
       fireEvent.click(screen.getByRole('button', { name: item.labelKey ?? item.label ?? item.id }));
       expect(onNavigate).toHaveBeenLastCalledWith(item.id);

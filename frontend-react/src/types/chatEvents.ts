@@ -42,6 +42,10 @@ export interface ToolCallPayload {
   error?: string;
   tool_name?: string;
   content?: string;
+  requires_approval?: boolean;
+  action?: string;
+  reason?: string;
+  timeout_seconds?: number;
 }
 
 export interface ErrorPayload {
@@ -59,7 +63,15 @@ export type ChatStreamEvent =
   | { type: 'thinking'; delta: string }
   | {
       type: 'tool_call';
-      toolCall: { id: string; name: string; arguments: Record<string, unknown> };
+      toolCall: {
+        id: string;
+        name: string;
+        arguments: Record<string, unknown>;
+        requiresApproval?: boolean;
+        action?: string;
+        reason?: string;
+        timeoutSeconds?: number;
+      };
     }
   | { type: 'tool_result'; toolCallId: string; result: string; error: string }
   | { type: 'done'; messageId?: string }
@@ -99,12 +111,24 @@ export function normalizeChatEvent(raw: RawSSEEvent): ChatStreamEvent {
       return { type: 'thinking', delta: typeof raw.data === 'string' ? raw.data : delta };
     }
     case CHAT_EVENT.TOOL_CALL: {
+      const requiresApproval = payload.requires_approval === true;
       return {
         type: 'tool_call',
         toolCall: {
           id: readString(payload, ['id', 'tool_call_id', 'toolCallId']) || '',
           name: readString(payload, ['name', 'tool_name']) || 'unknown',
           arguments: asRecord(payload.arguments ?? payload.args ?? payload.input),
+          // Only surface the approval fields when the backend asks for it so
+          // legacy deep-equal consumers keep seeing the old shape.
+          ...(requiresApproval
+            ? {
+                requiresApproval: true,
+                action: readString(payload, ['action']) || undefined,
+                reason: readString(payload, ['reason']) || undefined,
+                timeoutSeconds:
+                  typeof payload.timeout_seconds === 'number' ? payload.timeout_seconds : undefined,
+              }
+            : {}),
         },
       };
     }

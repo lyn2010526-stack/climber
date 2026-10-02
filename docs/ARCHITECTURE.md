@@ -164,7 +164,7 @@ flowchart LR
 ### ContextManager（上下文管理）
 
 **目的**: 组装和管理五层上下文（系统/工作/长期/会话/动态）
-**位置**: `app/core/context_manager.py`
+**位置**: `app/core/engine/pipeline.py`
 **依赖**: Memory, Compressor
 **被依赖**: AgentEngine
 
@@ -192,21 +192,21 @@ flowchart TB
 ### ToolRuntime（工具运行时）
 
 **目的**: 统一工具注册、发现和执行
-**位置**: `app/core/tool_runtime.py`
+**位置**: `app/core/engine/tools.py`
 **依赖**: MCPRegistry, PermissionController
 **被依赖**: AgentEngine, MultiAgent
 
 ### PermissionController（权限控制）
 
 **目的**: 7 级权限模式管理，危险命令拦截
-**位置**: `app/core/permission_controller.py`
+**位置**: `app/core/permission_rules.py`
 **依赖**: PermissionRules
 **被依赖**: ToolRuntime, AgentEngine
 
 ### ModelScheduler（模型调度）
 
 **目的**: 智能模型选择（成本/速度/可用性三维评分）+ 熔断降级
-**位置**: `app/core/model_scheduler.py`
+**位置**: `app/core/scheduler.py`
 **依赖**: ModelRegistry, CircuitBreaker
 **被依赖**: AgentEngine
 

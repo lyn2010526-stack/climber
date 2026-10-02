@@ -14,7 +14,7 @@ from sqlalchemy import select
 from starlette.websockets import WebSocketState
 
 from app.config import settings
-from app.core.auth import LOCAL_USER_ID
+from app.core.principal import LOCAL_SUBJECT_ID as LOCAL_USER_ID
 from app.core.group_ws_hub import group_ws_hub
 from app.middleware.auth import authenticate_credentials
 from app.storage import async_session
