@@ -227,7 +227,7 @@ jobs:
           STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
         run: |
           ssh -i ~/.ssh/deploy_key "${STAGING_USER}@${STAGING_HOST}" \
-            "docker compose exec -T api pytest tests/ -x -q --timeout=30 -k 'test_health'"
+            "docker compose exec -T api pytest tests/ -x -q --timeout=30 -k 'test_health or test_config or test_smoke'"
 
       - name: Rollback on failure
         if: failure()
