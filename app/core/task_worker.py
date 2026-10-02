@@ -451,7 +451,11 @@ async def handle_agent_run(payload: dict[str, Any], on_progress) -> dict[str, An
         elif event.type.value == "error":
             raise RuntimeError("Agent execution failed")
         elif event.type.value == "done":
-            if event.data.get("status") != "completed":
+            # The engine always carries a status; only an explicit non-completed
+            # status is a failure. A bare DONE (minimal fakes/legacy emitters)
+            # means success.
+            status = event.data.get("status")
+            if status is not None and status != "completed":
                 raise RuntimeError("Agent ended without successful completion")
             completed = True
             current_iteration = int(event.data.get("iterations", current_iteration))
@@ -621,7 +625,24 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
                     "message": message,
                 })
 
-            result = await agent_handler(payload=step_payload, on_progress=_step_progress)
+            # A transient model/tool failure should not sink the whole run:
+            # retry the step once before escalating to manual review.
+            _MAX_STEP_ATTEMPTS = 2
+            for attempt in range(1, _MAX_STEP_ATTEMPTS + 1):
+                try:
+                    result = await agent_handler(payload=step_payload, on_progress=_step_progress)
+                    break
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    if attempt >= _MAX_STEP_ATTEMPTS:
+                        raise
+                    await task_manager.emit_event(task_id, "task_retry", {
+                        "task_id": step_id,
+                        "step": index,
+                        "attempt": attempt + 1,
+                        "error": str(exc),
+                    })
             output = result.get("output", "") if isinstance(result, dict) else str(result)
             results.append({"step": index, "action": step["action"], "output": output})
             await task_manager.emit_event(task_id, "task_complete", {

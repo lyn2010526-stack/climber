@@ -102,14 +102,18 @@ describe('inspector layout memory', () => {
     await act(async () => useWorkspaceStore.setState({ activeSessionId: 's2' }));
     expect(isExpanded('right_panel.groups.changes')).toBe('true');
 
-    await expandGroup('right_panel.groups.execution');
-    await selectTab('right_panel.sections.reasoning');
+    await expandGroup('right_panel.sections.reasoning');
+    expect(isExpanded('right_panel.sections.reasoning')).toBe('true');
     expect(visiblePanel()).toBe('inspector-panel-reasoning');
 
     // s1 keeps the arrangement it was left with, unaffected by s2's.
     await act(async () => useWorkspaceStore.setState({ activeSessionId: 's1' }));
     expect(isExpanded('right_panel.groups.changes')).toBe('true');
     expect(visiblePanel()).toBe('inspector-panel-diff');
+    await settlePanel();
+    await act(async () => useWorkspaceStore.setState({ activeSessionId: 's2' }));
+    expect(isExpanded('right_panel.sections.reasoning')).toBe('true');
+    expect(visiblePanel()).toBe('inspector-panel-reasoning');
     await settlePanel();
     view.unmount();
   });

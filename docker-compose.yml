@@ -36,7 +36,9 @@ services:
       - APP_DEBUG=false
       - APP_SECRET_KEY=${APP_SECRET_KEY:?APP_SECRET_KEY is required in production}
       # Required on first startup: without it the admin account is never created.
-      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
+      # `:?` fails at compose parse time with a clear message instead of the
+      # api container crash-looping on the auth bootstrap RuntimeError.
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:?INITIAL_ADMIN_PASSWORD is required before first startup}
     volumes:
       - ./data:/app/data
     depends_on:

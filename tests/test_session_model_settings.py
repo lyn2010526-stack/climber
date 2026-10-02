@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+from app.core.api_key_crypto import encrypt_api_key
+from app.models.registry import PROVIDERS
+
 
 async def test_create_session_persists_and_lists_model_override(client) -> None:
     created = await client.post(
@@ -75,14 +80,19 @@ class _FakeRun:
 class _FakeEngine:
     def __init__(self):
         self._sessions: dict = {}
+        self._session_locks: dict = {}
         self.created: dict = {}
 
+    def _init_reasoning(self):
+        pass
+
     def create_session(self, **kwargs):
-        self.created = kwargs
+        self.created.update(kwargs)
 
         class _Session:
             def __init__(self, user_id):
                 self.user_id = user_id
+                self.session_config = SimpleNamespace()
 
         return _Session(kwargs.get("user_id", ""))
 
@@ -92,12 +102,26 @@ class _FakeEngine:
 
 async def test_chat_applies_session_model_override(client, monkeypatch) -> None:
     from app.api.v1 import chat as chat_module
+    from app.storage import async_session
+    from app.storage.database import ApiKey
+
+    async with async_session() as db:
+        db.add(ApiKey(
+            id="session-override-key", user_id="default-user", name="test",
+            provider="deepseek", api_key_encrypted=encrypt_api_key("test-deepseek-key"),
+            is_active=True,
+        ))
+        await db.commit()
+    monkeypatch.setitem(PROVIDERS, "deepseek", lambda **kwargs: SimpleNamespace(**kwargs))
 
     created = await client.post(
         "/api/v1/sessions/",
         json={
             "title": "chat-override",
-            "model_settings": {"provider": "deepseek", "model_id": "deepseek-chat"},
+            "model_settings": {
+                "provider": "deepseek", "model_id": "deepseek-chat",
+                "credential_id": "session-override-key",
+            },
         },
     )
     assert created.status_code == 200
@@ -113,6 +137,7 @@ async def test_chat_applies_session_model_override(client, monkeypatch) -> None:
 
     assert fake.created["provider"] == "deepseek"
     assert fake.created["model_id"] == "deepseek-chat"
+    assert fake.created["api_key"] == "test-deepseek-key"
 
 
 async def _noop():
@@ -129,7 +154,7 @@ async def _seed_agent(agent_id: str) -> None:
             name="chat-model-test",
             provider="openai",
             model_id="gpt-4o-mini",
-            api_key_encrypted="",
+            api_key_encrypted=encrypt_api_key("test-agent-key"),
             user_id="default-user",
         ))
         await db.commit()
@@ -170,6 +195,7 @@ async def _chat_kwargs_for(session_id: str, monkeypatch) -> dict:
 
 
 async def test_chat_same_provider_override_keeps_agent_key(client, monkeypatch) -> None:
+    monkeypatch.setitem(PROVIDERS, "openai", lambda **kwargs: SimpleNamespace(**kwargs))
     agent_id = "chat-model-test-agent"
     await _seed_agent(agent_id)
     try:
@@ -185,5 +211,6 @@ async def test_chat_same_provider_override_keeps_agent_key(client, monkeypatch) 
         assert kwargs["provider"] == "openai"
         assert kwargs["model_id"] == "gpt-4o"
         assert kwargs["agent_id"] == agent_id
+        assert kwargs["api_key"] == "test-agent-key"
     finally:
         await _drop_agent(agent_id)

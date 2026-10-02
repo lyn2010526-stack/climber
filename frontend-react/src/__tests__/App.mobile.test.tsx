@@ -133,16 +133,28 @@ describe('Desktop-first shell contract', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('navigates from the mobile command palette and closes it', async () => {
+  it('navigates from the mobile command palette to the desktop fallback and closes it', async () => {
     const user = userEvent.setup();
     setViewport(390);
     renderApp();
     await user.keyboard('{Control>}k{/Control}');
     await user.type(screen.getByRole('combobox'), 'Agents');
     await user.keyboard('{Enter}');
-    expect(await screen.findByText('Agents Page')).toBeInTheDocument();
+    expect(await screen.findByRole('region', { name: 'Agents' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Agents', level: 2 })).toBeInTheDocument();
+    expect(screen.getByText('此页面属于桌面工作台，移动端保留明确入口并提供稳定导航。')).toBeInTheDocument();
+    expect(screen.getByText('使用底部导航打开聊天，或点击“更多”访问可用的移动端入口。')).toBeInTheDocument();
+    expect(screen.queryByText('Agents Page')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('desktop-workspace')).not.toBeInTheDocument();
     expect(window.location.hash).toBe('#agents');
     expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('button', { name: i18n.t('sidebar.more') })).toHaveAttribute('aria-current', 'page');
+    await user.click(screen.getByRole('button', { name: i18n.t('sidebar.more') }));
+    expect(screen.getByRole('button', { name: 'Agents' })).toHaveAttribute('aria-current', 'page');
+    await user.keyboard('{Escape}');
+    setViewport(1280);
+    expect(await screen.findByText('Agents Page')).toBeInTheDocument();
+    expect(window.location.hash).toBe('#agents');
   });
 
   it('preserves global search across the mobile breakpoint and switches to commands exclusively', async () => {

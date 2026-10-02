@@ -52,18 +52,18 @@ beforeEach(async () => {
 describe('Task B operations pages', () => {
   it('reports the live health response and keeps quick actions compact', async () => {
     render(<DashboardPage />);
-    expect(await screen.findByText(/API request succeeded|API 请求成功/)).toBeDefined();
-    expect(screen.getByRole('button', { name: /Create an agent/i })).toBeDefined();
+    expect(await screen.findByText(i18n.t('home.api_online'))).toBeDefined();
+    expect(screen.getByRole('button', { name: i18n.t('home.create_agent') })).toBeDefined();
     expect(screen.queryByText('Welcome back')).toBeNull();
   });
 
   it('filters plugins by search and calls the existing toggle contract', async () => {
     render(<PluginsPage />);
     expect(await screen.findByText('Filesystem')).toBeDefined();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), { target: { value: 'missing' } });
-    expect(screen.getByText('未找到插件')).toBeDefined();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), { target: { value: 'file' } });
-    fireEvent.click(screen.getByRole('button', { name: '禁用' }));
+    fireEvent.change(screen.getByRole('textbox', { name: i18n.t('common.search') }), { target: { value: 'missing' } });
+    expect(screen.getByText(i18n.t('plugins.empty_title'))).toBeDefined();
+    fireEvent.change(screen.getByRole('textbox', { name: i18n.t('common.search') }), { target: { value: 'file' } });
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('plugins.disable', { defaultValue: 'Disable' }) }));
     await waitFor(() => expect(api.disablePlugin).toHaveBeenCalledWith('plugin-1'));
   });
 

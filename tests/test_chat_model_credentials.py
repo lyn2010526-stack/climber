@@ -17,7 +17,7 @@ from app.api.v1 import chat, model_discovery, router, sessions
 from app.core import AgentEvent, AgentEventType
 from app.core.agent_engine import AgentEngine
 from app.core.api_key_crypto import encrypt_api_key
-from app.core.auth import get_current_user
+from app.core.auth_manager import get_current_user
 from app.core.principal import Principal, reset_current_principal, set_current_principal
 from app.models.registry import PROVIDERS, ModelRegistry
 from app.storage.database import Agent, ApiKey, Session

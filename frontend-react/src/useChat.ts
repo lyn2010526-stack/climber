@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { api } from './api';
+import type { PermissionRequest } from './components/agent/FloatingPermissionDialog';
 
 export interface ToolCall {
   id: string;
@@ -9,7 +10,7 @@ export interface ToolCall {
   error?: string;
   status?: 'running' | 'success' | 'error';
   requiresApproval?: boolean;
-  action?: string;
+  action?: PermissionRequest['action'];
   description?: string;
   details?: string;
 }
@@ -117,7 +118,9 @@ export function useChat(sessionId: string | null) {
             arguments: event.toolCall.arguments,
             status: 'running',
             requiresApproval: event.toolCall.requiresApproval,
-            action: event.toolCall.action,
+            action: ['command', 'file_read', 'file_write', 'file_delete', 'network', 'mcp_tool'].includes(event.toolCall.action ?? '')
+              ? event.toolCall.action as PermissionRequest['action']
+              : undefined,
             description: event.toolCall.reason,
             details: event.toolCall.timeoutSeconds
               ? `Approval times out after ${event.toolCall.timeoutSeconds}s`

@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.core import SessionStatus
-from app.core.auth import get_current_user
+from app.core.auth_manager import get_current_user
 from app.storage import async_session
 from app.storage.database import Agent as AgentModel
 from app.storage.database import ApiKey as ApiKeyModel
