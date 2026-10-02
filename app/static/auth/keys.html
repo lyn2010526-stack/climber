@@ -211,7 +211,7 @@
 
         async function loadKeys() {
             if (!token) {
-                window.location.href = '/auth/login';
+                window.location.href = '/auth/login.html';
                 return;
             }
 
@@ -228,7 +228,7 @@
                     localStorage.removeItem('refresh_token');
                     localStorage.removeItem('user_info');
                     localStorage.removeItem('access_token');
-                    window.location.href = '/auth/login';
+                    window.location.href = '/auth/login.html';
                     return;
                 }
 
@@ -340,7 +340,7 @@
             localStorage.removeItem('access_token');
             localStorage.removeItem('user_id');
             localStorage.removeItem('scopes');
-            window.location.href = '/auth/login';
+            window.location.href = '/auth/login.html';
         });
 
         document.getElementById('create-key-form').addEventListener('submit', (e) => {
