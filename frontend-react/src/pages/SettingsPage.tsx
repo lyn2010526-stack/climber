@@ -219,10 +219,9 @@ function ProfileSection() {
     setSaveError(null);
     try {
       await api.updateSettings({
-        profile: { username, email },
         autonomous_agent_mode: false,
       });
-      setSaveError('后端暂未支持账户资料更新接口，修改未持久化。');
+      setSaveError('账户资料（用户名/邮箱）暂无更新接口，仅系统设置已保存。');
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : '保存账户资料失败');
     } finally {
@@ -259,8 +258,7 @@ function ProfileSection() {
                 id="settings-username"
               placeholder="输入用户名"
               value={username}
-              disabled={saving}
-              onChange={(e) => setUsername(e.target.value)}
+              disabled
             />
           </FormField>
           <FormField label="邮箱地址" description="用于登录和接收通知" required>
@@ -269,8 +267,7 @@ function ProfileSection() {
               type="email"
               placeholder="your@email.com"
               value={email}
-              disabled={saving}
-              onChange={(e) => setEmail(e.target.value)}
+              disabled
               leftIcon={<Mail size={14} />}
             />
           </FormField>

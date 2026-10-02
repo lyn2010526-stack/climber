@@ -25,18 +25,23 @@
 ```bash
 # 克隆仓库
 git clone https://github.com/lyn2010526-stack/climber.git
-cd climber/agent-engine
+cd climber
 
-# 启动所有服务
-docker-compose up -d
+# 启动所有服务（生产 compose，首次启动必须提供以下变量）
+export POSTGRES_PASSWORD='your-strong-password'
+export APP_SECRET_KEY='your-random-secret-key'
+export INITIAL_ADMIN_PASSWORD='your-admin-password'
+docker compose up -d
 ```
 
-### 服务组成
+> 生产 compose（`docker-compose.yml`）强制要求 `POSTGRES_PASSWORD` 与 `APP_SECRET_KEY`；本地开发请使用 `docker-compose.dev.yml`，见下文开发部署章节。
+
+### 服务组成（生产 docker-compose.yml）
 
 | 服务 | 端口 | 说明 |
 |------|------|------|
-| api | 8000 | FastAPI 后端 |
-| frontend | 5173 | React 前端 |
+| web | 8000 (容器内 80) | Nginx 入口，托管前端静态资源并反代 API |
+| api | 容器内 8000 | FastAPI 后端，由 web 反代访问 |
 | postgres | 5432 | PostgreSQL 数据库 |
 | redis | 6379 | Redis 缓存 |
 | chroma | 8001 | ChromaDB 向量存储 |
@@ -53,10 +58,10 @@ docker-compose up -d
 
 ```bash
 # 查看日志
-docker-compose logs -f api
+docker compose logs -f api
 
 # 重启服务
-docker-compose restart api
+docker compose restart api
 
 # 停止所有服务
 docker-compose down
@@ -66,7 +71,7 @@ docker-compose down -v
 
 # 重新构建
 docker-compose build --no-cache
-docker-compose up -d
+docker compose up -d
 ```
 
 ### 健康检查
@@ -97,7 +102,7 @@ docker-compose exec redis redis-cli ping
 ```bash
 # 克隆仓库
 git clone https://github.com/lyn2010526-stack/climber.git
-cd climber/agent-engine
+cd climber
 
 # 创建虚拟环境
 python -m venv venv
@@ -264,9 +269,9 @@ After=network.target postgresql.service redis.service
 Type=simple
 User=climber
 Group=climber
-WorkingDirectory=/opt/climber/agent-engine
-Environment=PATH=/opt/climber/agent-engine/venv/bin
-ExecStart=/opt/climber/agent-engine/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4
+WorkingDirectory=/opt/climber
+Environment=PATH=/opt/climber/venv/bin
+ExecStart=/opt/climber/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 4
 Restart=always
 RestartSec=5
 
@@ -339,8 +344,8 @@ sudo usermod -aG docker $USER
 
 # 3. 克隆并启动
 git clone https://github.com/lyn2010526-stack/climber.git
-cd climber/agent-engine
-docker-compose up -d
+cd climber
+docker compose up -d
 ```
 
 ### 部署到 Kubernetes
@@ -363,7 +368,7 @@ spec:
     spec:
       containers:
         - name: api
-          image: climber/agent-engine:latest
+          image: ghcr.io/lyn2010526-stack/climber:latest
           ports:
             - containerPort: 8000
           env:

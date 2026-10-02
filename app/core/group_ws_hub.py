@@ -153,8 +153,6 @@ class GroupWebSocketHub:
                 return {"ok": False, "error": "member not found"}
             if "status" in payload:
                 member.status = payload["status"]
-            if "current_task_id" in payload:
-                member.current_task_id = payload["current_task_id"]
             await db.commit()
             return {"ok": True, "id": member_id}
 

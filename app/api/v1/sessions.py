@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from app.core import SessionStatus
 from app.core.auth import get_current_user
 from app.storage import async_session
 from app.storage.database import Agent as AgentModel
@@ -160,7 +161,7 @@ async def create_session_with_slash(
         await resolve_model_credential(session, user_id, model_settings)
         row = SessionModel(
             title=payload.title or "New Session",
-            status="idle",
+            status=SessionStatus.IDLE.value,
             agent_id=payload.agent_id or None,
             user_id=user_id,
             model_settings=model_settings,

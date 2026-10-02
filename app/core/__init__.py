@@ -45,6 +45,7 @@ class CompressionStrategy(StrEnum):
 
 
 class SessionStatus(StrEnum):
+    IDLE = "idle"
     PENDING = "pending"
     RUNNING = "running"
     PAUSED = "paused"

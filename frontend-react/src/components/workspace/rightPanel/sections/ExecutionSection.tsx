@@ -22,20 +22,14 @@ interface TraceEntry {
   tokens?: number;
 }
 
-/** A plan step without a description is reported as unnamed, never invented. */
-function planLabel(item: Record<string, unknown>): string {
-  const raw = item.description ?? item.task;
-  return typeof raw === 'string' && raw.trim() ? raw.trim() : '';
-}
-
 export function DagSection({ onCount }: { onCount?: ReportCount } = {}) {
   const { t } = useI18n();
   const { data, loading, error, reload } = useAsyncData<PlanNode[]>(async () => {
     const payload = await api.getClusterStatus();
-    const plan = Array.isArray(payload?.plan) ? payload.plan : [];
-    return plan.map((item: Record<string, unknown>, index: number) => ({
+    const nodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
+    return nodes.map((item: Record<string, unknown>, index: number) => ({
       id: String(item.id ?? `node-${index}`),
-      label: planLabel(item),
+      label: typeof item.name === 'string' ? item.name : '',
       status: typeof item.status === 'string' ? item.status : '',
     }));
   }, []);

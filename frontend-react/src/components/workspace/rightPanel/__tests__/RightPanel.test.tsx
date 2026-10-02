@@ -19,7 +19,7 @@ vi.mock('../../../workspace/ReasoningPanel', () => ({
 
 vi.mock('../../../../api', () => ({
   api: {
-    getClusterStatus: vi.fn().mockResolvedValue({ plan: [] }),
+    getClusterStatus: vi.fn().mockResolvedValue({ nodes: [] }),
     listTraces: vi.fn().mockResolvedValue({ traces: [] }),
     listDocuments: vi.fn().mockResolvedValue([]),
     getSessionMessages: vi.fn().mockResolvedValue([]),
@@ -288,9 +288,9 @@ describe('RightPanel on-demand inspection', () => {
 
   it('tallies resolved entries in the group heading and retires the tally on collapse', async () => {
     vi.mocked(api.getClusterStatus).mockResolvedValue({
-      plan: [
-        { id: 'a', description: 'First step', status: 'completed' },
-        { id: 'b', description: 'Second step', status: 'running' },
+      nodes: [
+        { id: 'a', name: 'First step', status: 'completed' },
+        { id: 'b', name: 'Second step', status: 'running' },
       ],
     });
     useWorkspaceStore.setState({ rightPanelTab: 'dag' });
@@ -328,7 +328,7 @@ describe('RightPanel on-demand inspection', () => {
   });
 
   it('still tallies a resolved empty list as zero rather than unreported', async () => {
-    vi.mocked(api.getClusterStatus).mockResolvedValue({ plan: [] });
+    vi.mocked(api.getClusterStatus).mockResolvedValue({ nodes: [] });
     useWorkspaceStore.setState({ rightPanelTab: 'dag' });
     render(<RightPanel />);
     await screen.findByText('right_panel.states.empty_dag');

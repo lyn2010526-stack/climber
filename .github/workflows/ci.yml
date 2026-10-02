@@ -195,22 +195,26 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run bandit security scan
-        run: bandit -r app/ -f json -o bandit-report.json --severity-level medium || true
+        run: |
+          bandit -r app/ -f json -o bandit-report.json --severity-level high
+          echo "Bandit found no high-severity issues"
 
       - name: Check for known vulnerabilities
-        run: safety check -r requirements.txt --full-report || true
+        run: safety check -r requirements.txt --full-report
+        continue-on-error: true
 
-      - name: Audit dependencies
-        run: pip-audit -r requirements.txt --format json --output pip-audit-report.json || true
+      - name: Audit Python dependencies
+        run: pip-audit -r requirements.txt --format json --output pip-audit-report.json
+        continue-on-error: true
 
       - name: Check for hardcoded secrets
         run: |
           pip install detect-secrets
           if [ -f .secrets-baseline.json ]; then
-            detect-secrets audit .secrets-baseline.json || true
+            detect-secrets audit .secrets-baseline.json
           else
-            detect-secrets scan --all-files > .secrets-baseline.json || true
-            detect-secrets audit .secrets-baseline.json || true
+            detect-secrets scan --all-files > .secrets-baseline.json
+            echo "Baseline created; audit runs from next CI pass"
           fi
 
       - name: Upload security reports

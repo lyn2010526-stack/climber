@@ -8,6 +8,10 @@ export interface ToolCall {
   result?: string;
   error?: string;
   status?: 'running' | 'success' | 'error';
+  requiresApproval?: boolean;
+  action?: string;
+  description?: string;
+  details?: string;
 }
 
 export interface Message {
@@ -112,6 +116,12 @@ export function useChat(sessionId: string | null) {
             name: event.toolCall.name,
             arguments: event.toolCall.arguments,
             status: 'running',
+            requiresApproval: event.toolCall.requiresApproval,
+            action: event.toolCall.action,
+            description: event.toolCall.reason,
+            details: event.toolCall.timeoutSeconds
+              ? `Approval times out after ${event.toolCall.timeoutSeconds}s`
+              : undefined,
           };
           toolCallsMap.set(tc.id, tc);
           setMessages(prev =>

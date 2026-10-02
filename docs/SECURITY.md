@@ -133,22 +133,21 @@ ALLOWED_PATHS=/workspace/projects,/home/user/workspace
 
 ### Layer 6: 权限控制
 
-**7 级权限模式**:
+**6 级权限模式**（实现：`app/core/permission_rules.py` 的 `PermissionMode`）:
 
-| 级别 | 模式 | 说明 |
+| 模式 | 值 | 说明 |
 |------|------|------|
-| 1 | Read-Only | 仅允许读取操作 |
-| 2 | Standard | 标准权限，危险操作需确认 |
-| 3 | Elevated | 提升权限，允许写入 |
-| 4 | Admin | 管理权限 |
-| 5 | Unrestricted | 无限制 |
-| 6 | Bypass | 绕过所有检查 |
-| 7 | Debug | 调试模式 |
+| Default | `default` | 手动模式：只自动允许读取 |
+| Accept Edits | `acceptEdits` | 自动接受编辑 |
+| Plan | `plan` | 计划模式：只读预览 |
+| Auto | `auto` | 全自动（有分类器安全检查） |
+| Bypass | `bypass` | 跳过所有权限检查 |
+| Strict | `strict` | 严格模式：未显式允许即拒绝 |
 
 **权限规则引擎**:
 ```json
 {
-  "mode": "standard",
+  "mode": "default",
   "rules": [
     {"decision": "allow", "tool": "read_file"},
     {"decision": "deny", "tool": "shell_exec", "pattern": "rm -rf"},

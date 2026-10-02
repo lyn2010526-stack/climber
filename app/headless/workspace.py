@@ -120,7 +120,7 @@ class WorkspaceSandbox:
         env = self._sandbox_env()
         process = subprocess.Popen(
             command,
-            shell=True,
+            shell=True,  # nosec B602 - headless CLI executes user commands by design, sandboxed via _sandbox_env()
             cwd=str(self.root),
             env=env,
             start_new_session=True,

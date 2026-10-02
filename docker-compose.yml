@@ -6,6 +6,8 @@ services:
     build:
       context: .
       target: web
+    # Pull target for CD deploys; local `up -d` still builds and tags this name.
+    image: ghcr.io/lyn2010526-stack/climber-web:${IMAGE_TAG:-local}
     ports:
       - "8000:80"
     depends_on:

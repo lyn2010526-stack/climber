@@ -9,7 +9,6 @@ that, so the pragmas below are applied to every new connection.
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from pathlib import Path
 from typing import Any
 
@@ -162,5 +161,50 @@ async def init_db() -> None:
     )
 
     async with engine.begin() as conn:
-        with contextlib.suppress(Exception):
-            await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(Base.metadata.create_all)
+
+    # create_all only creates missing tables and never alters existing ones,
+    # so a database managed this way can silently drift from the ORM models.
+    # Surface that risk instead of swallowing it.
+    try:
+        await _warn_if_schema_unmanaged()
+    except Exception as exc:  # diagnostics must never block startup
+        logger.debug("schema management check skipped", error=str(exc))
+
+
+def _alembic_head() -> str | None:
+    try:
+        from alembic.config import Config
+        from alembic.script import ScriptDirectory
+
+        config = Config("alembic.ini")
+        return ScriptDirectory.from_config(config).get_current_head()
+    except Exception:
+        return None
+
+
+async def _warn_if_schema_unmanaged() -> None:
+    def _check(sync_conn: Any) -> None:
+        from alembic.runtime.migration import MigrationContext
+        from sqlalchemy import inspect
+
+        current = MigrationContext.configure(sync_conn).get_current_revision()
+        if current is None and "alembic_version" not in inspect(sync_conn).get_table_names():
+            logger.warning(
+                "init_db used create_all without Alembic version tracking; "
+                "run `alembic stamp head` (or `alembic upgrade head`) so future "
+                "migrations can apply cleanly"
+            )
+            return None
+        head = _alembic_head()
+        if head and current != head:
+            logger.warning(
+                "database schema revision %s is behind migrations head %s; "
+                "run `alembic upgrade head` to close the drift",
+                current,
+                head,
+            )
+        return None
+
+    async with engine.connect() as conn:
+        await conn.run_sync(_check)

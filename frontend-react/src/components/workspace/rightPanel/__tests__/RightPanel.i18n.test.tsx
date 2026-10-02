@@ -8,7 +8,7 @@ import { warmSectionChunks } from './warmSectionChunks';
 
 vi.mock('../../../../api', () => ({
   api: {
-    getClusterStatus: vi.fn().mockResolvedValue({ plan: [] }),
+    getClusterStatus: vi.fn().mockResolvedValue({ nodes: [] }),
     listTraces: vi.fn().mockResolvedValue({ traces: [] }),
     listDocuments: vi.fn().mockResolvedValue([]),
     getSessionMessages: vi.fn().mockResolvedValue([]),

@@ -20,7 +20,6 @@ from app.api.v1 import prompt_templates as prompt_templates_router
 from app.api.v1 import scheduler as scheduler_router
 from app.api.v1 import sessions as sessions_router
 from app.api.v1 import settings as settings_router
-from app.api.v1 import skills_router as skills_router_module
 from app.api.v1 import workflows as workflows_router
 from app.api.v1.routes.arcbench import router as arcbench_router
 from app.api.v1.routes.research import router as research_router
@@ -56,11 +55,6 @@ def _include_extension_routes(source: APIRouter, prefixes: tuple[str, ...]) -> N
 _include_extension_routes(cost_router.router, ("/cost/usage",))
 _include_extension_routes(scheduler_router.router, ("/scheduler/tasks",))
 _include_extension_routes(mcp_router.router, ("/mcp/servers", "/mcp/categories"))
-_include_extension_routes(skills_router_module.router, ("/skills/autonomous",))
-
-for route in skills_router_module.router.routes:
-    if getattr(route, "path", "") == "/skills/{skill_id}" and "PATCH" in getattr(route, "methods", set()):
-        router.routes.append(route)
 
 
 @router.get("/health", tags=["system"])

@@ -115,5 +115,7 @@ async def _run_diagnostics() -> dict:
 @router.get("")
 async def doctor() -> JSONResponse:
     report = await _run_diagnostics()
-    status = 200 if report["healthy"] else 503
-    return JSONResponse(report, status_code=status)
+    # The DoctorPage reads the full report body; unhealthy results keep 200 so
+    # the frontend never loses the diagnosis to a thrown request error.
+    # `/health` remains the machine-facing probe with 503 semantics.
+    return JSONResponse(report, status_code=200)

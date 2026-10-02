@@ -364,8 +364,8 @@ async def _mark_task_failed(task: Any, error: str) -> None:
             if t:
                 t.status = "failed"
                 await db.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error("group_task_mark_failed", task_id=task.id, error=str(e))
     await group_ws_hub.broadcast(task.group_id, {
         "type": "task_failed",
         "data": {"task_id": task.id, "error": error},

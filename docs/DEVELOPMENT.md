@@ -15,7 +15,7 @@
 ```bash
 # 克隆仓库
 git clone https://github.com/lyn2010526-stack/climber.git
-cd climber/agent-engine
+cd climber
 
 # 创建虚拟环境
 python -m venv venv

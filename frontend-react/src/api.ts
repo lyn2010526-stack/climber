@@ -868,7 +868,7 @@ class ApiClient {
   }
 
   // Permissions
-  async resolvePermission(toolCallId: string, decision: 'approve' | 'deny') {
+  async resolvePermission(toolCallId: string, decision: 'allow' | 'deny') {
     return this.request<any>(`/permissions/resolve`, {
       method: 'POST',
       body: JSON.stringify({ tool_call_id: toolCallId, decision }),

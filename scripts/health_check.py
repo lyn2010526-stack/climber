@@ -29,7 +29,7 @@ import httpx
 DEFAULT_API_URL = os.getenv("HEALTH_API_URL", "http://localhost:8000")
 DEFAULT_DB_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/climber.db")
 DEFAULT_REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-DEFAULT_DISK_PATH = os.getenv("HEALTH_DISK_PATH", "/workspace/agent-engine")
+DEFAULT_DISK_PATH = os.getenv("HEALTH_DISK_PATH", str(Path(__file__).resolve().parent.parent))
 
 DISK_WARNING_PERCENT = int(os.getenv("HEALTH_DISK_WARN", "80"))
 DISK_CRITICAL_PERCENT = int(os.getenv("HEALTH_DISK_CRIT", "90"))
