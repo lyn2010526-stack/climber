@@ -345,21 +345,30 @@ jobs:
       - name: Verify frontend image
         run: |
           # The production stage is nginx:alpine — there is no `node` binary in
-          # it. Smoke-test what the image is actually for: serving the built SPA.
-          docker run -d --name fe-check agent-engine-frontend:ci-test
+          # it, so verify what the image is actually for.
+          docker run --rm --entrypoint sh agent-engine-frontend:ci-test -c \
+            'test -s /usr/share/nginx/html/index.html && ls /usr/share/nginx/html/assets/*.js >/dev/null'
+
+          # ...and that it serves it. nginx resolves the `api` upstream while
+          # loading its config, so give it a host to resolve outside compose.
+          docker run -d --name fe-check -p 18080:80 --add-host api:127.0.0.1 \
+            agent-engine-frontend:ci-test
           ok=0
-          for _ in $(seq 1 15); do
-            if docker exec fe-check curl -fsS http://localhost/ 2>/dev/null | grep -qi 'id="root"'; then
+          for _ in $(seq 1 20); do
+            if curl -fsS http://localhost:18080/ | grep -qi 'id="root"'; then
               ok=1
               break
             fi
             sleep 1
           done
-          docker rm -f fe-check >/dev/null
           if [ "$ok" != "1" ]; then
             echo "::error::frontend image did not serve index.html"
+            docker logs fe-check || true
+            docker inspect fe-check --format '{{.State.Status}} exit={{.State.ExitCode}}' || true
+            docker rm -f fe-check || true
             exit 1
           fi
+          docker rm -f fe-check
           echo "Frontend image OK"
 
   # ===========================================================================
