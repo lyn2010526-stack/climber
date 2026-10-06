@@ -18,7 +18,7 @@ def install_metacognition_scope(engine: Any) -> None:
     """Bind the existing iteration facade to a task-local owning session."""
     if getattr(engine, "metacognition_scope_installed", False):
         return
-    iteration_loop = engine._iteration_loop  # noqa: SLF001 - engine facade composition point
+    iteration_loop = engine._iteration_loop
 
     async def scoped(session: Any, executor: Any, compressor: Any):
         token = _meta_session.set((engine, session))
@@ -29,7 +29,7 @@ def install_metacognition_scope(engine: Any) -> None:
         finally:
             _meta_session.reset(token)
 
-    engine._iteration_loop = scoped  # noqa: SLF001 - preserve the existing facade signature
+    engine._iteration_loop = scoped
     engine.metacognition_scope_installed = True
 
 
@@ -47,6 +47,7 @@ def dual_loop_coordinator(engine: Any) -> Any:
     if coordinator is None:
         try:
             from app.core.engine.dual_loop import DualLoopCoordinator
+
             coordinator = DualLoopCoordinator()
             engine._dual_loop = coordinator
         except Exception:
@@ -114,7 +115,8 @@ async def inject_profile_context(engine: Any, session: Any, message: str) -> Non
         profile_marker = "<!-- PROFILE_CONTEXT -->"
         # Clear stale injections before any read that can fail or observe revoked consent.
         session.messages[:] = [
-            msg for msg in session.messages
+            msg
+            for msg in session.messages
             if not (
                 msg.get("role") == MessageRole.SYSTEM
                 and isinstance(msg.get("content"), str)
@@ -127,7 +129,9 @@ async def inject_profile_context(engine: Any, session: Any, message: str) -> Non
         user_id = getattr(session, "user_id", None) or "local"
         profile_context = await coordinator.profile_context(user_id, message)
         if profile_context:
-            session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": profile_marker + "\n" + profile_context})
+            session.messages.insert(
+                -1, {"role": MessageRole.SYSTEM, "content": profile_marker + "\n" + profile_context}
+            )
     except Exception:
         pass
 
@@ -145,6 +149,7 @@ def record_profile_outcome(engine: Any, session: Any, message: str) -> None:
         if coordinator is None:
             return
         from app.core.task_state_machine import TaskState
+
         outcome = "success" if session.state_machine.state == TaskState.COMPLETED else "failure"
         metrics = getattr(session, "metrics", None)
         user_id = getattr(session, "user_id", None) or "local"

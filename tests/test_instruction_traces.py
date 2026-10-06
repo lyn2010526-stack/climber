@@ -233,7 +233,9 @@ async def test_retrieval_is_user_scoped_and_updates_access_metadata() -> None:
     user_id = str(uuid.uuid4())
     async with await _db() as db:
         own, _ = await create_trace(db, {"raw_text": "private deployment plan", "user_id": user_id})
-        await create_trace(db, {"raw_text": "private deployment plan", "user_id": str(uuid.uuid4())})
+        await create_trace(
+            db, {"raw_text": "private deployment plan", "user_id": str(uuid.uuid4())}
+        )
         await db.commit()
 
         rows = await retrieve_traces(db, user_id=user_id, query="deployment")
@@ -252,9 +254,10 @@ async def test_outcome_closes_trace_by_turn_without_changing_raw_text() -> None:
             {"raw_text": "原样保留\n第二行", "turn_id": turn_id, "status": "running"},
         )
         await db.commit()
-        assert await update_trace_outcome(
-            db, turn_id=turn_id, status="completed", outcome="success"
-        ) == 1
+        assert (
+            await update_trace_outcome(db, turn_id=turn_id, status="completed", outcome="success")
+            == 1
+        )
         await db.commit()
         await db.refresh(trace)
         assert trace.raw_text == "原样保留\n第二行"

@@ -73,7 +73,9 @@ async def _run_scheduled_workflow(task: Any) -> None:
         task.config["last_error"] = str(exc)
         status = "failed"
     async with async_session() as db:
-        record = (await db.execute(select(Workflow).where(Workflow.id == task.id))).scalar_one_or_none()
+        record = (
+            await db.execute(select(Workflow).where(Workflow.id == task.id))
+        ).scalar_one_or_none()
         if record is not None:
             record.run_count = (record.run_count or 0) + 1
             record.last_status = status
@@ -93,17 +95,20 @@ def _register_scheduled_task(wf: Any) -> None:
 
     _ensure_scheduler_handler()
     with contextlib.suppress(Exception):
-        _scheduler().add_task(ScheduledTask(
-            id=wf.id,
-            name=wf.name,
-            description=getattr(wf, "description", "") or "",
-            cron_expression=wf.schedule or "0 9 * * *",
-            task_type="workflow",
-            enabled=getattr(wf, "last_status", None) != "inactive",
-        ))
+        _scheduler().add_task(
+            ScheduledTask(
+                id=wf.id,
+                name=wf.name,
+                description=getattr(wf, "description", "") or "",
+                cron_expression=wf.schedule or "0 9 * * *",
+                task_type="workflow",
+                enabled=getattr(wf, "last_status", None) != "inactive",
+            )
+        )
 
 
 # /scheduler/tasks endpoints (frontend compatibility)
+
 
 @router.get("/scheduler/tasks")
 @router.get("/scheduler/tasks/")
@@ -111,18 +116,37 @@ async def list_scheduler_tasks(request: Request) -> list[dict[str, Any]]:
     async with async_session() as db:
         user_id = current_user_id(request)
         rows = (
-            await db.execute(
-                select(Workflow).where(Workflow.schedule.isnot(None), Workflow.user_id == user_id).order_by(Workflow.created_at.desc())
+            (
+                await db.execute(
+                    select(Workflow)
+                    .where(Workflow.schedule.isnot(None), Workflow.user_id == user_id)
+                    .order_by(Workflow.created_at.desc())
+                )
             )
-        ).scalars().all()
-        return [{"id": w.id, "name": w.name, "cron": w.schedule, "description": getattr(w, "description", ""), "enabled": getattr(w, "last_status", None) != "inactive", "last_run": None, "next_run": None, "run_count": w.run_count or 0} for w in rows]
+            .scalars()
+            .all()
+        )
+        return [
+            {
+                "id": w.id,
+                "name": w.name,
+                "cron": w.schedule,
+                "description": getattr(w, "description", ""),
+                "enabled": getattr(w, "last_status", None) != "inactive",
+                "last_run": None,
+                "next_run": None,
+                "run_count": w.run_count or 0,
+            }
+            for w in rows
+        ]
 
 
 @router.post("/scheduler/tasks")
 @router.post("/scheduler/tasks/")
-async def create_scheduler_task(request: Request,
+async def create_scheduler_task(
+    request: Request,
     _auth: dict = Depends(require_scopes("write")),
-)  -> dict[str, Any]:
+) -> dict[str, Any]:
     data = await _payload(request)
     await _ensure_scheduler_handler()
     async with async_session() as db:
@@ -138,18 +162,31 @@ async def create_scheduler_task(request: Request,
         await db.commit()
         await db.refresh(wf)
         _register_scheduled_task(wf)
-        return {"id": wf.id, "name": wf.name, "cron": wf.schedule, "description": wf.description, "enabled": True, "last_run": None, "next_run": None, "run_count": 0}
+        return {
+            "id": wf.id,
+            "name": wf.name,
+            "cron": wf.schedule,
+            "description": wf.description,
+            "enabled": True,
+            "last_run": None,
+            "next_run": None,
+            "run_count": 0,
+        }
 
 
 @router.patch("/scheduler/tasks/{task_id}")
-async def update_scheduler_task(task_id: str, request: Request,
+async def update_scheduler_task(
+    task_id: str,
+    request: Request,
     _auth: dict = Depends(require_scopes("write")),
-)  -> dict[str, Any]:
+) -> dict[str, Any]:
     data = await _payload(request)
     async with async_session() as db:
         user_id = current_user_id(request)
         wf = (
-            await db.execute(select(Workflow).where(Workflow.id == task_id, Workflow.user_id == user_id))
+            await db.execute(
+                select(Workflow).where(Workflow.id == task_id, Workflow.user_id == user_id)
+            )
         ).scalar_one_or_none()
         if wf is None:
             raise HTTPException(status_code=404, detail="Scheduler task not found")
@@ -165,17 +202,30 @@ async def update_scheduler_task(task_id: str, request: Request,
         await db.refresh(wf)
         if wf.schedule:
             _register_scheduled_task(wf)
-        return {"id": wf.id, "name": wf.name, "cron": wf.schedule, "description": wf.description, "enabled": wf.last_status != "inactive", "last_run": None, "next_run": None, "run_count": wf.run_count or 0}
+        return {
+            "id": wf.id,
+            "name": wf.name,
+            "cron": wf.schedule,
+            "description": wf.description,
+            "enabled": wf.last_status != "inactive",
+            "last_run": None,
+            "next_run": None,
+            "run_count": wf.run_count or 0,
+        }
 
 
 @router.delete("/scheduler/tasks/{task_id}")
-async def delete_scheduler_task(task_id: str, request: Request,
+async def delete_scheduler_task(
+    task_id: str,
+    request: Request,
     _auth: dict = Depends(require_scopes("write")),
-)  -> dict[str, Any]:
+) -> dict[str, Any]:
     async with async_session() as db:
         user_id = current_user_id(request)
         wf = (
-            await db.execute(select(Workflow).where(Workflow.id == task_id, Workflow.user_id == user_id))
+            await db.execute(
+                select(Workflow).where(Workflow.id == task_id, Workflow.user_id == user_id)
+            )
         ).scalar_one_or_none()
         if wf is None:
             raise HTTPException(status_code=404, detail="Scheduler task not found")

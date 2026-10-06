@@ -12,7 +12,9 @@ def register(tools, skills):
     from datetime import datetime, timedelta
 
     @tools.tool(description="Convert a date string to different format")
-    async def format_date(date_str: str, input_format: str = "%Y-%m-%d", output_format: str = "%B %d, %Y") -> str:
+    async def format_date(
+        date_str: str, input_format: str = "%Y-%m-%d", output_format: str = "%B %d, %Y"
+    ) -> str:
         try:
             dt = datetime.strptime(date_str, input_format)
             return dt.strftime(output_format)
@@ -46,7 +48,7 @@ def register(tools, skills):
     @tools.tool(description="Convert text to slug (URL-friendly)")
     async def slugify(text: str) -> str:
         import re
+
         slug = text.lower().strip()
         slug = re.sub(r"[^\w\s-]", "", slug)
-        slug = re.sub(r"[-\s]+", "-", slug)
-        return slug
+        return re.sub(r"[-\s]+", "-", slug)

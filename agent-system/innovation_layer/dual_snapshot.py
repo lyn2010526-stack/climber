@@ -64,44 +64,73 @@ class SnapshotManager:
 
     # ---- 保存 ----
 
-    def save_incremental(self, session_id: str, phase: TAORPhase,
-                         messages_delta: list[dict[str, Any]],
-                         changed_state: dict[str, Any]) -> Snapshot:
+    def save_incremental(
+        self,
+        session_id: str,
+        phase: TAORPhase,
+        messages_delta: list[dict[str, Any]],
+        changed_state: dict[str, Any],
+    ) -> Snapshot:
         """保存一轮循环的增量 diff 快照。"""
         with self._lock:
             head = self._get_head(session_id)
             snap = Snapshot(
-                kind="incremental", session_id=session_id, phase=phase, base_on=head,
+                kind="incremental",
+                session_id=session_id,
+                phase=phase,
+                base_on=head,
                 messages_delta=messages_delta,
                 diff={"changed_state": changed_state},
             )
             self._conn.execute(
                 "INSERT INTO snapshots(id, kind, session_id, phase, base_on, payload, created_at, milestone_label) "
                 "VALUES (?,?,?,?,?,?,?,?)",
-                (snap.id, snap.kind, session_id, phase.value, snap.base_on,
-                 json.dumps({"messages_delta": messages_delta, "changed_state": changed_state}),
-                 snap.created_at.isoformat(), None),
+                (
+                    snap.id,
+                    snap.kind,
+                    session_id,
+                    phase.value,
+                    snap.base_on,
+                    json.dumps({"messages_delta": messages_delta, "changed_state": changed_state}),
+                    snap.created_at.isoformat(),
+                    None,
+                ),
             )
             self._set_head(session_id, snap.id)
             self._conn.commit()
         return snap
 
-    def save_milestone(self, session_id: str, phase: TAORPhase,
-                       state: dict[str, Any], messages: list[dict[str, Any]],
-                       label: str) -> Snapshot:
+    def save_milestone(
+        self,
+        session_id: str,
+        phase: TAORPhase,
+        state: dict[str, Any],
+        messages: list[dict[str, Any]],
+        label: str,
+    ) -> Snapshot:
         """保存里程碑全量快照（人机暂停、关键业务节点）。"""
         with self._lock:
             snap = Snapshot(
-                kind="milestone", session_id=session_id, phase=phase,
-                state=state, milestone_label=label,
+                kind="milestone",
+                session_id=session_id,
+                phase=phase,
+                state=state,
+                milestone_label=label,
                 diff={"messages": messages},
             )
             self._conn.execute(
                 "INSERT INTO snapshots(id, kind, session_id, phase, base_on, payload, created_at, milestone_label) "
                 "VALUES (?,?,?,?,?,?,?,?)",
-                (snap.id, snap.kind, session_id, phase.value, None,
-                 json.dumps({"state": state, "messages": messages}),
-                 snap.created_at.isoformat(), label),
+                (
+                    snap.id,
+                    snap.kind,
+                    session_id,
+                    phase.value,
+                    None,
+                    json.dumps({"state": state, "messages": messages}),
+                    snap.created_at.isoformat(),
+                    label,
+                ),
             )
             self._set_head(session_id, snap.id)
             self._conn.commit()
@@ -129,7 +158,9 @@ class SnapshotManager:
                 return None
             payload = json.loads(row["payload"])
             return Snapshot(
-                id=row["id"], kind=row["kind"], session_id=session_id,
+                id=row["id"],
+                kind=row["kind"],
+                session_id=session_id,
                 phase=TAORPhase(row["phase"]) if row["phase"] else None,
                 base_on=row["base_on"],
                 state=payload.get("state", {}),
@@ -190,9 +221,7 @@ class SnapshotManager:
         chain: list[sqlite3.Row] = []
         cursor: str | None = head_id
         while cursor is not None:
-            row = self._conn.execute(
-                "SELECT * FROM snapshots WHERE id=?", (cursor,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM snapshots WHERE id=?", (cursor,)).fetchone()
             if row is None:
                 break
             chain.append(row)
@@ -207,9 +236,12 @@ class SnapshotManager:
                 state = dict(payload.get("state", {}))
                 messages = list(payload.get("messages", []))
                 base_snap = Snapshot(
-                    id=row["id"], kind="milestone", session_id=session_id,
+                    id=row["id"],
+                    kind="milestone",
+                    session_id=session_id,
                     phase=TAORPhase(row["phase"]) if row["phase"] else None,
-                    state=state, created_at=_parse_ts(row["created_at"]),
+                    state=state,
+                    created_at=_parse_ts(row["created_at"]),
                     milestone_label=row["milestone_label"],
                 )
             else:
@@ -223,9 +255,12 @@ class SnapshotManager:
             for row in chain:
                 messages.extend(json.loads(row["payload"]).get("messages_delta", []))
         return Snapshot(
-            id=head_id, kind="reconstructed", session_id=session_id,
+            id=head_id,
+            kind="reconstructed",
+            session_id=session_id,
             base_on=base_snap.base_on if base_snap else chain[0]["base_on"] if chain else None,
-            state=state, diff={"messages": messages},
+            state=state,
+            diff={"messages": messages},
             milestone_label=base_snap.milestone_label if base_snap else None,
         )
 
@@ -238,4 +273,5 @@ class SnapshotManager:
 
 def _parse_ts(ts: str):
     from datetime import datetime
+
     return datetime.fromisoformat(ts)

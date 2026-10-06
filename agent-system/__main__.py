@@ -45,8 +45,15 @@ from agent_system.innovation_layer.taor_engine import TAOREngine, TAOROptions
 from agent_system.innovation_layer.three_state_controller import ThreeStateController
 
 TOOLS = [
-    ToolDescriptor(name="query_db", description="只读查询数据库", tool_class=ToolClass.READ, read_only=True),
-    ToolDescriptor(name="analyze", description="对查询结果做统计分析", tool_class=ToolClass.READ, read_only=True),
+    ToolDescriptor(
+        name="query_db", description="只读查询数据库", tool_class=ToolClass.READ, read_only=True
+    ),
+    ToolDescriptor(
+        name="analyze",
+        description="对查询结果做统计分析",
+        tool_class=ToolClass.READ,
+        read_only=True,
+    ),
     ToolDescriptor(name="write_file", description="写入报告文件", tool_class=ToolClass.WRITE),
 ]
 
@@ -60,6 +67,7 @@ class FakeChatResult:
 
 def _now_str() -> str:
     from datetime import datetime
+
     return datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
 
 
@@ -71,40 +79,73 @@ def scripted_llm_factory():
         counter["n"] += 1
         n = counter["n"]
         if n == 1:
-            return FakeChatResult(content="先查询数据库", tool_calls=[
-                {"id": "tc_1", "type": "function",
-                 "function": {"name": "query_db", "arguments": {"sql": "SELECT * FROM orders"}}}])
+            return FakeChatResult(
+                content="先查询数据库",
+                tool_calls=[
+                    {
+                        "id": "tc_1",
+                        "type": "function",
+                        "function": {
+                            "name": "query_db",
+                            "arguments": {"sql": "SELECT * FROM orders"},
+                        },
+                    }
+                ],
+            )
         if n == 2:
-            return FakeChatResult(content="对结果做部门汇总", tool_calls=[
-                {"id": "tc_2", "type": "function",
-                 "function": {"name": "analyze", "arguments": {"field": "department"}}}])
+            return FakeChatResult(
+                content="对结果做部门汇总",
+                tool_calls=[
+                    {
+                        "id": "tc_2",
+                        "type": "function",
+                        "function": {"name": "analyze", "arguments": {"field": "department"}},
+                    }
+                ],
+            )
         return FakeChatResult(content="已完成数据分析，共 3 个部门 128 条记录，汇总结果见附件。")
 
     return llm_call
 
 
 async def query_db(call: ToolCall) -> ToolResult:
-    return ToolResult(tool_call_id=call.tool_call_id, name=call.name,
-                      content="[3 行] 华东:42, 华北:56, 华南:30", is_error=False)
+    return ToolResult(
+        tool_call_id=call.tool_call_id,
+        name=call.name,
+        content="[3 行] 华东:42, 华北:56, 华南:30",
+        is_error=False,
+    )
 
 
 async def analyze(call: ToolCall) -> ToolResult:
-    return ToolResult(tool_call_id=call.tool_call_id, name=call.name,
-                      content="结果: 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门",
-                      is_error=False)
+    return ToolResult(
+        tool_call_id=call.tool_call_id,
+        name=call.name,
+        content="结果: 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门",
+        is_error=False,
+    )
 
 
 async def write_file(call: ToolCall) -> ToolResult:
-    return ToolResult(tool_call_id=call.tool_call_id, name=call.name,
-                      content="报告已写入 report.md", is_error=False)
+    return ToolResult(
+        tool_call_id=call.tool_call_id,
+        name=call.name,
+        content="报告已写入 report.md",
+        is_error=False,
+    )
 
 
 async def tool_executor(call: ToolCall) -> ToolResult:
     handlers = {"query_db": query_db, "analyze": analyze, "write_file": write_file}
     handler = handlers.get(call.name)
     if handler is None:
-        return ToolResult(tool_call_id=call.tool_call_id, name=call.name,
-                          content=None, is_error=True, error=f"未知工具 {call.name}")
+        return ToolResult(
+            tool_call_id=call.tool_call_id,
+            name=call.name,
+            content=None,
+            is_error=True,
+            error=f"未知工具 {call.name}",
+        )
     return await handler(call)
 
 
@@ -118,10 +159,17 @@ async def main(args: argparse.Namespace) -> int:
 
     # 预置一条项目规则记忆（验证 SYSBOOT 检索）
     from agent_system.core_models import MemoryItem, MemoryKind
-    fts.upsert(MemoryItem(
-        kind=MemoryKind.RULE, text="报告需包含部门维度的汇总数字并标注占比最高的部门",
-        title="报告规则", doc_type="rule", doc_length=30, trust_score=0.9,
-    ))
+
+    fts.upsert(
+        MemoryItem(
+            kind=MemoryKind.RULE,
+            text="报告需包含部门维度的汇总数字并标注占比最高的部门",
+            title="报告规则",
+            doc_type="rule",
+            doc_length=30,
+            trust_score=0.9,
+        )
+    )
 
     mode = RunMode(args.mode) if args.mode else RunMode.AUTO
     controller = ThreeStateController(mode=mode)
@@ -131,14 +179,22 @@ async def main(args: argparse.Namespace) -> int:
 
     async def emit(event_type, data):
         events.append({"event": event_type.value, "data": data})
-        if not args.json and event_type in (SystemEventType.PHASE_CHANGED, SystemEventType.TOOL_CALL,
-                                            SystemEventType.YIELD_PENDING, SystemEventType.DONE):
+        if not args.json and event_type in (
+            SystemEventType.PHASE_CHANGED,
+            SystemEventType.TOOL_CALL,
+            SystemEventType.YIELD_PENDING,
+            SystemEventType.DONE,
+        ):
             _print_event(event_type, data)
 
     engine = TAOREngine(
-        llm_call=llm, tool_executor=tool_executor,
-        router=router, snapshot_mgr=snapshot_mgr, refiner=refiner,
-        compressor=compressor, controller=controller,
+        llm_call=llm,
+        tool_executor=tool_executor,
+        router=router,
+        snapshot_mgr=snapshot_mgr,
+        refiner=refiner,
+        compressor=compressor,
+        controller=controller,
         tool_descriptors=TOOLS,
         options=TAOROptions(max_outer_rounds=args.max_rounds, mode=mode),
         emit=emit,
@@ -151,8 +207,7 @@ async def main(args: argparse.Namespace) -> int:
         print(f"[{_now_str()}] workdir          : {workdir}")
         print("-" * 72)
 
-    report = await engine.run(args.session_id, args.objective,
-                              context={"max_tokens": 16000})
+    report = await engine.run(args.session_id, args.objective, context={"max_tokens": 16000})
 
     # 等后台精炼收尾
     await refiner.wait_all()
@@ -179,8 +234,10 @@ async def main(args: argparse.Namespace) -> int:
     print("== 记忆审计日志 (MemoryAudit) ==")
     if audits:
         for entry in audits:
-            print(f"  [{entry['action']}] mem={entry['memory_id'][-8:]:>8} " +
-                  f"text=\"{entry['text_preview'][:34]}\" reason={entry['reason']}")
+            print(
+                f"  [{entry['action']}] mem={entry['memory_id'][-8:]:>8} "
+                + f'text="{entry["text_preview"][:34]}" reason={entry["reason"]}'
+            )
     else:
         print("  (本轮无审计记录会话日志，未触发抽取)")
 
@@ -191,7 +248,9 @@ def _print_event(event_type: SystemEventType, data: dict[str, Any]) -> None:
     if event_type == SystemEventType.PHASE_CHANGED:
         print(f"  -> PHASE {data.get('phase'):<9} (round={data.get('round', '-')})")
     elif event_type == SystemEventType.TOOL_CALL:
-        print(f"  -> TOOL   {data.get('name')} args={json.dumps(data.get('arguments', {}), ensure_ascii=False)[:60]}")
+        print(
+            f"  -> TOOL   {data.get('name')} args={json.dumps(data.get('arguments', {}), ensure_ascii=False)[:60]}"
+        )
     elif event_type == SystemEventType.YIELD_PENDING:
         print(f"  -> YIELD  {data.get('reason')}")
     elif event_type == SystemEventType.DONE:
@@ -216,12 +275,15 @@ def _print_report(report) -> None:
 def _collect_audits(refiner) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for result in refiner.last_results():
-        out.extend({
-            "action": entry.action,
-            "memory_id": entry.memory_id,
-            "text_preview": entry.text_preview,
-            "reason": entry.reason,
-        } for entry in result.audits)
+        out.extend(
+            {
+                "action": entry.action,
+                "memory_id": entry.memory_id,
+                "text_preview": entry.text_preview,
+                "reason": entry.reason,
+            }
+            for entry in result.audits
+        )
     return out
 
 

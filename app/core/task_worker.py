@@ -1,4 +1,5 @@
 """Task worker — persistent async task execution with progress tracking."""
+
 from __future__ import annotations
 
 import asyncio
@@ -24,9 +25,12 @@ logger = structlog.get_logger()
 _SENSITIVE_PAYLOAD_KEYS = {"api_key", "api_key_encrypted"}
 
 
-async def resolve_owner_agent_payload(owner_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+async def resolve_owner_agent_payload(
+    owner_id: str, payload: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Resolve credentials only from the task owner's active stored configuration."""
     from sqlalchemy import select
+
     from app.core.api_key_crypto import decrypt_api_key
     from app.storage.database import Agent, ApiKey
 
@@ -48,9 +52,9 @@ async def resolve_owner_agent_payload(owner_id: str, payload: dict[str, Any] | N
         base_url = agent.base_url if agent else None
         if not stored_key:
             key = await db.scalar(
-                select(ApiKey).where(
-                    ApiKey.user_id == owner_id, ApiKey.provider == provider, ApiKey.is_active
-                ).order_by(ApiKey.created_at.desc(), ApiKey.id)
+                select(ApiKey)
+                .where(ApiKey.user_id == owner_id, ApiKey.provider == provider, ApiKey.is_active)
+                .order_by(ApiKey.created_at.desc(), ApiKey.id)
             )
             if key:
                 stored_key = key.api_key_encrypted
@@ -71,7 +75,9 @@ async def resolve_owner_agent_payload(owner_id: str, payload: dict[str, Any] | N
             "model": model,
             "api_key": api_key,
             "base_url": base_url,
-            "system_prompt": payload.get("system_prompt", agent.system_prompt or "" if agent else ""),
+            "system_prompt": payload.get(
+                "system_prompt", agent.system_prompt or "" if agent else ""
+            ),
             "tools": payload.get("tools", list(agent.tool_ids or []) if agent else []),
         }
 
@@ -89,7 +95,9 @@ async def _ensure_task_control_columns() -> None:
     async with async_session() as session:
         for name, definition in columns.items():
             with suppress(Exception):
-                await session.execute(text(f"ALTER TABLE auto_loop_tasks ADD COLUMN {name} {definition}"))
+                await session.execute(
+                    text(f"ALTER TABLE auto_loop_tasks ADD COLUMN {name} {definition}")
+                )
         await session.commit()
 
 
@@ -175,9 +183,15 @@ class TaskManager:
 
     async def emit_event(self, task_id: str, event_type: str, data: dict[str, Any]) -> None:
         self._event_sequence += 1
-        event = {"type": event_type, "data": data, "task_id": task_id,
-                 "sequence": self._event_sequence, "epoch": self._event_epoch,
-                 "timestamp": datetime.now(UTC).isoformat(), "protocol_version": 1}
+        event = {
+            "type": event_type,
+            "data": data,
+            "task_id": task_id,
+            "sequence": self._event_sequence,
+            "epoch": self._event_epoch,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "protocol_version": 1,
+        }
         history = self._event_history.setdefault(task_id, deque(maxlen=100))
         history.append(event)
         self._event_history.move_to_end(task_id)
@@ -196,18 +210,29 @@ class TaskManager:
         for queue in tuple(self._event_subscribers.get(task_id, ())):
             queue.put_nowait(event)
 
-    async def event_snapshot(self, task_id: str, owner_id: str, include_all: bool = False) -> dict | None:
+    async def event_snapshot(
+        self, task_id: str, owner_id: str, include_all: bool = False
+    ) -> dict | None:
         sequence = self._event_sequence
         history = list(self._event_history.get(task_id, ()))
         state = await self.get_status(task_id, owner_id=owner_id, include_all=include_all)
         if state is None:
             return None
-        return {"type": "snapshot", "task_id": task_id, "protocol_version": 1,
-                "epoch": self._event_epoch, "sequence": sequence,
-                "data": state, "events": history, "history_scope": "process_recent_100",
-                "timestamp": datetime.now(UTC).isoformat()}
+        return {
+            "type": "snapshot",
+            "task_id": task_id,
+            "protocol_version": 1,
+            "epoch": self._event_epoch,
+            "sequence": sequence,
+            "data": state,
+            "events": history,
+            "history_scope": "process_recent_100",
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
-    async def submit(self, task_type: str, payload: dict[str, Any], owner_id: str = "default-user") -> str:
+    async def submit(
+        self, task_type: str, payload: dict[str, Any], owner_id: str = "default-user"
+    ) -> str:
         if task_type not in self._handlers:
             raise ValueError(f"Unknown task type: {task_type}")
         if not owner_id or not owner_id.strip():
@@ -218,14 +243,16 @@ class TaskManager:
             for index, item in enumerate(payload["subtasks"] or [], start=1):
                 if not isinstance(item, dict) or not str(item.get("description", "")).strip():
                     raise ValueError("Each subtask requires a non-empty description")
-                normalized_subtasks.append({
-                    **item,
-                    "id": str(item.get("id") or f"st-{index}"),
-                    "status": "pending",
-                    "dependencies": list(item.get("dependencies") or []),
-                    "result": None,
-                    "error": "",
-                })
+                normalized_subtasks.append(
+                    {
+                        **item,
+                        "id": str(item.get("id") or f"st-{index}"),
+                        "status": "pending",
+                        "dependencies": list(item.get("dependencies") or []),
+                        "result": None,
+                        "error": "",
+                    }
+                )
             ids = {item["id"] for item in normalized_subtasks}
             if any(dep not in ids for item in normalized_subtasks for dep in item["dependencies"]):
                 raise ValueError("Subtask dependencies must reference a subtask in the same task")
@@ -237,9 +264,7 @@ class TaskManager:
 
         async with async_session() as session:
             persisted_payload = {
-                key: value
-                for key, value in payload.items()
-                if key not in _SENSITIVE_PAYLOAD_KEYS
+                key: value for key, value in payload.items() if key not in _SENSITIVE_PAYLOAD_KEYS
             }
             record = AutoLoopTask(
                 id=task_id,
@@ -265,9 +290,7 @@ class TaskManager:
         # that payload. Stored-owner config is only resolved on the
         # recover/resume/retry paths, where the original request credentials
         # are unavailable (wave-2 R9-10 design decision).
-        worker = asyncio.create_task(
-            self._run_task(task_id, task_type, payload, managed=True)
-        )
+        worker = asyncio.create_task(self._run_task(task_id, task_type, payload, managed=True))
         self._active_tasks[task_id] = worker
         worker.add_done_callback(lambda done: self._release_worker(task_id, done))
         return task_id
@@ -283,10 +306,13 @@ class TaskManager:
         queued = 0
         ready = []
         async with async_session() as session:
-            rows = (await session.scalars(
-                select(AutoLoopTask).where(AutoLoopTask.status == TaskStatus.PENDING.value)
-                .order_by(AutoLoopTask.created_at)
-            )).all()
+            rows = (
+                await session.scalars(
+                    select(AutoLoopTask)
+                    .where(AutoLoopTask.status == TaskStatus.PENDING.value)
+                    .order_by(AutoLoopTask.created_at)
+                )
+            ).all()
             for record in rows:
                 if len(ready) >= limit:
                     break
@@ -299,16 +325,27 @@ class TaskManager:
                 if not isinstance(payload, dict) or "type" not in payload:
                     continue
                 task_type = payload.pop("type")
-                if (task_type in self._handlers and record.owner_id
-                        and record.interruption_reason in {"resumed", "retry", "rollback"}
-                        and record.started_at is None and record.finished_at is None):
+                if (
+                    task_type in self._handlers
+                    and record.owner_id
+                    and record.interruption_reason in {"resumed", "retry", "rollback"}
+                    and record.started_at is None
+                    and record.finished_at is None
+                ):
                     record.status = TaskStatus.PAUSED.value
                     record.error = "Queued control interrupted by restart; explicit resume and checkpoint review required"
                     continue
-                if (not isinstance(task_type, str) or task_type not in self._handlers
-                        or not record.owner_id or not record.owner_id.strip()
-                        or record.started_at or record.current_step or record.finished_at
-                        or record.result is not None or record.error):
+                if (
+                    not isinstance(task_type, str)
+                    or task_type not in self._handlers
+                    or not record.owner_id
+                    or not record.owner_id.strip()
+                    or record.started_at
+                    or record.current_step
+                    or record.finished_at
+                    or record.result is not None
+                    or record.error
+                ):
                     record.status = TaskStatus.FAILED.value
                     record.error = "Automatic recovery refused: invalid configuration or prior execution; manual review required"
                     record.finished_at = datetime.now(UTC)
@@ -325,14 +362,20 @@ class TaskManager:
                 self._run_task(task_id, task_type, payload, resolve_credentials=True, managed=True)
             )
             self._active_tasks[task_id] = worker
-            worker.add_done_callback(lambda done, task_id=task_id: self._release_worker(task_id, done))
+            worker.add_done_callback(
+                lambda done, task_id=task_id: self._release_worker(task_id, done)
+            )
             queued += 1
         return queued
 
     async def cancel(self, task_id: str) -> bool:
         async with async_session() as session:
             record = await session.get(AutoLoopTask, task_id)
-            if record is None or record.status in {TaskStatus.COMPLETED.value, TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}:
+            if record is None or record.status in {
+                TaskStatus.COMPLETED.value,
+                TaskStatus.FAILED.value,
+                TaskStatus.CANCELLED.value,
+            }:
                 return False
             record.status = TaskStatus.CANCELLED.value
             record.interruption_reason = "cancelled"
@@ -341,13 +384,19 @@ class TaskManager:
         task = self._active_tasks.get(task_id)
         if task and not task.done():
             task.cancel()
-        await self._emit_progress(task_id, {"status": TaskStatus.CANCELLED.value, "reason": "cancelled"})
+        await self._emit_progress(
+            task_id, {"status": TaskStatus.CANCELLED.value, "reason": "cancelled"}
+        )
         return True
 
     async def pause(self, task_id: str) -> bool:
         async with async_session() as session:
             record = await session.get(AutoLoopTask, task_id)
-            if record is None or record.status not in {TaskStatus.PENDING.value, TaskStatus.RUNNING.value, TaskStatus.RETRYING.value}:
+            if record is None or record.status not in {
+                TaskStatus.PENDING.value,
+                TaskStatus.RUNNING.value,
+                TaskStatus.RETRYING.value,
+            }:
                 return False
             record.status = TaskStatus.PAUSED.value
             record.interruption_reason = "paused"
@@ -363,7 +412,9 @@ class TaskManager:
         return await self._requeue(task_id, {TaskStatus.PAUSED.value}, "resumed")
 
     async def retry(self, task_id: str) -> bool:
-        return await self._requeue(task_id, {TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}, "retry")
+        return await self._requeue(
+            task_id, {TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}, "retry"
+        )
 
     async def rollback(self, task_id: str) -> bool:
         async with async_session() as session:
@@ -371,9 +422,14 @@ class TaskManager:
             if record is None or not record.checkpoint:
                 return False
             worker = self._active_tasks.get(task_id)
-            if (record.status in {TaskStatus.PENDING.value, TaskStatus.RUNNING.value, TaskStatus.RETRYING.value}
-                    or (worker is not None and not worker.done())):
-                raise ValueError("Rollback requires a stopped worker; pause and await worker exit first")
+            if record.status in {
+                TaskStatus.PENDING.value,
+                TaskStatus.RUNNING.value,
+                TaskStatus.RETRYING.value,
+            } or (worker is not None and not worker.done()):
+                raise ValueError(
+                    "Rollback requires a stopped worker; pause and await worker exit first"
+                )
             checkpoint = dict(record.checkpoint)
             record.current_step = int(checkpoint.get("step", 0))
             record.progress_evaluation = checkpoint.get("evaluation")
@@ -398,8 +454,12 @@ class TaskManager:
                 return False
             if task_type not in self._handlers:
                 return False
-            if task_type == "factory_run" and (record.started_at or record.current_step or record.checkpoint is not None
-                                               or record.interruption_reason in {"resumed", "retry", "rollback"}):
+            if task_type == "factory_run" and (
+                record.started_at
+                or record.current_step
+                or record.checkpoint is not None
+                or record.interruption_reason in {"resumed", "retry", "rollback"}
+            ):
                 envelope["_factory_checkpoint"] = record.checkpoint or {}
                 record.checkpoint = envelope["_factory_checkpoint"]
             # Revoke the old run before publishing the new pending state.
@@ -418,10 +478,19 @@ class TaskManager:
         # Resume/retry control path: same rationale as recover_pending_tasks —
         # stored-owner model config is resolved because the caller no longer
         # supplies request credentials.
-        worker = asyncio.create_task(self._run_task(task_id, task_type, envelope, resolve_credentials=True, managed=True))
+        worker = asyncio.create_task(
+            self._run_task(task_id, task_type, envelope, resolve_credentials=True, managed=True)
+        )
         self._active_tasks[task_id] = worker
         worker.add_done_callback(lambda done: self._release_worker(task_id, done))
-        await self._emit_progress(task_id, {"status": "pending", "control": reason, "retry_count": record.retry_count if 'record' in locals() else 0})
+        await self._emit_progress(
+            task_id,
+            {
+                "status": "pending",
+                "control": reason,
+                "retry_count": record.retry_count if "record" in locals() else 0,
+            },
+        )
         return True
 
     async def get_status(
@@ -458,12 +527,7 @@ class TaskManager:
             return raw_objective
         if not isinstance(payload, dict):
             return str(payload) or ""
-        return str(
-            payload.get("objective")
-            or payload.get("workflow")
-            or payload.get("type")
-            or ""
-        )
+        return str(payload.get("objective") or payload.get("workflow") or payload.get("type") or "")
 
     async def list_tasks(
         self,
@@ -473,6 +537,7 @@ class TaskManager:
         include_all: bool = False,
     ) -> list[dict[str, Any]]:
         from sqlalchemy import select
+
         async with async_session() as session:
             stmt = select(AutoLoopTask).order_by(AutoLoopTask.created_at.desc())
             if status_filter:
@@ -562,25 +627,39 @@ class TaskManager:
             claimed: list[dict[str, Any]] = []
             for item in subtasks:
                 dependencies = set(item.get("dependencies", []))
-                if len(claimed) >= limit or item.get("status") != "pending" or not dependencies.issubset(completed):
+                if (
+                    len(claimed) >= limit
+                    or item.get("status") != "pending"
+                    or not dependencies.issubset(completed)
+                ):
                     continue
-                item.update({"status": "claimed", "claimed_by": agent_id, "claimed_at": now.isoformat(),
-                             "lease_expires_at": (now.timestamp() + max(1, lease_seconds))})
+                item.update(
+                    {
+                        "status": "claimed",
+                        "claimed_by": agent_id,
+                        "claimed_at": now.isoformat(),
+                        "lease_expires_at": (now.timestamp() + max(1, lease_seconds)),
+                    }
+                )
                 claimed.append(dict(item))
             if not claimed:
                 return []
             envelope["subtasks"] = subtasks
             updated = await session.execute(
-                update(AutoLoopTask).where(
+                update(AutoLoopTask)
+                .where(
                     AutoLoopTask.id == task_id,
                     AutoLoopTask.owner_id == record.owner_id,
                     AutoLoopTask.objective == original,
-                ).values(objective=json.dumps(envelope, ensure_ascii=False), updated_at=now)
+                )
+                .values(objective=json.dumps(envelope, ensure_ascii=False), updated_at=now)
             )
             if updated.rowcount != 1:
                 return []
             await session.commit()
-        await self._emit_progress(task_id, {"status": "subtasks_claimed", "count": len(claimed), "agent_id": agent_id})
+        await self._emit_progress(
+            task_id, {"status": "subtasks_claimed", "count": len(claimed), "agent_id": agent_id}
+        )
         return claimed
 
     async def complete_subtask(
@@ -610,22 +689,38 @@ class TaskManager:
                 return None
             subtasks = envelope.get("subtasks", [])
             target = next((item for item in subtasks if item.get("id") == subtask_id), None)
-            if target is None or target.get("status") != "claimed" or target.get("claimed_by") != agent_id:
+            if (
+                target is None
+                or target.get("status") != "claimed"
+                or target.get("claimed_by") != agent_id
+            ):
                 return None
-            target.update({"status": "failed" if error else "completed", "result": result, "error": error or "",
-                           "completed_at": datetime.now(UTC).isoformat()})
+            target.update(
+                {
+                    "status": "failed" if error else "completed",
+                    "result": result,
+                    "error": error or "",
+                    "completed_at": datetime.now(UTC).isoformat(),
+                }
+            )
             envelope["subtasks"] = subtasks
             updated = await session.execute(
-                update(AutoLoopTask).where(
+                update(AutoLoopTask)
+                .where(
                     AutoLoopTask.id == task_id,
                     AutoLoopTask.owner_id == record.owner_id,
                     AutoLoopTask.objective == original,
-                ).values(objective=json.dumps(envelope, ensure_ascii=False), updated_at=datetime.now(UTC))
+                )
+                .values(
+                    objective=json.dumps(envelope, ensure_ascii=False), updated_at=datetime.now(UTC)
+                )
             )
             if updated.rowcount != 1:
                 return None
             await session.commit()
-        await self._emit_progress(task_id, {"status": "subtask_completed", "subtask_id": subtask_id})
+        await self._emit_progress(
+            task_id, {"status": "subtask_completed", "subtask_id": subtask_id}
+        )
         return dict(target)
 
     def _owns_worker(self, task_id: str, worker: asyncio.Task | None) -> bool:
@@ -636,7 +731,13 @@ class TaskManager:
             self._active_tasks.pop(task_id, None)
 
     async def _run_task(
-        self, task_id: str, task_type: str, payload: dict[str, Any], *, resolve_credentials: bool = False, managed: bool = False
+        self,
+        task_id: str,
+        task_type: str,
+        payload: dict[str, Any],
+        *,
+        resolve_credentials: bool = False,
+        managed: bool = False,
     ) -> None:
         """Execute one claimed task row.
 
@@ -673,14 +774,18 @@ class TaskManager:
                         if not self._owns_worker(task_id, worker):
                             return
                         claimed = await session.execute(
-                            update(AutoLoopTask).where(
+                            update(AutoLoopTask)
+                            .where(
                                 AutoLoopTask.id == task_id,
                                 AutoLoopTask.owner_id == owner_id,
                                 AutoLoopTask.objective == record.objective,
                                 AutoLoopTask.status == TaskStatus.PENDING.value,
                                 AutoLoopTask.started_at.is_(None),
                                 AutoLoopTask.finished_at.is_(None),
-                            ).values(status=TaskStatus.RUNNING.value, started_at=now, heartbeat_at=now)
+                            )
+                            .values(
+                                status=TaskStatus.RUNNING.value, started_at=now, heartbeat_at=now
+                            )
                         )
                         await session.commit()
                     if claimed.rowcount == 1:
@@ -699,14 +804,19 @@ class TaskManager:
                         record = await session.get(AutoLoopTask, task_id)
                         if record is not None and record.status == TaskStatus.PENDING.value:
                             record.status = TaskStatus.FAILED.value
-                            record.error = f"Task claim failed ({type(exc).__name__}); manual review required"
+                            record.error = (
+                                f"Task claim failed ({type(exc).__name__}); manual review required"
+                            )
                             record.finished_at = datetime.now(UTC)
                             await session.commit()
-                    await self._emit_progress(task_id, {"status": TaskStatus.FAILED.value, "error": "claim failed"})
+                    await self._emit_progress(
+                        task_id, {"status": TaskStatus.FAILED.value, "error": "claim failed"}
+                    )
                     return
 
             await self._emit_progress(task_id, {"status": TaskStatus.RUNNING.value})
             try:
+
                 async def _progress_cb(step: int, total: int, message: str = ""):
                     await self._persist_progress(task_id, step, total, message, worker=worker)
 
@@ -714,23 +824,36 @@ class TaskManager:
                     payload = await resolve_owner_agent_payload(owner_id, payload)
                 runtime_payload = {**payload, "user_id": owner_id, "_task_id": task_id}
                 if task_type == "factory_run":
+
                     async def save_factory_checkpoint(snapshot: dict[str, Any]) -> None:
                         from app.core.checkpoint import CheckpointData, sanitize_checkpoint
 
                         safe = sanitize_checkpoint(
-                            CheckpointData(session_id=task_id, messages=[], iteration=0, status="running",
-                                           channel_values={"factory": snapshot}),
+                            CheckpointData(
+                                session_id=task_id,
+                                messages=[],
+                                iteration=0,
+                                status="running",
+                                channel_values={"factory": snapshot},
+                            ),
                             secrets=(str(runtime_payload.get("api_key", "")),),
                         ).channel_values["factory"]
                         safe["recovery_blocked"] = (
-                            safe["plan"] != snapshot["plan"] or safe["results"] != snapshot["results"]
+                            safe["plan"] != snapshot["plan"]
+                            or safe["results"] != snapshot["results"]
                         )
-                        safe["plan_digest"] = hashlib.sha256(json.dumps(safe["plan"], sort_keys=True).encode()).hexdigest()
+                        safe["plan_digest"] = hashlib.sha256(
+                            json.dumps(safe["plan"], sort_keys=True).encode()
+                        ).hexdigest()
                         async with async_session() as db:
                             row = await db.get(AutoLoopTask, task_id)
-                            if (not self._owns_worker(task_id, worker) or row is None
-                                    or row.status not in {TaskStatus.RUNNING.value, TaskStatus.RETRYING.value}):
-                                raise asyncio.CancelledError  # noqa: TRY301 - stop before any checkpoint mutation
+                            if (
+                                not self._owns_worker(task_id, worker)
+                                or row is None
+                                or row.status
+                                not in {TaskStatus.RUNNING.value, TaskStatus.RETRYING.value}
+                            ):
+                                raise asyncio.CancelledError
                             row.checkpoint = {**(row.checkpoint or {}), "factory": safe}
                             row.heartbeat_at = datetime.now(UTC)
                             await db.commit()
@@ -747,9 +870,15 @@ class TaskManager:
 
                 async with async_session() as session:
                     record = await session.get(AutoLoopTask, task_id)
-                    if self._owns_worker(task_id, worker) and record and record.status == TaskStatus.RUNNING.value:
+                    if (
+                        self._owns_worker(task_id, worker)
+                        and record
+                        and record.status == TaskStatus.RUNNING.value
+                    ):
                         record.status = result_status
-                        record.result = result if isinstance(result, dict) else {"output": str(result)}
+                        record.result = (
+                            result if isinstance(result, dict) else {"output": str(result)}
+                        )
                         if result_status == TaskStatus.FAILED.value and isinstance(result, dict):
                             record.error = str(result.get("error", ""))[:500]
                         record.finished_at = datetime.now(UTC)
@@ -764,7 +893,10 @@ class TaskManager:
                     record = await session.get(AutoLoopTask, task_id)
                     if not self._owns_worker(task_id, worker):
                         return
-                    if record and record.status not in {TaskStatus.PAUSED.value, TaskStatus.CANCELLED.value}:
+                    if record and record.status not in {
+                        TaskStatus.PAUSED.value,
+                        TaskStatus.CANCELLED.value,
+                    }:
                         record.status = TaskStatus.CANCELLED.value
                         record.interruption_reason = "cancelled"
                         record.finished_at = datetime.now(UTC)
@@ -776,7 +908,13 @@ class TaskManager:
                 error = f"Task execution failed ({type(exc).__name__}); manual review required before resubmission"
                 logger.error("task_failed", task_id=task_id, error=error)
                 await self._retry_or_fail(
-                    task_id, task_type, owner_id, payload, handler, error, exc,
+                    task_id,
+                    task_type,
+                    owner_id,
+                    payload,
+                    handler,
+                    error,
+                    exc,
                     on_progress=_progress_cb,
                     worker=worker,
                     resolve_credentials=resolve_credentials,
@@ -805,6 +943,7 @@ class TaskManager:
         budget is spent the task is recorded as failed for manual review.
         """
         if on_progress is None:
+
             async def on_progress(step: int, total: int, message: str = ""):
                 await self._persist_progress(task_id, step, total, message, worker=worker)
 
@@ -816,7 +955,11 @@ class TaskManager:
             attempts += 1
             async with async_session() as session:
                 record = await session.get(AutoLoopTask, task_id)
-                if self._owns_worker(task_id, worker) and record and record.status in {TaskStatus.RUNNING.value, TaskStatus.RETRYING.value}:
+                if (
+                    self._owns_worker(task_id, worker)
+                    and record
+                    and record.status in {TaskStatus.RUNNING.value, TaskStatus.RETRYING.value}
+                ):
                     record.status = TaskStatus.RETRYING.value
                     record.retry_count = (record.retry_count or 0) + 1
                     record.updated_at = datetime.now(UTC)
@@ -847,18 +990,30 @@ class TaskManager:
                 )
                 async with async_session() as session:
                     record = await session.get(AutoLoopTask, task_id)
-                    if self._owns_worker(task_id, worker) and record and record.status == TaskStatus.RETRYING.value:
+                    if (
+                        self._owns_worker(task_id, worker)
+                        and record
+                        and record.status == TaskStatus.RETRYING.value
+                    ):
                         record.status = result_status
-                        record.result = result if isinstance(result, dict) else {"output": str(result)}
-                        record.error = str(result.get("error", ""))[:500] if result_status == "failed" else None
+                        record.result = (
+                            result if isinstance(result, dict) else {"output": str(result)}
+                        )
+                        record.error = (
+                            str(result.get("error", ""))[:500]
+                            if result_status == "failed"
+                            else None
+                        )
                         record.finished_at = datetime.now(UTC)
                         await session.commit()
                     else:
                         return
                 await self._emit_progress(task_id, {"status": result_status, "result": result})
                 return
-            except Exception as retry_exc:  # noqa: BLE001
-                last_error = f"Retry {attempts}/{self._max_task_retries} failed ({type(retry_exc).__name__})"
+            except Exception as retry_exc:
+                last_error = (
+                    f"Retry {attempts}/{self._max_task_retries} failed ({type(retry_exc).__name__})"
+                )
                 logger.warning(
                     "task_retry_failed",
                     task_id=task_id,
@@ -868,7 +1023,11 @@ class TaskManager:
 
         async with async_session() as session:
             record = await session.get(AutoLoopTask, task_id)
-            if self._owns_worker(task_id, worker) and record and record.status in {TaskStatus.RUNNING.value, TaskStatus.RETRYING.value}:
+            if (
+                self._owns_worker(task_id, worker)
+                and record
+                and record.status in {TaskStatus.RUNNING.value, TaskStatus.RETRYING.value}
+            ):
                 record.status = TaskStatus.FAILED.value
                 record.error = last_error
                 record.finished_at = datetime.now(UTC)
@@ -877,8 +1036,21 @@ class TaskManager:
                 return
         await self._emit_progress(task_id, {"status": "failed", "error": last_error})
 
-    async def _persist_progress(self, task_id: str, step: int, total: int, message: str = "", *, worker: asyncio.Task | None = None) -> None:
-        evaluation = {"percent": round((step / total) * 100, 2) if total else 0, "message": message, "step": step, "total": total}
+    async def _persist_progress(
+        self,
+        task_id: str,
+        step: int,
+        total: int,
+        message: str = "",
+        *,
+        worker: asyncio.Task | None = None,
+    ) -> None:
+        evaluation = {
+            "percent": round((step / total) * 100, 2) if total else 0,
+            "message": message,
+            "step": step,
+            "total": total,
+        }
         async with async_session() as session:
             record = await session.get(AutoLoopTask, task_id)
             if not self._owns_worker(task_id, worker):
@@ -890,9 +1062,16 @@ class TaskManager:
                 record.max_steps = total
                 record.heartbeat_at = datetime.now(UTC)
                 record.progress_evaluation = evaluation
-                record.checkpoint = {**(record.checkpoint or {}), "step": step, "evaluation": evaluation, "message": message}
+                record.checkpoint = {
+                    **(record.checkpoint or {}),
+                    "step": step,
+                    "evaluation": evaluation,
+                    "message": message,
+                }
                 await session.commit()
-        await self._emit_progress(task_id, {"step": step, "total": total, **evaluation, "evaluation": evaluation})
+        await self._emit_progress(
+            task_id, {"step": step, "total": total, **evaluation, "evaluation": evaluation}
+        )
 
     async def _emit_progress(self, task_id: str, data: dict) -> None:
         await self.emit_event(task_id, "task_update", data)
@@ -905,10 +1084,19 @@ class TaskManager:
 # whose payload requests any of them has already *acted* once it ran — rerunning
 # the whole step would repeat the side effect (double-write, double-send), so
 # task-level retries must never apply to it. Read-only steps stay retryable.
-_SIDE_EFFECT_TOOLS = frozenset({
-    "write_file", "edit_file", "append_file", "file_delete",
-    "run_command", "http_request", "web_search", "fetch", "post_message",
-})
+_SIDE_EFFECT_TOOLS = frozenset(
+    {
+        "write_file",
+        "edit_file",
+        "append_file",
+        "file_delete",
+        "run_command",
+        "http_request",
+        "web_search",
+        "fetch",
+        "post_message",
+    }
+)
 
 
 def _step_has_side_effects(step_payload: dict[str, Any]) -> bool:
@@ -954,12 +1142,14 @@ def _precheck_plan_steps(steps: list[dict[str, Any]], permission_mode: str) -> l
                 for tool in tools
                 if str(tool) in _SIDE_EFFECT_TOOLS
             )
-        prechecks.append({
-            "index": index,
-            "tools": tools,
-            "blocked": bool(reasons),
-            "reasons": reasons,
-        })
+        prechecks.append(
+            {
+                "index": index,
+                "tools": tools,
+                "blocked": bool(reasons),
+                "reasons": reasons,
+            }
+        )
     return prechecks
 
 
@@ -1002,17 +1192,14 @@ def _check_objective(objective: str) -> dict[str, Any]:
 
     try:
         verdict = validate_instruction_goal(objective)
-    except Exception as exc:  # noqa: BLE001 - validation must never kill the worker
+    except Exception as exc:
         logger.warning("objective_validation_failed", error=str(exc))
         return {"status": "ready", "goal_preserved": None, "plain_reason": None}
     if verdict.status == "blocked":
         return {
             "status": "blocked",
             "goal_preserved": False,
-            "plain_reason": (
-                "这个任务没有说清楚要达成什么目标，先补充目标再执行，"
-                "避免跑偏。"
-            ),
+            "plain_reason": ("这个任务没有说清楚要达成什么目标，先补充目标再执行，避免跑偏。"),
         }
     return {"status": verdict.status, "goal_preserved": True, "plain_reason": None}
 
@@ -1030,9 +1217,11 @@ def _injected_system_prompt(payload: dict[str, Any]) -> str:
     try:
         from app.core.prompts import build_injected_prompt
 
-        bundle = build_injected_prompt(task_type="implementation", model_id=str(payload.get("model", "")))
+        bundle = build_injected_prompt(
+            task_type="implementation", model_id=str(payload.get("model", ""))
+        )
         return str(bundle["system_prompt"])
-    except Exception as exc:  # noqa: BLE001 - a prompt failure must not stop the run
+    except Exception as exc:
         logger.warning("core_prompt_injection_failed", error=str(exc))
         return ""
 
@@ -1041,6 +1230,7 @@ async def handle_agent_run(payload: dict[str, Any], on_progress) -> dict[str, An
     """Execute an autonomous agent run with the given objective."""
     from app.core.agent_engine import AgentEngine
     from app.core.di import resolve as di_resolve
+
     objective = payload.get("objective", "")
     if not objective.strip():
         raise ValueError("objective is required")
@@ -1102,31 +1292,36 @@ def _build_factory_plan(goal: str, skills: list[str]) -> list[dict[str, Any]]:
     """Build a safe fallback plan from selected capabilities."""
     steps: list[dict[str, Any]] = []
     if "web_search" in skills:
-        steps.append({
-            "action": "Research current evidence and constraints",
-            "objective": f"Research reliable, current information needed to accomplish: {goal}",
-            "tools": ["web_search"],
-        })
+        steps.append(
+            {
+                "action": "Research current evidence and constraints",
+                "objective": f"Research reliable, current information needed to accomplish: {goal}",
+                "tools": ["web_search"],
+            }
+        )
     if "file_manager" in skills or "code_reviewer" in skills:
-        steps.append({
-            "action": "Inspect the existing project and identify the smallest correct change",
-            "objective": f"Inspect the available project context and determine a concrete approach for: {goal}",
-            "tools": ["read_file", "list_files"],
-        })
+        steps.append(
+            {
+                "action": "Inspect the existing project and identify the smallest correct change",
+                "objective": f"Inspect the available project context and determine a concrete approach for: {goal}",
+                "tools": ["read_file", "list_files"],
+            }
+        )
     execution_tools = [
         tool
         for skill in skills
         for tool in _FACTORY_SKILL_TOOLS.get(skill, [])
         if tool not in {"web_search", "read_file", "list_files"}
     ]
-    steps.append({
-        "action": "Execute the goal and produce a verifiable result",
-        "objective": goal,
-        "tools": list(dict.fromkeys(execution_tools)),
-    })
+    steps.append(
+        {
+            "action": "Execute the goal and produce a verifiable result",
+            "objective": goal,
+            "tools": list(dict.fromkeys(execution_tools)),
+        }
+    )
     return [
-        {"step": index, "status": "pending", **step}
-        for index, step in enumerate(steps, start=1)
+        {"step": index, "status": "pending", **step} for index, step in enumerate(steps, start=1)
     ]
 
 
@@ -1140,9 +1335,7 @@ def _parse_factory_plan(raw_plan: str, goal: str, skills: list[str]) -> list[dic
     raw_steps = parsed.get("steps") if isinstance(parsed, dict) else parsed
     if not isinstance(raw_steps, list) or not raw_steps:
         raise ValueError("Planner returned no steps")
-    allowed_tools = {
-        tool for skill in skills for tool in _FACTORY_SKILL_TOOLS.get(skill, [])
-    }
+    allowed_tools = {tool for skill in skills for tool in _FACTORY_SKILL_TOOLS.get(skill, [])}
     plan: list[dict[str, Any]] = []
     for index, raw_step in enumerate(raw_steps[:5], start=1):
         if not isinstance(raw_step, dict):
@@ -1152,17 +1345,20 @@ def _parse_factory_plan(raw_plan: str, goal: str, skills: list[str]) -> list[dic
         if not action or not objective:
             raise ValueError("Planner step is missing an action or objective")
         requested_tools = raw_step.get("tools", [])
-        tools = [
-            str(tool) for tool in requested_tools
-            if str(tool) in allowed_tools
-        ] if isinstance(requested_tools, list) else []
-        plan.append({
-            "step": index,
-            "status": "pending",
-            "action": action,
-            "objective": objective,
-            "tools": list(dict.fromkeys(tools)),
-        })
+        tools = (
+            [str(tool) for tool in requested_tools if str(tool) in allowed_tools]
+            if isinstance(requested_tools, list)
+            else []
+        )
+        plan.append(
+            {
+                "step": index,
+                "status": "pending",
+                "action": action,
+                "objective": objective,
+                "tools": list(dict.fromkeys(tools)),
+            }
+        )
     return plan
 
 
@@ -1188,35 +1384,62 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
         raise ValueError(goal_check["plain_reason"])
 
     skills = [str(skill) for skill in payload.get("factory_skills", [])]
-    identity = {key: payload.get(key) for key in ("objective", "factory_skills", "tools", "permission_mode", "max_steps")}
+    identity = {
+        key: payload.get(key)
+        for key in ("objective", "factory_skills", "tools", "permission_mode", "max_steps")
+    }
     fingerprint = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
     checkpoint = payload.get("_factory_checkpoint")
     saved = None
     if checkpoint is not None:
         saved = checkpoint.get("factory") if isinstance(checkpoint, dict) else None
-        if (not isinstance(saved, dict) or saved.get("version") != 1
-                or saved.get("task_id") != task_id or saved.get("owner_id") != payload.get("user_id")
-                or saved.get("fingerprint") != fingerprint):
+        if (
+            not isinstance(saved, dict)
+            or saved.get("version") != 1
+            or saved.get("task_id") != task_id
+            or saved.get("owner_id") != payload.get("user_id")
+            or saved.get("fingerprint") != fingerprint
+        ):
             raise ValueError("Invalid factory checkpoint; manual review required")
         plan = saved.get("plan")
         results = saved.get("results")
-        if (not isinstance(plan, list) or not plan or len(plan) > 5
-                or not isinstance(results, list) or len(results) > len(plan)
-                or any(not isinstance(step, dict) or step.get("step") != i
-                       or not isinstance(step.get("action"), str) or not step["action"]
-                       or not isinstance(step.get("objective"), str) or not step["objective"]
-                       or not isinstance(step.get("tools"), list)
-                       or any(not isinstance(tool, str) for tool in step["tools"])
-                       for i, step in enumerate(plan, 1))
-                or any(not isinstance(result, dict) or result.get("step") != i
-                       or result.get("action") != plan[i - 1]["action"]
-                       or not isinstance(result.get("output"), str)
-                       for i, result in enumerate(results, 1))):
+        if (
+            not isinstance(plan, list)
+            or not plan
+            or len(plan) > 5
+            or not isinstance(results, list)
+            or len(results) > len(plan)
+            or any(
+                not isinstance(step, dict)
+                or step.get("step") != i
+                or not isinstance(step.get("action"), str)
+                or not step["action"]
+                or not isinstance(step.get("objective"), str)
+                or not step["objective"]
+                or not isinstance(step.get("tools"), list)
+                or any(not isinstance(tool, str) for tool in step["tools"])
+                for i, step in enumerate(plan, 1)
+            )
+            or any(
+                not isinstance(result, dict)
+                or result.get("step") != i
+                or result.get("action") != plan[i - 1]["action"]
+                or not isinstance(result.get("output"), str)
+                for i, result in enumerate(results, 1)
+            )
+        ):
             raise ValueError("Invalid factory step checkpoint; manual review required")
-        if saved.get("plan_digest") != hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest():
+        if (
+            saved.get("plan_digest")
+            != hashlib.sha256(json.dumps(plan, sort_keys=True).encode()).hexdigest()
+        ):
             raise ValueError("Mismatched factory plan; manual review required")
-        if saved.get("recovery_blocked") or "[REDACTED]" in json.dumps({"plan": plan, "results": results}):
-            raise ValueError("Redacted factory execution content is not recoverable; manual review required")
+        if saved.get("recovery_blocked") or "[REDACTED]" in json.dumps(
+            {"plan": plan, "results": results}
+        ):
+            raise ValueError(
+                "Redacted factory execution content is not recoverable; manual review required"
+            )
         active = saved.get("in_flight")
         if active is not None:
             if type(active) is not int or active != len(results) + 1 or active > len(plan):
@@ -1229,14 +1452,29 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
 
     async def save_boundary(in_flight: int | None) -> None:
         if save_checkpoint is not None:
-            await save_checkpoint({"version": 1, "task_id": task_id, "owner_id": payload.get("user_id"),
-                                   "fingerprint": fingerprint, "plan": plan, "results": results,
-                                   "in_flight": in_flight})
+            await save_checkpoint(
+                {
+                    "version": 1,
+                    "task_id": task_id,
+                    "owner_id": payload.get("user_id"),
+                    "fingerprint": fingerprint,
+                    "plan": plan,
+                    "results": results,
+                    "in_flight": in_flight,
+                }
+            )
 
     # Runtime controls and checkpoint data must never reach child model calls.
-    payload = {key: value for key, value in payload.items()
-               if key not in {"_factory_checkpoint", "_save_factory_checkpoint"}}
-    await task_manager.emit_event(task_id, "factory_start", {"task_id": task_id, "goal_preserved": goal_check["goal_preserved"]})
+    payload = {
+        key: value
+        for key, value in payload.items()
+        if key not in {"_factory_checkpoint", "_save_factory_checkpoint"}
+    }
+    await task_manager.emit_event(
+        task_id,
+        "factory_start",
+        {"task_id": task_id, "goal_preserved": goal_check["goal_preserved"]},
+    )
     await task_manager.emit_event(task_id, "planning", {"message": "Creating execution plan"})
     agent_handler = task_manager._handlers["agent_run"]
     planner_payload = {
@@ -1252,10 +1490,14 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
     }
     planner_payload.pop("_task_id", None)
     try:
-        planner_result = await agent_handler(
-            payload=planner_payload,
-            on_progress=lambda *_: asyncio.sleep(0),
-        ) if saved is None else {"output": json.dumps({"steps": saved["plan"]})}
+        planner_result = (
+            await agent_handler(
+                payload=planner_payload,
+                on_progress=lambda *_: asyncio.sleep(0),
+            )
+            if saved is None
+            else {"output": json.dumps({"steps": saved["plan"]})}
+        )
         planner_output = (
             planner_result.get("output", "")
             if isinstance(planner_result, dict)
@@ -1267,25 +1509,28 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
     except Exception as exc:
         plan = _build_factory_plan(goal, skills)
         await task_manager.emit_event(task_id, "plan_fallback", {"reason": str(exc)})
-    await task_manager.emit_event(task_id, "plan", {
-        "steps": [
-            {
-                "step": step["step"],
-                "action": step["action"],
-                "status": "pending",
-                **({"tool": step["tools"][0]} if step.get("tools") else {}),
-            }
-            for step in plan
-        ]
-    })
+    await task_manager.emit_event(
+        task_id,
+        "plan",
+        {
+            "steps": [
+                {
+                    "step": step["step"],
+                    "action": step["action"],
+                    "status": "pending",
+                    **({"tool": step["tools"][0]} if step.get("tools") else {}),
+                }
+                for step in plan
+            ]
+        },
+    )
 
     # Plan-stage batch precheck: unknown tools and side-effect tools under a
     # read-only permission mode are flagged once, up front, instead of being
     # caught one by one at execution time (sandbox review 5.2 item 3).
     permission_mode = _factory_permission_mode(payload)
     precheck_by_step = {
-        precheck["index"]: precheck
-        for precheck in _precheck_plan_steps(plan, permission_mode)
+        precheck["index"]: precheck for precheck in _precheck_plan_steps(plan, permission_mode)
     }
 
     results: list[dict[str, Any]] = list(saved["results"]) if saved is not None else []
@@ -1305,19 +1550,27 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
                 step=index,
                 reasons=precheck["reasons"],
             )
-            await task_manager.emit_event(task_id, "task_failed", {
-                "task_id": step_id,
-                "step": index,
-                "error": error,
-            })
+            await task_manager.emit_event(
+                task_id,
+                "task_failed",
+                {
+                    "task_id": step_id,
+                    "step": index,
+                    "error": error,
+                },
+            )
             results.append({"step": index, "action": step["action"], "output": "", "blocked": True})
             await save_boundary(None)
             continue
-        await task_manager.emit_event(task_id, "task_start", {
-            "task_id": step_id,
-            "step": index,
-            "description": step["action"],
-        })
+        await task_manager.emit_event(
+            task_id,
+            "task_start",
+            {
+                "task_id": step_id,
+                "step": index,
+                "description": step["action"],
+            },
+        )
         step_payload = {
             **payload,
             "objective": step["objective"],
@@ -1325,14 +1578,25 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
             "max_steps": min(int(payload.get("max_steps", 10)), 6),
         }
         step_payload.pop("_task_id", None)
-        async def _step_progress(current: int, total: int, message: str = "", _step_id: str = step_id, _index: int = index) -> None:
-            await task_manager.emit_event(task_id, "progress", {
-                "task_id": _step_id,
-                "step": _index,
-                "current": current,
-                "total": total,
-                "message": message,
-            })
+
+        async def _step_progress(
+            current: int,
+            total: int,
+            message: str = "",
+            _step_id: str = step_id,
+            _index: int = index,
+        ) -> None:
+            await task_manager.emit_event(
+                task_id,
+                "progress",
+                {
+                    "task_id": _step_id,
+                    "step": _index,
+                    "current": current,
+                    "total": total,
+                    "message": message,
+                },
+            )
 
         # A failed step is retried before the run gives up: transient model/tool
         # errors are common, and each retry is announced so the UI can show the
@@ -1346,7 +1610,7 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
             try:
                 result = await agent_handler(payload=step_payload, on_progress=_step_progress)
                 if isinstance(result, dict) and result.get("status") == TaskStatus.FAILED.value:
-                    raise RuntimeError("Factory step reported failure")  # noqa: TRY301 - reuse the bounded step failure path
+                    raise RuntimeError("Factory step reported failure")
                 output = result.get("output", "") if isinstance(result, dict) else str(result)
                 last_error = None
                 break
@@ -1359,29 +1623,43 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
                     # repeat the side effect. Give up on this step immediately.
                     break
                 if attempt <= task_manager.max_task_retries:
-                    await task_manager.emit_event(task_id, "task_retry", {
-                        "task_id": step_id,
-                        "step": index,
-                        "retries": attempt,
-                        "error": str(exc),
-                    })
+                    await task_manager.emit_event(
+                        task_id,
+                        "task_retry",
+                        {
+                            "task_id": step_id,
+                            "step": index,
+                            "retries": attempt,
+                            "error": str(exc),
+                        },
+                    )
                     await asyncio.sleep(0.5)
                 else:
                     break
         if last_error is not None:
             error = f"Step execution failed ({type(last_error).__name__})"
-            await task_manager.emit_event(task_id, "task_failed", {
-                "task_id": step_id,
-                "step": index,
-                "error": error,
-            })
+            await task_manager.emit_event(
+                task_id,
+                "task_failed",
+                {
+                    "task_id": step_id,
+                    "step": index,
+                    "error": error,
+                },
+            )
             raise RuntimeError(f"Factory step {index} failed: {error}") from None
         # Persistence failure must exit the handler, never re-execute the step.
         results.append({"step": index, "action": step["action"], "output": output})
         await save_boundary(None)
-        await task_manager.emit_event(task_id, "task_complete", {
-            "task_id": step_id, "step": index, "result": output,
-        })
+        await task_manager.emit_event(
+            task_id,
+            "task_complete",
+            {
+                "task_id": step_id,
+                "step": index,
+                "result": output,
+            },
+        )
         await on_progress(index, len(plan) + 1, step["action"])
 
     evidence = "\n\n".join(
@@ -1398,7 +1676,9 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
     }
     synthesis_payload.pop("_task_id", None)
     try:
-        synthesis = await agent_handler(payload=synthesis_payload, on_progress=lambda *_: asyncio.sleep(0))
+        synthesis = await agent_handler(
+            payload=synthesis_payload, on_progress=lambda *_: asyncio.sleep(0)
+        )
         report = synthesis.get("output", "") if isinstance(synthesis, dict) else str(synthesis)
     except asyncio.CancelledError:
         raise
@@ -1432,10 +1712,10 @@ async def handle_data_processing(payload: dict[str, Any], on_progress) -> dict[s
         else:
             results.append(item)
         if (i + 1) % max(1, total // 20) == 0:
-            await on_progress(i + 1, total, f"Processed {i+1}/{total}")
+            await on_progress(i + 1, total, f"Processed {i + 1}/{total}")
             await asyncio.sleep(0)
     await on_progress(total, total, "Complete")
-    window = results[offset:offset + limit]
+    window = results[offset : offset + limit]
     next_offset = offset + len(window) if offset + len(window) < len(results) else None
     return {
         "processed": len(results),
@@ -1450,11 +1730,11 @@ async def handle_data_processing(payload: dict[str, Any], on_progress) -> dict[s
 async def handle_workflow(payload: dict[str, Any], on_progress) -> dict[str, Any]:
     """Execute a multi-step workflow."""
     from app.multi_agent.flow import Flow
+
     workflow_name = payload.get("workflow", "default")
     params = payload.get("params", {})
     flow = Flow(name=workflow_name)
-    result = await flow.execute(params=params, on_progress=on_progress)
-    return result
+    return await flow.execute(params=params, on_progress=on_progress)
 
 
 task_manager = TaskManager(max_workers=settings.max_concurrent_subtasks)

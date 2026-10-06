@@ -9,7 +9,6 @@ from .context import RuntimePaths
 from .events import EventClient
 from .jsonio import read_json, write_json_atomic
 
-
 TABLE_NAMES = (
     "requirements",
     "scenarios",
@@ -51,7 +50,9 @@ def _as_bool_or_none(value: Any) -> bool | None:
     return None
 
 
-def _edge_key(source_req_id: str, target_req_id: str, from_interface_id: str, to_interface_id: str) -> str:
+def _edge_key(
+    source_req_id: str, target_req_id: str, from_interface_id: str, to_interface_id: str
+) -> str:
     return "::".join(
         [
             str(source_req_id or "").strip(),
@@ -173,13 +174,17 @@ class TraceabilityStore:
             req_id = str(node.get("id") or node.get("req_id") or "").strip()
             if not req_id:
                 return
-            children = [child for child in _as_list(node.get("children")) if isinstance(child, dict)]
+            children = [
+                child for child in _as_list(node.get("children")) if isinstance(child, dict)
+            ]
             children_ids = [
                 str(child.get("id") or child.get("req_id") or "").strip()
                 for child in children
                 if str(child.get("id") or child.get("req_id") or "").strip()
             ]
-            node_scenarios = [dict(item) for item in _as_list(node.get("scenarios")) if isinstance(item, dict)]
+            node_scenarios = [
+                dict(item) for item in _as_list(node.get("scenarios")) if isinstance(item, dict)
+            ]
             requirements[req_id] = {
                 "req_id": req_id,
                 "id": req_id,
@@ -248,7 +253,9 @@ class TraceabilityStore:
         normalized_req_id = str(req_id or "").strip()
         if not normalized_req_id:
             raise ValueError("req_id is required")
-        normalized_scenarios = [dict(item) for item in _as_list(scenarios) if isinstance(item, dict)]
+        normalized_scenarios = [
+            dict(item) for item in _as_list(scenarios) if isinstance(item, dict)
+        ]
         self._upsert_row(
             "requirements",
             normalized_req_id,
@@ -299,16 +306,28 @@ class TraceabilityStore:
     def delete_requirement(self, req_id: str) -> None:
         normalized_req_id = str(req_id or "").strip()
         self._delete_row("requirements", normalized_req_id)
-        for table_name, field_name in (("scenarios", "req_id"), ("tests", "req_id"), ("node_states", "req_id"), ("node_contracts", "req_id")):
+        for table_name, field_name in (
+            ("scenarios", "req_id"),
+            ("tests", "req_id"),
+            ("node_states", "req_id"),
+            ("node_contracts", "req_id"),
+        ):
             rows = self._read_table(table_name)
-            rows = {key: row for key, row in rows.items() if not isinstance(row, dict) or row.get(field_name) != normalized_req_id}
+            rows = {
+                key: row
+                for key, row in rows.items()
+                if not isinstance(row, dict) or row.get(field_name) != normalized_req_id
+            }
             self._write_table(table_name, rows)
         call_edges = self._read_table("call_edges")
         call_edges = {
             key: row
             for key, row in call_edges.items()
             if not isinstance(row, dict)
-            or (row.get("source_req_id") != normalized_req_id and row.get("target_req_id") != normalized_req_id)
+            or (
+                row.get("source_req_id") != normalized_req_id
+                and row.get("target_req_id") != normalized_req_id
+            )
         }
         self._write_table("call_edges", call_edges)
         self.events.notify_traceability_changed("requirement_deleted")
@@ -322,7 +341,9 @@ class TraceabilityStore:
             rows = [row for row in rows if isinstance(row, dict) and row.get("req_id") == req_id]
         return [dict(row) for row in rows if isinstance(row, dict)]
 
-    def upsert_scenario(self, *, scenario_id: str, req_id: str, name: str, steps: list[dict[str, str]]) -> None:
+    def upsert_scenario(
+        self, *, scenario_id: str, req_id: str, name: str, steps: list[dict[str, str]]
+    ) -> None:
         normalized_scenario_id = str(scenario_id or "").strip()
         normalized_req_id = str(req_id or "").strip()
         if not normalized_scenario_id or not normalized_req_id:
@@ -342,9 +363,16 @@ class TraceabilityStore:
             scenarios = [
                 item
                 for item in _as_list(requirement.get("scenarios"))
-                if str(item.get("id") or item.get("scenario_id") or "").strip() != normalized_scenario_id
+                if str(item.get("id") or item.get("scenario_id") or "").strip()
+                != normalized_scenario_id
             ]
-            scenarios.append({"id": normalized_scenario_id, "name": str(name or "").strip(), "steps": _as_list(steps)})
+            scenarios.append(
+                {
+                    "id": normalized_scenario_id,
+                    "name": str(name or "").strip(),
+                    "steps": _as_list(steps),
+                }
+            )
             self.update_requirement_fields(normalized_req_id, scenarios=scenarios)
         self.events.notify_traceability_changed("scenarios_updated")
 
@@ -367,7 +395,9 @@ class TraceabilityStore:
         return self._get_row("interfaces", interface_id)
 
     def list_interfaces(self, *, req_id: str | None = None) -> list[dict[str, Any]]:
-        rows = [dict(row) for row in self._read_table("interfaces").values() if isinstance(row, dict)]
+        rows = [
+            dict(row) for row in self._read_table("interfaces").values() if isinstance(row, dict)
+        ]
         if req_id:
             rows = [row for row in rows if req_id in _as_str_list(row.get("req_ids"))]
         return rows
@@ -594,9 +624,15 @@ class TraceabilityStore:
         self.events.notify_traceability_changed("call_edges_updated")
 
     def list_call_edges(self, *, req_id: str | None = None) -> list[dict[str, Any]]:
-        rows = [dict(row) for row in self._read_table("call_edges").values() if isinstance(row, dict)]
+        rows = [
+            dict(row) for row in self._read_table("call_edges").values() if isinstance(row, dict)
+        ]
         if req_id:
-            rows = [row for row in rows if row.get("source_req_id") == req_id or row.get("target_req_id") == req_id]
+            rows = [
+                row
+                for row in rows
+                if row.get("source_req_id") == req_id or row.get("target_req_id") == req_id
+            ]
         return rows
 
     def delete_call_edge(
@@ -607,7 +643,10 @@ class TraceabilityStore:
         from_interface_id: str,
         to_interface_id: str,
     ) -> None:
-        self._delete_row("call_edges", _edge_key(source_req_id, target_req_id, from_interface_id, to_interface_id))
+        self._delete_row(
+            "call_edges",
+            _edge_key(source_req_id, target_req_id, from_interface_id, to_interface_id),
+        )
         self.events.notify_traceability_changed("call_edge_deleted")
 
     def upsert_node_state(self, req_id: str, state: str, phase: str | None = None) -> None:
@@ -637,7 +676,9 @@ class TraceabilityStore:
         return self.get_node_state(req_id)
 
     def list_node_states(self) -> list[dict[str, Any]]:
-        return [dict(row) for row in self._read_table("node_states").values() if isinstance(row, dict)]
+        return [
+            dict(row) for row in self._read_table("node_states").values() if isinstance(row, dict)
+        ]
 
     def list_requirement_states(self) -> list[dict[str, Any]]:
         return self.list_node_states()
@@ -663,7 +704,11 @@ class TraceabilityStore:
         return self._get_row("node_contracts", req_id)
 
     def list_node_contracts(self) -> list[dict[str, Any]]:
-        return [dict(row) for row in self._read_table("node_contracts").values() if isinstance(row, dict)]
+        return [
+            dict(row)
+            for row in self._read_table("node_contracts").values()
+            if isinstance(row, dict)
+        ]
 
     def delete_node_contract(self, req_id: str) -> None:
         self._delete_row("node_contracts", req_id)
@@ -674,7 +719,9 @@ class TraceabilityStore:
         for key, row in list(interfaces.items()):
             if not isinstance(row, dict):
                 continue
-            remaining_req_ids = [value for value in _as_str_list(row.get("req_ids")) if value != req_id]
+            remaining_req_ids = [
+                value for value in _as_str_list(row.get("req_ids")) if value != req_id
+            ]
             if remaining_req_ids:
                 row["req_ids"] = remaining_req_ids
             else:
@@ -682,14 +729,19 @@ class TraceabilityStore:
         self._write_table("interfaces", interfaces)
 
         tests = self._read_table("tests")
-        tests = {key: row for key, row in tests.items() if not isinstance(row, dict) or row.get("req_id") != req_id}
+        tests = {
+            key: row
+            for key, row in tests.items()
+            if not isinstance(row, dict) or row.get("req_id") != req_id
+        }
         self._write_table("tests", tests)
 
         call_edges = self._read_table("call_edges")
         call_edges = {
             key: row
             for key, row in call_edges.items()
-            if not isinstance(row, dict) or (row.get("source_req_id") != req_id and row.get("target_req_id") != req_id)
+            if not isinstance(row, dict)
+            or (row.get("source_req_id") != req_id and row.get("target_req_id") != req_id)
         }
         self._write_table("call_edges", call_edges)
         self.events.notify_traceability_changed("design_artifacts_cleared")

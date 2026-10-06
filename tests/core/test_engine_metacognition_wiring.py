@@ -111,7 +111,15 @@ class _ControlledMetacognition:
 
 
 def _chat_result(tool_call_id: str = "call_1") -> _ChatResult:
-    return _ChatResult([{"id": tool_call_id, "type": "function", "function": {"name": "calculator", "arguments": {}}}])
+    return _ChatResult(
+        [
+            {
+                "id": tool_call_id,
+                "type": "function",
+                "function": {"name": "calculator", "arguments": {}},
+            }
+        ]
+    )
 
 
 class _ChatResult:
@@ -140,7 +148,9 @@ async def test_handle_tool_execution_blocks_when_metacognition_says_stop(
     meta = _ControlledMetacognition(proceed=False)
     engine = _minimal_engine(meta)
     _patch_engine_side_effects(monkeypatch, engine)
-    session = AgentSession(session_id="wire-block", agent_id="agent", user_id="user", api_key="k", model_id="m")
+    session = AgentSession(
+        session_id="wire-block", agent_id="agent", user_id="user", api_key="k", model_id="m"
+    )
 
     ran_tools: list[str] = []
 
@@ -162,7 +172,10 @@ async def test_handle_tool_execution_blocks_when_metacognition_says_stop(
     ]
     assert meta.pre_calls == [1]
     assert ran_tools == []
-    assert any(ev.type == AgentEventType.TOOL_RESULT and ev.data.get("error") == "resource_stop" for ev in events)
+    assert any(
+        ev.type == AgentEventType.TOOL_RESULT and ev.data.get("error") == "resource_stop"
+        for ev in events
+    )
     checkpoint = next(ev for ev in events if ev.type == AgentEventType.CHECKPOINT)
     assert checkpoint.data["metacognition"]["proceed"] is False
 
@@ -172,10 +185,14 @@ async def test_handle_tool_execution_feeds_post_action_back_to_checkpoint(
 ) -> None:
     from app.core.agent_engine import AgentEventType
 
-    meta = _ControlledMetacognition(proceed=True, post_results=[{"continue": True, "health_score": 0.9}])
+    meta = _ControlledMetacognition(
+        proceed=True, post_results=[{"continue": True, "health_score": 0.9}]
+    )
     engine = _minimal_engine(meta)
     _patch_engine_side_effects(monkeypatch, engine)
-    session = AgentSession(session_id="wire-feedback", agent_id="agent", user_id="user", api_key="k", model_id="m")
+    session = AgentSession(
+        session_id="wire-feedback", agent_id="agent", user_id="user", api_key="k", model_id="m"
+    )
 
     class _Executor:
         async def execute_all(self, calls):

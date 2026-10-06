@@ -61,7 +61,7 @@ async def load_latest_checkpoint(task_id: str) -> AgentGroupTaskCheckpoint | Non
         The latest checkpoint or None if not found.
     """
     async with async_session() as db:
-        result = (
+        return (
             await db.execute(
                 select(AgentGroupTaskCheckpoint)
                 .where(AgentGroupTaskCheckpoint.task_id == task_id)
@@ -69,7 +69,6 @@ async def load_latest_checkpoint(task_id: str) -> AgentGroupTaskCheckpoint | Non
                 .limit(1)
             )
         ).scalar_one_or_none()
-        return result
 
 
 async def update_checkpoint_status(task_id: str, status: str) -> None:
@@ -107,11 +106,21 @@ async def resume_from_checkpoint(task: Any, checkpoint: AgentGroupTaskCheckpoint
             t.current_round = checkpoint.current_round
             await db.commit()
 
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "checkpoint_restored",
-        "data": {"task_id": task.id, "checkpoint_id": checkpoint.id, "round": checkpoint.current_round},
-    })
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "task_update",
-        "data": {"id": task.id, "status": "running", "current_round": checkpoint.current_round},
-    })
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "checkpoint_restored",
+            "data": {
+                "task_id": task.id,
+                "checkpoint_id": checkpoint.id,
+                "round": checkpoint.current_round,
+            },
+        },
+    )
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "task_update",
+            "data": {"id": task.id, "status": "running", "current_round": checkpoint.current_round},
+        },
+    )

@@ -57,7 +57,10 @@ async def create_agent(
             provider=data.get("provider", "openai"),
             model_id=data.get("model_id", "gpt-4o-mini"),
             base_url=data.get("base_url"),
-            api_key_encrypted=encrypt_api_key(data.get("api_key") or data.get("api_key_encrypted") or "") or None,
+            api_key_encrypted=encrypt_api_key(
+                data.get("api_key") or data.get("api_key_encrypted") or ""
+            )
+            or None,
         )
         for field in ("description", "system_prompt", "tool_ids", "skill_ids"):
             if hasattr(agent, field) and data.get(field) is not None:

@@ -6,12 +6,11 @@ from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
-
-from app.core.auth_manager import require_scopes
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.api_key_crypto import encrypt_api_key
+from app.core.auth_manager import require_scopes
 from app.core.principal import CurrentPrincipal
 from app.schemas.api_v1.groups import (
     GroupCreateRequest,
@@ -29,7 +28,8 @@ router = APIRouter()
 
 @router.get("/groups/{group_id}/snapshot")
 async def group_snapshot(
-    group_id: str, principal: CurrentPrincipal,
+    group_id: str,
+    principal: CurrentPrincipal,
     _auth: dict = Depends(require_scopes("read")),
 ) -> dict[str, Any]:
     from app.core.group_ws_hub import get_group_state_snapshot
@@ -40,7 +40,9 @@ async def group_snapshot(
     return {**get_group_state_snapshot(group_id), "history_scope": "process_recent"}
 
 
-async def _get_owned_group(db: Any, group_id: str, user_id: str, *, with_members: bool = False) -> AgentGroup | None:
+async def _get_owned_group(
+    db: Any, group_id: str, user_id: str, *, with_members: bool = False
+) -> AgentGroup | None:
     """Fetch a group owned by the given user, or None when not found/owned."""
     stmt = select(AgentGroup).where(AgentGroup.id == group_id, AgentGroup.user_id == user_id)
     if with_members:
@@ -55,20 +57,26 @@ async def list_groups(principal: CurrentPrincipal) -> list[dict[str, Any]]:
     user_id = principal.subject_id
     async with async_session() as db:
         rows = (
-            await db.execute(
-                select(AgentGroup)
-                .where(AgentGroup.user_id == user_id)
-                .options(selectinload(AgentGroup.members))
-                .order_by(AgentGroup.created_at.desc())
+            (
+                await db.execute(
+                    select(AgentGroup)
+                    .where(AgentGroup.user_id == user_id)
+                    .options(selectinload(AgentGroup.members))
+                    .order_by(AgentGroup.created_at.desc())
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [_group_dict(g, members=_build_member_dicts(g.members)) for g in rows]
 
 
 @router.post("/groups")
 @router.post("/groups/", include_in_schema=False)
 async def create_group(
-    payload: GroupCreateRequest, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
+    payload: GroupCreateRequest,
+    principal: CurrentPrincipal,
+    _auth: dict = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Create a new group, optionally with default template members."""
     data = payload.model_dump()
@@ -92,12 +100,16 @@ async def create_group(
             await _add_default_members(db, group.id, user_id)
 
         group = (
-            await db.execute(
-                select(AgentGroup)
-                .where(AgentGroup.id == group.id)
-                .options(selectinload(AgentGroup.members))
+            (
+                await db.execute(
+                    select(AgentGroup)
+                    .where(AgentGroup.id == group.id)
+                    .options(selectinload(AgentGroup.members))
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         return _group_dict(group, members=_build_member_dicts(group.members if group else []))
 
 
@@ -109,13 +121,17 @@ async def _add_default_members(db: Any, group_id: str, user_id: str) -> None:
         group_id: The group ID to add members to.
     """
     agents = (
-        await db.execute(
-            select(Agent)
-            .where(Agent.user_id == user_id)
-            .order_by(Agent.created_at.desc())
-            .limit(3)
+        (
+            await db.execute(
+                select(Agent)
+                .where(Agent.user_id == user_id)
+                .order_by(Agent.created_at.desc())
+                .limit(3)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     roles = ("planner", "executor", "reviewer")
     for agent, role in zip(agents, roles, strict=False):
         member = AgentGroupMember(
@@ -216,13 +232,17 @@ async def list_group_messages(
         if group is None:
             raise HTTPException(status_code=404, detail="Group not found")
         rows = (
-            await db.execute(
-                select(AgentGroupMessage)
-                .where(AgentGroupMessage.group_id == group_id)
-                .order_by(AgentGroupMessage.created_at.desc())
-                .limit(limit)
+            (
+                await db.execute(
+                    select(AgentGroupMessage)
+                    .where(AgentGroupMessage.group_id == group_id)
+                    .order_by(AgentGroupMessage.created_at.desc())
+                    .limit(limit)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return {"messages": [_message_dict(m) for m in rows]}
 
 

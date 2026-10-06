@@ -44,6 +44,7 @@ def _load_json_list(value: Any) -> list:
 @dataclass
 class SkillInvocation:
     """A single skill invocation within a composition."""
+
     skill_id: str
     params: dict[str, Any] = field(default_factory=dict)
     depends_on: list[str] = field(default_factory=list)  # other invocation IDs
@@ -54,6 +55,7 @@ class SkillInvocation:
 @dataclass
 class SkillComposition:
     """A composition of multiple skills that work together."""
+
     id: str
     name: str
     description: str
@@ -68,11 +70,13 @@ class SkillComposition:
     ) -> str:
         """Add a skill invocation step. Returns invocation ID."""
         inv_id = f"step_{len(self.invocations)}"
-        self.invocations.append(SkillInvocation(
-            skill_id=skill_id,
-            params=params or {},
-            depends_on=depends_on or [],
-        ))
+        self.invocations.append(
+            SkillInvocation(
+                skill_id=skill_id,
+                params=params or {},
+                depends_on=depends_on or [],
+            )
+        )
         return inv_id
 
 

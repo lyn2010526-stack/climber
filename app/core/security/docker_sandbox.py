@@ -25,6 +25,7 @@ logger = structlog.get_logger()
 @dataclass
 class DockerSandboxConfig:
     """Enhanced Docker sandbox configuration."""
+
     image: str = "python:3.11-slim"
     cpu_limit: float = 0.5
     memory_limit: str = "256m"
@@ -56,6 +57,7 @@ class DockerSandbox:
             return self._available
         try:
             import docker
+
             self._client = docker.from_env()
             self._client.ping()
             self._available = True
@@ -76,6 +78,7 @@ class DockerSandbox:
             raise RuntimeError("Docker not available")
 
         import docker
+
         client = self._client or docker.from_env()
 
         workdir = cwd or tempfile.mkdtemp(prefix="sandbox_")
@@ -143,7 +146,7 @@ class DockerSandbox:
 
             stdout = ""
             try:
-                stdout = logs.decode("utf-8")[:self.config.max_output_bytes]
+                stdout = logs.decode("utf-8")[: self.config.max_output_bytes]
             except Exception as e:
                 logger.warning("security_docker_sandbox.logs_decode", error=str(e))
 
@@ -183,7 +186,7 @@ class DockerSandbox:
             return ""
         try:
             logs = container.logs(stdout=True, stderr=True)
-            return logs.decode("utf-8")[:self.config.max_output_bytes]
+            return logs.decode("utf-8")[: self.config.max_output_bytes]
         except Exception:
             return ""
 
@@ -205,8 +208,7 @@ class DockerSandbox:
         container_id = None
         try:
             container_id = self.create_container(cmd, cwd, env, network)
-            result = self.execute_command(container_id)
-            return result
+            return self.execute_command(container_id)
         except Exception as e:
             logger.error("docker_execution_error", error=str(e))
             return ExecutionResult(

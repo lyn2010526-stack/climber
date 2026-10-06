@@ -1,11 +1,12 @@
 """Standalone unittest regressions; no main app or shared pytest fixtures."""
+
 from __future__ import annotations
 
 import importlib.util
-from pathlib import Path
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from fastapi import FastAPI, Request
@@ -41,9 +42,16 @@ class SettingsClusterReviewTest(unittest.IsolatedAsyncioTestCase):
         self.addAsyncCleanup(self.engine.dispose)
         self.sessions = async_sessionmaker(self.engine, expire_on_commit=False)
         async with self.engine.begin() as connection:
-            await connection.run_sync(lambda conn: Base.metadata.create_all(
-                conn, tables=[UserSettings.__table__, AgentGroup.__table__, AgentGroupMember.__table__]
-            ))
+            await connection.run_sync(
+                lambda conn: Base.metadata.create_all(
+                    conn,
+                    tables=[
+                        UserSettings.__table__,
+                        AgentGroup.__table__,
+                        AgentGroupMember.__table__,
+                    ],
+                )
+            )
         for target, attr, value in [
             (settings_service, "async_session", self.sessions),
             (groups_route, "async_session", self.sessions),
@@ -78,9 +86,14 @@ class SettingsClusterReviewTest(unittest.IsolatedAsyncioTestCase):
         self.owner = {"x-test-owner": "alice"}
 
     async def test_persisted_round_trip_and_owner_isolation(self):
-        response = await self.client.patch("/settings/", headers=self.owner, json={
-            "autonomous_agent_mode": True, "token_throttle_mcp_enabled": True,
-        })
+        response = await self.client.patch(
+            "/settings/",
+            headers=self.owner,
+            json={
+                "autonomous_agent_mode": True,
+                "token_throttle_mcp_enabled": True,
+            },
+        )
         self.assertEqual(response.status_code, 200, response.text)
         await self.engine.dispose()
         saved = await self.client.get("/settings/", headers=self.owner)
@@ -89,9 +102,13 @@ class SettingsClusterReviewTest(unittest.IsolatedAsyncioTestCase):
         other = await self.client.get("/settings/", headers={"x-test-owner": "bob"})
         self.assertFalse(other.json()["autonomous_agent_mode"])
         self.assertFalse(other.json()["token_throttle_mcp_enabled"])
-        response = await self.client.patch("/settings/", headers=self.owner, json={
-            "autonomous_agent_mode": False,
-        })
+        response = await self.client.patch(
+            "/settings/",
+            headers=self.owner,
+            json={
+                "autonomous_agent_mode": False,
+            },
+        )
         self.assertEqual(response.status_code, 200)
         saved = await self.client.get("/settings/", headers=self.owner)
         self.assertFalse(saved.json()["autonomous_agent_mode"])
@@ -117,9 +134,13 @@ class SettingsClusterReviewTest(unittest.IsolatedAsyncioTestCase):
     async def test_invalid_boolean_values_are_rejected(self):
         for value in ["false", 0, 1, None, [], {}]:
             with self.subTest(value=value):
-                response = await self.client.patch("/settings/", headers=self.owner, json={
-                    "autonomous_agent_mode": value,
-                })
+                response = await self.client.patch(
+                    "/settings/",
+                    headers=self.owner,
+                    json={
+                        "autonomous_agent_mode": value,
+                    },
+                )
                 self.assertEqual(response.status_code, 422, response.text)
 
     async def test_empty_update_is_rejected(self):
@@ -131,19 +152,30 @@ class SettingsClusterReviewTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 401)
 
     async def test_read_scope_cannot_update(self):
-        response = await self.client.patch("/settings/", headers={
-            **self.owner, "x-test-scopes": "read",
-        }, json={"autonomous_agent_mode": True})
+        response = await self.client.patch(
+            "/settings/",
+            headers={
+                **self.owner,
+                "x-test-scopes": "read",
+            },
+            json={"autonomous_agent_mode": True},
+        )
         self.assertEqual(response.status_code, 403, response.text)
 
     async def test_group_detail_returns_only_owned_real_members(self):
         async with self.sessions() as db:
-            db.add_all([
-                AgentGroup(id="alice-group", name="Alice", user_id="alice"),
-                AgentGroup(id="bob-group", name="Bob", user_id="bob"),
-            ])
+            db.add_all(
+                [
+                    AgentGroup(id="alice-group", name="Alice", user_id="alice"),
+                    AgentGroup(id="bob-group", name="Bob", user_id="bob"),
+                ]
+            )
             await db.flush()
-            db.add(AgentGroupMember(id="member-a", group_id="alice-group", agent_id="agent-a", role="planner"))
+            db.add(
+                AgentGroupMember(
+                    id="member-a", group_id="alice-group", agent_id="agent-a", role="planner"
+                )
+            )
             await db.commit()
         response = await self.client.get("/groups/alice-group", headers=self.owner)
         self.assertEqual(response.status_code, 200, response.text)

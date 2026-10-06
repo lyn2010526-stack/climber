@@ -24,9 +24,9 @@ class CompressionDecision:
     """一次压缩决策。"""
 
     should_compress: bool = False
-    strength: float = 0.0            # 0..1 压缩强度
+    strength: float = 0.0  # 0..1 压缩强度
     target_tokens: int | None = None
-    strategy: str = "none"           # none|summarize|truncate|full_rewrite
+    strategy: str = "none"  # none|summarize|truncate|full_rewrite
     reason: str = ""
 
 
@@ -47,14 +47,16 @@ class AdaptiveCompressionScheduler:
     BUDGET_RATIO_LOW = 0.5
     BUDGET_RATIO_HIGH = 0.75
 
-    def __init__(self, summarize_fn: Callable[[list[dict[str, Any]], dict[str, Any]], str] | None = None) -> None:
+    def __init__(
+        self, summarize_fn: Callable[[list[dict[str, Any]], dict[str, Any]], str] | None = None
+    ) -> None:
         self.summarize_fn = summarize_fn
 
     def decide(
         self,
         context_tokens: int,
         max_tokens: int,
-        task_type: str = "general",      # simple|general|complex
+        task_type: str = "general",  # simple|general|complex
         stall_rounds: int = 0,
         risk_level: RiskLevel = RiskLevel.LOW,
         round_number: int = 0,
@@ -68,24 +70,28 @@ class AdaptiveCompressionScheduler:
         # 简单任务：保留更多细节，高水位才压缩
         if task_type == "simple":
             if ratio < self.BUDGET_RATIO_HIGH:
-                return CompressionDecision(should_compress=False,
-                                           reason=f"simple 任务 ratio={ratio:.2f} 低于高水位，保留细节")
+                return CompressionDecision(
+                    should_compress=False,
+                    reason=f"simple 任务 ratio={ratio:.2f} 低于高水位，保留细节",
+                )
             strength = 0.4
             strategy = "summarize"
             reason = f"simple 任务触顶 ratio={ratio:.2f}，轻度摘要"
         # 复杂任务：主动收紧
         elif task_type == "complex":
             if ratio < self.BUDGET_RATIO_LOW:
-                return CompressionDecision(should_compress=False,
-                                           reason=f"complex 任务 ratio={ratio:.2f} 仍充裕")
+                return CompressionDecision(
+                    should_compress=False, reason=f"complex 任务 ratio={ratio:.2f} 仍充裕"
+                )
             strength = 0.7 if ratio < self.BUDGET_RATIO_HIGH else 0.9
             strategy = "full_rewrite" if ratio >= self.BUDGET_RATIO_HIGH else "summarize"
             reason = f"complex 任务 ratio={ratio:.2f}，收紧上下文"
         else:
             # 通用：渐进
             if ratio < self.BUDGET_RATIO_LOW:
-                return CompressionDecision(should_compress=False,
-                                           reason=f"general 任务 ratio={ratio:.2f} 低于低水位")
+                return CompressionDecision(
+                    should_compress=False, reason=f"general 任务 ratio={ratio:.2f} 低于低水位"
+                )
             strength = 0.5 if ratio < self.BUDGET_RATIO_HIGH else 0.8
             strategy = "summarize" if ratio < self.BUDGET_RATIO_HIGH else "full_rewrite"
             reason = f"general 任务 ratio={ratio:.2f}，{strategy}"
@@ -109,8 +115,12 @@ class AdaptiveCompressionScheduler:
 
     # ---- 与现有 compressor 对接 ----
 
-    async def compress_messages(self, messages: list[dict[str, Any]], decision: CompressionDecision,
-                                summarize_fn: Callable | None = None) -> list[dict[str, Any]]:
+    async def compress_messages(
+        self,
+        messages: list[dict[str, Any]],
+        decision: CompressionDecision,
+        summarize_fn: Callable | None = None,
+    ) -> list[dict[str, Any]]:
         """执行压缩（复用注入的摘要函数）。"""
         if not decision.should_compress:
             return messages
@@ -132,7 +142,9 @@ class AdaptiveCompressionScheduler:
             summary = [{"role": "system", "content": f"[上下文摘要] {summary}"}]
         return [*system, *head, *summary, *tail]
 
-    def estimate_saved_tokens(self, messages: list[dict[str, Any]], decision: CompressionDecision) -> int:
+    def estimate_saved_tokens(
+        self, messages: list[dict[str, Any]], decision: CompressionDecision
+    ) -> int:
         """估算压缩节省的 token（评估报告用）。"""
         if not decision.should_compress:
             return 0

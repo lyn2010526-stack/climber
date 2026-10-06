@@ -32,7 +32,9 @@ from app.workflow import (
 from app.workflow.code_sandbox import run_code_sandboxed
 from app.workflow.safe_code import (
     safe_eval,
-    safe_exec,
+    safe_exec,  # noqa: F401 - re-exported: public surface of this module
+)
+from app.workflow.safe_code import (
     validate_code_ast as _validate_code_ast,
 )
 
@@ -117,9 +119,7 @@ class WorkflowEngine:
             )
 
         # Set start node
-        start_node = next(
-            (n for n in workflow.nodes if n.type == NodeType.START), None
-        )
+        start_node = next((n for n in workflow.nodes if n.type == NodeType.START), None)
         if start_node:
             start_node.output = user_inputs
             start_node.status = NodeStatus.COMPLETED
@@ -191,14 +191,19 @@ class WorkflowEngine:
                 output = await self._execute_tool_node(node, resolved_inputs)
             elif node.type == NodeType.CONDITION:
                 output, skip_targets = self._execute_condition_node(
-                    node, resolved_inputs, workflow,
+                    node,
+                    resolved_inputs,
+                    workflow,
                 )
                 # Mark downstream nodes for skipping
                 for target_id in skip_targets:
                     self._skip_downstream(target_id, node.id, workflow, skipped_nodes)
             elif node.type == NodeType.ITERATOR:
                 output = await self._execute_iterator_node(
-                    node, resolved_inputs, user_id, skipped_nodes,
+                    node,
+                    resolved_inputs,
+                    user_id,
+                    skipped_nodes,
                 )
             elif node.type == NodeType.CODE:
                 output = await self._execute_code_node(node, resolved_inputs)
@@ -321,9 +326,7 @@ class WorkflowEngine:
                 full_response_parts.append(event.data.get("content", ""))
             elif event.type.value == "error":
                 error_message = str(
-                    event.data.get("error")
-                    or event.data.get("message")
-                    or event.data
+                    event.data.get("error") or event.data.get("message") or event.data
                 )
 
         if error_message:
@@ -353,12 +356,14 @@ class WorkflowEngine:
                 resolved_tool_inputs[k] = v
 
         from app.core.parallel import ParallelToolExecutor
+
         registry = self._resolve_registry()
         sandbox = getattr(self.agent_engine, "sandbox", None)
         permission_overlay = getattr(self.agent_engine, "permission_overlay", None)
         capabilities = node.config.get("tool_capabilities")
 
         from app.core.engine.tool_capabilities import build_workflow_tool_validator
+
         validator = build_workflow_tool_validator(
             registry,
             sandbox=sandbox,
@@ -366,13 +371,17 @@ class WorkflowEngine:
             capabilities=capabilities,
         )
         executor = ParallelToolExecutor(registry, validator=validator)
-        tool_result = await executor.execute_all([{
-            "id": f"wf-{node.id}",
-            "function": {
-                "name": tool_name,
-                "arguments": resolved_tool_inputs,
-            },
-        }])
+        tool_result = await executor.execute_all(
+            [
+                {
+                    "id": f"wf-{node.id}",
+                    "function": {
+                        "name": tool_name,
+                        "arguments": resolved_tool_inputs,
+                    },
+                }
+            ]
+        )
         tool_result = tool_result[0]
 
         if not tool_result.success:
@@ -427,7 +436,9 @@ class WorkflowEngine:
 
         for edge in edges:
             edge_condition = edge.condition
-            if (edge_condition == "true" and not condition_result) or (edge_condition == "false" and condition_result):
+            if (edge_condition == "true" and not condition_result) or (
+                edge_condition == "false" and condition_result
+            ):
                 skip_targets.append(edge.target)
 
         return {
@@ -474,6 +485,7 @@ class WorkflowEngine:
                 return False
         elif operator == "regex":
             import re
+
             if len(expected) > 500:
                 return False
             # Reject catastrophic nested quantifiers like (a+)+ or (a*)*
@@ -621,6 +633,7 @@ class WorkflowEngine:
         capabilities = node.config.get("tool_capabilities")
 
         from app.core.engine.tool_capabilities import build_workflow_tool_validator
+
         validator = build_workflow_tool_validator(
             registry,
             sandbox=sandbox,
@@ -641,21 +654,29 @@ class WorkflowEngine:
         ledger = None
         if ledger_dir:
             from app.simulation.ledger import ExperimentLedger
+
             ledger = ExperimentLedger(ledger_dir)
 
-        llm_call = None
         if node.config.get("llm_mode") or orchestrator_mode:
             provider = node.config.get("provider", "openai")
             model_id = node.config.get("model_id", "gpt-4")
             import os as _os
+
             api_key_env = node.config.get("api_key_env", "")
-            api_key = _os.environ.get(api_key_env, "") if api_key_env else node.config.get("api_key", "")
+            api_key = (
+                _os.environ.get(api_key_env, "") if api_key_env else node.config.get("api_key", "")
+            )
 
             async def _llm_call(prompt: str, system_prompt: str):
                 from app.core.engine.session_runner import run_llm_single
+
                 return await run_llm_single(
-                    self.agent_engine, provider, model_id, api_key,
-                    system_prompt, prompt,
+                    self.agent_engine,
+                    provider,
+                    model_id,
+                    api_key,
+                    system_prompt,
+                    prompt,
                 )
 
         if orchestrator_mode:
@@ -669,7 +690,8 @@ class WorkflowEngine:
                 options=OrchestratorOptions(
                     max_plan_rounds=plan_rounds,
                     harness_options=HarnessOptions(
-                        max_rounds=max_rounds, policy=policy,
+                        max_rounds=max_rounds,
+                        policy=policy,
                     ),
                     default_tool=tool_name,
                 ),
@@ -701,6 +723,7 @@ class WorkflowEngine:
         if node.config.get("llm_mode"):
             tool_def = registry.get_tool(tool_name) if registry else None
             from app.simulation.llm_planner import LLMExperimentPlanner
+
             llm_planner = LLMExperimentPlanner(
                 llm_call=_llm_call,
                 tool_name=tool_name,
@@ -743,7 +766,7 @@ class WorkflowEngine:
 
         # Apply explicit input references (override auto-merged)
         for key, ref in node.inputs.items():
-            # Format: "node_id.output_key" or "node_id"
+            # Format: "node_id.output_key" or "node_id"  # noqa: ERA001
             if "." in ref:
                 node_id, output_key = ref.split(".", 1)
             else:
@@ -836,6 +859,3 @@ class WorkflowEngine:
             seen_names.add(node.name)
             outputs[key] = node.output
         return outputs
-
-
-

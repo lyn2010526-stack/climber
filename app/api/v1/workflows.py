@@ -28,8 +28,8 @@ async def _read_json_body(request: Request) -> Any:
     """Read a JSON request body, raising 400 instead of a raw 500 on parse errors."""
     try:
         return await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Request body must be valid JSON")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Request body must be valid JSON") from exc
 
 
 def _caller_identity(request: Request) -> tuple[str, bool]:
@@ -74,7 +74,9 @@ async def list_workflow_templates() -> list[dict[str, Any]]:
                 if tpl["id"] == "simple_qa":
                     workflow = template_fn(provider="openai", model_id="gpt-4o", api_key="")
                 elif tpl["id"] == "tool_use":
-                    workflow = template_fn(tool_name="list_files", provider="openai", model_id="gpt-4o", api_key="")
+                    workflow = template_fn(
+                        tool_name="list_files", provider="openai", model_id="gpt-4o", api_key=""
+                    )
                 elif tpl["id"] == "chain_of_thought" or tpl["id"] == "map_reduce":
                     workflow = template_fn(provider="openai", model_id="gpt-4o", api_key="")
                 elif tpl["id"] == "conditional_branch":
@@ -112,32 +114,49 @@ async def list_workflow_templates() -> list[dict[str, Any]]:
                     )
                 else:
                     continue
-                builtin.append({
-                    "template_id": tpl["id"],
-                    "name": tpl["name"],
-                    "description": tpl["description"],
-                    "nodes": [
-                        {"id": n.id, "type": n.type.value, "data": {"label": n.name, **n.config}}
-                        for n in workflow.nodes
-                    ],
-                    "edges": [
-                        {"id": f"e{i}", "source": e.source, "target": e.target, "condition": e.condition}
-                        for i, e in enumerate(workflow.edges)
-                    ],
-                })
+                builtin.append(
+                    {
+                        "template_id": tpl["id"],
+                        "name": tpl["name"],
+                        "description": tpl["description"],
+                        "nodes": [
+                            {
+                                "id": n.id,
+                                "type": n.type.value,
+                                "data": {"label": n.name, **n.config},
+                            }
+                            for n in workflow.nodes
+                        ],
+                        "edges": [
+                            {
+                                "id": f"e{i}",
+                                "source": e.source,
+                                "target": e.target,
+                                "condition": e.condition,
+                            }
+                            for i, e in enumerate(workflow.edges)
+                        ],
+                    }
+                )
             except Exception as exc:
-                logger.warning("workflows.list_templates_failed", template_id=tpl["id"], error=str(exc))
-                builtin.append({
+                logger.warning(
+                    "workflows.list_templates_failed", template_id=tpl["id"], error=str(exc)
+                )
+                builtin.append(
+                    {
+                        "template_id": tpl["id"],
+                        "name": tpl["name"],
+                        "description": tpl["description"],
+                    }
+                )
+        else:
+            builtin.append(
+                {
                     "template_id": tpl["id"],
                     "name": tpl["name"],
                     "description": tpl["description"],
-                })
-        else:
-            builtin.append({
-                "template_id": tpl["id"],
-                "name": tpl["name"],
-                "description": tpl["description"],
-            })
+                }
+            )
     return builtin
 
 
@@ -278,11 +297,17 @@ def _build_export_response(workflow: Workflow, workflow_id: str, fmt: str) -> Re
     if fmt == "yaml":
         try:
             import yaml  # type: ignore[import-untyped]
-            content = yaml.dump(WorkflowIO.export_workflow(workflow), allow_unicode=True, sort_keys=False)
+
+            content = yaml.dump(
+                WorkflowIO.export_workflow(workflow), allow_unicode=True, sort_keys=False
+            )
             media_type = "application/x-yaml"
             filename = f"workflow-{workflow_id}.yaml"
         except ImportError:
-            raise HTTPException(status_code=400, detail="PyYAML is required for YAML export. Install it with: pip install pyyaml") from None
+            raise HTTPException(
+                status_code=400,
+                detail="PyYAML is required for YAML export. Install it with: pip install pyyaml",
+            ) from None
     else:
         content = json.dumps(WorkflowIO.export_workflow(workflow), indent=2, ensure_ascii=False)
         media_type = "application/json"

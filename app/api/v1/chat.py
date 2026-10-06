@@ -1,12 +1,11 @@
 """Session chat endpoint with SSE streaming."""
 
 # The existing engine exposes canonical state through these integration seams.
-# ruff: noqa: SLF001
 
 from __future__ import annotations
 
-from copy import copy
 from contextlib import aclosing
+from copy import copy
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -45,16 +44,22 @@ class _ChatModelRegistry:
         self._adapter = ModelRegistry().register_model(model_id, provider, api_key, base_url)
 
     def get_or_create(
-        self, provider: str, model_id: str = "", api_key: str = "", base_url: str | None = None,
+        self,
+        provider: str,
+        model_id: str = "",
+        api_key: str = "",
+        base_url: str | None = None,
     ):
         if not model_id:
             provider, model_id = MODEL_ALIASES.get(
-                provider, tuple(provider.split(":", 1)) if ":" in provider
-                else (self.provider, provider),
+                provider,
+                tuple(provider.split(":", 1)) if ":" in provider else (self.provider, provider),
             )
         if (provider, model_id) != (self.provider, self.model_id):
             raise ValueError("Requested model is not bound to the session credential")
-        if (api_key and api_key != self._api_key) or (base_url is not None and base_url != self._base_url):
+        if (api_key and api_key != self._api_key) or (
+            base_url is not None and base_url != self._base_url
+        ):
             raise ValueError("Requested credentials do not match the session binding")
         return self._adapter
 
@@ -100,7 +105,9 @@ async def start_session_inputs(
     return await _session_stream(session_id, ChatRequest(message=""), user_id, queued_only=True)
 
 
-async def _session_stream(session_id: str, request: ChatRequest, user_id: str, *, queued_only=False):
+async def _session_stream(
+    session_id: str, request: ChatRequest, user_id: str, *, queued_only=False
+):
     try:
         images = validate_images(request.images)
         attachments = validate_attachments(request.attachments)
@@ -112,15 +119,25 @@ async def _session_stream(session_id: str, request: ChatRequest, user_id: str, *
         raise HTTPException(422, detail=str(exc)) from exc
     # Always resolve persisted ownership and credentials, including warm sessions.
     async with async_session() as db:
-        row = await db.scalar(select(SessionModel).where(
-            SessionModel.id == session_id, SessionModel.user_id == user_id,
-        ))
+        row = await db.scalar(
+            select(SessionModel).where(
+                SessionModel.id == session_id,
+                SessionModel.user_id == user_id,
+            )
+        )
         if row is None:
             raise HTTPException(404, detail="Session not found")
         agent_id = row.agent_id or ""
-        agent = await db.scalar(select(AgentModel).where(
-            AgentModel.id == agent_id, AgentModel.user_id == user_id,
-        )) if agent_id else None
+        agent = (
+            await db.scalar(
+                select(AgentModel).where(
+                    AgentModel.id == agent_id,
+                    AgentModel.user_id == user_id,
+                )
+            )
+            if agent_id
+            else None
+        )
         if agent_id and agent is None:
             raise HTTPException(404, detail="Agent not found")
         settings = _clean_model_settings(row.model_settings)
@@ -164,12 +181,26 @@ async def _session_stream(session_id: str, request: ChatRequest, user_id: str, *
     try:
         engine.model_registry = _ChatModelRegistry(provider, model_id, api_key, base_url)
     except Exception as exc:
-        raise HTTPException(422, detail="Selected model credential could not be initialized") from exc
+        raise HTTPException(
+            422, detail="Selected model credential could not be initialized"
+        ) from exc
     adapter = engine.model_registry.get_default()
-    if attachments and any(item.kind == "image" for item in attachments) and not adapter.capabilities.vision:
-        raise HTTPException(422, detail=f"Model {provider}/{model_id} does not support image attachments")
-    if attachments and any(item.kind == "file" for item in attachments) and not adapter.capabilities.file_attachments:
-        raise HTTPException(422, detail=f"Model {provider}/{model_id} does not support file attachments")
+    if (
+        attachments
+        and any(item.kind == "image" for item in attachments)
+        and not adapter.capabilities.vision
+    ):
+        raise HTTPException(
+            422, detail=f"Model {provider}/{model_id} does not support image attachments"
+        )
+    if (
+        attachments
+        and any(item.kind == "file" for item in attachments)
+        and not adapter.capabilities.file_attachments
+    ):
+        raise HTTPException(
+            422, detail=f"Model {provider}/{model_id} does not support file attachments"
+        )
     engine._init_reasoning()
     # Preflight awaits database I/O; another request may have reserved the stream.
     lock = engine._session_locks.get(session_id)
@@ -180,15 +211,24 @@ async def _session_stream(session_id: str, request: ChatRequest, user_id: str, *
     try:
         if session is None:
             session = engine.create_session(
-                agent_id=agent_id, user_id=user_id, provider=provider, model_id=model_id,
-                api_key=api_key, base_url=base_url, system_prompt=system_prompt,
-                tools=tool_ids, session_id=session_id,
+                agent_id=agent_id,
+                user_id=user_id,
+                provider=provider,
+                model_id=model_id,
+                api_key=api_key,
+                base_url=base_url,
+                system_prompt=system_prompt,
+                tools=tool_ids,
+                session_id=session_id,
             )
             if not queued_only:
                 await RecoveryManager().restore_session(session)
         # Rebind after recovery and on every turn so rotation takes effect.
         for name, value in {
-            "provider": provider, "model_id": model_id, "api_key": api_key, "base_url": base_url,
+            "provider": provider,
+            "model_id": model_id,
+            "api_key": api_key,
+            "base_url": base_url,
         }.items():
             setattr(session, name, value)
             setattr(session.session_config, name, value)
@@ -202,8 +242,9 @@ async def _session_stream(session_id: str, request: ChatRequest, user_id: str, *
         try:
             # Only pass the new field when present so engines predating images keep working.
             runner = (
-                engine.run_inputs(session) if queued_only else
-                engine.run(session, request.message, images=images)
+                engine.run_inputs(session)
+                if queued_only
+                else engine.run(session, request.message, images=images)
                 if images
                 else (
                     engine.run(session, request.message, attachments=attachments)
@@ -216,7 +257,10 @@ async def _session_stream(session_id: str, request: ChatRequest, user_id: str, *
                     yield event.to_sse()
         except Exception as e:
             import structlog
-            structlog.get_logger().error("chat_stream_error", session_id=session_id, error_type=type(e).__name__)
+
+            structlog.get_logger().error(
+                "chat_stream_error", session_id=session_id, error_type=type(e).__name__
+            )
             error_event = AgentEvent(
                 type=AgentEventType.ERROR,
                 data={"error": "Model execution failed; verify the selected credential and model"},

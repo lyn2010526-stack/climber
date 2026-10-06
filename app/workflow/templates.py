@@ -19,7 +19,9 @@ class WorkflowTemplates:
         nodes = [
             WorkflowNode(id="start", type=NodeType.START, name="Start"),
             WorkflowNode(
-                id="llm", type=NodeType.LLM, name="Answer",
+                id="llm",
+                type=NodeType.LLM,
+                name="Answer",
                 config={
                     "provider": provider,
                     "model_id": model_id,
@@ -29,7 +31,9 @@ class WorkflowTemplates:
                 },
                 inputs={"question": "start.question"},
             ),
-            WorkflowNode(id="end", type=NodeType.END, name="End", inputs={"result": "llm.response"}),
+            WorkflowNode(
+                id="end", type=NodeType.END, name="End", inputs={"result": "llm.response"}
+            ),
         ]
         edges = [
             WorkflowEdge(source="start", target="llm"),
@@ -48,7 +52,9 @@ class WorkflowTemplates:
         nodes = [
             WorkflowNode(id="start", type=NodeType.START, name="Start"),
             WorkflowNode(
-                id="think", type=NodeType.LLM, name="Think",
+                id="think",
+                type=NodeType.LLM,
+                name="Think",
                 config={
                     "provider": provider,
                     "model_id": model_id,
@@ -59,7 +65,9 @@ class WorkflowTemplates:
                 inputs={"question": "start.question"},
             ),
             WorkflowNode(
-                id="check", type=NodeType.CONDITION, name="Tool Needed?",
+                id="check",
+                type=NodeType.CONDITION,
+                name="Tool Needed?",
                 config={
                     "variable": "think.response",
                     "operator": "contains",
@@ -67,14 +75,18 @@ class WorkflowTemplates:
                 },
             ),
             WorkflowNode(
-                id="tool", type=NodeType.TOOL, name="Execute Tool",
+                id="tool",
+                type=NodeType.TOOL,
+                name="Execute Tool",
                 config={
                     "tool_name": tool_name,
                     "tool_inputs": {"input": "start.question"},
                 },
             ),
             WorkflowNode(
-                id="final", type=NodeType.LLM, name="Final Answer",
+                id="final",
+                type=NodeType.LLM,
+                name="Final Answer",
                 config={
                     "provider": provider,
                     "model_id": model_id,
@@ -84,7 +96,9 @@ class WorkflowTemplates:
                 },
                 inputs={"result": "tool.result"},
             ),
-            WorkflowNode(id="end", type=NodeType.END, name="End", inputs={"output": "think.response"}),
+            WorkflowNode(
+                id="end", type=NodeType.END, name="End", inputs={"output": "think.response"}
+            ),
         ]
         edges = [
             WorkflowEdge(source="start", target="think"),
@@ -110,35 +124,43 @@ class WorkflowTemplates:
         prev_id = "start"
         for i in range(steps):
             node_id = f"step_{i}"
-            nodes.append(WorkflowNode(
-                id=node_id,
-                type=NodeType.LLM,
-                name=f"Step {i + 1}",
-                config={
-                    "provider": provider,
-                    "model_id": model_id,
-                    "api_key": api_key,
-                    "prompt": (
-                        "{{question}}" if i == 0
-                        else f"Based on previous reasoning:\n{{{{step_{i-1}.response}}}}\n\nContinue reasoning step {i + 1}."
+            nodes.append(
+                WorkflowNode(
+                    id=node_id,
+                    type=NodeType.LLM,
+                    name=f"Step {i + 1}",
+                    config={
+                        "provider": provider,
+                        "model_id": model_id,
+                        "api_key": api_key,
+                        "prompt": (
+                            "{{question}}"
+                            if i == 0
+                            else f"Based on previous reasoning:\n{{{{step_{i - 1}.response}}}}\n\nContinue reasoning step {i + 1}."
+                        ),
+                        "system_prompt": (
+                            f"You are reasoning step {i + 1} of {steps}. "
+                            "Think carefully and show your work."
+                        ),
+                    },
+                    inputs=(
+                        {"question": "start.question"}
+                        if i == 0
+                        else {"question": f"step_{i - 1}.response"}
                     ),
-                    "system_prompt": (
-                        f"You are reasoning step {i + 1} of {steps}. "
-                        "Think carefully and show your work."
-                    ),
-                },
-                inputs=(
-                    {"question": "start.question"} if i == 0
-                    else {"question": f"step_{i-1}.response"}
-                ),
-            ))
+                )
+            )
             edges.append(WorkflowEdge(source=prev_id, target=node_id))
             prev_id = node_id
 
-        nodes.append(WorkflowNode(
-            id="end", type=NodeType.END, name="End",
-            inputs={"reasoning": f"{prev_id}.response"},
-        ))
+        nodes.append(
+            WorkflowNode(
+                id="end",
+                type=NodeType.END,
+                name="End",
+                inputs={"reasoning": f"{prev_id}.response"},
+            )
+        )
         edges.append(WorkflowEdge(source=prev_id, target="end"))
 
         return Workflow(
@@ -154,7 +176,9 @@ class WorkflowTemplates:
         nodes = [
             WorkflowNode(id="start", type=NodeType.START, name="Start"),
             WorkflowNode(
-                id="map", type=NodeType.ITERATOR, name="Map Items",
+                id="map",
+                type=NodeType.ITERATOR,
+                name="Map Items",
                 config={
                     "collection": "start.items",
                     "item_var": "item",
@@ -164,7 +188,9 @@ class WorkflowTemplates:
                 inputs={"items": "start.items"},
             ),
             WorkflowNode(
-                id="reduce", type=NodeType.LLM, name="Reduce/Aggregate",
+                id="reduce",
+                type=NodeType.LLM,
+                name="Reduce/Aggregate",
                 config={
                     "provider": provider,
                     "model_id": model_id,
@@ -174,7 +200,9 @@ class WorkflowTemplates:
                 },
                 inputs={"results": "map.results"},
             ),
-            WorkflowNode(id="end", type=NodeType.END, name="End", inputs={"output": "reduce.response"}),
+            WorkflowNode(
+                id="end", type=NodeType.END, name="End", inputs={"output": "reduce.response"}
+            ),
         ]
         edges = [
             WorkflowEdge(source="start", target="map"),
@@ -190,8 +218,12 @@ class WorkflowTemplates:
 
     @staticmethod
     def simulation_experiment(
-        provider: str, model_id: str, api_key: str,
-        tool_name: str, schema: dict | None = None, max_rounds: int = 8,
+        provider: str,
+        model_id: str,
+        api_key: str,
+        tool_name: str,
+        schema: dict | None = None,
+        max_rounds: int = 8,
     ) -> Workflow:
         """Run a simulation-experiment sweep through the SimulationHarness.
 
@@ -202,7 +234,9 @@ class WorkflowTemplates:
         nodes = [
             WorkflowNode(id="start", type=NodeType.START, name="Start"),
             WorkflowNode(
-                id="simulate", type=NodeType.SIMULATION, name="Simulate",
+                id="simulate",
+                type=NodeType.SIMULATION,
+                name="Simulate",
                 config={
                     "tool_name": tool_name,
                     "schema": schema or {},
@@ -212,7 +246,9 @@ class WorkflowTemplates:
                 inputs={"goal": "start.goal"},
             ),
             WorkflowNode(
-                id="summarize", type=NodeType.LLM, name="Summarize",
+                id="summarize",
+                type=NodeType.LLM,
+                name="Summarize",
                 config={
                     "provider": provider,
                     "model_id": model_id,
@@ -234,7 +270,9 @@ class WorkflowTemplates:
                     "rejected": "simulate.rejected",
                 },
             ),
-            WorkflowNode(id="end", type=NodeType.END, name="End", inputs={"output": "summarize.response"}),
+            WorkflowNode(
+                id="end", type=NodeType.END, name="End", inputs={"output": "summarize.response"}
+            ),
         ]
         edges = [
             WorkflowEdge(source="start", target="simulate"),
@@ -250,15 +288,21 @@ class WorkflowTemplates:
 
     @staticmethod
     def conditional_branch(
-        provider: str, model_id: str, api_key: str,
-        condition_var: str, condition_value: str,
-        true_prompt: str, false_prompt: str,
+        provider: str,
+        model_id: str,
+        api_key: str,
+        condition_var: str,
+        condition_value: str,
+        true_prompt: str,
+        false_prompt: str,
     ) -> Workflow:
         """Branch execution based on a condition."""
         nodes = [
             WorkflowNode(id="start", type=NodeType.START, name="Start"),
             WorkflowNode(
-                id="check", type=NodeType.CONDITION, name="Check Condition",
+                id="check",
+                type=NodeType.CONDITION,
+                name="Check Condition",
                 config={
                     "variable": condition_var,
                     "operator": "equals",
@@ -266,7 +310,9 @@ class WorkflowTemplates:
                 },
             ),
             WorkflowNode(
-                id="true_branch", type=NodeType.LLM, name="True Branch",
+                id="true_branch",
+                type=NodeType.LLM,
+                name="True Branch",
                 config={
                     "provider": provider,
                     "model_id": model_id,
@@ -276,7 +322,9 @@ class WorkflowTemplates:
                 },
             ),
             WorkflowNode(
-                id="false_branch", type=NodeType.LLM, name="False Branch",
+                id="false_branch",
+                type=NodeType.LLM,
+                name="False Branch",
                 config={
                     "provider": provider,
                     "model_id": model_id,
@@ -307,8 +355,24 @@ class WorkflowTemplates:
         return [
             {"id": "simple_qa", "name": "Simple QA", "description": "Single LLM call"},
             {"id": "tool_use", "name": "Tool Use", "description": "LLM with tool calling"},
-            {"id": "chain_of_thought", "name": "Chain of Thought", "description": "Multi-step reasoning"},
-            {"id": "map_reduce", "name": "Map Reduce", "description": "Parallel processing + aggregation"},
-            {"id": "conditional_branch", "name": "Conditional Branch", "description": "If-else branching"},
-            {"id": "simulation_experiment", "name": "Simulation Experiment", "description": "Parameter sweep on external simulator with review-retry loop"},
+            {
+                "id": "chain_of_thought",
+                "name": "Chain of Thought",
+                "description": "Multi-step reasoning",
+            },
+            {
+                "id": "map_reduce",
+                "name": "Map Reduce",
+                "description": "Parallel processing + aggregation",
+            },
+            {
+                "id": "conditional_branch",
+                "name": "Conditional Branch",
+                "description": "If-else branching",
+            },
+            {
+                "id": "simulation_experiment",
+                "name": "Simulation Experiment",
+                "description": "Parameter sweep on external simulator with review-retry loop",
+            },
         ]

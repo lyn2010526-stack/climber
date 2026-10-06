@@ -7,15 +7,14 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
+from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
-
-from alembic import context
 
 # Add project root to path so ``app`` imports resolve
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.config import settings  # noqa: E402
+from app.config import settings
 
 # Offline ``--sql`` mode only renders DDL; it never connects, so no DBAPI driver
 # is needed. Importing app.storage would otherwise eagerly build the async
@@ -27,7 +26,7 @@ _real_database_url = settings.database_url
 if _offline_sql and not _real_database_url.startswith("sqlite"):
     settings.database_url = "sqlite+aiosqlite:///:memory:"
 
-from app.storage import (  # noqa: E402
+from app.storage import (
     Base,
     database,  # noqa: F401
     models_cost,  # noqa: F401

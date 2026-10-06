@@ -24,9 +24,7 @@ class FileIndexEntry:
 
 
 class FileIndexService:
-    """Track and index files incrementally using SHA256 content hashing.
-
-    """
+    """Track and index files incrementally using SHA256 content hashing."""
 
     def __init__(self):
         self._index: dict[str, FileIndexEntry] = {}
@@ -52,7 +50,14 @@ class FileIndexService:
             return mtime > entry.modified_at
         return False
 
-    def record_index(self, path: str, content_hash: str, size_bytes: int, chunk_count: int = 0, metadata: dict[str, Any] | None = None) -> None:
+    def record_index(
+        self,
+        path: str,
+        content_hash: str,
+        size_bytes: int,
+        chunk_count: int = 0,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
         self._index[path] = FileIndexEntry(
             path=path,
             content_hash=content_hash,

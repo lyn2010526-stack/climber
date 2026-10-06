@@ -51,7 +51,11 @@ class TestDetectDeadlock:
         cycles = detect_deadlock({"a": ["c"], "b": ["a"], "c": ["b"], "d": ["b"]})
         assert len(cycles) == 1
         assert set(cycles[0]) == {"a", "b", "c"}
-        assert deadlocked_task_ids({"a": ["c"], "b": ["a"], "c": ["b"], "d": ["b"]}) == {"a", "b", "c"}
+        assert deadlocked_task_ids({"a": ["c"], "b": ["a"], "c": ["b"], "d": ["b"]}) == {
+            "a",
+            "b",
+            "c",
+        }
 
 
 class TestTopologicalOrder:
@@ -87,12 +91,28 @@ async def test_run_group_tasks_executes_acyclic_dependencies_in_order() -> None:
     group_id = "dl-acyclic-group"
     async with async_session() as db:
         db.add(AgentGroup(id=group_id, name="dl-acyclic", user_id="default-user"))
-        db.add(AgentGroupTask(id="dl-t1", group_id=group_id, description="t1", status="pending", dependencies=[]))
         db.add(
-            AgentGroupTask(id="dl-t2", group_id=group_id, description="t2", status="pending", dependencies=["dl-t1"])
+            AgentGroupTask(
+                id="dl-t1", group_id=group_id, description="t1", status="pending", dependencies=[]
+            )
         )
         db.add(
-            AgentGroupTask(id="dl-t3", group_id=group_id, description="t3", status="pending", dependencies=["dl-t2"])
+            AgentGroupTask(
+                id="dl-t2",
+                group_id=group_id,
+                description="t2",
+                status="pending",
+                dependencies=["dl-t1"],
+            )
+        )
+        db.add(
+            AgentGroupTask(
+                id="dl-t3",
+                group_id=group_id,
+                description="t3",
+                status="pending",
+                dependencies=["dl-t2"],
+            )
         )
         await db.commit()
 
@@ -141,10 +161,22 @@ async def test_run_group_tasks_reports_deadlock_and_skips_execution() -> None:
     async with async_session() as db:
         db.add(AgentGroup(id=group_id, name="dl-cycle", user_id="default-user"))
         db.add(
-            AgentGroupTask(id="dl-c1", group_id=group_id, description="c1", status="pending", dependencies=["dl-c2"])
+            AgentGroupTask(
+                id="dl-c1",
+                group_id=group_id,
+                description="c1",
+                status="pending",
+                dependencies=["dl-c2"],
+            )
         )
         db.add(
-            AgentGroupTask(id="dl-c2", group_id=group_id, description="c2", status="pending", dependencies=["dl-c1"])
+            AgentGroupTask(
+                id="dl-c2",
+                group_id=group_id,
+                description="c2",
+                status="pending",
+                dependencies=["dl-c1"],
+            )
         )
         await db.commit()
 
@@ -184,12 +216,28 @@ async def test_run_group_tasks_skips_only_blocked_tasks() -> None:
     async with async_session() as db:
         db.add(AgentGroup(id=group_id, name="dl-partial", user_id="default-user"))
         db.add(
-            AgentGroupTask(id="dl-p1", group_id=group_id, description="p1", status="pending", dependencies=["dl-p2"])
+            AgentGroupTask(
+                id="dl-p1",
+                group_id=group_id,
+                description="p1",
+                status="pending",
+                dependencies=["dl-p2"],
+            )
         )
         db.add(
-            AgentGroupTask(id="dl-p2", group_id=group_id, description="p2", status="pending", dependencies=["dl-p1"])
+            AgentGroupTask(
+                id="dl-p2",
+                group_id=group_id,
+                description="p2",
+                status="pending",
+                dependencies=["dl-p1"],
+            )
         )
-        db.add(AgentGroupTask(id="dl-p3", group_id=group_id, description="p3", status="pending", dependencies=[]))
+        db.add(
+            AgentGroupTask(
+                id="dl-p3", group_id=group_id, description="p3", status="pending", dependencies=[]
+            )
+        )
         await db.commit()
 
     engine = GroupCollaborationEngine(model_registry=object(), tool_registry=object())

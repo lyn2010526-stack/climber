@@ -30,7 +30,11 @@ class OpenAICompatibleModel:
             or parsed.fragment
         ):
             raise ValueError("Invalid USER_LLM_BASE_URL")
-        if parsed.scheme == "http" and not insecure_http and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+        if (
+            parsed.scheme == "http"
+            and not insecure_http
+            and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}
+        ):
             raise ValueError("Remote model endpoints require HTTPS")
         if not model or not api_key:
             raise ValueError("USER_LLM_MODEL and USER_LLM_API_KEY are required")
@@ -64,7 +68,9 @@ class OpenAICompatibleModel:
         api_key = pick("OPENAI_API_KEY", "USER_LLM_API_KEY")
         model = pick("MODEL", "USER_LLM_MODEL")
         base_url = pick("OPENAI_BASE_URL", "USER_LLM_BASE_URL", "https://api.openai.com/v1")
-        if not base_url.rstrip("/").endswith("/v1") and not base_url.rstrip("/").endswith("/chat/completions"):
+        if not base_url.rstrip("/").endswith("/v1") and not base_url.rstrip("/").endswith(
+            "/chat/completions"
+        ):
             base_url = base_url.rstrip("/") + "/v1"
         if base_url.rstrip("/").endswith("/chat/completions"):
             base_url = base_url.rstrip("/")[: -len("/chat/completions")]
@@ -72,7 +78,13 @@ class OpenAICompatibleModel:
 
     def complete(self, messages, tools, max_tokens, timeout):
         payload = json.dumps(
-            {"model": self.model, "messages": messages, "tools": tools, "max_tokens": max_tokens, "stream": False}
+            {
+                "model": self.model,
+                "messages": messages,
+                "tools": tools,
+                "max_tokens": max_tokens,
+                "stream": False,
+            }
         ).encode()
         request = urllib.request.Request(
             self.url,

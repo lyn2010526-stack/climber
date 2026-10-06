@@ -18,7 +18,13 @@ from app.services.ollama_queue import ollama_offline_queue
 class OllamaAdapter(ModelAdapter):
     """Ollama adapter for running local models (Llama, Mistral, Qwen, etc.)."""
 
-    def __init__(self, model_id: str, api_key: str, base_url: str | None = None, capabilities: ModelCapability | None = None):
+    def __init__(
+        self,
+        model_id: str,
+        api_key: str,
+        base_url: str | None = None,
+        capabilities: ModelCapability | None = None,
+    ):
         self._model_id = model_id
         self._api_key = api_key
         self._base_url = (base_url or "http://localhost:11434").rstrip("/")
@@ -64,7 +70,9 @@ class OllamaAdapter(ModelAdapter):
     async def _make_request(self, payload: dict[str, Any], stream: bool = False) -> Any:
         async with httpx.AsyncClient(timeout=120) as client:
             if stream:
-                async with client.stream("POST", f"{self._base_url}/api/chat", json=payload) as resp:
+                async with client.stream(
+                    "POST", f"{self._base_url}/api/chat", json=payload
+                ) as resp:
                     resp.raise_for_status()
                     return resp
             else:
@@ -102,9 +110,10 @@ class OllamaAdapter(ModelAdapter):
             return
 
         try:
-            async with httpx.AsyncClient(timeout=120) as client, client.stream(
-                "POST", f"{self._base_url}/api/chat", json=payload
-            ) as response:
+            async with (
+                httpx.AsyncClient(timeout=120) as client,
+                client.stream("POST", f"{self._base_url}/api/chat", json=payload) as response,
+            ):
                 response.raise_for_status()
                 pending_tool_calls: list[dict[str, Any]] = []
                 async for line in response.aiter_lines():
@@ -119,21 +128,25 @@ class OllamaAdapter(ModelAdapter):
                         for tc in message["tool_calls"]:
                             func = tc.get("function", {})
                             args = func.get("arguments", {})
-                            pending_tool_calls.append({
-                                "id": tc.get("id") or f"call_{uuid.uuid4().hex[:24]}",
-                                "type": "function",
-                                "function": {
-                                    "name": func.get("name", ""),
-                                    "arguments": args if isinstance(args, dict) else {},
-                                },
-                            })
+                            pending_tool_calls.append(
+                                {
+                                    "id": tc.get("id") or f"call_{uuid.uuid4().hex[:24]}",
+                                    "type": "function",
+                                    "function": {
+                                        "name": func.get("name", ""),
+                                        "arguments": args if isinstance(args, dict) else {},
+                                    },
+                                }
+                            )
                     if chunk.get("done"):
                         done_reason = chunk.get("done_reason")
                         yield ChatResult(
                             tool_calls=pending_tool_calls,
                             finish_reason=(
-                                "length" if done_reason == "length"
-                                else "tool_calls" if pending_tool_calls
+                                "length"
+                                if done_reason == "length"
+                                else "tool_calls"
+                                if pending_tool_calls
                                 else "stop"
                             ),
                             tokens_used=chunk.get("eval_count", 0),
@@ -187,14 +200,16 @@ class OllamaAdapter(ModelAdapter):
             for tc in message.get("tool_calls", []):
                 func = tc.get("function", {})
                 args = func.get("arguments", {})
-                tool_calls.append({
-                    "id": tc.get("id") or f"call_{uuid.uuid4().hex[:24]}",
-                    "type": "function",
-                    "function": {
-                        "name": func.get("name", ""),
-                        "arguments": args if isinstance(args, dict) else {},
-                    },
-                })
+                tool_calls.append(
+                    {
+                        "id": tc.get("id") or f"call_{uuid.uuid4().hex[:24]}",
+                        "type": "function",
+                        "function": {
+                            "name": func.get("name", ""),
+                            "arguments": args if isinstance(args, dict) else {},
+                        },
+                    }
+                )
 
             return ChatResult(
                 content=content,

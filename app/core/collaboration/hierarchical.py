@@ -47,38 +47,57 @@ async def run_hierarchical_process(task: Any, group: Any, principal: Any = None)
         logger.error("no_manager_found", group_id=group.id)
         raise RuntimeError("No manager found for hierarchical task")
 
-    workers = [m for m in group.members if m.id != manager_member.id and m.role in ("worker", "executor", "participant")]
+    workers = [
+        m
+        for m in group.members
+        if m.id != manager_member.id and m.role in ("worker", "executor", "participant")
+    ]
     if not workers:
         logger.error("no_workers_found", group_id=group.id)
         raise RuntimeError("No workers found for hierarchical task")
 
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "manager_start",
-        "data": {"member_id": manager_member.id, "member_name": manager_member.agent_id},
-    })
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "manager_start",
+            "data": {"member_id": manager_member.id, "member_name": manager_member.agent_id},
+        },
+    )
 
     manager_plan = await _plan_subtasks(task, manager_member, group.members, principal=principal)
 
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "hierarchical_plan",
-        "data": {"content": manager_plan, "tokens_used": 0},
-    })
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "hierarchical_plan",
+            "data": {"content": manager_plan, "tokens_used": 0},
+        },
+    )
 
     reviewers = [m for m in group.members if m.role == "reviewer"] or [manager_member]
     revision_context = manager_plan
     for current_round in range(1, max(1, task.max_rounds or 5) + 1):
         task.current_round = current_round
-        subtask_outputs = await _delegate_subtasks(task, workers, revision_context, principal=principal)
+        subtask_outputs = await _delegate_subtasks(
+            task, workers, revision_context, principal=principal
+        )
         all_issues = []
         for reviewer in reviewers:
-            manager_validation = await _validate_output(task, reviewer, manager_plan, subtask_outputs, principal=principal)
+            manager_validation = await _validate_output(
+                task, reviewer, manager_plan, subtask_outputs, principal=principal
+            )
             _, issues = parse_review_result(manager_validation)
             all_issues.extend(issues)
         passed = not all_issues
         if passed:
             break
-        revision_context = (manager_plan + "\nPrevious outputs:\n" + json.dumps(subtask_outputs, ensure_ascii=False)
-                            + "\nIssues to fix:\n" + json.dumps(all_issues, ensure_ascii=False))
+        revision_context = (
+            manager_plan
+            + "\nPrevious outputs:\n"
+            + json.dumps(subtask_outputs, ensure_ascii=False)
+            + "\nIssues to fix:\n"
+            + json.dumps(all_issues, ensure_ascii=False)
+        )
     final_output = "\n\n".join(subtask_outputs.values())
 
     async with async_session() as db:
@@ -93,10 +112,17 @@ async def run_hierarchical_process(task: Any, group: Any, principal: Any = None)
     await store_memory(task.group_id, task.id, manager_member.agent_id, final_output, "task_result")
     await invoke_task_callback(task, final_output)
 
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "task_completed" if passed else "task_partial",
-        "data": {"task_id": task.id, "final_output": final_output, "manager_validation": manager_validation},
-    })
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "task_completed" if passed else "task_partial",
+            "data": {
+                "task_id": task.id,
+                "final_output": final_output,
+                "manager_validation": manager_validation,
+            },
+        },
+    )
 
 
 async def _find_manager(group: Any) -> AgentGroupMember | None:
@@ -116,14 +142,25 @@ async def _find_manager(group: Any) -> AgentGroupMember | None:
 
     async with async_session() as db:
         candidates = (
-            await db.execute(
-                select(AgentGroupMember).where(
-                    AgentGroupMember.group_id == group.id,
-                    AgentGroupMember.role.in_(["manager", "planner", "coordinator"]),
+            (
+                await db.execute(
+                    select(AgentGroupMember).where(
+                        AgentGroupMember.group_id == group.id,
+                        AgentGroupMember.role.in_(["manager", "planner", "coordinator"]),
+                    )
                 )
             )
-        ).scalars().all()
-        return min(candidates, key=lambda m: ({"manager": 0, "planner": 1, "coordinator": 2}[m.role], m.id)) if candidates else None
+            .scalars()
+            .all()
+        )
+        return (
+            min(
+                candidates,
+                key=lambda m: ({"manager": 0, "planner": 1, "coordinator": 2}[m.role], m.id),
+            )
+            if candidates
+            else None
+        )
 
 
 async def _plan_subtasks(task: Any, manager: Any, members: list[Any], principal: Any = None) -> str:
@@ -169,7 +206,9 @@ async def _plan_subtasks(task: Any, manager: Any, members: list[Any], principal:
         raise RuntimeError(f"Manager planning failed: {e}") from e
 
 
-async def _delegate_subtasks(task: Any, workers: list[Any], manager_plan: str, principal: Any = None) -> dict[str, str]:
+async def _delegate_subtasks(
+    task: Any, workers: list[Any], manager_plan: str, principal: Any = None
+) -> dict[str, str]:
     """Delegate subtasks to workers and collect outputs.
 
     Args:
@@ -192,10 +231,17 @@ async def _delegate_subtasks(task: Any, workers: list[Any], manager_plan: str, p
             previous = list(subtask_outputs.values())[-1]
             subtask_desc += f"\nPrevious subtask output: {previous}\n"
 
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "hierarchical_delegate",
-            "data": {"worker_id": worker.id, "worker_name": worker.agent_id, "subtask_index": i + 1},
-        })
+        await group_ws_hub.broadcast(
+            task.group_id,
+            {
+                "type": "hierarchical_delegate",
+                "data": {
+                    "worker_id": worker.id,
+                    "worker_name": worker.agent_id,
+                    "subtask_index": i + 1,
+                },
+            },
+        )
 
         worker_output, worker_tokens = await agent_runner.run_agent_with_retry(
             agent_id=worker.agent_id,
@@ -215,15 +261,25 @@ async def _delegate_subtasks(task: Any, workers: list[Any], manager_plan: str, p
 
         await invoke_step_callback(task, "worker", worker.agent_id, worker_output)
 
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "hierarchical_delegate_done",
-            "data": {"worker_id": worker.id, "worker_name": worker.agent_id, "subtask_index": i + 1, "tokens_used": worker_tokens},
-        })
+        await group_ws_hub.broadcast(
+            task.group_id,
+            {
+                "type": "hierarchical_delegate_done",
+                "data": {
+                    "worker_id": worker.id,
+                    "worker_name": worker.agent_id,
+                    "subtask_index": i + 1,
+                    "tokens_used": worker_tokens,
+                },
+            },
+        )
 
     return subtask_outputs
 
 
-async def _validate_output(task: Any, manager: Any, plan: str, subtask_outputs: dict[str, str], principal: Any = None) -> str:
+async def _validate_output(
+    task: Any, manager: Any, plan: str, subtask_outputs: dict[str, str], principal: Any = None
+) -> str:
     """Have the manager validate subtask outputs.
 
     Args:

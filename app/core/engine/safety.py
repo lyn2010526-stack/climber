@@ -19,11 +19,36 @@ def setup_default_permissions(permission_overlay: Any) -> None:
     from app.core.security_sandbox import PermissionLevel, PermissionRule
 
     defaults = [
-        PermissionRule(action="read", resource_pattern="*", level=PermissionLevel.ALLOW, description="Read any file"),
-        PermissionRule(action="write", resource_pattern="./data/*", level=PermissionLevel.ALLOW, description="Write to data dir"),
-        PermissionRule(action="write", resource_pattern="*.py", level=PermissionLevel.ASK, description="Write Python files"),
-        PermissionRule(action="execute", resource_pattern="*", level=PermissionLevel.ASK, description="Execute any command"),
-        PermissionRule(action="delete", resource_pattern="*", level=PermissionLevel.DENY, description="Delete forbidden"),
+        PermissionRule(
+            action="read",
+            resource_pattern="*",
+            level=PermissionLevel.ALLOW,
+            description="Read any file",
+        ),
+        PermissionRule(
+            action="write",
+            resource_pattern="./data/*",
+            level=PermissionLevel.ALLOW,
+            description="Write to data dir",
+        ),
+        PermissionRule(
+            action="write",
+            resource_pattern="*.py",
+            level=PermissionLevel.ASK,
+            description="Write Python files",
+        ),
+        PermissionRule(
+            action="execute",
+            resource_pattern="*",
+            level=PermissionLevel.ASK,
+            description="Execute any command",
+        ),
+        PermissionRule(
+            action="delete",
+            resource_pattern="*",
+            level=PermissionLevel.DENY,
+            description="Delete forbidden",
+        ),
     ]
     permission_overlay.set_defaults(defaults)
 

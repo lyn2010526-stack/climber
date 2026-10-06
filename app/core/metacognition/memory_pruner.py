@@ -168,10 +168,7 @@ class LongTermMemoryPruner:
         if len(self._memories) <= target_size:
             return removed
 
-        scored = [
-            (entry.decayed_importance, mid)
-            for mid, entry in self._memories.items()
-        ]
+        scored = [(entry.decayed_importance, mid) for mid, entry in self._memories.items()]
         scored.sort()
 
         to_remove = len(self._memories) - target_size
@@ -211,8 +208,7 @@ class LongTermMemoryPruner:
                 groups.append(group)
                 # Merge content into first entry
                 merged_content = " | ".join(
-                    self._memories[mid].content for mid in group
-                    if mid in self._memories
+                    self._memories[mid].content for mid in group if mid in self._memories
                 )
                 self._memories[group[0]].content = f"[Merged] {merged_content[:500]}"
 
@@ -234,12 +230,11 @@ class LongTermMemoryPruner:
             for tag in entry.tags:
                 tag_counts[tag] = tag_counts.get(tag, 0) + 1
 
-        patterns = [
+        return [
             f"Pattern: '{tag}' appears {count} times"
             for tag, count in tag_counts.items()
             if count >= 3
         ]
-        return patterns
 
     def get_stats(self) -> dict[str, Any]:
         if not self._memories:

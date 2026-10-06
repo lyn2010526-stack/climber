@@ -75,7 +75,9 @@ class ParallelToolExecutor:
             tasks.append(self._execute_one(name, args, tool_call_id))
         return await asyncio.gather(*tasks)
 
-    async def execute_sequential(self, tool_calls: list[dict[str, Any]]) -> list[ToolExecutionResult]:
+    async def execute_sequential(
+        self, tool_calls: list[dict[str, Any]]
+    ) -> list[ToolExecutionResult]:
         results = []
         for tc in tool_calls:
             name = tc.get("function", {}).get("name", "")
@@ -91,7 +93,9 @@ class ParallelToolExecutor:
             results.append(await self._execute_one(name, args, tool_call_id))
         return results
 
-    async def _execute_one(self, name: str, arguments: dict[str, Any], tool_call_id: str = "") -> ToolExecutionResult:
+    async def _execute_one(
+        self, name: str, arguments: dict[str, Any], tool_call_id: str = ""
+    ) -> ToolExecutionResult:
         start = asyncio.get_event_loop().time()
         # Pre-execution safety check
         if self._validator is not None:
@@ -103,10 +107,22 @@ class ParallelToolExecutor:
                     # block the event loop, so they run in the default thread pool.
                     allowed, reason = await asyncio.to_thread(self._validator, name, arguments)
             except Exception as e:
-                return ToolExecutionResult(tool_name=name, error=f"validator error: {e}", success=False, duration_ms=0, tool_call_id=tool_call_id)
+                return ToolExecutionResult(
+                    tool_name=name,
+                    error=f"validator error: {e}",
+                    success=False,
+                    duration_ms=0,
+                    tool_call_id=tool_call_id,
+                )
             if not allowed:
                 duration = (asyncio.get_event_loop().time() - start) * 1000
-                return ToolExecutionResult(tool_name=name, error=f"blocked by sandbox: {reason}", success=False, duration_ms=duration, tool_call_id=tool_call_id)
+                return ToolExecutionResult(
+                    tool_name=name,
+                    error=f"blocked by sandbox: {reason}",
+                    success=False,
+                    duration_ms=duration,
+                    tool_call_id=tool_call_id,
+                )
         try:
             result = await asyncio.wait_for(
                 self._registry.execute(name, arguments),
@@ -123,15 +139,33 @@ class ParallelToolExecutor:
                     arguments=arguments,
                     tool_call_id=tool_call_id,
                 )
-            return ToolExecutionResult(tool_name=name, result=result, duration_ms=duration, arguments=arguments, tool_call_id=tool_call_id)
+            return ToolExecutionResult(
+                tool_name=name,
+                result=result,
+                duration_ms=duration,
+                arguments=arguments,
+                tool_call_id=tool_call_id,
+            )
         except TimeoutError:
-            return ToolExecutionResult(tool_name=name, error="timeout", success=False, arguments=arguments, tool_call_id=tool_call_id)
+            return ToolExecutionResult(
+                tool_name=name,
+                error="timeout",
+                success=False,
+                arguments=arguments,
+                tool_call_id=tool_call_id,
+            )
         except asyncio.CancelledError:
             # Cancellation must propagate; swallowing it would keep the parent
             # task alive and report a cancelled tool as an ordinary failure.
             raise
         except Exception as e:
-            return ToolExecutionResult(tool_name=name, error=str(e), success=False, arguments=arguments, tool_call_id=tool_call_id)
+            return ToolExecutionResult(
+                tool_name=name,
+                error=str(e),
+                success=False,
+                arguments=arguments,
+                tool_call_id=tool_call_id,
+            )
 
     @staticmethod
     def _is_error_result(result: Any) -> bool:

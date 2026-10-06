@@ -19,6 +19,7 @@ from app.simulation.planner import ParamDim
 @dataclass
 class AdjustConfig:
     """Bounded perturbation settings per parameter."""
+
     max_steps: int = 8  # max rounds per experiment
     perturb_ratio: float = 0.5  # relative step per retry
     reorder_attempts: int = 3  # how many perturb attempts before giving up
@@ -32,6 +33,7 @@ class ParameterAdjuster:
     are perturbed. Fixed base parameters are never touched, so a retry
     cannot corrupt the physical constants of an experiment.
     """
+
     config: AdjustConfig = field(default_factory=AdjustConfig)
     bounds: dict[str, tuple[float | None, float | None]] = field(default_factory=dict)
     adjustable: set[str] = field(default_factory=set)
@@ -63,20 +65,23 @@ class ParameterAdjuster:
         return adjusted
 
     @classmethod
-    def from_plan_dims(cls, dims: list[ParamDim], max_steps: int = 8) -> "ParameterAdjuster":
+    def from_plan_dims(cls, dims: list[ParamDim], max_steps: int = 8) -> ParameterAdjuster:
         bounds: dict[str, tuple[float | None, float | None]] = {}
         adjustable: set[str] = set()
         for dim in dims:
             adjustable.add(dim.name)
             lo = dim.min
             hi = dim.max
-            if lo is None or hi is None:
-                # Fall back to the declared values only when the plan
-                # gives no explicit numeric range. An explicit min/max
-                # must win over a single-value ``values`` list, otherwise
-                # a one-point sweep would freeze the adjuster at that value.
-                if dim.values and all(isinstance(v, (int, float)) for v in dim.values):
-                    lo = min(dim.values)
-                    hi = max(dim.values)
+            # Fall back to the declared values only when the plan gives no
+            # explicit numeric range. An explicit min/max must win over a
+            # single-value ``values`` list, otherwise a one-point sweep
+            # would freeze the adjuster at that value.
+            if (
+                (lo is None or hi is None)
+                and dim.values
+                and all(isinstance(v, (int, float)) for v in dim.values)
+            ):
+                lo = min(dim.values)
+                hi = max(dim.values)
             bounds[dim.name] = (lo, hi)
         return cls(config=AdjustConfig(max_steps=max_steps), bounds=bounds, adjustable=adjustable)

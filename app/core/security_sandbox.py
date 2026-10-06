@@ -16,7 +16,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, ClassVar
 from uuid import uuid4
 
 import structlog
@@ -26,34 +26,33 @@ logger = structlog.get_logger()
 
 # ─── Execution Mode ──────────────────────────────────────────────────────────
 
+
 class ExecutionMode(Enum):
-    SANDBOX = "sandbox"          # Isolated window, restricted access
-    FULL_AUTO = "full_auto"      # Full local access with permission grants
+    SANDBOX = "sandbox"  # Isolated window, restricted access
+    FULL_AUTO = "full_auto"  # Full local access with permission grants
 
 
 class AgentMode(Enum):
-    PLAN = "plan"                # Read-only preview mode
-    ACT = "act"                  # Real execution mode
+    PLAN = "plan"  # Read-only preview mode
+    ACT = "act"  # Real execution mode
 
 
 class PermissionLevel(Enum):
-    DENY = "deny"                # Forbidden
-    ASK = "ask"                  # Ask user
-    ALLOW = "allow"              # Directly allowed
+    DENY = "deny"  # Forbidden
+    ASK = "ask"  # Ask user
+    ALLOW = "allow"  # Directly allowed
 
 
 @dataclass
 class PermissionRule:
-    action: str                  # read / write / execute / delete
-    resource_pattern: str        # glob pattern
+    action: str  # read / write / execute / delete
+    resource_pattern: str  # glob pattern
     level: PermissionLevel
     description: str = ""
 
 
 class PermissionOverlay:
-    """Three-layer permission overlay: defaults → agent-level → user-level.
-
-    """
+    """Three-layer permission overlay: defaults → agent-level → user-level."""
 
     def __init__(self):
         self._defaults: list[PermissionRule] = []
@@ -69,14 +68,18 @@ class PermissionOverlay:
     def set_user_rules(self, user_id: str, rules: list[PermissionRule]) -> None:
         self._user_overrides[user_id] = rules
 
-    def evaluate(self, action: str, resource: str, agent_id: str | None = None, user_id: str | None = None) -> PermissionLevel:
+    def evaluate(
+        self, action: str, resource: str, agent_id: str | None = None, user_id: str | None = None
+    ) -> PermissionLevel:
         """Evaluate permission with three-layer overlay."""
         effective = self._merge_rules(action, resource, agent_id, user_id)
         if not effective:
             return PermissionLevel.DENY
         return effective.level
 
-    def _merge_rules(self, action: str, resource: str, agent_id: str | None, user_id: str | None) -> PermissionRule | None:
+    def _merge_rules(
+        self, action: str, resource: str, agent_id: str | None, user_id: str | None
+    ) -> PermissionRule | None:
         layers = [
             self._user_overrides.get(user_id, []) if user_id else [],
             self._agent_overrides.get(agent_id, []) if agent_id else [],
@@ -101,11 +104,14 @@ class PermissionOverlay:
     @staticmethod
     def _match(pattern: str, path: str) -> bool:
         import fnmatch
+
         return fnmatch.fnmatch(path, pattern)
 
     @staticmethod
     def _priority(level: PermissionLevel) -> int:
-        return {PermissionLevel.DENY: 2, PermissionLevel.ASK: 1, PermissionLevel.ALLOW: 0}.get(level, 0)
+        return {PermissionLevel.DENY: 2, PermissionLevel.ASK: 1, PermissionLevel.ALLOW: 0}.get(
+            level, 0
+        )
 
     @staticmethod
     def _specificity(pattern: str) -> tuple[int, int]:
@@ -115,14 +121,13 @@ class PermissionOverlay:
 
 # ─── JSON Schema Validation ──────────────────────────────────────────────────
 
+
 class SchemaValidationError(Exception):
     """Raised when tool input fails JSON Schema validation."""
 
 
 def validate_tool_input(schema: dict[str, Any], arguments: dict[str, Any]) -> None:
-    """Validate tool arguments against JSON Schema.
-
-    """
+    """Validate tool arguments against JSON Schema."""
     if not schema:
         return
     properties = schema.get("properties", {})
@@ -153,55 +158,64 @@ def validate_tool_input(schema: dict[str, Any], arguments: dict[str, Any]) -> No
 
 HAZARD_COMMANDS = [
     # Destructive file operations
-    r'\brm\s+(-[rfRF]+\s+)?/?(\s|$)',
-    r'\brm\s+-[rfRF]+\s+/',
-    r'\bshred\b',
-    r'\bwipe\b',
+    r"\brm\s+(-[rfRF]+\s+)?/?(\s|$)",
+    r"\brm\s+-[rfRF]+\s+/",
+    r"\bshred\b",
+    r"\bwipe\b",
     # Disk operations
-    r'\bmkfs\b',
-    r'\bfdisk\b',
-    r'\bdd\b.*\bof=/dev/',
-    r'>\s*/dev/sd[a-z]',
+    r"\bmkfs\b",
+    r"\bfdisk\b",
+    r"\bdd\b.*\bof=/dev/",
+    r">\s*/dev/sd[a-z]",
     # Fork bomb / DoS
-    r':\(\)\s*{\s*:\s*\|\s*:\s*&\s*}\s*;',
+    r":\(\)\s*{\s*:\s*\|\s*:\s*&\s*}\s*;",
     # Privilege escalation
-    r'\bchmod\s+777\b',
-    r'\bchown\s+-R\s+root\b',
-    r'\bsudo\b',
+    r"\bchmod\s+777\b",
+    r"\bchown\s+-R\s+root\b",
+    r"\bsudo\b",
     # Network threats
-    r'\bnc\b.*-e\s+/bin/',
-    r'\bbash\b.*-i\b.*>&\b',
-    r'\bnohup\b',
-    r'\bcurl\b.*\|\s*(sh|bash)\b',
-    r'\bwget\b.*\|\s*(sh|bash)\b',
+    r"\bnc\b.*-e\s+/bin/",
+    r"\bbash\b.*-i\b.*>&\b",
+    r"\bnohup\b",
+    r"\bcurl\b.*\|\s*(sh|bash)\b",
+    r"\bwget\b.*\|\s*(sh|bash)\b",
     # System control
-    r'\bshutdown\b',
-    r'\breboot\b',
-    r'\bpoweroff\b',
-    r'\binit\s+[06]\b',
-    r'\bsystemctl\s+(stop|disable)\b',
+    r"\bshutdown\b",
+    r"\breboot\b",
+    r"\bpoweroff\b",
+    r"\binit\s+[06]\b",
+    r"\bsystemctl\s+(stop|disable)\b",
     # Mount abuse
-    r'\bmount\b.*-o\s+loop',
+    r"\bmount\b.*-o\s+loop",
     # Command injection patterns
-    r'\$\(.*\)',
-    r'`[^`]*`',
-    r';\s*(rm|shred|mkfs|fdisk|dd|chmod|chown|sudo|shutdown|reboot|poweroff)\b',
-    r'\|\s*(rm|shred|mkfs|sudo|shutdown|reboot|poweroff)\b',
+    r"\$\(.*\)",
+    r"`[^`]*`",
+    r";\s*(rm|shred|mkfs|fdisk|dd|chmod|chown|sudo|shutdown|reboot|poweroff)\b",
+    r"\|\s*(rm|shred|mkfs|sudo|shutdown|reboot|poweroff)\b",
 ]
 
 
 # ─── Security Sandbox ──────────────────────────────────────────────────────
 
+
 @dataclass
 class SandboxConfig:
     """Sandbox isolation configuration."""
-    workdir: str                    # Isolated working directory
+
+    workdir: str  # Isolated working directory
     allowed_paths: list[str] = field(default_factory=list)  # Additional allowed paths
-    blocked_paths: list[str] = field(default_factory=lambda: [
-        '/etc/shadow', '/etc/passwd', '/etc/sudoers',
-        '/root/.ssh', '/home/*/.ssh',
-        '/proc', '/sys', '/dev',
-    ])
+    blocked_paths: list[str] = field(
+        default_factory=lambda: [
+            "/etc/shadow",
+            "/etc/passwd",
+            "/etc/sudoers",
+            "/root/.ssh",
+            "/home/*/.ssh",
+            "/proc",
+            "/sys",
+            "/dev",
+        ]
+    )
     max_file_size_mb: int = 50
     max_output_size_kb: int = 500
     command_timeout_seconds: int = 120
@@ -222,7 +236,7 @@ class SecuritySandbox:
         self.config = config or SandboxConfig(workdir="/tmp/sandbox")
         self._active = True
 
-    def validate_file_access(self, path: str, mode: str = 'read') -> tuple[bool, str]:
+    def validate_file_access(self, path: str, mode: str = "read") -> tuple[bool, str]:
         """Validate if a file can be accessed."""
         abs_path = os.path.realpath(path)
 
@@ -237,17 +251,20 @@ class SecuritySandbox:
                 return False, f"Access denied: path '{abs_path}' is in blocked list"
 
         # Check allowed paths
-        allowed = [self.config.workdir] + self.config.allowed_paths
+        allowed = [self.config.workdir, *self.config.allowed_paths]
         is_allowed = any(self._is_within(abs_path, p) for p in allowed)
 
         if not is_allowed:
             return False, f"Access denied: path '{abs_path}' is outside allowed directories"
 
         # Check file size for reads
-        if mode == 'read' and os.path.exists(abs_path):
+        if mode == "read" and os.path.exists(abs_path):
             size_mb = os.path.getsize(abs_path) / (1024 * 1024)
             if size_mb > self.config.max_file_size_mb:
-                return False, f"File too large: {size_mb:.1f}MB (max {self.config.max_file_size_mb}MB)"
+                return (
+                    False,
+                    f"File too large: {size_mb:.1f}MB (max {self.config.max_file_size_mb}MB)",
+                )
 
         return True, "OK"
 
@@ -264,7 +281,10 @@ class SecuritySandbox:
         # Check hazard patterns first
         for pattern in HAZARD_COMMANDS:
             if re.search(pattern, command, re.IGNORECASE):
-                return False, f"Command blocked by safety policy: matches hazard pattern '{pattern}'"
+                return (
+                    False,
+                    f"Command blocked by safety policy: matches hazard pattern '{pattern}'",
+                )
 
         # Check allowlist
         parts = command.strip().split()
@@ -279,21 +299,68 @@ class SecuritySandbox:
     def sanitize_output(self, output: str) -> str:
         """Truncate oversized output."""
         max_bytes = self.config.max_output_size_kb * 1024
-        if len(output.encode('utf-8')) > max_bytes:
-            truncated = output.encode('utf-8')[:max_bytes].decode('utf-8', errors='ignore')
-            return truncated + f"\n... [Output truncated: exceeded {self.config.max_output_size_kb}KB limit]"
+        if len(output.encode("utf-8")) > max_bytes:
+            truncated = output.encode("utf-8")[:max_bytes].decode("utf-8", errors="ignore")
+            return (
+                truncated
+                + f"\n... [Output truncated: exceeded {self.config.max_output_size_kb}KB limit]"
+            )
         return output
 
 
 # Allowed commands for the allowlist check
 _ALLOWED_COMMANDS = {
-    "ls", "cat", "echo", "pwd", "cd", "mkdir", "cp", "mv", "rm",
-    "touch", "head", "tail", "grep", "find", "wc", "sort", "uniq",
-    "diff", "file", "which", "env", "export",
-    "pip", "pip3", "npm", "npx", "git", "curl", "wget",
-    "tar", "zip", "unzip", "chmod", "chown", "ln", "tee", "awk",
-    "sed", "xargs", "jq", "yq", "make", "pytest", "go", "rustc",
-    "cargo", "java", "javac", "mvn", "gradle", "docker",
+    "ls",
+    "cat",
+    "echo",
+    "pwd",
+    "cd",
+    "mkdir",
+    "cp",
+    "mv",
+    "rm",
+    "touch",
+    "head",
+    "tail",
+    "grep",
+    "find",
+    "wc",
+    "sort",
+    "uniq",
+    "diff",
+    "file",
+    "which",
+    "env",
+    "export",
+    "pip",
+    "pip3",
+    "npm",
+    "npx",
+    "git",
+    "curl",
+    "wget",
+    "tar",
+    "zip",
+    "unzip",
+    "chmod",
+    "chown",
+    "ln",
+    "tee",
+    "awk",
+    "sed",
+    "xargs",
+    "jq",
+    "yq",
+    "make",
+    "pytest",
+    "go",
+    "rustc",
+    "cargo",
+    "java",
+    "javac",
+    "mvn",
+    "gradle",
+    "docker",
 }
 
 
@@ -321,10 +388,14 @@ def validate_command_allowlist(command: str) -> tuple[bool, str]:
     # Check for dangerous argument patterns
     dangerous_patterns = {
         "rm": [
-            r"-[rR][fF]", r"-[fF][rR]",  # -rf, -Fr, -rF, -fR etc.
-            r"-r\s+-?[fF]", r"-[fF]\s+-?r",  # -r -f, -f -r
-            r"--recursive.*--force", r"--force.*--recursive",  # --recursive --force
-            r"--[a-zA-Z]*r[a-zA-Z]*f", r"--[a-zA-Z]*f[a-zA-Z]*r",  # mixed long flags
+            r"-[rR][fF]",
+            r"-[fF][rR]",  # -rf, -Fr, -rF, -fR etc.
+            r"-r\s+-?[fF]",
+            r"-[fF]\s+-?r",  # -r -f, -f -r
+            r"--recursive.*--force",
+            r"--force.*--recursive",  # --recursive --force
+            r"--[a-zA-Z]*r[a-zA-Z]*f",
+            r"--[a-zA-Z]*f[a-zA-Z]*r",  # mixed long flags
         ],
     }
     if base in dangerous_patterns:
@@ -336,10 +407,8 @@ def validate_command_allowlist(command: str) -> tuple[bool, str]:
     return True, "OK"
 
 
-
-
-
 # ─── Code Execution Sandbox ──────────────────────────────────────────────────
+
 
 class VerificationResult:
     def __init__(self, allowed: bool, reason: str = ""):
@@ -348,37 +417,75 @@ class VerificationResult:
 
 
 class CodeSandbox:
-    """AST-level static code analysis sandbox.
+    """AST-level static code analysis sandbox."""
 
-    """
-
-    FORBIDDEN_MODULES = {"os", "sys", "subprocess", "socket", "shutil", "pickle", "marshal", "ctypes", "signal", "pty", "fcntl"}
-    FORBIDDEN_FUNCTIONS = {"eval", "exec", "open", "getattr", "setattr", "delattr", "globals", "locals", "compile", "__import__"}
-    FORBIDDEN_DUNDER = {"__dict__", "__class__", "__bases__", "__subclasses__", "__init_subclass__", "__setattr__", "__delattr__"}
+    FORBIDDEN_MODULES: ClassVar[set[str]] = {
+        "os",
+        "sys",
+        "subprocess",
+        "socket",
+        "shutil",
+        "pickle",
+        "marshal",
+        "ctypes",
+        "signal",
+        "pty",
+        "fcntl",
+    }
+    FORBIDDEN_FUNCTIONS: ClassVar[set[str]] = {
+        "eval",
+        "exec",
+        "open",
+        "getattr",
+        "setattr",
+        "delattr",
+        "globals",
+        "locals",
+        "compile",
+        "__import__",
+    }
+    FORBIDDEN_DUNDER: ClassVar[set[str]] = {
+        "__dict__",
+        "__class__",
+        "__bases__",
+        "__subclasses__",
+        "__init_subclass__",
+        "__setattr__",
+        "__delattr__",
+    }
 
     def verify(self, code: str) -> VerificationResult:
         """Verify code safety using AST analysis."""
         try:
             import ast
+
             tree = ast.parse(code)
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
                     for alias in node.names:
                         top = alias.name.split(".")[0]
                         if top in self.FORBIDDEN_MODULES:
-                            return VerificationResult(allowed=False, reason=f"Forbidden module: {top}")
+                            return VerificationResult(
+                                allowed=False, reason=f"Forbidden module: {top}"
+                            )
                 elif isinstance(node, ast.ImportFrom):
                     if node.module:
                         top = node.module.split(".")[0]
                         if top in self.FORBIDDEN_MODULES:
-                            return VerificationResult(allowed=False, reason=f"Forbidden module: {top}")
+                            return VerificationResult(
+                                allowed=False, reason=f"Forbidden module: {top}"
+                            )
                 elif isinstance(node, ast.Attribute):
                     if node.attr in self.FORBIDDEN_DUNDER:
-                        return VerificationResult(allowed=False, reason=f"Forbidden dunder: {node.attr}")
+                        return VerificationResult(
+                            allowed=False, reason=f"Forbidden dunder: {node.attr}"
+                        )
                 elif isinstance(node, ast.Call):
                     func = node.func
                     if isinstance(func, ast.Name) and func.id in self.FORBIDDEN_FUNCTIONS:
-                        return VerificationResult(allowed=False, reason=f"Forbidden function: {func.id}")
+                        return VerificationResult(
+                            allowed=False, reason=f"Forbidden function: {func.id}"
+                        )
             return VerificationResult(allowed=True)
         except SyntaxError as e:
             return VerificationResult(allowed=False, reason=f"Syntax error: {e}")
@@ -404,6 +511,7 @@ def intercept_hazards(command: str, code: str | None = None) -> tuple[bool, str]
 
 # ─── Permission Approval System ────────────────────────────────────────────
 
+
 class ApprovalStatus(Enum):
     PENDING = "pending"
     GRANTED = "granted"
@@ -415,13 +523,13 @@ class ApprovalStatus(Enum):
 class PermissionRequest:
     id: str
     session_id: str
-    action: str              # e.g., "access_path", "run_command"
-    details: str             # Human-readable description
-    risk_level: str          # "low" | "medium" | "high"
+    action: str  # e.g., "access_path", "run_command"
+    details: str  # Human-readable description
+    risk_level: str  # "low" | "medium" | "high"
     requested_at: float
     status: ApprovalStatus = ApprovalStatus.PENDING
     resolved_at: float | None = None
-    temporary: bool = True   # Auto-revoke after use
+    temporary: bool = True  # Auto-revoke after use
 
 
 class PermissionApprovalSystem:
@@ -514,6 +622,7 @@ class PermissionApprovalSystem:
 
 # ─── Audit Log System ──────────────────────────────────────────────────────
 
+
 @dataclass
 class AuditEntry:
     id: str
@@ -539,6 +648,13 @@ class AuditSystem:
 
     def __init__(self):
         self._entries: list[AuditEntry] = []
+        self._persist_tasks: set[asyncio.Task] = set()
+
+    def _spawn_persist(self, coro: Any) -> None:
+        """Schedule a persist coroutine, keeping a reference until it finishes."""
+        task = asyncio.create_task(coro)
+        self._persist_tasks.add(task)
+        task.add_done_callback(self._persist_tasks.discard)
 
     def log_file_operation(
         self,
@@ -550,18 +666,25 @@ class AuditSystem:
     ):
         """Log a file operation."""
         severity = "critical" if operation in ("delete", "modify") else "info"
-        self._entries.append(AuditEntry(
-            id=str(uuid4()),
-            session_id=session_id,
-            timestamp=time.time(),
-            action=f"file:{operation}",
-            severity=severity,
-            details={"path": path, **(details or {})},
-        ))
-        asyncio.create_task(self._persist(
-            session_id=session_id, action=f"file:{operation}", severity=severity,
-            details={"path": path, **(details or {})}, user_id=user_id,
-        ))
+        self._entries.append(
+            AuditEntry(
+                id=str(uuid4()),
+                session_id=session_id,
+                timestamp=time.time(),
+                action=f"file:{operation}",
+                severity=severity,
+                details={"path": path, **(details or {})},
+            )
+        )
+        self._spawn_persist(
+            self._persist(
+                session_id=session_id,
+                action=f"file:{operation}",
+                severity=severity,
+                details={"path": path, **(details or {})},
+                user_id=user_id,
+            )
+        )
 
     def log_command(
         self,
@@ -572,21 +695,27 @@ class AuditSystem:
         user_id: str | None = None,
     ):
         """Log a command execution."""
-        self._entries.append(AuditEntry(
-            id=str(uuid4()),
-            session_id=session_id,
-            timestamp=time.time(),
-            action="command:execute",
-            severity="critical" if blocked else "warning",
-            details={"command": command, "blocked": blocked, "output_preview": result[:200]},
-            result=result,
-        ))
-        asyncio.create_task(self._persist(
-            session_id=session_id, action="command:execute",
-            severity="critical" if blocked else "warning",
-            details={"command": command, "blocked": blocked, "output_preview": result[:200]},
-            result=result, user_id=user_id,
-        ))
+        self._entries.append(
+            AuditEntry(
+                id=str(uuid4()),
+                session_id=session_id,
+                timestamp=time.time(),
+                action="command:execute",
+                severity="critical" if blocked else "warning",
+                details={"command": command, "blocked": blocked, "output_preview": result[:200]},
+                result=result,
+            )
+        )
+        self._spawn_persist(
+            self._persist(
+                session_id=session_id,
+                action="command:execute",
+                severity="critical" if blocked else "warning",
+                details={"command": command, "blocked": blocked, "output_preview": result[:200]},
+                result=result,
+                user_id=user_id,
+            )
+        )
 
     def log_api_call(
         self,
@@ -597,20 +726,25 @@ class AuditSystem:
         user_id: str | None = None,
     ):
         """Log an API call."""
-        self._entries.append(AuditEntry(
-            id=str(uuid4()),
-            session_id=session_id,
-            timestamp=time.time(),
-            action="api:call",
-            severity="warning" if status_code >= 400 else "info",
-            details={"endpoint": endpoint, "status": status_code, "duration_ms": duration_ms},
-        ))
-        asyncio.create_task(self._persist(
-            session_id=session_id, action="api:call",
-            severity="warning" if status_code >= 400 else "info",
-            details={"endpoint": endpoint, "status": status_code, "duration_ms": duration_ms},
-            user_id=user_id,
-        ))
+        self._entries.append(
+            AuditEntry(
+                id=str(uuid4()),
+                session_id=session_id,
+                timestamp=time.time(),
+                action="api:call",
+                severity="warning" if status_code >= 400 else "info",
+                details={"endpoint": endpoint, "status": status_code, "duration_ms": duration_ms},
+            )
+        )
+        self._spawn_persist(
+            self._persist(
+                session_id=session_id,
+                action="api:call",
+                severity="warning" if status_code >= 400 else "info",
+                details={"endpoint": endpoint, "status": status_code, "duration_ms": duration_ms},
+                user_id=user_id,
+            )
+        )
 
     def log_permission(
         self,
@@ -621,25 +755,40 @@ class AuditSystem:
         user_id: str | None = None,
     ):
         """Log a permission event."""
-        self._entries.append(AuditEntry(
-            id=str(uuid4()),
-            session_id=session_id,
-            timestamp=time.time(),
-            action=f"permission:{action}",
-            severity="warning" if granted else "info",
-            details={"granted": granted, "reason": reason},
-        ))
-        asyncio.create_task(self._persist(
-            session_id=session_id, action=f"permission:{action}",
-            severity="warning" if granted else "info",
-            details={"granted": granted, "reason": reason}, user_id=user_id,
-        ))
+        self._entries.append(
+            AuditEntry(
+                id=str(uuid4()),
+                session_id=session_id,
+                timestamp=time.time(),
+                action=f"permission:{action}",
+                severity="warning" if granted else "info",
+                details={"granted": granted, "reason": reason},
+            )
+        )
+        self._spawn_persist(
+            self._persist(
+                session_id=session_id,
+                action=f"permission:{action}",
+                severity="warning" if granted else "info",
+                details={"granted": granted, "reason": reason},
+                user_id=user_id,
+            )
+        )
 
-    async def _persist(self, session_id: str, action: str, severity: str, details: dict[str, Any], result: str = "", user_id: str | None = None) -> None:
+    async def _persist(
+        self,
+        session_id: str,
+        action: str,
+        severity: str,
+        details: dict[str, Any],
+        result: str = "",
+        user_id: str | None = None,
+    ) -> None:
         """Persist audit entry to database."""
         try:
             from app.storage import async_session
             from app.storage.models_memory import AuditLog
+
             async with async_session() as db:
                 log = AuditLog(
                     session_id=session_id,

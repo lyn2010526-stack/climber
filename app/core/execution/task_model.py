@@ -121,9 +121,7 @@ class TaskStore:
         self._conn.commit()
 
     def load(self, task_id: str) -> Task | None:
-        row = self._conn.execute(
-            "SELECT * FROM tasks WHERE id = ?", (task_id,)
-        ).fetchone()
+        row = self._conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         if not row:
             return None
         return self._row_to_task(row)

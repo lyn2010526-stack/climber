@@ -104,7 +104,9 @@ class MemoryRecord(Base):
     access_count: Mapped[int] = mapped_column(Integer, default=0)
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+    )
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     forgotten_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -202,7 +204,7 @@ class MemoryLifecycleManager:
             records = result.scalars().all()
 
             query_lower = query.lower()
-            query_words = set(w for w in query_lower.split() if len(w) > 2)
+            query_words = {w for w in query_lower.split() if len(w) > 2}
             scored: list[tuple[float, MemoryRecord]] = []
 
             for record in records:
@@ -212,7 +214,7 @@ class MemoryLifecycleManager:
                 if query_words:
                     matches = sum(1 for w in query_words if w in content_lower)
                     if matches > 0:
-                        score *= (1.0 + matches / len(query_words))
+                        score *= 1.0 + matches / len(query_words)
                     else:
                         score *= 0.1
 
@@ -226,15 +228,17 @@ class MemoryLifecycleManager:
                 record.access_count += 1
                 record.last_accessed_at = now
                 record.updated_at = now
-                results.append(MemoryRetrieveResult(
-                    memory_id=record.id,
-                    content=record.content,
-                    importance=record.importance,
-                    agent_id=record.agent_id or "",
-                    score=score,
-                    memory_type=record.memory_type,
-                    created_at=record.created_at.isoformat() if record.created_at else "",
-                ))
+                results.append(
+                    MemoryRetrieveResult(
+                        memory_id=record.id,
+                        content=record.content,
+                        importance=record.importance,
+                        agent_id=record.agent_id or "",
+                        score=score,
+                        memory_type=record.memory_type,
+                        created_at=record.created_at.isoformat() if record.created_at else "",
+                    )
+                )
 
             await db.commit()
             return results
@@ -272,14 +276,18 @@ class MemoryLifecycleManager:
 
             for record in records:
                 if record.last_accessed_at:
-                    delta = now - record.last_accessed_at.replace(tzinfo=UTC) if record.last_accessed_at.tzinfo is None else now - record.last_accessed_at
+                    delta = (
+                        now - record.last_accessed_at.replace(tzinfo=UTC)
+                        if record.last_accessed_at.tzinfo is None
+                        else now - record.last_accessed_at
+                    )
                     days = delta.days
                 else:
                     days = 0
 
                 record.days_since_access = days
                 old_importance = record.importance
-                new_importance = old_importance * (self.DECAY_BASE ** days)
+                new_importance = old_importance * (self.DECAY_BASE**days)
 
                 if new_importance < old_importance:
                     record.importance = round(new_importance, 6)
@@ -364,7 +372,7 @@ class MemoryLifecycleManager:
 
                 record.days_since_access = days
                 old_importance = record.importance
-                new_importance = old_importance * (self.DECAY_BASE ** days)
+                new_importance = old_importance * (self.DECAY_BASE**days)
 
                 if new_importance < old_importance:
                     record.importance = round(new_importance, 6)

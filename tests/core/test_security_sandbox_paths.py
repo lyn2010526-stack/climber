@@ -14,9 +14,7 @@ def test_file_access_requires_directory_boundary(tmp_path) -> None:
 
 
 def test_blocked_home_ssh_glob_matches_nested_files(tmp_path) -> None:
-    sandbox = SecuritySandbox(
-        SandboxConfig(workdir=str(tmp_path), blocked_paths=["/home/*/.ssh"])
-    )
+    sandbox = SecuritySandbox(SandboxConfig(workdir=str(tmp_path), blocked_paths=["/home/*/.ssh"]))
 
     allowed, reason = sandbox.validate_file_access("/home/demo/.ssh/id_ed25519")
 

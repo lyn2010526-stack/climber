@@ -43,12 +43,14 @@ def _count_sidecars(user_id: str, scope: str) -> int:
             from sqlalchemy import func, select
 
             return int(
-                (await db.execute(
-                    select(func.count(MemorySidecar.id)).where(
-                        MemorySidecar.user_id == user_id,
-                        MemorySidecar.scope == scope,
+                (
+                    await db.execute(
+                        select(func.count(MemorySidecar.id)).where(
+                            MemorySidecar.user_id == user_id,
+                            MemorySidecar.scope == scope,
+                        )
                     )
-                )).scalar_one()
+                ).scalar_one()
             )
 
     return _run(_count())

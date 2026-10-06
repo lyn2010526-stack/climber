@@ -75,7 +75,10 @@ class AgentSession:
 
         def emit(event, **fields):
             self.trace.write(
-                json.dumps({"event": event, "elapsed_seconds": time.monotonic() - started, **fields}) + "\n"
+                json.dumps(
+                    {"event": event, "elapsed_seconds": time.monotonic() - started, **fields}
+                )
+                + "\n"
             )
             self.trace.flush()
 
@@ -114,7 +117,9 @@ class AgentSession:
                     raise ModelError("Expected assistant message")
                 calls = message.get("tool_calls") or []
                 content = message.get("content")
-                if not isinstance(calls, list) or (content is not None and not isinstance(content, str)):
+                if not isinstance(calls, list) or (
+                    content is not None and not isinstance(content, str)
+                ):
                     raise ModelError("Invalid assistant message")
                 if not calls:
                     if choice.get("finish_reason") != "stop" or not content or not content.strip():
@@ -134,7 +139,12 @@ class AgentSession:
                 parsed = []
                 for call in calls:
                     call_id = call["id"]
-                    if not isinstance(call_id, str) or not call_id or call_id in ids or call.get("type") != "function":
+                    if (
+                        not isinstance(call_id, str)
+                        or not call_id
+                        or call_id in ids
+                        or call.get("type") != "function"
+                    ):
                         raise ModelError("Invalid or duplicate tool call id")
                     ids.add(call_id)
                     function = call["function"]
@@ -153,12 +163,18 @@ class AgentSession:
                     try:
                         output = self.workspace.execute(name, arguments)
                     except (ValueError, OSError, RuntimeError) as exc:
-                        message = "Command failed or rejected" if name == "run_command" else "File tool rejected or failed"
+                        message = (
+                            "Command failed or rejected"
+                            if name == "run_command"
+                            else "File tool rejected or failed"
+                        )
                         output = {"error": type(exc).__name__, "message": message}
                     if "error" in output:
                         result.tool_errors += 1
                     emit("tool_result", call_id=call_id, name=name, ok="error" not in output)
-                    self.messages.append({"role": "tool", "tool_call_id": call_id, "content": json.dumps(output)})
+                    self.messages.append(
+                        {"role": "tool", "tool_call_id": call_id, "content": json.dumps(output)}
+                    )
                 if result.status == ExitStatus.BUDGET_EXHAUSTED:
                     break
             else:
@@ -191,7 +207,9 @@ class AgentDriver:
         self.output_dir = Path(output_dir)
         self.command_env = dict(command_env or {})
         self._model = model
-        self.budget = budget or Budget(max_turns=25, max_tool_calls=120, max_tokens=200_000, max_seconds=900)
+        self.budget = budget or Budget(
+            max_turns=25, max_tool_calls=120, max_tokens=200_000, max_seconds=900
+        )
         self.command_timeout = command_timeout
         self.trace = trace if trace is not None else io.StringIO()
         self._workspaces: list[WorkspaceSandbox] = []
@@ -221,7 +239,9 @@ class AgentDriver:
         return workspace
 
     def new_session(self, sandbox: WorkspaceSandbox | None = None) -> AgentSession:
-        return AgentSession(self._model, sandbox or self.new_sandbox(), self.budget, trace=self.trace)
+        return AgentSession(
+            self._model, sandbox or self.new_sandbox(), self.budget, trace=self.trace
+        )
 
     @property
     def spawned_pgids(self) -> set[int]:
@@ -233,4 +253,4 @@ class AgentDriver:
         return pgids
 
 
-__all__ = ["AgentDriver", "AgentSession", "SYSTEM_PROMPT"]
+__all__ = ["SYSTEM_PROMPT", "AgentDriver", "AgentSession"]

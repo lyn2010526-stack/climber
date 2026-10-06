@@ -1,9 +1,11 @@
 """Service layer."""
+
 from __future__ import annotations
 
 
 class BaseService:
     """Base service class."""
+
     def __init__(self, *args, **kwargs):
         pass
 

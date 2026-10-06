@@ -30,34 +30,54 @@ logger = structlog.get_logger()
 @dataclass
 class SandboxConfig:
     """Configuration for sandboxed execution."""
+
     workdir: str = ""
     timeout_seconds: int = 30
     max_output_bytes: int = 10000
     max_memory_mb: int = 256
     enable_network: bool = False
-    allowed_commands: list[str] = field(default_factory=lambda: [
-        "python", "python3", "node", "npm", "npx",
-        "cat", "ls", "head", "tail", "wc", "grep", "find",
-        "echo", "pwd", "mkdir", "touch", "cp", "mv",
-    ])
-    blocked_patterns: list[str] = field(default_factory=lambda: [
-        r"rm\s+-rf\s+/",
-        r"rm\s+-rf\s+~",
-        r"chmod\s+777",
-        r"chown\s+root",
-        r"sudo\s+",
-        r"curl\s+.*\|\s*sh",
-        r"wget\s+.*\|\s*sh",
-        r"dd\s+if=",
-        r"mkfs\.",
-        r"fdisk",
-        r":\(\)\{.*\|.*&};",
-        r">\s*/dev/sd",
-        r"shutdown",
-        r"reboot",
-        r"init\s+[06]",
-        r"kill\s+-9\s+1",
-    ])
+    allowed_commands: list[str] = field(
+        default_factory=lambda: [
+            "python",
+            "python3",
+            "node",
+            "npm",
+            "npx",
+            "cat",
+            "ls",
+            "head",
+            "tail",
+            "wc",
+            "grep",
+            "find",
+            "echo",
+            "pwd",
+            "mkdir",
+            "touch",
+            "cp",
+            "mv",
+        ]
+    )
+    blocked_patterns: list[str] = field(
+        default_factory=lambda: [
+            r"rm\s+-rf\s+/",
+            r"rm\s+-rf\s+~",
+            r"chmod\s+777",
+            r"chown\s+root",
+            r"sudo\s+",
+            r"curl\s+.*\|\s*sh",
+            r"wget\s+.*\|\s*sh",
+            r"dd\s+if=",
+            r"mkfs\.",
+            r"fdisk",
+            r":\(\)\{.*\|.*&};",
+            r">\s*/dev/sd",
+            r"shutdown",
+            r"reboot",
+            r"init\s+[06]",
+            r"kill\s+-9\s+1",
+        ]
+    )
 
 
 class SandboxExecutor:
@@ -69,8 +89,12 @@ class SandboxExecutor:
 
     # Sensitive paths that should never be accessed
     SENSITIVE_PATHS: ClassVar[tuple[str, ...]] = (
-        "/etc/shadow", "/etc/passwd", "/etc/sudoers",
-        "/etc/ssh/", "/root/.ssh/", "/etc/ssl/private/",
+        "/etc/shadow",
+        "/etc/passwd",
+        "/etc/sudoers",
+        "/etc/ssh/",
+        "/root/.ssh/",
+        "/etc/ssl/private/",
     )
 
     def _is_command_safe(self, command: str, workdir: str) -> tuple[bool, str]:
@@ -109,7 +133,9 @@ class SandboxExecutor:
         try:
             max_mem_bytes = self.config.max_memory_mb * 1024 * 1024
             resource.setrlimit(resource.RLIMIT_AS, (max_mem_bytes, max_mem_bytes))
-            resource.setrlimit(resource.RLIMIT_CPU, (self.config.timeout_seconds, self.config.timeout_seconds + 5))
+            resource.setrlimit(
+                resource.RLIMIT_CPU, (self.config.timeout_seconds, self.config.timeout_seconds + 5)
+            )
             resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
             resource.setrlimit(resource.RLIMIT_NPROC, (10, 10))
         except (ValueError, OSError):
@@ -135,7 +161,14 @@ class SandboxExecutor:
             allowed_env = {"PATH", "HOME", "LANG", "LC_ALL", "PYTHONPATH"}
             env = {key: value for key, value in os.environ.items() if key in allowed_env}
             if self.config.enable_network:
-                for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "NO_PROXY", "no_proxy"):
+                for key in (
+                    "HTTP_PROXY",
+                    "HTTPS_PROXY",
+                    "http_proxy",
+                    "https_proxy",
+                    "NO_PROXY",
+                    "no_proxy",
+                ):
                     if key in os.environ:
                         env[key] = os.environ[key]
 
@@ -177,7 +210,7 @@ class SandboxExecutor:
             parts.append(f"Command exited with code {returncode}")
         full_output = "\n".join(parts)
         if len(full_output.encode()) > self.config.max_output_bytes:
-            full_output = full_output[:self.config.max_output_bytes] + "\n... [OUTPUT TRUNCATED]"
+            full_output = full_output[: self.config.max_output_bytes] + "\n... [OUTPUT TRUNCATED]"
         return full_output if full_output else "Command completed (no output)"
 
     def cleanup(self) -> None:

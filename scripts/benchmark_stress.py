@@ -21,9 +21,9 @@ SESSION_ID: str | None = None
 
 
 def section(title):
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"  {title}")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
 
 def record(category, metric, value, unit=""):
@@ -64,7 +64,11 @@ async def benchmark_single_requests():
                 avg = statistics.mean(latencies)
                 med = statistics.median(latencies)
                 p95 = sorted(latencies)[int(len(latencies) * 0.95)]
-                p99 = sorted(latencies)[int(len(latencies) * 0.99)] if len(latencies) > 1 else latencies[0]
+                p99 = (
+                    sorted(latencies)[int(len(latencies) * 0.99)]
+                    if len(latencies) > 1
+                    else latencies[0]
+                )
                 name = path.replace("/api/v1/", "").replace("?", "_q")
                 record("single", f"{method} {name} avg", f"{avg:.1f}", "ms")
                 record("single", f"{method} {name} median", f"{med:.1f}", "ms")
@@ -201,10 +205,7 @@ def get_process_memory(pid):
                     return int(line.split()[1]) / 1024
     except (FileNotFoundError, PermissionError):
         pass
-    result = subprocess.run(
-        ["ps", "-p", pid, "-o", "rss="],
-        capture_output=True, text=True
-    )
+    result = subprocess.run(["ps", "-p", pid, "-o", "rss="], capture_output=True, text=True)
     try:
         return int(result.stdout.strip()) / 1024
     except ValueError:
@@ -214,16 +215,10 @@ def get_process_memory(pid):
 def benchmark_memory():
     section("4. Memory Usage")
 
-    result = subprocess.run(
-        ["pgrep", "-f", "uvicorn app.main:app"],
-        capture_output=True, text=True
-    )
+    result = subprocess.run(["pgrep", "-f", "uvicorn app.main:app"], capture_output=True, text=True)
     pids = result.stdout.strip().split("\n")
     if not pids or not pids[0]:
-        result = subprocess.run(
-            ["pgrep", "-f", "app.main:app"],
-            capture_output=True, text=True
-        )
+        result = subprocess.run(["pgrep", "-f", "app.main:app"], capture_output=True, text=True)
         pids = result.stdout.strip().split("\n")
 
     if not pids or not pids[0]:
@@ -256,8 +251,8 @@ def benchmark_memory():
 
     with open("/proc/meminfo") as f:
         lines = f.readlines()
-    mem_total = next((l for l in lines if "MemTotal" in l), "")
-    mem_avail = next((l for l in lines if "MemAvailable" in l), "")
+    mem_total = next((line for line in lines if "MemTotal" in line), "")
+    mem_avail = next((line for line in lines if "MemAvailable" in line), "")
     if mem_total and mem_avail:
         total_kb = int(mem_total.split()[1])
         avail_kb = int(mem_avail.split()[1])
@@ -326,9 +321,9 @@ async def benchmark_sustained_load():
             if latencies:
                 avg = statistics.mean(latencies)
                 p95 = sorted(latencies)[int(len(latencies) * 0.95)]
-                record("sustained", f"round_{round_num+1}_avg", f"{avg:.1f}", "ms")
-                record("sustained", f"round_{round_num+1}_p95", f"{p95:.1f}", "ms")
-                record("sustained", f"round_{round_num+1}_errors", errors, "")
+                record("sustained", f"round_{round_num + 1}_avg", f"{avg:.1f}", "ms")
+                record("sustained", f"round_{round_num + 1}_p95", f"{p95:.1f}", "ms")
+                record("sustained", f"round_{round_num + 1}_errors", errors, "")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -358,11 +353,15 @@ def main():
     # Save results
     output_path = "/workspace/agent-engine/benchmark_results_stress.json"
     with open(output_path, "w") as f:
-        json.dump({
-            "timestamp": datetime.now().isoformat(),
-            "target": BASE_URL,
-            "results": RESULTS,
-        }, f, indent=2)
+        json.dump(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "target": BASE_URL,
+                "results": RESULTS,
+            },
+            f,
+            indent=2,
+        )
     print(f"\nResults saved to {output_path}")
 
 

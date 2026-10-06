@@ -25,9 +25,9 @@ if TYPE_CHECKING:
     from agent_system.base_deps.mem_fts5_sqlite import Fts5Store
 
 # 检索路由阈值
-SHORT_DOC_MAX_LEN = 500          # 短文档：skill/规则
-LONG_DOC_MIN_LEN = 2000          # 长文档：代码/长文本
-VECTOR_SIM_THRESHOLD = 0.55      # 向量召回的最低相似度
+SHORT_DOC_MAX_LEN = 500  # 短文档：skill/规则
+LONG_DOC_MIN_LEN = 2000  # 长文档：代码/长文本
+VECTOR_SIM_THRESHOLD = 0.55  # 向量召回的最低相似度
 
 
 class AdaptiveRetrievalRouter:
@@ -43,7 +43,7 @@ class AdaptiveRetrievalRouter:
         self,
         fts_store: Fts5Store | None = None,
         chinese_index: ChineseWeightedIndex | None = None,
-        vector_store: Any | None = None,   # 可选插件（vector_memory 思路，smart-connections 参考）
+        vector_store: Any | None = None,  # 可选插件（vector_memory 思路，smart-connections 参考）
         fts_weight: float = 0.6,
         chinese_weight: float = 0.4,
         vector_weight: float = 0.5,
@@ -57,8 +57,9 @@ class AdaptiveRetrievalRouter:
 
     # ---- 路由决策 ----
 
-    def decide_route(self, query: str, doc_type: str | None = None,
-                     doc_length: int = 0, force: str | None = None) -> str:
+    def decide_route(
+        self, query: str, doc_type: str | None = None, doc_length: int = 0, force: str | None = None
+    ) -> str:
         """决定走哪条检索路径。"""
         if force:
             return force
@@ -70,11 +71,16 @@ class AdaptiveRetrievalRouter:
 
     # ---- 检索 ----
 
-    async def retrieve(self, query: str, top_k: int = 10,
-                       doc_type: str | None = None, doc_length: int = 0,
-                       force_route: str | None = None,
-                       kinds: list[str] | None = None,
-                       profile_context: dict[str, Any] | None = None) -> list[RetrievedMemory]:
+    async def retrieve(
+        self,
+        query: str,
+        top_k: int = 10,
+        doc_type: str | None = None,
+        doc_length: int = 0,
+        force_route: str | None = None,
+        kinds: list[str] | None = None,
+        profile_context: dict[str, Any] | None = None,
+    ) -> list[RetrievedMemory]:
         """自适应检索入口。
 
         Args:
@@ -98,17 +104,24 @@ class AdaptiveRetrievalRouter:
             try:
                 vector_results = await self._vector_search(query, top_k, kinds, profile_context)
                 results.extend(vector_results)
-            except Exception:  # noqa: S110 - 向量插件不可用时回退关键词结果
+            except Exception:
                 pass
 
         return self._fuse(query, results, route, top_k)
 
-    async def _vector_search(self, query: str, top_k: int, kinds: list[str] | None,
-                             profile_context: dict[str, Any] | None) -> list[RetrievedMemory]:
+    async def _vector_search(
+        self,
+        query: str,
+        top_k: int,
+        kinds: list[str] | None,
+        profile_context: dict[str, Any] | None,
+    ) -> list[RetrievedMemory]:
         """调用向量检索插件（Chroma vector_memory 或 smart-connections 思路插件）。"""
         collection = "archival"  # 长文档/代码默认集合
         raw = await self.vector_store.search(
-            collection, query, top_k=top_k,
+            collection,
+            query,
+            top_k=top_k,
             profile_context=profile_context,
         )
         results: list[RetrievedMemory] = []
@@ -119,17 +132,22 @@ class AdaptiveRetrievalRouter:
             vector_score = float(doc.get("score", 0.0))
             if vector_score < VECTOR_SIM_THRESHOLD:
                 continue
-            results.append(RetrievedMemory(
-                item=item, route="vector", score=round(vector_score, 4),
-                vector_score=round(vector_score, 4),
-                reason=f"vector={vector_score:.2f}",
-            ))
+            results.append(
+                RetrievedMemory(
+                    item=item,
+                    route="vector",
+                    score=round(vector_score, 4),
+                    vector_score=round(vector_score, 4),
+                    reason=f"vector={vector_score:.2f}",
+                )
+            )
         return results
 
     # ---- 融合排序 ----
 
-    def _fuse(self, query: str, results: list[RetrievedMemory],
-              route: str, top_k: int) -> list[RetrievedMemory]:
+    def _fuse(
+        self, query: str, results: list[RetrievedMemory], route: str, top_k: int
+    ) -> list[RetrievedMemory]:
         """加权融合：同一条记忆多路由得分合并，去重排序。"""
         by_id: dict[str, RetrievedMemory] = {}
         for r in results:
@@ -156,8 +174,9 @@ class AdaptiveRetrievalRouter:
         fused.sort(key=lambda r: r.score, reverse=True)
         return fused[:top_k]
 
-    def _rerank_with_profile(self, results: list[RetrievedMemory],
-                             profile_context: dict[str, Any] | None) -> list[RetrievedMemory]:
+    def _rerank_with_profile(
+        self, results: list[RetrievedMemory], profile_context: dict[str, Any] | None
+    ) -> list[RetrievedMemory]:
         """画像偏好微调排序（对接 Climber rank_with_profile 思路）。"""
         if not profile_context or not profile_context.get("enabled"):
             return results
@@ -178,6 +197,7 @@ class AdaptiveRetrievalRouter:
 def _dict_to_memory_item(doc: dict[str, Any]):
     """把向量存储返回的 dict 转成 MemoryItem。"""
     from agent_system.core_models import MemoryItem, now_utc
+
     metadata = doc.get("metadata") or {}
     kind_str = metadata.get("kind", "text")
     try:

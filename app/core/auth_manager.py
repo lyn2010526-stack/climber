@@ -1,4 +1,5 @@
 """Authentication manager — handles user auth, tokens, and password hashing."""
+
 from __future__ import annotations
 
 import base64
@@ -54,7 +55,9 @@ def create_access_token(user_id: str, scopes: list[str] | None = None) -> str:
     return _encode_token(payload)
 
 
-def create_refresh_token(user_id: str, scopes: list[str] | None = None, lifetime: timedelta | None = None) -> str:
+def create_refresh_token(
+    user_id: str, scopes: list[str] | None = None, lifetime: timedelta | None = None
+) -> str:
     payload = {
         "sub": user_id,
         "type": "refresh",
@@ -101,7 +104,9 @@ class AuthManager:
     def create_access_token(self, user_id: str, scopes: list[str] | None = None) -> str:
         return create_access_token(user_id, scopes)
 
-    def create_refresh_token(self, user_id: str, scopes: list[str] | None = None, lifetime: timedelta | None = None) -> str:
+    def create_refresh_token(
+        self, user_id: str, scopes: list[str] | None = None, lifetime: timedelta | None = None
+    ) -> str:
         return create_refresh_token(user_id, scopes, lifetime)
 
     def verify_token(self, token: str, expected_type: str = "access") -> dict[str, Any]:
@@ -128,6 +133,7 @@ async def authenticate_user(username: str, password: str) -> dict[str, Any]:
 
     from app.models.users import User, UserStatus
     from app.storage import async_session
+
     async with async_session() as session:
         result = await session.execute(
             select(User).where(User.username == username, User.status == UserStatus.ACTIVE.value)
@@ -135,9 +141,15 @@ async def authenticate_user(username: str, password: str) -> dict[str, Any]:
         user = result.scalar_one_or_none()
         if user and verify_password(password, user.hashed_password):
             from datetime import datetime
+
             user.last_login_at = datetime.utcnow()
             await session.commit()
-            return {"user_id": str(user.id), "username": user.username, "role": user.role, "scopes": scopes_for_role(user.role)}
+            return {
+                "user_id": str(user.id),
+                "username": user.username,
+                "role": user.role,
+                "scopes": scopes_for_role(user.role),
+            }
     raise HTTPException(401, "Invalid credentials")
 
 
@@ -168,11 +180,17 @@ def _principal_dict() -> dict[str, Any]:
 
 def _has_scope(principal: dict[str, Any], scope: str) -> bool:
     scopes = principal.get("scopes") or []
-    return "admin" in scopes or scope in scopes or principal.get("role") == scope or principal.get("role") == "admin"
+    return (
+        "admin" in scopes
+        or scope in scopes
+        or principal.get("role") == scope
+        or principal.get("role") == "admin"
+    )
 
 
 def require_admin():
     """Dependency factory that rejects callers without admin scope."""
+
     async def _check(request: Request) -> dict[str, Any]:
         principal = _principal_dict()
         # Local mode (auth disabled) resolves to the seeded default identity.
@@ -181,11 +199,13 @@ def require_admin():
         if principal.get("role") == "admin" or "admin" in principal["scopes"]:
             return principal
         raise HTTPException(403, "Admin scope required")
+
     return _check
 
 
 def require_scopes(*required_scopes: str):
     """Dependency factory that enforces each required scope."""
+
     async def _check(request: Request) -> dict[str, Any]:
         principal = _principal_dict()
         if not settings.enable_auth and principal["id"] == "default-user":
@@ -194,6 +214,7 @@ def require_scopes(*required_scopes: str):
             if not _has_scope(principal, scope):
                 raise HTTPException(403, f"Missing required scope: {scope}")
         return principal
+
     return _check
 
 
@@ -209,9 +230,7 @@ async def validate_api_key(raw_key: str) -> dict[str, Any]:
 
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
     async with async_session() as session:
-        result = await session.execute(
-            select(ApiKey).where(ApiKey.key_hash == key_hash)
-        )
+        result = await session.execute(select(ApiKey).where(ApiKey.key_hash == key_hash))
         record = result.scalar_one_or_none()
         if record is None or not record.is_active:
             raise HTTPException(401, "Invalid API key")
@@ -225,7 +244,9 @@ async def validate_api_key(raw_key: str) -> dict[str, Any]:
             decoded_scopes = json.loads(record.scopes) if record.scopes else ["read", "write"]
         except (TypeError, ValueError):
             raise HTTPException(401, "Invalid API key scopes") from None
-        if not isinstance(decoded_scopes, list) or not all(isinstance(scope, str) for scope in decoded_scopes):
+        if not isinstance(decoded_scopes, list) or not all(
+            isinstance(scope, str) for scope in decoded_scopes
+        ):
             raise HTTPException(401, "Invalid API key scopes")
         scopes = decoded_scopes
         record.last_used_at = datetime.utcnow()
@@ -256,7 +277,9 @@ async def initialize_auth_system() -> dict[str, Any] | None:
             if not bootstrap_password:
                 environment = settings.app_env.strip().lower()
                 if environment in {"production", "prod", "staging"}:
-                    raise RuntimeError("INITIAL_ADMIN_PASSWORD must be configured before first startup")
+                    raise RuntimeError(
+                        "INITIAL_ADMIN_PASSWORD must be configured before first startup"
+                    )
                 bootstrap_password = secrets.token_urlsafe(24)
             admin = User(
                 username="admin",
@@ -267,6 +290,10 @@ async def initialize_auth_system() -> dict[str, Any] | None:
             )
             session.add(admin)
             await session.commit()
-            return {"username": "admin", "password_set": True, "bootstrap_generated": not settings.initial_admin_password}
+            return {
+                "username": "admin",
+                "password_set": True,
+                "bootstrap_generated": not settings.initial_admin_password,
+            }
 
     return None

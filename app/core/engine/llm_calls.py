@@ -35,8 +35,9 @@ def accumulate_stream_tool_calls(
     """
     for position, tool_call in enumerate(chunks):
         call_id = tool_call.get("id")
-        existing = next((i for i, call in enumerate(accumulated)
-                         if call_id and call.get("id") == call_id), None)
+        existing = next(
+            (i for i, call in enumerate(accumulated) if call_id and call.get("id") == call_id), None
+        )
         if "index" in tool_call:
             index = tool_call["index"]
         elif existing is not None:
@@ -46,11 +47,13 @@ def accumulate_stream_tool_calls(
         else:
             index = position
         while len(accumulated) <= index:
-            accumulated.append({
-                "id": "",
-                "type": "function",
-                "function": {"name": "", "arguments": ""},
-            })
+            accumulated.append(
+                {
+                    "id": "",
+                    "type": "function",
+                    "function": {"name": "", "arguments": ""},
+                }
+            )
         target = accumulated[index]
         if tool_call.get("id"):
             target["id"] = tool_call["id"]
@@ -69,7 +72,12 @@ def accumulate_stream_tool_calls(
                 target["function"]["arguments"] += arguments
 
 
-async def stream_accumulate(adapter: Any, messages: list[dict[str, Any]], tools: list, sampling: dict[str, Any] | None = None) -> ChatResult:
+async def stream_accumulate(
+    adapter: Any,
+    messages: list[dict[str, Any]],
+    tools: list,
+    sampling: dict[str, Any] | None = None,
+) -> ChatResult:
     """Accumulate a streaming response into a single ChatResult.
 
     When the adapter reports authoritative cumulative content
@@ -87,7 +95,9 @@ async def stream_accumulate(adapter: Any, messages: list[dict[str, Any]], tools:
         A ChatResult with accumulated content and tool calls.
     """
     result = ChatResult()
-    async for chunk in adapter.stream_chat(messages=messages, tools=tools or None, **(sampling or {})):
+    async for chunk in adapter.stream_chat(
+        messages=messages, tools=tools or None, **(sampling or {})
+    ):
         merge_stream_chunk(result, chunk)
         if getattr(chunk, "tool_calls", None):
             accumulate_stream_tool_calls(result.tool_calls, chunk.tool_calls)
@@ -125,7 +135,9 @@ async def stream_chat(adapter: Any, session: Any, tools: list) -> ChatResult | N
         ChatResult with accumulated content, or None if stopped.
     """
     result = ChatResult()
-    async for chunk in adapter.stream_chat(messages=session.messages, tools=tools or None, **sampling_kwargs(session)):
+    async for chunk in adapter.stream_chat(
+        messages=session.messages, tools=tools or None, **sampling_kwargs(session)
+    ):
         if session._stop_requested:
             return None
         merge_stream_chunk(result, chunk)
@@ -150,7 +162,9 @@ async def call_llm(adapter: Any, session: Any, tools: list) -> ChatResult | None
     if session._stop_requested:
         await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
         return None
-    return await adapter.chat(messages=session.messages, tools=tools or None, **sampling_kwargs(session))
+    return await adapter.chat(
+        messages=session.messages, tools=tools or None, **sampling_kwargs(session)
+    )
 
 
 async def call_llm_with_resilience(
@@ -185,7 +199,7 @@ async def call_llm_with_resilience(
     )
     session._circuit_breaker = breaker
 
-    task_description = (session.messages[-1].get("content", "") if session.messages else "")
+    task_description = session.messages[-1].get("content", "") if session.messages else ""
     tools = engine._build_tools_for_session(session, task_description=task_description)
     sampling = sampling_kwargs(session)
 
@@ -193,9 +207,15 @@ async def call_llm_with_resilience(
     try:
 
         async def _single() -> ChatResult:
-            if model_adapter.capabilities and getattr(model_adapter.capabilities, "streaming", False):
-                return await stream_accumulate(model_adapter, messages or session.messages, tools, sampling)
-            return await model_adapter.chat(messages=messages or session.messages, tools=tools or None, **sampling)
+            if model_adapter.capabilities and getattr(
+                model_adapter.capabilities, "streaming", False
+            ):
+                return await stream_accumulate(
+                    model_adapter, messages or session.messages, tools, sampling
+                )
+            return await model_adapter.chat(
+                messages=messages or session.messages, tools=tools or None, **sampling
+            )
 
         async def _attempt() -> ChatResult:
             return await asyncio.wait_for(_single(), timeout=timeout_config.per_call_seconds)

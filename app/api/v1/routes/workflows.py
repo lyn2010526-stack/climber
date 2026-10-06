@@ -179,7 +179,9 @@ async def run_workflow(
                             Agent.id.in_(referenced_agent_ids),
                         )
                     )
-                ).scalars().all()
+                )
+                .scalars()
+                .all()
             )
             if owned_agent_ids != referenced_agent_ids:
                 raise HTTPException(
@@ -195,7 +197,11 @@ async def run_workflow(
         agent = (await db.execute(agent_stmt.limit(1))).scalar_one_or_none()
 
         if agent is None:
-            detail = "Agent not found" if payload.agent_id else "No agent configured; create an agent first"
+            detail = (
+                "Agent not found"
+                if payload.agent_id
+                else "No agent configured; create an agent first"
+            )
             raise HTTPException(status_code=404 if payload.agent_id else 409, detail=detail)
 
     run = WorkflowRun(workflow_id=workflow_id if wf else None, inputs=data.get("inputs", {}))
@@ -271,8 +277,7 @@ async def _execute_workflow(
         )
         if agent is not None:
             _apply_agent_settings(adapter.workflow_engine, agent)
-        result_payload = await adapter.run(nodes, edges, inputs=data.get("inputs", {}))
-        return result_payload
+        return await adapter.run(nodes, edges, inputs=data.get("inputs", {}))
 
     workflow = build_workflow_from_graph(
         nodes, edges, name=(wf.name if wf else f"Workflow {data.get('workflow_id', '')}")
@@ -338,9 +343,7 @@ async def _record_workflow_run(run: WorkflowRun, payload: dict[str, Any]) -> Non
 
 
 @router.get("/workflows/{workflow_id}/runs")
-async def list_workflow_runs(
-    workflow_id: str, principal: CurrentPrincipal
-) -> list[dict[str, Any]]:
+async def list_workflow_runs(workflow_id: str, principal: CurrentPrincipal) -> list[dict[str, Any]]:
     """List the most recent runs for a workflow (up to 50)."""
     user_id = principal.subject_id
     async with async_session() as db:
@@ -348,13 +351,17 @@ async def list_workflow_runs(
         if wf is None:
             raise HTTPException(status_code=404, detail="Workflow not found")
         rows = (
-            await db.execute(
-                select(WorkflowRun)
-                .where(WorkflowRun.workflow_id == workflow_id)
-                .order_by(WorkflowRun.created_at.desc())
-                .limit(50)
+            (
+                await db.execute(
+                    select(WorkflowRun)
+                    .where(WorkflowRun.workflow_id == workflow_id)
+                    .order_by(WorkflowRun.created_at.desc())
+                    .limit(50)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [_run_dict(r) for r in rows]
 
 

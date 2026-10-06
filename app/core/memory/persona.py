@@ -69,8 +69,12 @@ class PersonaModel(Base):
     expertise: Mapped[list[str]] = mapped_column(JSON, default=list)
     communication_style: Mapped[str] = mapped_column(String(500), default="")
     goals: Mapped[list[str]] = mapped_column(JSON, default=list)
-    created_at: Mapped[str] = mapped_column(String(50), default=lambda: datetime.now(UTC).isoformat())
-    updated_at: Mapped[str] = mapped_column(String(50), default=lambda: datetime.now(UTC).isoformat())
+    created_at: Mapped[str] = mapped_column(
+        String(50), default=lambda: datetime.now(UTC).isoformat()
+    )
+    updated_at: Mapped[str] = mapped_column(
+        String(50), default=lambda: datetime.now(UTC).isoformat()
+    )
 
 
 class SessionPersonaModel(Base):
@@ -82,7 +86,9 @@ class SessionPersonaModel(Base):
     base_persona_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     overrides: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     learnings: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
-    created_at: Mapped[str] = mapped_column(String(50), default=lambda: datetime.now(UTC).isoformat())
+    created_at: Mapped[str] = mapped_column(
+        String(50), default=lambda: datetime.now(UTC).isoformat()
+    )
 
 
 class PersonaStore:
@@ -103,17 +109,19 @@ class PersonaStore:
                 existing.goals = persona.goals
                 existing.updated_at = now
             else:
-                db.add(PersonaModel(
-                    agent_id=persona.agent_id,
-                    name=persona.name,
-                    role=persona.role,
-                    personality_traits=persona.personality_traits,
-                    expertise=persona.expertise,
-                    communication_style=persona.communication_style,
-                    goals=persona.goals,
-                    created_at=persona.created_at,
-                    updated_at=now,
-                ))
+                db.add(
+                    PersonaModel(
+                        agent_id=persona.agent_id,
+                        name=persona.name,
+                        role=persona.role,
+                        personality_traits=persona.personality_traits,
+                        expertise=persona.expertise,
+                        communication_style=persona.communication_style,
+                        goals=persona.goals,
+                        created_at=persona.created_at,
+                        updated_at=now,
+                    )
+                )
             await db.commit()
         logger.info("persona_saved", agent_id=persona.agent_id)
         return persona
@@ -152,9 +160,7 @@ class PersonaStore:
     async def delete(self, agent_id: str) -> bool:
         """Delete a persona."""
         async with async_session() as db:
-            result = await db.execute(
-                delete(PersonaModel).where(PersonaModel.agent_id == agent_id)
-            )
+            result = await db.execute(delete(PersonaModel).where(PersonaModel.agent_id == agent_id))
             await db.commit()
             deleted = result.rowcount > 0
             if deleted:
@@ -266,7 +272,7 @@ async def get_effective_persona(
 
         overrides = session_model.overrides or {}
         if overrides:
-            effective = AgentPersona(
+            return AgentPersona(
                 agent_id=base.agent_id,
                 name=overrides.get("name", base.name),
                 role=overrides.get("role", base.role),
@@ -277,7 +283,6 @@ async def get_effective_persona(
                 created_at=base.created_at,
                 updated_at=base.updated_at,
             )
-            return effective
         return base
 
 

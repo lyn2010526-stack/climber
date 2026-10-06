@@ -17,6 +17,7 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
 
+import app.core.group_ws_hub as hub_module
 from app.core import AgentEvent, AgentEventType
 from app.core.collaboration import agent_runner
 from app.core.collaboration import progress as progress_module
@@ -39,9 +40,8 @@ from app.core.group_ws_hub import (
     SUPPORTED_EVENT_TYPES,
     get_group_event_log,
     get_group_state_snapshot,
+    group_ws_hub,
 )
-import app.core.group_ws_hub as hub_module
-from app.core.group_ws_hub import group_ws_hub
 from app.core.principal import Principal
 
 
@@ -79,10 +79,17 @@ class WsEventProtocolTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_supported_types_include_canonical_six(self):
         self.assertTrue(CANONICAL_EVENT_TYPES.issubset(SUPPORTED_EVENT_TYPES))
-        self.assertEqual(CANONICAL_EVENT_TYPES, {
-            "status", "content_delta", "tool_result",
-            "task_update", "message_complete", "error",
-        })
+        self.assertEqual(
+            CANONICAL_EVENT_TYPES,
+            {
+                "status",
+                "content_delta",
+                "tool_result",
+                "task_update",
+                "message_complete",
+                "error",
+            },
+        )
 
     async def test_every_supported_legacy_event_maps_to_canonical(self):
         extras = {"tree_node_added", "tree_node_updated", "progress_warning", "progress_snapshot"}
@@ -155,7 +162,9 @@ class WsEventProtocolTests(unittest.IsolatedAsyncioTestCase):
         live, dead = await self.connect(2)
         dead.fail = True
 
-        await group_ws_hub.broadcast(self.group_id, {"type": "worker_start", "data": {"member_id": "m"}})
+        await group_ws_hub.broadcast(
+            self.group_id, {"type": "worker_start", "data": {"member_id": "m"}}
+        )
 
         self.assertIn(live, hub_module._group_connections[self.group_id])
         self.assertNotIn(dead, hub_module._group_connections[self.group_id])
@@ -164,14 +173,21 @@ class WsEventProtocolTests(unittest.IsolatedAsyncioTestCase):
     async def test_broadcast_without_clients_still_records_snapshot_log(self):
         # Client disconnected: the task keeps running and events keep
         # accumulating for the reconnecting snapshot pull.
-        await group_ws_hub.broadcast(self.group_id, {"type": "worker_start", "data": {"member_id": "m"}})
+        await group_ws_hub.broadcast(
+            self.group_id, {"type": "worker_start", "data": {"member_id": "m"}}
+        )
 
         snapshot = get_group_state_snapshot(self.group_id)
         self.assertEqual(snapshot["connected_clients"], 0)
         self.assertEqual(snapshot["protocol_version"], EVENT_PROTOCOL_VERSION)
-        self.assertEqual(snapshot["task_tree"], {
-            "group_id": self.group_id, "task_id": "", "nodes": [],
-        })
+        self.assertEqual(
+            snapshot["task_tree"],
+            {
+                "group_id": self.group_id,
+                "task_id": "",
+                "nodes": [],
+            },
+        )
         frames = [entry["message"] for entry in snapshot["recent_events"]]
         self.assertEqual([f["type"] for f in frames], ["worker_start", "status"])
         self.assertEqual(frames[1]["data"]["event"], "worker_start")
@@ -179,13 +195,13 @@ class WsEventProtocolTests(unittest.IsolatedAsyncioTestCase):
     async def test_get_group_event_log_returns_recent_frames(self):
         await self.connect()
         for i in range(3):
-            await group_ws_hub.broadcast(
-                self.group_id, {"type": "typing", "data": {"seq": i}}
-            )
+            await group_ws_hub.broadcast(self.group_id, {"type": "typing", "data": {"seq": i}})
         log = get_group_event_log(self.group_id, limit=2)
         self.assertEqual(len(log), 2)
         self.assertTrue(all("at" in entry for entry in log))
-        self.assertEqual(log[-1]["message"]["data"], {"event": "typing", "seq": 2, "protocol_version": 1})
+        self.assertEqual(
+            log[-1]["message"]["data"], {"event": "typing", "seq": 2, "protocol_version": 1}
+        )
 
     async def test_tree_node_events_mirror_into_canonical_task_update(self):
         # The real hub mirrors tree events into the canonical protocol so
@@ -200,9 +216,15 @@ class WsEventProtocolTests(unittest.IsolatedAsyncioTestCase):
         await tree.update_status(root.node_id, "completed")
 
         types = [m["type"] for m in ws.sent]
-        self.assertEqual(types, [
-            "tree_node_added", "task_update", "tree_node_updated", "task_update",
-        ])
+        self.assertEqual(
+            types,
+            [
+                "tree_node_added",
+                "task_update",
+                "tree_node_updated",
+                "task_update",
+            ],
+        )
         mirrors = [m["data"] for m in ws.sent if m["type"] == "task_update"]
         self.assertEqual(mirrors[0]["event"], "tree_node_added")
         self.assertEqual(mirrors[0]["task_name"], "real hub task")
@@ -267,16 +289,24 @@ class ProgressTrackerTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("g2:a2", get_progress_snapshots())
 
     async def test_broadcast_stall_warnings_only_for_stalled_trackers(self):
-        stalled = get_progress_tracker("g1:stalled", group_id="g1", agent_id="s", stall_threshold_seconds=5.0)
-        healthy = get_progress_tracker("g1:healthy", group_id="g1", agent_id="h", stall_threshold_seconds=5.0)
+        stalled = get_progress_tracker(
+            "g1:stalled", group_id="g1", agent_id="s", stall_threshold_seconds=5.0
+        )
+        healthy = get_progress_tracker(
+            "g1:healthy", group_id="g1", agent_id="h", stall_threshold_seconds=5.0
+        )
         self.addCleanup(drop_progress_tracker, "g1:stalled")
         self.addCleanup(drop_progress_tracker, "g1:healthy")
         stalled.record_activity("start", now=1000.0)
         healthy.record_activity("start", now=1009.0)
 
-        with patch.object(progress_module.group_ws_hub, "broadcast_canonical", new_callable=AsyncMock) as bc:
-            with patch.object(progress_module.time, "monotonic", return_value=1010.0):
-                warnings = await broadcast_stall_warnings("g1")
+        with (
+            patch.object(
+                progress_module.group_ws_hub, "broadcast_canonical", new_callable=AsyncMock
+            ) as bc,
+            patch.object(progress_module.time, "monotonic", return_value=1010.0),
+        ):
+            warnings = await broadcast_stall_warnings("g1")
 
         self.assertEqual(len(warnings), 1)
         self.assertEqual(warnings[0]["agent_id"], "s")
@@ -303,8 +333,11 @@ class TaskTreeTests(unittest.IsolatedAsyncioTestCase):
         drop_task_tree(self.group_id)
 
     def events(self, kind):
-        return [call.args[1]["data"] for call in self.broadcast.await_args_list
-                if call.args[1]["type"] == kind]
+        return [
+            call.args[1]["data"]
+            for call in self.broadcast.await_args_list
+            if call.args[1]["type"] == kind
+        ]
 
     async def test_task_start_and_subtask_nodes_broadcast_structured_events(self):
         tree = get_task_tree(self.group_id, task_id="task-1", create=True)
@@ -373,7 +406,9 @@ class AgentRunnerBroadcastTests(unittest.IsolatedAsyncioTestCase):
         self.broadcast_canonical = AsyncMock()
         self.broadcast = AsyncMock()
         self.patches = [
-            patch.object(agent_runner.group_ws_hub, "broadcast_canonical", self.broadcast_canonical),
+            patch.object(
+                agent_runner.group_ws_hub, "broadcast_canonical", self.broadcast_canonical
+            ),
             patch.object(agent_runner.group_ws_hub, "broadcast", self.broadcast),
         ]
         for p in self.patches:
@@ -396,9 +431,16 @@ class AgentRunnerBroadcastTests(unittest.IsolatedAsyncioTestCase):
 
         with patch.object(agent_runner, "run_agent", fake_run_agent):
             return await agent_runner.run_agent_simple(
-                agent_id="agent-a", provider="openai", model_id="gpt-4o",
-                api_key="test-only", system_prompt="s", user_message="u",
-                tools=[], group_id=group_id, role="worker", principal=self.principal,
+                agent_id="agent-a",
+                provider="openai",
+                model_id="gpt-4o",
+                api_key="test-only",
+                system_prompt="s",
+                user_message="u",
+                tools=[],
+                group_id=group_id,
+                role="worker",
+                principal=self.principal,
             )
 
     async def test_run_agent_simple_mirrors_events_as_canonical_frames(self):
@@ -412,18 +454,36 @@ class AgentRunnerBroadcastTests(unittest.IsolatedAsyncioTestCase):
         result = await self.run_simple("group-x", events)
 
         self.assertEqual(result, ("hello ", 7))
-        self.assertEqual(self.canonical_types(), [
-            "content_delta", "tool_result", "tool_result", "message_complete",
-        ])
-        self.assertEqual(self.canonical_payload(0), {
-            "event": "text", "role": "worker", "agent_id": "agent-a", "content": "hello ",
-        })
+        self.assertEqual(
+            self.canonical_types(),
+            [
+                "content_delta",
+                "tool_result",
+                "tool_result",
+                "message_complete",
+            ],
+        )
+        self.assertEqual(
+            self.canonical_payload(0),
+            {
+                "event": "text",
+                "role": "worker",
+                "agent_id": "agent-a",
+                "content": "hello ",
+            },
+        )
         self.assertEqual(self.canonical_payload(1)["event"], "tool_call")
         self.assertEqual(self.canonical_payload(1)["tool_name"], "search")
         self.assertEqual(self.canonical_payload(2)["event"], "tool_result")
-        self.assertEqual(self.canonical_payload(3), {
-            "event": "message_complete", "role": "worker", "agent_id": "agent-a", "tokens_used": 7,
-        })
+        self.assertEqual(
+            self.canonical_payload(3),
+            {
+                "event": "message_complete",
+                "role": "worker",
+                "agent_id": "agent-a",
+                "tokens_used": 7,
+            },
+        )
         tracker = get_progress_tracker("group-x:agent-a")
         self.assertEqual(tracker.tool_use_count, 1)
         self.assertEqual(tracker.cumulative_output_tokens, 7)
@@ -445,13 +505,22 @@ class AgentRunnerBroadcastTests(unittest.IsolatedAsyncioTestCase):
         async def fake_run_agent(*args, **kwargs):
             yield AgentEvent(AgentEventType.ERROR, {"error": "boom"})
 
-        with patch.object(agent_runner, "run_agent", fake_run_agent):
-            with self.assertRaisesRegex(Exception, "boom"):
-                await agent_runner.run_agent_simple(
-                    agent_id="agent-a", provider="openai", model_id="m", api_key="k",
-                    system_prompt="s", user_message="u", tools=[],
-                    group_id="group-err", role="worker", principal=self.principal,
-                )
+        with (
+            patch.object(agent_runner, "run_agent", fake_run_agent),
+            self.assertRaisesRegex(Exception, "boom"),
+        ):
+            await agent_runner.run_agent_simple(
+                agent_id="agent-a",
+                provider="openai",
+                model_id="m",
+                api_key="k",
+                system_prompt="s",
+                user_message="u",
+                tools=[],
+                group_id="group-err",
+                role="worker",
+                principal=self.principal,
+            )
 
         self.assertEqual(self.canonical_types(), ["error"])
         self.assertEqual(self.canonical_payload(0)["event"], "agent_error")
@@ -469,9 +538,16 @@ class AgentRunnerBroadcastTests(unittest.IsolatedAsyncioTestCase):
 
         with patch.object(agent_runner, "run_agent", fake_run_agent):
             result = await agent_runner.run_agent_with_retry(
-                agent_id="agent-a", provider="openai", model_id="gpt-4o",
-                api_key="k", system_prompt="s", user_message="u", tools=[],
-                group_id="group-tree", role="worker", principal=self.principal,
+                agent_id="agent-a",
+                provider="openai",
+                model_id="gpt-4o",
+                api_key="k",
+                system_prompt="s",
+                user_message="u",
+                tools=[],
+                group_id="group-tree",
+                role="worker",
+                principal=self.principal,
                 task_name="Implement feature",
             )
 
@@ -484,8 +560,16 @@ class AgentRunnerBroadcastTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(node["parent_id"], root["node_id"])
         self.assertEqual(node["task_name"], "worker:agent-a")
         self.assertEqual(node["status"], "completed")
-        added = [c.args[1] for c in self.broadcast.await_args_list if c.args[1]["type"] == "tree_node_added"]
-        updated = [c.args[1] for c in self.broadcast.await_args_list if c.args[1]["type"] == "tree_node_updated"]
+        added = [
+            c.args[1]
+            for c in self.broadcast.await_args_list
+            if c.args[1]["type"] == "tree_node_added"
+        ]
+        updated = [
+            c.args[1]
+            for c in self.broadcast.await_args_list
+            if c.args[1]["type"] == "tree_node_updated"
+        ]
         self.assertEqual(len(added), 2)
         self.assertEqual(len(updated), 1)
         self.assertEqual(updated[0]["data"]["status"], "completed")
@@ -497,15 +581,24 @@ class AgentRunnerBroadcastTests(unittest.IsolatedAsyncioTestCase):
             raise RuntimeError("primary failed")
             yield  # pragma: no cover
 
-        with patch.object(agent_runner, "run_agent", fake_run_agent), patch.object(
-            agent_runner, "MAX_RETRIES", 0
-        ), patch.object(agent_runner, "_get_fallback_model", return_value=None):
-            with self.assertRaisesRegex(RuntimeError, "worker failed after retry"):
-                await agent_runner.run_agent_with_retry(
-                    agent_id="agent-a", provider="openai", model_id="gpt-4o",
-                    api_key="k", system_prompt="s", user_message="u", tools=[],
-                    group_id="group-fail", role="worker", principal=self.principal,
-                )
+        with (
+            patch.object(agent_runner, "run_agent", fake_run_agent),
+            patch.object(agent_runner, "MAX_RETRIES", 0),
+            patch.object(agent_runner, "_get_fallback_model", return_value=None),
+            self.assertRaisesRegex(RuntimeError, "worker failed after retry"),
+        ):
+            await agent_runner.run_agent_with_retry(
+                agent_id="agent-a",
+                provider="openai",
+                model_id="gpt-4o",
+                api_key="k",
+                system_prompt="s",
+                user_message="u",
+                tools=[],
+                group_id="group-fail",
+                role="worker",
+                principal=self.principal,
+            )
 
         snapshot = get_task_tree_snapshot("group-fail")
         node = snapshot["nodes"][-1]
@@ -514,16 +607,25 @@ class AgentRunnerBroadcastTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_retry_runner_cancellation_marks_node_stopped(self):
         async def fake_run_agent(*args, **kwargs):
-            raise asyncio.CancelledError()
+            raise asyncio.CancelledError
             yield  # pragma: no cover
 
-        with patch.object(agent_runner, "run_agent", fake_run_agent):
-            with self.assertRaises(asyncio.CancelledError):
-                await agent_runner.run_agent_with_retry(
-                    agent_id="agent-a", provider="openai", model_id="gpt-4o",
-                    api_key="k", system_prompt="s", user_message="u", tools=[],
-                    group_id="group-cancel", role="worker", principal=self.principal,
-                )
+        with (
+            patch.object(agent_runner, "run_agent", fake_run_agent),
+            self.assertRaises(asyncio.CancelledError),
+        ):
+            await agent_runner.run_agent_with_retry(
+                agent_id="agent-a",
+                provider="openai",
+                model_id="gpt-4o",
+                api_key="k",
+                system_prompt="s",
+                user_message="u",
+                tools=[],
+                group_id="group-cancel",
+                role="worker",
+                principal=self.principal,
+            )
 
         snapshot = get_task_tree_snapshot("group-cancel")
         self.assertEqual(snapshot["nodes"][-1]["status"], "stopped")
@@ -535,9 +637,16 @@ class AgentRunnerBroadcastTests(unittest.IsolatedAsyncioTestCase):
         progress_module._task_trees.clear()
         with patch.object(agent_runner, "run_agent", fake_run_agent):
             await agent_runner.run_agent_with_retry(
-                agent_id="agent-a", provider="openai", model_id="gpt-4o",
-                api_key="k", system_prompt="s", user_message="u", tools=[],
-                group_id="", role="worker", principal=self.principal,
+                agent_id="agent-a",
+                provider="openai",
+                model_id="gpt-4o",
+                api_key="k",
+                system_prompt="s",
+                user_message="u",
+                tools=[],
+                group_id="",
+                role="worker",
+                principal=self.principal,
             )
 
         self.assertEqual(progress_module._task_trees, {})
@@ -579,13 +688,21 @@ class AgentRunnerBroadcastTests(unittest.IsolatedAsyncioTestCase):
             yield AgentEvent(AgentEventType.TEXT, {"content": "recovered"})
             yield AgentEvent(AgentEventType.DONE, {"status": "completed", "tokens_used": 5})
 
-        with patch.object(agent_runner, "run_agent", flaky_run_agent), patch.object(
-            agent_runner, "MAX_RETRIES", 1
+        with (
+            patch.object(agent_runner, "run_agent", flaky_run_agent),
+            patch.object(agent_runner, "MAX_RETRIES", 1),
         ):
             result = await agent_runner.run_agent_with_retry(
-                agent_id="agent-a", provider="openai", model_id="gpt-4o",
-                api_key="k", system_prompt="s", user_message="u", tools=[],
-                group_id="group-live", role="worker", principal=self.principal,
+                agent_id="agent-a",
+                provider="openai",
+                model_id="gpt-4o",
+                api_key="k",
+                system_prompt="s",
+                user_message="u",
+                tools=[],
+                group_id="group-live",
+                role="worker",
+                principal=self.principal,
             )
 
         self.assertEqual(result, ("recovered", 5))
@@ -593,7 +710,9 @@ class AgentRunnerBroadcastTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.canonical_types(), ["content_delta", "message_complete"])
         # One tree node per attempt: the failed try then the recovered one.
         snapshot = get_task_tree_snapshot("group-live")
-        self.assertEqual([n["status"] for n in snapshot["nodes"]], ["running", "failed", "completed"])
+        self.assertEqual(
+            [n["status"] for n in snapshot["nodes"]], ["running", "failed", "completed"]
+        )
         self.assertEqual(snapshot["nodes"][1]["task_name"], "worker:agent-a")
         self.assertEqual(snapshot["nodes"][2]["task_name"], "worker:agent-a")
 

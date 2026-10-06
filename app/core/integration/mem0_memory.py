@@ -57,7 +57,11 @@ class Mem0MemoryService:
                 user_id=user_id or self._user_id,
                 metadata=metadata or {},
             )
-            memory_id = result.get("results", [{}])[0].get("id", "") if isinstance(result, dict) else str(result)
+            memory_id = (
+                result.get("results", [{}])[0].get("id", "")
+                if isinstance(result, dict)
+                else str(result)
+            )
             logger.debug("memory_added", memory_id=memory_id)
             return memory_id
         except Exception as exc:

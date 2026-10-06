@@ -162,7 +162,7 @@ def _detect_title(raw: str, url: str) -> str:
 def _title_from_browser_summary(summary: str) -> str:
     for line in summary.splitlines():
         if line.startswith("Title:"):
-            return line[len("Title:"):].strip()
+            return line[len("Title:") :].strip()
     return ""
 
 
@@ -283,7 +283,9 @@ def _collect_sync(candidates: list[str], query: str, timeout_s: int) -> list[dic
     return findings
 
 
-async def _collect_browser(candidates: list[str], query: str, timeout_s: int) -> list[dict[str, Any]]:
+async def _collect_browser(
+    candidates: list[str], query: str, timeout_s: int
+) -> list[dict[str, Any]]:
     from app.tools import browser_tools
 
     findings: list[dict[str, Any]] = []
@@ -377,7 +379,9 @@ def research_report_text(result: dict[str, Any]) -> str:
         lines.append("")
     for finding in findings:
         lines.append(f"### {finding.get('title', finding.get('source', ''))}")
-        lines.append(f"- 来源：{finding.get('source', '')}（相关度 {finding.get('rel_score', 0.0)}）")
+        lines.append(
+            f"- 来源：{finding.get('source', '')}（相关度 {finding.get('rel_score', 0.0)}）"
+        )
         for point in finding.get("key_points", []):
             lines.append(f"- {point}")
         lines.append("")

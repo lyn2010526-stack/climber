@@ -21,7 +21,7 @@ def _entry() -> str:
 
 def _run(*extra: str) -> subprocess.CompletedProcess:
     cmd = [sys.executable, _entry(), *extra]
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=90, cwd=_repo_root())  # noqa: S603
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=90, cwd=_repo_root())
 
 
 def test_cli_human_mode_returns_zero() -> None:

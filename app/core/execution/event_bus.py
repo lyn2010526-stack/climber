@@ -219,7 +219,9 @@ def get_task_event_bus(db_path: str | None = None) -> EventBus:
     """
     global _event_bus, _default_event_bus_path
     if _event_bus is None:
-        _event_bus = EventBus(db_path=db_path if db_path is not None else str(_default_event_bus_path))
+        _event_bus = EventBus(
+            db_path=db_path if db_path is not None else str(_default_event_bus_path)
+        )
     return _event_bus
 
 

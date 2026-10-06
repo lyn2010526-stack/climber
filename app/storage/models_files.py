@@ -15,7 +15,9 @@ class FileRecord(Base):
     __tablename__ = "file_records"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True, default="default-user")
+    user_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, index=True, default="default-user"
+    )
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     original_name: Mapped[str] = mapped_column(String(255), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)

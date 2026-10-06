@@ -53,10 +53,14 @@ class TaskOwnerContractTests(unittest.IsolatedAsyncioTestCase):
     async def seed_task(self, owner="owner-a", active=True):
         task_id = "task-under-test"
         async with self.sessions() as session:
-            session.add(AutoLoopTask(
-                id=task_id, owner_id=owner, objective="contract test",
-                status="running" if active else "completed",
-            ))
+            session.add(
+                AutoLoopTask(
+                    id=task_id,
+                    owner_id=owner,
+                    objective="contract test",
+                    status="running" if active else "completed",
+                )
+            )
             await session.commit()
         if active:
             worker = asyncio.create_task(asyncio.Event().wait())
@@ -69,10 +73,19 @@ class TaskOwnerContractTests(unittest.IsolatedAsyncioTestCase):
             self.addAsyncCleanup(stop_worker)
         return task_id
 
-    async def cancel(self, task_id, *, user="owner-a", scopes=("read", "write"), role="user", local=False):
-        token = set_current_principal(principal_from_auth({
-            "user_id": user, "scopes": scopes, "role": role, "method": "test",
-        }))
+    async def cancel(
+        self, task_id, *, user="owner-a", scopes=("read", "write"), role="user", local=False
+    ):
+        token = set_current_principal(
+            principal_from_auth(
+                {
+                    "user_id": user,
+                    "scopes": scopes,
+                    "role": role,
+                    "method": "test",
+                }
+            )
+        )
         try:
             with patch.object(settings, "enable_auth", not local):
                 return await self.client.post(f"/api/v1/tasks/{task_id}/cancel")
@@ -158,23 +171,35 @@ class WorkflowInputContractTests(unittest.IsolatedAsyncioTestCase):
         )
         self.addAsyncCleanup(self.client.aclose)
         self.workflow = SimpleNamespace(
-            id="wf", name="Contract", nodes=[{"id": "input", "type": "input"}], edges=[],
+            id="wf",
+            name="Contract",
+            nodes=[{"id": "input", "type": "input"}],
+            edges=[],
         )
-        self.visible = self.enterContext(patch.object(
-            workflows, "_visible_workflow", AsyncMock(return_value=self.workflow)
-        ))
+        self.visible = self.enterContext(
+            patch.object(workflows, "_visible_workflow", AsyncMock(return_value=self.workflow))
+        )
         self.session = AsyncMock()
         result = MagicMock()
         result.scalar_one_or_none.return_value = SimpleNamespace(id="agent")
         self.session.execute.return_value = result
         self.session_factory = self.enterContext(patch.object(workflows, "async_session"))
         self.session_factory.return_value.__aenter__.return_value = self.session
-        self.execute = self.enterContext(patch.object(
-            workflows, "_execute_workflow", AsyncMock(return_value={
-                "status": "completed", "outputs": {},
-            })
-        ))
-        self.record = self.enterContext(patch.object(workflows, "_record_workflow_run", AsyncMock()))
+        self.execute = self.enterContext(
+            patch.object(
+                workflows,
+                "_execute_workflow",
+                AsyncMock(
+                    return_value={
+                        "status": "completed",
+                        "outputs": {},
+                    }
+                ),
+            )
+        )
+        self.record = self.enterContext(
+            patch.object(workflows, "_record_workflow_run", AsyncMock())
+        )
 
     async def test_inputs_envelope_reaches_execution_and_history_unchanged(self):
         inputs = {"question": "hello", "count": 0, "enabled": False, "nested": {"x": [1, 2]}}
@@ -198,16 +223,22 @@ class WorkflowInputContractTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(body=body):
                 response = await self.client.post("/api/v1/workflows/wf/run", json=body)
                 self.assertEqual(response.status_code, 422, response.text)
-                self.assertTrue(any(error["type"] == "extra_forbidden" for error in response.json()["detail"]))
+                self.assertTrue(
+                    any(error["type"] == "extra_forbidden" for error in response.json()["detail"])
+                )
         self.session_factory.assert_not_called()
         self.execute.assert_not_awaited()
 
     async def test_non_object_inputs_return_explicit_422(self):
         for inputs in (None, [], ["x"], "text", 42, False):
             with self.subTest(inputs=inputs):
-                response = await self.client.post("/api/v1/workflows/wf/run", json={"inputs": inputs})
+                response = await self.client.post(
+                    "/api/v1/workflows/wf/run", json={"inputs": inputs}
+                )
                 self.assertEqual(response.status_code, 422, response.text)
-                self.assertTrue(any(error["loc"] == ["body", "inputs"] for error in response.json()["detail"]))
+                self.assertTrue(
+                    any(error["loc"] == ["body", "inputs"] for error in response.json()["detail"])
+                )
         self.session_factory.assert_not_called()
         self.execute.assert_not_awaited()
 
@@ -215,7 +246,9 @@ class WorkflowInputContractTests(unittest.IsolatedAsyncioTestCase):
         for body in ("[]", "null", '"text"', "{"):
             with self.subTest(body=body):
                 response = await self.client.post(
-                    "/api/v1/workflows/wf/run", content=body, headers={"Content-Type": "application/json"},
+                    "/api/v1/workflows/wf/run",
+                    content=body,
+                    headers={"Content-Type": "application/json"},
                 )
                 self.assertEqual(response.status_code, 422, response.text)
         self.session_factory.assert_not_called()

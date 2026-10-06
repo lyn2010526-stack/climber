@@ -17,6 +17,7 @@ import structlog
 
 # ── Events ──
 
+
 class Event:
     type: str
     data: dict[str, Any]
@@ -44,6 +45,7 @@ class EventBus:
 
 # ── Enums ──
 
+
 class ExecutionStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
@@ -64,6 +66,7 @@ class NodeType(StrEnum):
 
 
 # ── Data Contracts ──
+
 
 @dataclass
 class ExecutionContext:
@@ -98,6 +101,7 @@ class ToolResult:
 
 # ── Interfaces ──
 
+
 class IModelAdapter(ABC):
     provider: str
     model_id: str
@@ -114,7 +118,9 @@ class IModelAdapter(ABC):
 
 class IToolRegistry(ABC):
     @abstractmethod
-    def register(self, name: str, description: str, parameters: dict[str, Any], func: Callable) -> None:
+    def register(
+        self, name: str, description: str, parameters: dict[str, Any], func: Callable
+    ) -> None:
         raise NotImplementedError
 
     @abstractmethod

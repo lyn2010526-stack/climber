@@ -43,7 +43,7 @@ from app.tools import register_builtins
 logger = structlog.get_logger()
 
 _missing = []
-for name in ('playwright', 'chromadb', 'psutil'):
+for name in ("playwright", "chromadb", "psutil"):
     if importlib.util.find_spec(name) is None:
         print(f"ERROR: Missing required dependency {name}, run scripts/init-env.sh")
         _missing.append(name)
@@ -54,6 +54,7 @@ _APP_VERSION = "0.2.0"
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend-react" / "dist"
 
 STATIC_AUTH_DIR = Path(__file__).parent / "static" / "auth"
+
 
 def _register_core_services() -> None:
     from app.core.agent_engine import AgentEngine
@@ -110,6 +111,7 @@ def _register_core_services() -> None:
 
 def _local_ip() -> str:
     import socket
+
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.settimeout(0.2)
@@ -142,7 +144,12 @@ async def _run_cleanup_step(name: str, coro) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log_dir = configure_logging(settings.app_log_level)
-    logger.info("Agent Engine starting", debug=settings.app_debug, version=_APP_VERSION, log_dir=str(log_dir))
+    logger.info(
+        "Agent Engine starting",
+        debug=settings.app_debug,
+        version=_APP_VERSION,
+        log_dir=str(log_dir),
+    )
 
     with ScopeContext("app_lifespan"):
         _register_core_services()
@@ -156,7 +163,11 @@ async def lifespan(app: FastAPI):
         try:
             await init_db()
             health = await db_health()
-            logger.info("Database ready", backend=health.get("backend"), journal_mode=health.get("journal_mode"))
+            logger.info(
+                "Database ready",
+                backend=health.get("backend"),
+                journal_mode=health.get("journal_mode"),
+            )
 
             from app.core.auth_manager import initialize_auth_system
 
@@ -197,6 +208,7 @@ async def lifespan(app: FastAPI):
 
             async def _relieve_memory() -> None:
                 from app.tools.browser_pool import get_browser_pool
+
                 reclaimed = await get_browser_pool().reclaim_idle()
                 logger.info("memory_relief_applied", browser_sessions_reclaimed=reclaimed)
 
@@ -207,14 +219,22 @@ async def lifespan(app: FastAPI):
                     from app.skills.memory_manager import persistent_memory
 
                     cleared = persistent_memory.clear()
-                    logger.info("memory_relief_caches_evicted", cache="persistent_memory", entries=cleared)
+                    logger.info(
+                        "memory_relief_caches_evicted", cache="persistent_memory", entries=cleared
+                    )
                 except Exception as exc:
-                    logger.warning("memory_relief_cache_evict_failed", cache="persistent_memory", error=str(exc))
+                    logger.warning(
+                        "memory_relief_cache_evict_failed",
+                        cache="persistent_memory",
+                        error=str(exc),
+                    )
                 try:
                     di_resolve("AgentEngine").tool_prioritizer.clear_caches()
                     logger.info("memory_relief_caches_evicted", cache="tool_prioritizer")
                 except Exception as exc:
-                    logger.warning("memory_relief_cache_evict_failed", cache="tool_prioritizer", error=str(exc))
+                    logger.warning(
+                        "memory_relief_cache_evict_failed", cache="tool_prioritizer", error=str(exc)
+                    )
 
             guardian.register_relief(_evict_caches)
             await guardian.start()
@@ -230,6 +250,7 @@ async def lifespan(app: FastAPI):
 
             try:
                 from app.services.telegram_bot import configure_bot, start_telegram_bot
+
                 model_registry = di_resolve("ModelRegistry")
                 tool_registry = di_resolve("ToolRegistry")
                 configure_bot(model_registry, tool_registry)
@@ -237,11 +258,13 @@ async def lifespan(app: FastAPI):
                 if telegram_started:
                     logger.info("Telegram remote control enabled")
                     from app.services.telegram_bot import stop_telegram_bot
+
                     defer("telegram_bot", stop_telegram_bot)
             except Exception as e:
                 logger.warning("Telegram bot startup skipped", error=str(e))
 
             from app.services.notifications import notification_service
+
             app.state.notification_service = notification_service
 
             from app.core.execution.event_bus import get_task_event_bus
@@ -262,7 +285,9 @@ async def lifespan(app: FastAPI):
             if settings.enable_lan_access:
                 logger.info("LAN access enabled", url=f"http://{_local_ip()}:{settings.port}")
         except Exception:
-            logger.error("startup failed, rolling back started services in reverse order", exc_info=True)
+            logger.error(
+                "startup failed, rolling back started services in reverse order", exc_info=True
+            )
             for name, coro_factory in reversed(cleanups):
                 await _run_cleanup_step(name, coro_factory())
             raise
@@ -274,6 +299,7 @@ async def lifespan(app: FastAPI):
                 await _run_cleanup_step(name, coro_factory())
             from app.models.anthropic_adapter import AnthropicAdapter
             from app.models.openai_adapter import OpenAIAdapter
+
             await _run_cleanup_step("openai_adapter_client", OpenAIAdapter.close_client())
             await _run_cleanup_step("anthropic_adapter_client", AnthropicAdapter.close_client())
             logger.info("Agent Engine shutting down")
@@ -290,10 +316,10 @@ async def _drain_background_tasks() -> None:
     with contextlib.suppress(Exception):
         from app.core.task_worker import task_manager
 
-        pending.extend(task_manager._active_tasks.values())  # noqa: SLF001
+        pending.extend(task_manager._active_tasks.values())
     with contextlib.suppress(Exception):
         agent_engine = di_resolve("AgentEngine")
-        pending.extend(agent_engine._background_tasks)  # noqa: SLF001
+        pending.extend(agent_engine._background_tasks)
     if not pending:
         return
     logger.info("main.draining_background_tasks", count=len(pending))
@@ -323,6 +349,7 @@ def _wire_auto_loop_runner(auto_loop_engine) -> None:
 
         async def on_progress(step: int, total: int, message: str = "") -> None:
             import time
+
             from app.core.auto_loop import AutoLoopTaskStatus
 
             record.current_step = step
@@ -360,7 +387,15 @@ app.add_middleware(
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin", "Cache-Control", "X-Request-Id"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "X-Requested-With",
+        "Accept",
+        "Origin",
+        "Cache-Control",
+        "X-Request-Id",
+    ],
 )
 
 app.include_router(api_router, prefix="/api/v1")
@@ -397,6 +432,7 @@ async def health() -> dict:
         checks["redis"] = "unavailable"
     try:
         import chromadb
+
         client = chromadb.PersistentClient(path=settings.vector_store_path)
         client.heartbeat()
         checks["chroma"] = "ok"
@@ -412,6 +448,7 @@ async def health() -> dict:
         checks["memory"] = {"error": str(e)}
     try:
         from app.tools.browser_pool import get_browser_pool
+
         checks["browser_pool"] = get_browser_pool().stats()
     except Exception as e:
         checks["browser_pool"] = {"error": str(e)}
@@ -429,13 +466,15 @@ async def health() -> dict:
 
 @app.get("/health/logs")
 async def health_logs(lines: int = 200, errors_only: bool = False) -> dict:
-    return {"lines": get_recent_logs(lines=min(lines, 2000), error_only=errors_only), "log_dir": settings.log_dir}
+    return {
+        "lines": get_recent_logs(lines=min(lines, 2000), error_only=errors_only),
+        "log_dir": settings.log_dir,
+    }
 
 
 @app.get("/metrics")
 async def metrics():
     return await metrics_endpoint()
-
 
 
 # Serve auth static files
@@ -464,11 +503,9 @@ if FRONTEND_DIR.exists():
         if response.status_code == 404:
             path = request.url.path
             if (
-                path.startswith("/api/")
-                or path.startswith("/docs")
+                path.startswith(("/api/", "/docs", "/_test/"))
                 or path == "/openapi.json"
                 or path == "/health"
-                or path.startswith("/_test/")
             ):
                 return response
             file_path = (FRONTEND_DIR / path.lstrip("/")).resolve()
@@ -477,11 +514,14 @@ if FRONTEND_DIR.exists():
             return FileResponse(frontend_index)
         return response
 else:
+
     @app.get("/")
     async def redirect_to_frontend():
-        return JSONResponse({
-            "message": "Climber Agent Engine API",
-            "frontend": "http://localhost:5173",
-            "docs": "/docs",
-            "health": "/health"
-        })
+        return JSONResponse(
+            {
+                "message": "Climber Agent Engine API",
+                "frontend": "http://localhost:5173",
+                "docs": "/docs",
+                "health": "/health",
+            }
+        )

@@ -172,7 +172,7 @@ def _yaml_scalar(value: str) -> str:
         return _quote(value)
     if value[0] in "-?:,[]{}#&*!|>'\"%@`" or " " in value:
         return _quote(value)
-    if "\n" in value or any(c in value for c in ":{}[]&*?|-><!%@`#,\"\\"):
+    if "\n" in value or any(c in value for c in ':{}[]&*?|-><!%@`#,"\\'):
         return _quote(value)
     try:
         int(value)

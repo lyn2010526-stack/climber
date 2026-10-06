@@ -17,10 +17,42 @@ _CONSTRAINT_PATTERNS = (
     r"(?:must|should|only|do not|don't|never|at least|at most)\b[^,.;\n]*",
 )
 _TARGET_PREFIXES = (
-    "实现", "新增", "添加", "修复", "修改", "重构", "删除", "创建", "设计", "分析",
-    "检查", "解释", "总结", "部署", "运行", "测试", "更新", "优化", "完成", "把", "将",
-    "implement", "add", "fix", "update", "refactor", "create", "design", "analyze",
-    "explain", "summarize", "deploy", "run", "test", "build", "make",
+    "实现",
+    "新增",
+    "添加",
+    "修复",
+    "修改",
+    "重构",
+    "删除",
+    "创建",
+    "设计",
+    "分析",
+    "检查",
+    "解释",
+    "总结",
+    "部署",
+    "运行",
+    "测试",
+    "更新",
+    "优化",
+    "完成",
+    "把",
+    "将",
+    "implement",
+    "add",
+    "fix",
+    "update",
+    "refactor",
+    "create",
+    "design",
+    "analyze",
+    "explain",
+    "summarize",
+    "deploy",
+    "run",
+    "test",
+    "build",
+    "make",
 )
 _METAPHOR_MARKERS = ("磨亮", "点燃", "开门", "铺路", "破冰", "降温", "加速", "收口", "抬头")
 
@@ -105,7 +137,9 @@ class InstructionUnderstanding:
             "profile_evidence": list(self.profile_evidence),
         }
 
-    def to_trace_payload(self, *, session_id: str | None = None, user_id: str | None = None) -> dict[str, Any]:
+    def to_trace_payload(
+        self, *, session_id: str | None = None, user_id: str | None = None
+    ) -> dict[str, Any]:
         """Build the payload accepted by ``repository_instruction_traces.create_trace``."""
         return {
             "session_id": session_id,
@@ -133,8 +167,10 @@ class InstructionUnderstandingService:
             candidates.extend(supplemental_candidates)
         profile_evidence = _profile_evidence(profile_context)
 
-        goal = deterministic_candidates[0].text if deterministic_candidates else (
-            candidates[0].text if candidates else None
+        goal = (
+            deterministic_candidates[0].text
+            if deterministic_candidates
+            else (candidates[0].text if candidates else None)
         )
         constraints = tuple(self._extract_constraints(raw_text))
         ambiguities = tuple(self._extract_ambiguities(raw_text, goal))
@@ -187,7 +223,9 @@ class InstructionUnderstandingService:
     def _extract_constraints(self, raw_text: str) -> list[str]:
         found: list[str] = []
         for pattern in _CONSTRAINT_PATTERNS:
-            found.extend(match.group(0).strip(" ，,；;") for match in re.finditer(pattern, raw_text, re.I))
+            found.extend(
+                match.group(0).strip(" ，,；;") for match in re.finditer(pattern, raw_text, re.I)
+            )
         return list(dict.fromkeys(item for item in found if item))
 
     def _extract_ambiguities(self, raw_text: str, goal: str | None) -> list[str]:
@@ -205,7 +243,11 @@ class InstructionUnderstandingService:
         return tuple(conditions)
 
     def _confidence(
-        self, goal: str | None, constraints: tuple[str, ...], ambiguities: tuple[str, ...], context: str | None
+        self,
+        goal: str | None,
+        constraints: tuple[str, ...],
+        ambiguities: tuple[str, ...],
+        context: str | None,
     ) -> float:
         score = 0.2 if goal is None else 0.65
         score += min(0.15, len(constraints) * 0.05)

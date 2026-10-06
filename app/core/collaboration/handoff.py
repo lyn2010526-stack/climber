@@ -97,20 +97,24 @@ class HandoffManager:
             context=context or {},
             priority=priority,
         )
-        handoff.audit_log.append({
-            "action": "created",
-            "timestamp": time.time(),
-            "agent_id": from_agent_id,
-        })
+        handoff.audit_log.append(
+            {
+                "action": "created",
+                "timestamp": time.time(),
+                "agent_id": from_agent_id,
+            }
+        )
         self._handoffs[handoff.id] = handoff
-        self._audit_trail.append({
-            "handoff_id": handoff.id,
-            "action": "created",
-            "task_id": task_id,
-            "from_agent_id": from_agent_id,
-            "to_agent_id": to_agent_id,
-            "timestamp": time.time(),
-        })
+        self._audit_trail.append(
+            {
+                "handoff_id": handoff.id,
+                "action": "created",
+                "task_id": task_id,
+                "from_agent_id": from_agent_id,
+                "to_agent_id": to_agent_id,
+                "timestamp": time.time(),
+            }
+        )
         return handoff
 
     def accept_handoff(self, handoff_id: str) -> HandoffRequest | None:
@@ -119,16 +123,20 @@ class HandoffManager:
         if not handoff or handoff.status != HandoffStatus.PENDING:
             return None
         handoff.status = HandoffStatus.ACCEPTED
-        handoff.audit_log.append({
-            "action": "accepted",
-            "timestamp": time.time(),
-            "agent_id": handoff.to_agent_id,
-        })
-        self._audit_trail.append({
-            "handoff_id": handoff_id,
-            "action": "accepted",
-            "timestamp": time.time(),
-        })
+        handoff.audit_log.append(
+            {
+                "action": "accepted",
+                "timestamp": time.time(),
+                "agent_id": handoff.to_agent_id,
+            }
+        )
+        self._audit_trail.append(
+            {
+                "handoff_id": handoff_id,
+                "action": "accepted",
+                "timestamp": time.time(),
+            }
+        )
         return handoff
 
     def reject_handoff(self, handoff_id: str, reason: str = "") -> HandoffRequest | None:
@@ -138,26 +146,27 @@ class HandoffManager:
             return None
         handoff.status = HandoffStatus.REJECTED
         handoff.reason = reason
-        handoff.audit_log.append({
-            "action": "rejected",
-            "timestamp": time.time(),
-            "agent_id": handoff.to_agent_id,
-            "reason": reason,
-        })
-        self._audit_trail.append({
-            "handoff_id": handoff_id,
-            "action": "rejected",
-            "reason": reason,
-            "timestamp": time.time(),
-        })
+        handoff.audit_log.append(
+            {
+                "action": "rejected",
+                "timestamp": time.time(),
+                "agent_id": handoff.to_agent_id,
+                "reason": reason,
+            }
+        )
+        self._audit_trail.append(
+            {
+                "handoff_id": handoff_id,
+                "action": "rejected",
+                "reason": reason,
+                "timestamp": time.time(),
+            }
+        )
         return handoff
 
     def get_pending_handoffs(self, agent_id: str | None = None) -> list[HandoffRequest]:
         """Get pending handoffs, optionally filtered by target agent."""
-        pending = [
-            h for h in self._handoffs.values()
-            if h.status == HandoffStatus.PENDING
-        ]
+        pending = [h for h in self._handoffs.values() if h.status == HandoffStatus.PENDING]
         if agent_id:
             pending = [h for h in pending if h.to_agent_id == agent_id]
         return pending

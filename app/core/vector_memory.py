@@ -72,7 +72,11 @@ class _DefaultEmbeddingWrapper(EmbeddingFunction):
             for tok in tokens:
                 digest = hashlib.sha256(tok.encode()).hexdigest()
                 idx = int(digest[:8], 16) % _EMBED_DIM
-                sign = 1.0 if int(hashlib.sha256(f"{tok}:s".encode()).hexdigest()[:8], 16) % 2 else -1.0
+                sign = (
+                    1.0
+                    if int(hashlib.sha256(f"{tok}:s".encode()).hexdigest()[:8], 16) % 2
+                    else -1.0
+                )
                 vec[idx] += sign
             norm = math.sqrt(sum(v * v for v in vec)) or 1.0
             vectors.append([v / norm for v in vec])
@@ -180,12 +184,14 @@ class VectorMemoryService:
 
         for i, doc_id in enumerate(ids):
             distance = distances[i] if i < len(distances) else 0.0
-            documents.append({
-                "id": doc_id,
-                "text": texts[i] if i < len(texts) else "",
-                "metadata": metadatas[i] if i < len(metadatas) else {},
-                "score": max(0.0, 1.0 - distance),
-            })
+            documents.append(
+                {
+                    "id": doc_id,
+                    "text": texts[i] if i < len(texts) else "",
+                    "metadata": metadatas[i] if i < len(metadatas) else {},
+                    "score": max(0.0, 1.0 - distance),
+                }
+            )
 
         if profile_context:
             documents = rank_with_profile(documents, profile_context)[:top_k]

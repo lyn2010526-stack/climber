@@ -1,4 +1,5 @@
 """Skill package manager."""
+
 from __future__ import annotations
 
 

@@ -7,8 +7,8 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.api.v1.common import current_user_id
-from app.core.auth_manager import require_scopes
 from app.core.api_key_crypto import encrypt_api_key
+from app.core.auth_manager import require_scopes
 from app.storage import async_session
 from app.storage.database import ApiKey as ApiKeyModel
 
@@ -39,7 +39,9 @@ async def list_api_keys(
     user_id = current_user_id(request)
     async with async_session() as session:
         result = await session.execute(
-            select(ApiKeyModel).where(ApiKeyModel.user_id == user_id).order_by(ApiKeyModel.created_at.desc())
+            select(ApiKeyModel)
+            .where(ApiKeyModel.user_id == user_id)
+            .order_by(ApiKeyModel.created_at.desc())
         )
         rows = result.scalars().all()
         return [

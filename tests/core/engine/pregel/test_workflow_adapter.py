@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from app.core.agent_engine import AgentEngine
 from app.core.engine.pregel.workflow import PregelWorkflowAdapter
-from app.workflow import NodeType, WorkflowNode
 
 
 def _make_engine() -> AgentEngine:
@@ -12,17 +11,14 @@ def _make_engine() -> AgentEngine:
 
 
 def _linear_flow(node_executor) -> PregelWorkflowAdapter:
-    adapter = PregelWorkflowAdapter(
+    return PregelWorkflowAdapter(
         _make_engine(),
         node_executor=node_executor,
     )
-    return adapter
 
 
 async def test_linear_workflow_updates_state_and_collects_outputs() -> None:
-    adapter = _linear_flow(
-        lambda node, inputs: {"result": f"{node.name}:{inputs.get('input')}"}
-    )
+    adapter = _linear_flow(lambda node, inputs: {"result": f"{node.name}:{inputs.get('input')}"})
     nodes = [
         {"id": "in", "type": "input", "data": {"label": "Input"}},
         {"id": "mid", "type": "llm", "data": {"label": "Transform", "model": "test-model"}},
@@ -96,9 +92,7 @@ async def test_conditional_branch_selects_false_side() -> None:
 
 
 async def test_run_captures_node_failure() -> None:
-    adapter = _linear_flow(
-        lambda node, inputs: (_ for _ in ()).throw(RuntimeError("boom"))
-    )
+    adapter = _linear_flow(lambda node, inputs: (_ for _ in ()).throw(RuntimeError("boom")))
     nodes = [
         {"id": "in", "type": "input", "data": {}},
         {"id": "bad", "type": "tool", "data": {}},

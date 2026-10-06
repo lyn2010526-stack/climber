@@ -17,6 +17,7 @@ Outbound destinations are judged in two layers:
 
 from __future__ import annotations
 
+from typing import ClassVar
 from urllib.parse import urlparse
 
 import structlog
@@ -34,7 +35,7 @@ class NetworkAllowlist:
     of the allowlist, so allowlisting them would grant nothing.
     """
 
-    DEFAULT_ALLOWED_DOMAINS = [
+    DEFAULT_ALLOWED_DOMAINS: ClassVar[list[str]] = [
         "api.openai.com",
         "api.anthropic.com",
     ]
@@ -45,7 +46,7 @@ class NetworkAllowlist:
         strict_domain_mode: bool = False,
     ):
         domains = allowed_domains or self.DEFAULT_ALLOWED_DOMAINS
-        self._allowed: set[str] = set(d.strip().lower() for d in domains)
+        self._allowed: set[str] = {d.strip().lower() for d in domains}
         self.strict_domain_mode = strict_domain_mode
         self._wildcards: list[str] = []
         self._rebuild_wildcards()
@@ -113,6 +114,7 @@ class NetworkAllowlist:
     def validate_dns(self, domain: str) -> tuple[bool, str]:
         """Validate domain via DNS resolution."""
         import socket
+
         try:
             socket.getaddrinfo(domain, None)
             return True, ""

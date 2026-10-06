@@ -75,9 +75,7 @@ async def test_interrupt_before_resumes_by_executing_interrupted_node():
         calls.append("first")
         return {"first_ran": True}
 
-    compiled = build_linear_graph(first).compile(
-        checkpointer=saver, interrupt_before=["first"]
-    )
+    compiled = build_linear_graph(first).compile(checkpointer=saver, interrupt_before=["first"])
     config = {"thread_id": "before"}
 
     interrupted = await compiled.invoke({}, config)
@@ -138,10 +136,7 @@ async def test_node_timeout_reaches_error_handler_and_error_event():
     )
 
     events = [
-        event
-        async for event in engine.astream_events(
-            GraphState(), {"thread_id": "node-timeout"}
-        )
+        event async for event in engine.astream_events(GraphState(), {"thread_id": "node-timeout"})
     ]
 
     error_events = [event for event in events if event.type == StreamEventType.ERROR]
@@ -177,6 +172,7 @@ async def test_stream_manager_broadcasts_to_every_subscriber():
     async def receive_one():
         async for received in manager.subscribe():
             return received
+        return None
 
     subscribers = [asyncio.create_task(receive_one()) for _ in range(2)]
     await asyncio.sleep(0)

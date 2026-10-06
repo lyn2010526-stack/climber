@@ -27,16 +27,22 @@ async def inject_memory(group_id: str, task_id: str, query: str) -> str:
     """
     async with async_session() as db:
         memories = (
-            await db.execute(
-                select(AgentGroupMemory)
-                .where(
-                    AgentGroupMemory.group_id == group_id,
-                    AgentGroupMemory.memory_type.in_(["short_term", "long_term"]),
+            (
+                await db.execute(
+                    select(AgentGroupMemory)
+                    .where(
+                        AgentGroupMemory.group_id == group_id,
+                        AgentGroupMemory.memory_type.in_(["short_term", "long_term"]),
+                    )
+                    .order_by(
+                        AgentGroupMemory.importance.desc(), AgentGroupMemory.created_at.desc()
+                    )
+                    .limit(10)
                 )
-                .order_by(AgentGroupMemory.importance.desc(), AgentGroupMemory.created_at.desc())
-                .limit(10)
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
     if not memories:
         return ""
@@ -45,10 +51,13 @@ async def inject_memory(group_id: str, task_id: str, query: str) -> str:
     for mem in memories:
         memory_lines.append(f"- [{mem.memory_type}] {mem.content}")
 
-    await group_ws_hub.broadcast(group_id, {
-        "type": "memory_injected",
-        "data": {"task_id": task_id, "count": len(memories)},
-    })
+    await group_ws_hub.broadcast(
+        group_id,
+        {
+            "type": "memory_injected",
+            "data": {"task_id": task_id, "count": len(memories)},
+        },
+    )
 
     return "\n".join(memory_lines)
 
@@ -85,10 +94,13 @@ async def store_memory(
         db.add(memory)
         await db.commit()
 
-    await group_ws_hub.broadcast(group_id, {
-        "type": "memory_stored",
-        "data": {"task_id": task_id, "memory_type": memory_type},
-    })
+    await group_ws_hub.broadcast(
+        group_id,
+        {
+            "type": "memory_stored",
+            "data": {"task_id": task_id, "memory_type": memory_type},
+        },
+    )
 
 
 async def build_context_from_dependencies(task: Any) -> dict[str, Any]:
@@ -105,13 +117,18 @@ async def build_context_from_dependencies(task: Any) -> dict[str, Any]:
         return context_data
     async with async_session() as db:
         for dep_task_id in task.context:
-            dep_task = await db.get(__import__("app.storage.models_groups", fromlist=["AgentGroupTask"]).AgentGroupTask, dep_task_id)
+            dep_task = await db.get(
+                __import__("app.storage.models_groups", fromlist=["AgentGroupTask"]).AgentGroupTask,
+                dep_task_id,
+            )
             if dep_task and dep_task.final_output:
                 context_data[dep_task_id] = {
                     "description": dep_task.description,
                     "output": dep_task.final_output,
                     "status": dep_task.status,
-                    "completed_at": dep_task.completed_at.isoformat() if dep_task.completed_at else None,
+                    "completed_at": dep_task.completed_at.isoformat()
+                    if dep_task.completed_at
+                    else None,
                 }
     return context_data
 

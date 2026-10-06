@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from sqlalchemy import create_engine, inspect
 
 import app.storage  # noqa: F401
-from app.models.users import User  # noqa: F401  (registers users on Base.metadata)
+from app.models.users import User
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -71,9 +71,7 @@ def test_users_nullability_matches_orm(migrated_db) -> None:
 def test_users_unique_indexes_present(migrated_db) -> None:
     inspector = inspect(migrated_db)
     unique_indexes = {
-        index["name"]
-        for index in inspector.get_indexes("users")
-        if index.get("unique")
+        index["name"] for index in inspector.get_indexes("users") if index.get("unique")
     }
     assert "ix_users_username" in unique_indexes
     assert "ix_users_email" in unique_indexes
@@ -119,9 +117,11 @@ def test_create_all_shaped_database_is_untouched(tmp_path) -> None:
     engine = create_engine(f"sqlite:///{db_path}")
     User.__table__.metadata.create_all(engine, tables=[User.__table__])
     before = inspect(engine).get_columns("users")
-    before_sql = engine.connect().execute(
-        sa.text("SELECT sql FROM sqlite_master WHERE name = 'users'")
-    ).scalar()
+    before_sql = (
+        engine.connect()
+        .execute(sa.text("SELECT sql FROM sqlite_master WHERE name = 'users'"))
+        .scalar()
+    )
     engine.dispose()
 
     env = {**os.environ, "DATABASE_URL": f"sqlite+aiosqlite:///{db_path}"}
@@ -144,9 +144,11 @@ def test_create_all_shaped_database_is_untouched(tmp_path) -> None:
 
     engine = create_engine(f"sqlite:///{db_path}")
     after = inspect(engine).get_columns("users")
-    after_sql = engine.connect().execute(
-        sa.text("SELECT sql FROM sqlite_master WHERE name = 'users'")
-    ).scalar()
+    after_sql = (
+        engine.connect()
+        .execute(sa.text("SELECT sql FROM sqlite_master WHERE name = 'users'"))
+        .scalar()
+    )
     engine.dispose()
 
     def _normalized(columns: list[dict]) -> list[dict]:

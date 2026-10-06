@@ -21,8 +21,11 @@ def parse_review_result(output: str) -> tuple[bool, list[dict[str, Any]]]:
     for issue in result["issues"]:
         if isinstance(issue, str) and issue.strip():
             issue = {"description": issue}
-        if (not isinstance(issue, dict) or not isinstance(issue.get("description"), str)
-                or not issue["description"].strip()):
+        if (
+            not isinstance(issue, dict)
+            or not isinstance(issue.get("description"), str)
+            or not issue["description"].strip()
+        ):
             return False, invalid
         issues.append(dict(issue))
     if result["passed"] and not issues:
@@ -69,7 +72,9 @@ def build_sequential_prompt(
     parts.append(f"\nPrevious output:\n{previous_output}")
     if issues:
         issue_descriptions = [i.get("description", str(i)) for i in issues]
-        parts.append(f"\nIssues to fix:\n{chr(10).join('- ' + desc for desc in issue_descriptions)}")
+        parts.append(
+            f"\nIssues to fix:\n{chr(10).join('- ' + desc for desc in issue_descriptions)}"
+        )
     return "\n".join(parts)
 
 

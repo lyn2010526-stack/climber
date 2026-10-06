@@ -12,6 +12,7 @@ Wave 2 deliberately changed the dispatch contract:
 These tests lock that contract so a future refactor cannot silently force
 stored-config resolution onto fresh submissions (or drop it from recovery).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -27,7 +28,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 # Load defaults only: never read the workspace dotenv or provider environment.
 with patch.object(
-    BaseSettings, "settings_customise_sources",
+    BaseSettings,
+    "settings_customise_sources",
     side_effect=lambda settings_cls, **sources: (sources["init_settings"],),
 ):
     from app.config import settings
@@ -71,9 +73,11 @@ class CredentialResolutionContractTests(unittest.IsolatedAsyncioTestCase):
         self.db_engine = create_async_engine(f"sqlite+aiosqlite:///{self.temp.name}/tasks.sqlite")
         self.sessions = async_sessionmaker(self.db_engine, expire_on_commit=False)
         async with self.db_engine.begin() as conn:
-            await conn.run_sync(lambda db: Base.metadata.create_all(
-                db, tables=[Agent.__table__, ApiKey.__table__, AutoLoopTask.__table__]
-            ))
+            await conn.run_sync(
+                lambda db: Base.metadata.create_all(
+                    db, tables=[Agent.__table__, ApiKey.__table__, AutoLoopTask.__table__]
+                )
+            )
         self.patches = [
             patch.object(task_worker, "async_session", self.sessions),
         ]
@@ -95,18 +99,31 @@ class CredentialResolutionContractTests(unittest.IsolatedAsyncioTestCase):
 
     async def add_owner(self, owner="alice", key="synthetic-alice-key", provider="owner-provider"):
         async with self.sessions() as db:
-            db.add(Agent(
-                id=f"agent-{owner}", user_id=owner, name=owner, provider=provider,
-                model_id="owner-model", system_prompt="owner prompt", tool_ids=[],
-                base_url="https://owner.invalid/v1",
-                api_key_encrypted=encrypt_api_key(key),
-            ))
+            db.add(
+                Agent(
+                    id=f"agent-{owner}",
+                    user_id=owner,
+                    name=owner,
+                    provider=provider,
+                    model_id="owner-model",
+                    system_prompt="owner prompt",
+                    tool_ids=[],
+                    base_url="https://owner.invalid/v1",
+                    api_key_encrypted=encrypt_api_key(key),
+                )
+            )
             await db.commit()
 
     async def add_row(self, task_id, objective, owner="alice", **values):
         async with self.sessions() as db:
-            db.add(AutoLoopTask(id=task_id, objective=objective, owner_id=owner,
-                                **{"status": "pending", "max_steps": 10, "current_step": 0, **values}))
+            db.add(
+                AutoLoopTask(
+                    id=task_id,
+                    objective=objective,
+                    owner_id=owner,
+                    **{"status": "pending", "max_steps": 10, "current_step": 0, **values},
+                )
+            )
             await db.commit()
 
     async def row(self, task_id):
@@ -122,18 +139,24 @@ class CredentialResolutionContractTests(unittest.IsolatedAsyncioTestCase):
         """R9-10 contract: new submissions must NOT resolve stored owner config."""
         await self.add_owner()
         fake = ScriptedFakeEngine()
-        resolver = AsyncMock(side_effect=AssertionError(
-            "fresh submit must not resolve stored owner credentials"
-        ))
-        with patch("app.core.di.resolve", return_value=fake), \
-                patch.object(task_worker, "resolve_owner_agent_payload", resolver):
-            task_id = await self.manager.submit("agent_run", {
-                "objective": "work",
-                "provider": "request-provider",
-                "model": "request-model",
-                "api_key": "synthetic-request-key",
-                "base_url": "https://request.invalid/v1",
-            }, owner_id="alice")
+        resolver = AsyncMock(
+            side_effect=AssertionError("fresh submit must not resolve stored owner credentials")
+        )
+        with (
+            patch("app.core.di.resolve", return_value=fake),
+            patch.object(task_worker, "resolve_owner_agent_payload", resolver),
+        ):
+            task_id = await self.manager.submit(
+                "agent_run",
+                {
+                    "objective": "work",
+                    "provider": "request-provider",
+                    "model": "request-model",
+                    "api_key": "synthetic-request-key",
+                    "base_url": "https://request.invalid/v1",
+                },
+                owner_id="alice",
+            )
             await self.drain()
 
         resolver.assert_not_called()
@@ -149,14 +172,23 @@ class CredentialResolutionContractTests(unittest.IsolatedAsyncioTestCase):
     async def test_recover_pending_resolves_stored_owner_config(self):
         """Recovery path: stored owner config is resolved because the request key is gone."""
         await self.add_owner()
-        await self.add_row("worker-original", json.dumps({
-            "type": "agent_run", "objective": "work",
-            "provider": "owner-provider", "model": "owner-model",
-        }))
+        await self.add_row(
+            "worker-original",
+            json.dumps(
+                {
+                    "type": "agent_run",
+                    "objective": "work",
+                    "provider": "owner-provider",
+                    "model": "owner-model",
+                }
+            ),
+        )
         fake = ScriptedFakeEngine()
         resolver = AsyncMock(wraps=task_worker.resolve_owner_agent_payload)
-        with patch("app.core.di.resolve", return_value=fake), \
-                patch.object(task_worker, "resolve_owner_agent_payload", resolver):
+        with (
+            patch("app.core.di.resolve", return_value=fake),
+            patch.object(task_worker, "resolve_owner_agent_payload", resolver),
+        ):
             self.assertEqual(await self.manager.recover_pending_tasks(), 1)
             await self.drain()
 
@@ -169,14 +201,25 @@ class CredentialResolutionContractTests(unittest.IsolatedAsyncioTestCase):
     async def test_resume_resolves_stored_owner_config(self):
         """Resume control path resolves stored config like recovery does."""
         await self.add_owner()
-        await self.add_row("worker-paused", json.dumps({
-            "type": "agent_run", "objective": "work",
-            "provider": "owner-provider", "model": "owner-model",
-        }), status="paused", started_at=datetime.now(UTC))
+        await self.add_row(
+            "worker-paused",
+            json.dumps(
+                {
+                    "type": "agent_run",
+                    "objective": "work",
+                    "provider": "owner-provider",
+                    "model": "owner-model",
+                }
+            ),
+            status="paused",
+            started_at=datetime.now(UTC),
+        )
         fake = ScriptedFakeEngine()
         resolver = AsyncMock(wraps=task_worker.resolve_owner_agent_payload)
-        with patch("app.core.di.resolve", return_value=fake), \
-                patch.object(task_worker, "resolve_owner_agent_payload", resolver):
+        with (
+            patch("app.core.di.resolve", return_value=fake),
+            patch.object(task_worker, "resolve_owner_agent_payload", resolver),
+        ):
             self.assertTrue(await self.manager.resume("worker-paused"))
             await self.drain()
 
@@ -193,10 +236,17 @@ class CredentialResolutionContractTests(unittest.IsolatedAsyncioTestCase):
 
         manager = task_worker.TaskManager(max_task_retries=1)
         manager.register("agent_run", failing_handler)
-        await self.add_row("worker-flaky", json.dumps({
-            "type": "agent_run", "objective": "work",
-            "provider": "owner-provider", "model": "owner-model",
-        }))
+        await self.add_row(
+            "worker-flaky",
+            json.dumps(
+                {
+                    "type": "agent_run",
+                    "objective": "work",
+                    "provider": "owner-provider",
+                    "model": "owner-model",
+                }
+            ),
+        )
         resolver = AsyncMock(wraps=task_worker.resolve_owner_agent_payload)
         with patch.object(task_worker, "resolve_owner_agent_payload", resolver):
             self.assertEqual(await manager.recover_pending_tasks(), 1)

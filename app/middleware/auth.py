@@ -37,7 +37,7 @@ from app.storage import engine
 # aiosqlite URLs are converted to the built-in sqlite3 driver so sync
 # sessions can share the on-disk test database.
 if str(engine.url).startswith("sqlite+aiosqlite"):
-    _sync_url = "sqlite" + str(engine.url)[len("sqlite+aiosqlite"):]
+    _sync_url = "sqlite" + str(engine.url)[len("sqlite+aiosqlite") :]
 else:
     _sync_url = str(engine.url)
 _sync_engine = create_engine(
@@ -64,7 +64,7 @@ async def authenticate_credentials(
 
     auth_header = headers.get("Authorization", "")
     if auth_header.startswith(AUTH_BEARER_PREFIX):
-        token = auth_header[len(AUTH_BEARER_PREFIX):]
+        token = auth_header[len(AUTH_BEARER_PREFIX) :]
 
     if not token:
         return None
@@ -148,7 +148,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         try:
             principal = principal_from_auth(auth_result)
-        except ValueError as exc:
+        except ValueError:
             return JSONResponse(
                 status_code=401,
                 content={
@@ -188,7 +188,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         }
 
 
-def create_jwt_token(subject: str, scopes: list[str] | None = None, expires_minutes: int | None = None) -> str:
+def create_jwt_token(
+    subject: str, scopes: list[str] | None = None, expires_minutes: int | None = None
+) -> str:
     """Create an access token through the shared auth_manager signing path."""
     del expires_minutes
     from app.core.auth_manager import auth_manager
@@ -227,7 +229,13 @@ class UserStore:
     synchronous API surface while sharing production storage.
     """
 
-    def create_key(self, owner: str, scopes: list[str] | None = None, name: str = "", ttl_days: int | None = None):
+    def create_key(
+        self,
+        owner: str,
+        scopes: list[str] | None = None,
+        name: str = "",
+        ttl_days: int | None = None,
+    ):
         """Create a new API key. Returns (raw_key, key_id)."""
         raw_key = API_KEY_PREFIX + secrets.token_urlsafe(32)
         key_id = "kid_" + secrets.token_hex(8)
@@ -277,9 +285,7 @@ class UserStore:
     def revoke_key(self, key_id: str) -> bool:
         """Revoke an API key by id. Returns True if revoked, False if missing."""
         with _sync_session() as session:
-            result = session.execute(
-                select(ApiKey).where(ApiKey.id == key_id)
-            )
+            result = session.execute(select(ApiKey).where(ApiKey.id == key_id))
             record = result.scalar_one_or_none()
             if record is None:
                 return False

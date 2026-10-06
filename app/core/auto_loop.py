@@ -1,6 +1,4 @@
-"""Auto-loop engine for autonomous task execution, persistence and recovery.
-
-"""
+"""Auto-loop engine for autonomous task execution, persistence and recovery."""
 
 from __future__ import annotations
 
@@ -28,6 +26,7 @@ def _to_utc(ts: float | None) -> datetime | None:
     if ts is None:
         return None
     return datetime.fromtimestamp(ts, tz=UTC)
+
 
 logger = structlog.get_logger()
 
@@ -92,9 +91,7 @@ class AutoLoopEngine:
         if self._running:
             return
         self._running = True
-        self._monitor = asyncio.create_task(
-            self._monitor_loop(), name="auto-loop-monitor"
-        )
+        self._monitor = asyncio.create_task(self._monitor_loop(), name="auto-loop-monitor")
         logger.info("auto_loop_engine_started")
 
     async def run_forever(self) -> None:
@@ -198,9 +195,16 @@ class AutoLoopEngine:
                         continue
 
                     new_status = AutoLoopTaskStatus.PENDING
-                    if (row.status != AutoLoopTaskStatus.PENDING or row.started_at
-                            or row.current_step or row.finished_at or row.result is not None or row.error
-                            or not row.owner_id or not row.owner_id.strip()):
+                    if (
+                        row.status != AutoLoopTaskStatus.PENDING
+                        or row.started_at
+                        or row.current_step
+                        or row.finished_at
+                        or row.result is not None
+                        or row.error
+                        or not row.owner_id
+                        or not row.owner_id.strip()
+                    ):
                         new_status = AutoLoopTaskStatus.FAILED
                         row.status = new_status.value
                         row.error = "Automatic recovery refused: missing owner or prior execution; manual review required"
@@ -216,15 +220,9 @@ class AutoLoopEngine:
                         status=new_status,
                         result=row.result,
                         error=row.error,
-                        created_at=row.created_at.timestamp()
-                        if row.created_at
-                        else time.time(),
-                        started_at=row.started_at.timestamp()
-                        if row.started_at
-                        else None,
-                        finished_at=row.finished_at.timestamp()
-                        if row.finished_at
-                        else None,
+                        created_at=row.created_at.timestamp() if row.created_at else time.time(),
+                        started_at=row.started_at.timestamp() if row.started_at else None,
+                        finished_at=row.finished_at.timestamp() if row.finished_at else None,
                     )
                     self._tasks[task_id] = record
 
@@ -244,18 +242,13 @@ class AutoLoopEngine:
                         self._execute_task(record), name=f"auto-loop:{record.task_id}"
                     )
         except Exception as exc:
-            logger.error(
-                "auto_loop_recovery_failed", error=type(exc).__name__
-            )
+            logger.error("auto_loop_recovery_failed", error=type(exc).__name__)
         return count
 
     async def run_pending(self) -> None:
         """Process pending/running tasks (called by scheduler)."""
         for record in list(self._tasks.values()):
-            if (
-                record.status == AutoLoopTaskStatus.PENDING
-                and record.asyncio_task is None
-            ):
+            if record.status == AutoLoopTaskStatus.PENDING and record.asyncio_task is None:
                 record.asyncio_task = asyncio.create_task(
                     self._execute_task(record),
                     name=f"auto-loop:{record.task_id}",
@@ -302,9 +295,7 @@ class AutoLoopEngine:
                 self._tasks.pop(record.task_id)
             return
         try:
-            await record.state_machine.transition(
-                TaskState.PROCESSING, trigger="auto_loop_start"
-            )
+            await record.state_machine.transition(TaskState.PROCESSING, trigger="auto_loop_start")
             record.status = AutoLoopTaskStatus.RUNNING
             runner = self._runners.get("autonomous")
             if runner is None:
@@ -312,18 +303,21 @@ class AutoLoopEngine:
             await runner(record)
 
             if record.status == AutoLoopTaskStatus.RUNNING:
-                if not isinstance(record.result, dict) or record.result.get("status") != "completed":
+                if (
+                    not isinstance(record.result, dict)
+                    or record.result.get("status") != "completed"
+                ):
                     raise RuntimeError("Runner returned without successful completion")
                 record.status = AutoLoopTaskStatus.COMPLETED
                 record.finished_at = time.time()
-                await record.state_machine.transition(TaskState.COMPLETED, trigger="auto_loop_complete")
+                await record.state_machine.transition(
+                    TaskState.COMPLETED, trigger="auto_loop_complete"
+                )
                 await self._persist_status(record, AutoLoopTaskStatus.COMPLETED)
         except asyncio.CancelledError:
             record.status = AutoLoopTaskStatus.CANCELLED
             record.finished_at = time.time()
-            await record.state_machine.transition(
-                TaskState.CANCELLED, trigger="auto_loop_cancel"
-            )
+            await record.state_machine.transition(TaskState.CANCELLED, trigger="auto_loop_cancel")
             await self._persist_status(record, AutoLoopTaskStatus.CANCELLED)
             logger.info("auto_loop_task_cancelled", task_id=record.task_id)
         except Exception as exc:
@@ -345,37 +339,28 @@ class AutoLoopEngine:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                logger.error(
-                    "auto_loop_monitor_error", error=str(exc), exc_info=True
-                )
+                logger.error("auto_loop_monitor_error", error=str(exc), exc_info=True)
 
     async def _check_stalled_tasks(self) -> None:
         """Detect and handle stalled tasks."""
         now = time.time()
         for record in self._tasks.values():
-            if record.status == AutoLoopTaskStatus.RUNNING and (record.heartbeat_at is None or (
-                now - record.heartbeat_at > self._heartbeat_timeout
-            )):
+            if record.status == AutoLoopTaskStatus.RUNNING and (
+                record.heartbeat_at is None or (now - record.heartbeat_at > self._heartbeat_timeout)
+            ):
                 logger.warning(
                     "auto_loop_task_stalled",
                     task_id=record.task_id,
-                    heartbeat_age=now - record.heartbeat_at
-                    if record.heartbeat_at
-                    else None,
+                    heartbeat_age=now - record.heartbeat_at if record.heartbeat_at else None,
                 )
-                if (
-                    record.asyncio_task is not None
-                    and not record.asyncio_task.done()
-                ):
+                if record.asyncio_task is not None and not record.asyncio_task.done():
                     record.asyncio_task.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
                         await record.asyncio_task
                 record.status = AutoLoopTaskStatus.FAILED
                 record.error = "Task stalled (no heartbeat)"
                 record.finished_at = time.time()
-                await self._persist_status(
-                    record, AutoLoopTaskStatus.FAILED
-                )
+                await self._persist_status(record, AutoLoopTaskStatus.FAILED)
 
     async def _persist_status(
         self,
@@ -390,19 +375,21 @@ class AutoLoopEngine:
         try:
             async with async_session() as db:
                 result = await db.execute(
-                    select(AutoLoopTask).where(
-                        AutoLoopTask.id == record.task_id
-                    )
+                    select(AutoLoopTask).where(AutoLoopTask.id == record.task_id)
                 )
                 existing = result.scalars().first()
 
                 now = datetime.now(UTC)
                 if existing:
-                    if existing.owner_id != record.owner_id or existing.objective != record.objective:
+                    if (
+                        existing.owner_id != record.owner_id
+                        or existing.objective != record.objective
+                    ):
                         raise ValueError("Task ownership or objective mismatch")
                     if claim:
                         claimed = await db.execute(
-                            update(AutoLoopTask).where(
+                            update(AutoLoopTask)
+                            .where(
                                 AutoLoopTask.id == record.task_id,
                                 AutoLoopTask.owner_id == record.owner_id,
                                 AutoLoopTask.objective == record.objective,
@@ -410,16 +397,19 @@ class AutoLoopEngine:
                                 AutoLoopTask.started_at.is_(None),
                                 AutoLoopTask.finished_at.is_(None),
                                 AutoLoopTask.current_step == 0,
-                            ).values(status=status.value, started_at=_to_utc(record.started_at), heartbeat_at=now)
+                            )
+                            .values(
+                                status=status.value,
+                                started_at=_to_utc(record.started_at),
+                                heartbeat_at=now,
+                            )
                         )
                         await db.commit()
                         return claimed.rowcount == 1
                     existing.status = status.value
                     existing.current_step = record.current_step
                     existing.updated_at = now
-                    existing.heartbeat_at = (
-                        now if status == AutoLoopTaskStatus.RUNNING else None
-                    )
+                    existing.heartbeat_at = now if status == AutoLoopTaskStatus.RUNNING else None
                     if record.error:
                         existing.error = record.error
                     if record.result is not None:
@@ -441,9 +431,7 @@ class AutoLoopEngine:
                         created_at=_to_utc(record.created_at),
                         started_at=_to_utc(record.started_at),
                         finished_at=_to_utc(record.finished_at),
-                        heartbeat_at=now
-                        if status == AutoLoopTaskStatus.RUNNING
-                        else None,
+                        heartbeat_at=now if status == AutoLoopTaskStatus.RUNNING else None,
                     )
                     db.add(task)
                 await db.commit()
@@ -455,5 +443,6 @@ class AutoLoopEngine:
                 error=type(exc).__name__,
             )
             raise
+
 
 auto_loop_engine = AutoLoopEngine()

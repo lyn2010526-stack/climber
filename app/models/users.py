@@ -116,6 +116,7 @@ class ApiKey(Base):
 
 # --- Pydantic schemas ---
 
+
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=64)
     email: EmailStr
@@ -134,7 +135,7 @@ class UserUpdate(BaseModel):
 
 
 class UserResponse(BaseModel):
-    model_config = ConfigDict(from_attributes = True)
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     username: str
@@ -207,7 +208,7 @@ class ApiKeyCreate(BaseModel):
 
 
 class ApiKeyResponse(BaseModel):
-    model_config = ConfigDict(from_attributes = True)
+    model_config = ConfigDict(from_attributes=True)
 
     id: str
     name: str

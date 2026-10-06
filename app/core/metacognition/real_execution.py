@@ -13,6 +13,7 @@ Supports explicitly injected user-model judgment and sub-task execution:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import math
 import os
@@ -241,10 +242,8 @@ async def execute_subtask_llm(
     )
     parts = [f"Sub-task goal:\n{goal}"]
     if context:
-        try:
+        with contextlib.suppress(TypeError, ValueError):
             parts.append("Context:\n" + json.dumps(context, ensure_ascii=False, default=str))
-        except (TypeError, ValueError):
-            pass
     messages = [
         {"role": "system", "content": system},
         {

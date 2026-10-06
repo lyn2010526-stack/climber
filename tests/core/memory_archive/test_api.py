@@ -35,7 +35,6 @@ def offline_semantic(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.core.persistent_memory.vector_memory", _InertVector())
 
 
-
 async def test_refresh_and_read_sidecars(client) -> None:
     payload = {
         "entries": [
@@ -55,7 +54,6 @@ async def test_refresh_and_read_sidecars(client) -> None:
     records = read.json()["records"]
     assert len(records) == 2
     assert {record["level"] for record in records} == {0, 1}
-
 
 
 async def test_search_falls_back_to_sidecar_keywords(client) -> None:
@@ -78,7 +76,6 @@ async def test_search_falls_back_to_sidecar_keywords(client) -> None:
     assert "rotated" in body["hits"][0]["text"].lower()
 
 
-
 async def test_create_and_fetch_archive(client) -> None:
     payload = {
         "session_id": "session-api-0001",
@@ -99,12 +96,9 @@ async def test_create_and_fetch_archive(client) -> None:
     assert fetched.status_code == 200
     assert fetched.json()["id"] == archive["id"]
 
-    listed = await client.get(
-        "/api/v1/memory/archives", params={"session_id": "session-api-0001"}
-    )
+    listed = await client.get("/api/v1/memory/archives", params={"session_id": "session-api-0001"})
     assert listed.status_code == 200
     assert listed.json()["total"] == 1
-
 
 
 async def test_context_bundle_endpoint(client) -> None:
@@ -122,7 +116,6 @@ async def test_context_bundle_endpoint(client) -> None:
     assert body["injected_summaries"] == 1
     assert "## Archived Memory Context" in body["content"]
     assert "OAuth 2.0 flows protect" in body["content"]
-
 
 
 async def test_unknown_archive_is_404(client) -> None:

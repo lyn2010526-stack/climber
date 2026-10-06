@@ -30,7 +30,9 @@ class TraceSpanRecord(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     trace_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    parent_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("trace_spans.id"), nullable=True, index=True)
+    parent_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("trace_spans.id"), nullable=True, index=True
+    )
 
     # Span metadata
     kind: Mapped[str] = mapped_column(String(30), nullable=False, index=True)

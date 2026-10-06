@@ -51,25 +51,35 @@ class DirectoryRetriever:
         seen: set[str] = set()
 
         for hit in await self._semantic.search(
-            user_id, scope, query, level=level, top_k=max(top_k, 8),
+            user_id,
+            scope,
+            query,
+            level=level,
+            top_k=max(top_k, 8),
         ):
             doc_id = str(hit.get("id", ""))
             if not doc_id or doc_id in seen:
                 continue
             seen.add(doc_id)
             meta = hit.get("metadata") or {}
-            results.append({
-                "id": doc_id,
-                "kind": "semantic",
-                "level": meta.get("level", 2),
-                "scope": scope,
-                "text": hit.get("text", ""),
-                "metadata": meta,
-                "score": round(float(hit.get("score", 0.0)), 4),
-            })
+            results.append(
+                {
+                    "id": doc_id,
+                    "kind": "semantic",
+                    "level": meta.get("level", 2),
+                    "scope": scope,
+                    "text": hit.get("text", ""),
+                    "metadata": meta,
+                    "score": round(float(hit.get("score", 0.0)), 4),
+                }
+            )
 
         for sidecar in await self._search_sidecars(
-            user_id, scope, query, level=level, limit=top_k,
+            user_id,
+            scope,
+            query,
+            level=level,
+            limit=top_k,
         ):
             if sidecar["id"] in seen:
                 continue
@@ -82,7 +92,7 @@ class DirectoryRetriever:
             "query": query,
             "level": level,
             "total": len(results),
-            "hits": results[: top_k],
+            "hits": results[:top_k],
         }
 
     async def find_sidecars(
@@ -127,12 +137,14 @@ class DirectoryRetriever:
             matched = not query_lower or query_lower in body_lower
             if not matched:
                 continue
-            hits.append({
-                "id": row.id,
-                "kind": "sidecar",
-                "level": row.level,
-                "scope": row.scope,
-                "text": row.body,
-                "score": 1.0 if query_lower and query_lower in body_lower else 0.5,
-            })
+            hits.append(
+                {
+                    "id": row.id,
+                    "kind": "sidecar",
+                    "level": row.level,
+                    "scope": row.scope,
+                    "text": row.body,
+                    "score": 1.0 if query_lower and query_lower in body_lower else 0.5,
+                }
+            )
         return hits[:limit]

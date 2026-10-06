@@ -289,15 +289,13 @@ class HypothesisSimulator:
         """Verify the top paths and blend their verdicts into scores."""
         if self._verifier is None and self._experiment_runner is None:
             return
-        verified = 0
-        for path in paths:
+        for verified, path in enumerate(paths):
             if verified >= _MAX_VERIFIED_PATHS:
                 break
             verdict = await self.verify_hypothesis(path, goal, context)
             self._blend_verdict(path, verdict)
             if self._experiment_runner is not None:
                 await self.run_experiment(path, goal, context)
-            verified += 1
 
     def _verification_payload(
         self,
@@ -387,7 +385,7 @@ class HypothesisSimulator:
         blended = 0.5 * path.estimated_success_rate + 0.5 * confidence
         path.estimated_success_rate = round(min(0.95, max(0.05, blended)), 4)
         if verdict.get("reason"):
-            path.risk_factors = list(path.risk_factors) + [f"verifier: {verdict['reason']}"]
+            path.risk_factors = [*list(path.risk_factors), f"verifier: {verdict['reason']}"]
         path.score = self._score_path(path)
 
     def generate_beliefs(
@@ -539,21 +537,19 @@ class HypothesisSimulator:
         return steps
 
     def _plan_parallel(self, goal: str, tools: set[str]) -> list[dict[str, Any]]:
-        steps = [
+        return [
             {"tool": "analysis", "purpose": f"Decompose goal into sub-tasks: {goal[:60]}"},
             {"tool": "dispatch", "purpose": "Dispatch independent sub-tasks to parallel agents"},
             {"tool": "merge", "purpose": "Merge sub-task results into final output"},
         ]
-        return steps
 
     def _plan_iterative(self, goal: str, tools: set[str]) -> list[dict[str, Any]]:
-        steps = [
+        return [
             {"tool": "analysis", "purpose": "Create minimal viable solution"},
             {"tool": "read_file", "purpose": "Verify current state"},
             {"tool": "write_file", "purpose": "Apply incremental change"},
             {"tool": "run_command", "purpose": "Test the change"},
         ]
-        return steps
 
     def _estimate_tokens(self, path: ExecutionPath) -> int:
         total = 500  # base overhead

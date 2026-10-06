@@ -187,14 +187,24 @@ class GroupCollaborationEngine:
             principal = principal_for_group(group)
             checkpoint = await self._load_latest_checkpoint(task_id)
             if checkpoint and checkpoint.status in ("running", "paused"):
-                logger.info("resuming_from_checkpoint", task_id=task_id, checkpoint_id=checkpoint.id)
+                logger.info(
+                    "resuming_from_checkpoint", task_id=task_id, checkpoint_id=checkpoint.id
+                )
                 await self._resume_from_checkpoint(task, checkpoint)
                 await _dispatch_by_process_type(
-                    self, task, worker, reviewers, group, checkpoint=checkpoint, principal=principal,
+                    self,
+                    task,
+                    worker,
+                    reviewers,
+                    group,
+                    checkpoint=checkpoint,
+                    principal=principal,
                 )
                 return
 
-            await _dispatch_by_process_type(self, task, worker, reviewers, group, principal=principal)
+            await _dispatch_by_process_type(
+                self, task, worker, reviewers, group, principal=principal
+            )
 
         except asyncio.CancelledError:
             logger.info("task_cancelled", task_id=task_id)
@@ -203,10 +213,13 @@ class GroupCollaborationEngine:
         except Exception as e:
             logger.exception("group_task_failed", task_id=task_id)
             await _update_task_status(task_id, "failed")
-            await group_ws_hub.broadcast(task.group_id, {
-                "type": "task_failed",
-                "data": {"task_id": task_id, "error": str(e)},
-            })
+            await group_ws_hub.broadcast(
+                task.group_id,
+                {
+                    "type": "task_failed",
+                    "data": {"task_id": task_id, "error": str(e)},
+                },
+            )
         finally:
             self._running_tasks.pop(task_id, None)
 
@@ -220,17 +233,23 @@ class GroupCollaborationEngine:
             A dictionary with execution results.
         """
         async with async_session() as db:
-            group = (await db.execute(select(AgentGroup).where(AgentGroup.id == group_id))).scalar_one_or_none()
+            group = (
+                await db.execute(select(AgentGroup).where(AgentGroup.id == group_id))
+            ).scalar_one_or_none()
             if not group:
                 return {"error": "Group not found"}
 
             tasks = (
-                await db.execute(
-                    select(AgentGroupTask)
-                    .where(AgentGroupTask.group_id == group_id)
-                    .where(AgentGroupTask.status.in_(["pending", "running"]))
+                (
+                    await db.execute(
+                        select(AgentGroupTask)
+                        .where(AgentGroupTask.group_id == group_id)
+                        .where(AgentGroupTask.status.in_(["pending", "running"]))
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
         if not tasks:
             return {"status": "no_pending_tasks"}
@@ -244,7 +263,9 @@ class GroupCollaborationEngine:
         dependency_map = {t.id: list(t.dependencies or []) for t in tasks}
         deadlock_cycles = detect_deadlock(dependency_map)
         if deadlock_cycles:
-            logger.warning("deadlock_detected_in_group_tasks", group_id=group_id, cycles=deadlock_cycles)
+            logger.warning(
+                "deadlock_detected_in_group_tasks", group_id=group_id, cycles=deadlock_cycles
+            )
             blocked = deadlocked_task_ids(dependency_map)
             if all(t.id in blocked for t in tasks):
                 return {
@@ -252,7 +273,9 @@ class GroupCollaborationEngine:
                     "error": f"Cycle detected in task dependencies: {deadlock_cycles}",
                     "cycles": deadlock_cycles,
                 }
-            logger.warning("deadlock_skipping_blocked_tasks", group_id=group_id, blocked=sorted(blocked))
+            logger.warning(
+                "deadlock_skipping_blocked_tasks", group_id=group_id, blocked=sorted(blocked)
+            )
 
         task_map: dict[str, AgentGroupTask] = {t.id: t for t in tasks}
         execution_levels = topological_order(dependency_map)
@@ -265,23 +288,35 @@ class GroupCollaborationEngine:
                 task = task_map.get(task_id)
                 if not task:
                     continue
-                if any(dep in task_map and dep not in completed_tasks for dep in task.dependencies or []):
+                if any(
+                    dep in task_map and dep not in completed_tasks
+                    for dep in task.dependencies or []
+                ):
                     await _update_task_status(task_id, "failed")
-                    level_results.append({"task_id": task_id, "status": "failed", "error": "Dependency did not complete"})
+                    level_results.append(
+                        {
+                            "task_id": task_id,
+                            "status": "failed",
+                            "error": "Dependency did not complete",
+                        }
+                    )
                     results["status"] = "partial"
                     continue
 
                 context_data: dict[str, str] = {}
-                for dep_id in (task.dependencies or []):
+                for dep_id in task.dependencies or []:
                     if dep_id in completed_tasks and dep_id in task_map:
                         dep_task = task_map[dep_id]
                         if dep_task.final_output:
                             context_data[dep_id] = dep_task.final_output
 
-                await group_ws_hub.broadcast(group_id, {
-                    "type": "dag_level_start",
-                    "data": {"task_id": task_id, "level": len(results["levels"]) + 1},
-                })
+                await group_ws_hub.broadcast(
+                    group_id,
+                    {
+                        "type": "dag_level_start",
+                        "data": {"task_id": task_id, "level": len(results["levels"]) + 1},
+                    },
+                )
 
                 try:
                     await self._run_single_task_in_dag(task, group, context_data)
@@ -363,7 +398,9 @@ class GroupCollaborationEngine:
                         agent_id=reviewer.agent_id,
                         provider=reviewer.model_provider or "openai",
                         model_id=reviewer.model_id or "gpt-4o",
-                        api_key=resolve_api_key(reviewer.model_provider, reviewer.api_key_encrypted),
+                        api_key=resolve_api_key(
+                            reviewer.model_provider, reviewer.api_key_encrypted
+                        ),
                         system_prompt=build_reviewer_prompt(task.description),
                         user_message=f"Review this output:\n{worker_output}",
                         tools=reviewer.tools or [],
@@ -392,12 +429,17 @@ class GroupCollaborationEngine:
 
         if passed:
             await store_memory(task.group_id, task.id, worker.agent_id, final_output, "task_result")
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "task_completed" if passed else "task_partial",
-            "data": {"task_id": task.id, "output": final_output, "issues": all_issues},
-        })
+        await group_ws_hub.broadcast(
+            task.group_id,
+            {
+                "type": "task_completed" if passed else "task_partial",
+                "data": {"task_id": task.id, "output": final_output, "issues": all_issues},
+            },
+        )
 
-    async def handoff_task(self, task_id: str, target_agent_id: str, reason: str = "") -> dict[str, Any]:
+    async def handoff_task(
+        self, task_id: str, target_agent_id: str, reason: str = ""
+    ) -> dict[str, Any]:
         """Hand off a task from one agent to another.
 
         Args:
@@ -438,15 +480,18 @@ class GroupCollaborationEngine:
                 reason=reason,
             )
 
-            await group_ws_hub.broadcast(task.group_id, {
-                "type": "task_handoff",
-                "data": {
-                    "task_id": task_id,
-                    "from_agent": msg.source_agent,
-                    "to_agent": target.id,
-                    "reason": reason,
+            await group_ws_hub.broadcast(
+                task.group_id,
+                {
+                    "type": "task_handoff",
+                    "data": {
+                        "task_id": task_id,
+                        "from_agent": msg.source_agent,
+                        "to_agent": target.id,
+                        "reason": reason,
+                    },
                 },
-            })
+            )
 
             return {"ok": True, "task_id": task_id, "handoff_to": target.id}
 
@@ -515,7 +560,9 @@ async def _load_task_context(task_id: str) -> tuple:
         A tuple of (task, worker, reviewers, group) or Nones on failure.
     """
     async with async_session() as db:
-        task = (await db.execute(select(AgentGroupTask).where(AgentGroupTask.id == task_id))).scalar_one_or_none()
+        task = (
+            await db.execute(select(AgentGroupTask).where(AgentGroupTask.id == task_id))
+        ).scalar_one_or_none()
         if task is None:
             logger.error("task_not_found", task_id=task_id)
             return None, None, None, None
@@ -534,13 +581,21 @@ async def _load_task_context(task_id: str) -> tuple:
         worker = None
         if task.worker_id:
             worker = (
-                await db.execute(select(AgentGroupMember).where(AgentGroupMember.id == task.worker_id))
+                await db.execute(
+                    select(AgentGroupMember).where(AgentGroupMember.id == task.worker_id)
+                )
             ).scalar_one_or_none()
 
         if worker is None:
             worker = (
-                await db.execute(select(AgentGroupMember).where(AgentGroupMember.group_id == task.group_id))
-            ).scalars().first()
+                (
+                    await db.execute(
+                        select(AgentGroupMember).where(AgentGroupMember.group_id == task.group_id)
+                    )
+                )
+                .scalars()
+                .first()
+            )
         if worker is None:
             logger.error("worker_not_found", task_id=task_id, worker_id=task.worker_id)
             task.status = "failed"
@@ -548,8 +603,14 @@ async def _load_task_context(task_id: str) -> tuple:
             return None, None, None, None
 
         reviewers = (
-            await db.execute(select(AgentGroupMember).where(AgentGroupMember.id.in_(task.reviewer_ids or [])))
-        ).scalars().all()
+            (
+                await db.execute(
+                    select(AgentGroupMember).where(AgentGroupMember.id.in_(task.reviewer_ids or []))
+                )
+            )
+            .scalars()
+            .all()
+        )
 
         task.started_at = datetime.now(UTC)
         task.status = "running"
@@ -596,10 +657,13 @@ async def _dispatch_by_process_type(
     else:
         logger.error("unknown_process_type", process_type=process_type, task_id=task.id)
         await _update_task_status(task.id, "failed")
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "task_failed",
-            "data": {"task_id": task.id, "error": f"Unknown process type: {process_type}"},
-        })
+        await group_ws_hub.broadcast(
+            task.group_id,
+            {
+                "type": "task_failed",
+                "data": {"task_id": task.id, "error": f"Unknown process type: {process_type}"},
+            },
+        )
 
 
 async def _update_task_status(task_id: str, status: str) -> None:
@@ -631,20 +695,25 @@ async def _select_worker(task: Any) -> Any | None:
     if task.worker_id:
         async with async_session() as db:
             worker = (
-                await db.execute(select(AgentGroupMember).where(AgentGroupMember.id == task.worker_id))
+                await db.execute(
+                    select(AgentGroupMember).where(AgentGroupMember.id == task.worker_id)
+                )
             ).scalar_one_or_none()
             if worker:
                 return worker
 
     async with async_session() as db:
-        worker = (
-            await db.execute(
-                select(AgentGroupMember)
-                .where(AgentGroupMember.group_id == task.group_id)
-                .where(AgentGroupMember.role.in_(["worker", "participant"]))
+        return (
+            (
+                await db.execute(
+                    select(AgentGroupMember)
+                    .where(AgentGroupMember.group_id == task.group_id)
+                    .where(AgentGroupMember.role.in_(["worker", "participant"]))
+                )
             )
-        ).scalars().first()
-    return worker
+            .scalars()
+            .first()
+        )
 
 
 async def _load_reviewers(task: Any) -> list[Any]:
@@ -660,8 +729,16 @@ async def _load_reviewers(task: Any) -> list[Any]:
         t = await db.get(AgentGroupTask, task.id)
         if t:
             reviewers = (
-                await db.execute(select(AgentGroupMember).where(AgentGroupMember.id.in_(t.reviewer_ids or [])))
-            ).scalars().all()
+                (
+                    await db.execute(
+                        select(AgentGroupMember).where(
+                            AgentGroupMember.id.in_(t.reviewer_ids or [])
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
             return list(reviewers)
     return []
 
@@ -701,6 +778,7 @@ def get_group_collaboration_engine() -> GroupCollaborationEngine:
             model_registry = di_resolve("ModelRegistry")
         except KeyError:
             from app.models.registry import ModelRegistry
+
             model_registry = ModelRegistry()
         _group_collaboration_engine = GroupCollaborationEngine(
             model_registry=model_registry,

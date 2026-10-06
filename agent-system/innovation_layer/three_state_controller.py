@@ -34,7 +34,7 @@ class YieldContext:
     """人机接力暂停时输出的上下文。"""
 
     current_progress: str = ""
-    candidates: list[str] = field(default_factory=list)   # 候选方案
+    candidates: list[str] = field(default_factory=list)  # 候选方案
     risks: list[dict[str, Any]] = field(default_factory=list)  # 风险清单
     snapshot_ids: list[str] = field(default_factory=list)  # 快照集合
     yield_reason: str = ""
@@ -55,11 +55,28 @@ class PauseDecision:
 class RiskPolicy:
     """风险判定策略。"""
 
-    HIGH_RISK_CLASSES: ClassVar[set[ToolClass]] = {ToolClass.WRITE, ToolClass.EXEC, ToolClass.NETWORK}
-    HIGH_RISK_TOOLS: ClassVar[frozenset[str]] = frozenset({
-        "bash", "shell", "exec", "run_command", "delete_file", "rm", "git_push",
-        "deploy", "upload", "write_file", "create_file", "edit_file", "install_package",
-    })
+    HIGH_RISK_CLASSES: ClassVar[set[ToolClass]] = {
+        ToolClass.WRITE,
+        ToolClass.EXEC,
+        ToolClass.NETWORK,
+    }
+    HIGH_RISK_TOOLS: ClassVar[frozenset[str]] = frozenset(
+        {
+            "bash",
+            "shell",
+            "exec",
+            "run_command",
+            "delete_file",
+            "rm",
+            "git_push",
+            "deploy",
+            "upload",
+            "write_file",
+            "create_file",
+            "edit_file",
+            "install_package",
+        }
+    )
 
     def assess_tool(self, tool: ToolDescriptor | str) -> RiskLevel:
         name = tool.name if isinstance(tool, ToolDescriptor) else tool
@@ -115,10 +132,14 @@ class ThreeStateController:
 
     # ---- 人机接力自动暂停评估 ----
 
-    def evaluate_pause(self, *, risk_level: RiskLevel = RiskLevel.LOW,
-                       candidates: list[str] | None = None,
-                       tool_class: ToolClass | None = None,
-                       tool_name: str | None = None) -> PauseDecision:
+    def evaluate_pause(
+        self,
+        *,
+        risk_level: RiskLevel = RiskLevel.LOW,
+        candidates: list[str] | None = None,
+        tool_class: ToolClass | None = None,
+        tool_name: str | None = None,
+    ) -> PauseDecision:
         """每轮自动评估是否触发人机接力暂停（创新点 3 核心）。"""
         if self.mode != RunMode.HITL:
             return PauseDecision(should_pause=False)
@@ -129,19 +150,28 @@ class ThreeStateController:
         if risk_level.value in {RiskLevel.HIGH.value, RiskLevel.CRITICAL.value}:
             risks.append({"type": "high_risk_operation", "detail": f"风险等级 {risk_level.value}"})
         if tool_class and self.risk_policy.HIGH_RISK_CLASSES.intersection({tool_class}):
-            risks.append({"type": "high_risk_operation", "detail": f"高风险工具类 {tool_class.value}"})
+            risks.append(
+                {"type": "high_risk_operation", "detail": f"高风险工具类 {tool_class.value}"}
+            )
         if tool_name and tool_name in self.risk_policy.HIGH_RISK_TOOLS:
             risks.append({"type": "high_risk_operation", "detail": f"高风险工具 {tool_name}"})
 
         # 条件 2：多条可选方案
         cands = candidates or []
         if len(cands) >= 2:
-            risks.append({"type": "multiple_candidates", "detail": f"{len(cands)} 条候选方案", "candidates": cands})
+            risks.append(
+                {
+                    "type": "multiple_candidates",
+                    "detail": f"{len(cands)} 条候选方案",
+                    "candidates": cands,
+                }
+            )
 
         # 条件 3：连续多次失败
         if self.consecutive_failures >= self.max_failures_before_yield:
-            risks.append({"type": "repeated_failures",
-                          "detail": f"连续 {self.consecutive_failures} 次失败"})
+            risks.append(
+                {"type": "repeated_failures", "detail": f"连续 {self.consecutive_failures} 次失败"}
+            )
 
         if not risks:
             return PauseDecision(should_pause=False)
@@ -153,10 +183,15 @@ class ThreeStateController:
             risks=risks,
         )
 
-    def yield_context(self, *, report: Any = None, candidates: list[str] | None = None,
-                      risks: list[dict[str, Any]] | None = None,
-                      snapshot_ids: list[str] | None = None,
-                      reason: str = "") -> YieldContext:
+    def yield_context(
+        self,
+        *,
+        report: Any = None,
+        candidates: list[str] | None = None,
+        risks: list[dict[str, Any]] | None = None,
+        snapshot_ids: list[str] | None = None,
+        reason: str = "",
+    ) -> YieldContext:
         """构造人机接力暂停输出（进度 + 候选 + 风险 + 快照集合）。"""
         return YieldContext(
             current_progress=report.progress if report else "",
@@ -169,9 +204,15 @@ class ThreeStateController:
         )
 
 
-def make_decision(phase: TAORPhase, *, done: bool = False, rollback: bool = False,
-                  yield_control: bool = False, reason: str = "",
-                  risk_level: RiskLevel = RiskLevel.LOW) -> LoopDecision:
+def make_decision(
+    phase: TAORPhase,
+    *,
+    done: bool = False,
+    rollback: bool = False,
+    yield_control: bool = False,
+    reason: str = "",
+    risk_level: RiskLevel = RiskLevel.LOW,
+) -> LoopDecision:
     """TAOR 状态分支判断的快捷构造。"""
     if done:
         next_phase = TAORPhase.DONE
@@ -181,5 +222,11 @@ def make_decision(phase: TAORPhase, *, done: bool = False, rollback: bool = Fals
         next_phase = TAORPhase.YIELD
     else:
         next_phase = phase  # LOOP：继续下一轮（从 THINK 或 PLAN）
-    return LoopDecision(next_phase=next_phase, done=done, rollback=rollback,
-                        yield_control=yield_control, reason=reason, risk_level=risk_level)
+    return LoopDecision(
+        next_phase=next_phase,
+        done=done,
+        rollback=rollback,
+        yield_control=yield_control,
+        reason=reason,
+        risk_level=risk_level,
+    )

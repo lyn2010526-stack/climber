@@ -68,7 +68,9 @@ class SkillTestResult(Base):
     __tablename__ = "skill_test_results"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    test_id: Mapped[str] = mapped_column(String(36), ForeignKey("skill_test_cases.id"), nullable=False, index=True)
+    test_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("skill_test_cases.id"), nullable=False, index=True
+    )
     skill_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
 
     # Result

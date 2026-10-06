@@ -53,7 +53,10 @@ async def resolve_permission(
 
     success = engine.resolve_permission(tool_call_id, decision, owner_id=_auth["id"])
     if not success:
-        raise HTTPException(status_code=404, detail=f"No pending permission request for tool_call_id: {tool_call_id}")
+        raise HTTPException(
+            status_code=404,
+            detail=f"No pending permission request for tool_call_id: {tool_call_id}",
+        )
 
     return {"status": "resolved", "tool_call_id": tool_call_id, "decision": decision}
 
@@ -118,13 +121,17 @@ async def update_permission_config(
             try:
                 decision = RuleDecision(r.decision)
             except ValueError:
-                raise HTTPException(status_code=400, detail=f"Invalid rule decision: {r.decision}") from None
-            rules.append(PermissionRule(
-                decision=decision,
-                tool=r.tool,
-                pattern=r.pattern,
-                description=r.description,
-            ))
+                raise HTTPException(
+                    status_code=400, detail=f"Invalid rule decision: {r.decision}"
+                ) from None
+            rules.append(
+                PermissionRule(
+                    decision=decision,
+                    tool=r.tool,
+                    pattern=r.pattern,
+                    description=r.description,
+                )
+            )
 
     allowed_tools = current.allowed_tools
     if update.allowed_tools is not None:

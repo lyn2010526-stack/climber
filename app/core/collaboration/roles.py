@@ -62,66 +62,78 @@ class RoleRegistry:
 
     def _register_defaults(self) -> None:
         """Register default role definitions."""
-        self.register_role(RoleDefinition(
-            role=AgentRole.PLANNER,
-            capabilities=[
-                Capability(name="task_decomposition", required_tools=["analyze"]),
-                Capability(name="goal_setting", required_tools=["plan"]),
-            ],
-            allowed_tools=["analyze", "plan", "search"],
-            allowed_actions=["create_task", "assign_task", "prioritize"],
-            max_iterations=5,
-        ))
-        self.register_role(RoleDefinition(
-            role=AgentRole.EXECUTOR,
-            capabilities=[
-                Capability(name="tool_execution", required_tools=["execute"]),
-                Capability(name="code_generation", required_tools=["write", "edit"]),
-            ],
-            allowed_tools=["execute", "write", "edit", "read", "search"],
-            allowed_actions=["execute_task", "report_result"],
-            max_iterations=15,
-        ))
-        self.register_role(RoleDefinition(
-            role=AgentRole.AUDITOR,
-            capabilities=[
-                Capability(name="quality_check", required_tools=["validate"]),
-                Capability(name="compliance_verify", required_tools=["audit"]),
-            ],
-            allowed_tools=["read", "validate", "audit", "compare"],
-            allowed_actions=["review", "approve", "reject"],
-            max_iterations=5,
-        ))
-        self.register_role(RoleDefinition(
-            role=AgentRole.RESEARCHER,
-            capabilities=[
-                Capability(name="information_gathering", required_tools=["search"]),
-                Capability(name="analysis", required_tools=["analyze"]),
-            ],
-            allowed_tools=["search", "analyze", "read", "summarize"],
-            allowed_actions=["research", "report"],
-            max_iterations=10,
-        ))
-        self.register_role(RoleDefinition(
-            role=AgentRole.COMMUNICATOR,
-            capabilities=[
-                Capability(name="message_routing", required_tools=["send"]),
-                Capability(name="notification", required_tools=["notify"]),
-            ],
-            allowed_tools=["send", "notify", "receive", "broadcast"],
-            allowed_actions=["send_message", "broadcast", "notify"],
-            max_iterations=10,
-        ))
-        self.register_role(RoleDefinition(
-            role=AgentRole.GUARD,
-            capabilities=[
-                Capability(name="safety_check", required_tools=["validate"]),
-                Capability(name="access_control", required_tools=["authorize"]),
-            ],
-            allowed_tools=["validate", "authorize", "block", "audit"],
-            allowed_actions=["check", "block", "allow", "escalate"],
-            max_iterations=3,
-        ))
+        self.register_role(
+            RoleDefinition(
+                role=AgentRole.PLANNER,
+                capabilities=[
+                    Capability(name="task_decomposition", required_tools=["analyze"]),
+                    Capability(name="goal_setting", required_tools=["plan"]),
+                ],
+                allowed_tools=["analyze", "plan", "search"],
+                allowed_actions=["create_task", "assign_task", "prioritize"],
+                max_iterations=5,
+            )
+        )
+        self.register_role(
+            RoleDefinition(
+                role=AgentRole.EXECUTOR,
+                capabilities=[
+                    Capability(name="tool_execution", required_tools=["execute"]),
+                    Capability(name="code_generation", required_tools=["write", "edit"]),
+                ],
+                allowed_tools=["execute", "write", "edit", "read", "search"],
+                allowed_actions=["execute_task", "report_result"],
+                max_iterations=15,
+            )
+        )
+        self.register_role(
+            RoleDefinition(
+                role=AgentRole.AUDITOR,
+                capabilities=[
+                    Capability(name="quality_check", required_tools=["validate"]),
+                    Capability(name="compliance_verify", required_tools=["audit"]),
+                ],
+                allowed_tools=["read", "validate", "audit", "compare"],
+                allowed_actions=["review", "approve", "reject"],
+                max_iterations=5,
+            )
+        )
+        self.register_role(
+            RoleDefinition(
+                role=AgentRole.RESEARCHER,
+                capabilities=[
+                    Capability(name="information_gathering", required_tools=["search"]),
+                    Capability(name="analysis", required_tools=["analyze"]),
+                ],
+                allowed_tools=["search", "analyze", "read", "summarize"],
+                allowed_actions=["research", "report"],
+                max_iterations=10,
+            )
+        )
+        self.register_role(
+            RoleDefinition(
+                role=AgentRole.COMMUNICATOR,
+                capabilities=[
+                    Capability(name="message_routing", required_tools=["send"]),
+                    Capability(name="notification", required_tools=["notify"]),
+                ],
+                allowed_tools=["send", "notify", "receive", "broadcast"],
+                allowed_actions=["send_message", "broadcast", "notify"],
+                max_iterations=10,
+            )
+        )
+        self.register_role(
+            RoleDefinition(
+                role=AgentRole.GUARD,
+                capabilities=[
+                    Capability(name="safety_check", required_tools=["validate"]),
+                    Capability(name="access_control", required_tools=["authorize"]),
+                ],
+                allowed_tools=["validate", "authorize", "block", "audit"],
+                allowed_actions=["check", "block", "allow", "escalate"],
+                max_iterations=3,
+            )
+        )
 
     def register_role(self, definition: RoleDefinition) -> None:
         """Register or update a role definition."""

@@ -50,14 +50,16 @@ def _rank_tools(
     for name in tool_names:
         defn = tool_registry.get_tool(name)
         if defn:
-            available.append({
-                "type": "function",
-                "function": {
-                    "name": defn.name,
-                    "description": defn.description,
-                    "parameters": defn.parameters,
-                },
-            })
+            available.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": defn.name,
+                        "description": defn.description,
+                        "parameters": defn.parameters,
+                    },
+                }
+            )
     ranked = tool_prioritizer.rank_tools(task_description, available)
     name_to_defn = {name: tool_registry.get_tool(name) for name in tool_names}
     return [name for name in ranked if name in name_to_defn]

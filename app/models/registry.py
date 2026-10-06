@@ -71,9 +71,7 @@ class ModelRegistry:
         """Register a model with direct API key."""
         adapter_cls = PROVIDERS.get(provider)
         if not adapter_cls:
-            raise ValueError(
-                f"Unknown provider: {provider}. Supported: {list(PROVIDERS.keys())}"
-            )
+            raise ValueError(f"Unknown provider: {provider}. Supported: {list(PROVIDERS.keys())}")
 
         kwargs: dict[str, Any] = {"model_id": model_id, "api_key": api_key}
         if base_url:
@@ -116,7 +114,11 @@ class ModelRegistry:
             return self._resolve_spec(provider)
         resolved_provider, resolved_model = MODEL_ALIASES.get(provider, (provider, model_id))
         if resolved_provider != provider or resolved_model != model_id:
-            logger.info("model_alias_resolved", alias=f"{provider}:{model_id}", resolved=f"{resolved_provider}:{resolved_model}")
+            logger.info(
+                "model_alias_resolved",
+                alias=f"{provider}:{model_id}",
+                resolved=f"{resolved_provider}:{resolved_model}",
+            )
         try:
             return self.get_model(resolved_provider, resolved_model)
         except ValueError:
@@ -170,9 +172,7 @@ class ModelRegistry:
         """
         adapter_cls = PROVIDERS.get(provider)
         if not adapter_cls:
-            raise ValueError(
-                f"Unknown provider: {provider}. Supported: {list(PROVIDERS.keys())}"
-            )
+            raise ValueError(f"Unknown provider: {provider}. Supported: {list(PROVIDERS.keys())}")
 
         for idx, api_key in enumerate(api_keys):
             cache_key = f"{provider}:{model_id}:key:{idx}"
@@ -246,11 +246,13 @@ class ModelRegistry:
                 continue
             seen.add(key)
             caps = adapter.capabilities
-            result.append({
-                "provider": provider,
-                "model_id": model_id,
-                "capabilities": caps.model_dump(),
-            })
+            result.append(
+                {
+                    "provider": provider,
+                    "model_id": model_id,
+                    "capabilities": caps.model_dump(),
+                }
+            )
         return result
 
 

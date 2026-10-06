@@ -22,6 +22,7 @@ def _identity() -> tuple[str, bool]:
         is_admin = True
     return principal.subject_id, is_admin
 
+
 router = APIRouter()
 
 
@@ -68,7 +69,12 @@ async def create_domestic_qr(
     if not provider.status().enabled:
         return {"status": "disabled", "provider": "qqbot", "reason": provider.status().reason}
     token = provider.issue_binding_token()
-    return {"status": "ok", "provider": "qqbot", "token": token.token, "expires_at": token.expires_at.isoformat()}
+    return {
+        "status": "ok",
+        "provider": "qqbot",
+        "token": token.token,
+        "expires_at": token.expires_at.isoformat(),
+    }
 
 
 @router.post("/integrations/domestic/qqbot/webhook")
@@ -79,7 +85,11 @@ async def domestic_webhook(request: Request) -> dict[str, Any]:
 
     body = await request.body()
     if not settings.domestic_integrations_enabled:
-        return {"status": "disabled", "provider": "qqbot", "reason": "domestic integrations are disabled"}
+        return {
+            "status": "disabled",
+            "provider": "qqbot",
+            "reason": "domestic integrations are disabled",
+        }
     valid = verify_webhook_signature(
         settings.domestic_webhook_secret,
         body,
@@ -93,6 +103,7 @@ async def domestic_webhook(request: Request) -> dict[str, Any]:
 
 
 # ─── LangGraph Endpoints ───
+
 
 @router.get("/integrations/langgraph/graphs")
 async def list_langgraph() -> dict[str, Any]:
@@ -134,6 +145,7 @@ async def invoke_langgraph(
 
 
 # ─── Mem0 Endpoints ───
+
 
 @router.get("/integrations/mem0/status")
 async def mem0_status() -> dict[str, Any]:
@@ -214,6 +226,7 @@ async def mem0_add(
 
 
 # ─── Pydantic-AI Endpoints ───
+
 
 @router.post("/integrations/agent/run")
 async def agent_run(

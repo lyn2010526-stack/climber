@@ -1,4 +1,5 @@
 """Notion integration client."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -44,13 +45,18 @@ class NotionClient:
         }
         if self.config.database_id:
             database = await request_json(
-                "Notion", "GET",
+                "Notion",
+                "GET",
                 f"https://api.notion.com/v1/databases/{quote(self.config.database_id, safe='')}",
-                headers=headers, timeout=self.config.timeout,
+                headers=headers,
+                timeout=self.config.timeout,
             )
             sources = database.get("data_sources")
-            if (database.get("object") != "database" or not isinstance(sources, list)
-                    or any(not isinstance(item, dict) for item in sources)):
+            if (
+                database.get("object") != "database"
+                or not isinstance(sources, list)
+                or any(not isinstance(item, dict) for item in sources)
+            ):
                 raise IntegrationError("Notion", "invalid database data_sources response")
             source_ids = [response_id(item, "id", "Notion") for item in sources]
             if source_id:
@@ -63,15 +69,18 @@ class NotionClient:
                     "Notion: unsupported ambiguous database; provide an explicit data_source_id"
                 )
         schema = await request_json(
-            "Notion", "GET",
+            "Notion",
+            "GET",
             f"https://api.notion.com/v1/data_sources/{quote(source_id, safe='')}",
-            headers=headers, timeout=self.config.timeout,
+            headers=headers,
+            timeout=self.config.timeout,
         )
         properties = schema.get("properties")
         if schema.get("object") != "data_source" or not isinstance(properties, dict):
             raise IntegrationError("Notion", "invalid data source schema response")
         title_fields = [
-            name for name, prop in properties.items()
+            name
+            for name, prop in properties.items()
             if isinstance(prop, dict) and prop.get("type") == "title"
         ]
         if len(title_fields) != 1:
@@ -84,14 +93,24 @@ class NotionClient:
         }
         if content:
             payload["children"] = [
-                {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [
-                    {"type": "text", "text": {"content": content[start:start + 2000]}}
-                ]}}
+                {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": [
+                            {"type": "text", "text": {"content": content[start : start + 2000]}}
+                        ]
+                    },
+                }
                 for start in range(0, len(content), 2000)
             ]
         data = await request_json(
-            "Notion", "POST", "https://api.notion.com/v1/pages",
-            headers=headers, timeout=self.config.timeout, payload=payload,
+            "Notion",
+            "POST",
+            "https://api.notion.com/v1/pages",
+            headers=headers,
+            timeout=self.config.timeout,
+            payload=payload,
         )
         if data.get("object") != "page":
             raise IntegrationError("Notion", "response is not a page; outcome unknown")

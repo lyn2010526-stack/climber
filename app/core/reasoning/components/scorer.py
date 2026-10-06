@@ -175,9 +175,7 @@ class CandidateScorer:
         if critique:
             no_critique_passed = 1.0 if critique.passed else 0.0
             issue_penalty = -(
-                critique.critical_count * 10
-                + critique.major_count * 3
-                + critique.major_count
+                critique.critical_count * 10 + critique.major_count * 3 + critique.major_count
             )
             return (no_critique_passed, issue_penalty, candidate.confidence)
         return (0.0, 0.0, candidate.confidence)

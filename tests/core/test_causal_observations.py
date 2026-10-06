@@ -5,7 +5,14 @@ from app.core.observability.trace import TraceCollector
 
 def test_causal_graph_tracks_uncertainty_and_suggests_probe():
     graph = CausalGraph()
-    edge = graph.update({"mode": "unknown"}, "probe", {"mode": "known"}, "observed", success=True, prediction_error=0.7)
+    edge = graph.update(
+        {"mode": "unknown"},
+        "probe",
+        {"mode": "known"},
+        "observed",
+        success=True,
+        prediction_error=0.7,
+    )
 
     assert edge.success_count == 1
     assert edge.uncertainty == 0.7
@@ -34,7 +41,9 @@ def test_trace_collector_records_factual_tool_observation():
     collector = TraceCollector()
     span = collector.start_span("tool")
     assert span is not None
-    collector.record_tool_observation(span, "read_file", {"path": "x"}, result="ok", success=True, prediction_error=0.25)
+    collector.record_tool_observation(
+        span, "read_file", {"path": "x"}, result="ok", success=True, prediction_error=0.25
+    )
 
     stored = collector.get_span(span.span_id)
     assert stored is not None

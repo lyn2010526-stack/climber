@@ -98,9 +98,7 @@ class SqliteCheckpointStore:
     def purge(self, thread_id: str | None = None) -> int:
         with self._lock:
             if thread_id:
-                cur = self._conn.execute(
-                    "DELETE FROM checkpoints WHERE thread_id=?", (thread_id,)
-                )
+                cur = self._conn.execute("DELETE FROM checkpoints WHERE thread_id=?", (thread_id,))
             else:
                 cur = self._conn.execute("DELETE FROM checkpoints")
             self._conn.commit()

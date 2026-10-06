@@ -27,11 +27,14 @@ from unittest.mock import AsyncMock, patch
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 # Isolate storage initialization as well as every session used by this suite.
-with patch.dict(os.environ, {
-    "APP_TESTING": "true",
-    "TEST_DATABASE_URL": "sqlite+aiosqlite:///:memory:",
-    "DATABASE_URL": "sqlite+aiosqlite:///:memory:",
-}):
+with patch.dict(
+    os.environ,
+    {
+        "APP_TESTING": "true",
+        "TEST_DATABASE_URL": "sqlite+aiosqlite:///:memory:",
+        "DATABASE_URL": "sqlite+aiosqlite:///:memory:",
+    },
+):
     from app.core import AgentEvent, AgentEventType
     from app.core.collaboration import (
         agent_runner,
@@ -43,7 +46,10 @@ with patch.dict(os.environ, {
     )
     from app.storage import Base
     from app.storage.models_groups import (
-        AgentGroup, AgentGroupMember, AgentGroupTask, AgentGroupTaskCheckpoint,
+        AgentGroup,
+        AgentGroupMember,
+        AgentGroupTask,
+        AgentGroupTaskCheckpoint,
     )
 
 
@@ -59,9 +65,15 @@ class MultiAgentHardeningTests(unittest.IsolatedAsyncioTestCase):
         async with self.db_engine.begin() as connection:
             await connection.run_sync(
                 Base.metadata.create_all,
-                tables=[model.__table__ for model in (
-                    AgentGroup, AgentGroupMember, AgentGroupTask, AgentGroupTaskCheckpoint,
-                )],
+                tables=[
+                    model.__table__
+                    for model in (
+                        AgentGroup,
+                        AgentGroupMember,
+                        AgentGroupTask,
+                        AgentGroupTaskCheckpoint,
+                    )
+                ],
             )
         for module in (base, sequential, group_chat, hierarchical, checkpoint):
             self.enterContext(patch.object(module, "async_session", self.sessions))
@@ -79,11 +91,13 @@ class MultiAgentHardeningTests(unittest.IsolatedAsyncioTestCase):
         self.responses = []
 
         async def scripted_agent(*args, **kwargs):
-            self.calls.append({
-                "agent_id": args[0],
-                "principal": args[8] if len(args) > 8 else kwargs.get("principal"),
-                "prompt": args[5],
-            })
+            self.calls.append(
+                {
+                    "agent_id": args[0],
+                    "principal": args[8] if len(args) > 8 else kwargs.get("principal"),
+                    "prompt": args[5],
+                }
+            )
             response = self.responses.pop(0)
             if isinstance(response, BaseException):
                 raise response
@@ -99,19 +113,29 @@ class MultiAgentHardeningTests(unittest.IsolatedAsyncioTestCase):
 
     async def create_fixtures(self, process_type: str, with_reviewer: bool = False):
         worker = AgentGroupMember(
-            id=f"{process_type}-worker", agent_id="worker-agent", role="worker",
+            id=f"{process_type}-worker",
+            agent_id="worker-agent",
+            role="worker",
         )
         group = AgentGroup(
-            id=f"group-{process_type}", name="Multi-agent", process_type=process_type,
-            user_id="owner-777", members=[worker],
+            id=f"group-{process_type}",
+            name="Multi-agent",
+            process_type=process_type,
+            user_id="owner-777",
+            members=[worker],
         )
         task = AgentGroupTask(
-            id=f"task-{process_type}", group_id=group.id, description="Do the thing",
-            worker_id=worker.id, status="pending",
+            id=f"task-{process_type}",
+            group_id=group.id,
+            description="Do the thing",
+            worker_id=worker.id,
+            status="pending",
         )
         if with_reviewer:
             reviewer = AgentGroupMember(
-                id=f"{process_type}-reviewer", agent_id="reviewer-agent", role="reviewer",
+                id=f"{process_type}-reviewer",
+                agent_id="reviewer-agent",
+                role="reviewer",
             )
             group.members.append(reviewer)
             task.reviewer_ids = [reviewer.id]
@@ -125,8 +149,11 @@ class MultiAgentHardeningTests(unittest.IsolatedAsyncioTestCase):
             return await db.get(AgentGroupTask, "task-" + (self._process_type or "sequential"))
 
     def events(self, kind):
-        return [call.args[1]["data"] for call in self.broadcast.await_args_list
-                if call.args[1]["type"] == kind]
+        return [
+            call.args[1]["data"]
+            for call in self.broadcast.await_args_list
+            if call.args[1]["type"] == kind
+        ]
 
     def assert_owner_principal(self, subject_id="owner-777"):
         for call in self.calls:
@@ -153,8 +180,9 @@ class MultiAgentHardeningTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(task.status, "completed")
         self.assertEqual(task.current_round, 3)
         self.assertEqual(task.final_output, "round3 revision")
-        self.assertEqual([call["agent_id"] for call in self.calls],
-                         ["worker-agent", "reviewer-agent"])
+        self.assertEqual(
+            [call["agent_id"] for call in self.calls], ["worker-agent", "reviewer-agent"]
+        )
         self.assertIn("draft v2", self.calls[0]["prompt"])
         self.assertIn("fix typo", self.calls[0]["prompt"])
         self.assertEqual(len(self.events("task_completed")), 1)
@@ -165,8 +193,9 @@ class MultiAgentHardeningTests(unittest.IsolatedAsyncioTestCase):
         self._process_type = "sequential"
         await self.create_fixtures("sequential")
         self.responses = [RuntimeError("worker exploded")]
-        with patch.object(agent_runner, "MAX_RETRIES", 0), patch.object(
-            agent_runner, "_get_fallback_model", return_value=None
+        with (
+            patch.object(agent_runner, "MAX_RETRIES", 0),
+            patch.object(agent_runner, "_get_fallback_model", return_value=None),
         ):
             await self.engine.run_task("task-sequential")
 
@@ -205,16 +234,22 @@ class MultiAgentHardeningTests(unittest.IsolatedAsyncioTestCase):
         task_row = await self.persisted_task()
         self.assertEqual(task_row.status, "completed")
         self.assertEqual(task_row.final_output, "worker output")
-        self.assertEqual([call["agent_id"] for call in self.calls],
-                         ["worker-agent", "reviewer-agent"])
+        self.assertEqual(
+            [call["agent_id"] for call in self.calls], ["worker-agent", "reviewer-agent"]
+        )
         self.assert_owner_principal()
         self.assertEqual(self.events("task_failed"), [])
 
     async def test_dag_rejected_and_malformed_reviews_remain_partial(self):
         self._process_type = "sequential"
         group, task = await self.create_fixtures("sequential", with_reviewer=True)
-        for review in ('{"passed":false,"issues":[{"description":"missing evidence"}]}',
-                       '{"passed":false,"issues":[]}', "不通过", "not approved", ""):
+        for review in (
+            '{"passed":false,"issues":[{"description":"missing evidence"}]}',
+            '{"passed":false,"issues":[]}',
+            "不通过",
+            "not approved",
+            "",
+        ):
             with self.subTest(review=review):
                 self.broadcast.reset_mock()
                 self.responses = ["worker draft", review]
@@ -239,14 +274,27 @@ class MultiAgentHardeningTests(unittest.IsolatedAsyncioTestCase):
         self._process_type = "sequential"
         group, task = await self.create_fixtures("sequential", with_reviewer=True)
         async with self.sessions() as db:
-            db.add(AgentGroupTask(id="dependent", group_id=group.id, description="Use approved output",
-                                 dependencies=[task.id], worker_id=task.worker_id, status="pending"))
+            db.add(
+                AgentGroupTask(
+                    id="dependent",
+                    group_id=group.id,
+                    description="Use approved output",
+                    dependencies=[task.id],
+                    worker_id=task.worker_id,
+                    status="pending",
+                )
+            )
             await db.commit()
-        self.responses = ["approved worker output", '{"passed":true,"issues":[]}', "dependent output"]
+        self.responses = [
+            "approved worker output",
+            '{"passed":true,"issues":[]}',
+            "dependent output",
+        ]
         result = await self.engine.run_group_tasks(group.id)
         self.assertEqual(result["status"], "completed")
-        self.assertEqual([level[0]["status"] for level in result["levels"]],
-                         ["completed", "completed"])
+        self.assertEqual(
+            [level[0]["status"] for level in result["levels"]], ["completed", "completed"]
+        )
         async with self.sessions() as db:
             dependent = await db.get(AgentGroupTask, "dependent")
             self.assertEqual(dependent.status, "completed")
@@ -258,8 +306,16 @@ class MultiAgentHardeningTests(unittest.IsolatedAsyncioTestCase):
         self._process_type = "sequential"
         group, task = await self.create_fixtures("sequential", with_reviewer=True)
         async with self.sessions() as db:
-            db.add(AgentGroupTask(id="dependent", group_id=group.id, description="Use approved output",
-                                 dependencies=[task.id], worker_id=task.worker_id, status="pending"))
+            db.add(
+                AgentGroupTask(
+                    id="dependent",
+                    group_id=group.id,
+                    description="Use approved output",
+                    dependencies=[task.id],
+                    worker_id=task.worker_id,
+                    status="pending",
+                )
+            )
             await db.commit()
         self.responses = ["worker draft", '{"passed":false,"issues":[]}']
         result = await self.engine.run_group_tasks(group.id)
@@ -276,42 +332,61 @@ class MultiAgentHardeningTests(unittest.IsolatedAsyncioTestCase):
         await self.create_fixtures("sequential")
         self.responses = [RuntimeError("primary failed")]
         principal = agent_runner.Principal(subject_id="caller-999")
-        with patch.object(agent_runner, "MAX_RETRIES", 0), patch.object(
-            agent_runner, "_get_fallback_model", return_value=None
+        with (
+            patch.object(agent_runner, "MAX_RETRIES", 0),
+            patch.object(agent_runner, "_get_fallback_model", return_value=None),
+            self.assertRaisesRegex(RuntimeError, "worker failed after retry"),
         ):
-            with self.assertRaisesRegex(RuntimeError, "worker failed after retry"):
-                await self.engine._run_agent_with_retry(
-                    agent_id="worker-agent", provider="openai", model_id="gpt-4o",
-                    api_key="test-only", system_prompt="worker", user_message="task",
-                    tools=[], group_id="group-sequential", role="worker",
-                    principal=principal,
-                )
+            await self.engine._run_agent_with_retry(
+                agent_id="worker-agent",
+                provider="openai",
+                model_id="gpt-4o",
+                api_key="test-only",
+                system_prompt="worker",
+                user_message="task",
+                tools=[],
+                group_id="group-sequential",
+                role="worker",
+                principal=principal,
+            )
         self.assertEqual(len(self.calls), 1)
         self.assertIs(self.calls[0]["principal"], principal)
 
     async def test_hierarchical_worker_failure_propagates_to_failed_task(self):
         self._process_type = "hierarchical"
         manager = AgentGroupMember(
-            id="hierarchical-manager", agent_id="manager-agent", role="manager",
+            id="hierarchical-manager",
+            agent_id="manager-agent",
+            role="manager",
         )
         worker = AgentGroupMember(
-            id="hierarchical-worker", agent_id="worker-agent", role="worker",
+            id="hierarchical-worker",
+            agent_id="worker-agent",
+            role="worker",
         )
         group = AgentGroup(
-            id="group-hierarchical", name="Multi-agent", process_type="hierarchical",
-            user_id="owner-777", manager_agent_id=manager.id, members=[manager, worker],
+            id="group-hierarchical",
+            name="Multi-agent",
+            process_type="hierarchical",
+            user_id="owner-777",
+            manager_agent_id=manager.id,
+            members=[manager, worker],
         )
         task = AgentGroupTask(
-            id="task-hierarchical", group_id=group.id, description="Do the thing",
-            worker_id=worker.id, status="pending",
+            id="task-hierarchical",
+            group_id=group.id,
+            description="Do the thing",
+            worker_id=worker.id,
+            status="pending",
         )
         async with self.sessions() as db:
             db.add_all([group, task])
             await db.commit()
 
         self.responses = ["the plan", RuntimeError("worker exploded")]
-        with patch.object(agent_runner, "MAX_RETRIES", 0), patch.object(
-            agent_runner, "_get_fallback_model", return_value=None
+        with (
+            patch.object(agent_runner, "MAX_RETRIES", 0),
+            patch.object(agent_runner, "_get_fallback_model", return_value=None),
         ):
             await self.engine.run_task("task-hierarchical")
 
@@ -324,12 +399,11 @@ class MultiAgentHardeningTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.events("task_completed"), [])
         self.assert_owner_principal()
 
-
     async def test_sequential_run_registers_worker_and_reviewer_tree_nodes(self):
         from app.core.collaboration.progress import drop_task_tree, get_task_tree_snapshot
 
         self._process_type = "sequential"
-        group, task = await self.create_fixtures("sequential", with_reviewer=True)
+        group, _task = await self.create_fixtures("sequential", with_reviewer=True)
         self.addCleanup(drop_task_tree, group.id)
         self.responses = ["worker output", '{"passed":true,"issues":[]}']
 

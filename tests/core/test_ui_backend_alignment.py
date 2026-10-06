@@ -56,7 +56,9 @@ class AlignmentTests(unittest.IsolatedAsyncioTestCase):
         app.include_router(groups.router, prefix="/api/v1")
         app.include_router(skills.router, prefix="/api/v1")
         app.dependency_overrides[get_current_principal] = get_context_principal
-        self.client = httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
+        self.client = httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        )
         self.addAsyncCleanup(self.client.aclose)
 
     async def request(self, method, path, user="alice", scopes=("read", "write"), **kwargs):
@@ -78,9 +80,13 @@ class AlignmentTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.json()["effective"], "next_iteration")
         response = await self.request("GET", "/ui/rules")
         self.assertEqual([r["content"] for r in response.json()], list(rules.RULE_KINDS))
-        session = SimpleNamespace(user_id="alice", messages=[
-            {"role": "system", "content": "policy"}, {"role": "user", "content": "go"},
-        ])
+        session = SimpleNamespace(
+            user_id="alice",
+            messages=[
+                {"role": "system", "content": "policy"},
+                {"role": "user", "content": "go"},
+            ],
+        )
         await rules.refresh_rule_context(session)
         await rules.refresh_rule_context(session)
         self.assertEqual(len(session.messages), 3)
@@ -100,19 +106,27 @@ class AlignmentTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stale.status_code, 409)
         revision = first.json()["revision"]
         update = await self.request(
-            "PUT", "/ui/rules/soul", json={"content": "v2", "revision": revision},
+            "PUT",
+            "/ui/rules/soul",
+            json={"content": "v2", "revision": revision},
         )
         self.assertEqual(update.status_code, 200)
         stale = await self.request(
-            "PUT", "/ui/rules/soul", json={"content": "v3", "revision": revision},
+            "PUT",
+            "/ui/rules/soul",
+            json={"content": "v3", "revision": revision},
         )
         self.assertEqual(stale.status_code, 409)
         readonly = await self.request(
-            "PUT", "/ui/rules/soul", scopes=("read",), json={"content": "x"},
+            "PUT",
+            "/ui/rules/soul",
+            scopes=("read",),
+            json={"content": "x"},
         )
         self.assertEqual(readonly.status_code, 403)
         for path, body in [
-            ("unknown", {"content": "x"}), ("soul", {"content": "x", "owner_id": "bob"}),
+            ("unknown", {"content": "x"}),
+            ("soul", {"content": "x", "owner_id": "bob"}),
             ("soul", {"content": "x" * 32001}),
         ]:
             response = await self.request("PUT", f"/ui/rules/{path}", json=body)
@@ -147,7 +161,7 @@ class AlignmentTests(unittest.IsolatedAsyncioTestCase):
 
         async def idle(awaitable, timeout):
             awaitable.close()
-            raise asyncio.TimeoutError
+            raise TimeoutError
 
         with patch.object(tasks.asyncio, "wait_for", idle):
             self.assertEqual(await anext(stream), ": keep-alive\n\n")
@@ -170,7 +184,13 @@ class AlignmentTests(unittest.IsolatedAsyncioTestCase):
         await self.seed_task()
         handler = AsyncMock(return_value={"status": "failed", "error": "scripted failure"})
         await self.manager._retry_or_fail(
-            "t", "test", "alice", {}, handler, "error", RuntimeError(),
+            "t",
+            "test",
+            "alice",
+            {},
+            handler,
+            "error",
+            RuntimeError(),
         )
         state = await self.manager.get_status("t", "alice")
         self.assertEqual(state["status"], "failed")
@@ -181,8 +201,11 @@ class AlignmentTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(response.json()[0]["finished_at"])
 
     async def test_approval_resolution_preserves_owner(self):
-        session = SimpleNamespace(user_id="alice", _pending_permission={"tool_call_id": "call"},
-                                  _permission_event=asyncio.Event())
+        session = SimpleNamespace(
+            user_id="alice",
+            _pending_permission={"tool_call_id": "call"},
+            _permission_event=asyncio.Event(),
+        )
         engine = SimpleNamespace(_sessions={"s": session})
         self.assertFalse(AgentEngine.resolve_permission(engine, "call", "allow", owner_id="bob"))
         self.assertFalse(session._permission_event.is_set())

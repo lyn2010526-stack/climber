@@ -9,6 +9,7 @@ import agent_bootstrap  # noqa: F401  # 顶层包名映射，必须先导入
 from agent_system.api.routes import router
 from fastapi import FastAPI
 
-app = FastAPI(title="Climber agent-system", version="0.1.0",
-              description="TAOR 七阶段智能体引擎 HTTP API")
+app = FastAPI(
+    title="Climber agent-system", version="0.1.0", description="TAOR 七阶段智能体引擎 HTTP API"
+)
 app.include_router(router, prefix="/api/agent", tags=["agent-system"])

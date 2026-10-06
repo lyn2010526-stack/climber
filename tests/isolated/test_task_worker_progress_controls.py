@@ -86,7 +86,9 @@ async def test_control_survives_handler_suppressing_cancellation(manager, contro
     assert state["status"] == ("cancelled" if control == "cancel" else "paused")
     assert state["result"] is None
     assert state["checkpoint"]["step"] == 1
-    assert all(event["data"].get("status") != "completed" for event in manager._event_history[task_id])
+    assert all(
+        event["data"].get("status") != "completed" for event in manager._event_history[task_id]
+    )
 
 
 @pytest.mark.asyncio
@@ -157,8 +159,14 @@ async def test_agent_retry_preserves_task_id_after_credential_resolution(manager
     monkeypatch.setattr(task_worker, "resolve_owner_agent_payload", resolve)
     manager.register("agent_run", handler)
     async with task_worker.async_session() as db:
-        db.add(AutoLoopTask(id="factory-retry", owner_id="alice", status="paused",
-                            objective=json.dumps({"type": "agent_run", "goal": "build"})))
+        db.add(
+            AutoLoopTask(
+                id="factory-retry",
+                owner_id="alice",
+                status="paused",
+                objective=json.dumps({"type": "agent_run", "goal": "build"}),
+            )
+        )
         await db.commit()
     assert await manager.resume("factory-retry")
     worker = manager._active_tasks["factory-retry"]
@@ -232,10 +240,14 @@ async def test_old_worker_cannot_own_resumed_run(manager, new_running, old_exit)
         assert state["result"] is None
         assert state["retry_count"] == 0
         assert state["checkpoint"]["step"] in {1, 2}
-        late_events = [event["data"] for event in manager._event_history[task_id]
-                       if event["sequence"] > marker]
-        assert all(event.get("status") not in {"cancelled", "failed", "completed"}
-                   and event.get("step") != 99 for event in late_events)
+        late_events = [
+            event["data"] for event in manager._event_history[task_id] if event["sequence"] > marker
+        ]
+        assert all(
+            event.get("status") not in {"cancelled", "failed", "completed"}
+            and event.get("step") != 99
+            for event in late_events
+        )
     finally:
         release_old.set()
         release_new.set()
@@ -264,11 +276,13 @@ async def test_factory_resume_skips_completed_write_and_continues(factory, monke
     paused_step = asyncio.Event()
     release = asyncio.Event()
     calls = []
-    plan = {"steps": [
-        {"action": "write", "objective": "write once", "tools": ["write_file"]},
-        {"action": "inspect", "objective": "read remaining", "tools": ["read_file"]},
-        {"action": "finish", "objective": "finish remaining", "tools": ["read_file"]},
-    ]}
+    plan = {
+        "steps": [
+            {"action": "write", "objective": "write once", "tools": ["write_file"]},
+            {"action": "inspect", "objective": "read remaining", "tools": ["read_file"]},
+            {"action": "finish", "objective": "finish remaining", "tools": ["read_file"]},
+        ]
+    }
 
     async def agent(payload, on_progress):
         objective = payload["objective"]
@@ -285,11 +299,16 @@ async def test_factory_resume_skips_completed_write_and_continues(factory, monke
         return {"output": "evidence"}
 
     factory.register("agent_run", agent)
-    task_id = await factory.submit("factory_run", {
-        "objective": "implement bounded change", "factory_skills": ["file_manager"],
-        "tools": ["write_file", "read_file"], "permission_mode": "auto",
-        "api_key": "synthetic-factory-secret",
-    })
+    task_id = await factory.submit(
+        "factory_run",
+        {
+            "objective": "implement bounded change",
+            "factory_skills": ["file_manager"],
+            "tools": ["write_file", "read_file"],
+            "permission_mode": "auto",
+            "api_key": "synthetic-factory-secret",
+        },
+    )
     old_worker = factory._active_tasks[task_id]
     await asyncio.wait_for(paused_step.wait(), 5)
     assert await factory.pause(task_id)
@@ -317,7 +336,20 @@ async def test_factory_resume_skips_completed_write_and_continues(factory, monke
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("damage", ["none", "version", "owner", "fingerprint", "plan", "plan_digest", "results", "in_flight", "uncertain_write"])
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "none",
+        "version",
+        "owner",
+        "fingerprint",
+        "plan",
+        "plan_digest",
+        "results",
+        "in_flight",
+        "uncertain_write",
+    ],
+)
 async def test_factory_invalid_or_uncertain_checkpoint_fails_closed(factory, damage):
     entered = asyncio.Event()
     calls = []
@@ -325,18 +357,29 @@ async def test_factory_invalid_or_uncertain_checkpoint_fails_closed(factory, dam
     async def agent(payload, on_progress):
         calls.append(payload["objective"])
         if payload["objective"].startswith("Create a concise"):
-            return {"output": json.dumps({"steps": [
-                {"action": "write", "objective": "write once", "tools": ["write_file"]},
-            ]})}
+            return {
+                "output": json.dumps(
+                    {
+                        "steps": [
+                            {"action": "write", "objective": "write once", "tools": ["write_file"]},
+                        ]
+                    }
+                )
+            }
         entered.set()
         await asyncio.Event().wait()
         return {"output": "unreachable"}
 
     factory.register("agent_run", agent)
-    task_id = await factory.submit("factory_run", {
-        "objective": "implement bounded change", "factory_skills": ["file_manager"],
-        "tools": ["write_file"], "permission_mode": "auto",
-    })
+    task_id = await factory.submit(
+        "factory_run",
+        {
+            "objective": "implement bounded change",
+            "factory_skills": ["file_manager"],
+            "tools": ["write_file"],
+            "permission_mode": "auto",
+        },
+    )
     old_worker = factory._active_tasks[task_id]
     await asyncio.wait_for(entered.wait(), 5)
     assert await factory.pause(task_id)
@@ -348,8 +391,13 @@ async def test_factory_invalid_or_uncertain_checkpoint_fails_closed(factory, dam
             cp = None
         elif damage != "uncertain_write":
             cp["factory"][damage if damage != "owner" else "owner_id"] = {
-                "version": 99, "owner": "other", "fingerprint": "mismatch",
-                "plan": [], "plan_digest": "mismatch", "results": [{"step": 9}], "in_flight": "one",
+                "version": 99,
+                "owner": "other",
+                "fingerprint": "mismatch",
+                "plan": [],
+                "plan_digest": "mismatch",
+                "results": [{"step": 9}],
+                "in_flight": "one",
             }[damage]
         row.checkpoint = cp
         await db.commit()
@@ -369,17 +417,28 @@ async def test_factory_failed_write_is_never_retried_as_whole_task(factory):
 
     async def agent(payload, on_progress):
         if payload["objective"].startswith("Create a concise"):
-            return {"output": json.dumps({"steps": [
-                {"action": "write", "objective": "write once", "tools": ["write_file"]},
-            ]})}
+            return {
+                "output": json.dumps(
+                    {
+                        "steps": [
+                            {"action": "write", "objective": "write once", "tools": ["write_file"]},
+                        ]
+                    }
+                )
+            }
         calls.append(payload["objective"])
         raise RuntimeError("write outcome uncertain")
 
     factory.register("agent_run", agent)
-    task_id = await factory.submit("factory_run", {
-        "objective": "implement bounded change", "factory_skills": ["file_manager"],
-        "tools": ["write_file"], "permission_mode": "auto",
-    })
+    task_id = await factory.submit(
+        "factory_run",
+        {
+            "objective": "implement bounded change",
+            "factory_skills": ["file_manager"],
+            "tools": ["write_file"],
+            "permission_mode": "auto",
+        },
+    )
     await asyncio.wait_for(factory._active_tasks[task_id], 5)
     assert calls == ["write once"]
     state = await factory.get_status(task_id)
@@ -417,17 +476,30 @@ async def test_factory_checkpoint_commit_failure_never_reexecutes_step(factory, 
 
     async def agent(payload, on_progress):
         if payload["objective"].startswith("Create a concise"):
-            return {"output": json.dumps({"steps": [
-                {"action": "read", "objective": "first", "tools": ["read_file"]},
-                {"action": "read", "objective": "second", "tools": ["read_file"]},
-            ]})}
+            return {
+                "output": json.dumps(
+                    {
+                        "steps": [
+                            {"action": "read", "objective": "first", "tools": ["read_file"]},
+                            {"action": "read", "objective": "second", "tools": ["read_file"]},
+                        ]
+                    }
+                )
+            }
         calls.append(payload["objective"])
         executed.set()
         return {"output": "evidence"}
 
     factory.register("agent_run", agent)
-    task_id = await factory.submit("factory_run", {"objective": "inspect project",
-        "factory_skills": ["code_reviewer"], "tools": ["read_file"], "permission_mode": "auto"})
+    task_id = await factory.submit(
+        "factory_run",
+        {
+            "objective": "inspect project",
+            "factory_skills": ["code_reviewer"],
+            "tools": ["read_file"],
+            "permission_mode": "auto",
+        },
+    )
     worker = factory._active_tasks[task_id]
     await asyncio.wait_for(executed.wait(), 5)
     await asyncio.wait_for(worker, 5)
@@ -450,10 +522,20 @@ async def test_redacted_factory_content_blocks_resume(factory, location):
     async def agent(payload, on_progress):
         objective = payload["objective"]
         if objective.startswith("Create a concise"):
-            return {"output": json.dumps({"steps": [
-                {"action": "read", "objective": synthetic_key if location == "plan" else "first", "tools": ["read_file"]},
-                {"action": "read", "objective": "second", "tools": ["read_file"]},
-            ]})}
+            return {
+                "output": json.dumps(
+                    {
+                        "steps": [
+                            {
+                                "action": "read",
+                                "objective": synthetic_key if location == "plan" else "first",
+                                "tools": ["read_file"],
+                            },
+                            {"action": "read", "objective": "second", "tools": ["read_file"]},
+                        ]
+                    }
+                )
+            }
         calls.append(objective)
         if objective == "second":
             entered.set()
@@ -461,9 +543,16 @@ async def test_redacted_factory_content_blocks_resume(factory, location):
         return {"output": synthetic_key if location == "result" else "evidence"}
 
     factory.register("agent_run", agent)
-    task_id = await factory.submit("factory_run", {"objective": "inspect project",
-        "factory_skills": ["code_reviewer"], "tools": ["read_file"],
-        "permission_mode": "auto", "api_key": synthetic_key})
+    task_id = await factory.submit(
+        "factory_run",
+        {
+            "objective": "inspect project",
+            "factory_skills": ["code_reviewer"],
+            "tools": ["read_file"],
+            "permission_mode": "auto",
+            "api_key": synthetic_key,
+        },
+    )
     worker = factory._active_tasks[task_id]
     await asyncio.wait_for(entered.wait(), 5)
     assert await factory.pause(task_id)
@@ -515,17 +604,25 @@ async def test_rollback_refuses_live_worker_even_after_pause(manager):
 
 
 @pytest.mark.asyncio
-async def test_requeued_restart_requires_explicit_resume_and_keeps_completed_write(factory, monkeypatch):
+async def test_requeued_restart_requires_explicit_resume_and_keeps_completed_write(
+    factory, monkeypatch
+):
     started = asyncio.Event()
     calls = []
 
     async def agent(payload, on_progress):
         objective = payload["objective"]
         if objective.startswith("Create a concise"):
-            return {"output": json.dumps({"steps": [
-                {"action": "write", "objective": "write once", "tools": ["write_file"]},
-                {"action": "read", "objective": "remaining", "tools": ["read_file"]},
-            ]})}
+            return {
+                "output": json.dumps(
+                    {
+                        "steps": [
+                            {"action": "write", "objective": "write once", "tools": ["write_file"]},
+                            {"action": "read", "objective": "remaining", "tools": ["read_file"]},
+                        ]
+                    }
+                )
+            }
         if objective.startswith("Produce the final"):
             return {"output": "report"}
         calls.append(objective)
@@ -535,8 +632,15 @@ async def test_requeued_restart_requires_explicit_resume_and_keeps_completed_wri
         return {"output": "evidence"}
 
     factory.register("agent_run", agent)
-    task_id = await factory.submit("factory_run", {"objective": "implement bounded change",
-        "factory_skills": ["file_manager"], "tools": ["write_file", "read_file"], "permission_mode": "auto"})
+    task_id = await factory.submit(
+        "factory_run",
+        {
+            "objective": "implement bounded change",
+            "factory_skills": ["file_manager"],
+            "tools": ["write_file", "read_file"],
+            "permission_mode": "auto",
+        },
+    )
     worker = factory._active_tasks[task_id]
     await asyncio.wait_for(started.wait(), 5)
     assert await factory.pause(task_id)

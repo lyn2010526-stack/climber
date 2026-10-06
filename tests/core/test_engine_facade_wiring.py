@@ -31,9 +31,16 @@ from app.core.agent_engine import AgentEngine
 from app.core.engine.run_storage import RunStorage
 from app.core.session import AgentSession, SessionConfig
 from app.storage import Base
-from app.storage.database import Agent, CheckpointRecord, Document, Message, Turn, UsageLog
+from app.storage.database import (
+    Agent,
+    CheckpointRecord,
+    Document,
+    Message,
+    SessionInput,
+    Turn,
+    UsageLog,
+)
 from app.storage.database import Session as SessionRow
-from app.storage.database import SessionInput
 from app.storage.models_cost import CostRecord
 
 
@@ -76,7 +83,17 @@ class FacadeWiringTests(unittest.IsolatedAsyncioTestCase):
         self.factory = async_sessionmaker(self.db_engine, expire_on_commit=False)
         tables = [
             model.__table__
-             for model in (Agent, SessionRow, Turn, Message, UsageLog, CheckpointRecord, CostRecord, Document, SessionInput)
+            for model in (
+                Agent,
+                SessionRow,
+                Turn,
+                Message,
+                UsageLog,
+                CheckpointRecord,
+                CostRecord,
+                Document,
+                SessionInput,
+            )
         ]
         async with self.db_engine.begin() as connection:
             await connection.run_sync(lambda conn: Base.metadata.create_all(conn, tables=tables))
@@ -86,7 +103,10 @@ class FacadeWiringTests(unittest.IsolatedAsyncioTestCase):
             ("app.core.ui_rules.async_session", self.factory),
             ("app.core.checkpoint.async_session", self.factory),
             ("app.core.prompt_optimizer.maybe_optimize_instruction", AsyncMock()),
-            ("app.core.agent_engine.AgentEngine._init_sandbox", lambda engine: setattr(engine, "sandbox", None)),
+            (
+                "app.core.agent_engine.AgentEngine._init_sandbox",
+                lambda engine: setattr(engine, "sandbox", None),
+            ),
             ("app.core.agent_engine.AgentEngine._init_permissions", Mock()),
             ("app.core.agent_engine.AgentEngine._record_profile_outcome", Mock()),
             ("app.core.agent_engine.AgentEngine._tick_evolution", Mock()),
@@ -103,10 +123,15 @@ class FacadeWiringTests(unittest.IsolatedAsyncioTestCase):
                 await asyncio.gather(*list(engine._background_tasks), return_exceptions=True)
 
     def make_session(self, sid="wire-1"):
-        return AgentSession(SessionConfig(
-            session_id=sid, agent_id="", user_id="u-1",
-            provider="scripted", model_id="fake-model",
-        ))
+        return AgentSession(
+            SessionConfig(
+                session_id=sid,
+                agent_id="",
+                user_id="u-1",
+                provider="scripted",
+                model_id="fake-model",
+            )
+        )
 
     def make_engine(self, adapter) -> AgentEngine:
         registry = SimpleNamespace(get_or_create=lambda *a, **k: adapter)
@@ -121,14 +146,18 @@ class FacadeWiringTests(unittest.IsolatedAsyncioTestCase):
         engine.agent_mode = None
         engine._build_tools_for_session = Mock(return_value=[])
         for name in (
-            "_set_agent_mode", "_send_start_notification",
-            "_send_completion_notification", "_send_failure_notification",
+            "_set_agent_mode",
+            "_send_start_notification",
+            "_send_completion_notification",
+            "_send_failure_notification",
             "_trigger_memory_reflection",
         ):
             setattr(engine, name, Mock(return_value=None))
         for name in (
-            "_inject_memory_context", "_inject_core_memory",
-            "_store_episodic_memory", "_inject_profile_context",
+            "_inject_memory_context",
+            "_inject_core_memory",
+            "_store_episodic_memory",
+            "_inject_profile_context",
             "_archive_instruction",
         ):
             setattr(engine, name, AsyncMock(return_value=None))
@@ -194,7 +223,9 @@ class FacadeWiringTests(unittest.IsolatedAsyncioTestCase):
         events = [item async for item in engine._run_locked(session, "hello")]
         self.assertEqual(seen, [session])
         # The override's event comes through first, then run_locked's own DONE.
-        self.assertEqual(events[0], AgentEvent(type=AgentEventType.DONE, data={"status": "completed"}))
+        self.assertEqual(
+            events[0], AgentEvent(type=AgentEventType.DONE, data={"status": "completed"})
+        )
         self.assertEqual(events[-1].type, AgentEventType.DONE)
 
     async def test_run_routes_through_facade_run_locked(self):
@@ -206,11 +237,18 @@ class FacadeWiringTests(unittest.IsolatedAsyncioTestCase):
 
         engine._run_locked = fake_run_locked
         events = [item async for item in engine.run(session, "hello")]
-        self.assertEqual([item.type for item in events], [
-            AgentEventType.TURN_STARTED, AgentEventType.RUNTIME_REPORT, AgentEventType.TEXT,
-            AgentEventType.TURN_DONE, AgentEventType.LOOP_STATUS, AgentEventType.RUNTIME_REPORT,
-            AgentEventType.DONE,
-        ])
+        self.assertEqual(
+            [item.type for item in events],
+            [
+                AgentEventType.TURN_STARTED,
+                AgentEventType.RUNTIME_REPORT,
+                AgentEventType.TEXT,
+                AgentEventType.TURN_DONE,
+                AgentEventType.LOOP_STATUS,
+                AgentEventType.RUNTIME_REPORT,
+                AgentEventType.DONE,
+            ],
+        )
 
     async def test_parallel_executor_validator_routes_through_facade(self):
         engine = self.make_engine(TextAdapter())
@@ -218,7 +256,8 @@ class FacadeWiringTests(unittest.IsolatedAsyncioTestCase):
         engine._validate_tool_call = Mock(return_value=(False, "blocked-by-facade"))
         executor = engine._make_parallel_executor(session)
         tool_call = {
-            "id": "c1", "type": "function",
+            "id": "c1",
+            "type": "function",
             "function": {"name": "any_tool", "arguments": {"x": 1}},
         }
         results = await executor.execute_all([tool_call])
@@ -245,7 +284,8 @@ class FacadeWiringTests(unittest.IsolatedAsyncioTestCase):
         session = self.make_session()
         executor = engine._make_parallel_executor(session)
         tool_call = {
-            "id": "c1", "type": "function",
+            "id": "c1",
+            "type": "function",
             "function": {"name": "any_tool", "arguments": {}},
         }
         results = await executor.execute_all([tool_call])
@@ -272,8 +312,12 @@ class FacadeWiringTests(unittest.IsolatedAsyncioTestCase):
         engine.tool_registry = SimpleNamespace(execute=execute)
 
         tr = SimpleNamespace(
-            tool_name="broken_tool", arguments={"a": 1}, error="boom",
-            result="", success=False, duration_ms=1,
+            tool_name="broken_tool",
+            arguments={"a": 1},
+            error="boom",
+            result="",
+            success=False,
+            duration_ms=1,
         )
         await engine._handle_tool_debug(session, tr)
         self.assertEqual(len(callbacks), 1)

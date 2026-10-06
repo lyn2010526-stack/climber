@@ -220,7 +220,11 @@ class MemFS:
             except Exception:
                 pass
 
-        block = MemoryBlock.new(path=path, content=content) if existing_block is None else existing_block
+        block = (
+            MemoryBlock.new(path=path, content=content)
+            if existing_block is None
+            else existing_block
+        )
 
         file_path.write_text(block.to_markdown(), encoding="utf-8")
 
@@ -264,7 +268,9 @@ class MemFS:
                 block.content = block.content.rstrip() + "\n" + content.strip() + "\n"
             except Exception:
                 existing = file_path.read_text(encoding="utf-8")
-                file_path.write_text(existing.rstrip() + "\n" + content.strip() + "\n", encoding="utf-8")
+                file_path.write_text(
+                    existing.rstrip() + "\n" + content.strip() + "\n", encoding="utf-8"
+                )
                 if self._auto_commit and self._git_available:
                     self._git_commit_file(path, "append")
                 return
@@ -372,14 +378,14 @@ class MemFS:
             elif entry.is_file():
                 rel = str(entry.relative_to(self._base_path))
                 size = entry.stat().st_size
-                mtime = datetime.fromtimestamp(
-                    entry.stat().st_mtime, tz=UTC
-                ).isoformat()
-                tree["_files"].append({
-                    "path": rel,
-                    "size": size,
-                    "modified": mtime,
-                })
+                mtime = datetime.fromtimestamp(entry.stat().st_mtime, tz=UTC).isoformat()
+                tree["_files"].append(
+                    {
+                        "path": rel,
+                        "size": size,
+                        "modified": mtime,
+                    }
+                )
 
         return tree
 
@@ -411,8 +417,12 @@ class MemFS:
         try:
             result = subprocess.run(
                 [
-                    "git", "log", f"--max-count={limit}",
-                    "--format=%H|%aI|%an|%s", "--", path,
+                    "git",
+                    "log",
+                    f"--max-count={limit}",
+                    "--format=%H|%aI|%an|%s",
+                    "--",
+                    path,
                 ],
                 cwd=str(self._base_path),
                 capture_output=True,
@@ -426,12 +436,14 @@ class MemFS:
             for line in result.stdout.strip().splitlines():
                 parts = line.split("|", 3)
                 if len(parts) == 4:
-                    history.append({
-                        "hash": parts[0][:12],
-                        "date": parts[1],
-                        "author": parts[2],
-                        "message": parts[3],
-                    })
+                    history.append(
+                        {
+                            "hash": parts[0][:12],
+                            "date": parts[1],
+                            "author": parts[2],
+                            "message": parts[3],
+                        }
+                    )
             return history
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return []
@@ -470,11 +482,13 @@ class MemFS:
                         matches.append(f"L{i}: {line.strip()}")
 
                 if matches:
-                    results.append({
-                        "path": rel,
-                        "matches": matches[:10],
-                        "total_matches": len(matches),
-                    })
+                    results.append(
+                        {
+                            "path": rel,
+                            "matches": matches[:10],
+                            "total_matches": len(matches),
+                        }
+                    )
 
         return results
 
@@ -525,7 +539,9 @@ class MemFS:
             )
             subprocess.run(
                 [
-                    "git", "commit", "-m",
+                    "git",
+                    "commit",
+                    "-m",
                     f"memfs: {action} {path}",
                     "--quiet",
                 ],
@@ -547,7 +563,9 @@ class MemFS:
             )
             subprocess.run(
                 [
-                    "git", "commit", "-m",
+                    "git",
+                    "commit",
+                    "-m",
                     f"memfs: delete {path}",
                     "--quiet",
                 ],

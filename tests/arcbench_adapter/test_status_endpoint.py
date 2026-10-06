@@ -27,18 +27,82 @@ async def test_arcbench_status_reports_completed_run(client, tmp_path, monkeypat
     import app.api.v1.routes.arcbench as arcbench
 
     run_dir = tmp_path / "run-1"
-    _write(run_dir, ".arc/runner-events.jsonl", "\n".join([
-        json.dumps({"type": "runner_state", "state": "running", "timestamp": "2026-09-18 10:00:00", "message": "started"}),
-        json.dumps({"type": "requirement_state", "node_id": "REQ-1", "phase": "design", "status": "completed", "timestamp": "2026-09-18 10:01:00", "message": "designed"}),
-        json.dumps({"type": "requirement_state", "node_id": "REQ-1", "phase": "implement", "status": "completed", "timestamp": "2026-09-18 10:02:00", "message": "implemented"}),
-        json.dumps({"type": "requirement_state", "node_id": "REQ-1", "phase": "test", "status": "passed", "timestamp": "2026-09-18 10:03:00", "message": "spec green"}),
-        json.dumps({"type": "requirement_state", "node_id": "REQ-2", "phase": "test", "status": "failed", "timestamp": "2026-09-18 10:04:00", "message": "spec red"}),
-        json.dumps({"type": "runner_state", "state": "completed", "timestamp": "2026-09-18 10:05:00", "message": "completed 1/2 nodes"}),
-    ]))
-    _write(run_dir, "run_summary.json", json.dumps({
-        "nodes_completed": 1, "nodes_total": 2, "acceptance": "1 passed, 1 failed",
-        "rehearsal_error": False,
-    }))
+    _write(
+        run_dir,
+        ".arc/runner-events.jsonl",
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "runner_state",
+                        "state": "running",
+                        "timestamp": "2026-09-18 10:00:00",
+                        "message": "started",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "requirement_state",
+                        "node_id": "REQ-1",
+                        "phase": "design",
+                        "status": "completed",
+                        "timestamp": "2026-09-18 10:01:00",
+                        "message": "designed",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "requirement_state",
+                        "node_id": "REQ-1",
+                        "phase": "implement",
+                        "status": "completed",
+                        "timestamp": "2026-09-18 10:02:00",
+                        "message": "implemented",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "requirement_state",
+                        "node_id": "REQ-1",
+                        "phase": "test",
+                        "status": "passed",
+                        "timestamp": "2026-09-18 10:03:00",
+                        "message": "spec green",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "requirement_state",
+                        "node_id": "REQ-2",
+                        "phase": "test",
+                        "status": "failed",
+                        "timestamp": "2026-09-18 10:04:00",
+                        "message": "spec red",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "runner_state",
+                        "state": "completed",
+                        "timestamp": "2026-09-18 10:05:00",
+                        "message": "completed 1/2 nodes",
+                    }
+                ),
+            ]
+        ),
+    )
+    _write(
+        run_dir,
+        "run_summary.json",
+        json.dumps(
+            {
+                "nodes_completed": 1,
+                "nodes_total": 2,
+                "acceptance": "1 passed, 1 failed",
+                "rehearsal_error": False,
+            }
+        ),
+    )
     (run_dir / ".arc" / "traceability").mkdir(parents=True)
 
     pack_dir = tmp_path / "dist"
@@ -68,11 +132,42 @@ async def test_arcbench_status_reports_mid_run_phase(client, tmp_path, monkeypat
     import app.api.v1.routes.arcbench as arcbench
 
     run_dir = tmp_path / "run-2"
-    _write(run_dir, ".arc/runner-events.jsonl", "\n".join([
-        json.dumps({"type": "runner_state", "state": "running", "timestamp": "2026-09-18 09:00:00", "message": "started"}),
-        json.dumps({"type": "requirement_state", "node_id": "REQ-1", "phase": "design", "status": "completed", "timestamp": "2026-09-18 09:01:00", "message": "designed"}),
-        json.dumps({"type": "requirement_state", "node_id": "REQ-1", "phase": "implement", "status": "running", "timestamp": "2026-09-18 09:02:00", "message": "coding"}),
-    ]))
+    _write(
+        run_dir,
+        ".arc/runner-events.jsonl",
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "runner_state",
+                        "state": "running",
+                        "timestamp": "2026-09-18 09:00:00",
+                        "message": "started",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "requirement_state",
+                        "node_id": "REQ-1",
+                        "phase": "design",
+                        "status": "completed",
+                        "timestamp": "2026-09-18 09:01:00",
+                        "message": "designed",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "requirement_state",
+                        "node_id": "REQ-1",
+                        "phase": "implement",
+                        "status": "running",
+                        "timestamp": "2026-09-18 09:02:00",
+                        "message": "coding",
+                    }
+                ),
+            ]
+        ),
+    )
     monkeypatch.setattr(arcbench, "_RUN_DIR", tmp_path)
     monkeypatch.setattr(arcbench, "_PACK_DIR", tmp_path / "empty-dist")
 
@@ -89,10 +184,30 @@ async def test_arcbench_status_reports_failed_runner(client, tmp_path, monkeypat
     import app.api.v1.routes.arcbench as arcbench
 
     run_dir = tmp_path / "run-3"
-    _write(run_dir, ".arc/runner-events.jsonl", "\n".join([
-        json.dumps({"type": "runner_state", "state": "running", "timestamp": "2026-09-18 08:00:00", "message": "started"}),
-        json.dumps({"type": "runner_state", "state": "failed", "timestamp": "2026-09-18 08:01:00", "message": "requirements parse failed: boom"}),
-    ]))
+    _write(
+        run_dir,
+        ".arc/runner-events.jsonl",
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "type": "runner_state",
+                        "state": "running",
+                        "timestamp": "2026-09-18 08:00:00",
+                        "message": "started",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "type": "runner_state",
+                        "state": "failed",
+                        "timestamp": "2026-09-18 08:01:00",
+                        "message": "requirements parse failed: boom",
+                    }
+                ),
+            ]
+        ),
+    )
     monkeypatch.setattr(arcbench, "_RUN_DIR", tmp_path)
     monkeypatch.setattr(arcbench, "_PACK_DIR", tmp_path / "empty-dist")
 

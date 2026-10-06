@@ -67,8 +67,7 @@ def _worker_main(queue, payload_json: str, _timeout_seconds: int) -> None:
         queue.put({"ok": False, "error": f"{type(exc).__name__}: {exc}"})
 
 
-def run_forked(fn, *args, timeout_seconds: int = _TASK_TIMEOUT_SECONDS,
-               **kwargs) -> ForkResult:
+def run_forked(fn, *args, timeout_seconds: int = _TASK_TIMEOUT_SECONDS, **kwargs) -> ForkResult:
     """同步隔离运行：把 fn(*args, **kwargs) 放到独立进程执行。
 
     fn 必须是可导入的函数（`module:qualname` 形式），参数与返回值需
@@ -81,12 +80,19 @@ def run_forked(fn, *args, timeout_seconds: int = _TASK_TIMEOUT_SECONDS,
         # 局部/未注册函数：降级为进程内隔离（try/except），记录差异
         try:
             value = fn(*args, **kwargs)
-            return ForkResult(ok=True, value=value, worker_pid=os.getpid(),
-                              duration_ms=(time.monotonic() - started) * 1000)
+            return ForkResult(
+                ok=True,
+                value=value,
+                worker_pid=os.getpid(),
+                duration_ms=(time.monotonic() - started) * 1000,
+            )
         except Exception as exc:
-            return ForkResult(ok=False, error=f"{type(exc).__name__}: {exc}",
-                              worker_pid=os.getpid(),
-                              duration_ms=(time.monotonic() - started) * 1000)
+            return ForkResult(
+                ok=False,
+                error=f"{type(exc).__name__}: {exc}",
+                worker_pid=os.getpid(),
+                duration_ms=(time.monotonic() - started) * 1000,
+            )
 
     ctx = multiprocessing.get_context("spawn")
     queue = ctx.Queue()
@@ -97,19 +103,27 @@ def run_forked(fn, *args, timeout_seconds: int = _TASK_TIMEOUT_SECONDS,
         item = queue.get(timeout=timeout_seconds + 5)
         worker_pid = proc.pid or 0
         proc.join(timeout=2)
-        return ForkResult(ok=bool(item.get("ok")), value=item.get("value"),
-                          error=item.get("error"), worker_pid=worker_pid,
-                          duration_ms=(time.monotonic() - started) * 1000)
+        return ForkResult(
+            ok=bool(item.get("ok")),
+            value=item.get("value"),
+            error=item.get("error"),
+            worker_pid=worker_pid,
+            duration_ms=(time.monotonic() - started) * 1000,
+        )
     except Exception as exc:
         proc.terminate()
         proc.join(timeout=2)
-        return ForkResult(ok=False, error=f"fork timeout/failure: {exc}",
-                          worker_pid=proc.pid or 0,
-                          duration_ms=(time.monotonic() - started) * 1000)
+        return ForkResult(
+            ok=False,
+            error=f"fork timeout/failure: {exc}",
+            worker_pid=proc.pid or 0,
+            duration_ms=(time.monotonic() - started) * 1000,
+        )
 
 
-async def run_forked_async(fn, *args, timeout_seconds: int = _TASK_TIMEOUT_SECONDS,
-                           **kwargs) -> ForkResult:
+async def run_forked_async(
+    fn, *args, timeout_seconds: int = _TASK_TIMEOUT_SECONDS, **kwargs
+) -> ForkResult:
     """异步隔离运行：把隔离任务放到线程池，不阻塞事件循环。"""
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(

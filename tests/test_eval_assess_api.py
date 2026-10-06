@@ -91,8 +91,12 @@ async def test_assess_veto_zeroes_score(client) -> None:
 
 @pytest.mark.asyncio
 async def test_assess_rejects_empty_output_and_rubric(client) -> None:
-    assert (await client.post("/api/v1/eval/assess", json={"output": "  ", "rubric": []})).status_code == 422
-    assert (await client.post("/api/v1/eval/assess", json={"output": "some text", "rubric": []})).status_code == 422
+    assert (
+        await client.post("/api/v1/eval/assess", json={"output": "  ", "rubric": []})
+    ).status_code == 422
+    assert (
+        await client.post("/api/v1/eval/assess", json={"output": "some text", "rubric": []})
+    ).status_code == 422
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,5 @@
 """Discord integration client."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,10 +31,12 @@ class DiscordClient:
             raise ValueError("channel_id must be a Discord snowflake string")
         validate_text(message, "message", 2000)
         data = await request_json(
-            "Discord", "POST",
+            "Discord",
+            "POST",
             f"https://discord.com/api/v10/channels/{self.config.channel_id}/messages",
             headers={"Authorization": f"Bot {self.config.token}"},
-            timeout=self.config.timeout, payload={"content": message},
+            timeout=self.config.timeout,
+            payload={"content": message},
         )
         message_id = response_id(data, "id", "Discord")
         if response_id(data, "channel_id", "Discord") != self.config.channel_id:

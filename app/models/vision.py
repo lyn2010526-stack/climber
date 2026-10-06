@@ -25,7 +25,9 @@ MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024
 SUPPORTED_ATTACHMENT_TYPES = {"application/pdf", "text/plain", "text/markdown", "text/csv"}
 
 _DATA_URL_RE = re.compile(r"^data:(image/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$")
-_GENERIC_DATA_URL_RE = re.compile(r"^data:([a-zA-Z0-9.+-]+/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$")
+_GENERIC_DATA_URL_RE = re.compile(
+    r"^data:([a-zA-Z0-9.+-]+/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$"
+)
 _HTTP_URL_RE = re.compile(r"^https?://\S+$")
 
 
@@ -80,7 +82,11 @@ def validate_attachments(attachments: list[dict] | None) -> list[ChatAttachment]
             raise ValueError("Each attachment must be an object")
         kind, data, mime_type = item.get("kind"), item.get("data"), item.get("mime_type")
         name, size = item.get("name") or "attachment", item.get("size")
-        if kind not in {"image", "file"} or not isinstance(data, str) or not isinstance(mime_type, str):
+        if (
+            kind not in {"image", "file"}
+            or not isinstance(data, str)
+            or not isinstance(mime_type, str)
+        ):
             raise ValueError("Each attachment requires kind, data and mime_type")
         if kind == "image" and not mime_type.startswith("image/"):
             raise ValueError("Image attachments require an image MIME type")
@@ -101,14 +107,18 @@ def validate_attachments(attachments: list[dict] | None) -> list[ChatAttachment]
     return result
 
 
-def build_user_content(text: str, images: list[str] | None = None, attachments: list[ChatAttachment] | None = None) -> str | list[dict[str, Any]]:
+def build_user_content(
+    text: str, images: list[str] | None = None, attachments: list[ChatAttachment] | None = None
+) -> str | list[dict[str, Any]]:
     """Build canonical user message content in OpenAI vision format.
 
     Returns the plain string when no images are present, otherwise content
     parts with the text first and one ``image_url`` part per image.
     """
     if attachments is None:
-        attachments = [ChatAttachment("image", url, "image", "image/unknown", 0) for url in (images or [])]
+        attachments = [
+            ChatAttachment("image", url, "image", "image/unknown", 0) for url in (images or [])
+        ]
     if not attachments:
         return text
     parts: list[dict[str, Any]] = []
@@ -118,7 +128,16 @@ def build_user_content(text: str, images: list[str] | None = None, attachments: 
         if attachment.kind == "image":
             parts.append({"type": "image_url", "image_url": {"url": attachment.data}})
         else:
-            parts.append({"type": "file", "file": {"filename": attachment.name, "mime_type": attachment.mime_type, "data": attachment.data}})
+            parts.append(
+                {
+                    "type": "file",
+                    "file": {
+                        "filename": attachment.name,
+                        "mime_type": attachment.mime_type,
+                        "data": attachment.data,
+                    },
+                }
+            )
     return parts
 
 

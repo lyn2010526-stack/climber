@@ -11,8 +11,7 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.storage import _ensure_auto_loop_columns, init_db
-
+from app.storage import _ensure_auto_loop_columns
 
 OLD_COLUMNS = """
 CREATE TABLE auto_loop_tasks (
@@ -46,7 +45,9 @@ async def test_ensure_auto_loop_columns_adds_all_four_missing_columns(tmp_path):
         from sqlalchemy import inspect
 
         columns = await conn.run_sync(
-            lambda sync_conn: {column["name"] for column in inspect(sync_conn).get_columns("auto_loop_tasks")}
+            lambda sync_conn: {
+                column["name"] for column in inspect(sync_conn).get_columns("auto_loop_tasks")
+            }
         )
     assert {"retry_count", "interruption_reason", "checkpoint", "progress_evaluation"} <= columns
     await engine.dispose()

@@ -68,20 +68,25 @@ class RunnerStore:
 
     def start(self, body: RunRequest) -> TaskInfo:
         session_id = body.session_id or f"api-{int(time.time() * 1000)}"
-        info = TaskInfo(session_id=session_id, state="running",
-                        objective=body.objective, created_at=time.time())
+        info = TaskInfo(
+            session_id=session_id, state="running", objective=body.objective, created_at=time.time()
+        )
         with self._lock:
             if (client := self._clients.get(session_id)) is None:
-                client = TAORClient(TAORConfig(
-                    data_dir=f"{self._data_dir}/{session_id}",
-                    max_outer_rounds=body.max_outer_rounds,
-                    mode=RunMode(body.mode),
-                ))
+                client = TAORClient(
+                    TAORConfig(
+                        data_dir=f"{self._data_dir}/{session_id}",
+                        max_outer_rounds=body.max_outer_rounds,
+                        mode=RunMode(body.mode),
+                    )
+                )
                 self._clients[session_id] = client
             self._tasks[session_id] = info
 
         threading.Thread(
-            target=self._worker, args=(session_id, info, body.mode), daemon=True,
+            target=self._worker,
+            args=(session_id, info, body.mode),
+            daemon=True,
         ).start()
         return info
 

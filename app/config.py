@@ -49,8 +49,7 @@ DEFAULT_MAX_CONCURRENT_SUBTASKS = 3
 MAX_CONCURRENT_SUBTASKS_CEILING = 18
 
 SECRET_GENERATION_HINT = (
-    "Generate a real secret, e.g. `python -c \"import secrets;"
-    " print(secrets.token_urlsafe(48))\"`"
+    'Generate a real secret, e.g. `python -c "import secrets; print(secrets.token_urlsafe(48))"`'
 )
 
 
@@ -141,7 +140,9 @@ class Settings(BaseSettings):
     trusted_proxies: str = Field(default="127.0.0.1,::1")
 
     cors_origins: str = Field(default="http://localhost:5173,http://localhost:3000")
-    cors_origins_list: list[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"])
+    cors_origins_list: list[str] = Field(
+        default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"]
+    )
 
     mcp_timeout: int = Field(default=30)
     tool_timeout: int = Field(default=60)
@@ -172,32 +173,34 @@ class Settings(BaseSettings):
     key_cooldown_seconds: int = Field(default=60)
 
     # Plugin marketplace catalog
-    plugin_marketplace: list[dict] = Field(default_factory=lambda: [
-        {
-            "plugin_key": "web-scraper",
-            "name": "网页抓取器",
-            "description": "抓取并解析网页内容为结构化数据",
-            "category": "data",
-            "version": "1.0.0",
-            "author": "climber",
-        },
-        {
-            "plugin_key": "code-runner",
-            "name": "代码执行器",
-            "description": "在本地沙箱中执行 Python 代码片段",
-            "category": "dev",
-            "version": "1.0.0",
-            "author": "climber",
-        },
-        {
-            "plugin_key": "file-watcher",
-            "name": "文件监听器",
-            "description": "监听本地目录变化并触发工作流",
-            "category": "automation",
-            "version": "1.0.0",
-            "author": "climber",
-        },
-    ])
+    plugin_marketplace: list[dict] = Field(
+        default_factory=lambda: [
+            {
+                "plugin_key": "web-scraper",
+                "name": "网页抓取器",
+                "description": "抓取并解析网页内容为结构化数据",
+                "category": "data",
+                "version": "1.0.0",
+                "author": "climber",
+            },
+            {
+                "plugin_key": "code-runner",
+                "name": "代码执行器",
+                "description": "在本地沙箱中执行 Python 代码片段",
+                "category": "dev",
+                "version": "1.0.0",
+                "author": "climber",
+            },
+            {
+                "plugin_key": "file-watcher",
+                "name": "文件监听器",
+                "description": "监听本地目录变化并触发工作流",
+                "category": "automation",
+                "version": "1.0.0",
+                "author": "climber",
+            },
+        ]
+    )
 
     @field_validator("max_concurrent_subtasks", mode="after")
     @classmethod

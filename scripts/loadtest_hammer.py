@@ -1,10 +1,11 @@
 """Stress/hammer test for the software-factory + simulation chain."""
+
 import json
 import random
 import threading
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 
 BASE = "http://localhost:8000"
 key = "sk-loadtest-fake-0000"
@@ -16,8 +17,9 @@ lock = threading.Lock()
 def req(method, path, body=None, timeout=120):
     url = BASE + path
     data = json.dumps(body).encode() if body is not None else None
-    r = urllib.request.Request(url, data=data, method=method,
-                               headers={"Content-Type": "application/json"})
+    r = urllib.request.Request(
+        url, data=data, method=method, headers={"Content-Type": "application/json"}
+    )
     t0 = time.time()
     try:
         with urllib.request.urlopen(r, timeout=timeout) as resp:
@@ -39,7 +41,7 @@ def record(method, path, status, dt, ok_flag):
             results["err"] += 1
             k = f"{method} {path} -> {status}"
             results["errors"][k] = results["errors"].get(k, 0) + 1
-    s = f"{method} {path} -> {status} [{dt*1000:.0f}ms]"
+    s = f"{method} {path} -> {status} [{dt * 1000:.0f}ms]"
     with open("/tmp/loadtest_rows.log", "a") as f:
         f.write(s + "\n")
 
@@ -51,25 +53,42 @@ def run_experiment_worker(worker_id, n):
         model = random.choice(["heat", "oscillator", "logistic", "bogus_model"])
         base = {"model": "heat", "dx": 0.02, "t_final": 5, "source_temp": 100, "ambient_temp": 0}
         if model == "oscillator":
-            base = {"model": "oscillator", "mass": 1, "stiffness": 2, "damping": 0.1,
-                    "drive_amplitude": 0.5, "drive_frequency": 1.2, "duration": 10}
+            base = {
+                "model": "oscillator",
+                "mass": 1,
+                "stiffness": 2,
+                "damping": 0.1,
+                "drive_amplitude": 0.5,
+                "drive_frequency": 1.2,
+                "duration": 10,
+            }
         elif model == "logistic":
-            base = {"model": "logistic", "growth_rate": 0.5, "carrying_capacity": 100,
-                    "initial_population": 10, "duration": 50}
+            base = {
+                "model": "logistic",
+                "growth_rate": 0.5,
+                "carrying_capacity": 100,
+                "initial_population": 10,
+                "duration": 50,
+            }
         schema = json.dumps({"sweep": {"dt": {"values": [dt]}}, "base": base})
-        malformed = (i % 5 == 0)
+        malformed = i % 5 == 0
         if malformed:
             schema = "{ not valid json !!"
         workflow = {
             "name": f"lt-{worker_id}-{i}",
             "nodes": [
                 {"id": "a", "type": "input", "data": {"label": "In"}},
-                {"id": "sim", "type": "simulation", "data": {
-                    "label": "Sim", "tool_name": "simulate_experiment",
-                    "goal": f"converge dt for {model}",
-                    "schema_(json)": schema,
-                    "max_rounds": str(random.choice([1, 3, 10])),
-                }},
+                {
+                    "id": "sim",
+                    "type": "simulation",
+                    "data": {
+                        "label": "Sim",
+                        "tool_name": "simulate_experiment",
+                        "goal": f"converge dt for {model}",
+                        "schema_(json)": schema,
+                        "max_rounds": str(random.choice([1, 3, 10])),
+                    },
+                },
                 {"id": "b", "type": "output", "data": {"label": "Out"}},
             ],
             "edges": [{"source": "a", "target": "sim"}, {"source": "sim", "target": "b"}],
@@ -97,10 +116,15 @@ def run_experiment_worker(worker_id, n):
 
 def api_key_stress_worker(worker_id, n):
     for i in range(n):
-        s, body, dt0 = req("POST", "/api/v1/api-keys", {
-            "provider": random.choice(["openai", "anthropic", "google", "ollama", "stepfun"]),
-            "name": f"key-{worker_id}-{i}", "api_key": f"sk-{random.randint(0,10**12)}",
-        })
+        s, _body, dt0 = req(
+            "POST",
+            "/api/v1/api-keys",
+            {
+                "provider": random.choice(["openai", "anthropic", "google", "ollama", "stepfun"]),
+                "name": f"key-{worker_id}-{i}",
+                "api_key": f"sk-{random.randint(0, 10**12)}",
+            },
+        )
         record("POST", "/api-keys", s, dt0, 200 <= s < 300)
         list_s, _, _ = req("GET", "/api/v1/api-keys")
         record("GET", "/api-keys", list_s, 0.01, list_s == 200)
@@ -108,9 +132,15 @@ def api_key_stress_worker(worker_id, n):
 
 def agent_stress_worker(worker_id, n):
     for i in range(n):
-        s, body, dt0 = req("POST", "/api/v1/agents", {
-            "name": f"agent-{worker_id}-{i}", "provider": "openai", "model_id": "gpt-4o-mini",
-        })
+        s, _body, dt0 = req(
+            "POST",
+            "/api/v1/agents",
+            {
+                "name": f"agent-{worker_id}-{i}",
+                "provider": "openai",
+                "model_id": "gpt-4o-mini",
+            },
+        )
         record("POST", "/agents", s, dt0, 200 <= s < 300)
 
 
@@ -126,10 +156,18 @@ def malformed_worker(worker_id, n):
     for i in range(n):
         body = garbage[i % len(garbage)]
         try:
-            data = json.loads(body) if body not in ("not-json", "[]") else json.loads(body) if body == "[]" else body
+            data = (
+                json.loads(body)
+                if body not in ("not-json", "[]")
+                else json.loads(body)
+                if body == "[]"
+                else body
+            )
         except Exception:
             data = body
-        s, resp, dt0 = req("POST", "/api/v1/workflows", data if isinstance(data, dict) else json.loads('{}'))
+        s, _resp, dt0 = req(
+            "POST", "/api/v1/workflows", data if isinstance(data, dict) else json.loads("{}")
+        )
         record("POST", "/workflows(garbage)", s, dt0, 400 <= s < 500 or s == 200)
 
 

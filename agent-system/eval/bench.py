@@ -41,11 +41,14 @@ def _llm_plan(*steps):
             return demo.FakeChatResult(content="任务完成，输出最终总结。")
         if isinstance(step, tuple):
             step = [step]
-        calls = [{
-            "id": f"tc_{counter['n']}_{i}",
-            "type": "function",
-            "function": {"name": name, "arguments": args},
-        } for i, (name, args) in enumerate(step)]
+        calls = [
+            {
+                "id": f"tc_{counter['n']}_{i}",
+                "type": "function",
+                "function": {"name": name, "arguments": args},
+            }
+            for i, (name, args) in enumerate(step)
+        ]
         return demo.FakeChatResult(content="执行工具调用", tool_calls=calls)
 
     return llm_call
@@ -64,19 +67,27 @@ def _ok_tool_executor(executed: list[str]):
 
 
 def _fail_tool_executor(call: ToolCall) -> ToolResult:
-    return ToolResult(tool_call_id=call.tool_call_id, name=call.name,
-                      content=None, is_error=True, error="boom")
+    return ToolResult(
+        tool_call_id=call.tool_call_id, name=call.name, content=None, is_error=True, error="boom"
+    )
 
 
 SCENARIOS = {
     "linear_complete": {
         "objective": "查询数据库并按部门汇总生成报告",
         "mode": RunMode.AUTO,
-        "llm": _llm_plan(("query_db", {"sql": "SELECT * FROM orders"}),
-                         ("analyze", {"field": "department"}),
-                         None),
-        "expect": {"status": "completed", "tool_calls_min": 2, "audits_min": 1,
-                   "snapshots_min": 2, "rollbacks": 0},
+        "llm": _llm_plan(
+            ("query_db", {"sql": "SELECT * FROM orders"}),
+            ("analyze", {"field": "department"}),
+            None,
+        ),
+        "expect": {
+            "status": "completed",
+            "tool_calls_min": 2,
+            "audits_min": 1,
+            "snapshots_min": 2,
+            "rollbacks": 0,
+        },
         "note": "线性任务：2 次工具调用后输出总结 → DONE",
     },
     "hitl_yield": {
@@ -106,11 +117,15 @@ SCENARIOS = {
     "long_milestones": {
         "objective": "分五步完成数据分析并汇报",
         "mode": RunMode.AUTO,
-        "llm": _llm_plan(("query_db", {"sql": "s1"}), ("query_db", {"sql": "s2"}),
-                         ("analyze", {"field": "a"}), ("analyze", {"field": "b"}),
-                         ("write_file", {"path": "r.md"}), None),
-        "expect": {"status": "completed", "tool_calls_min": 4,
-                   "snapshots_min": 5, "audits_min": 1},
+        "llm": _llm_plan(
+            ("query_db", {"sql": "s1"}),
+            ("query_db", {"sql": "s2"}),
+            ("analyze", {"field": "a"}),
+            ("analyze", {"field": "b"}),
+            ("write_file", {"path": "r.md"}),
+            None,
+        ),
+        "expect": {"status": "completed", "tool_calls_min": 4, "snapshots_min": 5, "audits_min": 1},
         "note": "长任务：多轮工具调用 + 每轮增量快照 + 中途后台精炼",
     },
 }
@@ -122,14 +137,19 @@ def run_scenario(name: str, spec: dict) -> dict:
     started = time.monotonic()
     workdir = os.path.join(tempfile.gettempdir(), "taor_eval")
     os.makedirs(workdir, exist_ok=True)
-    cfg = TAORConfig(data_dir=os.path.join(workdir, f"eval_{name}"),
-                     mode=spec["mode"], max_outer_rounds=8, max_stall_rounds=2,
-                     memory_refine_every=2)
+    cfg = TAORConfig(
+        data_dir=os.path.join(workdir, f"eval_{name}"),
+        mode=spec["mode"],
+        max_outer_rounds=8,
+        max_stall_rounds=2,
+        memory_refine_every=2,
+    )
     client = TAORClient(cfg)
 
     if spec.get("pre_seed_milestone"):
         client.snapshot_manager.save_milestone(
-            "eval-session", TAORPhase.PLAN, state={"step": 0}, messages=[], label="plan")
+            "eval-session", TAORPhase.PLAN, state={"step": 0}, messages=[], label="plan"
+        )
 
     executed: list[str] = []
     execute = demo.DEMO_TOOL_EXECUTOR
@@ -138,8 +158,14 @@ def run_scenario(name: str, spec: dict) -> dict:
     elif spec.get("spy_executor"):
         execute = _ok_tool_executor(executed)
 
-    handle = client.run(spec["objective"], mode=spec["mode"], session_id="eval-session",
-                        llm_call=spec["llm"], tool_executor=execute, tools=demo.DEMO_TOOLS)
+    handle = client.run(
+        spec["objective"],
+        mode=spec["mode"],
+        session_id="eval-session",
+        llm_call=spec["llm"],
+        tool_executor=execute,
+        tools=demo.DEMO_TOOLS,
+    )
 
     report = handle.report
     snapshots = handle.snapshots
@@ -185,10 +211,20 @@ def _fail_reasons(metrics: dict, expect: dict) -> list[str]:
         reasons.append(f"tool_calls={metrics['tool_calls']} < {expect['tool_calls_min']}")
     if "audits_min" in expect and metrics["audits"] < expect["audits_min"]:
         reasons.append(f"audits={metrics['audits']} < {expect['audits_min']}")
-    if "snapshots_min" in expect and sum(metrics["snapshot_kinds"].values()) < expect["snapshots_min"]:
-        reasons.append(f"snapshots={sum(metrics['snapshot_kinds'].values())} < {expect['snapshots_min']}")
-    if "milestones_min" in expect and metrics["snapshot_kinds"].get("milestone", 0) < expect["milestones_min"]:
-        reasons.append(f"milestones={metrics['snapshot_kinds'].get('milestone', 0)} < {expect['milestones_min']}")
+    if (
+        "snapshots_min" in expect
+        and sum(metrics["snapshot_kinds"].values()) < expect["snapshots_min"]
+    ):
+        reasons.append(
+            f"snapshots={sum(metrics['snapshot_kinds'].values())} < {expect['snapshots_min']}"
+        )
+    if (
+        "milestones_min" in expect
+        and metrics["snapshot_kinds"].get("milestone", 0) < expect["milestones_min"]
+    ):
+        reasons.append(
+            f"milestones={metrics['snapshot_kinds'].get('milestone', 0)} < {expect['milestones_min']}"
+        )
     if "rollbacks" in expect and metrics["rollbacks"] != expect["rollbacks"]:
         reasons.append(f"rollbacks={metrics['rollbacks']} != {expect['rollbacks']}")
     if "rollbacks_min" in expect and metrics["rollbacks"] < expect["rollbacks_min"]:
@@ -205,29 +241,36 @@ def build_report(results: dict[str, dict], _out_dir: str) -> str:
     lines.append("|---|---|---|---|---|---|---|---|---|")
     for name, m in results.items():
         marks = " ".join(f"{k}:{v}" for k, v in m["snapshot_kinds"].items())
-        lines.append(f"| {name} | {m['status']} | {m['outer_rounds']} | {m['tool_calls']} "
-                     f"| {m['retries']} | {m['rollbacks']} | {m['audits']} | {marks} | "
-                     f"{'PASS' if m['pass'] else 'FAIL'} |")
+        lines.append(
+            f"| {name} | {m['status']} | {m['outer_rounds']} | {m['tool_calls']} "
+            f"| {m['retries']} | {m['rollbacks']} | {m['audits']} | {marks} | "
+            f"{'PASS' if m['pass'] else 'FAIL'} |"
+        )
     lines.append("")
     lines.append("## 任务报告摘要")
     for name, m in results.items():
         rep = m["report"]["report"]
-        lines.append(f"- `{name}` status={rep['status']} outer_rounds={rep['outer_rounds']} "
-                     f"inner_turns={rep['inner_turns']} completed_tasks={len(rep.get('completed_tasks', []))}")
+        lines.append(
+            f"- `{name}` status={rep['status']} outer_rounds={rep['outer_rounds']} "
+            f"inner_turns={rep['inner_turns']} completed_tasks={len(rep.get('completed_tasks', []))}"
+        )
     lines.append("")
     lines.append("## 记忆审计摘要")
     for name, m in results.items():
         lines.append(f"- `{name}` 审计 {m['audits']} 条：" + ", ".join(m["audit_actions"]))
     lines.append("")
     lines.append("## 基线对照说明")
-    lines.append("本引擎（TAOR）在同等确定性场景下的实测指标见上表；对照列为参考特征（见 `baseline.py`），")
+    lines.append(
+        "本引擎（TAOR）在同等确定性场景下的实测指标见上表；对照列为参考特征（见 `baseline.py`），"
+    )
     lines.append("差异点集中在：本引擎具备『连续无进展→回滚里程碑』守卫、双层快照、后台记忆精炼。")
     return "\n".join(lines)
 
 
 def main(args: argparse.Namespace) -> int:
-    out_dir = args.out or os.path.join(os.path.dirname(os.path.abspath(__file__)), "results",
-                                       time.strftime("%Y%m%d-%H%M%S"))
+    out_dir = args.out or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "results", time.strftime("%Y%m%d-%H%M%S")
+    )
     os.makedirs(out_dir, exist_ok=True)
 
     names = args.only.split(",") if args.only else sorted(SCENARIOS)
@@ -242,8 +285,10 @@ def main(args: argparse.Namespace) -> int:
         tag = "PASS" if m["pass"] else "FAIL"
         if not m["pass"]:
             failed += 1
-        print(f"[{tag}] {name:<18} status={m['status']:<10} rounds={m['outer_rounds']} "
-              f"tools={m['tool_calls']} audits={m['audits']} ms={m['duration_ms']}")
+        print(
+            f"[{tag}] {name:<18} status={m['status']:<10} rounds={m['outer_rounds']} "
+            f"tools={m['tool_calls']} audits={m['audits']} ms={m['duration_ms']}"
+        )
         if m["fail_reasons"]:
             for r in m["fail_reasons"]:
                 print(f"      ! {r}")

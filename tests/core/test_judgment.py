@@ -21,6 +21,7 @@ class TestCalibrate:
     def test_non_finite_raw_confidence_raises(self, raw):
         with pytest.raises(ValueError, match="finite"):
             calibrate(raw, evidence_count=0)
+
     def test_empty_evidence_keeps_base_within_bounds(self):
         assert calibrate(0.5, evidence_count=0) == pytest.approx(0.5)
 
@@ -75,6 +76,7 @@ class TestContinuousGoal:
     def test_non_finite_weight_raises(self):
         with pytest.raises(ValueError, match="finite"):
             continuous_goal([0.5], weights=[math.nan])
+
     def test_empty_signals_yield_zero(self):
         assert continuous_goal([]) == 0.0
 
@@ -213,6 +215,7 @@ class TestDeflateVerdict:
     def test_non_finite_confidence_raises(self):
         with pytest.raises(ValueError, match="finite"):
             deflate_verdict(math.nan, calibrated=0.5)
+
     def test_overclaiming_escalates(self):
         assert deflate_verdict(0.9, calibrated=0.5) == "escalate"
         assert deflate_verdict(0.95, calibrated=0.3) == "escalate"
@@ -235,6 +238,7 @@ class TestJudgment:
     def test_non_finite_values_raise(self):
         with pytest.raises(ValueError, match="finite"):
             Judgment(claim="c", confidence=math.nan, scale=0.5)
+
     def test_confidence_out_of_range_raises(self):
         with pytest.raises(ValueError, match="confidence"):
             Judgment(claim="c", confidence=1.5, scale=0.5)

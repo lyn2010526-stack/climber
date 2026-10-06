@@ -99,7 +99,7 @@ class FakeVector:
         }
         return str(doc_id)
 
-    async def search(self, collection, query, top_k=5, where=None, profile_context=None):  # noqa: ARG002
+    async def search(self, collection, query, top_k=5, where=None, profile_context=None):
         self.search_where.append(where)
         if self.fail_search:
             raise RuntimeError("chroma down")
@@ -109,7 +109,9 @@ class FakeVector:
                 continue
             if where is not None and rec["metadata"].get("user_id") != where["$and"][0]["user_id"]:
                 continue
-            results.append({"id": doc_id, "text": rec["text"], "metadata": rec["metadata"], "score": 0.9})
+            results.append(
+                {"id": doc_id, "text": rec["text"], "metadata": rec["metadata"], "score": 0.9}
+            )
         return results[:top_k]
 
 
@@ -118,8 +120,16 @@ def test_semantic_index_scopes_query_by_dir_and_user(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr("app.core.vector_memory.vector_memory", fake)
     idx = SemanticIndex(enabled=True)
 
-    assert _run(idx.index("token rotation notes", scope="skills", level=2, doc_id="d1", user_id="u1")) is True
-    assert _run(idx.index("token rotation notes", scope="reference", level=2, doc_id="d2", user_id="u1")) is True
+    assert (
+        _run(idx.index("token rotation notes", scope="skills", level=2, doc_id="d1", user_id="u1"))
+        is True
+    )
+    assert (
+        _run(
+            idx.index("token rotation notes", scope="reference", level=2, doc_id="d2", user_id="u1")
+        )
+        is True
+    )
 
     results = _run(idx.search("u1", "skills", "query", level=2, top_k=3))
     assert len(results) == 1

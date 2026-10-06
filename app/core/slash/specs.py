@@ -121,10 +121,9 @@ def _validate_args(spec: SlashCommandSpec, tokens: list[str]) -> list[str]:
         if len(tokens) < required_count:
             raise SlashCommandError(f"Missing required argument for /{spec.name}")
 
-    if greedy is None:
-        if any(a.required for a in positional) and len(tokens) < len(positional):
-            missing = positional[len(tokens)]
-            raise SlashCommandError(f"Missing required argument <{missing.name}> for /{spec.name}")
+    if greedy is None and any(a.required for a in positional) and len(tokens) < len(positional):
+        missing = positional[len(tokens)]
+        raise SlashCommandError(f"Missing required argument <{missing.name}> for /{spec.name}")
 
     normalized: list[str] = []
     for index, arg_spec in enumerate(positional):
@@ -141,7 +140,7 @@ def _validate_args(spec: SlashCommandSpec, tokens: list[str]) -> list[str]:
             value = lowered
         normalized.append(value)
     if greedy is not None and len(tokens) > len(positional):
-        normalized.append(" ".join(tokens[len(positional):]).strip())
+        normalized.append(" ".join(tokens[len(positional) :]).strip())
     return normalized
 
 
@@ -156,7 +155,7 @@ def parse_input(raw: str, registry: CommandRegistry) -> ParseOutcome:
     if not text.startswith(COMMAND_PREFIX):
         return ParseOutcome(kind="passthrough", raw=raw)
 
-    stripped = text[len(COMMAND_PREFIX):]
+    stripped = text[len(COMMAND_PREFIX) :]
     if not stripped:
         # A bare "/" is not a command anyone registered; let the agent answer.
         return ParseOutcome(kind="passthrough", raw=raw)
@@ -180,21 +179,23 @@ def command_catalog(registry: CommandRegistry) -> list[dict[str, Any]]:
     """JSON-ready command metadata for the frontend autocomplete palette."""
     catalog: list[dict[str, Any]] = []
     for spec in registry.all_commands():
-        catalog.append({
-            "name": spec.name,
-            "aliases": list(spec.aliases),
-            "summary": spec.summary,
-            "usage": spec.usage,
-            "streaming": spec.streaming,
-            "allowed_while_streaming": spec.allowed_while_streaming,
-            "args": [
-                {
-                    "name": arg.name,
-                    "required": arg.required,
-                    "choices": list(arg.choices) if arg.choices else None,
-                    "description": arg.description,
-                }
-                for arg in spec.args
-            ],
-        })
+        catalog.append(
+            {
+                "name": spec.name,
+                "aliases": list(spec.aliases),
+                "summary": spec.summary,
+                "usage": spec.usage,
+                "streaming": spec.streaming,
+                "allowed_while_streaming": spec.allowed_while_streaming,
+                "args": [
+                    {
+                        "name": arg.name,
+                        "required": arg.required,
+                        "choices": list(arg.choices) if arg.choices else None,
+                        "description": arg.description,
+                    }
+                    for arg in spec.args
+                ],
+            }
+        )
     return catalog

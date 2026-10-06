@@ -9,7 +9,12 @@ from app.tools.memory_mcp_server import handle_frame, tool_definitions
 
 def _call(name: str, arguments: dict) -> dict:
     return handle_frame(
-        {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": arguments}}
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": name, "arguments": arguments},
+        }
     )
 
 
@@ -27,7 +32,12 @@ def test_tools_list_lists_expected_tools() -> None:
 
 def test_initialize_returns_server_info() -> None:
     resp = handle_frame(
-        {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"clientInfo": {"name": "t", "version": "1"}}}
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"clientInfo": {"name": "t", "version": "1"}},
+        }
     )
     result = resp["result"]
     assert result["serverInfo"]["name"] == "memory-mcp-server"
@@ -39,7 +49,12 @@ def test_write_then_search_hit() -> None:
     user = "test-user-1"
     write = _call(
         "memory_write",
-        {"content": "The API gateway routes on port 9000", "importance": 0.9, "tags": ["infra"], "user_id": user},
+        {
+            "content": "The API gateway routes on port 9000",
+            "importance": 0.9,
+            "tags": ["infra"],
+            "user_id": user,
+        },
     )
     assert write["result"]["isError"] is False
     memory_id = json.loads(write["result"]["content"][0]["text"])["memory_id"]

@@ -38,7 +38,9 @@ router.include_router(sessions_router.router, prefix="/sessions", tags=["session
 router.include_router(auth_management_router.router)
 router.include_router(settings_router.router, prefix="/settings", tags=["settings"])
 router.include_router(workflows_router.router, prefix="/workflows", tags=["workflows"])
-router.include_router(prompt_templates_router.router, prefix="/prompt-templates", tags=["prompt-templates"])
+router.include_router(
+    prompt_templates_router.router, prefix="/prompt-templates", tags=["prompt-templates"]
+)
 router.include_router(generic_router.router, tags=["generic"])
 router.include_router(api_keys_router.router, prefix="/api-keys", tags=["api-keys"])
 router.include_router(model_discovery_router.router)
@@ -73,7 +75,9 @@ _include_extension_routes(mcp_router.router, ("/mcp/servers", "/mcp/categories")
 _include_extension_routes(skills_router_module.router, ("/skills/autonomous",))
 
 for route in skills_router_module.router.routes:
-    if getattr(route, "path", "") == "/skills/{skill_id}" and "PATCH" in getattr(route, "methods", set()):
+    if getattr(route, "path", "") == "/skills/{skill_id}" and "PATCH" in getattr(
+        route, "methods", set()
+    ):
         router.routes.append(route)
 
 
@@ -85,4 +89,5 @@ async def api_health() -> dict:
 
 def get_engine():
     from app.api.v1.chat import get_engine as _get_engine
+
     return _get_engine()

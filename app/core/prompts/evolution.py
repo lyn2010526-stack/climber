@@ -71,8 +71,12 @@ def _shortcut_penalty(prompt_text: str) -> float:
     normalized = prompt_text.lower()
     if not normalized.strip():
         return 1.0
-    has_action = any(token in normalized for token in ("do ", "create ", "run ", "write ", "analyze "))
-    has_check = any(token in normalized for token in ("verify", "test", "check", "validate", "result"))
+    has_action = any(
+        token in normalized for token in ("do ", "create ", "run ", "write ", "analyze ")
+    )
+    has_check = any(
+        token in normalized for token in ("verify", "test", "check", "validate", "result")
+    )
     if has_action and not has_check and len(normalized.split()) <= 4:
         return 0.25
     return 0.0
@@ -91,9 +95,8 @@ class FitnessWeights:
 
     def composite(self, scores: ScoreMap) -> float:
         base = (
-            self.environment_prediction * scores.get(
-                "environment_prediction", scores.get("task_success", 0.0)
-            )
+            self.environment_prediction
+            * scores.get("environment_prediction", scores.get("task_success", 0.0))
             + self.metaphor_comprehension * scores.get("metaphor_comprehension", 0.0)
             + self.meta_correction * scores.get("meta_correction", 0.0)
         )
@@ -206,7 +209,7 @@ class PromptEvolutionEngine:
     ) -> None:
         self.config = config or EvolutionConfig()
         self.weights = weights or FitnessWeights()
-        self._rng = random.Random(self.config.random_seed)  # noqa: S311
+        self._rng = random.Random(self.config.random_seed)
         self._score_cache: dict[str, ScoreMap] = {}
 
     def composite(self, genome: PromptGenome) -> float:
@@ -252,7 +255,9 @@ class PromptEvolutionEngine:
         raw = self.weights.composite(normalized)
         effective = gated_fitness(raw, verdict)
         genome.fitness_breakdown = FitnessBreakdown(
-            environment_prediction=float(scores.get("environment_prediction", scores.get("task_success", 0.0))),
+            environment_prediction=float(
+                scores.get("environment_prediction", scores.get("task_success", 0.0))
+            ),
             metaphor_comprehension=float(scores.get("metaphor_comprehension", 0.0)),
             meta_correction=float(scores.get("meta_correction", 0.0)),
             safety_penalty=max(float(scores.get("safety_violation", 0.0)), verdict.penalty),
@@ -269,7 +274,7 @@ class PromptEvolutionEngine:
         for key in set(first.model_params) | set(second.model_params):
             left = first.model_params.get(key)
             right = second.model_params.get(key)
-            params[key] = (left if right is None else right if left is None else (left + right) / 2.0)
+            params[key] = left if right is None else right if left is None else (left + right) / 2.0
         if "temperature" in params:
             params["temperature"] = min(1.5, max(0.0, params["temperature"]))
         return params
@@ -337,7 +342,9 @@ class PromptEvolutionEngine:
             parent_ids=tuple(parent.id for parent in parents),
         )
 
-    def evolve(self, population: Sequence[PromptGenome], evaluator: Evaluator) -> list[PromptGenome]:
+    def evolve(
+        self, population: Sequence[PromptGenome], evaluator: Evaluator
+    ) -> list[PromptGenome]:
         scored_population = []
         for genome in population:
             if not genome.scores:
@@ -346,7 +353,9 @@ class PromptEvolutionEngine:
                 self._audit_fitness(genome, genome.scores)
             scored_population.append(genome)
         ranked = self._scored(scored_population)
-        next_generation: list[PromptGenome] = [genome for _, genome in ranked[: self.config.elite_count]]
+        next_generation: list[PromptGenome] = [
+            genome for _, genome in ranked[: self.config.elite_count]
+        ]
         while len(next_generation) < self.config.population_size:
             first = self._tournament(ranked)
             second: PromptGenome | None = None
@@ -416,10 +425,16 @@ class PromptEvolutionEngine:
                 self._audit_fitness(genome, genome.scores)
             scored_population.append(genome)
         ranked = self._scored(scored_population)
-        next_generation: list[PromptGenome] = [genome for _, genome in ranked[: self.config.elite_count]]
+        next_generation: list[PromptGenome] = [
+            genome for _, genome in ranked[: self.config.elite_count]
+        ]
         while len(next_generation) < self.config.population_size:
             first = self._tournament(ranked)
-            second = self._tournament(ranked) if self._rng.random() < self.config.crossover_rate else None
+            second = (
+                self._tournament(ranked)
+                if self._rng.random() < self.config.crossover_rate
+                else None
+            )
             if self.config.llm_operator is not None:
                 child = self._template_offspring(first, second)
             elif second is not None:
@@ -509,7 +524,7 @@ def bootstrap_population(
     """
     if size < 1:
         raise ValueError("size must be at least 1")
-    rng = random.Random(random_seed)  # noqa: S311
+    rng = random.Random(random_seed)
     engine = PromptEvolutionEngine(EvolutionConfig(random_seed=random_seed))
     root = PromptGenome(id="seed_0", prompt_text=seed_prompt)
     population = [root]
@@ -601,4 +616,9 @@ async def run_evolution_tick(
         }
     except Exception as exc:
         logger.exception("prompt_evolution_tick_failed", extra={"user_id": user_id})
-        return {"status": "failed", "user_id": user_id, "error_type": type(exc).__name__, "error": str(exc)}
+        return {
+            "status": "failed",
+            "user_id": user_id,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }

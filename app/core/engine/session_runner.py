@@ -40,7 +40,7 @@ def merge_stream_chunk(result: Any, chunk: Any) -> str:
     if snapshot:
         if not snapshot.startswith(result.content):
             raise ValueError("Streaming snapshot diverged from emitted content")
-        delta = snapshot[len(result.content):]
+        delta = snapshot[len(result.content) :]
         result.content = snapshot
     else:
         delta = getattr(chunk, "content", "") or ""

@@ -29,6 +29,7 @@ class CompressionStrategy(StrEnum):
 @dataclass
 class MemoryPressureConfig:
     """Configuration for memory pressure management."""
+
     warning_threshold: float = 0.75  # Warn at 75% capacity
     critical_threshold: float = 0.90  # Force compress at 90%
     max_messages_keep: int = 20  # Max messages to keep after compression
@@ -36,16 +37,19 @@ class MemoryPressureConfig:
     system_message_budget: int = 4000  # Tokens reserved for system prompt
     tool_result_max_tokens: int = 2000  # Truncate tool results beyond this
     compression_cooldown_turns: int = 2  # Min turns between compressions
-    strategies: list[CompressionStrategy] = field(default_factory=lambda: [
-        CompressionStrategy.TRUNCATE,
-        CompressionStrategy.DROP_TOOL_RESULTS,
-        CompressionStrategy.SUMMARIZE,
-    ])
+    strategies: list[CompressionStrategy] = field(
+        default_factory=lambda: [
+            CompressionStrategy.TRUNCATE,
+            CompressionStrategy.DROP_TOOL_RESULTS,
+            CompressionStrategy.SUMMARIZE,
+        ]
+    )
 
 
 @dataclass
 class PressureSnapshot:
     """Snapshot of current memory pressure state."""
+
     total_tokens: int
     max_tokens: int
     usage_ratio: float
@@ -159,6 +163,7 @@ class MemoryPressureManager:
             Tuple of (compressed_messages, compression_report)
         """
         import time
+
         start = time.monotonic()
         original_count = len(messages)
         original_tokens = self._estimate_tokens(messages)
@@ -254,7 +259,7 @@ class MemoryPressureManager:
                 token_estimate = len(content) // 4
                 if token_estimate > max_tokens:
                     # Truncate to max_tokens * 4 characters
-                    truncated = content[:max_tokens * 4] + "\n... [truncated]"
+                    truncated = content[: max_tokens * 4] + "\n... [truncated]"
                     msg = {**msg, "content": truncated}
             result.append(msg)
         return result
@@ -267,7 +272,7 @@ class MemoryPressureManager:
 
         # Always keep system messages + last N messages
         system_msgs = [m for m in messages if m.get("role") == "system"]
-        recent = messages[-(max_keep - len(system_msgs)):]
+        recent = messages[-(max_keep - len(system_msgs)) :]
         return system_msgs + recent
 
     def _apply_keep_system(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -304,4 +309,4 @@ class MemoryPressureManager:
             "content": f"[Previous context summary: {len(to_summarize)} earlier messages. Key points: {'; '.join(summary_parts)}]",
         }
 
-        return system_msgs + [summary_msg] + recent
+        return [*system_msgs, summary_msg, *recent]

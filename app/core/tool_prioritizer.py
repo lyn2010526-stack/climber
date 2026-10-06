@@ -1,6 +1,4 @@
-"""Tool prioritization with lightweight learning.
-
-"""
+"""Tool prioritization with lightweight learning."""
 
 from __future__ import annotations
 
@@ -122,14 +120,21 @@ class ToolPrioritizer:
         scored.sort(key=lambda x: x[0], reverse=True)
         return [name for _, name in scored]
 
-    def record_outcome(self, tool_name: str, success: bool, duration_ms: float, tokens: int = 0) -> None:
+    def record_outcome(
+        self, tool_name: str, success: bool, duration_ms: float, tokens: int = 0
+    ) -> None:
         """Update stats after a tool execution."""
         stats: ToolStats = self._stats.get_or_create(tool_name, ToolStats)
         stats.attempts += 1
         if success:
             stats.successes += 1
         stats.total_duration_ms += duration_ms
-        logger.debug("tool_prioritizer.record_outcome", tool=tool_name, success=success, duration_ms=duration_ms)
+        logger.debug(
+            "tool_prioritizer.record_outcome",
+            tool=tool_name,
+            success=success,
+            duration_ms=duration_ms,
+        )
 
     def get_stats(self, tool_name: str) -> dict[str, Any]:
         """Return learned stats for a tool."""

@@ -92,7 +92,13 @@ async def run_sequential_process(
             await _update_round_status(task, current_round, max_rounds, worker)
 
             worker_output, worker_tokens = await _execute_worker_turn(
-                task, worker, full_context, worker_output, all_issues, current_round, principal=principal,
+                task,
+                worker,
+                full_context,
+                worker_output,
+                all_issues,
+                current_round,
+                principal=principal,
             )
 
             if not worker_output:
@@ -111,7 +117,9 @@ async def run_sequential_process(
             if task.human_review_required:
                 approved = await wait_for_human_review(task, worker_output)
                 if not approved:
-                    all_issues = [{"description": "Human review rejected or timed out", "severity": "high"}]
+                    all_issues = [
+                        {"description": "Human review rejected or timed out", "severity": "high"}
+                    ]
                     await _broadcast_human_review_rejected(task, current_round)
                     continue
 
@@ -122,11 +130,15 @@ async def run_sequential_process(
             all_issues.extend(reviewer_results)
 
             if not all_issues and await _validate_and_finalize(task, worker_output):
-                    await store_memory(task.group_id, task.id, worker.agent_id, worker_output, "task_result")
-                    await invoke_task_callback(task, worker_output)
-                    await _checkpoint_and_broadcast(task, current_round, worker_output, [], status="completed")
-                    await _broadcast_task_completed(task, worker_output, current_round)
-                    return
+                await store_memory(
+                    task.group_id, task.id, worker.agent_id, worker_output, "task_result"
+                )
+                await invoke_task_callback(task, worker_output)
+                await _checkpoint_and_broadcast(
+                    task, current_round, worker_output, [], status="completed"
+                )
+                await _broadcast_task_completed(task, worker_output, current_round)
+                return
 
             await _checkpoint_and_broadcast(task, current_round, worker_output, all_issues)
 
@@ -155,10 +167,13 @@ async def _refresh_task_state(task: Any) -> bool:
 async def _wait_while_paused(task: Any) -> bool:
     """Wait while task is paused, return False if task should stop."""
     while task.status == "paused":
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "task_update",
-            "data": {"id": task.id, "status": "paused"},
-        })
+        await group_ws_hub.broadcast(
+            task.group_id,
+            {
+                "type": "task_update",
+                "data": {"id": task.id, "status": "paused"},
+            },
+        )
         await asyncio.sleep(1)
         async with async_session() as db:
             t = await db.get(AgentGroupTask, task.id)
@@ -177,19 +192,29 @@ async def _update_round_status(task: Any, current_round: int, max_rounds: int, w
             t.status = "running"
             await db.commit()
 
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "progress_update",
-        "data": {
-            "current_round": current_round,
-            "max_rounds": max_rounds,
-            "status": "running",
-            "active_member": worker.agent_id,
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "progress_update",
+            "data": {
+                "current_round": current_round,
+                "max_rounds": max_rounds,
+                "status": "running",
+                "active_member": worker.agent_id,
+            },
         },
-    })
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "worker_start",
-        "data": {"member_id": worker.id, "member_name": worker.agent_id, "round": current_round},
-    })
+    )
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "worker_start",
+            "data": {
+                "member_id": worker.id,
+                "member_name": worker.agent_id,
+                "round": current_round,
+            },
+        },
+    )
 
 
 async def _execute_worker_turn(
@@ -246,31 +271,40 @@ async def _execute_worker_turn(
 
 async def _broadcast_worker_done(task: Any, worker: Any, output: str, tokens: int) -> None:
     """Broadcast worker completion."""
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "worker_done",
-        "data": {
-            "member_id": worker.id,
-            "member_name": worker.agent_id,
-            "content": output,
-            "tokens_used": tokens,
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "worker_done",
+            "data": {
+                "member_id": worker.id,
+                "member_name": worker.agent_id,
+                "content": output,
+                "tokens_used": tokens,
+            },
         },
-    })
+    )
 
 
 async def _broadcast_guardrail_retry(task: Any, round_num: int, feedback: list) -> None:
     """Broadcast guardrail retry."""
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "guardrail_retry",
-        "data": {"round": round_num, "feedback": feedback},
-    })
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "guardrail_retry",
+            "data": {"round": round_num, "feedback": feedback},
+        },
+    )
 
 
 async def _broadcast_human_review_rejected(task: Any, round_num: int) -> None:
     """Broadcast human review rejection."""
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "human_review_rejected",
-        "data": {"round": round_num},
-    })
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "human_review_rejected",
+            "data": {"round": round_num},
+        },
+    )
 
 
 async def _execute_reviewer_turn(
@@ -296,10 +330,13 @@ async def _execute_reviewer_turn(
 
     all_issues: list[dict[str, Any]] = []
     for reviewer in reviewers:
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "reviewer_start",
-            "data": {"member_id": reviewer.id, "member_name": reviewer.agent_id},
-        })
+        await group_ws_hub.broadcast(
+            task.group_id,
+            {
+                "type": "reviewer_start",
+                "data": {"member_id": reviewer.id, "member_name": reviewer.agent_id},
+            },
+        )
 
         review_output = ""
         review_error = None
@@ -326,25 +363,35 @@ async def _execute_reviewer_turn(
 
         if review_error:
             all_issues.append({"description": "Reviewer execution failed", "severity": "high"})
-            await group_ws_hub.broadcast(task.group_id, {
-                "type": "reviewer_error",
-                "data": {"member_id": reviewer.id, "member_name": reviewer.agent_id, "error": review_error},
-            })
+            await group_ws_hub.broadcast(
+                task.group_id,
+                {
+                    "type": "reviewer_error",
+                    "data": {
+                        "member_id": reviewer.id,
+                        "member_name": reviewer.agent_id,
+                        "error": review_error,
+                    },
+                },
+            )
             continue
 
         passed, issues = parse_review_result(review_output)
 
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "reviewer_done",
-            "data": {
-                "member_id": reviewer.id,
-                "member_name": reviewer.agent_id,
-                "passed": passed,
-                "issues": issues,
-                "content": review_output,
-                "tokens_used": review_tokens,
+        await group_ws_hub.broadcast(
+            task.group_id,
+            {
+                "type": "reviewer_done",
+                "data": {
+                    "member_id": reviewer.id,
+                    "member_name": reviewer.agent_id,
+                    "passed": passed,
+                    "issues": issues,
+                    "content": review_output,
+                    "tokens_used": review_tokens,
+                },
             },
-        })
+        )
 
         if not passed:
             all_issues.extend(issues)
@@ -359,10 +406,13 @@ async def _validate_and_finalize(task: Any, worker_output: str) -> bool:
     if task.output_schema:
         valid, parsed = validate_structured_output(worker_output, task.output_schema)
         if not valid:
-            await group_ws_hub.broadcast(task.group_id, {
-                "type": "guardrail_failed",
-                "data": {"reason": "structured_output_validation_failed", "details": parsed},
-            })
+            await group_ws_hub.broadcast(
+                task.group_id,
+                {
+                    "type": "guardrail_failed",
+                    "data": {"reason": "structured_output_validation_failed", "details": parsed},
+                },
+            )
             return False
 
     async with async_session() as db:
@@ -371,7 +421,7 @@ async def _validate_and_finalize(task: Any, worker_output: str) -> bool:
             t.status = "completed"
             t.final_output = worker_output
             if task.output_schema:
-                t.structured_output = parsed if 'parsed' in dir() else {}
+                t.structured_output = parsed if "parsed" in dir() else {}
             t.completed_at = datetime.now(UTC)
             await db.commit()
     return True
@@ -394,18 +444,24 @@ async def _checkpoint_and_broadcast(
         issues,
         status=status,
     )
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "task_checkpoint",
-        "data": {"task_id": task.id, "round": round_num, "status": status},
-    })
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "task_checkpoint",
+            "data": {"task_id": task.id, "round": round_num, "status": status},
+        },
+    )
 
 
 async def _broadcast_task_completed(task: Any, output: str, rounds: int) -> None:
     """Broadcast task completion."""
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "task_completed",
-        "data": {"task_id": task.id, "final_output": output, "rounds": rounds},
-    })
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "task_completed",
+            "data": {"task_id": task.id, "final_output": output, "rounds": rounds},
+        },
+    )
 
 
 async def _mark_task_partial(task: Any, output: str, rounds: int) -> None:
@@ -418,10 +474,13 @@ async def _mark_task_partial(task: Any, output: str, rounds: int) -> None:
             t.completed_at = datetime.now(UTC)
             await db.commit()
     await update_checkpoint_status(task.id, "partial")
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "task_partial",
-        "data": {"task_id": task.id, "final_output": output, "rounds": rounds},
-    })
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "task_partial",
+            "data": {"task_id": task.id, "final_output": output, "rounds": rounds},
+        },
+    )
 
 
 async def _mark_task_failed(task: Any, error: str) -> None:
@@ -435,7 +494,10 @@ async def _mark_task_failed(task: Any, error: str) -> None:
     except Exception:
         pass
     await update_checkpoint_status(task.id, "failed")
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "task_failed",
-        "data": {"task_id": task.id, "error": error},
-    })
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "task_failed",
+            "data": {"task_id": task.id, "error": error},
+        },
+    )

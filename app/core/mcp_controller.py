@@ -1,4 +1,5 @@
 """MCP (Model Context Protocol) controller."""
+
 from __future__ import annotations
 
 from enum import StrEnum

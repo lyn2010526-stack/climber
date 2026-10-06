@@ -9,8 +9,8 @@ accepting garbage.
 
 from __future__ import annotations
 
-import math
 import json
+import math
 import re
 from typing import Any
 
@@ -45,9 +45,7 @@ ERROR_MARKERS = (
     "aborted",
 )
 
-_NUMBER_RE = re.compile(
-    r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?"
-)
+_NUMBER_RE = re.compile(r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?")
 
 
 def extract_numbers(text: str) -> list[float]:

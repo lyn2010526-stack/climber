@@ -58,9 +58,7 @@ def test_all_allowed_returns_one_entry_per_step() -> None:
 
     assert len(prechecks) == len(steps)
     assert [precheck["index"] for precheck in prechecks] == [1, 2, 3]
-    assert all(
-        precheck["blocked"] is False and precheck["reasons"] == [] for precheck in prechecks
-    )
+    assert all(precheck["blocked"] is False and precheck["reasons"] == [] for precheck in prechecks)
 
 
 async def test_factory_run_blocks_side_effect_step_at_plan_stage(client, monkeypatch) -> None:

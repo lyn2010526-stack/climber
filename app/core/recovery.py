@@ -11,7 +11,9 @@ from app.core.session import AgentSession
 class RecoveryManager:
     """Manages recovery of agent sessions from checkpoints."""
 
-    def __init__(self, checkpoint_store: SQLiteCheckpointStore | InMemoryCheckpointStore | None = None):
+    def __init__(
+        self, checkpoint_store: SQLiteCheckpointStore | InMemoryCheckpointStore | None = None
+    ):
         self._store = checkpoint_store if checkpoint_store is not None else SQLiteCheckpointStore()
 
     async def recover_session(self, session_id: str) -> dict[str, Any] | None:
@@ -49,7 +51,11 @@ class RecoveryManager:
             interrupted=recovered["interrupted"],
         )
         session._last_checkpoint_id = recovered["checkpoint_id"]
-        if not recovered["interrupted"] and recovered["status"] in {"failed", "cancelled", "stopped"}:
+        if not recovered["interrupted"] and recovered["status"] in {
+            "failed",
+            "cancelled",
+            "stopped",
+        }:
             session._restore_status(recovered["status"])
         return True
 
@@ -70,9 +76,12 @@ class RecoveryManager:
         for item in await self.list_recoverable_sessions():
             recovered = await self.recover_session(item["session_id"])
             if recovered and recovered["interrupted"] and not recovered["pending_writes"]:
-                candidates.append({
-                    "session_id": recovered["session_id"], "status": "recoverable",
-                    "iteration": recovered["iteration"],
-                    "checkpoint_id": recovered["checkpoint_id"],
-                })
+                candidates.append(
+                    {
+                        "session_id": recovered["session_id"],
+                        "status": "recoverable",
+                        "iteration": recovered["iteration"],
+                        "checkpoint_id": recovered["checkpoint_id"],
+                    }
+                )
         return candidates

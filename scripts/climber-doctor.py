@@ -40,7 +40,12 @@ def run_diagnostics() -> dict[str, Any]:
 
     # ── Python runtime ──────────────────────────────────────────────────────
     py = _section("python_runtime")
-    check(py, "python_version", sys.version_info >= (3, 11), f"{sys.version.split()[0]} {'OK' if sys.version_info >= (3, 11) else 'need 3.11+'}")
+    check(
+        py,
+        "python_version",
+        sys.version_info >= (3, 11),
+        f"{sys.version.split()[0]} {'OK' if sys.version_info >= (3, 11) else 'need 3.11+'}",
+    )
     report["sections"].append(py)
 
     # ── Core dependencies ───────────────────────────────────────────────────
@@ -68,10 +73,21 @@ def run_diagnostics() -> dict[str, Any]:
 
         check(db, "database_url_configured", bool(settings.database_url), settings.database_url)
         import asyncio
+
         health = asyncio.run(db_health())
-        check(db, "database_connected", health.get("connected", False), health.get("backend", "unknown"))
+        check(
+            db,
+            "database_connected",
+            health.get("connected", False),
+            health.get("backend", "unknown"),
+        )
         if health.get("backend") == "sqlite":
-            check(db, "wal_mode", str(health.get("journal_mode", "")).lower() == "wal", str(health.get("journal_mode")))
+            check(
+                db,
+                "wal_mode",
+                str(health.get("journal_mode", "")).lower() == "wal",
+                str(health.get("journal_mode")),
+            )
     except Exception as exc:
         check(db, "database_reachable", False, str(exc))
     report["sections"].append(db)
@@ -107,12 +123,14 @@ def render_html(report: dict[str, Any]) -> str:
         for c in section["checks"]:
             color = "#15803d" if c["ok"] else "#b91c1c"
             mark = "OK" if c["ok"] else "FAIL"
-            rows.append(f"<tr><td>{section['section']}</td><td>{c['name']}</td><td style='color:{color}'>{mark}</td><td>{c['detail']}</td></tr>")
+            rows.append(
+                f"<tr><td>{section['section']}</td><td>{c['name']}</td><td style='color:{color}'>{mark}</td><td>{c['detail']}</td></tr>"
+            )
     return f"""<!doctype html>
 <html><head><title>Climber doctor</title><style>body{{font-family:sans-serif;margin:2rem}}table{{border-collapse:collapse}}th,td{{border:1px solid #ccc;padding:.5rem 1rem}}</style></head>
-<body><h1>Climber doctor v{report['version']}</h1>
-<p>Overall: <strong style='color:#15803d'>{'HEALTHY' if report['healthy'] else 'UNHEALTHY'}</strong></p>
-<table><tr><th>Section</th><th>Check</th><th>Status</th><th>Detail</th></tr>{''.join(rows)}</table></body></html>"""
+<body><h1>Climber doctor v{report["version"]}</h1>
+<p>Overall: <strong style='color:#15803d'>{"HEALTHY" if report["healthy"] else "UNHEALTHY"}</strong></p>
+<table><tr><th>Section</th><th>Check</th><th>Status</th><th>Detail</th></tr>{"".join(rows)}</table></body></html>"""
 
 
 def main() -> int:

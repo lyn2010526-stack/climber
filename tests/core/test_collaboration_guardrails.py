@@ -15,13 +15,13 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from app.core.collaboration import guardrails
-from app.core.collaboration.prompts import parse_review_result
 from app.core.collaboration.guardrails import (
     CATEGORY_EXCEPTION,
     CATEGORY_VALIDATION,
     GuardrailAction,
     run_guardrails,
 )
+from app.core.collaboration.prompts import parse_review_result
 
 
 def _sync_boom(_output: str) -> bool:
@@ -149,8 +149,13 @@ class GuardrailsRunTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_role_review_json_contract_is_fail_closed(self):
         assert parse_review_result('{"passed":true,"issues":[]}') == (True, [])
-        for output in ("approved, looks good", "不通过", "not approved",
-                       '{"passed":false,"issues":[]}', '{"passed":"true","issues":[]}'):
+        for output in (
+            "approved, looks good",
+            "不通过",
+            "not approved",
+            '{"passed":false,"issues":[]}',
+            '{"passed":"true","issues":[]}',
+        ):
             passed, issues = parse_review_result(output)
             assert passed is False
             assert issues

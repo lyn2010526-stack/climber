@@ -39,45 +39,76 @@ class AgentGroup(Base):
     max_rounds: Mapped[int] = mapped_column(Integer, default=10)
 
     # Process type and manager config
-    process_type: Mapped[str] = mapped_column(String(20), server_default="sequential")  # sequential, hierarchical, group_chat
+    process_type: Mapped[str] = mapped_column(
+        String(20), server_default="sequential"
+    )  # sequential, hierarchical, group_chat
     manager_agent_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    manager_llm: Mapped[str | None] = mapped_column(String(100), nullable=True)  # e.g. "openai/gpt-4o"
+    manager_llm: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # e.g. "openai/gpt-4o"
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
-    members: Mapped[list[AgentGroupMember]] = relationship(back_populates="group", cascade="all, delete-orphan", foreign_keys="[AgentGroupMember.group_id]", primaryjoin="AgentGroup.id == AgentGroupMember.group_id")
-    messages: Mapped[list[AgentGroupMessage]] = relationship(back_populates="group", cascade="all, delete-orphan", order_by="AgentGroupMessage.created_at")
-    tasks: Mapped[list[AgentGroupTask]] = relationship(back_populates="group", cascade="all, delete-orphan", order_by="AgentGroupTask.created_at.desc()")
-    memories: Mapped[list[AgentGroupMemory]] = relationship(back_populates="group", cascade="all, delete-orphan", order_by="AgentGroupMemory.created_at.desc()")
-    checkpoints: Mapped[list[AgentGroupTaskCheckpoint]] = relationship(back_populates="group", cascade="all, delete-orphan", order_by="AgentGroupTaskCheckpoint.created_at.desc()")
+    members: Mapped[list[AgentGroupMember]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan",
+        foreign_keys="[AgentGroupMember.group_id]",
+        primaryjoin="AgentGroup.id == AgentGroupMember.group_id",
+    )
+    messages: Mapped[list[AgentGroupMessage]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan",
+        order_by="AgentGroupMessage.created_at",
+    )
+    tasks: Mapped[list[AgentGroupTask]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan",
+        order_by="AgentGroupTask.created_at.desc()",
+    )
+    memories: Mapped[list[AgentGroupMemory]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan",
+        order_by="AgentGroupMemory.created_at.desc()",
+    )
+    checkpoints: Mapped[list[AgentGroupTaskCheckpoint]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan",
+        order_by="AgentGroupTaskCheckpoint.created_at.desc()",
+    )
 
 
 class AgentGroupMember(Base):
     """Member (agent) belonging to a group."""
 
     __tablename__ = "agent_group_members"
-    __table_args__ = (
-        UniqueConstraint("group_id", "agent_id", name="uq_agent_group_member"),
-    )
+    __table_args__ = (UniqueConstraint("group_id", "agent_id", name="uq_agent_group_member"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     group_id: Mapped[str] = mapped_column(String(36), ForeignKey("agent_groups.id"), nullable=False)
     agent_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
     # Role in the group
-    role: Mapped[str] = mapped_column(String(50), default="participant")  # worker, reviewer, moderator, observer, manager
+    role: Mapped[str] = mapped_column(
+        String(50), default="participant"
+    )  # worker, reviewer, moderator, observer, manager
     status: Mapped[str] = mapped_column(String(20), default="active")  # active, idle, left, error
     is_speaking: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Collaboration config (auto loop)
-    model_provider: Mapped[str | None] = mapped_column(String(20), nullable=True)  # openai/anthropic/google/ollama
+    model_provider: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # openai/anthropic/google/ollama
     model_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     tools: Mapped[list[str]] = mapped_column(JSON, default=list)
-    review_type: Mapped[str] = mapped_column(String(20), default="code")  # code, architecture, security
+    review_type: Mapped[str] = mapped_column(
+        String(20), default="code"
+    )  # code, architecture, security
     is_worker: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Stats
@@ -101,7 +132,9 @@ class AgentGroupMessage(Base):
     sender_name: Mapped[str] = mapped_column(String(100), nullable=False)
 
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    message_type: Mapped[str] = mapped_column(String(20), default="text")  # text, system, vote, proposal
+    message_type: Mapped[str] = mapped_column(
+        String(20), default="text"
+    )  # text, system, vote, proposal
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
@@ -127,31 +160,49 @@ class AgentGroupTask(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Task config
-    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, running, paused, completed, failed, partial, stopped, awaiting_human_review
-    worker_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("agent_group_members.id"), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(20), default="pending"
+    )  # pending, running, paused, completed, failed, partial, stopped, awaiting_human_review
+    worker_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("agent_group_members.id"), nullable=True
+    )
     reviewer_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
     max_rounds: Mapped[int] = mapped_column(Integer, default=5)
     current_round: Mapped[int] = mapped_column(Integer, default=0)
 
     # Task dependencies and context passing
-    dependencies: Mapped[list[str]] = mapped_column(JSON, default=list)  # task IDs that must complete before this task runs
-    context: Mapped[list[str]] = mapped_column(JSON, default=list)  # list of task IDs whose output should be passed as context
-    parent_task_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("agent_group_tasks.id"), nullable=True)
+    dependencies: Mapped[list[str]] = mapped_column(
+        JSON, default=list
+    )  # task IDs that must complete before this task runs
+    context: Mapped[list[str]] = mapped_column(
+        JSON, default=list
+    )  # list of task IDs whose output should be passed as context
+    parent_task_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("agent_group_tasks.id"), nullable=True
+    )
 
     # Guardrails and validation
-    guardrails: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)  # list of guardrail configs
+    guardrails: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list
+    )  # list of guardrail configs
 
     # Human-in-the-loop
     human_review_required: Mapped[bool] = mapped_column(Boolean, default=False)
-    human_review_status: Mapped[str] = mapped_column(String(20), default="pending")  # pending, approved, rejected
+    human_review_status: Mapped[str] = mapped_column(
+        String(20), default="pending"
+    )  # pending, approved, rejected
     human_review_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Structured output schema
-    output_schema: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)  # JSON schema for output validation
+    output_schema: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict
+    )  # JSON schema for output validation
 
     # Result
     final_output: Mapped[str | None] = mapped_column(Text, nullable=True)
-    structured_output: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)  # parsed structured output
+    structured_output: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict
+    )  # parsed structured output
     total_tokens: Mapped[int] = mapped_column(Integer, default=0)
 
     # Timestamps
@@ -161,14 +212,24 @@ class AgentGroupTask(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # Callbacks
-    step_callback: Mapped[str | None] = mapped_column(String(255), nullable=True)  # reference to callback function
-    task_callback: Mapped[str | None] = mapped_column(String(255), nullable=True)  # reference to callback function
+    step_callback: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )  # reference to callback function
+    task_callback: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )  # reference to callback function
 
     # Relationships
     group: Mapped[AgentGroup] = relationship(back_populates="tasks")
-    checkpoints: Mapped[list[AgentGroupTaskCheckpoint]] = relationship(back_populates="task", cascade="all, delete-orphan")
-    child_tasks: Mapped[list[AgentGroupTask]] = relationship("AgentGroupTask", foreign_keys="AgentGroupTask.parent_task_id", back_populates="parent_task")
-    parent_task: Mapped[AgentGroupTask | None] = relationship("AgentGroupTask", remote_side="AgentGroupTask.id", back_populates="child_tasks")
+    checkpoints: Mapped[list[AgentGroupTaskCheckpoint]] = relationship(
+        back_populates="task", cascade="all, delete-orphan"
+    )
+    child_tasks: Mapped[list[AgentGroupTask]] = relationship(
+        "AgentGroupTask", foreign_keys="AgentGroupTask.parent_task_id", back_populates="parent_task"
+    )
+    parent_task: Mapped[AgentGroupTask | None] = relationship(
+        "AgentGroupTask", remote_side="AgentGroupTask.id", back_populates="child_tasks"
+    )
 
 
 class AgentGroupTaskCheckpoint(Base):
@@ -177,11 +238,17 @@ class AgentGroupTaskCheckpoint(Base):
     __tablename__ = "agent_group_task_checkpoints"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    group_id: Mapped[str] = mapped_column(String(36), ForeignKey("agent_groups.id"), nullable=False, index=True)
-    task_id: Mapped[str] = mapped_column(String(36), ForeignKey("agent_group_tasks.id"), nullable=False, index=True)
+    group_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("agent_groups.id"), nullable=False, index=True
+    )
+    task_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("agent_group_tasks.id"), nullable=False, index=True
+    )
 
     # Checkpoint state
-    status: Mapped[str] = mapped_column(String(20), default="running")  # running, paused, completed, failed, stopped
+    status: Mapped[str] = mapped_column(
+        String(20), default="running"
+    )  # running, paused, completed, failed, stopped
     current_round: Mapped[int] = mapped_column(Integer, default=0)
     max_rounds: Mapped[int] = mapped_column(Integer, default=5)
     total_tokens: Mapped[int] = mapped_column(Integer, default=0)
@@ -210,7 +277,9 @@ class AgentGroupTaskCheckpoint(Base):
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Relationships
@@ -224,12 +293,20 @@ class AgentGroupMemory(Base):
     __tablename__ = "agent_group_memories"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    group_id: Mapped[str] = mapped_column(String(36), ForeignKey("agent_groups.id"), nullable=False, index=True)
-    task_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("agent_group_tasks.id"), nullable=True, index=True)
+    group_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("agent_groups.id"), nullable=False, index=True
+    )
+    task_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("agent_group_tasks.id"), nullable=True, index=True
+    )
 
     # Memory classification
-    memory_type: Mapped[str] = mapped_column(String(30), default="short_term")  # short_term, long_term, insight
-    memory_category: Mapped[str] = mapped_column(String(30), default="conversation")  # conversation, decision, fact, lesson
+    memory_type: Mapped[str] = mapped_column(
+        String(30), default="short_term"
+    )  # short_term, long_term, insight
+    memory_category: Mapped[str] = mapped_column(
+        String(30), default="conversation"
+    )  # conversation, decision, fact, lesson
 
     # Memory content
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -250,7 +327,9 @@ class AgentGroupMemory(Base):
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Relationships
@@ -263,8 +342,12 @@ class AgentGroupGuardrail(Base):
     __tablename__ = "agent_group_guardrails"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    group_id: Mapped[str] = mapped_column(String(36), ForeignKey("agent_groups.id"), nullable=False, index=True)
-    task_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("agent_group_tasks.id"), nullable=True, index=True)
+    group_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("agent_groups.id"), nullable=False, index=True
+    )
+    task_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("agent_group_tasks.id"), nullable=True, index=True
+    )
 
     # Guardrail config
     name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -272,9 +355,15 @@ class AgentGroupGuardrail(Base):
     guardrail_type: Mapped[str] = mapped_column(String(20), default="llm")  # llm, function, schema
 
     # Validation config
-    validation_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)  # for LLM-based guardrails
-    validation_function: Mapped[str | None] = mapped_column(String(255), nullable=True)  # Python dotted path for function-based
-    schema: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)  # JSON schema for output validation
+    validation_prompt: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )  # for LLM-based guardrails
+    validation_function: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )  # Python dotted path for function-based
+    schema: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True
+    )  # JSON schema for output validation
 
     # Retry config
     max_retries: Mapped[int] = mapped_column(Integer, default=2)
@@ -286,7 +375,9 @@ class AgentGroupGuardrail(Base):
     fail_count: Mapped[int] = mapped_column(Integer, default=0)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
 
 # Add relationship to AgentGroup (after both classes are defined)

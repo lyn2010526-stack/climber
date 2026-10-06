@@ -163,7 +163,9 @@ class PregelWorkflowAdapter:
             elif node.type == NodeType.SIMULATION:
                 output = await self.workflow_engine._execute_simulation_node(node, resolved)
             elif node.type == NodeType.ITERATOR:
-                output = await self.workflow_engine._execute_iterator_node(node, resolved, user_id, set())
+                output = await self.workflow_engine._execute_iterator_node(
+                    node, resolved, user_id, set()
+                )
             else:
                 output = resolved
             return {node.id: output}

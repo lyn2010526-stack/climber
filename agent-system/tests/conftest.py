@@ -18,4 +18,3 @@ os.environ.setdefault("APP_TESTING", "true")
 
 # 仅作为副作用导入：注册 agent_system -> agent-system/ 的导入映射
 import agent_bootstrap  # noqa: E402, F401
-

@@ -38,7 +38,9 @@ def _truncate(value: Any) -> str:
     return str(value)[:_MAX_AGENT_EVENT_CHARS]
 
 
-async def _broadcast_agent_event(group_id: str, role: str, agent_id: str, event: AgentEvent) -> None:
+async def _broadcast_agent_event(
+    group_id: str, role: str, agent_id: str, event: AgentEvent
+) -> None:
     """Mirror one agent engine event onto the group WS as a canonical event.
 
     Purely observational: never raises, so the agent run cannot be broken
@@ -79,7 +81,9 @@ async def _broadcast_agent_event(group_id: str, role: str, agent_id: str, event:
             tracker.record_activity("error")
         await group_ws_hub.broadcast_canonical(group_id, canonical, data)
     except Exception as exc:
-        logger.warning("agent_event_broadcast_failed", group_id=group_id, agent_id=agent_id, error=str(exc))
+        logger.warning(
+            "agent_event_broadcast_failed", group_id=group_id, agent_id=agent_id, error=str(exc)
+        )
 
 
 async def _open_task_node(
@@ -98,7 +102,9 @@ async def _open_task_node(
             metadata={"role": role, "agent_id": agent_id},
         )
     except Exception as exc:
-        logger.warning("task_tree_node_open_failed", group_id=group_id, agent_id=agent_id, error=str(exc))
+        logger.warning(
+            "task_tree_node_open_failed", group_id=group_id, agent_id=agent_id, error=str(exc)
+        )
         return None, None
     return tree, node
 
@@ -110,7 +116,9 @@ async def _close_task_node(tree: Any, node: Any, status: str) -> None:
     try:
         await tree.update_status(node.node_id, status)
     except Exception as exc:
-        logger.warning("task_tree_node_close_failed", node_id=getattr(node, "node_id", ""), error=str(exc))
+        logger.warning(
+            "task_tree_node_close_failed", node_id=getattr(node, "node_id", ""), error=str(exc)
+        )
 
 
 async def _ensure_task_root(group_id: str, task_name: str | None) -> None:
@@ -174,8 +182,8 @@ async def run_agent(
     """
     # Keep provider constructors and registry behavior, but isolate role credentials.
     model_registry = copy(di_resolve("ModelRegistry"))
-    model_registry._models = {}  # noqa: SLF001 - isolated copy of the existing registry
-    model_registry._user_keys = {}  # noqa: SLF001 - never mutate the shared registry
+    model_registry._models = {}
+    model_registry._user_keys = {}
     adapter = model_registry.register_model(model_id, provider, api_key, base_url)
     model_registry.get_default = lambda: adapter
     tool_registry = di_resolve("ToolRegistry")
@@ -416,10 +424,15 @@ async def _run_agent_with_retry_impl(
             last_error = e
 
         if attempt < MAX_RETRIES:
-            await group_ws_hub.broadcast(group_id, {
-                "type": "system_message",
-                "data": {"content": f"{role} 调用失败，正在重试 ({attempt + 1}/{MAX_RETRIES})..."},
-            })
+            await group_ws_hub.broadcast(
+                group_id,
+                {
+                    "type": "system_message",
+                    "data": {
+                        "content": f"{role} 调用失败，正在重试 ({attempt + 1}/{MAX_RETRIES})..."
+                    },
+                },
+            )
 
     return await _try_fallback_model(
         agent_id,
@@ -483,10 +496,13 @@ async def _try_fallback_model(
     fallback = _get_fallback_model(provider, model_id)
     if fallback:
         fb_provider, fb_model = fallback
-        await group_ws_hub.broadcast(group_id, {
-            "type": "system_message",
-            "data": {"content": f"正在降级到 {fb_model}..."},
-        })
+        await group_ws_hub.broadcast(
+            group_id,
+            {
+                "type": "system_message",
+                "data": {"content": f"正在降级到 {fb_model}..."},
+            },
+        )
         try:
             async with asyncio.timeout(TASK_TIMEOUT):
                 output, total_tokens = await run_agent_simple(
@@ -507,7 +523,11 @@ async def _try_fallback_model(
         except Exception as e:
             last_error = e
 
-    logger.error(f"{role}_failed_after_retry", agent_id=agent_id, error=str(last_error) if last_error else "unknown")
+    logger.error(
+        f"{role}_failed_after_retry",
+        agent_id=agent_id,
+        error=str(last_error) if last_error else "unknown",
+    )
     raise RuntimeError(f"{role} failed after retry") from last_error
 
 
@@ -525,8 +545,9 @@ def _get_fallback_model(provider: str, model_id: str) -> tuple[str, str] | None:
     if key in FALLBACK_MODELS:
         return FALLBACK_MODELS[key]
     from app.models.registry import MODEL_ALIASES
+
     if key in MODEL_ALIASES:
-        resolved_provider, resolved_model = MODEL_ALIASES[key]
+        _resolved_provider, resolved_model = MODEL_ALIASES[key]
         if resolved_model.lower() in FALLBACK_MODELS:
             return FALLBACK_MODELS[resolved_model.lower()]
     return None

@@ -34,7 +34,9 @@ class DisabledQQBotProvider:
         self._token_store = token_store
 
     def status(self) -> ProviderStatus:
-        return ProviderStatus("qqbot", False, "disabled", "external provider credentials are not configured")
+        return ProviderStatus(
+            "qqbot", False, "disabled", "external provider credentials are not configured"
+        )
 
     def issue_binding_token(self) -> QRToken:
         raise RuntimeError("qqbot provider is disabled")

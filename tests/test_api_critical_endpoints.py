@@ -57,9 +57,7 @@ async def test_session_fork_copies_session(client) -> None:
     assert detail.status_code == 200
     assert "fork" in detail.json()["title"]
 
-    duplicate = await client.post(
-        f"/api/v1/sessions/{sid}/fork", json={"new_session_id": new_id}
-    )
+    duplicate = await client.post(f"/api/v1/sessions/{sid}/fork", json={"new_session_id": new_id})
     assert duplicate.status_code == 409
 
 

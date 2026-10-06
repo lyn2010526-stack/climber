@@ -8,6 +8,10 @@ from typing import Any
 from app.core.permission_rules import normalize_tool_name
 from app.core.session import AgentSession
 
+# Keep strong references to fire-and-forget audit tasks so they are not
+# garbage-collected before they finish.
+_BACKGROUND_TASKS: set[asyncio.Task] = set()
+
 # Tool names that accept a shell command under a "command" parameter
 # Keys are canonical names — aliases (bash/shell/command/...) resolve via normalize_tool_name
 _COMMAND_TOOLS: set[str] = {"run_command"}
@@ -30,10 +34,16 @@ _FILE_TOOLS: dict[str, tuple[str, str]] = {
 # legacy safety shim.  The canonical tables above are the policy source of
 # truth; these mirror the same policy with command aliases listed explicitly
 # so no normalize_tool_name call is needed at lookup sites.
-COMMAND_TOOLS: frozenset[str] = frozenset({
-    "run_command", "shell", "execute_command", "bash",
-    "stream_command", "container_exec",
-})
+COMMAND_TOOLS: frozenset[str] = frozenset(
+    {
+        "run_command",
+        "shell",
+        "execute_command",
+        "bash",
+        "stream_command",
+        "container_exec",
+    }
+)
 
 FILE_TOOLS: dict[str, tuple[str, str]] = {
     "read_file": ("path", "read"),
@@ -87,8 +97,8 @@ def validate_tool_call(
         return allowed, reason
 
     # A previously approved call skips the approval prompt, never the DENY rules.
-    already_approved = (
-        _approval_key(tool_name, arguments) in getattr(session, "_approved_tool_calls", set())
+    already_approved = _approval_key(tool_name, arguments) in getattr(
+        session, "_approved_tool_calls", set()
     )
 
     allowed, reason = _check_permission_rules(
@@ -129,6 +139,7 @@ def validate_tool_call(
 
 def _security_audit() -> Any:
     from app.core.observability.audit import security_audit_chain
+
     return security_audit_chain
 
 
@@ -150,7 +161,9 @@ def _audit_validation(audit: Any, session: Any, tool_name: str, decision: str, r
     _mirror_durable_permission_audit(session, tool_name, decision, reason)
 
 
-def _mirror_durable_permission_audit(session: Any, tool_name: str, decision: str, reason: Any) -> None:
+def _mirror_durable_permission_audit(
+    session: Any, tool_name: str, decision: str, reason: Any
+) -> None:
     """Mirror the decision onto the durable audit table without blocking policy."""
     try:
         loop = asyncio.get_running_loop()
@@ -169,9 +182,11 @@ def _mirror_durable_permission_audit(session: Any, tool_name: str, decision: str
         )
 
     try:
-        loop.create_task(_write())
+        task = loop.create_task(_write())
     except Exception:
         return
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
 
 
 def _check_plan_mode(agent_mode: Any, tool_name: str) -> tuple[bool, str]:
@@ -187,6 +202,7 @@ def _check_plan_mode(agent_mode: Any, tool_name: str) -> tuple[bool, str]:
     if agent_mode is None:
         return True, "OK"
     from app.core.security_sandbox import AgentMode
+
     if agent_mode != AgentMode.PLAN:
         return True, "OK"
     if _command_capability(tool_name):
@@ -221,6 +237,7 @@ def _check_permission_rules(
     """
     if session.permission_config is not None:
         from app.core.permission_rules import RuleDecision
+
         decision = session.permission_config.evaluate(tool_name, arguments)
         if decision == RuleDecision.DENY:
             return False, f"Permission denied by rules: {tool_name}"
@@ -254,6 +271,7 @@ def _check_permission_overlay(
     if permission_overlay is None:
         return True, "OK"
     from app.core.security_sandbox import PermissionLevel
+
     action = "execute" if _command_capability(tool_name) else "read"
     file_capability = _file_capability(tool_name)
     if file_capability is not None:
@@ -280,7 +298,9 @@ def _approval_key(tool_name: str, arguments: dict[str, Any]) -> str:
     return f"{tool_name}:{json.dumps(arguments, sort_keys=True, default=str)}"
 
 
-def _check_schema_validation(tool_registry: Any, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
+def _check_schema_validation(
+    tool_registry: Any, tool_name: str, arguments: dict[str, Any]
+) -> tuple[bool, str]:
     """Validate tool call arguments against JSON schema.
 
     Args:
@@ -293,6 +313,7 @@ def _check_schema_validation(tool_registry: Any, tool_name: str, arguments: dict
     """
     try:
         from app.core.security_sandbox import validate_tool_input
+
         tool_def = tool_registry.get_tool(tool_name)
         if tool_def and tool_def.parameters:
             validate_tool_input(tool_def.parameters, arguments)
@@ -347,6 +368,7 @@ def _check_script_preflight(tool_name: str, arguments: dict[str, Any]) -> tuple[
     if not isinstance(code, str):
         return True, "OK"
     from app.core.security_sandbox import CodeSandbox
+
     result = CodeSandbox().preflight_script(code)
     if not result.allowed:
         return False, f"Script preflight blocked: {result.reason}"

@@ -1,6 +1,4 @@
-"""DebateStrategy prompts — multi-agent debate for consensus convergence.
-
-"""
+"""DebateStrategy prompts — multi-agent debate for consensus convergence."""
 
 PROPONENT_SYSTEM_PROMPT = """You are the PROPONENT in a structured debate. Your role:
 1. Propose the strongest possible solution to the task

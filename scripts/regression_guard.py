@@ -16,12 +16,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -224,14 +223,16 @@ async def send_slack_alert(webhook_url: str, report: RegressionReport) -> bool:
             },
         ]
         for suite in failed_suites:
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*{suite.name}*\n"
-                    + "\n".join(f"  - {t}" for t in suite.failed_tests[:5]),
-                },
-            })
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*{suite.name}*\n"
+                        + "\n".join(f"  - {t}" for t in suite.failed_tests[:5]),
+                    },
+                }
+            )
 
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(webhook_url, json={"blocks": blocks})
@@ -295,17 +296,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Regression Guard - Automated test runner")
     parser.add_argument("--full", action="store_true", help="Run full test suite")
     parser.add_argument("--smoke", action="store_true", help="Run smoke tests only")
-    parser.add_argument(
-        "--watch", action="store_true", help="Watch mode - run continuously"
-    )
-    parser.add_argument(
-        "--interval", type=int, default=300, help="Watch interval in seconds"
-    )
+    parser.add_argument("--watch", action="store_true", help="Watch mode - run continuously")
+    parser.add_argument("--interval", type=int, default=300, help="Watch interval in seconds")
     parser.add_argument("--notify", type=str, help="Webhook URL for alerts")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
-    parser.add_argument(
-        "--fail-fast", action="store_true", help="Stop on first failure"
-    )
+    parser.add_argument("--fail-fast", action="store_true", help="Stop on first failure")
     return parser.parse_args()
 
 
@@ -328,7 +323,7 @@ async def run_guard(args: argparse.Namespace) -> RegressionReport:
     total_duration = sum(r.duration_seconds for r in results)
 
     report = RegressionReport(
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         overall_passed=overall_passed,
         test_results=results,
         total_duration=total_duration,

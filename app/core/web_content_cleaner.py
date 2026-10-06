@@ -1,6 +1,4 @@
-"""Web content cleaning and noise filtering.
-
-"""
+"""Web content cleaning and noise filtering."""
 
 from __future__ import annotations
 
@@ -8,9 +6,7 @@ import re
 
 
 def clean_web_content(html: str, text: str) -> str:
-    """Remove ads, navigation, footers, and other noise from web content.
-
-    """
+    """Remove ads, navigation, footers, and other noise from web content."""
     lines = text.splitlines()
     filtered: list[str] = []
     for line in lines:
@@ -25,8 +21,7 @@ def clean_web_content(html: str, text: str) -> str:
 
 def extract_main_content(text: str) -> str:
     """Extract the main content area from a web page."""
-    cleaned = clean_web_content("", text)
-    return cleaned
+    return clean_web_content("", text)
 
 
 def _is_noise(line: str) -> bool:

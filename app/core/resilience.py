@@ -78,7 +78,11 @@ class CircuitBreaker:
 
     @property
     def state(self) -> CircuitState:
-        if self._state == CircuitState.OPEN and self._opened_at is not None and time.monotonic() - self._opened_at >= self.config.recovery_timeout:
+        if (
+            self._state == CircuitState.OPEN
+            and self._opened_at is not None
+            and time.monotonic() - self._opened_at >= self.config.recovery_timeout
+        ):
             self._state = CircuitState.HALF_OPEN
             self._half_open_used = 0
         return self._state
@@ -108,7 +112,9 @@ class CircuitBreaker:
             raise CircuitBreakerOpenError(f"circuit_breaker '{self.name}' is open")
         if current == CircuitState.HALF_OPEN:
             if self._half_open_used >= self.config.half_open_max_calls:
-                raise CircuitBreakerOpenError(f"circuit_breaker '{self.name}' half-open capacity reached")
+                raise CircuitBreakerOpenError(
+                    f"circuit_breaker '{self.name}' half-open capacity reached"
+                )
             self._half_open_used += 1
         try:
             if inspect.isawaitable(coro):
@@ -180,7 +186,7 @@ class RetryHandler:
         return False
 
     def _calculate_delay(self, attempt: int) -> float:
-        delay = self.config.base_delay * (2 ** attempt)
+        delay = self.config.base_delay * (2**attempt)
         delay = min(delay, self.config.max_delay)
         if self.config.jitter:
             delay = random.uniform(0.0, delay)

@@ -20,7 +20,7 @@ from app.core.auth_manager import (
     require_scopes,
 )
 from app.core.observability.audit_store import audit_log
-from app.models.users import ApiKey, User, UserRole, UserStatus
+from app.models.users import ApiKey, User, UserStatus
 from app.storage import async_session
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -95,7 +95,9 @@ async def login(payload: LoginRequest) -> LoginResponse:
 
     result = await authenticate_user(payload.username, payload.password)
     if not result:
-        await audit_log.log_login(user_id=None, username=payload.username, success=False, reason="invalid credentials")
+        await audit_log.log_login(
+            user_id=None, username=payload.username, success=False, reason="invalid credentials"
+        )
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     await audit_log.log_login(user_id=result["user_id"], username=payload.username, success=True)
@@ -189,9 +191,7 @@ async def change_password(
 ) -> dict:
     """Change current user password."""
     async with async_session() as session:
-        result = await session.execute(
-            select(User).where(User.id == current_user)
-        )
+        result = await session.execute(select(User).where(User.id == current_user))
         user = result.scalar_one_or_none()
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -268,7 +268,9 @@ async def list_api_keys(
     async with async_session() as session:
         query = select(ApiKey).order_by(ApiKey.created_at.desc())
         if current_user.get("role") != "admin" and "admin" not in current_user.get("scopes", []):
-            query = query.where(ApiKey.owner == str(current_user.get("id") or current_user.get("user_id")))
+            query = query.where(
+                ApiKey.owner == str(current_user.get("id") or current_user.get("user_id"))
+            )
         result = await session.execute(query)
         keys = result.scalars().all()
 

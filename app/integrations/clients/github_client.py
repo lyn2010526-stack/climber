@@ -177,6 +177,7 @@ class GitHubClient:
         """Get or create HTTP session."""
         if self._session is None:
             import httpx
+
             headers = {
                 "Accept": "application/vnd.github.v3+json",
                 "User-Agent": "AgentEngine-GitHub-Client/1.0",
@@ -277,18 +278,20 @@ class GitHubClient:
                 break
 
             for item in data:
-                repos.append(GitHubRepo(
-                    id=item["id"],
-                    name=item["name"],
-                    full_name=item["full_name"],
-                    description=item.get("description", ""),
-                    url=item.get("html_url", ""),
-                    stars=item.get("stargazers_count", 0),
-                    forks=item.get("forks_count", 0),
-                    open_issues=item.get("open_issues_count", 0),
-                    language=item.get("language", ""),
-                    private=item.get("private", False),
-                ))
+                repos.append(
+                    GitHubRepo(
+                        id=item["id"],
+                        name=item["name"],
+                        full_name=item["full_name"],
+                        description=item.get("description", ""),
+                        url=item.get("html_url", ""),
+                        stars=item.get("stargazers_count", 0),
+                        forks=item.get("forks_count", 0),
+                        open_issues=item.get("open_issues_count", 0),
+                        language=item.get("language", ""),
+                        private=item.get("private", False),
+                    )
+                )
 
             if len(data) < self._config.per_page:
                 break
@@ -391,16 +394,18 @@ class GitHubClient:
         for item in response.json():
             if "pull_request" in item:
                 continue
-            issues.append(GitHubIssue(
-                id=item["id"],
-                number=item["number"],
-                title=item["title"],
-                body=item.get("body", ""),
-                state=item.get("state", "open"),
-                labels=[label["name"] for label in item.get("labels", [])],
-                author=item["user"]["login"] if item.get("user") else "",
-                url=item.get("html_url", ""),
-            ))
+            issues.append(
+                GitHubIssue(
+                    id=item["id"],
+                    number=item["number"],
+                    title=item["title"],
+                    body=item.get("body", ""),
+                    state=item.get("state", "open"),
+                    labels=[label["name"] for label in item.get("labels", [])],
+                    author=item["user"]["login"] if item.get("user") else "",
+                    url=item.get("html_url", ""),
+                )
+            )
 
         return issues
 
@@ -492,19 +497,21 @@ class GitHubClient:
 
         prs: list[GitHubPullRequest] = []
         for item in response.json():
-            prs.append(GitHubPullRequest(
-                id=item["id"],
-                number=item["number"],
-                title=item["title"],
-                body=item.get("body", ""),
-                state=item.get("state", "open"),
-                author=item["user"]["login"] if item.get("user") else "",
-                base_branch=item["base"]["ref"] if item.get("base") else "",
-                head_branch=item["head"]["ref"] if item.get("head") else "",
-                url=item.get("html_url", ""),
-                merged=item.get("merged", False),
-                mergeable=item.get("mergeable"),
-            ))
+            prs.append(
+                GitHubPullRequest(
+                    id=item["id"],
+                    number=item["number"],
+                    title=item["title"],
+                    body=item.get("body", ""),
+                    state=item.get("state", "open"),
+                    author=item["user"]["login"] if item.get("user") else "",
+                    base_branch=item["base"]["ref"] if item.get("base") else "",
+                    head_branch=item["head"]["ref"] if item.get("head") else "",
+                    url=item.get("html_url", ""),
+                    merged=item.get("merged", False),
+                    mergeable=item.get("mergeable"),
+                )
+            )
 
         return prs
 

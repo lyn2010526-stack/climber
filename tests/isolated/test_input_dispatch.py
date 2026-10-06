@@ -23,7 +23,15 @@ from app.core.checkpoint import InMemoryCheckpointStore
 from app.core.engine.input_queue import SessionInputQueue
 from app.core.engine.run_storage import RunStorage
 from app.storage import Base
-from app.storage.database import Agent, CheckpointRecord, Message, Session, SessionInput, Turn, UsageLog
+from app.storage.database import (
+    Agent,
+    CheckpointRecord,
+    Message,
+    Session,
+    SessionInput,
+    Turn,
+    UsageLog,
+)
 from app.storage.models_cost import CostRecord
 from app.tools import ToolRegistry
 
@@ -31,18 +39,36 @@ from app.tools import ToolRegistry
 class InputDispatchTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="input-dispatch-")
-        self.db_engine = create_async_engine("sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "private.db"))
+        self.db_engine = create_async_engine(
+            "sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "private.db")
+        )
         self.factory = async_sessionmaker(self.db_engine, expire_on_commit=False)
         async with self.db_engine.begin() as conn:
-            tables = [m.__table__ for m in (Agent, Session, SessionInput, Turn, Message, UsageLog, CostRecord, CheckpointRecord)]
+            tables = [
+                m.__table__
+                for m in (
+                    Agent,
+                    Session,
+                    SessionInput,
+                    Turn,
+                    Message,
+                    UsageLog,
+                    CostRecord,
+                    CheckpointRecord,
+                )
+            ]
             await conn.run_sync(lambda db: Base.metadata.create_all(db, tables=tables))
         async with self.factory() as db:
-            db.add(Agent(id="a", name="scripted", user_id="u", provider="ollama", model_id="scripted"))
+            db.add(
+                Agent(id="a", name="scripted", user_id="u", provider="ollama", model_id="scripted")
+            )
             await db.flush()
             db.add(Session(id="s", agent_id="a", user_id="u", context_data={}))
             await db.commit()
         self.queue = SessionInputQueue(self.factory)
-        self.model = SimpleNamespace(capabilities=SimpleNamespace(streaming=False, max_tokens=100000))
+        self.model = SimpleNamespace(
+            capabilities=SimpleNamespace(streaming=False, max_tokens=100000)
+        )
         self.calls = []
 
         async def respond(messages, **kwargs):
@@ -50,7 +76,9 @@ class InputDispatchTests(unittest.IsolatedAsyncioTestCase):
             return ChatResult(content="answer " + str(len(self.calls)))
 
         self.model.chat = respond
-        self.registry = SimpleNamespace(get_default=lambda: self.model, get_or_create=lambda **kwargs: self.model)
+        self.registry = SimpleNamespace(
+            get_default=lambda: self.model, get_or_create=lambda **kwargs: self.model
+        )
         self.patches = []
         for target, value in (
             ("app.storage.async_session", self.factory),
@@ -66,15 +94,31 @@ class InputDispatchTests(unittest.IsolatedAsyncioTestCase):
             p = patch(target, value)
             p.start()
             self.patches.append(p)
-        self.engine = AgentEngine(model_registry=self.registry, tool_registry=ToolRegistry(),
-                                  checkpoint_store=InMemoryCheckpointStore(), run_store=RunStorage(self.factory))
+        self.engine = AgentEngine(
+            model_registry=self.registry,
+            tool_registry=ToolRegistry(),
+            checkpoint_store=InMemoryCheckpointStore(),
+            run_store=RunStorage(self.factory),
+        )
         self.engine.sandbox = self.engine.permission_overlay = self.engine.agent_mode = None
         self.engine._build_tools_for_session = Mock(return_value=[])
-        for name in ("_set_agent_mode", "_send_start_notification", "_send_completion_notification",
-                     "_send_failure_notification", "_trigger_memory_reflection", "_record_profile_outcome", "_tick_evolution"):
+        for name in (
+            "_set_agent_mode",
+            "_send_start_notification",
+            "_send_completion_notification",
+            "_send_failure_notification",
+            "_trigger_memory_reflection",
+            "_record_profile_outcome",
+            "_tick_evolution",
+        ):
             setattr(self.engine, name, Mock())
-        for name in ("_inject_memory_context", "_inject_core_memory", "_inject_profile_context",
-                     "_store_episodic_memory", "_archive_instruction"):
+        for name in (
+            "_inject_memory_context",
+            "_inject_core_memory",
+            "_inject_profile_context",
+            "_store_episodic_memory",
+            "_archive_instruction",
+        ):
             setattr(self.engine, name, AsyncMock())
         p = patch.object(chat, "get_engine", return_value=self.engine)
         p.start()
@@ -118,9 +162,15 @@ class InputDispatchTests(unittest.IsolatedAsyncioTestCase):
         async with self.factory() as db:
             db.add(Message(session_id="s", role="assistant", content="committed history"))
             await db.commit()
-        with patch.object(chat.RecoveryManager, "restore_session", AsyncMock(side_effect=AssertionError("checkpoint replay"))):
+        with patch.object(
+            chat.RecoveryManager,
+            "restore_session",
+            AsyncMock(side_effect=AssertionError("checkpoint replay")),
+        ):
             frames = self.frames(await self.client.post("/api/v1/sessions/s/inputs/start"))
-        self.assertEqual([i["status"] for i in await self.queue.list("s", "u")], ["completed", "completed"])
+        self.assertEqual(
+            [i["status"] for i in await self.queue.list("s", "u")], ["completed", "completed"]
+        )
         turns = [data for name, data in frames if name == "turn_done"]
         self.assertEqual([t["input_id"] for t in turns], [first["id"], second["id"]])
         self.assertEqual(sum(name == "done" for name, _ in frames), 1)
@@ -136,9 +186,18 @@ class InputDispatchTests(unittest.IsolatedAsyncioTestCase):
         reports = [data for name, data in frames if name == "runtime_report"]
         for report in reports:
             self.assertEqual(set(report), {"completed", "executing", "queued", "risks"})
-            self.assertTrue(all(isinstance(v, list) and all(isinstance(s, str) for s in v) for v in report.values()))
-        print("DISPATCH_EVIDENCE=" + json.dumps({"turn_done": turns, "report": reports[-1],
-                                                "events": [name for name, _ in frames]}))
+            self.assertTrue(
+                all(
+                    isinstance(v, list) and all(isinstance(s, str) for s in v)
+                    for v in report.values()
+                )
+            )
+        print(
+            "DISPATCH_EVIDENCE="
+            + json.dumps(
+                {"turn_done": turns, "report": reports[-1], "events": [name for name, _ in frames]}
+            )
+        )
 
     async def test_empty_or_steering_only_returns_409_without_start(self):
         for kind in (None, "steering"):
@@ -161,8 +220,13 @@ class InputDispatchTests(unittest.IsolatedAsyncioTestCase):
         async with self.factory() as db:
             for model in (Session, SessionInput, Turn, Message, CheckpointRecord):
                 rows = (await db.scalars(select(model))).all()
-                persisted = [{attribute.key: getattr(row, attribute.key)
-                              for attribute in model.__mapper__.column_attrs} for row in rows]
+                persisted = [
+                    {
+                        attribute.key: getattr(row, attribute.key)
+                        for attribute in model.__mapper__.column_attrs
+                    }
+                    for row in rows
+                ]
                 self.assertNotIn(secret, repr(persisted))
         for checkpoint in self.engine._checkpoints._store.values():
             self.assertNotIn(secret, repr(checkpoint))
@@ -191,7 +255,9 @@ class InputDispatchTests(unittest.IsolatedAsyncioTestCase):
         turn = next(data for name, data in frames if name == "turn_done")
         self.assertEqual(turn["input_id"], safe["id"])
         self.assertNotEqual(turn["turn_id"], "old")
-        self.assertEqual([i["status"] for i in await self.queue.list("s", "u")], ["blocked", "completed"])
+        self.assertEqual(
+            [i["status"] for i in await self.queue.list("s", "u")], ["blocked", "completed"]
+        )
 
     async def test_unfinished_turn_blocks_checkpoint_replay(self):
         await self.submit("safe")
@@ -206,7 +272,9 @@ class InputDispatchTests(unittest.IsolatedAsyncioTestCase):
     async def test_ownership_write_scope_and_credentials_fail_before_claim(self):
         await self.submit("safe")
         self.app.dependency_overrides[chat.get_current_user] = lambda: "other"
-        self.assertEqual((await self.client.post("/api/v1/sessions/s/inputs/start")).status_code, 404)
+        self.assertEqual(
+            (await self.client.post("/api/v1/sessions/s/inputs/start")).status_code, 404
+        )
         self.app.dependency_overrides[chat.get_current_user] = lambda: "u"
         route = next(r for r in chat.router.routes if r.path.endswith("/inputs/start"))
         auth = next(d.call for d in route.dependant.dependencies if d.name == "_scope_check")
@@ -215,10 +283,14 @@ class InputDispatchTests(unittest.IsolatedAsyncioTestCase):
             raise HTTPException(403, "write required")
 
         self.app.dependency_overrides[auth] = denied
-        self.assertEqual((await self.client.post("/api/v1/sessions/s/inputs/start")).status_code, 403)
+        self.assertEqual(
+            (await self.client.post("/api/v1/sessions/s/inputs/start")).status_code, 403
+        )
         self.app.dependency_overrides[auth] = lambda: {}
         with patch.object(chat, "_ChatModelRegistry", side_effect=ValueError("invalid credential")):
-            self.assertEqual((await self.client.post("/api/v1/sessions/s/inputs/start")).status_code, 422)
+            self.assertEqual(
+                (await self.client.post("/api/v1/sessions/s/inputs/start")).status_code, 422
+            )
         self.assertEqual((await self.queue.list("s", "u"))[0]["status"], "queued")
         self.assertEqual(self.calls, [])
 
@@ -264,19 +336,36 @@ class InputDispatchTests(unittest.IsolatedAsyncioTestCase):
                 async with client.stream("POST", "/api/v1/sessions/s/inputs/start") as response:
                     self.assertEqual(response.status_code, 200)
                     await asyncio.wait_for(entered.wait(), 10)
-                    self.assertEqual((await client.post("/api/v1/sessions/s/inputs/start")).status_code, 409)
-                    self.assertEqual((await client.post("/api/v1/sessions/s/chat", json={"message": "busy"})).status_code, 409)
+                    self.assertEqual(
+                        (await client.post("/api/v1/sessions/s/inputs/start")).status_code, 409
+                    )
+                    self.assertEqual(
+                        (
+                            await client.post("/api/v1/sessions/s/chat", json={"message": "busy"})
+                        ).status_code,
+                        409,
+                    )
                 async with asyncio.timeout(10):
                     while "s" in chat._chat_inflight:
                         await asyncio.sleep(0.01)
-            self.assertEqual([i["status"] for i in await self.queue.list("s", "u")], ["blocked", "blocked"])
+            self.assertEqual(
+                [i["status"] for i in await self.queue.list("s", "u")], ["blocked", "blocked"]
+            )
             self.assertNotIn("s", self.engine._session_locks)
             async with self.factory() as db:
                 turn = await db.scalar(select(Turn))
                 self.assertEqual(turn.status, "stopped")
                 self.assertIsNotNone(turn.completed_at)
-            print("DISCONNECT_EVIDENCE=" + json.dumps({"inputs": ["blocked", "blocked"],
-                                                       "turn_status": "stopped", "lock_released": True}))
+            print(
+                "DISCONNECT_EVIDENCE="
+                + json.dumps(
+                    {
+                        "inputs": ["blocked", "blocked"],
+                        "turn_status": "stopped",
+                        "lock_released": True,
+                    }
+                )
+            )
         finally:
             server.should_exit = True
             await asyncio.wait_for(task, 10)

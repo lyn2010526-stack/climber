@@ -33,7 +33,9 @@ def prepare_iteration(engine: Any, session: Any) -> tuple[Any, list[dict[str, An
         api_key=session.api_key,
         base_url=session.base_url,
     )
-    task_description = content_text(session.messages[-1].get("content", "")) if session.messages else ""
+    task_description = (
+        content_text(session.messages[-1].get("content", "")) if session.messages else ""
+    )
     tools = engine._build_tools_for_session(session, task_description=task_description)
     return adapter, tools
 
@@ -64,8 +66,12 @@ async def compress_if_needed(
         taken before compression.
     """
     ctx_tokens = estimate_tokens(session.messages)
-    ctx_limit = getattr(adapter.capabilities, "max_tokens", None) or session.context_config.max_tokens
-    if compressor.needs_compression(session.messages) or (ctx_limit and ctx_tokens > ctx_limit * 0.8):
+    ctx_limit = (
+        getattr(adapter.capabilities, "max_tokens", None) or session.context_config.max_tokens
+    )
+    if compressor.needs_compression(session.messages) or (
+        ctx_limit and ctx_tokens > ctx_limit * 0.8
+    ):
         compressed = await compressor.compress(session.messages, adapter, meter=meter)
         session.messages = compressed
         return compressed, ctx_tokens
@@ -98,16 +104,23 @@ async def save_checkpoint(
     from app.core.checkpoint import CheckpointData, sanitize_checkpoint
 
     cp = CheckpointData(
-        session_id=session.session_id, messages=session.messages,
-        iteration=session._last_iteration, status=session.state_machine.state.value,
+        session_id=session.session_id,
+        messages=session.messages,
+        iteration=session._last_iteration,
+        status=session.state_machine.state.value,
         metadata={"thread_id": session.current_turn_id or "", "error": session._last_error},
-        channel_values=channels, channel_versions={"messages": session._last_iteration},
+        channel_values=channels,
+        channel_versions={"messages": session._last_iteration},
         versions_seen={"node": {"messages": session._last_iteration}},
         pending_writes=pending_writes or [],
     )
     cp = sanitize_checkpoint(cp, secrets=(session.api_key,))
-    cid = await checkpoint_store.save(None, cp,
-        thread_id=session.current_turn_id or "", checkpoint_id=str(uuid4()),
-        parent_id=getattr(session, "_last_checkpoint_id", None))
+    cid = await checkpoint_store.save(
+        None,
+        cp,
+        thread_id=session.current_turn_id or "",
+        checkpoint_id=str(uuid4()),
+        parent_id=getattr(session, "_last_checkpoint_id", None),
+    )
     session._last_checkpoint_id = cid
     return cid

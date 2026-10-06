@@ -70,7 +70,8 @@ CORE_SECTIONS = (
     "RESEARCH_AND_KNOWLEDGE",
 )
 
-CORE_SECTIONS_V1_3_0 = CORE_SECTIONS + (
+CORE_SECTIONS_V1_3_0 = (
+    *CORE_SECTIONS,
     "ENVIRONMENT_CONTEXT",
     "DELEGATION_PACKET",
     "EVIDENCE_HANDOFF",
@@ -254,7 +255,9 @@ from the event history instead of keeping a second copy of it.
    decision is well supported.
 """
 
-CORE_BODY_1_3_0 = CORE_BODY_1_2_0 + """
+CORE_BODY_1_3_0 = (
+    CORE_BODY_1_2_0
+    + """
 
 [ENVIRONMENT_CONTEXT]
 1. Before acting, capture the relevant branch, target files, available tools, and
@@ -280,6 +283,7 @@ CORE_BODY_1_3_0 = CORE_BODY_1_2_0 + """
 3. For research and memory, preserve source, kind, confidence, and timestamp so
    later retrieval can filter and rank evidence without flattening conflicts.
 """
+)
 
 TASK_BODIES = {
     "implementation": """[TASK_TYPE: IMPLEMENTATION]
@@ -466,7 +470,11 @@ def validate_prompt_contract(
     errors: list[str] = []
     body = str(values.get("body", ""))
     declared = set(values.get("sections", ()))
-    missing = [section for section in required_sections if section not in declared or f"[{section}]" not in body]
+    missing = [
+        section
+        for section in required_sections
+        if section not in declared or f"[{section}]" not in body
+    ]
     if missing:
         errors.append(f"missing sections: {', '.join(missing)}")
     if values.get("tool_contract_version") != tool_contract_version:
@@ -483,7 +491,9 @@ def resolve_active_prompt(prompt_id: str, version: str | None = None) -> PromptS
     versions = _PROMPTS.get(prompt_id)
     if not versions:
         raise PromptVersionError(f"unknown prompt: {prompt_id}")
-    candidate = next((item for item in versions if version is None or item.version == version), None)
+    candidate = next(
+        (item for item in versions if version is None or item.version == version), None
+    )
     if candidate is None:
         raise PromptVersionError(f"unknown version: {prompt_id}@{version}")
     if version is None and candidate.status is PromptStatus.DEPRECATED:
@@ -522,6 +532,13 @@ def build_injected_prompt(
             "task": task.metadata(),
             "model_id": model_id,
             "tool_contract_version": TOOL_CONTRACT_VERSION,
-            "visible_event_fields": ("phase", "action", "status", "next_step", "tool_summary", "validation_summary"),
+            "visible_event_fields": (
+                "phase",
+                "action",
+                "status",
+                "next_step",
+                "tool_summary",
+                "validation_summary",
+            ),
         },
     }

@@ -39,9 +39,11 @@ def _meter_summarize(engine: Any, session: Any, iteration: int):
     summarize response through the engine's run store so the call is metered
     like any ordinary response.
     """
+
     async def meter(response: Any) -> None:
         await engine._run_store.record_response(session, response, iteration, complete=True)
         session.metrics.total_tokens_used += getattr(response, "tokens_used", 0) or 0
+
     return meter
 
 
@@ -86,11 +88,19 @@ async def run_locked(
         content = build_user_content(message, images, attachments)
         session.messages.append({"role": MessageRole.USER, "content": content})
         persisted = await engine._persist_message(
-            session.session_id, MessageRole.USER,
-            content=message, images=images,
-            attachments=[{
-                "kind": item.kind, "name": item.name, "mime_type": item.mime_type, "size": item.size,
-            } for item in (attachments or [])],
+            session.session_id,
+            MessageRole.USER,
+            content=message,
+            images=images,
+            attachments=[
+                {
+                    "kind": item.kind,
+                    "name": item.name,
+                    "mime_type": item.mime_type,
+                    "size": item.size,
+                }
+                for item in (attachments or [])
+            ],
         )
         if getattr(session, "_continuing_input", False) and not persisted:
             raise RuntimeError("Follow-up message persistence failed")
@@ -114,7 +124,9 @@ async def run_locked(
     result: ChatResult | None = None
 
     try:
-        async with contextlib.aclosing(engine._iteration_loop(session, executor, compressor)) as events:
+        async with contextlib.aclosing(
+            engine._iteration_loop(session, executor, compressor)
+        ) as events:
             async for event in events:
                 yield event
     except Exception as e:
@@ -142,16 +154,19 @@ async def run_locked(
     engine._record_profile_outcome(session, message)
     engine._tick_evolution(session)
     result = session._last_result
-    yield AgentEvent(type=AgentEventType.DONE, data={
-        "status": session._run_status_override or session.status.value,
-        "iterations": session._last_iteration,
-        "content": result.content if result else "",
-        "tokens_used": getattr(session, "_run_tokens", 0),
-        "cost_status": getattr(session, "_run_cost_status", "unknown"),
-        "usage_status": getattr(session, "_run_usage_status", "unknown"),
-        "metrics": session.metrics.to_dict(),
-        "message_id": getattr(session, "_last_assistant_message_id", None),
-    })
+    yield AgentEvent(
+        type=AgentEventType.DONE,
+        data={
+            "status": session._run_status_override or session.status.value,
+            "iterations": session._last_iteration,
+            "content": result.content if result else "",
+            "tokens_used": getattr(session, "_run_tokens", 0),
+            "cost_status": getattr(session, "_run_cost_status", "unknown"),
+            "usage_status": getattr(session, "_run_usage_status", "unknown"),
+            "metrics": session.metrics.to_dict(),
+            "message_id": getattr(session, "_last_assistant_message_id", None),
+        },
+    )
 
 
 async def iteration_loop(
@@ -181,7 +196,9 @@ async def iteration_loop(
         try:
             from app.core.metacognition import ExecutionContext
 
-            goal_hint = content_text(session.messages[-1].get("content", "")) if session.messages else ""
+            goal_hint = (
+                content_text(session.messages[-1].get("content", "")) if session.messages else ""
+            )
             meta_orchestrator.initialize(
                 ExecutionContext(
                     goal=goal_hint[:2000],
@@ -210,35 +227,53 @@ async def iteration_loop(
 
         await refresh_rule_context(session)
         # Derived task views are rebuilt from storage, never fed into compaction.
-        session.messages = [msg for msg in session.messages if not (
-            msg.get("role") == MessageRole.SYSTEM
-            and isinstance(msg.get("content"), str)
-            and msg["content"].startswith(TASK_MEMORY_MARKER)
-        )]
+        session.messages = [
+            msg
+            for msg in session.messages
+            if not (
+                msg.get("role") == MessageRole.SYSTEM
+                and isinstance(msg.get("content"), str)
+                and msg["content"].startswith(TASK_MEMORY_MARKER)
+            )
+        ]
         compressed, ctx_tokens = await compress_if_needed(
-            session, adapter, compressor, meter=_meter_summarize(engine, session, iteration),
+            session,
+            adapter,
+            compressor,
+            meter=_meter_summarize(engine, session, iteration),
         )
         if compressed is not None:
-            yield AgentEvent(type=AgentEventType.CONTEXT_COMPRESSION,
-                             data={"iteration": iteration, "tokens": ctx_tokens,
-                                   "limit": getattr(adapter.capabilities, "max_tokens", None)
-                                    or session.context_config.max_tokens})
+            yield AgentEvent(
+                type=AgentEventType.CONTEXT_COMPRESSION,
+                data={
+                    "iteration": iteration,
+                    "tokens": ctx_tokens,
+                    "limit": getattr(adapter.capabilities, "max_tokens", None)
+                    or session.context_config.max_tokens,
+                },
+            )
 
-        context_limit = min(session.context_config.max_tokens,
-                            getattr(adapter.capabilities, "max_tokens", None)
-                            or session.context_config.max_tokens)
-        await engine._inject_task_memory_context(  # noqa: SLF001
-            session, token_budget=min(2048, max(0, context_limit // 4)),
+        context_limit = min(
+            session.context_config.max_tokens,
+            getattr(adapter.capabilities, "max_tokens", None) or session.context_config.max_tokens,
+        )
+        await engine._inject_task_memory_context(
+            session,
+            token_budget=min(2048, max(0, context_limit // 4)),
         )
 
         if adapter.capabilities.streaming:
             result = ChatResult()
             started = time.monotonic()
             try:
-                async for chunk in adapter.stream_chat(messages=session.messages, tools=tools or None, **sampling_kwargs(session)):
+                async for chunk in adapter.stream_chat(
+                    messages=session.messages, tools=tools or None, **sampling_kwargs(session)
+                ):
                     delta = merge_stream_chunk(result, chunk)
                     if session._stop_requested:
-                        await engine._run_store.record_response(session, result, iteration, complete=False)
+                        await engine._run_store.record_response(
+                            session, result, iteration, complete=False
+                        )
                         session.metrics.total_tokens_used += result.tokens_used
                         result = None
                         break
@@ -247,15 +282,21 @@ async def iteration_loop(
                     engine._accumulate_stream_tool_calls(result.tool_calls, chunk.tool_calls)
             except BaseException:
                 if result is not None:
-                    await engine._run_store.record_response(session, result, iteration, complete=False)
+                    await engine._run_store.record_response(
+                        session, result, iteration, complete=False
+                    )
                     session.metrics.total_tokens_used += result.tokens_used
                 raise
             finally:
                 session.metrics.llm_call_durations.append(time.monotonic() - started)
             if result is not None:
-                result.finish_reason = result.finish_reason or ("tool_calls" if result.tool_calls else "stop")
+                result.finish_reason = result.finish_reason or (
+                    "tool_calls" if result.tool_calls else "stop"
+                )
         else:
-            result = await engine._call_llm_with_resilience(session, adapter, session.messages, iteration)
+            result = await engine._call_llm_with_resilience(
+                session, adapter, session.messages, iteration
+            )
         if result is None:
             if session._stop_requested:
                 await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
@@ -263,11 +304,15 @@ async def iteration_loop(
             else:
                 session._last_error = "LLM call failed or stopped"
                 await session.state_machine.transition(TaskState.FAILED, trigger="llm_stopped")
-                yield AgentEvent(type=AgentEventType.ERROR, data={"error": "LLM call failed or stopped"})
+                yield AgentEvent(
+                    type=AgentEventType.ERROR, data={"error": "LLM call failed or stopped"}
+                )
             break
         session._last_result = result
         result.tokens_used = response_usage(result)["total_tokens"] or 0
-        await engine._run_store.record_response(session, result, iteration, complete=result.finish_reason != "error")
+        await engine._run_store.record_response(
+            session, result, iteration, complete=result.finish_reason != "error"
+        )
         session.metrics.total_tokens_used += getattr(result, "tokens_used", 0) or 0
         if session.status.value == "paused":
             await engine._save_checkpoint(session, {"paused": True})
@@ -289,31 +334,47 @@ async def iteration_loop(
                 session._run_status_override = "no_progress"
                 await session.state_machine.transition(TaskState.PAUSED, trigger="no_progress")
                 await engine._save_checkpoint(session, {"no_progress": session._last_error})
-                yield AgentEvent(type=AgentEventType.PROGRESS, data={"status": "paused", "reason": session._last_error})
+                yield AgentEvent(
+                    type=AgentEventType.PROGRESS,
+                    data={"status": "paused", "reason": session._last_error},
+                )
                 return
-            session.messages.append({
-                "role": MessageRole.SYSTEM,
-                "content": "Your previous response was empty. Please provide a helpful response or use an appropriate tool.",
-            })
+            session.messages.append(
+                {
+                    "role": MessageRole.SYSTEM,
+                    "content": "Your previous response was empty. Please provide a helpful response or use an appropriate tool.",
+                }
+            )
             continue
 
         if result.tool_calls:
             batch = []
-            async for _event in engine._handle_tool_execution(session, executor, result, iteration, ctx_tokens, metacognition=meta_orchestrator):
+            async for _event in engine._handle_tool_execution(
+                session, executor, result, iteration, ctx_tokens, metacognition=meta_orchestrator
+            ):
                 if _event.type == AgentEventType.TOOL_RESULT:
                     batch.append(_event.data)
                 yield _event
             from app.core.engine.input_queue import stalled_batch
 
-            evidence = stalled_batch(result.tool_calls, batch) if not (result.content or "").strip() else None
-            no_progress = no_progress + 1 if evidence is not None and evidence == previous_batch else 0
+            evidence = (
+                stalled_batch(result.tool_calls, batch)
+                if not (result.content or "").strip()
+                else None
+            )
+            no_progress = (
+                no_progress + 1 if evidence is not None and evidence == previous_batch else 0
+            )
             previous_batch = evidence
             if no_progress >= 2 and not session._stop_requested:
                 session._last_error = "Two repeated tool batches with unchanged read-only results"
                 session._run_status_override = "no_progress"
                 await session.state_machine.transition(TaskState.PAUSED, trigger="no_progress")
                 await engine._save_checkpoint(session, {"no_progress": session._last_error})
-                yield AgentEvent(type=AgentEventType.PROGRESS, data={"status": "paused", "reason": session._last_error})
+                yield AgentEvent(
+                    type=AgentEventType.PROGRESS,
+                    data={"status": "paused", "reason": session._last_error},
+                )
                 return
             continue
 
@@ -332,7 +393,11 @@ async def iteration_loop(
 
     if session.status.value == "failed":
         return
-    if not session._stop_requested and iteration >= session.max_iterations and (result is None or result.tool_calls or not result.content):
+    if (
+        not session._stop_requested
+        and iteration >= session.max_iterations
+        and (result is None or result.tool_calls or not result.content)
+    ):
         await session.state_machine.transition(TaskState.FAILED, trigger="max_iterations")
         session._run_status_override = "max_iterations_reached"
         session._last_error = "Maximum iterations reached"
@@ -372,12 +437,19 @@ async def handle_text_result(
         xml_tool_calls = OpenAIAdapter._parse_xml_tool_calls(result.content)
         if xml_tool_calls:
             result.tool_calls = xml_tool_calls
-            cleaned = re.sub(r"<function([^>]+)>.*?</\1>", "", result.content, flags=re.DOTALL | re.IGNORECASE).strip()
+            cleaned = re.sub(
+                r"<function([^>]+)>.*?</\1>", "", result.content, flags=re.DOTALL | re.IGNORECASE
+            ).strip()
             if not cleaned:
                 result.content = ""
 
     session.messages.append({"role": MessageRole.ASSISTANT, "content": result.content})
-    persisted_id = await engine._persist_message(session.session_id, MessageRole.ASSISTANT, content=result.content, tokens=getattr(result, "tokens_used", 0))
+    persisted_id = await engine._persist_message(
+        session.session_id,
+        MessageRole.ASSISTANT,
+        content=result.content,
+        tokens=getattr(result, "tokens_used", 0),
+    )
     if getattr(session, "_continuing_input", False) and not persisted_id:
         raise RuntimeError("Follow-up response persistence failed")
     if persisted_id:

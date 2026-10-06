@@ -12,18 +12,42 @@ from app.core.session import AgentSession, SessionConfig
 
 
 def make_engine():
-    adapter = SimpleNamespace(chat=AsyncMock(return_value=ChatResult(
-        content=json.dumps({"evidence": ["优化它"], "questions": ["具体优化哪个对象?"],
-                            "missing_information": True}, ensure_ascii=False),
-        finish_reason="stop",
-    )))
-    engine = SimpleNamespace(model_registry=SimpleNamespace(get_or_create=Mock(return_value=adapter)))
-    for name in ("_persist_message", "_archive_instruction", "_inject_memory_context",
-                 "_inject_core_memory", "_inject_profile_context", "_save_checkpoint",
-                 "_store_episodic_memory"):
+    adapter = SimpleNamespace(
+        chat=AsyncMock(
+            return_value=ChatResult(
+                content=json.dumps(
+                    {
+                        "evidence": ["优化它"],
+                        "questions": ["具体优化哪个对象?"],
+                        "missing_information": True,
+                    },
+                    ensure_ascii=False,
+                ),
+                finish_reason="stop",
+            )
+        )
+    )
+    engine = SimpleNamespace(
+        model_registry=SimpleNamespace(get_or_create=Mock(return_value=adapter))
+    )
+    for name in (
+        "_persist_message",
+        "_archive_instruction",
+        "_inject_memory_context",
+        "_inject_core_memory",
+        "_inject_profile_context",
+        "_save_checkpoint",
+        "_store_episodic_memory",
+    ):
         setattr(engine, name, AsyncMock())
-    for name in ("_set_agent_mode", "_send_start_notification", "_make_parallel_executor",
-                 "_trigger_memory_reflection", "_record_profile_outcome", "_tick_evolution"):
+    for name in (
+        "_set_agent_mode",
+        "_send_start_notification",
+        "_make_parallel_executor",
+        "_trigger_memory_reflection",
+        "_record_profile_outcome",
+        "_tick_evolution",
+    ):
         setattr(engine, name, Mock())
     seen = []
 
@@ -39,9 +63,14 @@ def make_engine():
 async def test_runner_injects_before_iteration_and_persists_verbatim_then_expires(monkeypatch):
     monkeypatch.setenv("USER_PROMPT_OPT_MODE", "auto")
     engine, adapter, seen = make_engine()
-    session = AgentSession(SessionConfig(
-        session_id="s", provider="openai", model_id="fake", api_key="project-key",
-    ))
+    session = AgentSession(
+        SessionConfig(
+            session_id="s",
+            provider="openai",
+            model_id="fake",
+            api_key="project-key",
+        )
+    )
     events = [event async for event in run_locked(engine, session, "优化它")]
     assert events[-1].type == AgentEventType.DONE
     assert seen[0][-1]["content"] == "优化它"
@@ -63,9 +92,14 @@ async def test_runner_failure_preserves_original_and_continues_facade(monkeypatc
     monkeypatch.setenv("USER_PROMPT_OPT_MODE", "auto")
     engine, adapter, seen = make_engine()
     adapter.chat.side_effect = RuntimeError("scripted failure")
-    session = AgentSession(SessionConfig(
-        session_id="s", provider="openai", model_id="fake", api_key="project-key",
-    ))
+    session = AgentSession(
+        SessionConfig(
+            session_id="s",
+            provider="openai",
+            model_id="fake",
+            api_key="project-key",
+        )
+    )
     events = await asyncio_collect(run_locked(engine, session, "优化它"))
     assert events[-1].type == AgentEventType.DONE
     assert seen == [[{"role": "user", "content": "优化它"}]]

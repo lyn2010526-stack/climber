@@ -35,8 +35,12 @@ _ORIG_MESSAGES: dict[str, Exception] = {
     "sqlite_not_null": Exception("NOT NULL constraint failed: users.name"),
     "sqlite_fk": Exception("FOREIGN KEY constraint failed"),
     "sqlite_unique": Exception("UNIQUE constraint failed: feedback.session_id, feedback.type"),
-    "pg_not_null": Exception('null value in column "name" of relation "users" violates not-null constraint'),
-    "pg_fk": Exception('insert or update on table "orders" violates foreign key constraint "orders_user_fkey"'),
+    "pg_not_null": Exception(
+        'null value in column "name" of relation "users" violates not-null constraint'
+    ),
+    "pg_fk": Exception(
+        'insert or update on table "orders" violates foreign key constraint "orders_user_fkey"'
+    ),
     "pg_unique": Exception('duplicate key value violates unique constraint "feedback_pkey"'),
     "unknown": Exception("some unrecognized driver failure"),
 }
@@ -49,7 +53,9 @@ def _build_app() -> FastAPI:
 
     @app.get("/http-error")
     async def http_error() -> None:
-        raise HTTPException(status_code=404, detail="missing", headers={"Cache-Control": "no-store"})
+        raise HTTPException(
+            status_code=404, detail="missing", headers={"Cache-Control": "no-store"}
+        )
 
     @app.post("/validation-error")
     async def validation_error(body: _EchoBody) -> dict[str, str]:
@@ -169,7 +175,9 @@ async def test_integrity_error_is_classified_by_constraint_type(
 
 
 @pytest.mark.parametrize("kind", ["sqlite_not_null", "sqlite_unique", "pg_fk"])
-async def test_integrity_error_response_does_not_leak_raw_constraint(app: FastAPI, kind: str) -> None:
+async def test_integrity_error_response_does_not_leak_raw_constraint(
+    app: FastAPI, kind: str
+) -> None:
     response = await _request(app, "GET", "/integrity-error", params={"kind": kind})
 
     assert "violates" not in response.text
@@ -206,7 +214,9 @@ def test_classify_integrity_error_without_orig_falls_back_to_persistence() -> No
         ("unknown", "some unrecognized driver failure"),
     ],
 )
-def test_describe_integrity_constraint_extracts_identifier(kind: str, expected_identifier: str) -> None:
+def test_describe_integrity_constraint_extracts_identifier(
+    kind: str, expected_identifier: str
+) -> None:
     assert _describe_integrity_constraint(_ORIG_MESSAGES[kind]) == expected_identifier
 
 

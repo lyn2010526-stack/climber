@@ -48,14 +48,18 @@ def notify(title: str, message: str, *, urgency: str = "normal", icon: str | Non
                 cmd += ["-u", urgency]
             result = subprocess.run(cmd, check=False, timeout=5)
             if result.returncode != 0:
-                logger.warning("desktop_notify_failed", backend="notify-send", exit_code=result.returncode)
+                logger.warning(
+                    "desktop_notify_failed", backend="notify-send", exit_code=result.returncode
+                )
                 return False
             return True
         if _has_applescript:
             script = f'display notification "{_escape_applescript(message)}" with title "{_escape_applescript(title)}" sound name "default"'
             result = subprocess.run(["osascript", "-e", script], check=False, timeout=5)
             if result.returncode != 0:
-                logger.warning("desktop_notify_failed", backend="osascript", exit_code=result.returncode)
+                logger.warning(
+                    "desktop_notify_failed", backend="osascript", exit_code=result.returncode
+                )
                 return False
             return True
         if _has_powershell:
@@ -68,7 +72,9 @@ def notify(title: str, message: str, *, urgency: str = "normal", icon: str | Non
             )
             result = subprocess.run(["powershell.exe", "-Command", ps_cmd], check=False, timeout=5)
             if result.returncode != 0:
-                logger.warning("desktop_notify_failed", backend="powershell", exit_code=result.returncode)
+                logger.warning(
+                    "desktop_notify_failed", backend="powershell", exit_code=result.returncode
+                )
                 return False
             return True
     except Exception as exc:
@@ -77,7 +83,9 @@ def notify(title: str, message: str, *, urgency: str = "normal", icon: str | Non
     return False
 
 
-async def anotify(title: str, message: str, *, urgency: str = "normal", icon: str | None = None) -> bool:
+async def anotify(
+    title: str, message: str, *, urgency: str = "normal", icon: str | None = None
+) -> bool:
     """Fire a desktop notification without blocking the event loop.
 
     Runs the blocking subprocess call in a worker thread so async callers

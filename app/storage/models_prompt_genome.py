@@ -8,7 +8,7 @@ and reads return the latest generation of every genome for fast reload.
 
 from __future__ import annotations
 
-from datetime import datetime  # noqa: TC003 - Mapped[datetime] is resolved by SQLAlchemy at runtime
+from datetime import datetime
 from uuid import uuid4
 
 from sqlalchemy import (

@@ -12,20 +12,48 @@ from app.core.reasoning.base import ReasoningMode, ReasoningRequest
 class StrategySelector:
     """Selects reasoning strategy based on task analysis."""
 
-    CODING_KEYWORDS = frozenset({
-        "implement", "code", "function", "class", "algorithm",
-        "fix", "debug", "refactor", "test", "optimize",
-    })
+    CODING_KEYWORDS = frozenset(
+        {
+            "implement",
+            "code",
+            "function",
+            "class",
+            "algorithm",
+            "fix",
+            "debug",
+            "refactor",
+            "test",
+            "optimize",
+        }
+    )
 
-    CREATIVE_KEYWORDS = frozenset({
-        "design", "create", "write", "brainstorm", "propose",
-        "architecture", "plan", "strategy", "innovate",
-    })
+    CREATIVE_KEYWORDS = frozenset(
+        {
+            "design",
+            "create",
+            "write",
+            "brainstorm",
+            "propose",
+            "architecture",
+            "plan",
+            "strategy",
+            "innovate",
+        }
+    )
 
-    EVAL_KEYWORDS = frozenset({
-        "evaluate", "compare", "choose", "review", "assess",
-        "recommend", "analyze", "judge", "rank",
-    })
+    EVAL_KEYWORDS = frozenset(
+        {
+            "evaluate",
+            "compare",
+            "choose",
+            "review",
+            "assess",
+            "recommend",
+            "analyze",
+            "judge",
+            "rank",
+        }
+    )
 
     def select(
         self, request: ReasoningRequest, available: dict[ReasoningMode, object]
@@ -48,7 +76,10 @@ class StrategySelector:
                 return ReasoningMode.DEBATE
             return ReasoningMode.TREE_OF_THOUGHT
 
-        if self._matches(task_lower, self.CREATIVE_KEYWORDS) and ReasoningMode.TREE_OF_THOUGHT in available:
+        if (
+            self._matches(task_lower, self.CREATIVE_KEYWORDS)
+            and ReasoningMode.TREE_OF_THOUGHT in available
+        ):
             return ReasoningMode.TREE_OF_THOUGHT
 
         return ReasoningMode.TREE_OF_THOUGHT

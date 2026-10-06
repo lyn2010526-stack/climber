@@ -73,7 +73,13 @@ def test_core_contract_declares_all_sections_and_no_hidden_reasoning_request():
 
 def test_tool_contract_validation_reports_missing_and_wrong_contract():
     errors = validate_prompt_contract(
-        {"body": "[ROLE_AND_SCOPE] x", "sections": ("ROLE_AND_SCOPE",), "version": "1.0.0", "source": "test", "tool_contract_version": "0.1"}
+        {
+            "body": "[ROLE_AND_SCOPE] x",
+            "sections": ("ROLE_AND_SCOPE",),
+            "version": "1.0.0",
+            "source": "test",
+            "tool_contract_version": "0.1",
+        }
     )
     assert any("missing sections" in error for error in errors)
     assert "unsupported tool contract version" in errors

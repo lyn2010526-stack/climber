@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import sqlite3
+from typing import ClassVar
 
 from app.core.engine.validation import validate_tool_call
 from app.core.observability.audit import AuditChain, security_audit_chain
 from app.core.permission_rules import PermissionConfig, PermissionRule, PermissionTier, RuleDecision
-from app.core.security_sandbox import CodeSandbox, PermissionOverlay, SecuritySandbox, SandboxConfig
+from app.core.security_sandbox import CodeSandbox, SandboxConfig, SecuritySandbox
 
 
 async def _awaitable(value):
@@ -17,7 +18,7 @@ async def _awaitable(value):
 class _Session:
     agent_id = "agent"
     user_id = "user"
-    _approved_tool_calls: set[str] = set()
+    _approved_tool_calls: ClassVar[set[str]] = set()
 
     def __init__(self, config: PermissionConfig) -> None:
         self.permission_config = config
@@ -39,8 +40,11 @@ def test_permission_tiers_preserve_read_and_restrict_writes(tmp_path) -> None:
 
     sandbox = SecuritySandbox(SandboxConfig(workdir=str(tmp_path)))
     allowed, reason = validate_tool_call(
-        _Session(read_only), "write_file", {"path": str(tmp_path / "a.py"), "content": "x"},
-        sandbox=sandbox, tool_registry=_Registry(),
+        _Session(read_only),
+        "write_file",
+        {"path": str(tmp_path / "a.py"), "content": "x"},
+        sandbox=sandbox,
+        tool_registry=_Registry(),
     )
     assert allowed is False
     assert "Permission denied by rules" in reason
@@ -53,8 +57,11 @@ def test_validation_chain_blocks_script_before_execution(tmp_path) -> None:
     )
     sandbox = SecuritySandbox(SandboxConfig(workdir=str(tmp_path)))
     allowed, reason = validate_tool_call(
-        _Session(config), "run_command", {"command": "echo ok", "code": "import os\nresult = 1"},
-        sandbox=sandbox, tool_registry=_Registry(),
+        _Session(config),
+        "run_command",
+        {"command": "echo ok", "code": "import os\nresult = 1"},
+        sandbox=sandbox,
+        tool_registry=_Registry(),
     )
     assert allowed is False
     assert "Script preflight blocked" in reason

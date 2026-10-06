@@ -35,6 +35,7 @@ logger = structlog.get_logger()
 @dataclass
 class HarnessOptions:
     """Tuning knobs for the orchestration loop."""
+
     max_rounds: int = 8
     concurrency: int = 4
     timeout_per_tool: float = 60.0
@@ -46,6 +47,7 @@ class HarnessOptions:
 @dataclass
 class HarnessRunResult:
     """Aggregate result across all experiments in a plan."""
+
     plan: ExperimentPlan
     reports: list[ExperimentReport] = field(default_factory=list)
     accepted: int = 0
@@ -218,10 +220,14 @@ class SimulationHarness:
             validator=self._validate_tool_call,
         )
         try:
-            results = await executor.execute_all([{
-                "id": f"{spec.id}-r{round_number}",
-                "function": {"name": spec.tool_name, "arguments": parameters},
-            }])
+            results = await executor.execute_all(
+                [
+                    {
+                        "id": f"{spec.id}-r{round_number}",
+                        "function": {"name": spec.tool_name, "arguments": parameters},
+                    }
+                ]
+            )
             tool_result = results[0]
             attempt.success = tool_result.success
             attempt.output = tool_result.result

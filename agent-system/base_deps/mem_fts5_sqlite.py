@@ -101,12 +101,20 @@ class Fts5Store:
                     source_session=excluded.source_session, structured=excluded.structured
                 """,
                 (
-                    item.id, item.kind.value, item.text, item.title, item.doc_type,
-                    item.doc_length, json.dumps(item.metadata, ensure_ascii=False),
-                    item.trust_score, item.decay,
+                    item.id,
+                    item.kind.value,
+                    item.text,
+                    item.title,
+                    item.doc_type,
+                    item.doc_length,
+                    json.dumps(item.metadata, ensure_ascii=False),
+                    item.trust_score,
+                    item.decay,
                     item.created_at.isoformat(),
                     item.last_accessed_at.isoformat() if item.last_accessed_at else None,
-                    item.accessed_count, item.ttl_seconds, item.source_session,
+                    item.accessed_count,
+                    item.ttl_seconds,
+                    item.source_session,
                     json.dumps(item.structured, ensure_ascii=False),
                 ),
             )
@@ -122,8 +130,14 @@ class Fts5Store:
 
     # ---- 检索 ----
 
-    def search(self, query: str, top_k: int = 10, kinds: list[str] | None = None,
-               min_trust: float = 0.0, include_expired: bool = False) -> list[RetrievedMemory]:
+    def search(
+        self,
+        query: str,
+        top_k: int = 10,
+        kinds: list[str] | None = None,
+        min_trust: float = 0.0,
+        include_expired: bool = False,
+    ) -> list[RetrievedMemory]:
         """FTS5 关键词检索 + 可信度 + 时间衰减加权。
 
         返回按融合分倒序的 RetrievedMemory 列表。
@@ -147,7 +161,7 @@ class Fts5Store:
         with self._lock:
             # 结构部分由代码拼接，所有取值均走 `?` 参数绑定，无注入面。
             query = (
-                "SELECT m.id, m.kind, m.text, m.title, m.doc_type, m.doc_length, "  # noqa: S608
+                "SELECT m.id, m.kind, m.text, m.title, m.doc_type, m.doc_length, "
                 "m.metadata, m.trust_score, m.decay, m.created_at, "
                 "m.last_accessed_at, m.accessed_count, m.ttl_seconds, "
                 "m.source_session, m.structured, "
@@ -167,11 +181,15 @@ class Fts5Store:
             keyword_score = _normalize_bm25(row["raw_score"])
             decay = _time_decay(item, now, self.half_life)
             score = keyword_score * decay * (0.5 + item.trust_score)
-            results.append(RetrievedMemory(
-                item=item, route="fts", score=round(score, 4),
-                keyword_score=round(keyword_score, 4),
-                reason=f"bm25={row['raw_score']:.2f} decay={decay:.2f} trust={item.trust_score:.2f}",
-            ))
+            results.append(
+                RetrievedMemory(
+                    item=item,
+                    route="fts",
+                    score=round(score, 4),
+                    keyword_score=round(keyword_score, 4),
+                    reason=f"bm25={row['raw_score']:.2f} decay={decay:.2f} trust={item.trust_score:.2f}",
+                )
+            )
         results.sort(key=lambda r: r.score, reverse=True)
         return results[:top_k]
 
@@ -278,7 +296,8 @@ def _row_to_item(row: sqlite3.Row) -> MemoryItem:
         decay=row["decay"] or 1.0,
         created_at=datetime.fromisoformat(row["created_at"]) if row["created_at"] else now_utc(),
         last_accessed_at=datetime.fromisoformat(row["last_accessed_at"])
-        if row["last_accessed_at"] else None,
+        if row["last_accessed_at"]
+        else None,
         accessed_count=row["accessed_count"] or 0,
         ttl_seconds=row["ttl_seconds"],
         source_session=row["source_session"],

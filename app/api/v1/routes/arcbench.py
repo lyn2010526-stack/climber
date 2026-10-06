@@ -133,10 +133,11 @@ def _derive_phase(events: list[dict[str, Any]], summary: dict[str, Any] | None) 
     return "design", "planning / design in progress"
 
 
-def _build_acceptance(events: list[dict[str, Any]], summary: dict[str, Any] | None) -> ArcBenchAcceptance:
+def _build_acceptance(
+    events: list[dict[str, Any]], summary: dict[str, Any] | None
+) -> ArcBenchAcceptance:
     test_nodes = [
-        e for e in events
-        if e.get("type") == "requirement_state" and e.get("phase") == "test"
+        e for e in events if e.get("type") == "requirement_state" and e.get("phase") == "test"
     ]
     passed = sum(1 for e in test_nodes if e.get("status") == "passed")
     failed = sum(1 for e in test_nodes if e.get("status") == "failed")
@@ -176,7 +177,10 @@ async def arcbench_status() -> ArcBenchStatus:
     last_events = []
     for raw in events[-_MAX_EVENTS:]:
         payload = dict(raw)
-        event = {"type": str(payload.pop("type", "")), "timestamp": str(payload.pop("timestamp", "") or "")}
+        event = {
+            "type": str(payload.pop("type", "")),
+            "timestamp": str(payload.pop("timestamp", "") or ""),
+        }
         event["data"] = payload
         last_events.append(ArcBenchEvent(**event))
 

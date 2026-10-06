@@ -57,7 +57,9 @@ class TaskExecutionEngine:
             task.status = TaskState.FAILED.value
             task.metadata["failure_reason"] = "circuit_breaker_open"
             self._store.save(task)
-            await self._publish_event(EventBus.EVENT_FAILED, task.id, {"reason": "circuit_breaker_open"})
+            await self._publish_event(
+                EventBus.EVENT_FAILED, task.id, {"reason": "circuit_breaker_open"}
+            )
             return task
 
         task.status = TaskState.RUNNING.value
@@ -175,10 +177,7 @@ class TaskExecutionEngine:
 
             self._store.save(task)
 
-        return all(
-            subtask_map[st_id].status == TaskState.COMPLETED.value
-            for st_id in subtask_map
-        )
+        return all(subtask_map[st_id].status == TaskState.COMPLETED.value for st_id in subtask_map)
 
     def _get_ready_subtasks(
         self,
@@ -198,7 +197,9 @@ class TaskExecutionEngine:
         desc_lower = subtask.description.lower()
         return any(kw in desc_lower for kw in sensitive_keywords)
 
-    async def _wait_for_approval(self, hitl_request_id: str, task: Task, poll_interval: float = 0.1) -> bool:
+    async def _wait_for_approval(
+        self, hitl_request_id: str, task: Task, poll_interval: float = 0.1
+    ) -> bool:
         deadline = time.monotonic() + self._timeout.get_remaining_time(task.id)
         while True:
             request = self._hitl.get_request(hitl_request_id)
@@ -223,7 +224,9 @@ class TaskExecutionEngine:
     def _default_subtask_executor(self, subtask: SubTask, task: Task) -> str:
         return f"Executed: {subtask.description}"
 
-    async def _publish_event(self, event_type: str, task_id: str, data: dict[str, Any] | None = None) -> None:
+    async def _publish_event(
+        self, event_type: str, task_id: str, data: dict[str, Any] | None = None
+    ) -> None:
         event = TaskEvent(
             event_type=event_type,
             task_id=task_id,

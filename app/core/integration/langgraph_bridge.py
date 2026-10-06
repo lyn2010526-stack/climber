@@ -72,8 +72,7 @@ class LangGraphBridge:
             raise ValueError(f"Graph '{name}' not registered")
 
         cfg = {"configurable": config or {}}
-        result = await self._compiled[name].ainvoke(inputs, cfg)
-        return result
+        return await self._compiled[name].ainvoke(inputs, cfg)
 
     async def astream(
         self,

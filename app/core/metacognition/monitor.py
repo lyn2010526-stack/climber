@@ -66,12 +66,14 @@ class MetaCognitionMonitor:
         result: str,
         iteration: int,
     ) -> None:
-        self._call_history.append({
-            "tool": tool_name,
-            "args": arguments,
-            "result": result[:500],
-            "iteration": iteration,
-        })
+        self._call_history.append(
+            {
+                "tool": tool_name,
+                "args": arguments,
+                "result": result[:500],
+                "iteration": iteration,
+            }
+        )
 
     def record_token_usage(self, tokens: int) -> None:
         self._token_used += tokens
@@ -106,7 +108,7 @@ class MetaCognitionMonitor:
     def check_contradictions(self, candidates: list[dict[str, Any]]) -> list[str]:
         contradictions = []
         for index, candidate in enumerate(candidates):
-            for other in candidates[index + 1:]:
+            for other in candidates[index + 1 :]:
                 shared = set(candidate) & set(other)
                 if any(candidate[key] != other[key] for key in shared):
                     contradictions.append(f"Candidates {index} and {index + 1} disagree")
@@ -121,34 +123,40 @@ class MetaCognitionMonitor:
 
         for key, count in seen.items():
             if count >= 3:
-                defects.append(DefectReport(
-                    type=DefectType.REDUNDANT_CALL,
-                    description=f"Tool '{key.split(':')[0]}' called {count} times with same arguments",
-                    severity=min(0.3 + 0.2 * count, 0.95),
-                    iteration=iteration,
-                    suggestion="Try a fundamentally different approach or stop retrying",
-                ))
+                defects.append(
+                    DefectReport(
+                        type=DefectType.REDUNDANT_CALL,
+                        description=f"Tool '{key.split(':')[0]}' called {count} times with same arguments",
+                        severity=min(0.3 + 0.2 * count, 0.95),
+                        iteration=iteration,
+                        suggestion="Try a fundamentally different approach or stop retrying",
+                    )
+                )
         return defects
 
     def _check_context_overflow(self) -> list[DefectReport]:
         defects = []
         usage_ratio = self._token_used / max(self._token_budget, 1)
         if usage_ratio > 0.9:
-            defects.append(DefectReport(
-                type=DefectType.CONTEXT_OVERFLOW,
-                description=f"Token usage at {usage_ratio:.0%} ({self._token_used}/{self._token_budget})",
-                severity=0.9,
-                iteration=len(self._call_history),
-                suggestion="Trigger context compression immediately or stop current branch",
-            ))
+            defects.append(
+                DefectReport(
+                    type=DefectType.CONTEXT_OVERFLOW,
+                    description=f"Token usage at {usage_ratio:.0%} ({self._token_used}/{self._token_budget})",
+                    severity=0.9,
+                    iteration=len(self._call_history),
+                    suggestion="Trigger context compression immediately or stop current branch",
+                )
+            )
         elif usage_ratio > 0.7:
-            defects.append(DefectReport(
-                type=DefectType.CONTEXT_OVERFLOW,
-                description=f"Token usage at {usage_ratio:.0%} — approaching limit",
-                severity=0.5,
-                iteration=len(self._call_history),
-                suggestion="Consider reducing tool calls or triggering early compression",
-            ))
+            defects.append(
+                DefectReport(
+                    type=DefectType.CONTEXT_OVERFLOW,
+                    description=f"Token usage at {usage_ratio:.0%} — approaching limit",
+                    severity=0.5,
+                    iteration=len(self._call_history),
+                    suggestion="Consider reducing tool calls or triggering early compression",
+                )
+            )
         return defects
 
     def _check_goal_drift(self, output: str) -> list[DefectReport]:
@@ -160,46 +168,60 @@ class MetaCognitionMonitor:
             return []
         overlap = len(goal_words & output_words) / len(goal_words)
         if overlap < 0.2 and len(output) > 100:
-            return [DefectReport(
-                type=DefectType.GOAL_DRIFT,
-                description=f"Output diverges from original goal (word overlap: {overlap:.0%})",
-                severity=0.6,
-                iteration=len(self._call_history),
-                suggestion="Re-read the original objective and refocus execution",
-            )]
+            return [
+                DefectReport(
+                    type=DefectType.GOAL_DRIFT,
+                    description=f"Output diverges from original goal (word overlap: {overlap:.0%})",
+                    severity=0.6,
+                    iteration=len(self._call_history),
+                    suggestion="Re-read the original objective and refocus execution",
+                )
+            ]
         return []
 
     def _check_tool_misuse(self) -> list[DefectReport]:
         defects = []
         for i, call in enumerate(self._call_history):
             result = call.get("result", "")
-            if (result.startswith("Error") or result.startswith("ERROR")) and i > 0 and self._call_history[i - 1].get("tool") == call["tool"]:
-                    defects.append(DefectReport(
+            if (
+                (result.startswith(("Error", "ERROR")))
+                and i > 0
+                and self._call_history[i - 1].get("tool") == call["tool"]
+            ):
+                defects.append(
+                    DefectReport(
                         type=DefectType.TOOL_MISUSE,
                         description=f"Repeated errors with '{call['tool']}': {result[:80]}",
                         severity=0.7,
                         iteration=call["iteration"],
                         suggestion=f"Stop using '{call['tool']}' with current parameters. Read error message carefully.",
-                    ))
+                    )
+                )
         return defects
 
     def _check_capability_gap(self, output: str) -> list[DefectReport]:
         gap_indicators = [
-            "i don't have a tool", "cannot directly", "no access to",
-            "i'm unable to", "missing capability", "tool not found",
+            "i don't have a tool",
+            "cannot directly",
+            "no access to",
+            "i'm unable to",
+            "missing capability",
+            "tool not found",
         ]
         defects = []
         if output:
             lower = output.lower()
             for indicator in gap_indicators:
                 if indicator in lower:
-                    defects.append(DefectReport(
-                        type=DefectType.INSUFFICIENT_CAPABILITY,
-                        description=f"Agent reported capability gap: '{indicator}'",
-                        severity=0.75,
-                        iteration=len(self._call_history),
-                        suggestion="Trigger Capability Discovery: combine existing tools or request human help",
-                    ))
+                    defects.append(
+                        DefectReport(
+                            type=DefectType.INSUFFICIENT_CAPABILITY,
+                            description=f"Agent reported capability gap: '{indicator}'",
+                            severity=0.75,
+                            iteration=len(self._call_history),
+                            suggestion="Trigger Capability Discovery: combine existing tools or request human help",
+                        )
+                    )
                     break
         return defects
 

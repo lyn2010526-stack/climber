@@ -65,10 +65,14 @@ class Agent(Base):
     # Status
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
-    sessions: Mapped[list[Session]] = relationship(back_populates="agent", cascade="all, delete-orphan")
+    sessions: Mapped[list[Session]] = relationship(
+        back_populates="agent", cascade="all, delete-orphan"
+    )
 
 
 class Session(Base):
@@ -90,7 +94,9 @@ class Session(Base):
     working_memory: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     agent: Mapped[Agent] = relationship(back_populates="sessions")
@@ -123,7 +129,9 @@ class Turn(Base):
     __tablename__ = "turns"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    session_id: Mapped[str] = mapped_column(String(36), ForeignKey("sessions.id"), nullable=False, index=True)
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("sessions.id"), nullable=False, index=True
+    )
     status: Mapped[str] = mapped_column(String(20), default="pending")
     checkpoint_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -154,13 +162,17 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # Branching fields
-    parent_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("messages.id"), nullable=True, index=True)
+    parent_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("messages.id"), nullable=True, index=True
+    )
     branch_id: Mapped[str] = mapped_column(String(36), default="main", index=True)
     children_count: Mapped[int] = mapped_column(Integer, default=0)
 
     # Relationships
     session: Mapped[Session] = relationship(back_populates="messages")
-    parent: Mapped[Message | None] = relationship(back_populates="children", remote_side="Message.id")
+    parent: Mapped[Message | None] = relationship(
+        back_populates="children", remote_side="Message.id"
+    )
     children: Mapped[list[Message]] = relationship(back_populates="parent")
 
 
@@ -186,7 +198,9 @@ class Document(Base):
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_type: Mapped[str] = mapped_column(String(100))
     size_bytes: Mapped[int] = mapped_column(Integer, default=0)
-    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)  # SHA256
+    content_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )  # SHA256
     collection: Mapped[str] = mapped_column(String(100), nullable=False)
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(20), default="processing")
@@ -196,6 +210,7 @@ class Document(Base):
 
 class ApiKey(Base):
     """User-stored API keys for different providers."""
+
     __tablename__ = "api_keys"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
@@ -210,11 +225,14 @@ class ApiKey(Base):
 
 class UsageLog(Base):
     """Track token usage per session/message for analytics."""
+
     __tablename__ = "usage_logs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str] = mapped_column(String(36), nullable=False)
-    session_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("sessions.id"), nullable=True)
+    session_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("sessions.id"), nullable=True
+    )
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     model_id: Mapped[str] = mapped_column(String(100), nullable=False)
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
@@ -225,6 +243,7 @@ class UsageLog(Base):
 
 class CheckpointRecord(Base):
     """Database table for storing agent execution checkpoints."""
+
     __tablename__ = "checkpoints"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
@@ -257,7 +276,9 @@ class RunProgressRecord(Base):
     session_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     turn_id: Mapped[str] = mapped_column(String(36), nullable=False)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="in_progress", index=True)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="in_progress", index=True
+    )
     outer_round: Mapped[int] = mapped_column(Integer, default=0)
     current_subtask: Mapped[str] = mapped_column(Text, default="")
     completed_subtasks_json: Mapped[str] = mapped_column(Text, default="[]")
@@ -265,7 +286,9 @@ class RunProgressRecord(Base):
     steering_queue_json: Mapped[str] = mapped_column(Text, default="[]")
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
 
 async def ensure_checkpoint_schema(database_engine: Any | None = None) -> None:
@@ -288,14 +311,12 @@ async def ensure_checkpoint_schema(database_engine: Any | None = None) -> None:
         if database_engine in _checkpoint_schema_ready:
             return
         async with database_engine.begin() as connection:
+
             def checkpoint_columns(sync_connection: Any) -> set[str]:
                 inspector = inspect(sync_connection)
                 if not inspector.has_table("checkpoints"):
                     return set(columns)
-                return {
-                    column["name"]
-                    for column in inspector.get_columns("checkpoints")
-                }
+                return {column["name"] for column in inspector.get_columns("checkpoints")}
 
             existing = await connection.run_sync(checkpoint_columns)
             for name, definition in columns.items():

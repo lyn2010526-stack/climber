@@ -34,7 +34,7 @@ for path in sorted(LOCALES.glob("*.json")):
     before = json.dumps(data, ensure_ascii=False, sort_keys=True)
     added = deep_merge(data, bundle_for(lang))
     data = json.loads(json.dumps(data), object_pairs_hook=OrderedDict)
-    path.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(
+        f"{lang}: added {added} new keys, {len(data)} top-level namespaces, changed={json.dumps(data, ensure_ascii=False, sort_keys=True) != before}"
     )
-    print(f"{lang}: added {added} new keys, {len(data)} top-level namespaces, changed={json.dumps(data, ensure_ascii=False, sort_keys=True) != before}")

@@ -179,7 +179,7 @@ MODEL_ADAPTATIONS: dict[str, ModelAdaptation] = {
     "qwen": ModelAdaptation(
         model_id="qwen",
         tool_call_format="json",
-        tool_instruction="[TOOL CALL FORMAT — QWEN]\nUse XML-style tool calls: <tool_call>{\"name\": \"...\", \"arguments\": {...}}</tool_call>\nEnsure all required parameters are included. Verify paths exist before file operations.",
+        tool_instruction='[TOOL CALL FORMAT — QWEN]\nUse XML-style tool calls: <tool_call>{"name": "...", "arguments": {...}}</tool_call>\nEnsure all required parameters are included. Verify paths exist before file operations.',
         error_reflection_prompt="分析错误原因。检查参数是否完整、路径是否正确。调整后重试。",
         max_system_tokens=8192,
         special_constraints=["Prefer Chinese responses when user writes in Chinese"],
@@ -320,9 +320,7 @@ class PromptEngine:
 
         assembled = "\n\n".join(parts)
         assembled = self._apply_model_adaptation(assembled, context.model_id)
-        assembled = self._enforce_token_budget(assembled)
-
-        return assembled
+        return self._enforce_token_budget(assembled)
 
     def _build_runtime_parts(self, context: RuntimeContext) -> list[str]:
         """Build runtime prompt parts based on current context."""
@@ -441,7 +439,9 @@ class PromptEngine:
             return list(self._layer1_fragments)
         return list(self._layer2_fragments)
 
-    def apply_template(self, template: PromptTemplate, variables: dict[str, str] | None = None) -> None:
+    def apply_template(
+        self, template: PromptTemplate, variables: dict[str, str] | None = None
+    ) -> None:
         """Apply a prompt template as session-level fragments."""
         content = template.render(variables)
         self._layer1_fragments.append(

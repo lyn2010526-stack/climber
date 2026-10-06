@@ -111,7 +111,13 @@ async def persist_tool_result(engine: Any, session: Any, tr: Any) -> None:
         tr: The tool execution result.
     """
     content = tr.result or tr.error or ""
-    session.messages.append({"role": MessageRole.TOOL, "content": content, "tool_call_id": tr.tool_call_id or tr.tool_name})
+    session.messages.append(
+        {
+            "role": MessageRole.TOOL,
+            "content": content,
+            "tool_call_id": tr.tool_call_id or tr.tool_name,
+        }
+    )
     persisted = await engine._persist_message(
         session.session_id,
         MessageRole.TOOL,
@@ -144,7 +150,9 @@ async def handle_tool_debug(engine: Any, session: Any, tr: Any) -> None:
                 tool_name=tr.tool_name,
                 arguments=tr.arguments or {},
                 error_output=tr.error or tr.result,
-                retry_callback=lambda retry_tool, retry_args: engine.tool_registry.execute(retry_tool, retry_args),
+                retry_callback=lambda retry_tool, retry_args: engine.tool_registry.execute(
+                    retry_tool, retry_args
+                ),
             )
             if fixed and fixed.success and fixed.output:
                 tr.error = ""
@@ -195,7 +203,10 @@ async def _blocked_by_metacognition(
             tool_name=name,
             tool_call_id=tc.get("id", ""),
         )
-    yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration, "tool_calls": 0, "metacognition": guidance})
+    yield AgentEvent(
+        type=AgentEventType.CHECKPOINT,
+        data={"iteration": iteration, "tool_calls": 0, "metacognition": guidance},
+    )
 
 
 async def _record_tool_result(
@@ -221,7 +232,9 @@ async def _record_tool_result(
     """
     from app.middleware.metrics import TOOL_CALL_LATENCY, TOOL_CALL_TOTAL
 
-    TOOL_CALL_TOTAL.labels(tool_name=tr.tool_name, status="success" if tr.success else "error").inc()
+    TOOL_CALL_TOTAL.labels(
+        tool_name=tr.tool_name, status="success" if tr.success else "error"
+    ).inc()
     TOOL_CALL_LATENCY.labels(tool_name=tr.tool_name).observe((tr.duration_ms or 0.0) / 1000.0)
     session.metrics.tool_call_durations.append(getattr(tr, "duration_ms", 0.0) or 0.0)
     engine.tool_prioritizer.record_outcome(tr.tool_name, tr.success, tr.duration_ms)
@@ -320,8 +333,12 @@ async def handle_tool_execution(
     for index, tc in enumerate(result.tool_calls):
         if not tc.get("id"):
             tc["id"] = f"tool-{iteration}-{len(session.messages)}-{index}"
-    session.messages.append({"role": MessageRole.ASSISTANT, "content": "", "tool_calls": result.tool_calls})
-    persisted = await engine._persist_message(session.session_id, MessageRole.ASSISTANT, content="", tool_calls=result.tool_calls)
+    session.messages.append(
+        {"role": MessageRole.ASSISTANT, "content": "", "tool_calls": result.tool_calls}
+    )
+    persisted = await engine._persist_message(
+        session.session_id, MessageRole.ASSISTANT, content="", tool_calls=result.tool_calls
+    )
     if getattr(session, "_continuing_input", False) and not persisted:
         raise RuntimeError("Follow-up tool calls persistence failed")
 
@@ -332,24 +349,39 @@ async def handle_tool_execution(
         tool_call_id = tc.get("id") or f"tool-{iteration}-{len(session.messages)}-{index}"
         allowed, reason = engine._validate_tool_call(session, tool_name, arguments)
         event_data: dict[str, Any] = {"id": tool_call_id, "name": tool_name, "arguments": arguments}
-        requires_approval = not allowed and isinstance(reason, dict) and reason.get("requires_approval")
+        requires_approval = (
+            not allowed and isinstance(reason, dict) and reason.get("requires_approval")
+        )
         if requires_approval:
             event_data.update(reason)
             event_data["tool_call_id"] = tool_call_id
-        async for event in _emit_tool_call(engine, session, tool_name, arguments, event_data, bool(requires_approval)):
+        async for event in _emit_tool_call(
+            engine, session, tool_name, arguments, event_data, bool(requires_approval)
+        ):
             yield event
 
-    await engine._save_checkpoint(session, {"last_tool_calls": result.tool_calls},
-        pending_writes=[{"channel": "tools", "value": tc,
-                         "write_id": tc.get("id") or f"{iteration}-{index}", "status": "pending"}
-                        for index, tc in enumerate(result.tool_calls)])
+    await engine._save_checkpoint(
+        session,
+        {"last_tool_calls": result.tool_calls},
+        pending_writes=[
+            {
+                "channel": "tools",
+                "value": tc,
+                "write_id": tc.get("id") or f"{iteration}-{index}",
+                "status": "pending",
+            }
+            for index, tc in enumerate(result.tool_calls)
+        ],
+    )
 
     meta_guidance: dict[str, Any] = {}
     if metacognition is not None:
         try:
             meta_guidance = metacognition.pre_action(iteration)
             if not meta_guidance.get("proceed", True):
-                async for event in _blocked_by_metacognition(engine, session, result.tool_calls, iteration, meta_guidance):
+                async for event in _blocked_by_metacognition(
+                    engine, session, result.tool_calls, iteration, meta_guidance
+                ):
                     yield event
                 return
         except Exception:
@@ -358,9 +390,24 @@ async def handle_tool_execution(
     tool_results = await executor.execute_all(result.tool_calls)
     session.metrics.total_tool_calls += len(result.tool_calls)
     for tr in tool_results:
-        async for event in _record_tool_result(engine, session, tr, iteration, metacognition, meta_guidance):
+        async for event in _record_tool_result(
+            engine, session, tr, iteration, metacognition, meta_guidance
+        ):
             yield event
 
-    await engine._save_checkpoint(session, {"last_tool_calls": result.tool_calls,
-        "last_tool_results": [tr.result for tr in tool_results], "context_tokens": ctx_tokens})
-    yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration, "tool_calls": len(result.tool_calls), "metacognition": meta_guidance})
+    await engine._save_checkpoint(
+        session,
+        {
+            "last_tool_calls": result.tool_calls,
+            "last_tool_results": [tr.result for tr in tool_results],
+            "context_tokens": ctx_tokens,
+        },
+    )
+    yield AgentEvent(
+        type=AgentEventType.CHECKPOINT,
+        data={
+            "iteration": iteration,
+            "tool_calls": len(result.tool_calls),
+            "metacognition": meta_guidance,
+        },
+    )

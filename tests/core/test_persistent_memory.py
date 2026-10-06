@@ -93,9 +93,7 @@ def test_create_episodic_memory_writes_vector_and_retrieve_hits(
         )
     )
 
-    assert any(
-        col == "episodic" and doc_id == memory.id for col, doc_id, _, _ in fake.added
-    )
+    assert any(col == "episodic" and doc_id == memory.id for col, doc_id, _, _ in fake.added)
 
     high = _run(
         persistent_memory.create_episodic_memory(
@@ -104,9 +102,7 @@ def test_create_episodic_memory_writes_vector_and_retrieve_hits(
             importance=0.95,
         )
     )
-    results = _run(
-        persistent_memory.retrieve_memories(user, query="quantum", limit=10)
-    )
+    results = _run(persistent_memory.retrieve_memories(user, query="quantum", limit=10))
     assert any(c["collection"] == "episodic" for c in fake.search_calls)
     returned_ids = [m.id for m in results]
     assert memory.id in returned_ids
@@ -129,9 +125,7 @@ def test_retrieve_keyword_fallback_when_vector_empty(monkeypatch: Any) -> None:
         )
     )
 
-    results = _run(
-        persistent_memory.retrieve_memories(user, query="gateway routing", limit=5)
-    )
+    results = _run(persistent_memory.retrieve_memories(user, query="gateway routing", limit=5))
     assert any(c["collection"] == "episodic" for c in fake.search_calls)
     assert [m.id for m in results][:1] == [memory.id]
 
@@ -169,10 +163,7 @@ def test_create_archival_passage_vector_id_aligned(monkeypatch: Any) -> None:
         )
     )
 
-    assert any(
-        col == "archival" and doc_id == passage.id
-        for col, doc_id, _, _ in fake.added
-    )
+    assert any(col == "archival" and doc_id == passage.id for col, doc_id, _, _ in fake.added)
 
     results = _run(persistent_memory.search_archival_memories(user, query="deployment"))
     assert any(c["collection"] == "archival" for c in fake.search_calls)
@@ -194,9 +185,7 @@ def test_archival_like_fallback_when_vector_empty(monkeypatch: Any) -> None:
         )
     )
 
-    results = _run(
-        persistent_memory.search_archival_memories(user, query="payments")
-    )
+    results = _run(persistent_memory.search_archival_memories(user, query="payments"))
     assert any(c["collection"] == "archival" for c in fake.search_calls)
     assert [p.id for p in results] == [passage.id]
 

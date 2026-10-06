@@ -17,6 +17,7 @@ This module is self-contained: it implements the platform contract directly
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -36,17 +37,18 @@ if str(BUNDLE_DIR) not in sys.path:
 # Prefer the installed PyPI runtime, fall back to the vendored MIT copy.
 RuntimeModules = None
 try:  # pragma: no cover - import fallback is exercised in tests
-    import arcbench_agent_runtime as RuntimeModules  # noqa: F401
+    import arcbench_agent_runtime as RuntimeModules
 except ImportError:
     sys.path.insert(0, str(BUNDLE_DIR / "vendor"))
     try:
-        import arcbench_agent_runtime as RuntimeModules  # noqa: F401
+        import arcbench_agent_runtime as RuntimeModules
     except ImportError:  # pragma: no cover
         RuntimeModules = None
 
 import acceptance  # noqa: E402
-import memory  # noqa: E402
 import prompts  # noqa: E402
+
+import memory  # noqa: E402
 
 DEFAULT_TIME_BUDGET = 2700.0
 DEFAULT_NODE_TIMEOUT = 1200.0
@@ -139,9 +141,10 @@ def node_type(node: dict) -> str:
 
 
 def is_atomic(node: dict) -> bool:
-    if node_type(node) != "ATOMIC" and not (not node.get("children") and node_type(node) != "FOLDER"):
-        return False
-    return True
+    return not (
+        node_type(node) != "ATOMIC"
+        and not (not node.get("children") and node_type(node) != "FOLDER")
+    )
 
 
 def flatten_atomic(node: dict, out: list[dict] | None = None) -> list[dict]:
@@ -151,9 +154,8 @@ def flatten_atomic(node: dict, out: list[dict] | None = None) -> list[dict]:
     if not isinstance(node, dict):
         return out
     has_children = bool(node.get("children"))
-    if is_atomic(node) or (not has_children and node_type(node) != "FOLDER"):
-        if node.get("id"):
-            out.append(node)
+    if (is_atomic(node) or (not has_children and node_type(node) != "FOLDER")) and node.get("id"):
+        out.append(node)
     for child in node.get("children") or []:
         flatten_atomic(child, out)
     return out
@@ -193,7 +195,9 @@ def env_diagnosis() -> None:
     base = os.environ.get("OPENAI_BASE_URL") or os.environ.get("USER_LLM_BASE_URL") or ""
     model = os.environ.get("MODEL") or os.environ.get("USER_LLM_MODEL") or ""
     key = os.environ.get("OPENAI_API_KEY") or os.environ.get("USER_LLM_API_KEY") or ""
-    log(f"base_url={base or '<unset>'} model={model or '<unset>'} api_key_present={bool(key)} api_key_len={len(key)}")
+    log(
+        f"base_url={base or '<unset>'} model={model or '<unset>'} api_key_present={bool(key)} api_key_len={len(key)}"
+    )
 
 
 def _http_post_json(url: str, api_key: str, payload: dict, timeout: float):
@@ -267,7 +271,9 @@ def _listening_pids(port: int) -> list[int]:
         for match in re.finditer(rf"(?<![:\d]):{port}(?![:\d])", out):
             # pid= appears in the same Process line as the socket
             block = out[: match.start()]
-            for pid in re.findall(r"pid=(\d+)", block[block.rfind("\n") + 1 :] if False else block[-800:]):
+            for pid in re.findall(
+                r"pid=(\d+)", block[block.rfind("\n") + 1 :] if False else block[-800:]
+            ):
                 result.add(int(pid))
         for line in out.splitlines():
             if f":{port}" in line:
@@ -332,15 +338,24 @@ class PortWatchdog(threading.Thread):
                 continue
             if not bound:
                 continue
-            mine = [p for p in bound if p in self.registry or os.getpgid(p) in self.registry if _pid_alive(p)]
+            mine = [
+                p
+                for p in bound
+                if p in self.registry or os.getpgid(p) in self.registry
+                if _pid_alive(p)
+            ]
             if mine:
-                log(f"watchdog: killing our process group(s) {mine} holding grading port {self.web_port}")
+                log(
+                    f"watchdog: killing our process group(s) {mine} holding grading port {self.web_port}"
+                )
                 _kill_pids(mine)
             elif self.warning_mode:
                 pass
             else:
                 self.warning_mode = True
-                log(f"watchdog: foreign process {bound} holds grading port {self.web_port}; leaving it alone")
+                log(
+                    f"watchdog: foreign process {bound} holds grading port {self.web_port}; leaving it alone"
+                )
 
     def stop(self) -> None:
         self.stop_event.set()
@@ -540,19 +555,13 @@ def _rehearse_once(output_dir: Path, smoke_port: int) -> str | None:
                 time.sleep(1.0)
         return f"backend did not bind smoke port {smoke_port} within 45s"
     finally:
-        try:
+        with contextlib.suppress(OSError):
             os.killpg(proc.pid, signal.SIGKILL)
-        except OSError:
-            pass
         if proc.stdout:
-            try:
+            with contextlib.suppress(OSError):
                 proc.stdout.close()
-            except OSError:
-                pass
-        try:
+        with contextlib.suppress(subprocess.TimeoutExpired):
             proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            pass
         _free_web_port(smoke_port)
 
 
@@ -576,7 +585,15 @@ def rehearse_startup(output_dir: Path, smoke_port: int, max_rehearsals: int = DE
 # ---------------------------------------------------------------------------
 
 
-def run_turn(driver, session, prompt: str, deadline: float, timeout: float, label: str, stats: dict | None = None) -> tuple[bool, str]:
+def run_turn(
+    driver,
+    session,
+    prompt: str,
+    deadline: float,
+    timeout: float,
+    label: str,
+    stats: dict | None = None,
+) -> tuple[bool, str]:
     wall = min(deadline, time.monotonic() + timeout)
     started = time.monotonic()
     before_tokens = getattr(session, "result_tokens", 0)
@@ -593,13 +610,24 @@ def run_turn(driver, session, prompt: str, deadline: float, timeout: float, labe
     return last_ok, text
 
 
-def run_prompt_with_retries(driver, prompt: str, ok_text, label: str, deadline: float, timeout: float, attempts: int = 2, stats: dict | None = None):
+def run_prompt_with_retries(
+    driver,
+    prompt: str,
+    ok_text,
+    label: str,
+    deadline: float,
+    timeout: float,
+    attempts: int = 2,
+    stats: dict | None = None,
+):
     """Run a prompt on a fresh session; retry once on transport failure."""
 
     last_error = ""
     for i in range(attempts):
         session = driver.new_session()
-        ok, text = run_turn(driver, session, prompt, deadline, timeout, f"{label}[{i}]", stats=stats)
+        ok, text = run_turn(
+            driver, session, prompt, deadline, timeout, f"{label}[{i}]", stats=stats
+        )
         if ok and ok_text(text):
             return True, text
         last_error = text
@@ -644,10 +672,22 @@ def _acceptance_failure_context(acc: dict, node_id: str, out_dir: Path) -> dict:
     }
 
 
-def _acceptance_repair_loop(  # noqa: PLR0913 - bounded wiring of existing helpers
-    acc: dict, out_dir: Path, tests_dir: Path, *,
-    web_port: int, smoke_port: int, extra_ports, node_ids, free_port, log_fn, tail_fn,
-    deadline: float, driver, specs_inject: str, stats: dict | None = None,
+def _acceptance_repair_loop(
+    acc: dict,
+    out_dir: Path,
+    tests_dir: Path,
+    *,
+    web_port: int,
+    smoke_port: int,
+    extra_ports,
+    node_ids,
+    free_port,
+    log_fn,
+    tail_fn,
+    deadline: float,
+    driver,
+    specs_inject: str,
+    stats: dict | None = None,
     qa_review_text: str = "",
 ) -> tuple[dict, int]:
     """Acceptance -> attribute failures -> repair prompt -> re-run, deadline-bounded.
@@ -662,14 +702,18 @@ def _acceptance_repair_loop(  # noqa: PLR0913 - bounded wiring of existing helpe
         return acc, 0
     remaining = deadline - time.monotonic()
     if remaining < ACCEPTANCE_REPAIR_MIN_REMAINING:
-        log_fn(f"acceptance repair skipped ({int(remaining)}s < {int(ACCEPTANCE_REPAIR_MIN_REMAINING)}s budget reserved)")
+        log_fn(
+            f"acceptance repair skipped ({int(remaining)}s < {int(ACCEPTANCE_REPAIR_MIN_REMAINING)}s budget reserved)"
+        )
         return acc, 0
     current = acc
     rounds = 0
     for pass_idx in range(1, passes + 1):
         remaining = deadline - time.monotonic()
         if remaining < ACCEPTANCE_REPAIR_MIN_REMAINING:
-            log_fn(f"acceptance repair aborted after {rounds} round(s): budget low ({int(remaining)}s left)")
+            log_fn(
+                f"acceptance repair aborted after {rounds} round(s): budget low ({int(remaining)}s left)"
+            )
             break
         failed = current.get("evidence_failed") or []
         if not failed:
@@ -679,38 +723,60 @@ def _acceptance_repair_loop(  # noqa: PLR0913 - bounded wiring of existing helpe
         for node_id in failed:
             ctx = _acceptance_failure_context(current, node_id, out_dir)
             prompt_repair = prompts.acceptance_repair_prompt(
-                ctx["node_id"], ctx["titles"], ctx["message"], ctx["workspace_path"],
-                specs_inject, smoke_port=smoke_port, web_port=web_port,
+                ctx["node_id"],
+                ctx["titles"],
+                ctx["message"],
+                ctx["workspace_path"],
+                specs_inject,
+                smoke_port=smoke_port,
+                web_port=web_port,
             )
             if qa_review_text:
-                prompt_repair = prompt_repair + "\n\nQA review process noted: " + tail_fn(qa_review_text, 600)
+                prompt_repair = (
+                    prompt_repair + "\n\nQA review process noted: " + tail_fn(qa_review_text, 600)
+                )
             repair_timeout = min(ACCEPTANCE_REPAIR_ROUND_TIMEOUT, max(120.0, remaining))
             ok, text = run_prompt_with_retries(
-                driver, prompt_repair, lambda t: True,
-                f"acceptance-repair-pass-{pass_idx}", deadline, repair_timeout,
-                attempts=2, stats=stats,
+                driver,
+                prompt_repair,
+                lambda t: True,
+                f"acceptance-repair-pass-{pass_idx}",
+                deadline,
+                repair_timeout,
+                attempts=2,
+                stats=stats,
             )
             repaired_any = repaired_any or ok
-            log_fn(f"acceptance repair pass {pass_idx} node {node_id}: ok={ok} text={tail_fn(text, 120)!r}")
+            log_fn(
+                f"acceptance repair pass {pass_idx} node {node_id}: ok={ok} text={tail_fn(text, 120)!r}"
+            )
         if not repaired_any or time.monotonic() >= deadline:
             break
         remaining = max(0.0, deadline - time.monotonic())
         rerun_deadline = time.time() + min(max(remaining * 0.6, 60.0), DEFAULT_ACCEPTANCE_TIMEOUT)
         try:
             refreshed = acceptance.run_acceptance(
-                out_dir, tests_dir,
-                web_port=web_port, extra_ports=extra_ports, node_ids=node_ids,
-                free_port=free_port, log=log_fn, tail=tail_fn, deadline=rerun_deadline,
+                out_dir,
+                tests_dir,
+                web_port=web_port,
+                extra_ports=extra_ports,
+                node_ids=node_ids,
+                free_port=free_port,
+                log=log_fn,
+                tail=tail_fn,
+                deadline=rerun_deadline,
             )
-        except Exception as exc:  # noqa: BLE001 - a crashed re-run keeps the previous result
+        except Exception as exc:
             log_fn(f"acceptance re-run crashed (non-fatal): {type(exc).__name__}: {exc}")
             break
         if refreshed is None:
             break
         current = refreshed
         rounds += 1
-        log_fn(f"acceptance repair re-run {rounds}: "
-               f"passed={current.get('passed')} evidence_failed={current.get('evidence_failed')}")
+        log_fn(
+            f"acceptance repair re-run {rounds}: "
+            f"passed={current.get('passed')} evidence_failed={current.get('evidence_failed')}"
+        )
     return current, rounds
 
 
@@ -745,8 +811,16 @@ def write_acceptance_evidence(out_dir: Path, acc: dict) -> Path | None:
         return None
 
 
-def run_qa_review(driver, node_names, smoke_port: int, web_port: int, specs_inject: str,
-                  deadline: float, stats: dict | None = None, final_check_text: str = "") -> str:
+def run_qa_review(
+    driver,
+    node_names,
+    smoke_port: int,
+    web_port: int,
+    specs_inject: str,
+    deadline: float,
+    stats: dict | None = None,
+    final_check_text: str = "",
+) -> str:
     """Budget-bounded independent review of the final check; returns review text."""
 
     if not acceptance_qa_enabled():
@@ -763,11 +837,20 @@ def run_qa_review(driver, node_names, smoke_port: int, web_port: int, specs_inje
     if specs_inject:
         prompt = specs_inject + "\n\n" + prompt
     if final_check_text:
-        prompt = (f"Model final-check output to review:\n```\n{_tail(final_check_text, 800)}\n```\n\n"
-                  + prompt)
+        prompt = (
+            f"Model final-check output to review:\n```\n{_tail(final_check_text, 800)}\n```\n\n"
+            + prompt
+        )
     session = driver.new_session()
-    ok, text = run_turn(driver, session, prompt, deadline,
-                        min(300.0, max(60.0, remaining)), "qa-review", stats=stats)
+    _ok, text = run_turn(
+        driver,
+        session,
+        prompt,
+        deadline,
+        min(300.0, max(60.0, remaining)),
+        "qa-review",
+        stats=stats,
+    )
     return text or ""
 
 
@@ -782,7 +865,9 @@ def _write_run_summary(output_dir: Path, summary: dict) -> None:
         log(f"run_summary.json write failed: {exc}")
 
 
-def finalize_preview(output_dir: Path, web_port: int, smoke_port: int, *, ready: bool = False) -> None:
+def finalize_preview(
+    output_dir: Path, web_port: int, smoke_port: int, *, ready: bool = False
+) -> None:
     artifacts = os.environ.get("ARCBENCH_ARTIFACTS_DIR", "").strip()
     if not artifacts:
         return
@@ -809,7 +894,9 @@ def finalize_preview(output_dir: Path, web_port: int, smoke_port: int, *, ready:
 
 def resolve_web_port(cli: int | None = None) -> int:
     for key in ("ARCBENCH_WEB_PORT", "ARC_WEB_PORT"):
-        raw = (cli if key and cli is not None and key == "ARCBENCH_WEB_PORT" else None) or os.environ.get(key, "").strip()
+        raw = (
+            cli if key and cli is not None and key == "ARCBENCH_WEB_PORT" else None
+        ) or os.environ.get(key, "").strip()
         if raw:
             try:
                 return int(raw)
@@ -856,8 +943,12 @@ def main(argv: list[str] | None = None) -> int:
     if smoke_port == web_port:
         smoke_port += 1
 
-    time_budget = float(os.environ.get("CLIMBER_ARC_TIME_BUDGET", "").strip() or DEFAULT_TIME_BUDGET)
-    node_timeout = float(os.environ.get("CLIMBER_ARC_NODE_TIMEOUT", "").strip() or DEFAULT_NODE_TIMEOUT)
+    time_budget = float(
+        os.environ.get("CLIMBER_ARC_TIME_BUDGET", "").strip() or DEFAULT_TIME_BUDGET
+    )
+    node_timeout = float(
+        os.environ.get("CLIMBER_ARC_NODE_TIMEOUT", "").strip() or DEFAULT_NODE_TIMEOUT
+    )
 
     env_diagnosis()
     runtime = make_runtime(out_dir)
@@ -865,26 +956,41 @@ def main(argv: list[str] | None = None) -> int:
     deadline = time.monotonic() + time_budget
 
     try:
-        return run(args, out_dir, req_dir, web_port, smoke_port, time_budget, node_timeout, runtime, deadline)
-    except Exception as exc:  # noqa: BLE001 - contract: report failure and exit 0
+        return run(
+            args,
+            out_dir,
+            req_dir,
+            web_port,
+            smoke_port,
+            time_budget,
+            node_timeout,
+            runtime,
+            deadline,
+        )
+    except Exception as exc:
         log(f"fatal: {type(exc).__name__}: {exc}")
-        try:
+        with contextlib.suppress(Exception):
             runtime.events.mark_run_failed(f"{type(exc).__name__}: {exc}")
-        except Exception:
-            pass
         finalize_preview(out_dir, web_port, smoke_port)
         _free_web_port(web_port)
         return 0
 
 
-def run(  # noqa: PLR0913 - mirrors CLI contract
-    args, out_dir: Path, req_dir: Path, web_port: int, smoke_port: int,
-    time_budget: float, node_timeout: float, runtime, deadline: float,
+def run(
+    args,
+    out_dir: Path,
+    req_dir: Path,
+    web_port: int,
+    smoke_port: int,
+    time_budget: float,
+    node_timeout: float,
+    runtime,
+    deadline: float,
 ) -> int:
     # ------------------------------------------------------------------ plan
     try:
         tree = load_requirement_tree(req_dir)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log(f"requirements parse failed: {exc}")
         runtime.events.mark_run_failed(f"requirements parse failed: {exc}")
         return 0
@@ -894,7 +1000,9 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
         runtime.events.mark_run_failed("no atomic requirement nodes found")
         return 0
     node_names = [f"{n.get('id')}" for n in nodes]
-    log(f"planned {len(node_names)} atomic nodes; output={out_dir} web={web_port} smoke={smoke_port}")
+    log(
+        f"planned {len(node_names)} atomic nodes; output={out_dir} web={web_port} smoke={smoke_port}"
+    )
 
     extra_ports = parse_extra_ports(*find_spec_files()[0]) if find_spec_files() else []
     specs_inject = tests_injection(extra_ports, smoke_port, web_port)
@@ -921,19 +1029,19 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
     # ------------------------------------------------------------ traceability
     try:
         runtime.traceability.store_requirement_tree(tree)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log(f"traceability store failed (non-fatal): {exc}")
 
     def git_commit(message: str) -> None:
         try:
             runtime.git.commit(message)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             log(f"git commit failed (non-fatal): {exc}")
 
     git_ensure_error = None
     try:
         runtime.git.ensure_repo()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         git_ensure_error = str(exc)
         log(f"git ensure_repo failed (non-fatal): {exc}")
 
@@ -944,6 +1052,7 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
     failed_nodes: list[str] = []
 
     try:
+
         def skeleton_present() -> bool:
             return deliverable_ok(out_dir)
 
@@ -960,13 +1069,31 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
                 log("time budget exhausted before skeleton completed")
                 break
             session = driver.new_session()
-            base = prompts.skeleton_prompt(smoke_port, web_port) + ("\n\n" + specs_inject if specs_inject else "")
-            ok, text = run_turn(driver, session, base, deadline, min(node_timeout * 2, max(60.0, deadline - time.monotonic())), f"skeleton[{attempt}]", stats=run_stats)
+            base = prompts.skeleton_prompt(smoke_port, web_port) + (
+                "\n\n" + specs_inject if specs_inject else ""
+            )
+            ok, text = run_turn(
+                driver,
+                session,
+                base,
+                deadline,
+                min(node_timeout * 2, max(60.0, deadline - time.monotonic())),
+                f"skeleton[{attempt}]",
+                stats=run_stats,
+            )
             for nudge in range(DEFAULT_NUDGES):
                 if skeleton_present():
                     break
                 log(f"skeleton nudge {nudge + 1} (files still missing)")
-                run_turn(driver, session, prompts.nudge_prompt() + "\n" + skeleton_retry_files_prompt(out_dir), deadline, 180.0, f"skeleton[{attempt}]nudge{nudge}", stats=run_stats)
+                run_turn(
+                    driver,
+                    session,
+                    prompts.nudge_prompt() + "\n" + skeleton_retry_files_prompt(out_dir),
+                    deadline,
+                    180.0,
+                    f"skeleton[{attempt}]nudge{nudge}",
+                    stats=run_stats,
+                )
             if skeleton_present():
                 skeleton_ok = True
                 break
@@ -995,7 +1122,7 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
                 runtime.events.mark_design_started(node_id)
                 runtime.events.mark_design_done(node_id)
                 runtime.events.mark_implementation_started(node_id)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log(f"event error for {node_id}: {exc}")
             node_prompt = prompts.node_prompt(
                 f"Requirement node to implement now ({describe_node(node)})",
@@ -1010,19 +1137,25 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
             remaining = max(60.0, deadline - time.monotonic())
             turn_timeout = min(node_timeout, remaining)
             session = driver.new_session()
-            ok, text = run_turn(driver, session, node_prompt, deadline, turn_timeout, f"node {node_id}", stats=run_stats)
+            ok, text = run_turn(
+                driver,
+                session,
+                node_prompt,
+                deadline,
+                turn_timeout,
+                f"node {node_id}",
+                stats=run_stats,
+            )
             if ok and deliverable_ok(out_dir):
                 git_commit(f"{node_id} (implement): {node_name}")
                 try:
                     runtime.events.mark_implementation_done(node_id)
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     log(f"event error for {node_id}: {exc}")
             else:
                 log(f"node {node_id} left no deliverables; turn ok={ok}")
-                try:
+                with contextlib.suppress(Exception):
                     runtime.events.mark_implementation_failed(node_id, _tail(text, 200))
-                except Exception:  # noqa: BLE001
-                    pass
                 failed_nodes.append(node_id)
 
         # ----------------------------------------------------- final check
@@ -1037,24 +1170,23 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
             if memory_blocks:
                 prompt_final = "\n\n".join(memory_blocks) + "\n\n" + prompt_final
             ok, text = run_prompt_with_retries(
-                driver, prompt_final,
+                driver,
+                prompt_final,
                 lambda t: True,
-                "finalcheck", deadline, min(900.0, max(120.0, deadline - time.monotonic())),
+                "finalcheck",
+                deadline,
+                min(900.0, max(120.0, deadline - time.monotonic())),
                 stats=run_stats,
             )
             final_check_text = text or ""
             final_pass = ok and "VERDICT: PASS" in (text or "")
             if not final_pass:
                 log(f"final check verdict not PASS: {_tail(text, 200)!r}")
-                try:
+                with contextlib.suppress(Exception):
                     runtime.events.mark_run_failed("final check reported FAIL")
-                except Exception:  # noqa: BLE001
-                    pass
                 for node_id in node_names:
-                    try:
+                    with contextlib.suppress(Exception):
                         runtime.events.mark_test_failed(node_id)
-                    except Exception:  # noqa: BLE001
-                        pass
                 for node_id in node_names:
                     if node_id not in failed_nodes:
                         failed_nodes.append(node_id)
@@ -1069,16 +1201,29 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
     # ------------------------------------------------------------- qa review
     try:
         qa_review_text = run_qa_review(
-            driver, node_names, smoke_port, web_port, specs_inject, deadline,
-            stats=run_stats, final_check_text=final_check_text,
+            driver,
+            node_names,
+            smoke_port,
+            web_port,
+            specs_inject,
+            deadline,
+            stats=run_stats,
+            final_check_text=final_check_text,
         )
-    except Exception as exc:  # noqa: BLE001 - review is best-effort
+    except Exception as exc:
         log(f"qa review crashed (non-fatal): {type(exc).__name__}: {exc}")
         qa_review_text = ""
 
     # -------------------------------------------------------------- rehearsal
     rehearsal_error, rehearsal_count = rehearse_best_effort(
-        out_dir, smoke_port, web_port, node_timeout, deadline, driver, make_driver, specs_inject,
+        out_dir,
+        smoke_port,
+        web_port,
+        node_timeout,
+        deadline,
+        driver,
+        make_driver,
+        specs_inject,
         stats=run_stats,
     )
     if rehearsal_error:
@@ -1093,15 +1238,18 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
     if not rehearsal_error and deliverable_ok(out_dir):
         entries = find_spec_files()
 
-        acc_cap = float(os.environ.get("CLIMBER_ARC_ACCEPTANCE_TIMEOUT", "").strip()
-                        or DEFAULT_ACCEPTANCE_TIMEOUT)
+        acc_cap = float(
+            os.environ.get("CLIMBER_ARC_ACCEPTANCE_TIMEOUT", "").strip()
+            or DEFAULT_ACCEPTANCE_TIMEOUT
+        )
         remaining = max(0.0, deadline - time.monotonic())
         acc_deadline = time.time() + min(max(remaining * 0.6, 60.0), acc_cap)
         if entries and deadline - time.monotonic() > 90.0:
             log("running independent GUI acceptance suite")
             try:
                 acc = acceptance.run_acceptance(
-                    out_dir, entries[0][0],
+                    out_dir,
+                    entries[0][0],
                     web_port=web_port,
                     extra_ports=extra_ports,
                     node_ids=node_names,
@@ -1110,17 +1258,25 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
                     tail=_tail,
                     deadline=acc_deadline,
                 )
-            except Exception as exc:  # noqa: BLE001 - acceptance must never crash the run
+            except Exception as exc:
                 log(f"acceptance runner crashed (non-fatal): {type(exc).__name__}: {exc}")
                 acc = None
             if acc is not None:
                 final_acc, repair_rounds = _acceptance_repair_loop(
-                    acc, out_dir, entries[0][0],
-                    web_port=web_port, smoke_port=smoke_port,
-                    extra_ports=extra_ports, node_ids=node_names,
-                    free_port=_free_web_port, log_fn=log, tail_fn=_tail,
-                    deadline=deadline, driver=driver,
-                    specs_inject=specs_inject, stats=run_stats,
+                    acc,
+                    out_dir,
+                    entries[0][0],
+                    web_port=web_port,
+                    smoke_port=smoke_port,
+                    extra_ports=extra_ports,
+                    node_ids=node_names,
+                    free_port=_free_web_port,
+                    log_fn=log,
+                    tail_fn=_tail,
+                    deadline=deadline,
+                    driver=driver,
+                    specs_inject=specs_inject,
+                    stats=run_stats,
                     qa_review_text=qa_review_text,
                 )
                 if repair_rounds:
@@ -1137,21 +1293,23 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
                         runtime.events.mark_test_passed(
                             node_id, "independent acceptance spec passed" + fallback_note
                         )
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:
                         log(f"event error for {node_id}: {exc}")
                 for node_id in final_acc.get("evidence_failed") or []:
                     try:
                         runtime.events.mark_test_failed(
                             node_id, "independent acceptance spec failed" + fallback_note
                         )
-                    except Exception as exc:  # noqa: BLE001
+                    except Exception as exc:
                         log(f"event error for {node_id}: {exc}")
                     if node_id not in failed_nodes:
                         failed_nodes.append(node_id)
                 if final_acc.get("passed"):
                     acceptance_note = "independent acceptance tests passed" + fallback_note
                 elif not final_acc.get("available"):
-                    acceptance_note = f"acceptance infra unavailable: {_tail(final_acc.get('message', ''), 200)}"
+                    acceptance_note = (
+                        f"acceptance infra unavailable: {_tail(final_acc.get('message', ''), 200)}"
+                    )
                 elif final_acc.get("all_specs_green"):
                     acceptance_note = (
                         "all acceptance specs green with unverified nodes: "
@@ -1168,34 +1326,41 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
     # -------------------------------------------- failure memory persistence
     try:
         memory.record_failed_nodes(out_dir, failed_nodes, acc_result)
-    except Exception as exc:  # noqa: BLE001 - memory persistence is best-effort
+    except Exception as exc:
         log(f"failure memory write crashed (non-fatal): {type(exc).__name__}: {exc}")
 
     # ------------------------------------------------------------ postflight
     try:
         postflight_structure(out_dir)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log(f"postflight failed (non-fatal): {exc}")
 
-    finalize_preview(out_dir, web_port, smoke_port, ready=not rehearsal_error and deliverable_ok(out_dir))
+    finalize_preview(
+        out_dir, web_port, smoke_port, ready=not rehearsal_error and deliverable_ok(out_dir)
+    )
     _free_web_port(web_port)
 
     tokens_used = run_stats.get("tokens", 0)
     seconds_used = time.perf_counter() - perf_started
-    _write_run_summary(out_dir, {
-        "nodes_completed": len(nodes) - len(set(failed_nodes)),
-        "nodes_total": len(nodes),
-        "tokens": tokens_used,
-        "turns": run_stats.get("turns", 0),
-        "tool_calls": run_stats.get("tool_calls", 0),
-        "elapsed_seconds": round(seconds_used, 1),
-        "acceptance": acceptance_note,
-        "rehearsal_error": bool(rehearsal_error),
-        "failed_nodes": sorted(set(failed_nodes)),
-    })
+    _write_run_summary(
+        out_dir,
+        {
+            "nodes_completed": len(nodes) - len(set(failed_nodes)),
+            "nodes_total": len(nodes),
+            "tokens": tokens_used,
+            "turns": run_stats.get("turns", 0),
+            "tool_calls": run_stats.get("tool_calls", 0),
+            "elapsed_seconds": round(seconds_used, 1),
+            "acceptance": acceptance_note,
+            "rehearsal_error": bool(rehearsal_error),
+            "failed_nodes": sorted(set(failed_nodes)),
+        },
+    )
 
-    msg = (f"completed {len(nodes) - len(set(failed_nodes))}/{len(nodes)} nodes "
-           f"(smoke={smoke_port}) tokens={tokens_used} elapsed={seconds_used:.0f}s")
+    msg = (
+        f"completed {len(nodes) - len(set(failed_nodes))}/{len(nodes)} nodes "
+        f"(smoke={smoke_port}) tokens={tokens_used} elapsed={seconds_used:.0f}s"
+    )
     if rehearsal_error:
         msg += f"; rehearsal error: {_tail(rehearsal_error, 120)}"
     if failed_nodes:
@@ -1206,7 +1371,7 @@ def run(  # noqa: PLR0913 - mirrors CLI contract
             runtime.events.mark_run_failed(msg)
         else:
             runtime.events.mark_run_completed(msg)
-    except Exception:  # noqa: BLE001
+    except Exception:
         pass
     if git_ensure_error:
         log(f"git was unavailable: {git_ensure_error}")
@@ -1222,16 +1387,25 @@ def skeleton_retry_files_prompt(out_dir: Path) -> str:
     listing = []
     for sub in missing[:4]:
         listing.append(f"missing dir {sub}/")
-    return ("Verified missing after last turn:\n" + "\n".join(listing) + "\n"
-            "Create the entire missing tree now with full content, not placeholders:\n"
-            "- frontend/index.html, frontend/package.json (script build -> copies current directory to dist/ using plain node/coreutils with zero npm install)\n"
-            "- backend/server.js (node http server; PORT env required; serves ../frontend/dist statically and /api with JSON in backend/data/db.json; hash passwords with crypto scrypt; seeds demo data)\n"
-            "- backend/package.json (script start -> node server.js)")
+    return (
+        "Verified missing after last turn:\n" + "\n".join(listing) + "\n"
+        "Create the entire missing tree now with full content, not placeholders:\n"
+        "- frontend/index.html, frontend/package.json (script build -> copies current directory to dist/ using plain node/coreutils with zero npm install)\n"
+        "- backend/server.js (node http server; PORT env required; serves ../frontend/dist statically and /api with JSON in backend/data/db.json; hash passwords with crypto scrypt; seeds demo data)\n"
+        "- backend/package.json (script start -> node server.js)"
+    )
 
 
 def rehearse_best_effort(
-    out_dir: Path, smoke_port: int, web_port: int, node_timeout: float,
-    deadline: float, driver, make_driver, specs_inject: str, stats: dict | None = None,
+    out_dir: Path,
+    smoke_port: int,
+    web_port: int,
+    node_timeout: float,
+    deadline: float,
+    driver,
+    make_driver,
+    specs_inject: str,
+    stats: dict | None = None,
 ):
     error, attempts = rehearse_startup(out_dir, smoke_port)
     for round_idx in range(DEFAULT_REHEARSALS - 1):
@@ -1242,7 +1416,15 @@ def rehearse_best_effort(
         if specs_inject:
             prompt_repair = specs_inject + "\n\n" + prompt_repair
         session = driver.new_session()
-        run_turn(driver, session, prompt_repair, deadline, min(600.0, max(120.0, deadline - time.monotonic())), f"repair[{round_idx}]", stats=stats)
+        run_turn(
+            driver,
+            session,
+            prompt_repair,
+            deadline,
+            min(600.0, max(120.0, deadline - time.monotonic())),
+            f"repair[{round_idx}]",
+            stats=stats,
+        )
         error, extra = rehearse_startup(out_dir, smoke_port)
         attempts += extra
     return error, attempts

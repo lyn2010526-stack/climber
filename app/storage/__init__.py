@@ -54,7 +54,10 @@ def _build_engine():
             db_url,
             echo=settings.app_debug,
             pool_pre_ping=True,
-            connect_args={"check_same_thread": False, "timeout": settings.sqlite_busy_timeout_ms / 1000},
+            connect_args={
+                "check_same_thread": False,
+                "timeout": settings.sqlite_busy_timeout_ms / 1000,
+            },
         )
 
     return create_async_engine(
@@ -111,7 +114,10 @@ async def get_db() -> Any:
 
 async def db_health() -> dict[str, Any]:
     """Report backend, journal mode and connectivity for diagnostics."""
-    info: dict[str, Any] = {"backend": "sqlite" if _is_sqlite else "other", "url": db_url.split("://")[0]}
+    info: dict[str, Any] = {
+        "backend": "sqlite" if _is_sqlite else "other",
+        "url": db_url.split("://")[0],
+    }
     from sqlalchemy.exc import OperationalError
 
     for attempt in range(3):
@@ -200,7 +206,9 @@ async def _ensure_auto_loop_columns(conn: Any) -> None:
     if "auto_loop_tasks" not in tables:
         return
     columns = await conn.run_sync(
-        lambda sync_conn: {column["name"] for column in inspect(sync_conn).get_columns("auto_loop_tasks")}
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("auto_loop_tasks")
+        }
     )
     additions = {
         "retry_count": "INTEGER NOT NULL DEFAULT 0",
@@ -219,7 +227,9 @@ async def _ensure_instruction_trace_columns(conn: Any) -> None:
     if "user_instruction_traces" not in tables:
         return
     columns = await conn.run_sync(
-        lambda sync_conn: {column["name"] for column in inspect(sync_conn).get_columns("user_instruction_traces")}
+        lambda sync_conn: {
+            column["name"] for column in inspect(sync_conn).get_columns("user_instruction_traces")
+        }
     )
     additions = {
         "turn_id": "VARCHAR(36)",
@@ -232,4 +242,6 @@ async def _ensure_instruction_trace_columns(conn: Any) -> None:
     }
     for name, definition in additions.items():
         if name not in columns:
-            await conn.execute(text(f'ALTER TABLE user_instruction_traces ADD COLUMN "{name}" {definition}'))
+            await conn.execute(
+                text(f'ALTER TABLE user_instruction_traces ADD COLUMN "{name}" {definition}')
+            )

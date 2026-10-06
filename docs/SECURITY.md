@@ -391,11 +391,8 @@ add_header Permissions-Policy "camera=(), microphone=(), geolocation=()";
 所有安全相关事件记录结构化日志：
 
 ```python
-logger.info("permission_check", 
-    tool="shell_exec", 
-    decision="deny", 
-    pattern="rm -rf",
-    user_id="default-user"
+logger.info(
+    "permission_check", tool="shell_exec", decision="deny", pattern="rm -rf", user_id="default-user"
 )
 ```
 

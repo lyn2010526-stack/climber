@@ -30,12 +30,13 @@ class RuleDecision(StrEnum):
 
 class PermissionMode(StrEnum):
     """权限模式 — 参考 Claude Code 的 mode 系统"""
-    DEFAULT = "default"          # 手动模式：只自动允许读取
+
+    DEFAULT = "default"  # 手动模式：只自动允许读取
     ACCEPT_EDITS = "acceptEdits"  # 自动接受编辑
-    PLAN = "plan"                # 计划模式：只读预览
-    AUTO = "auto"                # 全自动（有分类器安全检查）
-    BYPASS = "bypass"            # 跳过所有权限检查
-    STRICT = "strict"            # 严格模式：未显式允许即拒绝
+    PLAN = "plan"  # 计划模式：只读预览
+    AUTO = "auto"  # 全自动（有分类器安全检查）
+    BYPASS = "bypass"  # 跳过所有权限检查
+    STRICT = "strict"  # 严格模式：未显式允许即拒绝
 
 
 class PermissionTier(StrEnum):
@@ -131,9 +132,10 @@ def normalize_tool_name(tool_name: str) -> str:
 @dataclass
 class PermissionRule:
     """单条权限规则"""
+
     decision: RuleDecision
-    tool: str                    # 工具名或工具类型
-    pattern: str | None = None   # glob 模式 (可选)
+    tool: str  # 工具名或工具类型
+    pattern: str | None = None  # glob 模式 (可选)
     description: str = ""
 
     def matches(self, tool_name: str, arguments: dict[str, Any] | None = None) -> bool:
@@ -159,9 +161,7 @@ class PermissionRule:
 
         # 文件操作工具: pattern 匹配文件路径
         if tool_name in _FILE_PATH_TOOLS:
-            file_path = arguments.get(
-                "path", arguments.get("file_path", arguments.get("dir", ""))
-            )
+            file_path = arguments.get("path", arguments.get("file_path", arguments.get("dir", "")))
             return fnmatch.fnmatch(file_path, self.pattern) if self.pattern else True
 
         # 网络工具: pattern 匹配 URL
@@ -175,10 +175,11 @@ class PermissionRule:
 @dataclass
 class PermissionConfig:
     """权限配置 — 完整规则集"""
+
     mode: PermissionMode = PermissionMode.DEFAULT
     rules: list[PermissionRule] = field(default_factory=list)
     allowed_tools: list[str] = field(default_factory=list)  # Crush 风格的工具白名单
-    denied_tools: list[str] = field(default_factory=list)   # Crush 风格的工具黑名单
+    denied_tools: list[str] = field(default_factory=list)  # Crush 风格的工具黑名单
     tier: PermissionTier = PermissionTier.FULL_WRITE
 
     def evaluate(self, tool_name: str, arguments: dict[str, Any] | None = None) -> RuleDecision:
@@ -250,7 +251,9 @@ class PermissionConfig:
         return tier_decision or RuleDecision.ASK
 
     def _tier_decision(
-        self, tool_name: str, arguments: dict[str, Any] | None,
+        self,
+        tool_name: str,
+        arguments: dict[str, Any] | None,
     ) -> RuleDecision | None:
         """Return the tier ceiling without overriding explicit deny rules."""
         tool = normalize_tool_name(tool_name)
@@ -266,8 +269,10 @@ class PermissionConfig:
                 if not isinstance(path, str) or not path:
                     return RuleDecision.ASK
                 path = os.path.abspath(path)
-                if any(path == root or path.startswith(root + "/")
-                       for root in ("/etc", "/root", "/proc", "/sys", "/dev")):
+                if any(
+                    path == root or path.startswith(root + "/")
+                    for root in ("/etc", "/root", "/proc", "/sys", "/dev")
+                ):
                     return RuleDecision.DENY
                 return None
         return None
@@ -285,18 +290,18 @@ class PermissionConfig:
 
         # 高危命令模式
         high_risk_patterns = [
-            r'rm\s+-rf',
-            r'curl.*\|.*bash',
-            r'curl.*\|.*sh',
-            r'wget.*\|.*sh',
-            r'git\s+push\s+--force',
-            r'git\s+push\s+-f',
-            r'docker\s+rm',
-            r'docker\s+system\s+prune',
-            r'npm\s+publish',
-            r'drop\s+table',
-            r'drop\s+database',
-            r'truncate\s+table',
+            r"rm\s+-rf",
+            r"curl.*\|.*bash",
+            r"curl.*\|.*sh",
+            r"wget.*\|.*sh",
+            r"git\s+push\s+--force",
+            r"git\s+push\s+-f",
+            r"docker\s+rm",
+            r"docker\s+system\s+prune",
+            r"npm\s+publish",
+            r"drop\s+table",
+            r"drop\s+database",
+            r"truncate\s+table",
         ]
 
         if tool in _COMMAND_TOOLS:
@@ -327,11 +332,11 @@ class PermissionConfig:
         # 命令执行
         if tool in _COMMAND_TOOLS:
             command = arguments.get("command", "")
-            high_risk = ['rm', 'mv', 'dd', 'mkfs', 'format', 'fdisk', 'shutdown', 'reboot']
-            medium_risk = ['git push', 'npm publish', 'pip install', 'docker', 'kubectl']
+            high_risk = ["rm", "mv", "dd", "mkfs", "format", "fdisk", "shutdown", "reboot"]
+            medium_risk = ["git push", "npm publish", "pip install", "docker", "kubectl"]
 
             for pattern in high_risk:
-                if command.startswith(pattern) or f' {pattern}' in command:
+                if command.startswith(pattern) or f" {pattern}" in command:
                     return "high"
             for pattern in medium_risk:
                 if pattern in command:

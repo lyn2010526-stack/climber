@@ -49,7 +49,9 @@ def validate_instruction_goal(
     result = understanding or understand_instruction(raw_text)
     needs_clarification = result.goal_missing or bool(result.ambiguities)
     return InstructionGoalValidation(
-        status="blocked" if result.goal_missing else ("needs_clarification" if needs_clarification else "ready"),
+        status="blocked"
+        if result.goal_missing
+        else ("needs_clarification" if needs_clarification else "ready"),
         goal=result.main_goal,
         confidence=result.confidence,
         needs_clarification=needs_clarification,
@@ -157,9 +159,7 @@ class GoalTracker:
         row = self._conn.execute("SELECT id FROM goals WHERE id = ?", (goal_id,)).fetchone()
         if not row:
             return False
-        self._conn.execute(
-            "UPDATE goals SET is_active = 0 WHERE id = ?", (goal_id,)
-        )
+        self._conn.execute("UPDATE goals SET is_active = 0 WHERE id = ?", (goal_id,))
         self._conn.commit()
         return True
 
@@ -248,7 +248,7 @@ class GoalTracker:
             return 0.5
 
         action_lower = action.lower()
-        action_words = set(re.findall(r'\w+', action_lower))
+        action_words = set(re.findall(r"\w+", action_lower))
         if not action_words:
             return 0.0
 
@@ -266,14 +266,56 @@ class GoalTracker:
 
     def _extract_keywords(self, text: str) -> list[str]:
         """Extract meaningful keywords from text."""
-        words = re.findall(r'\w+', text.lower())
+        words = re.findall(r"\w+", text.lower())
         stopwords = {
-            "the", "a", "an", "is", "are", "was", "were", "be", "been",
-            "being", "have", "has", "had", "do", "does", "did", "will",
-            "would", "could", "should", "may", "might", "can", "shall",
-            "to", "of", "in", "for", "on", "with", "at", "by", "from",
-            "as", "into", "through", "during", "before", "after", "and",
-            "but", "or", "not", "no", "this", "that", "it", "its",
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "can",
+            "shall",
+            "to",
+            "of",
+            "in",
+            "for",
+            "on",
+            "with",
+            "at",
+            "by",
+            "from",
+            "as",
+            "into",
+            "through",
+            "during",
+            "before",
+            "after",
+            "and",
+            "but",
+            "or",
+            "not",
+            "no",
+            "this",
+            "that",
+            "it",
+            "its",
         }
         return [w for w in words if w not in stopwords and len(w) > 2]
 

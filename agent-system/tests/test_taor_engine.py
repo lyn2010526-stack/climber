@@ -49,18 +49,30 @@ def make_tool_call(name: str, args: dict[str, Any], tc_id: str = "tc_1") -> dict
 
 async def fake_tool_executor(call: ToolCall) -> ToolResult:
     if call.name == "query_db":
-        return ToolResult(tool_call_id=call.tool_call_id, name=call.name,
-                          content="mock 查询结果: 找到 3 条记录", is_error=False)
+        return ToolResult(
+            tool_call_id=call.tool_call_id,
+            name=call.name,
+            content="mock 查询结果: 找到 3 条记录",
+            is_error=False,
+        )
     if call.name == "write_file":
-        return ToolResult(tool_call_id=call.tool_call_id, name=call.name,
-                          content="file written", is_error=False)
-    return ToolResult(tool_call_id=call.tool_call_id, name=call.name,
-                      content=None, is_error=True, error="unknown tool")
+        return ToolResult(
+            tool_call_id=call.tool_call_id, name=call.name, content="file written", is_error=False
+        )
+    return ToolResult(
+        tool_call_id=call.tool_call_id,
+        name=call.name,
+        content=None,
+        is_error=True,
+        error="unknown tool",
+    )
 
 
 def make_tools() -> list[ToolDescriptor]:
     return [
-        ToolDescriptor(name="query_db", description="只读查询数据库", tool_class=ToolClass.READ, read_only=True),
+        ToolDescriptor(
+            name="query_db", description="只读查询数据库", tool_class=ToolClass.READ, read_only=True
+        ),
         ToolDescriptor(name="write_file", description="写入文件", tool_class=ToolClass.WRITE),
     ]
 
@@ -85,7 +97,9 @@ async def test_auto_mode_tool_then_done(tmp_path):
         calls.append(len(messages))
         # 第 1 轮：调用 query_db；之后：输出最终总结
         if len(messages) <= 2:
-            return FakeChatResult(content="先查询数据库", tool_calls=[make_tool_call("query_db", {"sql": "SELECT 1"})])
+            return FakeChatResult(
+                content="先查询数据库", tool_calls=[make_tool_call("query_db", {"sql": "SELECT 1"})]
+            )
         return FakeChatResult(content="任务完成总结: 已查出 3 条记录并完成分析。")
 
     async def emit(event_type, data):
@@ -133,7 +147,9 @@ async def test_hitl_yield_on_high_risk_tool(tmp_path):
     _fts, router, snapshot_mgr, _refiner, _compressor = make_components(str(tmp_path))
 
     async def mock_llm(messages, tools):
-        return FakeChatResult(content="写入配置", tool_calls=[make_tool_call("write_file", {"path": "x.py"})])
+        return FakeChatResult(
+            content="写入配置", tool_calls=[make_tool_call("write_file", {"path": "x.py"})]
+        )
 
     controller = ThreeStateController(mode=RunMode.HITL)
 
@@ -162,7 +178,9 @@ async def test_observe_mode_blocks_write_tools(tmp_path):
     executed: list[str] = []
 
     async def mock_llm(messages, tools):
-        return FakeChatResult(content="写入文件", tool_calls=[make_tool_call("write_file", {"path": "x.py"})])
+        return FakeChatResult(
+            content="写入文件", tool_calls=[make_tool_call("write_file", {"path": "x.py"})]
+        )
 
     async def spy_tool_executor(call: ToolCall) -> ToolResult:
         executed.append(call.name)
@@ -191,15 +209,24 @@ async def test_rollback_on_stall_after_milestone(tmp_path):
     _fts, router, snapshot_mgr, _refiner, _compressor = make_components(str(tmp_path))
 
     async def fail_executor(call: ToolCall) -> ToolResult:
-        return ToolResult(tool_call_id=call.tool_call_id, name=call.name,
-                          content=None, is_error=True, error="boom")
+        return ToolResult(
+            tool_call_id=call.tool_call_id,
+            name=call.name,
+            content=None,
+            is_error=True,
+            error="boom",
+        )
 
     async def mock_llm(messages, tools):
         # 每次都要工具调用且都失败 → 连续无进展
-        return FakeChatResult(content="重试写入", tool_calls=[make_tool_call("write_file", {"path": "x.py"})])
+        return FakeChatResult(
+            content="重试写入", tool_calls=[make_tool_call("write_file", {"path": "x.py"})]
+        )
 
     # 先存一个里程碑快照作为回滚点
-    snapshot_mgr.save_milestone("stall-session", TAORPhase.PLAN, state={"step": 1}, messages=[], label="plan")
+    snapshot_mgr.save_milestone(
+        "stall-session", TAORPhase.PLAN, state={"step": 1}, messages=[], label="plan"
+    )
 
     engine = TAOREngine(
         llm_call=mock_llm,

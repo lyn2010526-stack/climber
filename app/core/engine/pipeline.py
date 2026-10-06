@@ -25,9 +25,11 @@ except ImportError:
 
     class ToolDef:  # type: ignore[no-redef]
         """Fallback ToolDef when app.models doesn't export it."""
+
         name: str = ""
         description: str = ""
         parameters: dict | None = None
+
 
 logger = structlog.get_logger()
 
@@ -37,6 +39,7 @@ TurnStep = Callable[["TurnContext"], Awaitable["TurnContext"]]
 @dataclass
 class RoutePlan:
     """Structured routing decision result."""
+
     target_tier: str = "C1"  # C0-C3
     model: str = ""
     provider: str = ""
@@ -70,6 +73,7 @@ class TurnContext:
     Steps modify metadata dict to pass state forward.
     Original message/session_id remain unchanged.
     """
+
     message: str
     session_id: str
     model: str
@@ -111,6 +115,7 @@ class TurnContext:
 @dataclass
 class StepResult:
     """Result of a single pipeline step."""
+
     step_name: str
     success: bool
     duration_ms: float
@@ -121,6 +126,7 @@ class StepResult:
 
 class EnginePipelineError(Exception):
     """Raised when pipeline execution cannot continue."""
+
     def __init__(self, step_name: str, reason: str, partial_ctx: TurnContext | None = None):
         super().__init__(f"Pipeline failed at [{step_name}]: {reason}")
         self.step_name = step_name
@@ -177,13 +183,15 @@ async def run_pipeline(
         if not success and fail_open:
             warning = f"Step {step_name} failed (fail-open): {error}"
 
-        results.append(StepResult(
-            step_name=step_name,
-            success=success,
-            duration_ms=round(duration, 2),
-            error=error,
-            warning=warning,
-        ))
+        results.append(
+            StepResult(
+                step_name=step_name,
+                success=success,
+                duration_ms=round(duration, 2),
+                error=error,
+                warning=warning,
+            )
+        )
 
     return current_ctx, results
 

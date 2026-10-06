@@ -19,7 +19,9 @@ class EventClient:
     def set_requirement_state_writer(self, writer) -> None:
         self._requirement_state_writer = writer
 
-    def _emit_requirement_state(self, node_id: str, phase: str, status: str, message: str | None = None) -> None:
+    def _emit_requirement_state(
+        self, node_id: str, phase: str, status: str, message: str | None = None
+    ) -> None:
         normalized_node_id = str(node_id or "").strip()
         if not normalized_node_id:
             return

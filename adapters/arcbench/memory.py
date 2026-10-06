@@ -52,12 +52,14 @@ def record_failed_nodes(out_dir: Path, failed_nodes, acc: dict | None) -> None:
             haystack = " ".join([res.get("file", ""), *res.get("titles", [])])
             if node_id in haystack:
                 titles.append(" - ".join(res.get("titles", [])) or res.get("file", ""))
-        entries.append({
-            "node_id": node_id,
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "titles": titles[:6],
-            "message": message,
-        })
+        entries.append(
+            {
+                "node_id": node_id,
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "titles": titles[:6],
+                "message": message,
+            }
+        )
     path = memory_path(out_dir)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -100,5 +102,7 @@ def acceptance_memory_inject(node_id: str, out_dir) -> str:
         lines.append(f"- {stamp} {msg}{title_note}".strip())
     if not lines:
         return ""
-    return ("REGRESSION GUARD from previous run(s), these independent acceptance "
-            "failures were recorded for this node:\n" + "\n".join(lines))
+    return (
+        "REGRESSION GUARD from previous run(s), these independent acceptance "
+        "failures were recorded for this node:\n" + "\n".join(lines)
+    )

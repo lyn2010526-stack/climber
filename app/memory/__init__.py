@@ -62,10 +62,12 @@ class LongTermMemory:
     def add_fact(self, user_id: str, fact: str, category: str = "general") -> None:
         if user_id not in self._facts:
             self._facts[user_id] = []
-        self._facts[user_id].append({
-            "fact": fact,
-            "category": category,
-        })
+        self._facts[user_id].append(
+            {
+                "fact": fact,
+                "category": category,
+            }
+        )
 
     def get_facts(self, user_id: str, limit: int = 20) -> list[dict[str, Any]]:
         return self._facts.get(user_id, [])[-limit:]
@@ -94,6 +96,7 @@ class VectorMemory:
     async def _get_client(self):
         if self._client is None:
             import chromadb
+
             self._client = chromadb.PersistentClient(path=self.persist_path)
         return self._client
 
@@ -114,6 +117,7 @@ class VectorMemory:
         coll = await self._get_collection(collection)
         if ids is None:
             import uuid
+
             ids = [str(uuid.uuid4()) for _ in documents]
         coll.add(documents=documents, ids=ids, metadatas=metadatas)
 

@@ -15,7 +15,11 @@ from app.core.metacognition.judgment import (
 )
 from app.core.metacognition.memory_pruner import LongTermMemoryPruner
 from app.core.metacognition.monitor import MetaCognitionMonitor
-from app.core.metacognition.orchestrator import ExecutionContext, MetacognitionCycleResult, MetacognitionOrchestrator
+from app.core.metacognition.orchestrator import (
+    ExecutionContext,
+    MetacognitionCycleResult,
+    MetacognitionOrchestrator,
+)
 from app.core.metacognition.resource import ResourceOrchestrator
 from app.core.metacognition.safety_gate import (
     BLOCK_THRESHOLD,
@@ -41,13 +45,13 @@ __all__ = [
     "CausalGraph",
     "ExecutionContext",
     "GoalDynamicAdjuster",
-    "HypothesisSimulator",
     "HypothesisBelief",
+    "HypothesisSimulator",
     "Judgment",
     "LongTermMemoryPruner",
     "MetaCognitionMonitor",
-    "MetacognitionOrchestrator",
     "MetacognitionCycleResult",
+    "MetacognitionOrchestrator",
     "ResourceOrchestrator",
     "SafetyVerdict",
     "SelfModuleRefactor",

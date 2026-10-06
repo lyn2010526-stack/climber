@@ -21,20 +21,48 @@ logger = structlog.get_logger()
 @dataclass
 class FSIsolationConfig:
     """File system isolation configuration."""
+
     allowed_paths: list[str] = field(default_factory=list)
-    blocked_paths: list[str] = field(default_factory=lambda: [
-        "/etc/shadow", "/etc/passwd", "/etc/sudoers",
-        "/root/.ssh", "/home/*/.ssh",
-        "/proc", "/sys", "/dev",
-    ])
+    blocked_paths: list[str] = field(
+        default_factory=lambda: [
+            "/etc/shadow",
+            "/etc/passwd",
+            "/etc/sudoers",
+            "/root/.ssh",
+            "/home/*/.ssh",
+            "/proc",
+            "/sys",
+            "/dev",
+        ]
+    )
     read_only_paths: list[str] = field(default_factory=list)
     temp_dir: str = ""
     max_file_size_mb: int = 50
-    allowed_extensions: list[str] = field(default_factory=lambda: [
-        ".py", ".js", ".ts", ".tsx", ".jsx", ".json", ".yaml", ".yml",
-        ".md", ".txt", ".csv", ".html", ".css", ".xml", ".toml",
-        ".sh", ".bash", ".sql", ".log", ".ini", ".cfg",
-    ])
+    allowed_extensions: list[str] = field(
+        default_factory=lambda: [
+            ".py",
+            ".js",
+            ".ts",
+            ".tsx",
+            ".jsx",
+            ".json",
+            ".yaml",
+            ".yml",
+            ".md",
+            ".txt",
+            ".csv",
+            ".html",
+            ".css",
+            ".xml",
+            ".toml",
+            ".sh",
+            ".bash",
+            ".sql",
+            ".log",
+            ".ini",
+            ".cfg",
+        ]
+    )
 
 
 class FSIsolationManager:
@@ -55,10 +83,12 @@ class FSIsolationManager:
         """
         merged = FSIsolationConfig(
             allowed_paths=list(config.allowed_paths),
-            blocked_paths=sorted({
-                *FSIsolationConfig().blocked_paths,
-                *(p for p in config.blocked_paths if p),
-            }),
+            blocked_paths=sorted(
+                {
+                    *FSIsolationConfig().blocked_paths,
+                    *(p for p in config.blocked_paths if p),
+                }
+            ),
             read_only_paths=list(config.read_only_paths),
             temp_dir=config.temp_dir,
             max_file_size_mb=config.max_file_size_mb,
@@ -141,7 +171,10 @@ class FSIsolationManager:
         if not self.config.allowed_extensions:
             return True, ""
         if ext not in self.config.allowed_extensions:
-            return False, f"File type '{ext}' not allowed. Allowed: {self.config.allowed_extensions}"
+            return (
+                False,
+                f"File type '{ext}' not allowed. Allowed: {self.config.allowed_extensions}",
+            )
         return True, ""
 
     def validate_file_size(self, path: str) -> tuple[bool, str]:
@@ -156,6 +189,7 @@ class FSIsolationManager:
     def _is_blocked(self, abs_path: Path) -> bool:
         """Check if path is in blocked list."""
         import fnmatch
+
         for blocked in self.config.blocked_paths:
             if "*" in blocked:
                 if fnmatch.fnmatch(str(abs_path), blocked):
@@ -172,7 +206,9 @@ class FSIsolationManager:
         for allowed in self.config.allowed_paths:
             try:
                 allowed_abs = Path(allowed).resolve()
-                if str(abs_path) == str(allowed_abs) or str(abs_path).startswith(str(allowed_abs) + "/"):
+                if str(abs_path) == str(allowed_abs) or str(abs_path).startswith(
+                    str(allowed_abs) + "/"
+                ):
                     return True
             except (OSError, ValueError):
                 continue

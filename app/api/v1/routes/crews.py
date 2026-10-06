@@ -38,17 +38,23 @@ async def list_crews(principal: CurrentPrincipal) -> list[dict[str, Any]]:
     user_id = principal.subject_id
     async with async_session() as db:
         rows = (
-            await db.execute(
-                select(Crew).where(Crew.user_id == user_id).order_by(Crew.created_at.desc())
+            (
+                await db.execute(
+                    select(Crew).where(Crew.user_id == user_id).order_by(Crew.created_at.desc())
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [_crew_dict(c) for c in rows]
 
 
 @router.post("/crews")
 @router.post("/crews/", include_in_schema=False)
 async def create_crew(
-    payload: CrewCreateRequest, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
+    payload: CrewCreateRequest,
+    principal: CurrentPrincipal,
+    _auth: dict = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Create a new crew."""
     data = payload.model_dump()
@@ -68,7 +74,9 @@ async def create_crew(
                             Agent.id.in_(agent_ids),
                         )
                     )
-                ).scalars().all()
+                )
+                .scalars()
+                .all()
             )
             if owned_agent_ids != agent_ids:
                 raise HTTPException(
@@ -188,7 +196,9 @@ async def _execute_crew_tasks(
     try:
         for idx, task in enumerate(crew_tasks):
             description = task.get("description") or task.get("name") or f"Task {idx + 1}"
-            prompt = description if not transcript else f"{description}\n\n上一步结果：\n{transcript}"
+            prompt = (
+                description if not transcript else f"{description}\n\n上一步结果：\n{transcript}"
+            )
 
             session = engine.create_session(
                 agent_id=agent_row.id,
@@ -208,7 +218,9 @@ async def _execute_crew_tasks(
             transcript = "".join(parts)
             task_results.append({"task": description, "output": transcript})
     except Exception as e:
-        logger.exception("crew_execution_failed", crew_id=getattr(agent_row, "id", None), error=str(e))
+        logger.exception(
+            "crew_execution_failed", crew_id=getattr(agent_row, "id", None), error=str(e)
+        )
         status = "failed"
         error = "Crew execution failed"
 

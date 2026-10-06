@@ -155,10 +155,12 @@ class TestSyncValidatorOffEventLoop:
 
         executor = ParallelToolExecutor(_registry(), validator=slow_validator)
         start = time.monotonic()
-        results = await executor.execute_all([
-            _tool_call("echo", call_id="a"),
-            _tool_call("echo", call_id="b"),
-        ])
+        results = await executor.execute_all(
+            [
+                _tool_call("echo", call_id="a"),
+                _tool_call("echo", call_id="b"),
+            ]
+        )
         elapsed = time.monotonic() - start
 
         assert all(r.success for r in results)
@@ -181,14 +183,18 @@ class TestMixedRegistrations:
         sync_exec = ParallelToolExecutor(registry, validator=sync_validator)
         async_exec = ParallelToolExecutor(registry, validator=async_validator)
         sync_results, async_results = await asyncio.gather(
-            sync_exec.execute_all([
-                _tool_call("echo", call_id="s-allow"),
-                _tool_call("blocked-sync", call_id="s-deny"),
-            ]),
-            async_exec.execute_all([
-                _tool_call("echo", call_id="a-allow"),
-                _tool_call("blocked-async", call_id="a-deny"),
-            ]),
+            sync_exec.execute_all(
+                [
+                    _tool_call("echo", call_id="s-allow"),
+                    _tool_call("blocked-sync", call_id="s-deny"),
+                ]
+            ),
+            async_exec.execute_all(
+                [
+                    _tool_call("echo", call_id="a-allow"),
+                    _tool_call("blocked-async", call_id="a-deny"),
+                ]
+            ),
         )
 
         assert sync_results[0].success is True

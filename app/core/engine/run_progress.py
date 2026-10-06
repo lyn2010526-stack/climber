@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
@@ -21,7 +21,7 @@ TERMINAL_STATUSES = {"completed", "failed", "cancelled", "stopped"}
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _default_factory():
@@ -57,7 +57,9 @@ class RunProgressStore:
             "status": "in_progress",
             "outer_round": int(outer_round or 0),
             "current_subtask": str(current_subtask or "")[:2000],
-            "completed_subtasks_json": json.dumps(list(completed_subtasks or []), ensure_ascii=False),
+            "completed_subtasks_json": json.dumps(
+                list(completed_subtasks or []), ensure_ascii=False
+            ),
             "followup_queue_json": json.dumps(list(followup_queue or []), ensure_ascii=False),
             "steering_queue_json": json.dumps(list(steering_queue or []), ensure_ascii=False),
             "heartbeat_at": _now(),
@@ -147,13 +149,17 @@ class RunProgressStore:
         try:
             async with self.session_factory() as db:
                 rows = (
-                    await db.execute(
-                        select(RunProgressRecord).where(
-                            RunProgressRecord.status == "in_progress",
-                            RunProgressRecord.heartbeat_at < cutoff,
+                    (
+                        await db.execute(
+                            select(RunProgressRecord).where(
+                                RunProgressRecord.status == "in_progress",
+                                RunProgressRecord.heartbeat_at < cutoff,
+                            )
                         )
                     )
-                ).scalars().all()
+                    .scalars()
+                    .all()
+                )
                 for row in rows:
                     row.status = "interrupted"
                     row.heartbeat_at = _now()
@@ -180,10 +186,14 @@ def build_loop_snapshot(session: object, loop_payload: dict[str, object]) -> dic
 
 
 def _engine_factory(engine: object):
-    return getattr(getattr(engine, "_run_store", None), "session_factory", None) or _default_factory()
+    return (
+        getattr(getattr(engine, "_run_store", None), "session_factory", None) or _default_factory()
+    )
 
 
-async def record_loop_progress(engine: object, session: object, loop_payload: dict[str, object]) -> bool:
+async def record_loop_progress(
+    engine: object, session: object, loop_payload: dict[str, object]
+) -> bool:
     """Mirror a LOOP_STATUS payload onto the durable snapshot (fail-open)."""
     try:
         store = RunProgressStore(_engine_factory(engine))
@@ -199,7 +209,7 @@ async def finalize_run_progress(engine: object, session: object) -> bool:
     interrupted so startup recovery can surface untracked sessions.
     """
     try:
-        status = getattr(session, "_run_status_override", None) or getattr(session, "status").value
+        status = getattr(session, "_run_status_override", None) or session.status.value
         store = RunProgressStore(_engine_factory(engine))
         if status == "completed":
             return await store.mark_completed(str(session.session_id))

@@ -81,9 +81,7 @@ def test_extract_abstract_empty_when_no_intro_paragraph() -> None:
 
 
 def test_first_sentence_stops_at_boundary() -> None:
-    sentence = _first_sentence(
-        "One sentence that is long enough to keep. Another one follows."
-    )
+    sentence = _first_sentence("One sentence that is long enough to keep. Another one follows.")
     assert sentence == "One sentence that is long enough to keep."
 
 
@@ -114,9 +112,7 @@ def test_text_summarizer_llm_failure_falls_back_to_rules(
     async def boom(*args: Any, **kwargs: Any) -> str:
         raise SummarizerError("boom")
 
-    monkeypatch.setattr(
-        "app.core.memory_archive.summarizer.llm_completion", boom
-    )
+    monkeypatch.setattr("app.core.memory_archive.summarizer.llm_completion", boom)
     summarizer = TextSummarizer(use_llm=True)
     abstract, overview = _run(summarizer.generate_pair(OVERVIEW_SOURCE))
     assert abstract

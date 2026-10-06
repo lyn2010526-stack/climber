@@ -75,7 +75,10 @@ class CausalGraph:
         prediction_error: float | None = None,
     ) -> CausalEdge:
         state_key = repr(sorted(state.items()))
-        edge = next((item for item in self.edges if item.state_key == state_key and item.action == action), None)
+        edge = next(
+            (item for item in self.edges if item.state_key == state_key and item.action == action),
+            None,
+        )
         if edge is None:
             edge = CausalEdge(state_key, action, outcome)
             self.edges.append(edge)
@@ -95,7 +98,14 @@ class CausalGraph:
 
     def query_effect(self, state: dict[str, Any], action: str) -> CausalEdge | None:
         state_key = repr(sorted(state.items()))
-        return next((edge for edge in reversed(self.edges) if edge.state_key == state_key and edge.action == action), None)
+        return next(
+            (
+                edge
+                for edge in reversed(self.edges)
+                if edge.state_key == state_key and edge.action == action
+            ),
+            None,
+        )
 
     def suggest_probes(self, state: dict[str, Any], limit: int = 3) -> list[dict[str, Any]]:
         """Return observed actions whose effects remain uncertain."""
@@ -109,7 +119,7 @@ class CausalGraph:
                 "uncertainty": round(edge.uncertainty, 4),
                 "observations": edge.observations,
             }
-            for edge in candidates[:max(0, limit)]
+            for edge in candidates[: max(0, limit)]
             if edge.uncertainty > 0.0
         ]
 
@@ -143,12 +153,14 @@ class CausalAttribution:
         outcome: str,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        self._execution_log.append({
-            "iteration": iteration,
-            "action": action,
-            "outcome": outcome,
-            "metadata": metadata or {},
-        })
+        self._execution_log.append(
+            {
+                "iteration": iteration,
+                "action": action,
+                "outcome": outcome,
+                "metadata": metadata or {},
+            }
+        )
 
     def analyze(
         self,
@@ -175,8 +187,7 @@ class CausalAttribution:
     ) -> AttributionResult:
         chain = self._build_chain()
         error_outcomes = [
-            e for e in chain
-            if e.outcome.startswith("Error") or "error" in e.outcome.lower()
+            e for e in chain if e.outcome.startswith("Error") or "error" in e.outcome.lower()
         ]
 
         # Check for repeated tool failures
@@ -199,8 +210,13 @@ class CausalAttribution:
         # Check for hallucination indicators
         outcome_lower = outcome.lower()
         hallucination_signs = [
-            "i believe", "i think", "probably", "likely",
-            "it seems", "appears to be", "might be",
+            "i believe",
+            "i think",
+            "probably",
+            "likely",
+            "it seems",
+            "appears to be",
+            "might be",
         ]
         if any(sign in outcome_lower for sign in hallucination_signs):
             return AttributionResult(
@@ -253,16 +269,17 @@ class CausalAttribution:
         chain = []
         for entry in self._execution_log:
             is_error = (
-                entry["outcome"].startswith("Error")
-                or "error" in entry["outcome"].lower()[:50]
+                entry["outcome"].startswith("Error") or "error" in entry["outcome"].lower()[:50]
             )
-            chain.append(CausalNode(
-                iteration=entry["iteration"],
-                action=entry["action"],
-                outcome=entry["outcome"][:200],
-                is_failure_point=is_error,
-                evidence=entry["metadata"].get("evidence", ""),
-            ))
+            chain.append(
+                CausalNode(
+                    iteration=entry["iteration"],
+                    action=entry["action"],
+                    outcome=entry["outcome"][:200],
+                    is_failure_point=is_error,
+                    evidence=entry["metadata"].get("evidence", ""),
+                )
+            )
         return chain
 
     def reset(self) -> None:

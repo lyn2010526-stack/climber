@@ -1,6 +1,5 @@
 """Deterministic consumer regressions with a private in-memory profile store."""
 
-# ruff: noqa: PT009
 import unittest
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
@@ -32,7 +31,11 @@ class ProfileConsumerBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def ready(self):
         await self.enable()
         await self.store.record_run(
-            "alice", instruction="local task", task_type="coding", outcome="success", occurred_at=isolated.NOW,
+            "alice",
+            instruction="local task",
+            task_type="coding",
+            outcome="success",
+            occurred_at=isolated.NOW,
         )
         coordinator = dual_loop.DualLoopCoordinator()
         coordinator._profile_store = self.store
@@ -47,12 +50,15 @@ class ProfileConsumerBoundaryTests(unittest.IsolatedAsyncioTestCase):
             {"role": MessageRole.TOOL, "content": "original tool result"},
             {"role": MessageRole.USER, "content": "current goal"},
         ]
-        session = SimpleNamespace(user_id="alice", messages=[
-            {"role": MessageRole.SYSTEM, "content": MARKER + "\nold profile one"},
-            *kept[:2],
-            {"role": "system", "content": MARKER + "\nold profile two"},
-            *kept[2:],
-        ])
+        session = SimpleNamespace(
+            user_id="alice",
+            messages=[
+                {"role": MessageRole.SYSTEM, "content": MARKER + "\nold profile one"},
+                *kept[:2],
+                {"role": "system", "content": MARKER + "\nold profile two"},
+                *kept[2:],
+            ],
+        )
         return session, kept
 
     async def test_disable_between_reads_returns_no_context(self):
@@ -94,7 +100,9 @@ class ProfileConsumerBoundaryTests(unittest.IsolatedAsyncioTestCase):
                         await db.commit()
                 session, kept = self.session()
                 messages = session.messages
-                await hooks.inject_profile_context(SimpleNamespace(_dual_loop=coordinator), session, "current goal")
+                await hooks.inject_profile_context(
+                    SimpleNamespace(_dual_loop=coordinator), session, "current goal"
+                )
                 self.assertIs(session.messages, messages)
                 self.assertEqual(session.messages, kept)
                 for actual, original in zip(session.messages, kept, strict=True):
@@ -119,14 +127,22 @@ class ProfileConsumerBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
                 session, kept = self.session()
                 with patch.object(self.store, "suggestions", revoke):
-                    await hooks.inject_profile_context(SimpleNamespace(_dual_loop=coordinator), session, "current goal")
+                    await hooks.inject_profile_context(
+                        SimpleNamespace(_dual_loop=coordinator), session, "current goal"
+                    )
                 self.assertEqual(session.messages, kept)
 
     async def test_enabled_refresh_replaces_all_old_profiles_with_one(self):
         coordinator = await self.ready()
         session, kept = self.session()
-        await hooks.inject_profile_context(SimpleNamespace(_dual_loop=coordinator), session, "current goal")
-        profiles = [msg for msg in session.messages if msg["role"] == "system" and msg["content"].startswith(MARKER)]
+        await hooks.inject_profile_context(
+            SimpleNamespace(_dual_loop=coordinator), session, "current goal"
+        )
+        profiles = [
+            msg
+            for msg in session.messages
+            if msg["role"] == "system" and msg["content"].startswith(MARKER)
+        ]
         self.assertEqual(len(profiles), 1)
         self.assertIn("task_preferences: coding", profiles[0]["content"])
         self.assertEqual([msg for msg in session.messages if msg is not profiles[0]], kept)
@@ -137,12 +153,19 @@ class ProfileConsumerBoundaryTests(unittest.IsolatedAsyncioTestCase):
         for method in ("summary", "suggestions"):
             with self.subTest(method=method):
                 session, kept = self.session()
-                with patch.object(self.store, method, AsyncMock(side_effect=RuntimeError("isolated read failure"))):
-                    await hooks.inject_profile_context(SimpleNamespace(_dual_loop=coordinator), session, "current goal")
+                with patch.object(
+                    self.store, method, AsyncMock(side_effect=RuntimeError("isolated read failure"))
+                ):
+                    await hooks.inject_profile_context(
+                        SimpleNamespace(_dual_loop=coordinator), session, "current goal"
+                    )
                 self.assertEqual(session.messages, kept)
 
     async def test_missing_or_raising_coordinator_clears_old_profiles(self):
-        for coordinator in (None, SimpleNamespace(profile_context=AsyncMock(side_effect=RuntimeError("unavailable")))):
+        for coordinator in (
+            None,
+            SimpleNamespace(profile_context=AsyncMock(side_effect=RuntimeError("unavailable"))),
+        ):
             with self.subTest(coordinator=coordinator):
                 session, kept = self.session()
                 with patch.object(hooks, "dual_loop_coordinator", return_value=coordinator):

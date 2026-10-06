@@ -29,15 +29,94 @@ _LATIN_WORD_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9_-]*")
 # 中英停用词表（zeyi 思路：过滤高频无意义词）
 STOPWORDS = {
     # 中文
-    "的", "了", "是", "在", "和", "与", "或", "也", "都", "就", "而", "及",
-    "我", "你", "他", "她", "它", "我们", "你们", "他们", "这个", "那个", "一个",
-    "之", "于", "为", "以", "对", "从", "到", "把", "被", "让", "给", "使",
-    "这", "那", "些", "很", "更", "最", "只", "但", "如果", "因为", "所以",
-    "然后", "接着", "并且", "以及", "或者", "可以", "需要", "应该", "将", "会",
+    "的",
+    "了",
+    "是",
+    "在",
+    "和",
+    "与",
+    "或",
+    "也",
+    "都",
+    "就",
+    "而",
+    "及",
+    "我",
+    "你",
+    "他",
+    "她",
+    "它",
+    "我们",
+    "你们",
+    "他们",
+    "这个",
+    "那个",
+    "一个",
+    "之",
+    "于",
+    "为",
+    "以",
+    "对",
+    "从",
+    "到",
+    "把",
+    "被",
+    "让",
+    "给",
+    "使",
+    "这",
+    "那",
+    "些",
+    "很",
+    "更",
+    "最",
+    "只",
+    "但",
+    "如果",
+    "因为",
+    "所以",
+    "然后",
+    "接着",
+    "并且",
+    "以及",
+    "或者",
+    "可以",
+    "需要",
+    "应该",
+    "将",
+    "会",
     # 英文
-    "the", "a", "an", "of", "to", "in", "and", "or", "for", "on", "with",
-    "is", "are", "was", "were", "be", "been", "that", "this", "it", "as",
-    "at", "by", "from", "not", "we", "you", "they", "he", "she", "i",
+    "the",
+    "a",
+    "an",
+    "of",
+    "to",
+    "in",
+    "and",
+    "or",
+    "for",
+    "on",
+    "with",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "that",
+    "this",
+    "it",
+    "as",
+    "at",
+    "by",
+    "from",
+    "not",
+    "we",
+    "you",
+    "they",
+    "he",
+    "she",
+    "i",
 }
 
 
@@ -127,7 +206,9 @@ class ChineseWeightedIndex:
         self._titles[item.id] = item.title
         tokens = tokenize_chinese(f"{item.title}\n{item.text}")
         for token in tokens:
-            weight = self.TITLE_WEIGHT if token in tokenize_chinese(item.title) else self.BODY_WEIGHT
+            weight = (
+                self.TITLE_WEIGHT if token in tokenize_chinese(item.title) else self.BODY_WEIGHT
+            )
             self._token_rows.setdefault(token, []).append((item.id, weight))
         if self._conn:
             self._conn.execute(
@@ -147,13 +228,17 @@ class ChineseWeightedIndex:
         self._docs.pop(memory_id, None)
         self._titles.pop(memory_id, None)
         for token in list(self._token_rows):
-            self._token_rows[token] = [(mid, w) for mid, w in self._token_rows[token] if mid != memory_id]
+            self._token_rows[token] = [
+                (mid, w) for mid, w in self._token_rows[token] if mid != memory_id
+            ]
         if self._conn:
             self._conn.execute("DELETE FROM cn_docs WHERE memory_id=?", (memory_id,))
             self._conn.execute("DELETE FROM cn_index WHERE memory_id=?", (memory_id,))
             self._conn.commit()
 
-    def search(self, query: str, top_k: int = 10, kinds: list[str] | None = None) -> list[RetrievedMemory]:
+    def search(
+        self, query: str, top_k: int = 10, kinds: list[str] | None = None
+    ) -> list[RetrievedMemory]:
         """中文加权检索。
 
         打分 = 命中 token 权重和 / 查询 token 数，标题命中额外加权。
@@ -178,11 +263,15 @@ class ChineseWeightedIndex:
             title_hit = any(t in tokenize_chinese(item.title) for t in query_tokens)
             if title_hit:
                 normalized = min(1.0, normalized * 1.3)  # 标题加权
-            results.append(RetrievedMemory(
-                item=item, route="chinese", score=round(normalized, 4),
-                keyword_score=round(normalized, 4),
-                reason=f"cn_tokens={raw:.0f}/{len(query_tokens)} title_hit={title_hit}",
-            ))
+            results.append(
+                RetrievedMemory(
+                    item=item,
+                    route="chinese",
+                    score=round(normalized, 4),
+                    keyword_score=round(normalized, 4),
+                    reason=f"cn_tokens={raw:.0f}/{len(query_tokens)} title_hit={title_hit}",
+                )
+            )
         results.sort(key=lambda r: r.score, reverse=True)
         return results[:top_k]
 

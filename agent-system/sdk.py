@@ -40,8 +40,7 @@ if TYPE_CHECKING:
 class TAORConfig:
     """客户端数据目录与运行参数。"""
 
-    data_dir: str = field(
-        default_factory=lambda: os.path.join(tempfile.gettempdir(), "taor_sdk"))
+    data_dir: str = field(default_factory=lambda: os.path.join(tempfile.gettempdir(), "taor_sdk"))
     mode: RunMode = RunMode.AUTO
     max_outer_rounds: int = 8
     max_stall_rounds: int = 2
@@ -107,12 +106,16 @@ class TAORClient:
             self._store.upsert(_memory_from_dict(entry))
 
     # ---- 同步运行（阻塞，子线程中文档友好） ----
-    def run(self, objective: str, *,
-            mode: RunMode | None = None,
-            llm_call: Callable | None = None,
-            tool_executor: Callable | None = None,
-            tools: list[ToolDescriptor] | None = None,
-            session_id: str = "") -> SDKRunHandle:
+    def run(
+        self,
+        objective: str,
+        *,
+        mode: RunMode | None = None,
+        llm_call: Callable | None = None,
+        tool_executor: Callable | None = None,
+        tools: list[ToolDescriptor] | None = None,
+        session_id: str = "",
+    ) -> SDKRunHandle:
         """同步运行。未提供 llm/tool 时使用确定性 demo。"""
         import asyncio
 
@@ -143,9 +146,12 @@ class TAORClient:
 
     def _build_engine(self, mode, llm, execute, tools, emit) -> TAOREngine:
         return TAOREngine(
-            llm_call=llm, tool_executor=execute,
-            router=self._router, snapshot_mgr=self._snapshots,
-            refiner=self._refiner, compressor=self._compressor,
+            llm_call=llm,
+            tool_executor=execute,
+            router=self._router,
+            snapshot_mgr=self._snapshots,
+            refiner=self._refiner,
+            compressor=self._compressor,
             controller=ThreeStateController(mode=mode),
             tool_descriptors=tools,
             options=TAOROptions(

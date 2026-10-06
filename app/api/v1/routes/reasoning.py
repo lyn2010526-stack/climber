@@ -77,10 +77,20 @@ TIER_MODES: dict[str, PermissionMode] = {
 # Canonical tool names the tier view reports decisions for; aliases are folded
 # in by the rule engine itself, so reporting the canonical set is enough.
 _CANONICAL_TOOLS: tuple[str, ...] = (
-    "read_file", "list_directory", "search", "glob",
-    "write_file", "edit_file", "append_file", "apply_patch",
-    "file_exists", "file_info", "file_diff",
-    "run_command", "web_search", "file_delete",
+    "read_file",
+    "list_directory",
+    "search",
+    "glob",
+    "write_file",
+    "edit_file",
+    "append_file",
+    "apply_patch",
+    "file_exists",
+    "file_info",
+    "file_diff",
+    "run_command",
+    "web_search",
+    "file_delete",
 )
 
 
@@ -111,17 +121,13 @@ async def get_permission_tiers(
     The per-tool states are derived from the enforced config, so this read
     carries the same admin gate as ``GET /permissions/config``.
     """
-    tiers = [
-        {"id": tier_id, "mode": mode.value}
-        for tier_id, mode in TIER_MODES.items()
-    ]
+    tiers = [{"id": tier_id, "mode": mode.value} for tier_id, mode in TIER_MODES.items()]
     config = engine.get_permission_config()
     mode_value = getattr(getattr(config, "mode", None), "value", None)
     tool_states: list[dict[str, str]] = []
     if config is not None:
         tool_states = [
-            {"tool": tool, "decision": config.evaluate(tool).value}
-            for tool in _CANONICAL_TOOLS
+            {"tool": tool, "decision": config.evaluate(tool).value} for tool in _CANONICAL_TOOLS
         ]
     return {
         "tiers": tiers,
@@ -135,7 +141,8 @@ async def get_permission_tiers(
 
 @router.get("/reasoning/sessions/{session_id}/reasoning-level")
 async def get_session_reasoning_level(
-    session_id: str, user_id: str = Depends(get_current_user),
+    session_id: str,
+    user_id: str = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Current thinking-level override for one owned session."""
     level = await _load_session_level(session_id, user_id)
@@ -155,9 +162,12 @@ async def update_session_reasoning_level(
 ) -> dict[str, Any]:
     """Persist the per-session override (same store as the /level command)."""
     async with async_session() as db:
-        row = await db.scalar(select(SessionModel).where(
-            SessionModel.id == session_id, SessionModel.user_id == user_id,
-        ))
+        row = await db.scalar(
+            select(SessionModel).where(
+                SessionModel.id == session_id,
+                SessionModel.user_id == user_id,
+            )
+        )
         if row is None:
             raise HTTPException(404, detail="Session not found")
         context_data = dict(row.context_data or {})
@@ -174,9 +184,12 @@ async def update_session_reasoning_level(
 
 async def _load_session_level(session_id: str, user_id: str) -> str:
     async with async_session() as db:
-        row = await db.scalar(select(SessionModel).where(
-            SessionModel.id == session_id, SessionModel.user_id == user_id,
-        ))
+        row = await db.scalar(
+            select(SessionModel).where(
+                SessionModel.id == session_id,
+                SessionModel.user_id == user_id,
+            )
+        )
     if row is None:
         raise HTTPException(404, detail="Session not found")
     return level_from_context(row.context_data)
@@ -225,10 +238,17 @@ class LevelAwareModelRegistry:
         self._params = dict(params)
 
     def get_or_create(
-        self, provider: str, model_id: str = "", api_key: str = "", base_url: str | None = None,
+        self,
+        provider: str,
+        model_id: str = "",
+        api_key: str = "",
+        base_url: str | None = None,
     ) -> _LevelAdapter:
         adapter = self._registry.get_or_create(
-            provider, model_id=model_id, api_key=api_key, base_url=base_url,
+            provider,
+            model_id=model_id,
+            api_key=api_key,
+            base_url=base_url,
         )
         return _LevelAdapter(adapter, self._params)
 

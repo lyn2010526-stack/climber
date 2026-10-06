@@ -19,6 +19,7 @@ logger = structlog.get_logger()
 @dataclass
 class RouterDecisionEvent:
     """Structured record of a single routing decision."""
+
     decision_id: str = field(default_factory=lambda: str(uuid.uuid4())[:12])
     timestamp: float = field(default_factory=time.monotonic)
     target_tier: str = "C1"
@@ -51,6 +52,7 @@ class RouterDecisionEvent:
 @dataclass
 class TierConfig:
     """Configuration for a routing tier."""
+
     name: str
     models: list[tuple[str, str]]  # (provider, model_id) pairs
     max_tokens: int = 4096
@@ -106,7 +108,9 @@ class RouterDecisionEngine:
             ),
         }
 
-    def estimate_complexity(self, message: str, *, tool_count: int = 0, history_len: int = 0) -> float:
+    def estimate_complexity(
+        self, message: str, *, tool_count: int = 0, history_len: int = 0
+    ) -> float:
         """Estimate task complexity on a 0-1 scale.
 
         Heuristic based on message length, tool requirements, and conversation depth.
@@ -139,7 +143,16 @@ class RouterDecisionEngine:
             score += 0.1
 
         # Keyword-based boost
-        complex_keywords = ["analyze", "plan", "architecture", "implement", "refactor", "debug", "optimize", "design"]
+        complex_keywords = [
+            "analyze",
+            "plan",
+            "architecture",
+            "implement",
+            "refactor",
+            "debug",
+            "optimize",
+            "design",
+        ]
         if any(kw in message.lower() for kw in complex_keywords):
             score += 0.15
 
@@ -200,7 +213,9 @@ class RouterDecisionEngine:
         """
         start = time.monotonic()
 
-        complexity = self.estimate_complexity(message, tool_count=tool_count, history_len=history_len)
+        complexity = self.estimate_complexity(
+            message, tool_count=tool_count, history_len=history_len
+        )
 
         if user_override and user_override in self._tiers:
             tier_name = user_override
@@ -251,7 +266,9 @@ class RouterDecisionEngine:
             confidence=confidence,
             probabilities=probabilities,
             savings_pct=savings,
-            fallback_reason=f"fallback from {previous_tier}" if previous_tier and previous_tier != tier_name else None,
+            fallback_reason=f"fallback from {previous_tier}"
+            if previous_tier and previous_tier != tier_name
+            else None,
             route_source=route_source,
             latency_ms=latency,
             task_complexity=complexity,
@@ -264,7 +281,7 @@ class RouterDecisionEngine:
         """Append decision to log, with size cap."""
         self._decision_log.append(event)
         if len(self._decision_log) > self._max_log_size:
-            self._decision_log = self._decision_log[-self._max_log_size // 2:]
+            self._decision_log = self._decision_log[-self._max_log_size // 2 :]
 
     def get_decision_log(self, last_n: int = 50) -> list[RouterDecisionEvent]:
         """Get recent decisions for audit/debugging."""

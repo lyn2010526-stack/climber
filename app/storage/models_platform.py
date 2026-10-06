@@ -32,13 +32,17 @@ class UserSettings(Base):
     __tablename__ = "user_settings"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, default="default-user")
+    user_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, unique=True, default="default-user"
+    )
     autonomous_agent_mode: Mapped[bool] = mapped_column(Boolean, default=False)
     token_throttle_mcp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     mcp_status: Mapped[str] = mapped_column(String(20), default="disconnected")
     notifications: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Workflow(Base):
@@ -47,7 +51,9 @@ class Workflow(Base):
     __tablename__ = "workflows"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True, default="default-user")
+    user_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, index=True, default="default-user"
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False, default="Untitled Workflow")
     description: Mapped[str] = mapped_column(Text, default="")
     nodes: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
@@ -58,7 +64,9 @@ class Workflow(Base):
     last_status: Mapped[str] = mapped_column(String(20), default="never_run")
     schedule: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
 
 class WorkflowRun(Base):
@@ -67,7 +75,9 @@ class WorkflowRun(Base):
     __tablename__ = "workflow_runs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    workflow_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("workflows.id"), nullable=True, index=True)
+    workflow_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("workflows.id"), nullable=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(20), default="running")
     inputs: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     outputs: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
@@ -83,10 +93,14 @@ class Crew(Base):
     __tablename__ = "crews"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True, default="default-user")
+    user_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, index=True, default="default-user"
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="")
-    process: Mapped[str] = mapped_column(String(20), default="sequential")  # sequential / hierarchical
+    process: Mapped[str] = mapped_column(
+        String(20), default="sequential"
+    )  # sequential / hierarchical
     agents: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     tasks: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     run_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -99,7 +113,9 @@ class CrewRun(Base):
     __tablename__ = "crew_runs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    crew_id: Mapped[str] = mapped_column(String(36), ForeignKey("crews.id"), nullable=False, index=True)
+    crew_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("crews.id"), nullable=False, index=True
+    )
     status: Mapped[str] = mapped_column(String(20), default="running")
     inputs: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     output: Mapped[str] = mapped_column(Text, default="")
@@ -109,14 +125,14 @@ class CrewRun(Base):
 
 
 class Skill(Base):
-    """A reusable skill (prompt template + tool bundle).
-
-    """
+    """A reusable skill (prompt template + tool bundle)."""
 
     __tablename__ = "skills"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True, default="default-user")
+    user_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, index=True, default="default-user"
+    )
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="")
@@ -126,7 +142,9 @@ class Skill(Base):
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     use_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
     # Three-tier scope
     scope: Mapped[str] = mapped_column(String(20), default="global")  # global / team / user
@@ -145,7 +163,9 @@ class Trace(Base):
     __tablename__ = "traces"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True, default="default-user")
+    user_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, index=True, default="default-user"
+    )
     session_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     trace_type: Mapped[str] = mapped_column(String(30), default="agent_run")
     name: Mapped[str] = mapped_column(String(255), default="")
@@ -180,7 +200,9 @@ class DocumentChunk(Base):
     __tablename__ = "document_chunks"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    document_id: Mapped[str] = mapped_column(String(36), ForeignKey("documents.id"), nullable=False, index=True)
+    document_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("documents.id"), nullable=False, index=True
+    )
     collection: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     chunk_index: Mapped[int] = mapped_column(Integer, default=0)
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -194,7 +216,9 @@ class AutoLoopTask(Base):
     __tablename__ = "auto_loop_tasks"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    owner_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True, default="default-user")
+    owner_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, index=True, default="default-user"
+    )
     objective: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     max_steps: Mapped[int] = mapped_column(Integer, default=10)
@@ -202,7 +226,9 @@ class AutoLoopTask(Base):
     result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)

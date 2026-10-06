@@ -22,6 +22,7 @@ logger = structlog.get_logger()
 @dataclass
 class ResourceQuota:
     """Resource quota configuration."""
+
     cpu_cores: float = 1.0
     memory_mb: int = 512
     disk_mb: int = 1024
@@ -31,6 +32,7 @@ class ResourceQuota:
 @dataclass
 class ResourceUsage:
     """Current resource usage snapshot."""
+
     cpu_seconds: float = 0.0
     memory_mb: float = 0.0
     disk_mb: float = 0.0
@@ -77,7 +79,10 @@ class QuotaManager:
         if usage.disk_mb > quota.disk_mb:
             return False, f"Disk quota exceeded: {usage.disk_mb:.0f}MB > {quota.disk_mb}MB"
         if usage.network_kb * 8 > quota.network_kbps:
-            return False, f"Network quota exceeded: {usage.network_kb * 8:.0f}kbps > {quota.network_kbps}kbps"
+            return (
+                False,
+                f"Network quota exceeded: {usage.network_kb * 8:.0f}kbps > {quota.network_kbps}kbps",
+            )
 
         return True, ""
 

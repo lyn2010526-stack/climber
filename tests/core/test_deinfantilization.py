@@ -27,9 +27,9 @@ from itertools import pairwise
 
 import pytest
 
+import app.core.metacognition.safety_gate as safety_gate_module
 import app.core.profile as profile_package
 import app.core.profile.loop as profile_loop_module
-import app.core.metacognition.safety_gate as safety_gate_module
 from app.core.metacognition.judgment import (
     Judgment,
     aggregate_dissent,

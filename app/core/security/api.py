@@ -107,10 +107,13 @@ async def update_fs_config(
         allowed_extensions=request.allowed_extensions,
     )
     fs_isolation_manager.set_config(config)
-    return {"status": "updated", "config": {
-        "allowed_paths": fs_isolation_manager.config.allowed_paths,
-        "blocked_paths": fs_isolation_manager.config.blocked_paths,
-    }}
+    return {
+        "status": "updated",
+        "config": {
+            "allowed_paths": fs_isolation_manager.config.allowed_paths,
+            "blocked_paths": fs_isolation_manager.config.blocked_paths,
+        },
+    }
 
 
 # --- Network Allowlist Endpoints ---

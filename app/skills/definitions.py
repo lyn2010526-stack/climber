@@ -648,9 +648,7 @@ def register_builtin_skills(registry: SkillRegistry) -> int:
         try:
             registry.register(info, handler)
         except Exception as exc:
-            logger.warning(
-                "builtin_skill_registration_failed", skill_id=info.id, error=str(exc)
-            )
+            logger.warning("builtin_skill_registration_failed", skill_id=info.id, error=str(exc))
             continue
         registered += 1
     if registered:

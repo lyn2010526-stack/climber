@@ -123,7 +123,9 @@ async def handle_app_exception(request: Request, exc: BaseAppException) -> JSONR
         A JSONResponse using the exception's status_code and error_type.
     """
     del request
-    return JSONResponse(status_code=exc.status_code, content=_error_body(exc.detail, exc.error_type))
+    return JSONResponse(
+        status_code=exc.status_code, content=_error_body(exc.detail, exc.error_type)
+    )
 
 
 async def handle_agent_engine_error(request: Request, exc: AgentEngineError) -> JSONResponse:
@@ -149,7 +151,9 @@ async def handle_agent_engine_error(request: Request, exc: AgentEngineError) -> 
         error_type=type(exc).__name__,
         path=request.url.path,
     )
-    return JSONResponse(status_code=500, content=_error_body("Agent engine failure", "agent_engine_error"))
+    return JSONResponse(
+        status_code=500, content=_error_body("Agent engine failure", "agent_engine_error")
+    )
 
 
 async def handle_http_exception(request: Request, exc: HTTPException) -> JSONResponse:
@@ -244,7 +248,9 @@ async def handle_unhandled_exception(request: Request, exc: Exception) -> JSONRe
         crash_dump=str(dump) if dump else None,
         exc_info=True,
     )
-    return JSONResponse(status_code=500, content=_error_body("Internal server error", "internal_error"))
+    return JSONResponse(
+        status_code=500, content=_error_body("Internal server error", "internal_error")
+    )
 
 
 def register_exception_handlers(app: FastAPI) -> None:

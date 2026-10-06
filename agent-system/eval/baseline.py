@@ -51,24 +51,12 @@ class LoopCharacteristic:
 def characteristics() -> list[LoopCharacteristic]:
     """逐维度基线对照（不同循环体系的区别点）。"""
     return [
-        LoopCharacteristic("循环上限",
-                           "maxTurns/maxBudgetUsd 外部预算",
-                           "planner 递归任务数上限"),
-        LoopCharacteristic("工具循环",
-                           "同程 while（结果回写后继续）",
-                           "工具调用循环 + 评估"),
-        LoopCharacteristic("无进展守卫",
-                           "依赖预算兜底",
-                           "高层决策兜底"),
-        LoopCharacteristic("记忆持久化",
-                           "transcript 附带",
-                           "向量/关系记忆召回"),
-        LoopCharacteristic("回滚语义",
-                           "无里程碑回滚",
-                           "无里程碑回滚"),
-        LoopCharacteristic("结构化输出重试",
-                           "≤5 次（MAX_STRUCTURED_OUTPUT_RETRIES）",
-                           "未固定"),
+        LoopCharacteristic("循环上限", "maxTurns/maxBudgetUsd 外部预算", "planner 递归任务数上限"),
+        LoopCharacteristic("工具循环", "同程 while（结果回写后继续）", "工具调用循环 + 评估"),
+        LoopCharacteristic("无进展守卫", "依赖预算兜底", "高层决策兜底"),
+        LoopCharacteristic("记忆持久化", "transcript 附带", "向量/关系记忆召回"),
+        LoopCharacteristic("回滚语义", "无里程碑回滚", "无里程碑回滚"),
+        LoopCharacteristic("结构化输出重试", "≤5 次（MAX_STRUCTURED_OUTPUT_RETRIES）", "未固定"),
     ]
 
 
@@ -82,10 +70,8 @@ def describe(name: str) -> dict:
 
 def summary() -> str:
     """Markdown 块：基线对照表。"""
-    rows = ["| 维度 | 原版 claw-code | 原版 Hermes-Agent | 本引擎(TAOR) |",
-            "|---|---|---|---|"]
+    rows = ["| 维度 | 原版 claw-code | 原版 Hermes-Agent | 本引擎(TAOR) |", "|---|---|---|---|"]
     rows.extend(
-        f"| {c.key} | {c.claw_code} | {c.hermes_agent} | 见 run 度量 |"
-        for c in characteristics()
+        f"| {c.key} | {c.claw_code} | {c.hermes_agent} | 见 run 度量 |" for c in characteristics()
     )
     return "\n".join(rows)

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import subprocess
@@ -15,7 +14,6 @@ from typing import Any
 
 from watchdog.events import (
     FileSystemEvent,
-    FileSystemEventHandler,
     PatternMatchingEventHandler,
 )
 from watchdog.observers import Observer
@@ -105,9 +103,7 @@ class AlertManager:
         """Check if we should send an alert for this file."""
         now = time.time()
         last_alert = self._state.get("alerted_files", {}).get(file_path, 0)
-        if now - last_alert < 300:
-            return False
-        return True
+        return not now - last_alert < 300
 
     def record_failure(self, file_path: str) -> None:
         """Record a test failure."""
@@ -161,7 +157,7 @@ class AlertManager:
             f.write(f"Backend: {result.backend}\n")
             f.write(f"Duration: {result.duration:.2f}s\n")
             f.write(f"Tests: {result.test_count}, Failures: {result.fail_count}\n")
-            f.write(f"\n--- Output ---\n")
+            f.write("\n--- Output ---\n")
             f.write(result.output[-2000:])
             f.write("\n")
 
@@ -201,7 +197,7 @@ class CoverageReporter:
         recent = [e["coverage"] for e in self._history[-5:]]
         if recent[-1] > recent[0]:
             return "improving"
-        elif recent[-1] < recent[0]:
+        if recent[-1] < recent[0]:
             return "declining"
         return "stable"
 
@@ -246,22 +242,41 @@ class TestRunner:
             test_file = self._find_matching_test(target_file)
             if test_file:
                 cmd = [
-                    sys.executable, "-m", "pytest",
+                    sys.executable,
+                    "-m",
+                    "pytest",
                     str(test_file),
-                    "-x", "-q", "--tb=line", "--no-header",
-                    "-m", "not integration and not slow",
+                    "-x",
+                    "-q",
+                    "--tb=line",
+                    "--no-header",
+                    "-m",
+                    "not integration and not slow",
                 ]
             else:
                 cmd = [
-                    sys.executable, "-m", "pytest",
-                    "tests/", "-x", "-q", "--tb=line", "--no-header",
-                    "-m", "not integration and not slow",
+                    sys.executable,
+                    "-m",
+                    "pytest",
+                    "tests/",
+                    "-x",
+                    "-q",
+                    "--tb=line",
+                    "--no-header",
+                    "-m",
+                    "not integration and not slow",
                 ]
         else:
             cmd = [
-                sys.executable, "-m", "pytest",
-                "tests/", "-x", "--tb=short", "--no-header",
-                "-m", "not integration and not slow",
+                sys.executable,
+                "-m",
+                "pytest",
+                "tests/",
+                "-x",
+                "--tb=short",
+                "--no-header",
+                "-m",
+                "not integration and not slow",
             ]
 
         try:
@@ -363,12 +378,17 @@ class TestRunner:
         """Run full backend tests with coverage report."""
         start = time.time()
         cmd = [
-            sys.executable, "-m", "pytest",
-            "tests/", "--cov=app",
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/",
+            "--cov=app",
             "--cov-report=html",
             "--cov-report=term-missing",
-            "--tb=short", "-q",
-            "-m", "not integration and not slow",
+            "--tb=short",
+            "-q",
+            "-m",
+            "not integration and not slow",
         ]
 
         try:
@@ -415,8 +435,12 @@ class TestRunner:
         """Run E2E tests."""
         start = time.time()
         cmd = [
-            sys.executable, "-m", "pytest",
-            "tests/e2e/", "-v", "--tb=short",
+            sys.executable,
+            "-m",
+            "pytest",
+            "tests/e2e/",
+            "-v",
+            "--tb=short",
         ]
 
         try:
@@ -482,6 +506,7 @@ class TestRunner:
     def _parse_test_count(output: str) -> int:
         """Parse test count from pytest output."""
         import re
+
         match = re.search(r"(\d+?) passed", output)
         if match:
             return int(match.group(1))
@@ -491,6 +516,7 @@ class TestRunner:
     def _parse_fail_count(output: str) -> int:
         """Parse failure count from pytest output."""
         import re
+
         match = re.search(r"(\d+?) failed", output)
         if match:
             return int(match.group(1))
@@ -500,6 +526,7 @@ class TestRunner:
     def _parse_vitest_count(output: str) -> int:
         """Parse test count from vitest output."""
         import re
+
         match = re.search(r"(\d+?) passed", output)
         if match:
             return int(match.group(1))
@@ -512,6 +539,7 @@ class TestRunner:
     def _parse_vitest_fail_count(output: str) -> int:
         """Parse failure count from vitest output."""
         import re
+
         match = re.search(r"(\d+?) failed", output)
         if match:
             return int(match.group(1))
@@ -588,7 +616,7 @@ class ChangeHandler(PatternMatchingEventHandler):
         """Run backend tests for a changed file."""
         rel_path = os.path.relpath(file_path, str(PROJECT_ROOT))
         print(f"\n[BACKEND CHANGE] {rel_path}")
-        print(f"  Running tests...")
+        print("  Running tests...")
 
         if "__pycache__" in file_path or ".pytest_cache" in file_path:
             return
@@ -600,7 +628,7 @@ class ChangeHandler(PatternMatchingEventHandler):
         """Run frontend tests for a changed file."""
         rel_path = os.path.relpath(file_path, str(PROJECT_ROOT))
         print(f"\n[FRONTEND CHANGE] {rel_path}")
-        print(f"  Running tests...")
+        print("  Running tests...")
 
         if "node_modules" in file_path:
             return
@@ -617,14 +645,16 @@ class ChangeHandler(PatternMatchingEventHandler):
         color = "\033[92m" if result.passed else "\033[91m"
         reset = "\033[0m"
 
-        print(f"  {color}[{status}]{reset} {result.test_count} tests, "
-              f"{result.fail_count} failures ({result.duration:.2f}s)")
+        print(
+            f"  {color}[{status}]{reset} {result.test_count} tests, "
+            f"{result.fail_count} failures ({result.duration:.2f}s)"
+        )
 
         if result.passed:
             self.alert_manager.record_success()
         else:
             self.alert_manager.send_alert(result, trigger_file)
-            print(f"\n  Failure output (last 15 lines):")
+            print("\n  Failure output (last 15 lines):")
             lines = result.output.strip().split("\n")
             for line in lines[-15:]:
                 print(f"    {line}")
@@ -707,8 +737,10 @@ class FrontendChangeHandler(PatternMatchingEventHandler):
         status = "PASS" if result.passed else "FAIL"
         color = "\033[92m" if result.passed else "\033[91m"
         reset = "\033[0m"
-        print(f"  {color}[{status}]{reset} {result.test_count} tests, "
-              f"{result.fail_count} failures ({result.duration:.2f}s)")
+        print(
+            f"  {color}[{status}]{reset} {result.test_count} tests, "
+            f"{result.fail_count} failures ({result.duration:.2f}s)"
+        )
         if result.passed:
             self.alert_manager.record_success()
         else:
@@ -727,10 +759,13 @@ class ContinuousTestDaemon:
         self._running = False
 
         self.backend_handler = ChangeHandler(
-            self.runner, self.alert_manager, self.coverage_reporter,
+            self.runner,
+            self.alert_manager,
+            self.coverage_reporter,
         )
         self.frontend_handler = FrontendChangeHandler(
-            self.runner, self.alert_manager,
+            self.runner,
+            self.alert_manager,
         )
 
     def start(self) -> None:
@@ -795,8 +830,10 @@ class ContinuousTestDaemon:
         print(f"\n[PERIODIC] Full backend test @ {datetime.now().strftime('%H:%M:%S')}")
         result = self.runner.run_backend_tests(quick=False)
         status = "PASS" if result.passed else "FAIL"
-        print(f"  [{status}] {result.test_count} tests, "
-              f"{result.fail_count} failures ({result.duration:.2f}s)")
+        print(
+            f"  [{status}] {result.test_count} tests, "
+            f"{result.fail_count} failures ({result.duration:.2f}s)"
+        )
 
         if not result.passed:
             self.alert_manager.send_alert(result, "periodic_check")
@@ -826,8 +863,10 @@ class ContinuousTestDaemon:
         print(f"\n[E2E] Running E2E tests @ {datetime.now().strftime('%H:%M:%S')}")
         result = self.runner.run_e2e_tests()
         status = "PASS" if result.passed else "FAIL"
-        print(f"  [{status}] {result.test_count} tests, "
-              f"{result.fail_count} failures ({result.duration:.2f}s)")
+        print(
+            f"  [{status}] {result.test_count} tests, "
+            f"{result.fail_count} failures ({result.duration:.2f}s)"
+        )
 
         if not result.passed:
             self.alert_manager.send_alert(result, "periodic_e2e")
@@ -843,7 +882,7 @@ class ContinuousTestDaemon:
 def run_full_suite() -> None:
     """Run full test suite (non-watch mode)."""
     runner = TestRunner()
-    alert_manager = AlertManager(ALERT_STATE_FILE)
+    AlertManager(ALERT_STATE_FILE)
     coverage_reporter = CoverageReporter(COVERAGE_DIR)
 
     print("=" * 60)
@@ -853,14 +892,18 @@ def run_full_suite() -> None:
     print("\n[1/3] Backend tests...")
     be_result = runner.run_backend_tests(quick=False)
     status = "PASS" if be_result.passed else "FAIL"
-    print(f"  [{status}] {be_result.test_count} tests, "
-          f"{be_result.fail_count} failures ({be_result.duration:.2f}s)")
+    print(
+        f"  [{status}] {be_result.test_count} tests, "
+        f"{be_result.fail_count} failures ({be_result.duration:.2f}s)"
+    )
 
     print("\n[2/3] Frontend tests...")
     fe_result = runner.run_frontend_tests(quick=False)
     status = "PASS" if fe_result.passed else "FAIL"
-    print(f"  [{status}] {fe_result.test_count} tests, "
-          f"{fe_result.fail_count} failures ({fe_result.duration:.2f}s)")
+    print(
+        f"  [{status}] {fe_result.test_count} tests, "
+        f"{fe_result.fail_count} failures ({fe_result.duration:.2f}s)"
+    )
 
     print("\n[3/3] Coverage...")
     cov_result = runner.run_backend_coverage()
@@ -887,23 +930,29 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Continuous Test Daemon")
     parser.add_argument(
-        "--full", action="store_true",
+        "--full",
+        action="store_true",
         help="Run full test suite once and exit",
     )
     parser.add_argument(
-        "--backend-only", action="store_true",
+        "--backend-only",
+        action="store_true",
         help="Only run backend tests in watch mode",
     )
     parser.add_argument(
-        "--frontend-only", action="store_true",
+        "--frontend-only",
+        action="store_true",
         help="Only run frontend tests in watch mode",
     )
     parser.add_argument(
-        "--no-periodic", action="store_true",
+        "--no-periodic",
+        action="store_true",
         help="Disable periodic full test runs",
     )
     parser.add_argument(
-        "--e2e-interval", type=int, default=60,
+        "--e2e-interval",
+        type=int,
+        default=60,
         help="E2E test interval in cycles (default: 60)",
     )
 

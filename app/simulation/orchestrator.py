@@ -13,9 +13,9 @@ loop re-runs. Every round is recorded in the ledger.
 
 from __future__ import annotations
 
-import json
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import structlog
 
@@ -34,6 +34,7 @@ ToolSelectFn = Callable[[str, list[dict[str, Any]]], Awaitable[str]]
 @dataclass
 class AggregateReviewContext:
     """What the aggregate reviewer sees after one plan round."""
+
     requirement: str
     tool_name: str
     accepted: int
@@ -45,6 +46,7 @@ class AggregateReviewContext:
 @dataclass
 class PlanRound:
     """One full plan→run→review cycle of the orchestrator."""
+
     round_number: int = 0
     tool_name: str = ""
     plan_rounds_hint: str = ""
@@ -56,6 +58,7 @@ class PlanRound:
 @dataclass
 class OrchestratorOptions:
     """Tuning knobs for the global close-loop."""
+
     max_plan_rounds: int = 3
     harness_options: HarnessOptions = field(default_factory=HarnessOptions)
     default_tool: str = ""
@@ -64,6 +67,7 @@ class OrchestratorOptions:
 @dataclass
 class OrchestratorResult:
     """Final output of the orchestrator after all plan rounds."""
+
     requirement: str
     rounds: list[PlanRound] = field(default_factory=list)
     accepted: int = 0

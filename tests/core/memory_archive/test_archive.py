@@ -56,9 +56,7 @@ def test_archive_round_trip_with_summary_and_diff() -> None:
     session = "session-archive-roundtrip-0001"
     service = _archiver()
 
-    payload = _run(
-        service.archive(user, session, _messages(), title="weekly release notes")
-    )
+    payload = _run(service.archive(user, session, _messages(), title="weekly release notes"))
     assert payload["session_id"] == session
     assert payload["message_count"] == 3
     assert payload["one_line_summary"] == "weekly release notes"

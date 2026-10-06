@@ -14,8 +14,9 @@ it can be unit-tested and used headless.
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from app.simulation.models import (
     ExperimentAttempt,
@@ -37,6 +38,7 @@ class ParameterPolicy:
     specific dangerous values (e.g. exec flags). Name allowlist can be
     disabled by passing ``allowed=None``.
     """
+
     allowed: list[str] | None = None
     ranges: dict[str, tuple[float | None, float | None]] = field(default_factory=dict)
     disallowed_values: dict[str, list[Any]] = field(default_factory=dict)
@@ -68,6 +70,7 @@ class ParameterPolicy:
 @dataclass
 class ReviewContext:
     """Everything the reviewer needs to judge one attempt."""
+
     spec: ExperimentSpec
     attempt: ExperimentAttempt
     policy: ParameterPolicy | None = None

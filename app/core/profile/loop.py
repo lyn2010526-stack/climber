@@ -107,9 +107,7 @@ def blend(
     if current is None:
         return incoming
 
-    def merge_preferences(
-        previous: dict[str, float], latest: dict[str, float]
-    ) -> dict[str, float]:
+    def merge_preferences(previous: dict[str, float], latest: dict[str, float]) -> dict[str, float]:
         keys = previous.keys() | latest.keys()
         return {
             key: round(

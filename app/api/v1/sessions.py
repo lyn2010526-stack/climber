@@ -40,16 +40,21 @@ def _clean_model_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
 
 
 async def resolve_model_credential(
-    db: AsyncSession, user_id: str, settings: dict[str, Any],
+    db: AsyncSession,
+    user_id: str,
+    settings: dict[str, Any],
 ) -> ApiKeyModel | None:
     """Resolve an explicit credential identically at creation and every chat turn."""
     credential_id = settings.get("credential_id")
     if not credential_id:
         return None
-    row = await db.scalar(select(ApiKeyModel).where(
-        ApiKeyModel.id == credential_id, ApiKeyModel.user_id == user_id,
-        ApiKeyModel.is_active.is_(True),
-    ))
+    row = await db.scalar(
+        select(ApiKeyModel).where(
+            ApiKeyModel.id == credential_id,
+            ApiKeyModel.user_id == user_id,
+            ApiKeyModel.is_active.is_(True),
+        )
+    )
     if row is None:
         raise HTTPException(404, detail="Selected model credential is unavailable or revoked")
     if settings.get("provider") and settings["provider"] != row.provider:
@@ -110,7 +115,8 @@ class SessionRuntimeReport(BaseModel):
 
 @router.get("/{session_id}/inputs/report", response_model=SessionRuntimeReport)
 async def session_input_report(
-    session_id: str, user_id: str = Depends(get_current_user),
+    session_id: str,
+    user_id: str = Depends(get_current_user),
 ) -> dict:
     from app.core.engine.input_queue import SessionInputQueue
 
@@ -122,23 +128,29 @@ async def session_input_report(
 
 @router.post("/{session_id}/inputs/resume", response_model=SessionInputPage)
 async def resume_session_inputs(
-    session_id: str, payload: SessionInputReview,
+    session_id: str,
+    payload: SessionInputReview,
     user_id: str = Depends(get_current_user),
     _auth: dict = Depends(require_scopes("write")),
 ) -> dict:
     from app.core.engine.input_queue import SessionInputQueue
 
     try:
-        return {"items": await SessionInputQueue(async_session).resume_reviewed(
-            session_id, user_id, payload.review_confirmed,
-        )}
+        return {
+            "items": await SessionInputQueue(async_session).resume_reviewed(
+                session_id,
+                user_id,
+                payload.review_confirmed,
+            )
+        }
     except LookupError as exc:
         raise HTTPException(404, detail=str(exc)) from exc
 
 
 @router.post("/{session_id}/inputs", response_model=SessionInputOut)
 async def submit_session_input(
-    session_id: str, payload: SessionInputCreate,
+    session_id: str,
+    payload: SessionInputCreate,
     user_id: str = Depends(get_current_user),
     _auth: dict = Depends(require_scopes("write")),
 ) -> dict:
@@ -146,7 +158,11 @@ async def submit_session_input(
 
     try:
         return await SessionInputQueue(async_session).submit(
-            session_id, user_id, payload.client_request_id, payload.kind, payload.message,
+            session_id,
+            user_id,
+            payload.client_request_id,
+            payload.kind,
+            payload.message,
         )
     except LookupError as exc:
         raise HTTPException(404, detail=str(exc)) from exc
@@ -156,7 +172,8 @@ async def submit_session_input(
 
 @router.get("/{session_id}/inputs", response_model=SessionInputPage)
 async def list_session_inputs(
-    session_id: str, user_id: str = Depends(get_current_user),
+    session_id: str,
+    user_id: str = Depends(get_current_user),
 ) -> dict:
     from app.core.engine.input_queue import SessionInputQueue
 
@@ -244,9 +261,12 @@ async def create_session_with_slash(
         agent = None
         if payload.agent_id:
             agent = (
-                await session.execute(select(AgentModel).where(
-                    AgentModel.id == payload.agent_id, AgentModel.user_id == user_id,
-                ))
+                await session.execute(
+                    select(AgentModel).where(
+                        AgentModel.id == payload.agent_id,
+                        AgentModel.user_id == user_id,
+                    )
+                )
             ).scalar_one_or_none()
             if agent is None:
                 raise HTTPException(404, detail="Agent not found")
@@ -269,7 +289,6 @@ async def create_session_with_slash(
             "status": row.status,
             **_session_effective_model(row, agent),
         }
-
 
 
 @router.post("", response_model=dict)
@@ -338,6 +357,7 @@ async def clear_session(
         if not row or (row.user_id and row.user_id != user_id):
             raise HTTPException(status_code=404, detail="Session not found")
         from sqlalchemy import delete
+
         await session.execute(delete(MessageModel).where(MessageModel.session_id == session_id))
         await session.commit()
     return {"status": "cleared"}
@@ -503,12 +523,16 @@ async def fork_session(
         )
         session.add(snapshot)
         rows = (
-            await session.execute(
-                select(MessageModel)
-                .where(MessageModel.session_id == session_id)
-                .order_by(MessageModel.created_at.asc(), MessageModel.id.asc())
+            (
+                await session.execute(
+                    select(MessageModel)
+                    .where(MessageModel.session_id == session_id)
+                    .order_by(MessageModel.created_at.asc(), MessageModel.id.asc())
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for msg in rows:
             session.add(
                 MessageModel(

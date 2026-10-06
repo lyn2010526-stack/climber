@@ -35,7 +35,9 @@ def test_persistent_memory_deque_evicts_oldest() -> None:
 
     assert len(store._cache) == _CACHE_MAX_ENTRIES
     assert store.recall(query="entry-0") == []
-    assert [e.content for e in store.recall(query=f"entry-{overflow - 1}")] == [f"entry-{overflow - 1}"]
+    assert [e.content for e in store.recall(query=f"entry-{overflow - 1}")] == [
+        f"entry-{overflow - 1}"
+    ]
     assert store.get_stats()["total"] == _CACHE_MAX_ENTRIES
     assert len(store.recall(limit=3)) == 3
 
@@ -64,11 +66,15 @@ def test_register_keys_warns_once_per_soft_limit_crossing(monkeypatch: pytest.Mo
 
     reg.register_keys("openai", "bulk", [f"k{i}" for i in range(_SOFT_LIMIT + 1)])
     assert reg._size_warning_emitted is True
-    warning_events = [w for w in captured.warnings if w["event"] == "model_registry_soft_limit_exceeded"]
+    warning_events = [
+        w for w in captured.warnings if w["event"] == "model_registry_soft_limit_exceeded"
+    ]
     assert len(warning_events) == 1
 
     reg.register_keys("openai", "more", ["extra"])
-    warning_events = [w for w in captured.warnings if w["event"] == "model_registry_soft_limit_exceeded"]
+    warning_events = [
+        w for w in captured.warnings if w["event"] == "model_registry_soft_limit_exceeded"
+    ]
     assert len(warning_events) == 1
 
     reg.unregister_key("openai", "bulk")
@@ -94,4 +100,8 @@ def test_tool_prioritizer_caches_bounded_and_clearable() -> None:
     prioritizer.clear_caches()
     assert len(prioritizer._description_cache) == 0
     assert len(prioritizer._stats) == 0
-    assert prioritizer.get_stats("tool-0000") == {"attempts": 0, "success_rate": None, "avg_duration_ms": None}
+    assert prioritizer.get_stats("tool-0000") == {
+        "attempts": 0,
+        "success_rate": None,
+        "avg_duration_ms": None,
+    }

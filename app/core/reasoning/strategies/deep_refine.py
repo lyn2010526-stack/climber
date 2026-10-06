@@ -130,17 +130,21 @@ class DeepRefineStrategy:
         for round_num in range(1, request.max_refine_rounds + 1):
             round_start = time.monotonic()
 
-            critique = await self._run_critique(request.task, current, model_adapter, round_num, request.max_refine_rounds)
+            critique = await self._run_critique(
+                request.task, current, model_adapter, round_num, request.max_refine_rounds
+            )
             confidence = self._scorer.score_from_critique(critique)
             duration = (time.monotonic() - round_start) * 1000
 
-            all_traces.append(RoundTrace(
-                round_num=round_num,
-                action="critique",
-                input_summary=request.task[:100],
-                output_summary=f"passed={critique.passed}, avg={critique.average_score:.2f}, confidence={confidence:.2f}",
-                duration_ms=duration,
-            ))
+            all_traces.append(
+                RoundTrace(
+                    round_num=round_num,
+                    action="critique",
+                    input_summary=request.task[:100],
+                    output_summary=f"passed={critique.passed}, avg={critique.average_score:.2f}, confidence={confidence:.2f}",
+                    duration_ms=duration,
+                )
+            )
 
             if confidence > best_confidence:
                 best_confidence = confidence
@@ -159,27 +163,36 @@ class DeepRefineStrategy:
 
             if consecutive_no_improvement >= 2:
                 backtrack_decision = await self._decide_backtrack(
-                    current, critique.average_score, reflection_memory.size,
-                    round_num, model_adapter,
+                    current,
+                    critique.average_score,
+                    reflection_memory.size,
+                    round_num,
+                    model_adapter,
                 )
                 if backtrack_decision == "backtrack" and snapshots:
                     snapshot = max(snapshots, key=lambda s: s.confidence)
                     if snapshot.confidence > confidence:
                         logger.info("deep_refine_backtracking", to_round=snapshot.round_num)
                         current = snapshot.content
-                        all_traces.append(RoundTrace(
-                            round_num=round_num,
-                            action="backtrack",
-                            input_summary=f"backtrack to round {snapshot.round_num}",
-                            output_summary=f"confidence {confidence:.2f} -> {snapshot.confidence:.2f}",
-                        ))
+                        all_traces.append(
+                            RoundTrace(
+                                round_num=round_num,
+                                action="backtrack",
+                                input_summary=f"backtrack to round {snapshot.round_num}",
+                                output_summary=f"confidence {confidence:.2f} -> {snapshot.confidence:.2f}",
+                            )
+                        )
                         consecutive_no_improvement = 0
                         continue
 
             reflection_guidance = reflection_memory.generate_guidance()
             if not critique.passed:
                 reflection = await self._generate_reflection(
-                    request.task, current, critique, round_num, model_adapter,
+                    request.task,
+                    current,
+                    critique,
+                    round_num,
+                    model_adapter,
                 )
                 if reflection:
                     reflection_memory.add_reflection(
@@ -190,7 +203,11 @@ class DeepRefineStrategy:
                     )
 
             improved = await self._run_improvement(
-                request.task, current, critique, reflection_guidance, model_adapter,
+                request.task,
+                current,
+                critique,
+                reflection_guidance,
+                model_adapter,
             )
 
             if improved:
@@ -215,18 +232,20 @@ class DeepRefineStrategy:
             duration_ms=round(elapsed, 1),
         )
 
-        return [Candidate(
-            id="deep_ref_01",
-            strategy=self.name,
-            path_type="deep_refinement",
-            content=best_content,
-            reasoning_chain=[rt.output_summary for rt in all_traces],
-            confidence=best_confidence,
-            critique=final_critique,
-            round_created=len(all_traces),
-            duration_ms=round(elapsed, 1),
-            metadata={"reflections": reflection_memory.size, "snapshots": len(snapshots)},
-        )]
+        return [
+            Candidate(
+                id="deep_ref_01",
+                strategy=self.name,
+                path_type="deep_refinement",
+                content=best_content,
+                reasoning_chain=[rt.output_summary for rt in all_traces],
+                confidence=best_confidence,
+                critique=final_critique,
+                round_created=len(all_traces),
+                duration_ms=round(elapsed, 1),
+                metadata={"reflections": reflection_memory.size, "snapshots": len(snapshots)},
+            )
+        ]
 
     async def _generate_initial(
         self,
@@ -266,12 +285,20 @@ class DeepRefineStrategy:
         ]
         try:
             result = await model_adapter.chat(
-                messages, response_format={"type": "json_object"}, temperature=0.2, max_tokens=2000,
+                messages,
+                response_format={"type": "json_object"},
+                temperature=0.2,
+                max_tokens=2000,
             )
             return _parse_critique_response(result.content)
         except Exception as exc:
             logger.error("deep_refine_critique_error", error=str(exc))
-            return CritiqueResult(passed=False, scores=dict.fromkeys(("correctness", "completeness", "clarity", "safety", "actionability"), 1.0))
+            return CritiqueResult(
+                passed=False,
+                scores=dict.fromkeys(
+                    ("correctness", "completeness", "clarity", "safety", "actionability"), 1.0
+                ),
+            )
 
     async def _generate_reflection(
         self,
@@ -290,7 +317,10 @@ class DeepRefineStrategy:
         ]
         try:
             result = await model_adapter.chat(
-                messages, response_format={"type": "json_object"}, temperature=0.3, max_tokens=1500,
+                messages,
+                response_format={"type": "json_object"},
+                temperature=0.3,
+                max_tokens=1500,
             )
             data = json.loads(result.content.strip())
             return {
@@ -362,7 +392,10 @@ class DeepRefineStrategy:
         ]
         try:
             result = await model_adapter.chat(
-                messages, response_format={"type": "json_object"}, temperature=0.3, max_tokens=500,
+                messages,
+                response_format={"type": "json_object"},
+                temperature=0.3,
+                max_tokens=500,
             )
             data = json.loads(result.content.strip())
             return data.get("decision", "continue")

@@ -24,6 +24,7 @@ try:  # optional dependency — keeps import safe when mcp is not installed
     from mcp import ClientSession
     from mcp.client.stdio import stdio_client
     from mcp.client.streamable_http import streamablehttp_client
+
     _MCP_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _MCP_AVAILABLE = False
@@ -146,8 +147,7 @@ class MCPClient:
             from mcp.client.sse import sse_client
         except ImportError:
             raise ImportError(
-                "SSE transport requires mcp[sse] extra. "
-                "Install with: pip install mcp[sse]"
+                "SSE transport requires mcp[sse] extra. Install with: pip install mcp[sse]"
             ) from None
 
         if not self.url:
@@ -252,13 +252,15 @@ class MCPClient:
 
             result = await self.session.list_tools(**kwargs)
             for t in result.tools:
-                all_tools.append(MCPTool(
-                    name=t.name,
-                    title=getattr(t, "title", None),
-                    description=t.description or "",
-                    inputSchema=t.inputSchema,
-                    annotations=getattr(t, "annotations", None),
-                ))
+                all_tools.append(
+                    MCPTool(
+                        name=t.name,
+                        title=getattr(t, "title", None),
+                        description=t.description or "",
+                        inputSchema=t.inputSchema,
+                        annotations=getattr(t, "annotations", None),
+                    )
+                )
 
             cursor = getattr(result, "nextCursor", None)
             if not cursor:
@@ -280,13 +282,15 @@ class MCPClient:
             result = await self.session.call_tool(name, arguments)
             content = []
             for item in result.content:
-                content.append(MCPContent(
-                    type=getattr(item, "type", "text"),
-                    text=getattr(item, "text", None),
-                    data=getattr(item, "data", None),
-                    mimeType=getattr(item, "mimeType", None),
-                    uri=getattr(item, "uri", None),
-                ))
+                content.append(
+                    MCPContent(
+                        type=getattr(item, "type", "text"),
+                        text=getattr(item, "text", None),
+                        data=getattr(item, "data", None),
+                        mimeType=getattr(item, "mimeType", None),
+                        uri=getattr(item, "uri", None),
+                    )
+                )
 
             return MCPToolResult(
                 content=content,
@@ -300,7 +304,9 @@ class MCPClient:
             )
 
     @staticmethod
-    def _validate_arguments(tool_name: str, arguments: dict[str, Any], schema: dict[str, Any]) -> None:
+    def _validate_arguments(
+        tool_name: str, arguments: dict[str, Any], schema: dict[str, Any]
+    ) -> None:
         """Validate arguments against JSON Schema (basic validation)."""
         if not isinstance(schema, dict):
             return
@@ -312,15 +318,11 @@ class MCPClient:
 
             for req_field in required:
                 if req_field not in arguments:
-                    raise ValueError(
-                        f"Tool '{tool_name}' missing required argument: {req_field}"
-                    )
+                    raise ValueError(f"Tool '{tool_name}' missing required argument: {req_field}")
 
             for key in arguments:
                 if key not in properties and schema.get("additionalProperties") is False:
-                    raise ValueError(
-                        f"Tool '{tool_name}' got unexpected argument: {key}"
-                    )
+                    raise ValueError(f"Tool '{tool_name}' got unexpected argument: {key}")
 
     async def list_resources(self) -> list[MCPResource]:
         """List available resources."""
@@ -330,12 +332,14 @@ class MCPClient:
         result = await self.session.list_resources()
         resources = []
         for r in result.resources:
-            resources.append(MCPResource(
-                uri=r.uri,
-                name=r.name,
-                description=getattr(r, "description", None),
-                mimeType=getattr(r, "mimeType", None),
-            ))
+            resources.append(
+                MCPResource(
+                    uri=r.uri,
+                    name=r.name,
+                    description=getattr(r, "description", None),
+                    mimeType=getattr(r, "mimeType", None),
+                )
+            )
 
         self.resources = {r.uri: r for r in resources}
         return resources
@@ -368,11 +372,13 @@ class MCPClient:
                     {"name": a.name, "description": getattr(a, "description", None)}
                     for a in p.arguments
                 ]
-            prompts.append(MCPPrompt(
-                name=p.name,
-                description=getattr(p, "description", None),
-                arguments=args,
-            ))
+            prompts.append(
+                MCPPrompt(
+                    name=p.name,
+                    description=getattr(p, "description", None),
+                    arguments=args,
+                )
+            )
 
         self.prompts = {p.name: p for p in prompts}
         return prompts
@@ -437,14 +443,16 @@ class MCPClient:
         """Return tools in OpenAI function calling format (backward compat)."""
         result = []
         for _name, tool in self.tools.items():
-            result.append({
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.inputSchema,
-                },
-            })
+            result.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.inputSchema,
+                    },
+                }
+            )
         return result
 
 
@@ -479,14 +487,16 @@ class MCPRegistry:
         tools = []
         for client in self._clients.values():
             for _name, tool in client.tools.items():
-                tools.append({
-                    "type": "function",
-                    "function": {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": tool.inputSchema,
-                    },
-                })
+                tools.append(
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "parameters": tool.inputSchema,
+                        },
+                    }
+                )
         return tools
 
 

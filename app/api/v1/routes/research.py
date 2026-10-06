@@ -12,7 +12,9 @@ router = APIRouter(prefix="/research", tags=["research"])
 
 
 @router.post("", response_model=ResearchResult)
-def research(req: ResearchRequest, _auth: dict = Depends(require_scopes("write"))) -> ResearchResult:
+def research(
+    req: ResearchRequest, _auth: dict = Depends(require_scopes("write"))
+) -> ResearchResult:
     """Run an online research pipeline for ``query`` and return a report dict."""
     result = run_research(req.query, sources=req.sources, timeout_s=req.timeout_s)
     return ResearchResult(**result)

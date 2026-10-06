@@ -47,7 +47,9 @@ async def browser_navigate(url: str, session_id: str = "default") -> str:
 
 
 @tool(description="Take screenshot of a webpage. Returns file path.")
-async def browser_screenshot(url: str, output_path: str = "/tmp/browser_screenshot.png", session_id: str = "default") -> str:
+async def browser_screenshot(
+    url: str, output_path: str = "/tmp/browser_screenshot.png", session_id: str = "default"
+) -> str:
     """Screenshot a webpage."""
     try:
         page = await _get_or_create_page(session_id)
@@ -90,9 +92,7 @@ async def browser_extract_links(session_id: str = "default") -> str:
             "elements => elements.map(e => ({text: e.textContent.trim(), href: e.href}))",
         )
         formatted = [
-            f"- {link['text'][:80]}\n  {link['href']}"
-            for link in links[:30]
-            if link["text"]
+            f"- {link['text'][:80]}\n  {link['href']}" for link in links[:30] if link["text"]
         ]
         return "\n".join(formatted) if formatted else "No links found"
     except Exception as e:

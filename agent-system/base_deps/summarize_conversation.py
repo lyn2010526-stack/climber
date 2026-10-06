@@ -40,8 +40,9 @@ def sliding_window(messages: list[dict[str, Any]], keep_ratio: float = 0.5) -> l
     return messages[-keep:]
 
 
-def summarize_middle(messages: list[dict[str, Any]], head: int = 2, tail: int = 4,
-                     summary_text: str = "") -> list[dict[str, Any]]:
+def summarize_middle(
+    messages: list[dict[str, Any]], head: int = 2, tail: int = 4, summary_text: str = ""
+) -> list[dict[str, Any]]:
     """保留头部 head 条与尾部 tail 条，中间合并为一条 system 摘要。
 
     与 adaptive_compression.compress_messages 的无摘要回退路径对齐；

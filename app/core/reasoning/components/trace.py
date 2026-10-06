@@ -103,9 +103,7 @@ class ReasoningTracer:
 
     def finish(self) -> ReasoningTrace:
         with self._lock:
-            self._trace.total_duration_ms = (
-                time.time() - self._trace.created_at
-            ) * 1000
+            self._trace.total_duration_ms = (time.time() - self._trace.created_at) * 1000
             trace = self._trace.model_copy()
 
         logger.info(

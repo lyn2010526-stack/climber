@@ -5,7 +5,6 @@ metadata), OpenAI vision passthrough, provider degradation and adapter
 conversions. Follows the fake-adapter style of
 ``tests/test_chat_model_credentials.py``; no network.
 """
-# ruff: noqa: PT009, PT027
 
 import tempfile
 import unittest
@@ -39,11 +38,20 @@ from app.models.vision import (
     image_parts,
     is_image_reference,
     split_data_url,
-    validate_images,
     validate_attachments,
+    validate_images,
 )
 from app.storage import Base
-from app.storage.database import Agent, ApiKey, CheckpointRecord, Message, Session, SessionInput, Turn, UsageLog
+from app.storage.database import (
+    Agent,
+    ApiKey,
+    CheckpointRecord,
+    Message,
+    Session,
+    SessionInput,
+    Turn,
+    UsageLog,
+)
 
 PNG_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=="
 JPEG_DATA_URL = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/"
@@ -89,16 +97,34 @@ class VisionHelperTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_validate_file_attachment_requires_matching_size_and_type(self):
         import base64
+
         data = base64.b64encode(b"hello").decode()
-        self.assertEqual(validate_attachments([{
-            "kind": "file", "data": f"data:text/plain;base64,{data}",
-            "name": "notes.txt", "mime_type": "text/plain", "size": 5,
-        }])[0].name, "notes.txt")
+        self.assertEqual(
+            validate_attachments(
+                [
+                    {
+                        "kind": "file",
+                        "data": f"data:text/plain;base64,{data}",
+                        "name": "notes.txt",
+                        "mime_type": "text/plain",
+                        "size": 5,
+                    }
+                ]
+            )[0].name,
+            "notes.txt",
+        )
         with self.assertRaises(ValueError):
-            validate_attachments([{
-                "kind": "file", "data": f"data:text/plain;base64,{data}",
-                "name": "notes.txt", "mime_type": "text/plain", "size": 4,
-            }])
+            validate_attachments(
+                [
+                    {
+                        "kind": "file",
+                        "data": f"data:text/plain;base64,{data}",
+                        "name": "notes.txt",
+                        "mime_type": "text/plain",
+                        "size": 4,
+                    }
+                ]
+            )
 
     async def test_degrade_flattens_parts_and_keeps_plain_messages(self):
         messages = [

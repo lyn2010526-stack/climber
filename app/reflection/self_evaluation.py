@@ -1,4 +1,5 @@
 """Self-evaluation module."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -22,7 +23,9 @@ class EvaluationResult:
 class SelfEvaluator:
     """Evaluates output quality."""
 
-    async def evaluate(self, output: str, criteria: dict[str, Any] | None = None) -> EvaluationResult:
+    async def evaluate(
+        self, output: str, criteria: dict[str, Any] | None = None
+    ) -> EvaluationResult:
         return EvaluationResult(
             score=QualityScore(overall=0.8, accuracy=0.85, completeness=0.75),
             feedback="Good",

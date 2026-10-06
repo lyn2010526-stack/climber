@@ -21,8 +21,8 @@ class ScheduledTask:
     id: str
     name: str
     description: str
-    cron_expression: str        # Simple: "*/5 * * * *" = every 5 min
-    task_type: str              # "inspect", "audit", "backup", "custom"
+    cron_expression: str  # Simple: "*/5 * * * *" = every 5 min
+    task_type: str  # "inspect", "audit", "backup", "custom"
     enabled: bool = True
     last_run: float | None = None
     next_run: float | None = None
@@ -65,10 +65,7 @@ class TaskScheduler:
     def get_due_tasks(self) -> list[ScheduledTask]:
         """Get tasks that are due for execution."""
         now = time.time()
-        return [
-            t for t in self._tasks.values()
-            if t.enabled and t.next_run and t.next_run <= now
-        ]
+        return [t for t in self._tasks.values() if t.enabled and t.next_run and t.next_run <= now]
 
     async def run_pending(self):
         """Run all due tasks."""
@@ -91,7 +88,9 @@ class TaskScheduler:
                 # No handler registered: surface the gap instead of silently
                 # pushing the run forward. The task stays due so the operator
                 # (health endpoint / UI) can see it is unserved.
-                task.config["last_error"] = f"No handler registered for task_type '{task.task_type}'"
+                task.config["last_error"] = (
+                    f"No handler registered for task_type '{task.task_type}'"
+                )
 
     def _calc_next_run(self, cron: str) -> float:
         """Calculate the next run time for a standard five-field cron expression."""

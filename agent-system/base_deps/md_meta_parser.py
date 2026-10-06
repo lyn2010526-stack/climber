@@ -18,8 +18,20 @@ _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n?", re.DOTALL)
 _YAML_LINE_RE = re.compile(r"^([a-zA-Z_][\w.-]*)\s*:\s*(.*)$")
 
 COMMON_META_KEYS = {
-    "name", "description", "tags", "skill", "version", "author", "language",
-    "category", "type", "title", "summary", "rules", "dependencies", "license",
+    "name",
+    "description",
+    "tags",
+    "skill",
+    "version",
+    "author",
+    "language",
+    "category",
+    "type",
+    "title",
+    "summary",
+    "rules",
+    "dependencies",
+    "license",
 }
 
 
@@ -32,7 +44,7 @@ class DocMeta:
     title: str = ""
     description: str = ""
     tags: list[str] = field(default_factory=list)
-    doc_type: str = ""                 # skill | rule | code | text
+    doc_type: str = ""  # skill | rule | code | text
     raw_frontmatter: str = ""
 
     def to_memory_item_fields(self) -> dict[str, Any]:

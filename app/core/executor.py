@@ -27,6 +27,7 @@ logger = structlog.get_logger()
 
 # ── Workflow Engine Adapter ──
 
+
 class WorkflowExecutorAdapter:
     def __init__(self, workflow_engine: Any) -> None:
         self._engine = workflow_engine
@@ -49,6 +50,7 @@ class WorkflowExecutorAdapter:
 
 # ── Skill Composer Adapter ──
 
+
 class SkillComposerExecutorAdapter:
     def __init__(self, composer: Any) -> None:
         self._composer = composer
@@ -58,7 +60,9 @@ class SkillComposerExecutorAdapter:
         if composition is None:
             return ExecutionResult(status=ExecutionStatus.FAILED, error="composition is required")
         try:
-            result = await self._composer.execute_composition(composition, context=context.variables)
+            result = await self._composer.execute_composition(
+                composition, context=context.variables
+            )
             if isinstance(result, dict):
                 ok = result.get("status") in ("completed", "partial")
                 return ExecutionResult(
@@ -78,6 +82,7 @@ class SkillComposerExecutorAdapter:
 
 
 # ── Crew Adapter ──
+
 
 class CrewExecutorAdapter:
     def __init__(self, crew: Any) -> None:
@@ -101,6 +106,7 @@ class CrewExecutorAdapter:
 
 
 # ── Unified Executor Dispatcher ──
+
 
 class UnifiedExecutor(IExecutor):
     def __init__(self) -> None:

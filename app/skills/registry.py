@@ -72,8 +72,10 @@ class SkillRegistry:
         skills = list(self._skills.values())
         if category is not None:
             skills = [
-                s for s in skills
-                if (s.category.value if hasattr(s.category, "value") else str(s.category)) == category
+                s
+                for s in skills
+                if (s.category.value if hasattr(s.category, "value") else str(s.category))
+                == category
             ]
         return [skill.model_dump() for skill in skills]
 
@@ -124,9 +126,7 @@ class SkillRegistry:
             return
         unknown = set(params) - set(signature.parameters)
         if unknown:
-            raise ValueError(
-                f"Skill '{skill_id}' does not accept parameter(s): {sorted(unknown)}"
-            )
+            raise ValueError(f"Skill '{skill_id}' does not accept parameter(s): {sorted(unknown)}")
 
     async def execute(self, skill_id: str, **kwargs: Any) -> Any:
         """Execute a skill by ID with given keyword arguments."""
@@ -136,7 +136,9 @@ class SkillRegistry:
         """Get skills grouped by category value."""
         result: dict[str, list[SkillInfo]] = {}
         for skill in self._skills.values():
-            cat_val = skill.category.value if hasattr(skill.category, "value") else str(skill.category)
+            cat_val = (
+                skill.category.value if hasattr(skill.category, "value") else str(skill.category)
+            )
             if cat_val not in result:
                 result[cat_val] = []
             result[cat_val].append(skill)

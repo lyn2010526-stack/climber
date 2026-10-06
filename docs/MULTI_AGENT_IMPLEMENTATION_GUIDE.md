@@ -106,14 +106,15 @@ class Action(ABC):
     @abstractmethod
     def execute(self) -> Any:
         pass
-    
+
     @abstractmethod
     def undo(self) -> None:
         pass
-    
+
     @abstractmethod
     def redo(self) -> None:
         pass
+
 
 # 操作历史栈
 command_stack: List[Action] = []
@@ -130,8 +131,7 @@ command_stack: List[Action] = []
 ```python
 workflow = create_planning_workflow()
 result = await workflow.execute(
-    initial_task="Add user authentication to the project",
-    user_callback=user_feedback_handler
+    initial_task="Add user authentication to the project", user_callback=user_feedback_handler
 )
 
 # 流程特点：
@@ -157,8 +157,7 @@ result = await workflow.execute(
 ```python
 workflow = create_prompt_to_app_workflow()
 app = await workflow.execute(
-    prompt="Build a fitness coaching landing page with dark theme",
-    user_callback=user_callback
+    prompt="Build a fitness coaching landing page with dark theme", user_callback=user_callback
 )
 
 # 自动生成：
@@ -190,11 +189,12 @@ Additional Notes:
 {optional_notes}
 """
 
+
 # Replit Agent 的 prompt 压缩技术
 def compress_prompt(prompt: str) -> str:
     """减少 token 消耗同时保持语义完整性。"""
     # Remove redundant words
-    # Consolidate similar requirements  
+    # Consolidate similar requirements
     # Use concise terminology
     # Keep essential context
     return compressed
@@ -257,6 +257,7 @@ config_map = {
 
 # 加载配置
 import os
+
 env = os.getenv("AGENT_ENV", "development")
 config = config_map.get(env, MultiAgentSystemConfig.default())
 ```
@@ -301,26 +302,30 @@ from functools import wraps
 import hashlib
 import json
 
+
 def cached_result(ttl_seconds: int = 3600):
     """装饰器：缓存函数结果。"""
+
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            cache_key = f"agent:{func.__name__}:{hashlib.sha256(
-                json.dumps((args, kwargs), sort_keys=True).encode()
-            ).hexdigest()}"
-            
+            cache_key = f"agent:{func.__name__}:{
+                hashlib.sha256(json.dumps((args, kwargs), sort_keys=True).encode()).hexdigest()
+            }"
+
             # Try cache
             result = await redis.get(cache_key)
             if result:
                 return json.loads(result)
-            
+
             # Execute and cache
             result = await func(*args, **kwargs)
             await redis.setex(cache_key, ttl_seconds, json.dumps(result))
-            
+
             return result
+
         return wrapper
+
     return decorator
 ```
 
@@ -333,24 +338,25 @@ class ConcurrencyLimiter:
     def __init__(self, max_concurrent: int):
         self.semaphore = asyncio.Semaphore(max_concurrent)
         self.logger = logger.bind(component="concurrency_limiter")
-    
+
     async def acquire(self):
         """尝试获取许可。"""
         acquired = await asyncio.wait_for(self.semaphore.acquire(), timeout=30)
         if acquired:
             self.logger.debug("acquired_slot")
-    
+
     def release(self):
         """释放许可。"""
         self.semaphore.release()
         self.logger.debug("released_slot")
-    
+
     async def __aenter__(self):
         await self.acquire()
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         self.release()
+
 
 # 使用
 async with concurrency_limiter:
@@ -368,29 +374,29 @@ class BatchProcessor:
         self.timeout_ms = timeout_ms
         self.pending_tasks = []
         self.processing = False
-    
+
     async def add_task(self, task: Dict):
         """添加任务到批处理队列。"""
         self.pending_tasks.append(task)
-        
+
         if len(self.pending_tasks) >= self.batch_size:
             await self._process_batch()
-    
+
     async def _process_batch(self):
         """处理一批任务。"""
         if self.processing:
             return
-        
+
         self.processing = True
-        batch = self.pending_tasks[:self.batch_size]
-        self.pending_tasks = self.pending_tasks[self.batch_size:]
-        
+        batch = self.pending_tasks[: self.batch_size]
+        self.pending_tasks = self.pending_tasks[self.batch_size :]
+
         try:
             results = await self._execute_batch(batch)
             self._emit_results(results)
         finally:
             self.processing = False
-    
+
     async def _execute_batch(self, tasks: List[Dict]) -> List[Any]:
         """执行批量任务 - 应优化为单次 API 调用。"""
         # 实现优化的批量处理逻辑
@@ -454,10 +460,10 @@ class EnhancedSandboxExecutor(SandboxExecutor):
 ```python
 class AuditLogger:
     """审计日志记录器。"""
-    
+
     def __init__(self):
         self.logger = structlog.get_logger(component="audit")
-    
+
     def log_operation(self, operation: str, user: str, details: Dict):
         """记录操作。"""
         self.logger.info(
@@ -467,11 +473,11 @@ class AuditLogger:
             timestamp=datetime.utcnow().isoformat(),
             **details,
             # 永远不要记录敏感数据
-            password=None, 
+            password=None,
             api_key=None,
             secret=None,
         )
-    
+
     def log_security_event(self, event_type: str, risk_level: str, details: Dict):
         """记录安全事件。"""
         self.logger.warning(
@@ -481,12 +487,13 @@ class AuditLogger:
             **details,
         )
 
+
 # 使用
 audit = AuditLogger()
 audit.log_operation(
     operation="file_delete",
     user="agent_coder_1",
-    details={"file_path": "/app/main.py", "size_kb": 42}
+    details={"file_path": "/app/main.py", "size_kb": 42},
 )
 ```
 
@@ -501,21 +508,22 @@ audit.log_operation(
 ```python
 import pytest
 from app.core.multi_agent import (
-    IAgent, 
-    IOrchestrator, 
+    IAgent,
+    IOrchestrator,
     AgentRole,
     AgentContext,
     Message,
 )
 
+
 class MockAgent(BaseAgent):
     """用于测试的模拟智能体。"""
-    
+
     def __init__(self, name: str, should_succeed: bool = True):
         super().__init__(name, AgentRole.PLANNER)
         self.should_succeed = should_succeed
         self.call_count = 0
-    
+
     async def execute(self, task: str, context: AgentContext) -> Any:
         self.call_count += 1
         if self.should_succeed:
@@ -523,32 +531,33 @@ class MockAgent(BaseAgent):
         else:
             raise Exception(f"Simulated failure in {self.name}")
 
+
 class TestMultiAgentSystem:
     """多智能体系统测试套件。"""
-    
+
     @pytest.fixture
     def mock_agent(self):
         return MockAgent("test_agent")
-    
+
     @pytest.fixture
     def test_context(self):
         return AgentContext(session_id="test-session")
-    
+
     async def test_agent_execution_success(self, mock_agent, test_context):
         """测试智能体成功执行。"""
         result = await mock_agent.execute("test task", test_context)
         assert result["status"] == "success"
         assert mock_agent.call_count == 1
-    
+
     async def test_orchestrator_task_routing(self):
         """测试协调器的任务路由。"""
         orchestrator = SimpleOrchestrator()
         planner = SimplePlannerAgent()
-        
+
         orchestrator.register_agent(planner)
-        
+
         assert planner in orchestrator.get_available_agents()
-    
+
     async def test_confirmation_flow(self, test_context):
         """测试确认流程。"""
         confirmation = UserConfirmation(
@@ -561,7 +570,7 @@ class TestMultiAgentSystem:
                 {"label": "Cancel", "value": "cancel"},
             ],
         )
-        
+
         assert confirmation.request_id == "test-123"
         assert len(confirmation.options) == 2
 
@@ -585,34 +594,34 @@ class TestMultiAgentSystem:
 @pytest.mark.integration
 class TestFullWorkflow:
     """完整工作流集成测试。"""
-    
+
     @pytest.fixture
     def real_test_environment(self):
         """准备真实的测试环境。"""
         # Create temporary project directory
         temp_dir = tempfile.mkdtemp()
-        
+
         # Initialize git repo
         subprocess.run(["git", "init"], cwd=temp_dir)
-        
+
         yield temp_dir
-        
+
         # Cleanup
         shutil.rmtree(temp_dir)
-    
+
     async def test_planning_to_deployment(self, real_test_environment):
         """测试从规划到部署的完整流程。"""
         workflow = create_planning_workflow()
-        
+
         result = await workflow.execute(
             task="Create a simple REST API with FastAPI",
-            user_callback=lambda x: None  # Auto-approve
+            user_callback=lambda x: None,  # Auto-approve
         )
-        
+
         assert result["status"] == "completed"
         assert len(result["plan"]) > 0
         assert all(step["status"] == "completed" for step in result["plan"])
-        
+
         # Verify generated files exist
         api_file = Path(real_test_environment) / "main.py"
         assert api_file.exists()
@@ -631,59 +640,39 @@ from prometheus_client import Counter, Histogram, Gauge
 
 # 指标定义
 TASK_EXECUTION_COUNT = Counter(
-    'agent_task_total',
-    'Total number of tasks executed',
-    ['agent_role', 'status']
+    "agent_task_total", "Total number of tasks executed", ["agent_role", "status"]
 )
 
 TASK_EXECUTION_TIME = Histogram(
-    'agent_task_duration_seconds',
-    'Time spent executing tasks',
-    ['agent_role'],
-    buckets=[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0]
+    "agent_task_duration_seconds",
+    "Time spent executing tasks",
+    ["agent_role"],
+    buckets=[0.1, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0],
 )
 
-AGENT_MEMORY_USAGE = Gauge(
-    'agent_memory_usage_bytes',
-    'Memory usage by agent processes'
-)
+AGENT_MEMORY_USAGE = Gauge("agent_memory_usage_bytes", "Memory usage by agent processes")
 
-QUEUE_SIZE = Gauge(
-    'task_queue_size',
-    'Number of tasks waiting to be processed'
-)
+QUEUE_SIZE = Gauge("task_queue_size", "Number of tasks waiting to be processed")
 
-ERROR_RATE = Counter(
-    'agent_errors_total',
-    'Total number of errors',
-    ['error_type', 'agent_role']
-)
+ERROR_RATE = Counter("agent_errors_total", "Total number of errors", ["error_type", "agent_role"])
+
 
 class MetricsCollector:
     """指标收集器。"""
-    
+
     def __init__(self):
         self.logger = logger.bind(component="metrics_collector")
-    
+
     async def record_task_start(self, agent_role: str):
         """记录任务开始。"""
         start_time = time.time()
-        
-    async def record_task_complete(
-        self, 
-        agent_role: str, 
-        status: str, 
-        duration: float
-    ):
+
+    async def record_task_complete(self, agent_role: str, status: str, duration: float):
         """记录任务完成。"""
         TASK_EXECUTION_COUNT.labels(role=agent_role, status=status).inc()
         TASK_EXECUTION_TIME.labels(role=agent_role).observe(duration)
-    
-    async def record_error(
-        self, 
-        error_type: str, 
-        agent_role: str
-    ):
+
+    async def record_error(self, error_type: str, agent_role: str):
         """记录错误。"""
         ERROR_RATE.labels(error_type=error_type, role=agent_role).inc()
 ```
@@ -709,19 +698,20 @@ trace.set_tracer_provider(provider)
 
 tracer = trace.get_tracer(__name__)
 
+
 class TracedAgent(BaseAgent):
     """带有追踪功能的智能体。"""
-    
+
     async def execute(self, task: str, context: AgentContext) -> Any:
         with tracer.start_as_current_span(
             f"{self.role.value}_execution",
             attributes={
                 "agent.name": self.name,
                 "task.preview": task[:100],
-            }
+            },
         ) as span:
             span.set_attribute("context.session_id", context.session_id)
-            
+
             try:
                 result = await super().execute(task, context)
                 span.set_attribute("status", "success")
@@ -770,31 +760,32 @@ Dashboard: Multi-Agent System Overview
 ```python
 class ABTestRunner:
     """A/B 测试运行器。"""
-    
+
     def __init__(self, experiment_name: str):
         self.experiment_name = experiment_name
         self.variants = {}
         self.results = defaultdict(list)
-    
+
     def register_variant(self, variant_name: str, strategy_fn):
         """注册实验变体。"""
         self.variants[variant_name] = strategy_fn
-    
+
     async def run_experiment(self, test_cases: List[Dict], n_iterations: int):
         """运行实验。"""
         for i in range(n_iterations):
             for variant_name, strategy_fn in self.variants.items():
                 result = await strategy_fn(test_cases[i % len(test_cases)])
                 self.results[variant_name].append(result)
-        
+
         self._analyze_results()
-    
+
     def _analyze_results(self):
         """分析实验结果。"""
         # Statistical analysis
         # Determine winner
         # Log insights
         pass
+
 
 # 使用示例
 experiment = ABTestRunner("prompt_optimization")
@@ -854,7 +845,7 @@ class FeedbackCollector:
 ```python
 class AutomatedQualityEvaluator:
     """自动化质量评估器。"""
-    
+
     def __init__(self):
         self.evaluation_criteria = [
             "code_correctness",
@@ -863,47 +854,48 @@ class AutomatedQualityEvaluator:
             "security_score",
             "documentation_quality",
         ]
-    
+
     def evaluate_output(self, output: Dict) -> Dict[str, float]:
         """评估 AI 生成的输出质量。"""
         scores = {}
-        
+
         for criterion in self.evaluation_criteria:
             score = getattr(self, f"_evaluate_{criterion}")(output)
             scores[criterion] = score
-        
+
         return scores
-    
+
     def _evaluate_code_correctness(self, output: Dict) -> float:
         """评估代码正确性。"""
         # Run unit tests
         test_results = self._run_tests(output.get("code"))
-        
+
         if not test_results["passed"]:
             return 0.0
-        
+
         # Check for logical errors using static analysis
         issues = self._static_analysis(output.get("code"))
-        
+
         return 1.0 - (len(issues) / max(len(output["code"].splitlines()), 1))
-    
+
     def _evaluate_test_coverage(self, output: Dict) -> float:
         """评估测试覆盖率。"""
         coverage_report = self._generate_coverage(output.get("code"))
         return coverage_report["percentage"] / 100.0
 
+
 # 每月质量报告
 def generate_quality_report():
     """生成月度质量报告。"""
     last_month_outputs = get_last_month_outputs()
-    
+
     evaluator = AutomatedQualityEvaluator()
-    
+
     metrics = {}
     for output in last_month_outputs:
         quality = evaluator.evaluate_output(output)
         aggregate_metrics(output.task_type, quality)
-    
+
     return summarize_metrics(metrics)
 ```
 

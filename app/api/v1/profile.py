@@ -155,7 +155,9 @@ async def get_profile_summary(
 ) -> ProfileSummaryRead:
     """Rebuild the user's profile summary from the stored event log."""
     if not (await store.get_settings(user_id))["show_raw_profile"]:
-        raise HTTPException(status_code=403, detail="Raw profile display is disabled in profile settings")
+        raise HTTPException(
+            status_code=403, detail="Raw profile display is disabled in profile settings"
+        )
     return await store.summary(user_id)
 
 
@@ -166,5 +168,7 @@ async def get_profile_suggestions(
 ) -> dict[str, object]:
     """Return profile hints that never override the current instruction."""
     if not (await store.get_settings(user_id))["show_raw_profile"]:
-        raise HTTPException(status_code=403, detail="Raw profile display is disabled in profile settings")
+        raise HTTPException(
+            status_code=403, detail="Raw profile display is disabled in profile settings"
+        )
     return await store.suggestions(user_id, current_instruction or "")

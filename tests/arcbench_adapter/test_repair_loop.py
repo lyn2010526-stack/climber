@@ -22,9 +22,16 @@ TREE = {"id": "root", "type": "FOLDER", "children": [{"id": "REQ-1"}, {"id": "RE
 
 def acc_failed():
     return {
-        "ran": True, "available": True, "passed": False, "all_specs_green": False,
-        "passed_nodes": ["REQ-1"], "evidence_failed": ["REQ-2"], "unknown": [],
-        "fallback": False, "specs": 2, "message": "2 spec(s) executed, 1 failing",
+        "ran": True,
+        "available": True,
+        "passed": False,
+        "all_specs_green": False,
+        "passed_nodes": ["REQ-1"],
+        "evidence_failed": ["REQ-2"],
+        "unknown": [],
+        "fallback": False,
+        "specs": 2,
+        "message": "2 spec(s) executed, 1 failing",
         "specs_detail": [
             {"file": "REQ-1.spec.ts", "titles": ["REQ-1 shows dashboard"], "passed": True},
             {"file": "REQ-2.spec.ts", "titles": ["REQ-2 checkout"], "passed": False},
@@ -34,9 +41,16 @@ def acc_failed():
 
 def acc_passed():
     return {
-        "ran": True, "available": True, "passed": True, "all_specs_green": True,
-        "passed_nodes": ["REQ-1", "REQ-2"], "evidence_failed": [], "unknown": [],
-        "fallback": False, "specs": 2, "message": "2 spec(s) executed, 0 failing",
+        "ran": True,
+        "available": True,
+        "passed": True,
+        "all_specs_green": True,
+        "passed_nodes": ["REQ-1", "REQ-2"],
+        "evidence_failed": [],
+        "unknown": [],
+        "fallback": False,
+        "specs": 2,
+        "message": "2 spec(s) executed, 0 failing",
         "specs_detail": [
             {"file": "REQ-1.spec.ts", "titles": ["REQ-1 shows dashboard"], "passed": True},
             {"file": "REQ-2.spec.ts", "titles": ["REQ-2 checkout"], "passed": True},
@@ -88,10 +102,15 @@ def run_flow(env_passes, acc_results, memory_env="1"):
     out = {}
     with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
         stack.enter_context(patch.dict(sys.modules, {"agent_driver": MagicMock()}))
-        stack.enter_context(patch.dict(os.environ, {
-            "CLIMBER_ARC_ACCEPTANCE_REPAIR_PASSES": str(env_passes),
-            "CLIMBER_ARC_ACCEPTANCE_MEMORY": memory_env,
-        }))
+        stack.enter_context(
+            patch.dict(
+                os.environ,
+                {
+                    "CLIMBER_ARC_ACCEPTANCE_REPAIR_PASSES": str(env_passes),
+                    "CLIMBER_ARC_ACCEPTANCE_MEMORY": memory_env,
+                },
+            )
+        )
         for name, value in {
             "load_requirement_tree": TREE,
             "tests_injection": "",
@@ -100,20 +119,37 @@ def run_flow(env_passes, acc_results, memory_env="1"):
             "rehearse_best_effort": (None, 1),
         }.items():
             stack.enter_context(patch.object(adapter, name, return_value=value))
-        stack.enter_context(patch.object(adapter, "run_prompt_with_retries", side_effect=_turn_router))
-        stack.enter_context(patch.object(adapter.acceptance, "run_acceptance", side_effect=_acceptance))
-        stack.enter_context(patch.object(adapter, "find_spec_files", return_value=[(Path(directory), [])]))
+        stack.enter_context(
+            patch.object(adapter, "run_prompt_with_retries", side_effect=_turn_router)
+        )
+        stack.enter_context(
+            patch.object(adapter.acceptance, "run_acceptance", side_effect=_acceptance)
+        )
+        stack.enter_context(
+            patch.object(adapter, "find_spec_files", return_value=[(Path(directory), [])])
+        )
         for name in ("PortWatchdog", "postflight_structure", "_free_web_port", "log"):
             stack.enter_context(patch.object(adapter, name))
         adapter.run(
-            MagicMock(), Path(directory), Path(directory), 3000, 3100,
-            100, 10, runtime, time.monotonic() + 600,
+            MagicMock(),
+            Path(directory),
+            Path(directory),
+            3000,
+            3100,
+            100,
+            10,
+            runtime,
+            time.monotonic() + 600,
         )
         evidence_dir = Path(directory) / ".arc" / "traceability"
-        evidence_files = sorted(evidence_dir.glob("acceptance-evidence*.json")) if evidence_dir.is_dir() else []
-        out["evidence"] = [json.loads(p.read_text()) for p in evidence_files] if evidence_files else []
+        evidence_files = (
+            sorted(evidence_dir.glob("acceptance-evidence*.json")) if evidence_dir.is_dir() else []
+        )
+        out["evidence"] = (
+            [json.loads(p.read_text()) for p in evidence_files] if evidence_files else []
+        )
         memory_file = Path(directory) / ".arc" / "memory.json"
-        out["memory"] = (json.loads(memory_file.read_text()) if memory_file.is_file() else None)
+        out["memory"] = json.loads(memory_file.read_text()) if memory_file.is_file() else None
     out["runtime"] = runtime
     out["acceptance_calls"] = len(acceptance_calls)
     out["repair_prompts"] = repair_prompts
@@ -145,10 +181,13 @@ class RepairLoopTests(unittest.TestCase):
             for e in out["runtime"].generated
             if e[1] in ("mark_test_passed", "mark_test_failed")
         ]
-        self.assertEqual(test_events, [
-            ("mark_test_passed", "REQ-1"),
-            ("mark_test_passed", "REQ-2"),
-        ])
+        self.assertEqual(
+            test_events,
+            [
+                ("mark_test_passed", "REQ-1"),
+                ("mark_test_passed", "REQ-2"),
+            ],
+        )
         completed = [e for e in out["runtime"].generated if e[1] == "mark_run_completed"]
         self.assertTrue(completed)
         self.assertIn("independent acceptance tests passed", completed[-1][3])

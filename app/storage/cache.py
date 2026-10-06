@@ -45,6 +45,7 @@ async def get_redis():
             return None
 
         from app.config import settings
+
         client = None
         try:
             client = redis.from_url(settings.redis_url, decode_responses=True)
@@ -128,6 +129,7 @@ class Cache:
 
 def cached(ttl: int = 300, key_prefix: str = "cache"):
     """Decorator for caching async function results."""
+
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -139,5 +141,7 @@ def cached(ttl: int = 300, key_prefix: str = "cache"):
             result = await func(*args, **kwargs)
             await cache.set(cache_key, result, ttl)
             return result
+
         return wrapper
+
     return decorator

@@ -28,8 +28,15 @@ from app.core.memfs.store import MemFS
 from app.core.recovery import RecoveryManager
 from app.core.session import AgentSession
 from app.storage import Base
-from app.storage.database import (Agent, CheckpointRecord, Message, Session, SessionInput,
-                                  Turn, UsageLog)
+from app.storage.database import (
+    Agent,
+    CheckpointRecord,
+    Message,
+    Session,
+    SessionInput,
+    Turn,
+    UsageLog,
+)
 from app.storage.models_cost import CostRecord
 from app.storage.models_memory import CoreMemoryBlock
 
@@ -47,7 +54,9 @@ class RecoveryAndCostFixes(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="memfs-recovery-")
         self.addCleanup(self.tmp.cleanup)
-        self.db_engine = create_async_engine("sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "isolated.db"))
+        self.db_engine = create_async_engine(
+            "sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "isolated.db")
+        )
         self.addAsyncCleanup(self.db_engine.dispose)
 
         @event.listens_for(self.db_engine.sync_engine, "connect")
@@ -55,14 +64,26 @@ class RecoveryAndCostFixes(unittest.IsolatedAsyncioTestCase):
             connection.execute("PRAGMA foreign_keys=ON")
 
         self.factory = async_sessionmaker(self.db_engine, expire_on_commit=False)
-        tables = [model.__table__ for model in (Agent, Session, Turn, Message, UsageLog,
-                                                CheckpointRecord, CostRecord, SessionInput,
-                                                CoreMemoryBlock)]
+        tables = [
+            model.__table__
+            for model in (
+                Agent,
+                Session,
+                Turn,
+                Message,
+                UsageLog,
+                CheckpointRecord,
+                CostRecord,
+                SessionInput,
+                CoreMemoryBlock,
+            )
+        ]
         async with self.db_engine.begin() as connection:
             await connection.run_sync(lambda conn: Base.metadata.create_all(conn, tables=tables))
 
     async def rows(self, model):
         from sqlalchemy import select
+
         async with self.factory() as db:
             return list((await db.execute(select(model))).scalars().all())
 
@@ -72,8 +93,7 @@ class RecoveryAndCostFixes(unittest.IsolatedAsyncioTestCase):
         await store.save(None, CheckpointData("session-b", [], 1, "completed"))
         manager = RecoveryManager(checkpoint_store=store)
         sessions = await manager.list_recoverable_sessions()
-        self.assertEqual(sorted(row["session_id"] for row in sessions),
-                         ["session-a", "session-b"])
+        self.assertEqual(sorted(row["session_id"] for row in sessions), ["session-a", "session-b"])
 
     async def test_auto_recover_finds_in_memory_processing_checkpoint(self):
         store = InMemoryCheckpointStore()
@@ -107,9 +127,13 @@ class RecoveryAndCostFixes(unittest.IsolatedAsyncioTestCase):
                 return self._CM()
 
         fake_engine = SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
-        checkpoint = CheckpointData("pg-session", [{"role": "user", "content": "hi"}], 1, "processing")
-        with patch("app.core.checkpoint.async_session", _SessionFactory()), \
-                patch("app.storage.engine", fake_engine):
+        checkpoint = CheckpointData(
+            "pg-session", [{"role": "user", "content": "hi"}], 1, "processing"
+        )
+        with (
+            patch("app.core.checkpoint.async_session", _SessionFactory()),
+            patch("app.storage.engine", fake_engine),
+        ):
             store = SQLiteCheckpointStore()
             cid = await store.save(None, checkpoint)
         self.assertTrue(cid)
@@ -118,8 +142,12 @@ class RecoveryAndCostFixes(unittest.IsolatedAsyncioTestCase):
 
     async def test_cost_record_carries_group_and_task_attribution(self):
         session = AgentSession(
-            session_id="s-group", user_id="u1", agent_id=None,
-            provider="p", model_id="m", api_key="k",
+            session_id="s-group",
+            user_id="u1",
+            agent_id=None,
+            provider="p",
+            model_id="m",
+            api_key="k",
         )
         session.context["group_id"] = "grp-1"
         session.context["task_id"] = "task-42"
@@ -134,8 +162,12 @@ class RecoveryAndCostFixes(unittest.IsolatedAsyncioTestCase):
 
     async def test_cost_record_without_context_has_null_group(self):
         session = AgentSession(
-            session_id="s-plain", user_id="u1", agent_id=None,
-            provider="p", model_id="m", api_key="k",
+            session_id="s-plain",
+            user_id="u1",
+            agent_id=None,
+            provider="p",
+            model_id="m",
+            api_key="k",
         )
         store = RunStorage(self.factory)
         await store.begin(session)
@@ -149,18 +181,25 @@ class RecoveryAndCostFixes(unittest.IsolatedAsyncioTestCase):
         service = CoreMemoryService()
         with patch("app.core.core_memory.async_session", self.factory):
             block = await service.create_or_update_block(
-                "u1", "persona", "x" * 10000, limit=10 ** 9,
+                "u1",
+                "persona",
+                "x" * 10000,
+                limit=10**9,
             )
             self.assertEqual(block.limit, 4096)
             self.assertEqual(len(block.value), 4096)
             low = await service.create_or_update_block(
-                "u1", "bounded", "y" * 1000, limit=-5,
+                "u1",
+                "bounded",
+                "y" * 1000,
+                limit=-5,
             )
             self.assertEqual(low.limit, 64)
             self.assertEqual(len(low.value), 64)
 
     async def test_messages_relationship_has_id_tiebreak(self):
         from app.storage.database import Session
+
         order_by = Session.messages.property.order_by
         rendered = ", ".join(str(expr) for expr in order_by)
         self.assertIn("messages.id", rendered)
@@ -221,9 +260,18 @@ class MemFsFixes(unittest.IsolatedAsyncioTestCase):
         parsed = MemoryBlock.from_markdown(block.path, md)
         self.assertEqual(parsed.content, block.content)
         self.assertEqual(parsed.description, block.description)
-        for key in ("tags", "importance", "nullable", "empty_string", "ticked", "quoted", "newline"):
-            self.assertEqual(parsed.metadata.get(key), block.metadata[key],
-                             f"key {key!r} changed on round-trip")
+        for key in (
+            "tags",
+            "importance",
+            "nullable",
+            "empty_string",
+            "ticked",
+            "quoted",
+            "newline",
+        ):
+            self.assertEqual(
+                parsed.metadata.get(key), block.metadata[key], f"key {key!r} changed on round-trip"
+            )
 
 
 if __name__ == "__main__":

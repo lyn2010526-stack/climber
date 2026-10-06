@@ -43,7 +43,7 @@ class StubRetriever:
     def __init__(self, hits: list[dict[str, Any]]) -> None:
         self._hits = hits
 
-    async def search(self, user_id, scope, query, *, level=None, top_k=5):  # noqa: ARG002
+    async def search(self, user_id, scope, query, *, level=None, top_k=5):
         return {
             "scope": scope,
             "query": query,

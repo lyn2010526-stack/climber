@@ -64,7 +64,9 @@ async def list_models() -> list[dict[str, Any]]:
         key = f"{m['provider']}:{m['model_id']}"
         if key not in seen:
             seen.add(key)
-            models.append({"provider": m["provider"], "model_id": m["model_id"], "label": m["model_id"]})
+            models.append(
+                {"provider": m["provider"], "model_id": m["model_id"], "label": m["model_id"]}
+            )
 
     await _add_local_ollama_models(models)
     return models
@@ -87,7 +89,11 @@ async def _add_local_ollama_models(models: list[dict[str, Any]]) -> None:
             if resp.status_code == 200:
                 for m in resp.json().get("models", []):
                     models.append(
-                        {"provider": "ollama", "model_id": m.get("name", ""), "label": f"{m.get('name', '')} (local)"}
+                        {
+                            "provider": "ollama",
+                            "model_id": m.get("name", ""),
+                            "label": f"{m.get('name', '')} (local)",
+                        }
                     )
     except Exception as e:
         logger.warning("list_models_ollama_discovery", error=str(e))
@@ -101,6 +107,7 @@ async def _add_local_ollama_models(models: list[dict[str, Any]]) -> None:
 async def list_tools() -> list[dict[str, Any]]:
     """List all registered tools from the tool registry."""
     import app.tools.builtins  # noqa: F401  ensures builtin tools are registered
+
     tool_registry = __import__("app.core.di", fromlist=["resolve"]).resolve("ToolRegistry")
 
     return [
@@ -119,10 +126,13 @@ async def get_stats() -> dict[str, Any]:
     from app.storage.database import Agent, ApiKey, Message, Session, UsageLog
 
     async with async_session() as db:
+
         async def count(model: Any) -> int:
             return (await db.execute(select(func.count()).select_from(model))).scalar() or 0
 
-        total_tokens = (await db.execute(select(func.coalesce(func.sum(UsageLog.total_tokens), 0)))).scalar() or 0
+        total_tokens = (
+            await db.execute(select(func.coalesce(func.sum(UsageLog.total_tokens), 0)))
+        ).scalar() or 0
 
         return {
             "total_users": 1,
@@ -132,7 +142,9 @@ async def get_stats() -> dict[str, Any]:
             "total_messages": await count(Message),
             "total_tokens": int(total_tokens),
             "total_workflows": await count(Workflow),
-            "total_crews": await count(__import__("app.storage.models_platform", fromlist=["Crew"]).Crew),
+            "total_crews": await count(
+                __import__("app.storage.models_platform", fromlist=["Crew"]).Crew
+            ),
         }
 
 
@@ -153,7 +165,12 @@ async def get_profile(request: Request) -> dict[str, Any]:
     role = principal.role if principal else None
     scopes = principal.scopes if principal else ()
     is_admin = role == "admin" or "admin" in scopes
-    return {"id": subject, "display_name": subject, "email": f"{subject}@localhost", "is_admin": is_admin}
+    return {
+        "id": subject,
+        "display_name": subject,
+        "email": f"{subject}@localhost",
+        "is_admin": is_admin,
+    }
 
 
 # ─── Terminal ───────────────────────────────────────────────────────────────
@@ -183,9 +200,14 @@ async def terminal_execute(
         raise HTTPException(status_code=503, detail="sandbox is unavailable") from exc
     effective_timeout = min(body.timeout or 30, 120)
     output = await sandbox.execute(command, timeout=effective_timeout)
-    logger.info("terminal_command_executed", command=command, user_id=current_user_id(request), timeout=effective_timeout)
+    logger.info(
+        "terminal_command_executed",
+        command=command,
+        user_id=current_user_id(request),
+        timeout=effective_timeout,
+    )
     blocked = output.startswith("BLOCKED:")
-    failed = blocked or output.startswith("TIMEOUT:") or output.startswith("Error:")
+    failed = blocked or output.startswith(("TIMEOUT:", "Error:"))
     return {"command": command, "output": output, "success": not failed}
 
 
@@ -197,7 +219,9 @@ async def terminal_execute(
 async def list_cluster_nodes() -> list[dict[str, Any]]:
     """List all cluster nodes."""
     async with async_session() as db:
-        rows = (await db.execute(select(Cluster).order_by(Cluster.created_at.desc()))).scalars().all()
+        rows = (
+            (await db.execute(select(Cluster).order_by(Cluster.created_at.desc()))).scalars().all()
+        )
         return [_cluster_node_dict(n) for n in rows]
 
 
@@ -236,7 +260,9 @@ async def get_cluster_status() -> dict[str, Any]:
             "status": "ok",
             "total_nodes": len(rows),
             "online_nodes": len(online),
-            "nodes": [{"id": n.id, "name": n.name, "status": n.status, "role": n.role} for n in rows],
+            "nodes": [
+                {"id": n.id, "name": n.name, "status": n.status, "role": n.role} for n in rows
+            ],
         }
 
 
@@ -272,18 +298,24 @@ async def delete_cluster_node(
 
 @router.get("/traces")
 @router.get("/traces/")
-async def list_traces(request: Request, limit: int = Query(default=100, ge=1, le=500)) -> list[dict[str, Any]]:
+async def list_traces(
+    request: Request, limit: int = Query(default=100, ge=1, le=500)
+) -> list[dict[str, Any]]:
     """List the current user's traces ordered by creation date (newest first)."""
     user_id = current_user_id(request)
     async with async_session() as db:
         rows = (
-            await db.execute(
-                select(Trace)
-                .where(Trace.user_id == user_id)
-                .order_by(Trace.created_at.desc())
-                .limit(limit)
+            (
+                await db.execute(
+                    select(Trace)
+                    .where(Trace.user_id == user_id)
+                    .order_by(Trace.created_at.desc())
+                    .limit(limit)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [_trace_dict(t) for t in rows]
 
 
@@ -328,7 +360,10 @@ async def get_marketplace() -> list[dict[str, Any]]:
             for p in (await db.execute(select(PluginRecord))).scalars().all()
             if p.plugin_key
         }
-    return [{**item, "is_installed": item["plugin_key"] in installed} for item in settings.plugin_marketplace]
+    return [
+        {**item, "is_installed": item["plugin_key"] in installed}
+        for item in settings.plugin_marketplace
+    ]
 
 
 @router.get("/plugins/categories")
@@ -339,7 +374,9 @@ async def get_plugin_categories() -> list[str]:
 
     async with async_session() as db:
         rows = (await db.execute(select(PluginRecord.category).distinct())).scalars().all()
-    return sorted({*(r for r in (rows or []) if r), *(m["category"] for m in settings.plugin_marketplace)})
+    return sorted(
+        {*(r for r in (rows or []) if r), *(m["category"] for m in settings.plugin_marketplace)}
+    )
 
 
 @router.post("/plugins/{plugin_key}/install")
@@ -355,8 +392,10 @@ async def install_plugin(
     data = await parse_request_payload(request)
     async with async_session() as db:
         existing = (
-            await db.execute(select(PluginRecord).where(PluginRecord.plugin_key == plugin_key))
-        ).scalars().first()
+            (await db.execute(select(PluginRecord).where(PluginRecord.plugin_key == plugin_key)))
+            .scalars()
+            .first()
+        )
         if existing is not None:
             existing.status = "installed"
             await db.commit()
@@ -468,7 +507,17 @@ async def list_scheduled(request: Request) -> list[dict[str, Any]]:
     """List all scheduled workflows."""
     user_id = current_user_id(request)
     async with async_session() as db:
-        rows = (await db.execute(select(Workflow).where(Workflow.schedule.isnot(None), Workflow.user_id == user_id))).scalars().all()
+        rows = (
+            (
+                await db.execute(
+                    select(Workflow).where(
+                        Workflow.schedule.isnot(None), Workflow.user_id == user_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
         return [
             {
                 "id": w.id,
@@ -483,9 +532,10 @@ async def list_scheduled(request: Request) -> list[dict[str, Any]]:
 
 @router.post("/scheduler")
 @router.post("/scheduler/")
-async def create_scheduled(request: Request,
+async def create_scheduled(
+    request: Request,
     _auth: dict = Depends(require_scopes("write")),
-)  -> dict[str, Any]:
+) -> dict[str, Any]:
     """Create a scheduled workflow."""
     data = await parse_request_payload(request)
     user_id = current_user_id(request)
@@ -511,19 +561,27 @@ async def create_scheduled(request: Request,
 async def list_mcp_servers() -> list[dict[str, Any]]:
     """List all MCP servers."""
     async with async_session() as db:
-        rows = (await db.execute(select(MCPServerRecord).order_by(MCPServerRecord.created_at.desc()))).scalars().all()
+        rows = (
+            (await db.execute(select(MCPServerRecord).order_by(MCPServerRecord.created_at.desc())))
+            .scalars()
+            .all()
+        )
         return [_mcp_dict(m) for m in rows]
 
 
 @router.post("/mcp")
 @router.post("/mcp/")
-async def create_mcp_server(request: Request,
+async def create_mcp_server(
+    request: Request,
     _auth: dict = Depends(require_admin()),
-)  -> dict[str, Any]:
+) -> dict[str, Any]:
     """Create a new MCP server."""
     data = await parse_request_payload(request)
     if not data.get("command") and not data.get("url"):
-        raise HTTPException(status_code=422, detail="MCP server requires either a command (stdio) or a url (sse/http)")
+        raise HTTPException(
+            status_code=422,
+            detail="MCP server requires either a command (stdio) or a url (sse/http)",
+        )
     async with async_session() as db:
         server = MCPServerRecord(
             plugin_id=data.get("plugin_id"),
@@ -540,9 +598,10 @@ async def create_mcp_server(request: Request,
 
 
 @router.post("/mcp/{server_id}/start")
-async def start_mcp_server(server_id: str,
+async def start_mcp_server(
+    server_id: str,
     _auth: dict = Depends(require_admin()),
-)  -> dict[str, Any]:
+) -> dict[str, Any]:
     """Start an MCP server."""
     async with async_session() as db:
         server = await get_or_404(db, MCPServerRecord, server_id, detail="MCP server not found")
@@ -552,9 +611,10 @@ async def start_mcp_server(server_id: str,
 
 
 @router.post("/mcp/{server_id}/stop")
-async def stop_mcp_server(server_id: str,
+async def stop_mcp_server(
+    server_id: str,
     _auth: dict = Depends(require_admin()),
-)  -> dict[str, Any]:
+) -> dict[str, Any]:
     """Stop an MCP server."""
     async with async_session() as db:
         server = await get_or_404(db, MCPServerRecord, server_id, detail="MCP server not found")
@@ -564,9 +624,10 @@ async def stop_mcp_server(server_id: str,
 
 
 @router.delete("/mcp/{server_id}")
-async def delete_mcp_server(server_id: str,
+async def delete_mcp_server(
+    server_id: str,
     _auth: dict = Depends(require_admin()),
-)  -> dict[str, bool | str]:
+) -> dict[str, bool | str]:
     """Delete an MCP server."""
     async with async_session() as db:
         server = await get_or_404(db, MCPServerRecord, server_id, detail="MCP server not found")
@@ -587,20 +648,25 @@ async def list_eval_datasets(request: Request) -> list[dict[str, Any]]:
     user_id = current_user_id(request)
     async with async_session() as db:
         rows = (
-            await db.execute(
-                select(EvalDataset)
-                .where(EvalDataset.user_id == user_id)
-                .order_by(EvalDataset.created_at.desc())
+            (
+                await db.execute(
+                    select(EvalDataset)
+                    .where(EvalDataset.user_id == user_id)
+                    .order_by(EvalDataset.created_at.desc())
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [_eval_dataset_dict(e) for e in rows]
 
 
 @router.post("/eval/datasets")
 @router.post("/eval/datasets/")
-async def create_eval_dataset(request: Request,
+async def create_eval_dataset(
+    request: Request,
     _auth: dict = Depends(require_scopes("write")),
-)  -> dict[str, Any]:
+) -> dict[str, Any]:
     """Create an evaluation dataset.
 
     Rejects malformed or non-object JSON bodies instead of silently creating a
@@ -613,8 +679,8 @@ async def create_eval_dataset(request: Request,
 
     try:
         raw = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Request body must be valid JSON")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Request body must be valid JSON") from exc
     if not isinstance(raw, dict):
         raise HTTPException(status_code=422, detail="Request body must be a JSON object")
     data = raw.get("data") if isinstance(raw.get("data"), dict) else raw
@@ -626,8 +692,10 @@ async def create_eval_dataset(request: Request,
     elif isinstance(data_json, str):
         try:
             parsed = _json.loads(data_json)
-        except ValueError:
-            raise HTTPException(status_code=422, detail="data_json must be a valid JSON array")
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422, detail="data_json must be a valid JSON array"
+            ) from exc
         if not isinstance(parsed, list):
             raise HTTPException(status_code=422, detail="data_json must be a JSON array")
         case_count = len(parsed)
@@ -651,9 +719,10 @@ async def create_eval_dataset(request: Request,
 
 @router.post("/eval/run")
 @router.post("/eval/run/")
-async def run_evaluation(request: Request,
+async def run_evaluation(
+    request: Request,
     _auth: dict = Depends(require_scopes("write")),
-)  -> dict[str, Any]:
+) -> dict[str, Any]:
     """Create an evaluation run record."""
     from app.storage.database import Agent
     from app.storage.models_eval import EvalDataset, EvalRun
@@ -677,14 +746,14 @@ async def run_evaluation(request: Request,
         def _as_int(value: Any, field: str) -> int:
             try:
                 return int(value)
-            except (TypeError, ValueError):
-                raise HTTPException(status_code=422, detail=f"{field} must be an integer")
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(status_code=422, detail=f"{field} must be an integer") from exc
 
         def _as_float(value: Any, field: str) -> float:
             try:
                 return float(value)
-            except (TypeError, ValueError):
-                raise HTTPException(status_code=422, detail=f"{field} must be a number")
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(status_code=422, detail=f"{field} must be a number") from exc
 
         run = EvalRun(
             user_id=user_id,
@@ -702,7 +771,9 @@ async def run_evaluation(request: Request,
             await db.commit()
         except IntegrityError as exc:
             await db.rollback()
-            raise HTTPException(status_code=409, detail="Evaluation run conflicts with stored data") from exc
+            raise HTTPException(
+                status_code=409, detail="Evaluation run conflicts with stored data"
+            ) from exc
         await db.refresh(run)
         return _eval_run_dict(run)
 
@@ -833,7 +904,11 @@ async def get_budget(request: Request) -> dict[str, Any]:
 
     user_id = current_user_id(request)
     async with async_session() as db:
-        cfg = (await db.execute(select(BudgetConfig).where(BudgetConfig.user_id == user_id))).scalars().first()
+        cfg = (
+            (await db.execute(select(BudgetConfig).where(BudgetConfig.user_id == user_id)))
+            .scalars()
+            .first()
+        )
         if cfg is None:
             # Concurrent requests may race on the check-then-insert; the unique
             # user_id constraint turns the loser into an IntegrityError, and the
@@ -844,8 +919,10 @@ async def get_budget(request: Request) -> dict[str, Any]:
             except IntegrityError:
                 await db.rollback()
                 cfg = (
-                    await db.execute(select(BudgetConfig).where(BudgetConfig.user_id == user_id))
-                ).scalars().first()
+                    (await db.execute(select(BudgetConfig).where(BudgetConfig.user_id == user_id)))
+                    .scalars()
+                    .first()
+                )
             else:
                 await db.refresh(cfg)
         if cfg is None:
@@ -864,7 +941,12 @@ async def get_budget(request: Request) -> dict[str, Any]:
             if total is not None:
                 current_spend = round(float(total), 6)
         except Exception as exc:
-            logger.warning("budget_current_spend_query_failed", user_id=user_id, period=cfg.period, error=str(exc))
+            logger.warning(
+                "budget_current_spend_query_failed",
+                user_id=user_id,
+                period=cfg.period,
+                error=str(exc),
+            )
             current_spend = 0.0
         return {
             "amount": cfg.amount,
@@ -884,7 +966,11 @@ async def get_quota(request: Request) -> dict[str, Any]:
 
     user_id = current_user_id(request)
     async with async_session() as db:
-        q = (await db.execute(select(UsageQuota).where(UsageQuota.user_id == user_id))).scalars().first()
+        q = (
+            (await db.execute(select(UsageQuota).where(UsageQuota.user_id == user_id)))
+            .scalars()
+            .first()
+        )
         if q is None:
             # Same check-then-insert race as get_budget: degrade to an
             # idempotent re-query when a concurrent request wins the insert.
@@ -894,8 +980,10 @@ async def get_quota(request: Request) -> dict[str, Any]:
             except IntegrityError:
                 await db.rollback()
                 q = (
-                    await db.execute(select(UsageQuota).where(UsageQuota.user_id == user_id))
-                ).scalars().first()
+                    (await db.execute(select(UsageQuota).where(UsageQuota.user_id == user_id)))
+                    .scalars()
+                    .first()
+                )
             else:
                 await db.refresh(q)
         if q is None:
@@ -925,17 +1013,21 @@ async def search_documents(
     async with async_session() as db:
         pattern = f"%{q}%"
         rows = (
-            await db.execute(
-                select(DocumentChunk)
-                .join(Document, Document.id == DocumentChunk.document_id)
-                .where(
-                    DocumentChunk.content.ilike(pattern),
-                    Document.user_id == user_id,
+            (
+                await db.execute(
+                    select(DocumentChunk)
+                    .join(Document, Document.id == DocumentChunk.document_id)
+                    .where(
+                        DocumentChunk.content.ilike(pattern),
+                        Document.user_id == user_id,
+                    )
+                    .order_by(DocumentChunk.created_at.desc())
+                    .limit(limit)
                 )
-                .order_by(DocumentChunk.created_at.desc())
-                .limit(limit)
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [_chunk_dict(c) for c in rows]
 
 
@@ -953,12 +1045,16 @@ async def _find_plugin(db: Any, plugin_id: str) -> PluginRecord | None:
         The PluginRecord if found, None otherwise.
     """
     return (
-        await db.execute(
-            select(PluginRecord).where(
-                (PluginRecord.id == plugin_id) | (PluginRecord.plugin_key == plugin_id)
+        (
+            await db.execute(
+                select(PluginRecord).where(
+                    (PluginRecord.id == plugin_id) | (PluginRecord.plugin_key == plugin_id)
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
 
 
 async def _set_plugin_enabled(plugin_id: str, enabled: bool) -> dict[str, Any]:
@@ -1012,10 +1108,12 @@ def _trace_dict(t: Trace) -> dict[str, Any]:
 def _trace_detail_dict(t: Trace) -> dict[str, Any]:
     """Convert a Trace model instance to a detailed response dictionary."""
     base = _trace_dict(t)
-    base.update({
-        "input_data": t.input_data,
-        "output_data": t.output_data,
-    })
+    base.update(
+        {
+            "input_data": t.input_data,
+            "output_data": t.output_data,
+        }
+    )
     return base
 
 

@@ -245,5 +245,3 @@ async def test_data_import() -> None:
     # Assert
     assert result is not None
     mock_service.execute.assert_called_once()
-
-

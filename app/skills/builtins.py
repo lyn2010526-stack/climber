@@ -412,7 +412,7 @@ async def skill_git_master(
     elif action == "conflict-resolve":
         cmd = "git diff --name-only --diff-filter=U"
     else:
-        return f"Unknown action: {action}. Available: {list(commands.keys()) + ['commit', 'branch', 'merge', 'rebase', 'conflict-resolve']}"
+        return f"Unknown action: {action}. Available: {[*list(commands.keys()), 'commit', 'branch', 'merge', 'rebase', 'conflict-resolve']}"
 
     try:
         proc = await asyncio.create_subprocess_shell(
@@ -937,7 +937,9 @@ Apply 5 Whys:
 Begin analysis."""
 
 
-async def skill_memory_action(action: str = "recall", query: str = "", content: str = "", memory_type: str = "fact") -> str:
+async def skill_memory_action(
+    action: str = "recall", query: str = "", content: str = "", memory_type: str = "fact"
+) -> str:
     """Persistent Memory Manager: store, recall, and manage long-term agent memory."""
     if action == "recall":
         entries = persistent_memory.recall(query=query, limit=10)

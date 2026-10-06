@@ -83,7 +83,9 @@ class DurableAuditStore:
             result="allowed" if allowed else "denied",
         )
 
-    async def log_file_change(self, session_id=None, user_id=None, operation=None, path=None, details=None) -> bool:
+    async def log_file_change(
+        self, session_id=None, user_id=None, operation=None, path=None, details=None
+    ) -> bool:
         return await self.log(
             session_id=session_id,
             user_id=user_id,
@@ -93,7 +95,9 @@ class DurableAuditStore:
             result=operation or "",
         )
 
-    async def log_agent_action(self, session_id=None, user_id=None, action=None, details=None) -> bool:
+    async def log_agent_action(
+        self, session_id=None, user_id=None, action=None, details=None
+    ) -> bool:
         return await self.log(
             session_id=session_id,
             user_id=user_id,

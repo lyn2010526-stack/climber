@@ -65,19 +65,28 @@ class TestAdaptiveRetrieval:
     def test_route_decision(self):
         router = AdaptiveRetrievalRouter()
         assert router.decide_route("q", doc_type="skill", doc_length=30) == "fts_chinese"
-        assert router.decide_route("q", doc_type="code", doc_length=3000) == "fts_chinese"  # 无向量插件回退
+        assert (
+            router.decide_route("q", doc_type="code", doc_length=3000) == "fts_chinese"
+        )  # 无向量插件回退
         assert router.decide_route("q", doc_type="conversation", doc_length=800) == "hybrid"
 
     def test_retrieve_empty_ok(self, tmp_path):
         fts = Fts5Store(str(tmp_path / "router_test.db"))
         router = AdaptiveRetrievalRouter(fts_store=fts)
-        mem = MemoryItem(kind=MemoryKind.SKILL, text="关于 python 项目结构的规则说明",
-                         title="项目结构规则", doc_type="skill", doc_length=20)
+        mem = MemoryItem(
+            kind=MemoryKind.SKILL,
+            text="关于 python 项目结构的规则说明",
+            title="项目结构规则",
+            doc_type="skill",
+            doc_length=20,
+        )
         fts.upsert(mem)
 
         async def _run():
             return await router.retrieve("项目结构", top_k=5, doc_type="skill", doc_length=20)
+
         import asyncio
+
         results = asyncio.run(_run())
         assert results, "skill 文档应能被检索到"
 
@@ -98,7 +107,9 @@ class TestAdaptiveCompression:
     def test_stall_increases_strength(self):
         sched = AdaptiveCompressionScheduler()
         base = sched.decide(context_tokens=800, max_tokens=1000, task_type="general")
-        boosted = sched.decide(context_tokens=800, max_tokens=1000, task_type="general", stall_rounds=3)
+        boosted = sched.decide(
+            context_tokens=800, max_tokens=1000, task_type="general", stall_rounds=3
+        )
         assert boosted.strength > base.strength
 
 
@@ -136,9 +147,19 @@ class TestThreeState:
 class TestDualSnapshot:
     def test_chain_rebuild(self, tmp_path):
         mgr = SnapshotManager(str(tmp_path / "snap.db"))
-        mgr.save_milestone("s1", TAORPhase.PLAN, state={"step": 1}, messages=[{"role": "user", "content": "m0"}], label="plan")
-        mgr.save_incremental("s1", TAORPhase.ACT, messages_delta=[{"role": "assistant", "content": "a1"}],
-                             changed_state={"step": 2})
+        mgr.save_milestone(
+            "s1",
+            TAORPhase.PLAN,
+            state={"step": 1},
+            messages=[{"role": "user", "content": "m0"}],
+            label="plan",
+        )
+        mgr.save_incremental(
+            "s1",
+            TAORPhase.ACT,
+            messages_delta=[{"role": "assistant", "content": "a1"}],
+            changed_state={"step": 2},
+        )
         full = mgr.load_head("s1")
         assert full.state["step"] == 2
         assert len(full.diff["messages"]) == 2

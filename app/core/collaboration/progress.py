@@ -245,7 +245,9 @@ class TaskTree:
         self.task_id = task_id
         self.nodes: OrderedDict[str, TaskNode] = OrderedDict()
 
-    async def add_root(self, task_name: str, node_id: str | None = None, metadata: dict[str, Any] | None = None) -> TaskNode:
+    async def add_root(
+        self, task_name: str, node_id: str | None = None, metadata: dict[str, Any] | None = None
+    ) -> TaskNode:
         """Add the root node for a task start."""
         return await self._add_node(task_name, parent_id=None, node_id=node_id, metadata=metadata)
 
@@ -257,7 +259,9 @@ class TaskTree:
         metadata: dict[str, Any] | None = None,
     ) -> TaskNode:
         """Add a subtask node under ``parent_id``."""
-        return await self._add_node(task_name, parent_id=parent_id, node_id=node_id, metadata=metadata)
+        return await self._add_node(
+            task_name, parent_id=parent_id, node_id=node_id, metadata=metadata
+        )
 
     async def _add_node(
         self,
@@ -277,19 +281,22 @@ class TaskTree:
             metadata=dict(metadata or {}),
         )
         self.nodes[node.node_id] = node
-        await group_ws_hub.broadcast(self.group_id, {
-            "type": "tree_node_added",
-            "data": {
-                "event": "tree_node_added",
-                "node_id": node.node_id,
-                "parent_id": node.parent_id,
-                "task_id": self.task_id,
-                "task_name": node.task_name,
-                "status": node.status,
-                "started_at": _utc_now_iso(),
-                "metadata": dict(node.metadata),
+        await group_ws_hub.broadcast(
+            self.group_id,
+            {
+                "type": "tree_node_added",
+                "data": {
+                    "event": "tree_node_added",
+                    "node_id": node.node_id,
+                    "parent_id": node.parent_id,
+                    "task_id": self.task_id,
+                    "task_name": node.task_name,
+                    "status": node.status,
+                    "started_at": _utc_now_iso(),
+                    "metadata": dict(node.metadata),
+                },
             },
-        })
+        )
         return node
 
     async def ensure_root(self, task_name: str) -> TaskNode:
@@ -299,7 +306,9 @@ class TaskTree:
             return root
         return await self.add_root(task_name)
 
-    async def update_status(self, node_id: str, status: str, metadata: dict[str, Any] | None = None) -> TaskNode | None:
+    async def update_status(
+        self, node_id: str, status: str, metadata: dict[str, Any] | None = None
+    ) -> TaskNode | None:
         """Update a node status and broadcast the structured change event."""
         node = self.nodes.get(node_id)
         if node is None:
@@ -309,19 +318,22 @@ class TaskTree:
             node.ended_at = time.monotonic()
         if metadata:
             node.metadata.update(metadata)
-        await group_ws_hub.broadcast(self.group_id, {
-            "type": "tree_node_updated",
-            "data": {
-                "event": "tree_node_updated",
-                "node_id": node.node_id,
-                "parent_id": node.parent_id,
-                "task_id": self.task_id,
-                "task_name": node.task_name,
-                "status": node.status,
-                "elapsed_ms": node.elapsed_ms(),
-                "metadata": dict(node.metadata),
+        await group_ws_hub.broadcast(
+            self.group_id,
+            {
+                "type": "tree_node_updated",
+                "data": {
+                    "event": "tree_node_updated",
+                    "node_id": node.node_id,
+                    "parent_id": node.parent_id,
+                    "task_id": self.task_id,
+                    "task_name": node.task_name,
+                    "status": node.status,
+                    "elapsed_ms": node.elapsed_ms(),
+                    "metadata": dict(node.metadata),
+                },
             },
-        })
+        )
         return node
 
     def snapshot(self) -> dict[str, Any]:

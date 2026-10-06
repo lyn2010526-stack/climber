@@ -31,8 +31,8 @@ from app.core.auth_manager import create_access_token
 from app.core.permission_rules import (
     PermissionConfig,
     PermissionMode,
-    PermissionTier,
     PermissionRule,
+    PermissionTier,
     RuleDecision,
 )
 from app.middleware.auth import AuthMiddleware
@@ -154,7 +154,9 @@ def test_get_and_put_config_reject_the_same_callers(
     for scopes, expected in ((None, 401), (["read", "write"], 403), (["admin"], 200)):
         headers = {} if scopes is None else _bearer(scopes)
         read_status = client.get(CONFIG_PATH, headers=headers).status_code
-        write_status = client.put(CONFIG_PATH, json={"mode": PermissionMode.PLAN.value}, headers=headers).status_code
+        write_status = client.put(
+            CONFIG_PATH, json={"mode": PermissionMode.PLAN.value}, headers=headers
+        ).status_code
 
         assert read_status == expected
         assert write_status == expected

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 # ── Agent schemas ──
 
+
 class AgentCreate(BaseModel):
     name: str
     description: str = ""
@@ -34,6 +35,7 @@ class AgentResponse(BaseModel):
 
 # ── Session schemas ──
 
+
 class SessionCreate(BaseModel):
     agent_id: str
 
@@ -53,6 +55,7 @@ class ChatResponse(BaseModel):
 
 # ── Tool schemas ──
 
+
 class ToolRegister(BaseModel):
     name: str
     description: str
@@ -66,6 +69,7 @@ class ToolResponse(BaseModel):
 
 
 # ── Model schemas ──
+
 
 class ModelRegister(BaseModel):
     provider: str

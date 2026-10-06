@@ -69,7 +69,7 @@ from app.core.engine.notifications import (
 
 # Patch targets used by tests: tests patch these names on this facade module,
 # and the thin engine methods below resolve them at call time.
-from app.core.engine.persistence import persist_message  # noqa: F401
+from app.core.engine.persistence import persist_message
 from app.core.engine.run_storage import RunStorage, track_run
 from app.core.engine.runner import (
     TASK_MEMORY_MARKER,
@@ -82,14 +82,14 @@ from app.core.engine.session_runner import (  # noqa: F401
     response_usage,
 )
 from app.core.engine.tool_exec import handle_tool_debug, handle_tool_execution
-from app.core.engine.tools import build_tools  # noqa: F401
+from app.core.engine.tools import build_tools
 from app.core.engine.validation import (  # noqa: F401
     _COMMAND_TOOLS,
     _FILE_TOOLS,
     _approval_key,
     validate_tool_call,
 )
-from app.core.parallel import ParallelToolExecutor  # noqa: F401
+from app.core.parallel import ParallelToolExecutor
 from app.core.persistent_memory import PersistentMemoryService
 from app.core.resilience import ResourceTracker
 from app.core.session import AgentSession, SessionConfig
@@ -172,7 +172,9 @@ class AgentEngine:
         """
         self.model_registry = model_registry or _resolve_registry("ModelRegistry", ModelRegistry)
         self.tool_registry = tool_registry or _resolve_registry("ToolRegistry", ToolRegistry)
-        self._checkpoints = checkpoint_store if checkpoint_store is not None else SQLiteCheckpointStore()
+        self._checkpoints = (
+            checkpoint_store if checkpoint_store is not None else SQLiteCheckpointStore()
+        )
         self._run_store = run_store if run_store is not None else RunStorage()
         from app.core.engine.input_queue import SessionInputQueue
 
@@ -270,6 +272,7 @@ class AgentEngine:
             The created AgentSession instance.
         """
         from uuid import uuid4
+
         sid = session_id or str(uuid4())
         # Only pass sampling overrides when explicitly set so they do not
         # clobber values already carried by ``session_config``.
@@ -293,7 +296,10 @@ class AgentEngine:
             session_config=session_config,
             **sampling_overrides,
         )
-        if hasattr(self, "_default_permission_config") and self._default_permission_config is not None:
+        if (
+            hasattr(self, "_default_permission_config")
+            and self._default_permission_config is not None
+        ):
             session.permission_config = self._default_permission_config
         if system_prompt:
             session.messages.append({"role": MessageRole.SYSTEM, "content": system_prompt})
@@ -314,9 +320,13 @@ class AgentEngine:
             self._sessions.pop(sid, None)
 
     async def run(
-        self, session: AgentSession, message: str, images: list[str] | None = None,
+        self,
+        session: AgentSession,
+        message: str,
+        images: list[str] | None = None,
         attachments: list[ChatAttachment] | None = None,
-        *, queued_only: bool = False,
+        *,
+        queued_only: bool = False,
     ) -> AsyncIterator[AgentEvent]:
         """Run the agent engine for a session and message.
 
@@ -337,12 +347,18 @@ class AgentEngine:
         """
         lock = self._session_locks.get(session.session_id)
         if lock is not None and lock.locked():
-            yield AgentEvent(type=AgentEventType.ERROR, data={"error": "Session is busy processing another request"})
+            yield AgentEvent(
+                type=AgentEventType.ERROR,
+                data={"error": "Session is busy processing another request"},
+            )
             return
         if lock is None:
             lock = self._session_locks.setdefault(session.session_id, asyncio.Lock())
             if lock.locked():
-                yield AgentEvent(type=AgentEventType.ERROR, data={"error": "Session is busy processing another request"})
+                yield AgentEvent(
+                    type=AgentEventType.ERROR,
+                    data={"error": "Session is busy processing another request"},
+                )
                 return
 
         try:
@@ -352,8 +368,13 @@ class AgentEngine:
                 if queued_only:
                     from app.core.engine.input_dispatch import prepare_dispatch
 
-                    item = await prepare_dispatch(self._input_queue, session.session_id, session.user_id,
-                                                  claim=True, session=session)
+                    item = await prepare_dispatch(
+                        self._input_queue,
+                        session.session_id,
+                        session.user_id,
+                        claim=True,
+                        session=session,
+                    )
                     input_id, message, first = item["id"], item["message"], False
                     yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
                 outer_no_progress = 0
@@ -363,47 +384,80 @@ class AgentEngine:
                 while True:
                     session._continuing_input = not first
                     if not first and session._stop_requested:
-                        for item in await self._input_queue.freeze(session.session_id, session.user_id, "Execution stopped"):
+                        for item in await self._input_queue.freeze(
+                            session.session_id, session.user_id, "Execution stopped"
+                        ):
                             yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
-                        yield AgentEvent(type=AgentEventType.RUNTIME_REPORT, data=await self._input_queue.report(
-                            session.session_id, session.user_id,
-                        ))
+                        yield AgentEvent(
+                            type=AgentEventType.RUNTIME_REPORT,
+                            data=await self._input_queue.report(
+                                session.session_id,
+                                session.user_id,
+                            ),
+                        )
                         yield AgentEvent(type=AgentEventType.DONE, data={"status": "stopped"})
                         break
                     terminal = []
                     async with self._track_run_with_cleanup(session):
                         if first:
-                            recovered = await self._input_queue.recover(session.session_id, session.user_id)
+                            recovered = await self._input_queue.recover(
+                                session.session_id, session.user_id
+                            )
                             for item in recovered:
-                                yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
+                                yield AgentEvent(
+                                    type=AgentEventType.INPUT_STATUS, data={"item": item}
+                                )
                             if recovered:
-                                raise RuntimeError("Interrupted input has unknown effects; manual review required")
+                                raise RuntimeError(
+                                    "Interrupted input has unknown effects; manual review required"
+                                )
                         outer_rounds += 1
                         session._outer_rounds = outer_rounds
-                        yield AgentEvent(type=AgentEventType.TURN_STARTED,
-                                         data={"input_id": input_id, "message": message})
-                        yield AgentEvent(type=AgentEventType.RUNTIME_REPORT, data=await self._input_queue.report(
-                            session.session_id, session.user_id, message if input_id is None else None,
-                        ))
-                        async with contextlib.aclosing(self._run_locked(session, message, images, attachments)) as events:
+                        yield AgentEvent(
+                            type=AgentEventType.TURN_STARTED,
+                            data={"input_id": input_id, "message": message},
+                        )
+                        yield AgentEvent(
+                            type=AgentEventType.RUNTIME_REPORT,
+                            data=await self._input_queue.report(
+                                session.session_id,
+                                session.user_id,
+                                message if input_id is None else None,
+                            ),
+                        )
+                        async with contextlib.aclosing(
+                            self._run_locked(session, message, images, attachments)
+                        ) as events:
                             async for event in events:
                                 if event.type in {AgentEventType.DONE, AgentEventType.ERROR}:
                                     terminal.append(event)
                                 else:
                                     yield event
                                     if event.type == AgentEventType.INPUT_STATUS:
-                                        yield AgentEvent(type=AgentEventType.RUNTIME_REPORT, data=await self._input_queue.report(
-                                            session.session_id, session.user_id, message if input_id is None else None,
-                                        ))
+                                        yield AgentEvent(
+                                            type=AgentEventType.RUNTIME_REPORT,
+                                            data=await self._input_queue.report(
+                                                session.session_id,
+                                                session.user_id,
+                                                message if input_id is None else None,
+                                            ),
+                                        )
                     # The turn transaction is committed before acknowledging or claiming inputs.
-                    yield AgentEvent(type=AgentEventType.TURN_DONE, data={
-                        "input_id": input_id, "turn_id": session.current_turn_id,
-                        "status": getattr(session, "_run_status_override", None) or session.status.value,
-                        "message_id": getattr(session, "_last_assistant_message_id", None),
-                    })
-                    if getattr(session, "_run_status_override", None) or session.status.value == "completed":
-                        if message not in completed_subtasks:
-                            completed_subtasks.append(message)
+                    yield AgentEvent(
+                        type=AgentEventType.TURN_DONE,
+                        data={
+                            "input_id": input_id,
+                            "turn_id": session.current_turn_id,
+                            "status": getattr(session, "_run_status_override", None)
+                            or session.status.value,
+                            "message_id": getattr(session, "_last_assistant_message_id", None),
+                        },
+                    )
+                    if (
+                        getattr(session, "_run_status_override", None)
+                        or session.status.value == "completed"
+                    ) and message not in completed_subtasks:
+                        completed_subtasks.append(message)
                     loop_payload: dict[str, Any] = {
                         "outer_round": outer_rounds,
                         "current_input": message,
@@ -413,11 +467,14 @@ class AgentEngine:
                         "no_progress_count": outer_no_progress,
                     }
                     try:
-                        for queued_item in await self._input_queue.list(session.session_id, session.user_id):
+                        for queued_item in await self._input_queue.list(
+                            session.session_id, session.user_id
+                        ):
                             if queued_item["status"] not in {"queued", "started"}:
                                 continue
                             target = (
-                                loop_payload["followup_queue"] if queued_item["kind"] == "follow_up"
+                                loop_payload["followup_queue"]
+                                if queued_item["kind"] == "follow_up"
                                 else loop_payload["steering_queue"]
                             )
                             target.append(queued_item["message"])
@@ -431,82 +488,144 @@ class AgentEngine:
                     except BaseException:
                         pass
                     if input_id:
-                        stopped = session._stop_requested or session.status.value in {"paused", "stopped", "cancelled"}
+                        stopped = session._stop_requested or session.status.value in {
+                            "paused",
+                            "stopped",
+                            "cancelled",
+                        }
                         finish_status = (
-                            "blocked" if stopped else
-                            "completed" if session.status.value == "completed" else "failed"
+                            "blocked"
+                            if stopped
+                            else "completed"
+                            if session.status.value == "completed"
+                            else "failed"
                         )
                         finish_error = session._last_error
                         if finish_error is None and finish_status != "completed":
                             finish_error = (
                                 "Execution stopped before the input completed"
-                                if stopped else
-                                "Input ended without a recorded error"
+                                if stopped
+                                else "Input ended without a recorded error"
                             )
                         item = await self._input_queue.finish(
-                            session.session_id, session.user_id, input_id,
+                            session.session_id,
+                            session.user_id,
+                            input_id,
                             finish_status,
                             finish_error,
                         )
                         yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
-                    pi_auto = bool((getattr(session, "context", None) or {}).get("pi_auto_continue"))
-                    if pi_auto and session.max_iterations and outer_rounds >= session.max_iterations:
+                    pi_auto = bool(
+                        (getattr(session, "context", None) or {}).get("pi_auto_continue")
+                    )
+                    if (
+                        pi_auto
+                        and session.max_iterations
+                        and outer_rounds >= session.max_iterations
+                    ):
                         reason = "Outer loop reached max iterations; pausing auto-continue"
                         session._last_error = reason
                         session._run_status_override = "max_iterations_reached"
-                        for item in await self._input_queue.freeze(session.session_id, session.user_id, reason):
+                        for item in await self._input_queue.freeze(
+                            session.session_id, session.user_id, reason
+                        ):
                             yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
-                        yield AgentEvent(type=AgentEventType.RUNTIME_REPORT, data=await self._input_queue.report(
-                            session.session_id, session.user_id,
-                        ))
-                        yield AgentEvent(type=AgentEventType.PROGRESS, data={"status": "paused", "reason": reason})
-                        yield AgentEvent(type=AgentEventType.DONE, data={"status": "max_iterations_reached", "error": reason})
+                        yield AgentEvent(
+                            type=AgentEventType.RUNTIME_REPORT,
+                            data=await self._input_queue.report(
+                                session.session_id,
+                                session.user_id,
+                            ),
+                        )
+                        yield AgentEvent(
+                            type=AgentEventType.PROGRESS,
+                            data={"status": "paused", "reason": reason},
+                        )
+                        yield AgentEvent(
+                            type=AgentEventType.DONE,
+                            data={"status": "max_iterations_reached", "error": reason},
+                        )
                         break
                     if session._stop_requested or session.status.value != "completed":
-                        reason = session._last_error or "Execution stopped; queued inputs require review"
-                        for item in await self._input_queue.freeze(session.session_id, session.user_id, reason):
+                        reason = (
+                            session._last_error or "Execution stopped; queued inputs require review"
+                        )
+                        for item in await self._input_queue.freeze(
+                            session.session_id, session.user_id, reason
+                        ):
                             yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
-                        yield AgentEvent(type=AgentEventType.RUNTIME_REPORT, data=await self._input_queue.report(
-                            session.session_id, session.user_id,
-                        ))
+                        yield AgentEvent(
+                            type=AgentEventType.RUNTIME_REPORT,
+                            data=await self._input_queue.report(
+                                session.session_id,
+                                session.user_id,
+                            ),
+                        )
                         for event in terminal:
                             if event.type == AgentEventType.DONE and session._stop_requested:
-                                event = AgentEvent(type=AgentEventType.DONE, data={**event.data, "status": "stopped"})
+                                event = AgentEvent(
+                                    type=AgentEventType.DONE,
+                                    data={**event.data, "status": "stopped"},
+                                )
                             yield event
                         if not any(event.type == AgentEventType.DONE for event in terminal):
-                            yield AgentEvent(type=AgentEventType.DONE, data={
-                                "status": getattr(session, "_run_status_override", None) or session.status.value,
-                                "error": session._last_error,
-                            })
+                            yield AgentEvent(
+                                type=AgentEventType.DONE,
+                                data={
+                                    "status": getattr(session, "_run_status_override", None)
+                                    or session.status.value,
+                                    "error": session._last_error,
+                                },
+                            )
                         break
                     # Pi outer loop: stall guard over the follow-up queue.
                     # Two consecutive turns without overall progress (no new
                     # iteration, no new output) pause the outer loop and dump state.
                     turn_signature = _outer_turn_signature(session)
                     outer_no_progress, outer_prev_signature = _outer_stall_update(
-                        turn_signature, outer_prev_signature, outer_no_progress)
+                        turn_signature, outer_prev_signature, outer_no_progress
+                    )
                     if outer_no_progress >= 2:
                         reason = "Agent produced two consecutive turns without overall progress; pausing outer loop"
                         session._last_error = reason
                         session._run_status_override = "no_progress"
-                        for item in await self._input_queue.freeze(session.session_id, session.user_id, reason):
+                        for item in await self._input_queue.freeze(
+                            session.session_id, session.user_id, reason
+                        ):
                             yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
-                        yield AgentEvent(type=AgentEventType.RUNTIME_REPORT, data=await self._input_queue.report(
-                            session.session_id, session.user_id,
-                        ))
-                        yield AgentEvent(type=AgentEventType.PROGRESS, data={"status": "paused", "reason": reason})
+                        yield AgentEvent(
+                            type=AgentEventType.RUNTIME_REPORT,
+                            data=await self._input_queue.report(
+                                session.session_id,
+                                session.user_id,
+                            ),
+                        )
+                        yield AgentEvent(
+                            type=AgentEventType.PROGRESS,
+                            data={"status": "paused", "reason": reason},
+                        )
                         for event in terminal:
                             if event.type != AgentEventType.DONE:
                                 yield event
-                        yield AgentEvent(type=AgentEventType.DONE, data={
-                            "status": "no_progress", "error": reason,
-                        })
+                        yield AgentEvent(
+                            type=AgentEventType.DONE,
+                            data={
+                                "status": "no_progress",
+                                "error": reason,
+                            },
+                        )
                         break
-                    item = await self._input_queue.claim(session.session_id, session.user_id, "follow_up")
+                    item = await self._input_queue.claim(
+                        session.session_id, session.user_id, "follow_up"
+                    )
                     if item is None:
-                        yield AgentEvent(type=AgentEventType.RUNTIME_REPORT, data=await self._input_queue.report(
-                            session.session_id, session.user_id,
-                        ))
+                        yield AgentEvent(
+                            type=AgentEventType.RUNTIME_REPORT,
+                            data=await self._input_queue.report(
+                                session.session_id,
+                                session.user_id,
+                            ),
+                        )
                         for event in terminal:
                             yield event
                         break
@@ -515,8 +634,11 @@ class AgentEngine:
                     yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
         except BaseException:
             with CancelScope(shield=True):
-                await self._input_queue.freeze(session.session_id, session.user_id,
-                                               "Execution interrupted; manual review required")
+                await self._input_queue.freeze(
+                    session.session_id,
+                    session.user_id,
+                    "Execution interrupted; manual review required",
+                )
             raise
         finally:
             session._continuing_input = False
@@ -578,11 +700,14 @@ class AgentEngine:
                     output_parts.append(event.data["content"])
             elif event.type == AgentEventType.ERROR:
                 error = event.data.get("error")
-        return {"output": "".join(output_parts),
-                "tokens_used": getattr(session, "_run_tokens", tokens_used),
-                "status": status or session.status.value, "error": error,
-                "cost_status": cost_status,
-                "usage_status": getattr(session, "_run_usage_status", "unknown")}
+        return {
+            "output": "".join(output_parts),
+            "tokens_used": getattr(session, "_run_tokens", tokens_used),
+            "status": status or session.status.value,
+            "error": error,
+            "cost_status": cost_status,
+            "usage_status": getattr(session, "_run_usage_status", "unknown"),
+        }
 
     # --- execution loop entry points (async-generator valued) ---
 
@@ -596,16 +721,21 @@ class AgentEngine:
                 break
             yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
             if session._stop_requested:
-                item = await self._input_queue.finish(session.session_id, session.user_id,
-                                                       item["id"], "blocked", "Execution stopped")
+                item = await self._input_queue.finish(
+                    session.session_id, session.user_id, item["id"], "blocked", "Execution stopped"
+                )
                 yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
                 break
             session.messages.append({"role": MessageRole.USER, "content": item["message"]})
-            persisted = await self._persist_message(session.session_id, MessageRole.USER, content=item["message"])
+            persisted = await self._persist_message(
+                session.session_id, MessageRole.USER, content=item["message"]
+            )
             if not persisted:
                 raise RuntimeError("Steering message persistence failed")
             await self._save_checkpoint(session, {"steering_input_id": item["id"]})
-            item = await self._input_queue.finish(session.session_id, session.user_id, item["id"], "applied")
+            item = await self._input_queue.finish(
+                session.session_id, session.user_id, item["id"], "applied"
+            )
             yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
 
     async def _enqueue_follow_up(self, session: AgentSession, message: str) -> str:
@@ -617,12 +747,17 @@ class AgentEngine:
         """
         client_request_id = f"agent-followup:{_follow_up_hash(message)}"
         item = await self._input_queue.submit(
-            session.session_id, session.user_id, client_request_id,
-            "follow_up", message,
+            session.session_id,
+            session.user_id,
+            client_request_id,
+            "follow_up",
+            message,
         )
         return str(item["id"])
 
-    async def _decide_followup(self, session: AgentSession, result: Any) -> dict[str, str | bool | None]:
+    async def _decide_followup(
+        self, session: AgentSession, result: Any
+    ) -> dict[str, str | bool | None]:
         """Pi dual-loop G1 default decider: one light LLM call, no context pollution.
 
         Asks the model to return ``{"finished": bool, "next_subtask": str|None,
@@ -642,13 +777,19 @@ class AgentEngine:
         )
         system = "You are an outer-loop controller. Decide if another subtask should run."
         raw = await run_llm_single(
-            self, session.provider, session.model_id, session.api_key, system, prompt,
-            base_url=session.base_url, max_chars=2000,
+            self,
+            session.provider,
+            session.model_id,
+            session.api_key,
+            system,
+            prompt,
+            base_url=session.base_url,
+            max_chars=2000,
         )
         try:
             import json
 
-            decision = json.loads(raw[raw.find("{"): raw.rfind("}") + 1] or "{}")
+            decision = json.loads(raw[raw.find("{") : raw.rfind("}") + 1] or "{}")
             if not isinstance(decision, dict):
                 raise ValueError("decision is not an object")
         except (ValueError, TypeError):
@@ -657,15 +798,19 @@ class AgentEngine:
         next_subtask = decision.get("next_subtask")
         if finished or not (isinstance(next_subtask, str) and next_subtask.strip()):
             return {
-                "finished": finished, "next_subtask": None,
+                "finished": finished,
+                "next_subtask": None,
                 "reason": decision.get("reason", "finished" if finished else "empty subtask"),
             }
         return {
-            "finished": False, "next_subtask": next_subtask.strip(),
+            "finished": False,
+            "next_subtask": next_subtask.strip(),
             "reason": decision.get("reason", ""),
         }
 
-    async def maybe_generate_followup(self, session: AgentSession, result: Any) -> dict[str, str | bool | None] | None:
+    async def maybe_generate_followup(
+        self, session: AgentSession, result: Any
+    ) -> dict[str, str | bool | None] | None:
         """Pi dual-loop G1 gate: decide and enqueue the next auto-continue subtask.
 
         Opt-in only (``session.context["pi_auto_continue"]``). Skipped while
@@ -687,7 +832,10 @@ class AgentEngine:
         return decision
 
     def _run_locked(
-        self, session: AgentSession, message: str, images: list[str] | None = None,
+        self,
+        session: AgentSession,
+        message: str,
+        images: list[str] | None = None,
         attachments: list[ChatAttachment] | None = None,
     ) -> AsyncIterator[AgentEvent]:
         """Internal run method - executes under session lock."""
@@ -702,7 +850,9 @@ class AgentEngine:
         """Main iteration loop for agent execution."""
         return iteration_loop(self, session, executor, compressor)
 
-    def _handle_text_result(self, session: AgentSession, result: Any, adapter: Any) -> AsyncIterator[AgentEvent]:
+    def _handle_text_result(
+        self, session: AgentSession, result: Any, adapter: Any
+    ) -> AsyncIterator[AgentEvent]:
         """Handle text content from LLM response."""
         return handle_text_result(self, session, result, adapter)
 
@@ -716,12 +866,18 @@ class AgentEngine:
         metacognition: Any = None,
     ) -> AsyncIterator[AgentEvent]:
         """Handle tool execution from LLM response."""
-        return handle_tool_execution(self, session, executor, result, iteration, ctx_tokens, metacognition=metacognition)
+        return handle_tool_execution(
+            self, session, executor, result, iteration, ctx_tokens, metacognition=metacognition
+        )
 
     # --- override points routed to engine submodules ---
 
-    async def _save_checkpoint(self, session: AgentSession, channels: dict[str, Any],
-                               pending_writes: list[dict[str, Any]] | None = None) -> str:
+    async def _save_checkpoint(
+        self,
+        session: AgentSession,
+        channels: dict[str, Any],
+        pending_writes: list[dict[str, Any]] | None = None,
+    ) -> str:
         """Persist a sanitized checkpoint snapshot of the session.
 
         Args:
@@ -734,7 +890,9 @@ class AgentEngine:
         """
         return await save_checkpoint(self._checkpoints, session, channels, pending_writes)
 
-    async def _call_llm(self, adapter: Any, session: AgentSession, tools: list) -> ChatResult | None:
+    async def _call_llm(
+        self, adapter: Any, session: AgentSession, tools: list
+    ) -> ChatResult | None:
         """Call the LLM adapter and return the result.
 
         Args:
@@ -771,7 +929,9 @@ class AgentEngine:
         """
         return await call_llm_with_resilience(self, session, model_adapter, messages, iteration)
 
-    async def _stream_accumulate(self, adapter: Any, messages: list[dict[str, Any]], tools: list) -> ChatResult:
+    async def _stream_accumulate(
+        self, adapter: Any, messages: list[dict[str, Any]], tools: list
+    ) -> ChatResult:
         """Accumulate a streaming response into a single ChatResult.
 
         Args:
@@ -784,7 +944,9 @@ class AgentEngine:
         """
         return await stream_accumulate(adapter, messages, tools)
 
-    async def _stream_chat(self, adapter: Any, session: AgentSession, tools: list) -> ChatResult | None:
+    async def _stream_chat(
+        self, adapter: Any, session: AgentSession, tools: list
+    ) -> ChatResult | None:
         """Handle streaming chat response for a session.
 
         Args:
@@ -798,7 +960,9 @@ class AgentEngine:
         return await stream_chat(adapter, session, tools)
 
     @staticmethod
-    def _accumulate_stream_tool_calls(accumulated: list[dict[str, Any]], chunks: list[dict[str, Any]]) -> None:
+    def _accumulate_stream_tool_calls(
+        accumulated: list[dict[str, Any]], chunks: list[dict[str, Any]]
+    ) -> None:
         """Merge streamed tool call deltas into complete tool calls.
 
         Args:
@@ -807,7 +971,9 @@ class AgentEngine:
         """
         accumulate_stream_tool_calls(accumulated, chunks)
 
-    def _validate_tool_call(self, session: AgentSession, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
+    def _validate_tool_call(
+        self, session: AgentSession, tool_name: str, arguments: dict[str, Any]
+    ) -> tuple[bool, str]:
         """Validate a tool call using the engine's configured sandbox/mode.
 
         Returns:
@@ -834,7 +1000,9 @@ class AgentEngine:
         """
         return build_tools(self.tool_registry, list(tool_names or []), self.tool_prioritizer)
 
-    def _build_tools_for_session(self, session: AgentSession, task_description: str = "") -> list[dict[str, Any]]:
+    def _build_tools_for_session(
+        self, session: AgentSession, task_description: str = ""
+    ) -> list[dict[str, Any]]:
         """Build tool definitions for the session's enabled tools.
 
         Args:
@@ -844,7 +1012,12 @@ class AgentEngine:
         Returns:
             A list of tool definition dictionaries.
         """
-        return build_tools(self.tool_registry, session.tools, self.tool_prioritizer, task_description=task_description)
+        return build_tools(
+            self.tool_registry,
+            session.tools,
+            self.tool_prioritizer,
+            task_description=task_description,
+        )
 
     def _make_parallel_executor(self, session: AgentSession) -> ParallelToolExecutor:
         """Build the parallel tool executor bound to the facade validation.
@@ -943,37 +1116,54 @@ class AgentEngine:
         """
         await inject_memory_context(self, session, message)
 
-    async def _inject_task_memory_context(self, session: AgentSession, *, token_budget: int = 2048) -> None:
+    async def _inject_task_memory_context(
+        self, session: AgentSession, *, token_budget: int = 2048
+    ) -> None:
         """Refresh a bounded durable task view without splitting tool exchanges."""
         import structlog
 
         from app.core.engine.task_memory import TaskMemory
 
-        session.messages = [msg for msg in session.messages if not (
-            msg.get("role") == MessageRole.SYSTEM
-            and isinstance(msg.get("content"), str)
-            and msg["content"].startswith(TASK_MEMORY_MARKER)
-        )]
+        session.messages = [
+            msg
+            for msg in session.messages
+            if not (
+                msg.get("role") == MessageRole.SYSTEM
+                and isinstance(msg.get("content"), str)
+                and msg["content"].startswith(TASK_MEMORY_MARKER)
+            )
+        ]
         try:
             budget = min(2048, max(0, token_budget), max(0, session.context_config.max_tokens // 4))
             prefix = TASK_MEMORY_MARKER + "\n"
             view = await TaskMemory(self._run_store.session_factory).restore(
-                session.session_id, session.user_id,
+                session.session_id,
+                session.user_id,
                 token_budget=max(0, budget - len(prefix.encode("utf-8"))),
             )
             session.task_memory_diagnostics = {
-                "status": "restored", "budget_used": view["budget_used"], "omitted": view["omitted"],
+                "status": "restored",
+                "budget_used": view["budget_used"],
+                "omitted": view["omitted"],
             }
             if view["task_context"]:
                 position = 0
-                while position < len(session.messages) and session.messages[position].get("role") == MessageRole.SYSTEM:
+                while (
+                    position < len(session.messages)
+                    and session.messages[position].get("role") == MessageRole.SYSTEM
+                ):
                     position += 1
-                session.messages.insert(position, {"role": MessageRole.SYSTEM,
-                                                   "content": prefix + view["task_context"]})
+                session.messages.insert(
+                    position, {"role": MessageRole.SYSTEM, "content": prefix + view["task_context"]}
+                )
         except Exception as exc:
             session.task_memory_diagnostics = {"status": "restore_failed", "error": str(exc)}
-            structlog.get_logger().warning("task_memory_restore_failed", session_id=session.session_id,
-                                           turn_id=session.current_turn_id, error=str(exc))
+            structlog.get_logger().warning(
+                "task_memory_restore_failed",
+                session_id=session.session_id,
+                turn_id=session.current_turn_id,
+                error=str(exc),
+            )
 
     async def _summarize_task_memory(self, session: AgentSession) -> None:
         """Summarize committed outcomes under the existing session lock."""
@@ -983,15 +1173,26 @@ class AgentEngine:
 
         try:
             summary = await TaskMemory(self._run_store.session_factory).summarize_turn(
-                session.session_id, session.user_id, session.current_turn_id,
+                session.session_id,
+                session.user_id,
+                session.current_turn_id,
             )
             session.task_memory_summary_diagnostics = {
-                "status": "stored", "revision": summary["revision"], "source_hash": summary["source_hash"],
+                "status": "stored",
+                "revision": summary["revision"],
+                "source_hash": summary["source_hash"],
             }
         except Exception as exc:
-            session.task_memory_summary_diagnostics = {"status": "summary_failed", "error": str(exc)}
-            structlog.get_logger().warning("task_memory_summary_failed", session_id=session.session_id,
-                                           turn_id=session.current_turn_id, error=str(exc))
+            session.task_memory_summary_diagnostics = {
+                "status": "summary_failed",
+                "error": str(exc),
+            }
+            structlog.get_logger().warning(
+                "task_memory_summary_failed",
+                session_id=session.session_id,
+                turn_id=session.current_turn_id,
+                error=str(exc),
+            )
 
     async def _archive_instruction(self, session: AgentSession, message: str) -> None:
         """Persist the verbatim instruction and its safe local parse.
@@ -1062,6 +1263,7 @@ class AgentEngine:
             message: The user query the profile is adapted to.
         """
         from app.core.engine.dual_loop_hooks import inject_profile_context
+
         await inject_profile_context(self, session, message)
 
     def _record_profile_outcome(self, session: AgentSession, message: str) -> None:
@@ -1072,6 +1274,7 @@ class AgentEngine:
             message: The user instruction of this run.
         """
         from app.core.engine.dual_loop_hooks import record_profile_outcome
+
         record_profile_outcome(self, session, message)
 
     def _tick_evolution(self, session: AgentSession) -> None:
@@ -1081,6 +1284,7 @@ class AgentEngine:
             session: The agent session.
         """
         from app.core.engine.dual_loop_hooks import tick_evolution
+
         tick_evolution(self, session)
 
     @staticmethod
@@ -1140,7 +1344,9 @@ class AgentEngine:
 
     # --- permission API ---
 
-    def resolve_permission(self, tool_call_id: str, decision: str, *, owner_id: str | None = None) -> bool:
+    def resolve_permission(
+        self, tool_call_id: str, decision: str, *, owner_id: str | None = None
+    ) -> bool:
         """Resolve a pending permission request.
 
         Args:
@@ -1153,7 +1359,10 @@ class AgentEngine:
         for session in self._sessions.values():
             if owner_id is not None and session.user_id != owner_id:
                 continue
-            if session._pending_permission and session._pending_permission.get("tool_call_id") == tool_call_id:
+            if (
+                session._pending_permission
+                and session._pending_permission.get("tool_call_id") == tool_call_id
+            ):
                 session._pending_permission["decision"] = decision
                 if session._permission_event is not None:
                     session._permission_event.set()

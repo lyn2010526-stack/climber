@@ -23,7 +23,7 @@ import sys
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -96,7 +96,7 @@ class APIMonitor:
             latency_ms = (time.monotonic() - start) * 1000
             return APIMetric(
                 endpoint=endpoint,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 response_time_ms=latency_ms,
                 status_code=resp.status_code,
                 success=200 <= resp.status_code < 500,
@@ -105,7 +105,7 @@ class APIMonitor:
             latency_ms = (time.monotonic() - start) * 1000
             return APIMetric(
                 endpoint=endpoint,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 response_time_ms=latency_ms,
                 status_code=0,
                 success=False,
@@ -140,7 +140,7 @@ class SystemMonitor:
                 connections = 0
 
             metric = SystemMetric(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 cpu_percent=cpu,
                 memory_percent=mem.percent,
                 memory_used_mb=mem.used / (1024**2),
@@ -150,7 +150,7 @@ class SystemMonitor:
             )
         except ImportError:
             metric = SystemMetric(
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
                 cpu_percent=0.0,
                 memory_percent=0.0,
                 memory_used_mb=0.0,
@@ -243,9 +243,7 @@ def analyze_performance(
             summary["alerts"].append(f"Memory critical: {max(mem_values):.0f}%")
 
     if leak_detected:
-        summary["alerts"].append(
-            f"Memory leak suspected: {leak_growth_mb:.1f}MB growth in window"
-        )
+        summary["alerts"].append(f"Memory leak suspected: {leak_growth_mb:.1f}MB growth in window")
 
     if summary["alerts"]:
         summary["status"] = "degraded" if len(summary["alerts"]) < 3 else "critical"
@@ -305,12 +303,12 @@ def format_report_text(report: PerformanceReport) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Performance Monitor")
-    parser.add_argument("--interval", type=float, default=DEFAULT_INTERVAL, help="Sampling interval")
+    parser.add_argument(
+        "--interval", type=float, default=DEFAULT_INTERVAL, help="Sampling interval"
+    )
     parser.add_argument("--duration", type=int, default=DEFAULT_DURATION, help="Total duration")
     parser.add_argument("--api-url", default=DEFAULT_API_URL, help="API base URL")
-    parser.add_argument(
-        "--endpoint", action="append", help="Endpoints to probe (can repeat)"
-    )
+    parser.add_argument("--endpoint", action="append", help="Endpoints to probe (can repeat)")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     return parser.parse_args()
 
@@ -338,7 +336,7 @@ async def main() -> int:
     )
 
     report = PerformanceReport(
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         duration_seconds=duration,
         api_metrics=api_monitor.metrics,
         system_metrics=sys_monitor.metrics,

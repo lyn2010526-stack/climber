@@ -9,9 +9,9 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from uuid import uuid4
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from app.storage import async_session
 
@@ -29,8 +29,8 @@ class CheckpointData:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     # LangGraph-style enhancements
-    channel_values: dict[str, Any] = field(default_factory=dict)        # 状态通道快照
-    channel_versions: dict[str, int] = field(default_factory=dict)      # 通道版本号
+    channel_values: dict[str, Any] = field(default_factory=dict)  # 状态通道快照
+    channel_versions: dict[str, int] = field(default_factory=dict)  # 通道版本号
     versions_seen: dict[str, dict[str, int]] = field(default_factory=dict)  # 节点见过的版本
     pending_writes: list[dict[str, Any]] = field(default_factory=list)  # 待处理写入
 
@@ -38,21 +38,35 @@ class CheckpointData:
 @dataclass
 class PendingWrite:
     """A write that is pending commit to a checkpoint."""
+
     channel: str
     value: Any
     write_id: str
     status: str = "pending"  # pending / committed / rolled_back
 
 
-def sanitize_checkpoint(checkpoint: CheckpointData, secrets: tuple[str, ...] = ()) -> CheckpointData:
+def sanitize_checkpoint(
+    checkpoint: CheckpointData, secrets: tuple[str, ...] = ()
+) -> CheckpointData:
     """Copy payloads and redact credential fields and explicitly supplied keys."""
-    secret_fields = {"api_key", "apikey", "authorization", "password",
-                     "access_token", "refresh_token", "client_secret"}
+    secret_fields = {
+        "api_key",
+        "apikey",
+        "authorization",
+        "password",
+        "access_token",
+        "refresh_token",
+        "client_secret",
+    }
 
     def clean(value):
         if isinstance(value, dict):
-            return {key: "[REDACTED]" if str(key).lower().replace("-", "_") in secret_fields
-                    else clean(item) for key, item in value.items()}
+            return {
+                key: "[REDACTED]"
+                if str(key).lower().replace("-", "_") in secret_fields
+                else clean(item)
+                for key, item in value.items()
+            }
         if isinstance(value, (list, tuple)):
             return [clean(item) for item in value]
         if isinstance(value, str):
@@ -91,10 +105,14 @@ class InMemoryCheckpointStore:
     async def get(self, _thread_id: str | None, checkpoint_id: str) -> CheckpointData | None:
         return deepcopy(self._store.get(checkpoint_id))
 
-    async def get_latest(self, _thread_id: str | None, session_id: str, thread_id: str = "") -> tuple[CheckpointData, str] | None:
+    async def get_latest(
+        self, _thread_id: str | None, session_id: str, thread_id: str = ""
+    ) -> tuple[CheckpointData, str] | None:
         candidates = [
-            (cid, cp) for cid, cp in self._store.items()
-            if cp.session_id == session_id and (not thread_id or cp.metadata.get("thread_id") == thread_id)
+            (cid, cp)
+            for cid, cp in self._store.items()
+            if cp.session_id == session_id
+            and (not thread_id or cp.metadata.get("thread_id") == thread_id)
         ]
         if not candidates:
             return None
@@ -149,13 +167,13 @@ class SQLiteCheckpointStore:
         checkpoint_id: str = "",
         parent_id: str | None = None,
     ) -> str:
-        from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
         from app.storage import engine as _db_engine
+        from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
 
         await ensure_checkpoint_schema()
         checkpoint = sanitize_checkpoint(checkpoint)
         cid = checkpoint_id or str(uuid4())
-        saved_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        saved_at = datetime.now(UTC).replace(tzinfo=None)
         metadata_payload = {
             **checkpoint.metadata,
             "parent_id": parent_id,
@@ -205,7 +223,9 @@ class SQLiteCheckpointStore:
         async with async_session() as db:
             record = (
                 await db.execute(
-                    __import__("sqlalchemy").select(CheckpointRecord).where(CheckpointRecord.id == checkpoint_id)
+                    __import__("sqlalchemy")
+                    .select(CheckpointRecord)
+                    .where(CheckpointRecord.id == checkpoint_id)
                 )
             ).scalar_one_or_none()
             if record is None:
@@ -232,13 +252,17 @@ class SQLiteCheckpointStore:
                 return None
             return self._to_checkpoint(record)
 
-    async def get_latest(self, _thread_id: str | None, session_id: str, thread_id: str = "") -> tuple[CheckpointData, str] | None:
+    async def get_latest(
+        self, _thread_id: str | None, session_id: str, thread_id: str = ""
+    ) -> tuple[CheckpointData, str] | None:
         from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
 
         await ensure_checkpoint_schema()
         async with async_session() as db:
-            query = __import__("sqlalchemy").select(CheckpointRecord).where(
-                CheckpointRecord.session_id == session_id
+            query = (
+                __import__("sqlalchemy")
+                .select(CheckpointRecord)
+                .where(CheckpointRecord.session_id == session_id)
             )
             if thread_id:
                 query = query.where(CheckpointRecord.thread_id == thread_id)
@@ -261,13 +285,17 @@ class SQLiteCheckpointStore:
         await ensure_checkpoint_schema()
         async with async_session() as db:
             rows = (
-                await db.execute(
-                    __import__("sqlalchemy")
-                    .select(CheckpointRecord.id)
-                    .where(CheckpointRecord.session_id == session_id)
-                    .order_by(CheckpointRecord.created_at.asc())
+                (
+                    await db.execute(
+                        __import__("sqlalchemy")
+                        .select(CheckpointRecord.id)
+                        .where(CheckpointRecord.session_id == session_id)
+                        .order_by(CheckpointRecord.created_at.asc())
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             return list(rows)
 
     async def list_recoverable_sessions(self) -> list[dict[str, Any]]:
@@ -290,8 +318,7 @@ class SQLiteCheckpointStore:
                 )
             ).all()
             return [
-                {"session_id": row.session_id, "checkpoint_count": int(row.cnt)}
-                for row in rows
+                {"session_id": row.session_id, "checkpoint_count": int(row.cnt)} for row in rows
             ]
 
     async def list(self, session_id: str) -> list[CheckpointData]:
@@ -301,29 +328,40 @@ class SQLiteCheckpointStore:
         await ensure_checkpoint_schema()
         async with async_session() as db:
             rows = (
-                await db.execute(
-                    __import__("sqlalchemy")
-                    .select(CheckpointRecord)
-                    .where(CheckpointRecord.session_id == session_id)
-                    .order_by(CheckpointRecord.created_at.asc())
+                (
+                    await db.execute(
+                        __import__("sqlalchemy")
+                        .select(CheckpointRecord)
+                        .where(CheckpointRecord.session_id == session_id)
+                        .order_by(CheckpointRecord.created_at.asc())
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             return [self._to_checkpoint(r) for r in rows]
 
     async def delete_for_session(self, _thread_id: str | None, session_id: str) -> int:
         from app.storage.database import CheckpointRecord
+
         async with async_session() as db:
             rows = (
-                await db.execute(
-                    __import__("sqlalchemy")
-                    .select(CheckpointRecord.id)
-                    .where(CheckpointRecord.session_id == session_id)
+                (
+                    await db.execute(
+                        __import__("sqlalchemy")
+                        .select(CheckpointRecord.id)
+                        .where(CheckpointRecord.session_id == session_id)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             ids = list(rows)
             if ids:
                 await db.execute(
-                    __import__("sqlalchemy").delete(CheckpointRecord).where(CheckpointRecord.session_id == session_id)
+                    __import__("sqlalchemy")
+                    .delete(CheckpointRecord)
+                    .where(CheckpointRecord.session_id == session_id)
                 )
                 await db.commit()
             return len(ids)
@@ -331,9 +369,12 @@ class SQLiteCheckpointStore:
     async def delete(self, checkpoint_id: str) -> bool:
         """Remove a single checkpoint by id."""
         from app.storage.database import CheckpointRecord
+
         async with async_session() as db:
             result = await db.execute(
-                __import__("sqlalchemy").delete(CheckpointRecord).where(CheckpointRecord.id == checkpoint_id)
+                __import__("sqlalchemy")
+                .delete(CheckpointRecord)
+                .where(CheckpointRecord.id == checkpoint_id)
             )
             await db.commit()
             return result.rowcount > 0
@@ -345,7 +386,9 @@ class SQLiteCheckpointStore:
         async with async_session() as db:
             record = (
                 await db.execute(
-                    __import__("sqlalchemy").select(CheckpointRecord).where(CheckpointRecord.id == checkpoint_id)
+                    __import__("sqlalchemy")
+                    .select(CheckpointRecord)
+                    .where(CheckpointRecord.id == checkpoint_id)
                 )
             ).scalar_one_or_none()
             if record is None:
@@ -362,7 +405,9 @@ class SQLiteCheckpointStore:
         async with async_session() as db:
             record = (
                 await db.execute(
-                    __import__("sqlalchemy").select(CheckpointRecord).where(CheckpointRecord.id == checkpoint_id)
+                    __import__("sqlalchemy")
+                    .select(CheckpointRecord)
+                    .where(CheckpointRecord.id == checkpoint_id)
                 )
             ).scalar_one_or_none()
             if record is None:
@@ -408,12 +453,8 @@ class SQLiteCheckpointStore:
             status=record.status,
             tool_results=tool_results,
             metadata=metadata,
-            channel_values=self._load_json(
-                getattr(record, "channel_values", "{}"), {}
-            ),
-            channel_versions=self._load_json(
-                getattr(record, "channel_versions", "{}"), {}
-            ),
+            channel_values=self._load_json(getattr(record, "channel_values", "{}"), {}),
+            channel_versions=self._load_json(getattr(record, "channel_versions", "{}"), {}),
             versions_seen=self._load_json(getattr(record, "versions_seen", "{}"), {}),
             pending_writes=pending_writes,
         )

@@ -10,14 +10,12 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from app.simulation.adjuster import ParameterAdjuster
 from app.simulation.harness import HarnessOptions, SimulationHarness
 from app.simulation.ledger import ExperimentLedger
+from app.simulation.models import ExperimentSpec, Verdict
 from app.simulation.planner import (
     ExperimentPlan,
-    ParamDim,
     plan_from_schema,
 )
 from app.simulation.probes import (
@@ -27,7 +25,6 @@ from app.simulation.probes import (
     probe_convergence,
 )
 from app.simulation.review import HarnessReviewer, ParameterPolicy, ReviewContext
-from app.simulation.models import ExperimentSpec, Verdict
 from app.tools import ToolRegistry
 
 
@@ -46,6 +43,7 @@ class FakeSimTool:
             return "Error executing mesher: exception at cell 5, traceback"
         if self.behavior == "ok":
             return f"Simulation ok. throughput={float(kwargs.get('rate', 1.0)) * 2:.2f}"
+        return None
 
     def make(self):
         return self._impl
@@ -54,15 +52,21 @@ class FakeSimTool:
 def make_registry(behavior: str = "ok") -> tuple[ToolRegistry, FakeSimTool]:
     registry = ToolRegistry()
     fake = FakeSimTool(behavior)
-    registry.register("simulate", "Fake simulation tool", {
-        "type": "object",
-        "properties": {"rate": {"type": "number"}},
-        "required": ["rate"],
-    }, fake.make())
+    registry.register(
+        "simulate",
+        "Fake simulation tool",
+        {
+            "type": "object",
+            "properties": {"rate": {"type": "number"}},
+            "required": ["rate"],
+        },
+        fake.make(),
+    )
     return registry, fake
 
 
 # ── planner / schema tests ──
+
 
 def test_plan_from_schema_values():
     plan = plan_from_schema(
@@ -94,10 +98,12 @@ def test_plan_from_schema_range():
 
 def test_plan_respects_cap():
     plan = plan_from_schema(
-        {"sweep": {
-            "a": {"values": list(range(10))},
-            "b": {"values": list(range(10))},
-        }},
+        {
+            "sweep": {
+                "a": {"values": list(range(10))},
+                "b": {"values": list(range(10))},
+            }
+        },
         tool_name="simulate",
         max_experiments=20,
     )
@@ -105,6 +111,7 @@ def test_plan_respects_cap():
 
 
 # ── probes tests ──
+
 
 def test_extract_numbers():
     assert extract_numbers("price=12.5 and count 3") == [12.5, 3]
@@ -151,6 +158,7 @@ def test_probe_convergence_reads_named_json_metrics():
 
 # ── reviewer tests ──
 
+
 def test_reviewer_policy_rejects_unknown_param():
     policy = ParameterPolicy(allowed=["rate"])
 
@@ -171,9 +179,14 @@ def test_reviewer_policy_rejects_unknown_param():
 
 async def make_attempt(params, output, success=True):
     from app.simulation.models import ExperimentAttempt
+
     return ExperimentAttempt(
-        round=1, spec_id="s1", tool_name="simulate",
-        parameters=params, output=output, success=success,
+        round=1,
+        spec_id="s1",
+        tool_name="simulate",
+        parameters=params,
+        output=output,
+        success=success,
     )
 
 
@@ -181,11 +194,14 @@ def test_reviewer_accepts_good_output():
     async def go():
         reviewer = HarnessReviewer()
         attempt = await make_attempt({"rate": 1.0}, "throughput=2.00")
-        await reviewer.review(ReviewContext(
-            spec=ExperimentSpec(tool_name="simulate", parameters={"rate": 1.0}),
-            attempt=attempt,
-        ))
+        await reviewer.review(
+            ReviewContext(
+                spec=ExperimentSpec(tool_name="simulate", parameters={"rate": 1.0}),
+                attempt=attempt,
+            )
+        )
         return attempt
+
     attempt = asyncio.run(go())
     assert attempt.verdict == Verdict.ACCEPTED
 
@@ -194,17 +210,21 @@ def test_reviewer_rejects_divergent_output():
     async def go():
         reviewer = HarnessReviewer()
         attempt = await make_attempt({"rate": 9.0}, "diverged, NaN")
-        await reviewer.review(ReviewContext(
-            spec=ExperimentSpec(tool_name="simulate", parameters={"rate": 9.0}),
-            attempt=attempt,
-        ))
+        await reviewer.review(
+            ReviewContext(
+                spec=ExperimentSpec(tool_name="simulate", parameters={"rate": 9.0}),
+                attempt=attempt,
+            )
+        )
         return attempt
+
     attempt = asyncio.run(go())
     assert attempt.verdict == Verdict.REJECTED
     assert "probe" in attempt.reviewer_note
 
 
 # ── adjuster tests ──
+
 
 def test_adjuster_within_bounds():
     adjuster = ParameterAdjuster(bounds={"rate": (0.0, 10.0)})
@@ -218,16 +238,20 @@ def test_adjuster_within_bounds():
 
 def test_adjuster_stops_after_budget():
     adjuster = ParameterAdjuster()
-    assert adjuster.next_parameters(
-        ExperimentSpec(tool_name="simulate", parameters={"rate": 8.0}), 100
-    ) is None
+    assert (
+        adjuster.next_parameters(
+            ExperimentSpec(tool_name="simulate", parameters={"rate": 8.0}), 100
+        )
+        is None
+    )
 
 
 # ── harness end-to-end ──
 
+
 def test_harness_accepts_good_simulation():
     async def go():
-        registry, fake = make_registry("ok")
+        registry, _fake = make_registry("ok")
         harness = SimulationHarness(
             registry,
             options=HarnessOptions(max_rounds=3),
@@ -260,7 +284,7 @@ def test_harness_retries_then_gives_up_on_divergence():
         result = await harness.run_plan(plan, goal="tune")
         return result, fake
 
-    result, fake = asyncio.run(go())
+    result, _fake = asyncio.run(go())
     assert result.rejected == 1
     report = result.reports[0]
     assert report.rounds_used == 3
@@ -287,11 +311,16 @@ def test_harness_recovers_when_first_round_errors():
     async def go():
         registry = ToolRegistry()
         fake = FlakySim()
-        registry.register("simulate", "f", {
-            "type": "object",
-            "properties": {"rate": {"type": "number"}},
-            "required": ["rate"],
-        }, fake._impl)
+        registry.register(
+            "simulate",
+            "f",
+            {
+                "type": "object",
+                "properties": {"rate": {"type": "number"}},
+                "required": ["rate"],
+            },
+            fake._impl,
+        )
         harness = SimulationHarness(
             registry,
             options=HarnessOptions(max_rounds=3),
@@ -314,11 +343,16 @@ def test_harness_marks_registry_error_as_failed_attempt():
 
     async def go():
         registry = ToolRegistry()
-        registry.register("simulate", "broken", {
-            "type": "object",
-            "properties": {"rate": {"type": "number"}},
-            "required": ["rate"],
-        }, broken)
+        registry.register(
+            "simulate",
+            "broken",
+            {
+                "type": "object",
+                "properties": {"rate": {"type": "number"}},
+                "required": ["rate"],
+            },
+            broken,
+        )
         harness = SimulationHarness(
             registry,
             options=HarnessOptions(max_rounds=1),
@@ -338,7 +372,7 @@ def test_harness_marks_registry_error_as_failed_attempt():
 
 def test_harness_ledger_persists(tmp_path):
     async def go():
-        registry, fake = make_registry("ok")
+        registry, _fake = make_registry("ok")
         ledger = ExperimentLedger(tmp_path)
         harness = SimulationHarness(
             registry,
@@ -352,7 +386,7 @@ def test_harness_ledger_persists(tmp_path):
         result = await harness.run_plan(plan, goal="persisted")
         return result, ledger
 
-    result, ledger = asyncio.run(go())
+    _result, ledger = asyncio.run(go())
     records = ledger.read_all()
     types = {r["type"] for r in records}
     assert {"goal", "attempt", "report"} <= types

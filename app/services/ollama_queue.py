@@ -43,7 +43,12 @@ class OllamaOfflineQueue:
         self._lock = asyncio.Lock()
         self._background_tasks: set[asyncio.Task] = set()
 
-    async def enqueue(self, payload: dict[str, Any], callback: Callable[[], Awaitable[None]] | None = None, base_url: str | None = None) -> str:
+    async def enqueue(
+        self,
+        payload: dict[str, Any],
+        callback: Callable[[], Awaitable[None]] | None = None,
+        base_url: str | None = None,
+    ) -> str:
         request_id = f"ollama-{int(time.time() * 1000)}"
         req = QueuedRequest(
             request_id=request_id,
@@ -86,14 +91,22 @@ class OllamaOfflineQueue:
                     else:
                         await self._execute_payload(req)
                     self._queue.popleft()
-                    logger.info("ollama_request_processed", request_id=req.request_id, queue_size=len(self._queue))
+                    logger.info(
+                        "ollama_request_processed",
+                        request_id=req.request_id,
+                        queue_size=len(self._queue),
+                    )
                 except Exception as e:
                     req.retries += 1
                     if req.retries >= req.max_retries:
                         self._queue.popleft()
-                        logger.warning("ollama_request_failed", request_id=req.request_id, error=str(e))
+                        logger.warning(
+                            "ollama_request_failed", request_id=req.request_id, error=str(e)
+                        )
                     else:
-                        logger.info("ollama_request_retry", request_id=req.request_id, retry=req.retries)
+                        logger.info(
+                            "ollama_request_retry", request_id=req.request_id, retry=req.retries
+                        )
                         await asyncio.sleep(self.RETRY_INTERVAL)
         finally:
             self._processing = False

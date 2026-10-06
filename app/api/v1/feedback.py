@@ -102,10 +102,8 @@ async def feedback_stats(request: Request) -> dict:
     user_id = current_user_id(request)
     async with async_session() as db:
         rows = (
-            await db.execute(
-                select(Feedback).where(Feedback.user_id == user_id)
-            )
-        ).scalars().all()
+            (await db.execute(select(Feedback).where(Feedback.user_id == user_id))).scalars().all()
+        )
         total = len(rows)
         up = sum(1 for r in rows if r.rating == "up")
         down = sum(1 for r in rows if r.rating == "down")
@@ -163,13 +161,17 @@ async def submit_reasoning_feedback(
         if trace is None:
             raise HTTPException(status_code=404, detail="Reasoning trace not found")
         existing = (
-            await db.execute(
-                select(ReasoningFeedbackDB).where(
-                    ReasoningFeedbackDB.trace_id == trace_id,
-                    ReasoningFeedbackDB.user_id == user_id,
+            (
+                await db.execute(
+                    select(ReasoningFeedbackDB).where(
+                        ReasoningFeedbackDB.trace_id == trace_id,
+                        ReasoningFeedbackDB.user_id == user_id,
+                    )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if existing is not None:
             existing.rating = rating
             existing.thumbs = thumbs
@@ -178,7 +180,9 @@ async def submit_reasoning_feedback(
                 await db.commit()
             except IntegrityError as exc:
                 await db.rollback()
-                raise HTTPException(status_code=409, detail="Reasoning feedback conflicts with stored data") from exc
+                raise HTTPException(
+                    status_code=409, detail="Reasoning feedback conflicts with stored data"
+                ) from exc
             return {"ok": True, "id": existing.id}
         fb = ReasoningFeedbackDB(
             user_id=user_id,
@@ -192,7 +196,9 @@ async def submit_reasoning_feedback(
             await db.commit()
         except IntegrityError as exc:
             await db.rollback()
-            raise HTTPException(status_code=422, detail="Reasoning feedback references invalid data") from exc
+            raise HTTPException(
+                status_code=422, detail="Reasoning feedback references invalid data"
+            ) from exc
         await db.refresh(fb)
         return {"ok": True, "id": fb.id}
 
@@ -203,13 +209,17 @@ async def get_reasoning_feedback(trace_id: str, request: Request) -> list[dict]:
     user_id = current_user_id(request)
     async with async_session() as db:
         rows = (
-            await db.execute(
-                select(ReasoningFeedbackDB).where(
-                    ReasoningFeedbackDB.trace_id == trace_id,
-                    ReasoningFeedbackDB.user_id == user_id,
+            (
+                await db.execute(
+                    select(ReasoningFeedbackDB).where(
+                        ReasoningFeedbackDB.trace_id == trace_id,
+                        ReasoningFeedbackDB.user_id == user_id,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [
             {
                 "id": r.id,

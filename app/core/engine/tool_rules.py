@@ -30,6 +30,7 @@ class ToolRuleType(StrEnum):
 @dataclass
 class ToolRule:
     """Defines a rule for a tool."""
+
     tool_name: str
     rule_type: ToolRuleType = ToolRuleType.NORMAL
     requires: list[str] = field(default_factory=list)  # Must have been called before
@@ -41,6 +42,7 @@ class ToolRule:
 @dataclass
 class ToolCallRecord:
     """Record of a tool call within a turn."""
+
     tool_name: str
     arguments: dict[str, Any] = field(default_factory=dict)
     success: bool = True
@@ -52,6 +54,7 @@ class ToolCallRecord:
 @dataclass
 class RulesCheckResult:
     """Result of checking a tool call against rules."""
+
     allowed: bool
     reason: str = ""
     violated_rules: list[str] = field(default_factory=list)
@@ -85,20 +88,26 @@ class ToolRulesSolver:
         self._failed_tools = set()
         self._call_order = 0
 
-    def record_result(self, tool_name: str, success: bool, error: str | None = None, result: str = "") -> None:
+    def record_result(
+        self, tool_name: str, success: bool, error: str | None = None, result: str = ""
+    ) -> None:
         """Record a tool execution result."""
         self._call_order += 1
-        self._call_history.append(ToolCallRecord(
-            tool_name=tool_name,
-            success=success,
-            error=error,
-            result_summary=result[:200] if result else "",
-            order=self._call_order,
-        ))
+        self._call_history.append(
+            ToolCallRecord(
+                tool_name=tool_name,
+                success=success,
+                error=error,
+                result_summary=result[:200] if result else "",
+                order=self._call_order,
+            )
+        )
         if not success:
             self._failed_tools.add(tool_name)
 
-    def check_tool_call(self, tool_name: str, *, batch: list[str] | None = None) -> RulesCheckResult:
+    def check_tool_call(
+        self, tool_name: str, *, batch: list[str] | None = None
+    ) -> RulesCheckResult:
         """Check if a tool call is allowed given current state and rules.
 
         Args:
@@ -172,10 +181,7 @@ class ToolRulesSolver:
 
     def get_recommended_next(self, available_tools: list[str]) -> list[str]:
         """Get tools that are valid to call next, given current state."""
-        return [
-            t for t in available_tools
-            if self.check_tool_call(t).allowed
-        ]
+        return [t for t in available_tools if self.check_tool_call(t).allowed]
 
     def get_history_summary(self) -> dict[str, Any]:
         """Get summary of tool call history this turn."""

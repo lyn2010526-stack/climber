@@ -1,6 +1,5 @@
 """Standalone persistence regressions using only a private in-memory database."""
 
-# ruff: noqa: PT009, PT027
 import json
 import sys
 import unittest
@@ -74,10 +73,16 @@ class ProfilePersistenceWindowTests(unittest.IsolatedAsyncioTestCase):
     async def seed(self, user, events):
         async with self.sessions() as db:
             for event_id, days, task, outcome in events:
-                db.add(UserProfileEvent(
-                    id=event_id, user_id=user, occurred_at=NOW + timedelta(days=days),
-                    task_type=task, outcome=outcome, source="agent_internal",
-                ))
+                db.add(
+                    UserProfileEvent(
+                        id=event_id,
+                        user_id=user,
+                        occurred_at=NOW + timedelta(days=days),
+                        task_type=task,
+                        outcome=outcome,
+                        source="agent_internal",
+                    )
+                )
             await db.commit()
 
     async def snapshot(self, user="alice"):
@@ -88,11 +93,14 @@ class ProfilePersistenceWindowTests(unittest.IsolatedAsyncioTestCase):
     async def test_recent_window_is_chronological_and_user_isolated(self):
         await self.enable()
         await self.enable("bob")
-        await self.seed("alice", [
-            ("a-new", 0, "new", "success"),
-            ("a-old", -3, "old", "failure"),
-            ("a-middle", -1, "middle", "success"),
-        ])
+        await self.seed(
+            "alice",
+            [
+                ("a-new", 0, "new", "success"),
+                ("a-old", -3, "old", "failure"),
+                ("a-middle", -1, "middle", "success"),
+            ],
+        )
         await self.seed("bob", [("b", 1, "other-user", "failure")])
         recorded = []
         original = ProfileLoopService.record
@@ -137,9 +145,13 @@ class ProfilePersistenceWindowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_repeated_reads_after_new_event_are_idempotent(self):
         await self.enable()
-        await self.store.record_run("alice", instruction="first", task_type="old", outcome="success", occurred_at=NOW)
+        await self.store.record_run(
+            "alice", instruction="first", task_type="old", outcome="success", occurred_at=NOW
+        )
         await self.store.summary("alice")
-        await self.store.record_run("alice", instruction="second", task_type="new", outcome="failure", occurred_at=NOW)
+        await self.store.record_run(
+            "alice", instruction="second", task_type="new", outcome="failure", occurred_at=NOW
+        )
         expected = (await self.store._load_service("alice")).summary()
         first = await self.store.summary("alice")
         self.assertEqual(first, expected)
@@ -147,7 +159,9 @@ class ProfilePersistenceWindowTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await ProfileStore().summary("alice"), first)
             self.assertEqual(await self.snapshot(), json.loads(json.dumps(asdict(first))))
         async with self.sessions() as db:
-            self.assertEqual(await db.scalar(select(func.count()).select_from(UserProfileSnapshot)), 1)
+            self.assertEqual(
+                await db.scalar(select(func.count()).select_from(UserProfileSnapshot)), 1
+            )
 
     async def test_evicted_events_do_not_linger_in_snapshot(self):
         await self.enable()
@@ -184,7 +198,9 @@ class ProfilePersistenceWindowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_disable_preserves_snapshot_and_resume_rebuilds(self):
         await self.enable()
-        await self.store.record_run("alice", instruction="first", outcome="success", occurred_at=NOW)
+        await self.store.record_run(
+            "alice", instruction="first", outcome="success", occurred_at=NOW
+        )
         first = await self.store.summary("alice")
         snapshot = await self.snapshot()
         await self.store.update_settings("alice", enabled=False)
@@ -212,7 +228,9 @@ class ProfilePersistenceWindowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_disable_during_replay_blocks_old_suggestions(self):
         await self.enable()
-        await self.store.record_run("alice", instruction="first", task_type="coding", outcome="success", occurred_at=NOW)
+        await self.store.record_run(
+            "alice", instruction="first", task_type="coding", outcome="success", occurred_at=NOW
+        )
         original = self.store._load_service
 
         async def pause_after_load(user):
@@ -224,7 +242,9 @@ class ProfilePersistenceWindowTests(unittest.IsolatedAsyncioTestCase):
             context = await self.store.suggestions("alice", "current goal")
         self.assertFalse(context["enabled"])
         self.assertEqual(context["task_preferences"], {})
-        self.assertEqual(context["suggestions"], {"task_type": None, "tool": None, "reasoning_level": None})
+        self.assertEqual(
+            context["suggestions"], {"task_type": None, "tool": None, "reasoning_level": None}
+        )
         self.assertEqual(context["current_instruction"], "current goal")
 
 

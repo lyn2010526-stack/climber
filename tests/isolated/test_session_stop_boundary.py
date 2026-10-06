@@ -63,13 +63,17 @@ class SessionStopBoundaryTests(unittest.IsolatedAsyncioTestCase):
                 await self.session._await_pending_tasks()
                 self.assertEqual(self.session.status, SessionStatus.STOPPED)
                 self.assertEqual(self.session.state_machine.transition_count, 1)
-                self.assertEqual(self.session.state_machine.metadata["transition_trigger"], "user_stop")
+                self.assertEqual(
+                    self.session.state_machine.metadata["transition_trigger"], "user_stop"
+                )
                 self.assertEqual(self.session._pending_tasks, set())
 
     async def test_completion_before_stop_task_runs_preserves_terminal_state(self):
         for state in (TaskState.COMPLETED, TaskState.FAILED):
             with self.subTest(state=state):
-                self.session.state_machine = TaskStateMachine("race", initial_state=TaskState.PROCESSING)
+                self.session.state_machine = TaskStateMachine(
+                    "race", initial_state=TaskState.PROCESSING
+                )
                 self.session.stop()
                 await self.session.state_machine.transition(state, trigger="execution_finished")
                 await self.session._await_pending_tasks()

@@ -87,7 +87,9 @@ class CircuitBreaker:
         self._last_state_change = datetime.now(UTC)
         if new_state == CircuitBreakerState.OPEN:
             self._tripped_at = datetime.now(UTC)
-            logger.warning("circuit_breaker_tripped: breaker=%s failures=%d", self.name, self._failure_count)
+            logger.warning(
+                "circuit_breaker_tripped: breaker=%s failures=%d", self.name, self._failure_count
+            )
         elif new_state == CircuitBreakerState.CLOSED:
             self._failure_count = 0
             self._failure_timestamps.clear()

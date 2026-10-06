@@ -17,10 +17,8 @@ the harness just moves to the next round instead of mislabeling a result.
 from __future__ import annotations
 
 import json
-import logging
 import re
 from collections.abc import Awaitable, Callable
-from typing import Any
 
 import structlog
 
@@ -36,8 +34,8 @@ _SYSTEM_PROMPT = (
     "simulation result is physically and numerically plausible given the "
     "goal, the parameters, and the raw output. Respond with a single JSON "
     "object:\n"
-    "{\"verdict\": \"accepted\" | \"rejected\" | \"retry\", "
-    "\"reason\": \"<one sentence>\"}\n"
+    '{"verdict": "accepted" | "rejected" | "retry", '
+    '"reason": "<one sentence>"}\n'
     "Use 'rejected' for clearly wrong values, 'retry' when you cannot "
     "judge or the run seems inconclusive, 'accepted' only when you are "
     "confident the result is sound."
@@ -93,7 +91,8 @@ class LLMReviewer:
             parameters=json.dumps(ctx.attempt.parameters, ensure_ascii=False, default=str),
             output=(ctx.attempt.output or "")[:4000],
             probe_metrics=json.dumps(ctx.attempt.probe.metrics, ensure_ascii=False, default=str)
-            if ctx.attempt.probe else "{}",
+            if ctx.attempt.probe
+            else "{}",
         )
         try:
             reply = await self._llm_call(prompt, _SYSTEM_PROMPT)

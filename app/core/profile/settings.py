@@ -1,7 +1,6 @@
 """Persisted, explicit consent for local interaction learning."""
 
 # Chinese user-facing notice uses Chinese punctuation.
-# ruff: noqa: RUF001
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, String, select, text
@@ -35,7 +34,9 @@ async def load_settings(db, user_id: str, *, lock: bool = False):
     if lock and connection.dialect.name == "sqlite":
         # Serialize setting updates with event acceptance on SQLite too.
         await db.execute(text("BEGIN IMMEDIATE"))
-    await connection.run_sync(lambda conn: ProfileLearningSettings.__table__.create(conn, checkfirst=True))
+    await connection.run_sync(
+        lambda conn: ProfileLearningSettings.__table__.create(conn, checkfirst=True)
+    )
     query = select(ProfileLearningSettings).where(ProfileLearningSettings.user_id == user_id)
     if lock:
         query = query.with_for_update()
@@ -50,7 +51,9 @@ def settings_payload(row) -> dict:
     return {
         "enabled": learning_enabled(row),
         "show_raw_profile": bool(row and row.show_raw_profile),
-        "consent_required": not bool(row and row.consent_version == NOTICE_VERSION and row.consented_at),
+        "consent_required": not bool(
+            row and row.consent_version == NOTICE_VERSION and row.consented_at
+        ),
         "consent_version": row.consent_version if row else None,
         "consented_at": row.consented_at if row else None,
         "notice_version": NOTICE_VERSION,

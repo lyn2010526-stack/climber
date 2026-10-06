@@ -6,6 +6,7 @@ in an append-only, immutable audit trail.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
 import uuid
@@ -131,9 +132,7 @@ class AuditChain:
 
     def get_entry(self, entry_id: str) -> AuditEntry | None:
         """Retrieve a single audit entry by ID."""
-        row = self._conn.execute(
-            "SELECT * FROM audit_entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+        row = self._conn.execute("SELECT * FROM audit_entries WHERE id = ?", (entry_id,)).fetchone()
         if not row:
             return None
         return self._row_to_entry(row)
@@ -196,16 +195,23 @@ class AuditChain:
                  input_summary, output_summary, rationale, confidence, alternatives_json)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (entry.id, entry.timestamp, entry.agent_id, entry.session_id,
-                 entry.decision_type, entry.input_summary, entry.output_summary,
-                 entry.rationale, entry.confidence, json.dumps(entry.alternatives_considered)),
+                (
+                    entry.id,
+                    entry.timestamp,
+                    entry.agent_id,
+                    entry.session_id,
+                    entry.decision_type,
+                    entry.input_summary,
+                    entry.output_summary,
+                    entry.rationale,
+                    entry.confidence,
+                    json.dumps(entry.alternatives_considered),
+                ),
             )
             self._conn.commit()
         except sqlite3.Error:
-            try:
+            with contextlib.suppress(sqlite3.Error):
                 self._conn.rollback()
-            except sqlite3.Error:
-                pass
             # Keep the event available for a later retry; fail-closed callers
             # still receive their security decision immediately.
             if entry not in self._pending_events:

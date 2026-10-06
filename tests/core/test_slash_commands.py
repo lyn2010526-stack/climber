@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -33,7 +33,6 @@ from app.core.slash import (
 )
 from app.storage import Base
 from app.storage.database import Agent, ApiKey, Message, Session
-
 
 # ---------------------------------------------------------------------------
 # Parser / registry (pure python)
@@ -105,7 +104,8 @@ class ParserTests(unittest.TestCase):
         catalog = command_catalog(self.registry)
         names = [entry["name"] for entry in catalog]
         self.assertEqual(
-            names, ["help", "model", "level", "clear", "retry", "stop", "status"],
+            names,
+            ["help", "model", "level", "clear", "retry", "stop", "status"],
         )
         stop = next(entry for entry in catalog if entry["name"] == "stop")
         self.assertIn("cancel", stop["aliases"])
@@ -135,7 +135,10 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.registry = build_default_registry()
         self.session_row = SimpleNamespace(
-            id="s-1", user_id="u-1", title="T", status="idle",
+            id="s-1",
+            user_id="u-1",
+            title="T",
+            status="idle",
             model_settings={"provider": "openai", "model_id": "gpt-4o-mini"},
             context_data={},
         )
@@ -143,7 +146,9 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_passthrough_reports_agent_message(self):
         service = _make_service(self.session_row)
         execution = await service.execute(
-            parse_input("hello agent", self.registry), session_id="s-1", user_id="u-1",
+            parse_input("hello agent", self.registry),
+            session_id="s-1",
+            user_id="u-1",
         )
         self.assertEqual(execution.kind, "passthrough")
         self.assertEqual(execution.agent_message, "hello agent")
@@ -151,33 +156,44 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_help_lists_commands_and_topic(self):
         service = _make_service(self.session_row)
         listing = await service.execute(
-            parse_input("/help", self.registry), session_id="s-1", user_id="u-1",
+            parse_input("/help", self.registry),
+            session_id="s-1",
+            user_id="u-1",
         )
         self.assertEqual(listing.kind, "reply")
         self.assertIn("/model", listing.reply.content)
         self.assertIn("/stop", listing.reply.content)
         topic = await service.execute(
-            parse_input("/help retry", self.registry), session_id="s-1", user_id="u-1",
+            parse_input("/help retry", self.registry),
+            session_id="s-1",
+            user_id="u-1",
         )
         self.assertIn("Re-run the last user message", topic.reply.content)
 
     async def test_help_unknown_topic_is_error(self):
         service = _make_service(self.session_row)
         execution = await service.execute(
-            parse_input("/help nope", self.registry), session_id="s-1", user_id="u-1",
+            parse_input("/help nope", self.registry),
+            session_id="s-1",
+            user_id="u-1",
         )
         self.assertEqual(execution.kind, "error")
 
     async def test_status_reports_model_and_warm_state(self):
         warm = SimpleNamespace(
             state_machine=SimpleNamespace(state=SimpleNamespace(value="completed")),
-            _last_iteration=3, max_iterations=10, messages=[{"role": "user", "content": "x"}],
-            metrics=SimpleNamespace(total_tokens_used=42), _stop_requested=False,
+            _last_iteration=3,
+            max_iterations=10,
+            messages=[{"role": "user", "content": "x"}],
+            metrics=SimpleNamespace(total_tokens_used=42),
+            _stop_requested=False,
             restart_count=0,
         )
         service = _make_service(self.session_row, engine_sessions={"s-1": warm})
         execution = await service.execute(
-            parse_input("/status", self.registry), session_id="s-1", user_id="u-1",
+            parse_input("/status", self.registry),
+            session_id="s-1",
+            user_id="u-1",
         )
         self.assertEqual(execution.kind, "reply")
         self.assertIn("openai:gpt-4o-mini", execution.reply.content)
@@ -187,7 +203,9 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_model_view_and_update(self):
         service = _make_service(self.session_row)
         view = await service.execute(
-            parse_input("/model", self.registry), session_id="s-1", user_id="u-1",
+            parse_input("/model", self.registry),
+            session_id="s-1",
+            user_id="u-1",
         )
         self.assertIn("openai:gpt-4o-mini", view.reply.content)
 
@@ -195,7 +213,10 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         warm = SimpleNamespace(_stop_requested=False, stop=lambda: None)
         service = _make_service(self.session_row, engine_sessions={"s-1": warm})
         execution = await service.execute(
-            parse_input("/stop", self.registry), session_id="s-1", user_id="u-1", running=True,
+            parse_input("/stop", self.registry),
+            session_id="s-1",
+            user_id="u-1",
+            running=True,
         )
         self.assertEqual(execution.kind, "reply")
         self.assertEqual(execution.reply.effect, "stop_requested")
@@ -204,14 +225,20 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_stop_without_warm_session_reports_noop(self):
         service = _make_service(self.session_row)
         execution = await service.execute(
-            parse_input("/stop", self.registry), session_id="s-1", user_id="u-1", running=True,
+            parse_input("/stop", self.registry),
+            session_id="s-1",
+            user_id="u-1",
+            running=True,
         )
         self.assertIsNone(execution.reply.effect)
 
     async def test_non_stop_command_rejected_while_streaming(self):
         service = _make_service(self.session_row)
         execution = await service.execute(
-            parse_input("/clear", self.registry), session_id="s-1", user_id="u-1", running=True,
+            parse_input("/clear", self.registry),
+            session_id="s-1",
+            user_id="u-1",
+            running=True,
         )
         self.assertEqual(execution.kind, "error")
         self.assertIn("/stop", execution.reply.content)
@@ -256,21 +283,38 @@ class ChatCommandEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.database = create_async_engine("sqlite+aiosqlite:///:memory:")
         self.addAsyncCleanup(self.database.dispose)
         tables = [
-            Agent.__table__, ApiKey.__table__, Session.__table__, Message.__table__,
+            Agent.__table__,
+            ApiKey.__table__,
+            Session.__table__,
+            Message.__table__,
         ]
         async with self.database.begin() as connection:
             await connection.run_sync(lambda conn: Base.metadata.create_all(conn, tables=tables))
         self.db = async_sessionmaker(self.database, expire_on_commit=False)
         async with self.db() as db:
-            db.add_all([
-                ApiKey(id="key-a", user_id="owner-a", provider="openai", name="A",
-                       api_key_encrypted="plain:secret-a", is_active=True),
-                Session(id="s-1", user_id="owner-a", title="T", status="idle",
+            db.add_all(
+                [
+                    ApiKey(
+                        id="key-a",
+                        user_id="owner-a",
+                        provider="openai",
+                        name="A",
+                        api_key_encrypted="plain:secret-a",
+                        is_active=True,
+                    ),
+                    Session(
+                        id="s-1",
+                        user_id="owner-a",
+                        title="T",
+                        status="idle",
                         model_settings={
                             "credential_id": "key-a",
-                            "provider": "openai", "model_id": "gpt-4o-mini",
-                        }),
-            ])
+                            "provider": "openai",
+                            "model_id": "gpt-4o-mini",
+                        },
+                    ),
+                ]
+            )
             db.add(Message(session_id="s-1", role="user", content="original question"))
             await db.commit()
         self.engine = RecordingEngine()
@@ -289,7 +333,8 @@ class ChatCommandEndpointTests(unittest.IsolatedAsyncioTestCase):
         app.include_router(chat_commands.router, prefix="/api/v1")
         app.dependency_overrides[chat_commands.get_current_user] = lambda: "owner-a"
         self.client = httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app), base_url="http://test",
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
         )
         self.addAsyncCleanup(self.client.aclose)
 
@@ -316,7 +361,8 @@ class ChatCommandEndpointTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_parse_endpoint(self):
         response = await self.client.post(
-            "/api/v1/chat-commands/parse", json={"message": "/level warp"},
+            "/api/v1/chat-commands/parse",
+            json={"message": "/level warp"},
         )
         self.assertEqual(response.status_code, 200)
         body = response.json()
@@ -324,7 +370,8 @@ class ChatCommandEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("expected one of", body["error"])
 
         ok = await self.client.post(
-            "/api/v1/chat-commands/parse", json={"message": "just a question"},
+            "/api/v1/chat-commands/parse",
+            json={"message": "just a question"},
         )
         self.assertEqual(ok.json()["kind"], "passthrough")
 
@@ -339,7 +386,8 @@ class ChatCommandEndpointTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_slash_passthrough_reaches_engine_verbatim(self):
         response = await self.client.post(
-            "/api/v1/sessions/s-1/slash", json={"message": "/etc/hosts what is this"},
+            "/api/v1/sessions/s-1/slash",
+            json={"message": "/etc/hosts what is this"},
         )
         self.assertEqual(response.status_code, 200)
         frames = await self._sse_frames(response)
@@ -348,7 +396,8 @@ class ChatCommandEndpointTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_slash_invalid_args_stream_error_event(self):
         response = await self.client.post(
-            "/api/v1/sessions/s-1/slash", json={"message": "/clear all"},
+            "/api/v1/sessions/s-1/slash",
+            json={"message": "/clear all"},
         )
         frames = await self._sse_frames(response)
         self.assertEqual(frames[0][0], "error")
@@ -384,7 +433,8 @@ class ChatCommandEndpointTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_slash_level_updates_session(self):
         response = await self.client.post(
-            "/api/v1/sessions/s-1/slash", json={"message": "/level deep"},
+            "/api/v1/sessions/s-1/slash",
+            json={"message": "/level deep"},
         )
         frames = await self._sse_frames(response)
         self.assertEqual(frames[-1][1]["effect"], "level_updated")
@@ -394,7 +444,8 @@ class ChatCommandEndpointTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_slash_model_switch_persists(self):
         response = await self.client.post(
-            "/api/v1/sessions/s-1/slash", json={"message": "/model openai:o3-mini"},
+            "/api/v1/sessions/s-1/slash",
+            json={"message": "/model openai:o3-mini"},
         )
         frames = await self._sse_frames(response)
         self.assertEqual(frames[-1][1]["effect"], "model_updated")
@@ -404,7 +455,8 @@ class ChatCommandEndpointTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_slash_model_switch_rejects_credential_provider_mismatch(self):
         response = await self.client.post(
-            "/api/v1/sessions/s-1/slash", json={"message": "/model anthropic:claude-3"},
+            "/api/v1/sessions/s-1/slash",
+            json={"message": "/model anthropic:claude-3"},
         )
         frames = await self._sse_frames(response)
         self.assertEqual(frames[0][0], "error")
@@ -416,7 +468,8 @@ class ChatCommandEndpointTests(unittest.IsolatedAsyncioTestCase):
         # Ownership is enforced in _resolve_run_context via the session query;
         # parse-level commands still answer, but session effects 404.
         response = await app_client.post(
-            "/api/v1/sessions/other/slash", json={"message": "/help"},
+            "/api/v1/sessions/other/slash",
+            json={"message": "/help"},
         )
         self.assertEqual(response.status_code, 200)  # local command, no session read
 
@@ -428,7 +481,9 @@ class ChatCommandEndpointTests(unittest.IsolatedAsyncioTestCase):
     async def test_cancel_interrupts_inflight_turn(self):
         chat_commands._chat_inflight.add("s-1")
         warm = SimpleNamespace(
-            user_id="owner-a", _stop_requested=False, stop=lambda: None,
+            user_id="owner-a",
+            _stop_requested=False,
+            stop=lambda: None,
         )
         self.engine._sessions["s-1"] = warm
         response = await self.client.post("/api/v1/sessions/s-1/cancel")

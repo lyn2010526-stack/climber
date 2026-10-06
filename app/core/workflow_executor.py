@@ -95,12 +95,14 @@ def build_workflow_from_graph(
                 "format": data.get("format", "text"),
             }
 
-        workflow_nodes.append(WorkflowNode(
-            id=node["id"],
-            type=node_type,
-            name=data.get("label", node.get("type", "node")),
-            config=config,
-        ))
+        workflow_nodes.append(
+            WorkflowNode(
+                id=node["id"],
+                type=node_type,
+                name=data.get("label", node.get("type", "node")),
+                config=config,
+            )
+        )
 
     workflow_edges: list[WorkflowEdge] = []
     for edge in edges:
@@ -112,11 +114,13 @@ def build_workflow_from_graph(
         elif source_handle == "false":
             condition = "false"
 
-        workflow_edges.append(WorkflowEdge(
-            source=edge["source"],
-            target=edge["target"],
-            condition=condition,
-        ))
+        workflow_edges.append(
+            WorkflowEdge(
+                source=edge["source"],
+                target=edge["target"],
+                condition=condition,
+            )
+        )
 
     return Workflow(
         id=str(uuid4())[:8],
@@ -130,6 +134,7 @@ def build_workflow_from_graph(
 def _parse_json_safe(value: Any) -> dict[str, Any]:
     """Safely parse a JSON string, returning empty dict on failure."""
     import json
+
     if isinstance(value, dict):
         return value
     if not value:
@@ -169,6 +174,7 @@ async def execute_visual_workflow(
     """
     if engine is None:
         from app.tools import tool_registry
+
         model_registry = di_resolve("ModelRegistry")
         engine = AgentEngine(
             model_registry=model_registry,

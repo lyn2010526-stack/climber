@@ -1,4 +1,5 @@
 """Memory manager for skills — provides persistent memory storage."""
+
 from __future__ import annotations
 
 import uuid
@@ -35,7 +36,13 @@ class PersistentMemory:
     def __init__(self):
         self._cache: deque[MemoryEntry] = deque(maxlen=_CACHE_MAX_ENTRIES)
 
-    def store(self, content: str, memory_type: MemoryType = MemoryType.FACT, source: str = "system", **kwargs) -> MemoryEntry:
+    def store(
+        self,
+        content: str,
+        memory_type: MemoryType = MemoryType.FACT,
+        source: str = "system",
+        **kwargs,
+    ) -> MemoryEntry:
         entry = MemoryEntry(
             id=str(uuid.uuid4())[:12],
             content=content,
@@ -47,7 +54,9 @@ class PersistentMemory:
         self._cache.append(entry)
         return entry
 
-    def recall(self, query: str = "", limit: int = 10, memory_type: MemoryType | None = None) -> list[MemoryEntry]:
+    def recall(
+        self, query: str = "", limit: int = 10, memory_type: MemoryType | None = None
+    ) -> list[MemoryEntry]:
         if limit <= 0:
             return []
         results = list(self._cache)

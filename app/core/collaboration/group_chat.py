@@ -51,10 +51,13 @@ async def run_group_chat_process(task: Any, group: Any, principal: Any = None) -
         if not await _check_task_not_stopped(task):
             return
 
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "progress_update",
-            "data": {"current_round": round_num, "max_rounds": max_rounds, "status": "running"},
-        })
+        await group_ws_hub.broadcast(
+            task.group_id,
+            {
+                "type": "progress_update",
+                "data": {"current_round": round_num, "max_rounds": max_rounds, "status": "running"},
+            },
+        )
 
         await _execute_chat_round(task, participants, conversation, round_num, principal=principal)
 
@@ -116,10 +119,17 @@ async def _execute_chat_round(
     from app.core.collaboration.constants import TASK_TIMEOUT
 
     for participant in participants:
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "group_chat_turn",
-            "data": {"member_id": participant.id, "member_name": participant.agent_id, "round": round_num},
-        })
+        await group_ws_hub.broadcast(
+            task.group_id,
+            {
+                "type": "group_chat_turn",
+                "data": {
+                    "member_id": participant.id,
+                    "member_name": participant.agent_id,
+                    "round": round_num,
+                },
+            },
+        )
 
         context_messages = build_group_chat_context(task.description, conversation)
 
@@ -139,25 +149,30 @@ async def _execute_chat_round(
                 task_name=task.description,
             )
 
-        conversation.append({
-            "round": round_num,
-            "agent_id": participant.agent_id,
-            "agent_name": participant.agent_id,
-            "role": participant.role,
-            "content": output,
-        })
-
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "message",
-            "data": {
-                "sender_id": participant.agent_id,
-                "sender_name": participant.agent_id,
-                "content": output,
-                "message_type": "text",
+        conversation.append(
+            {
                 "round": round_num,
-                "tokens_used": tokens_used,
+                "agent_id": participant.agent_id,
+                "agent_name": participant.agent_id,
+                "role": participant.role,
+                "content": output,
+            }
+        )
+
+        await group_ws_hub.broadcast(
+            task.group_id,
+            {
+                "type": "message",
+                "data": {
+                    "sender_id": participant.agent_id,
+                    "sender_name": participant.agent_id,
+                    "content": output,
+                    "message_type": "text",
+                    "round": round_num,
+                    "tokens_used": tokens_used,
+                },
             },
-        })
+        )
 
         await invoke_step_callback(task, participant.role, participant.agent_id, output)
 
@@ -168,12 +183,20 @@ def _check_consensus(participants: list[Any], conversation: list[dict[str, Any]]
     Messages that express disagreement (e.g. "disagree", "不同意") are excluded
     even though they contain agreement substrings like "agree" / "同意".
     """
-    recent = conversation[-(len(participants)):]
+    recent = conversation[-(len(participants)) :]
 
     agreement_keywords = ["同意", "agree", "consensus", "好的", "approved", "accept", "looks good"]
     disagreement_keywords = [
-        "不同意", "不赞同", "反对", "cannot agree", "can't agree", "do not agree",
-        "don't agree", "disagree", "not agree", "reject",
+        "不同意",
+        "不赞同",
+        "反对",
+        "cannot agree",
+        "can't agree",
+        "do not agree",
+        "don't agree",
+        "disagree",
+        "not agree",
+        "reject",
     ]
 
     agreement_count = 0
@@ -189,11 +212,17 @@ def _check_consensus(participants: list[Any], conversation: list[dict[str, Any]]
 
 async def _broadcast_completion(task: Any, consensus: bool, output: str, rounds: int) -> None:
     """Broadcast group chat completion."""
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "group_chat_consensus",
-        "data": {"reached": consensus, "final_output": output},
-    })
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "task_completed" if consensus else "task_partial",
-        "data": {"task_id": task.id, "final_output": output, "rounds": rounds},
-    })
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "group_chat_consensus",
+            "data": {"reached": consensus, "final_output": output},
+        },
+    )
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "task_completed" if consensus else "task_partial",
+            "data": {"task_id": task.id, "final_output": output, "rounds": rounds},
+        },
+    )

@@ -62,27 +62,48 @@ class FactExtractor:
             return facts
 
         # 1) 三元组规则
-        for match in re.finditer(r"([\u4e00-\u9fffA-Za-z_][\u4e00-\u9fffA-Za-z0-9_.\-]{0,40})"
-                                 r"\s*(?:被|已|用于|用来|实现|完成|修复|设置|定义为)\s*"
-                                 r"([\u4e00-\u9fffA-Za-z0-9_./\- :]{1,50})",
-                                 text):
+        for match in re.finditer(
+            r"([\u4e00-\u9fffA-Za-z_][\u4e00-\u9fffA-Za-z0-9_.\-]{0,40})"
+            r"\s*(?:被|已|用于|用来|实现|完成|修复|设置|定义为)\s*"
+            r"([\u4e00-\u9fffA-Za-z0-9_./\- :]{1,50})",
+            text,
+        ):
             subject, obj = match.group(1), match.group(2)
             if subject and obj and len(subject) > 1 and len(obj) > 1:
-                facts.append(Fact(subject=subject, predicate="关联/设置", object=obj,
-                                  confidence=0.55, context=context[:120]))
+                facts.append(
+                    Fact(
+                        subject=subject,
+                        predicate="关联/设置",
+                        object=obj,
+                        confidence=0.55,
+                        context=context[:120],
+                    )
+                )
 
         # 2) 关键词规则
         for pattern, predicate in _KEYWORD_RULES:
             for match in re.finditer(pattern, text):
                 value = match.group(1).strip()
                 if value and 2 <= len(value) <= 100:
-                    facts.append(Fact(subject="", predicate=predicate, object=value,
-                                      confidence=0.6, context=context[:120]))
+                    facts.append(
+                        Fact(
+                            subject="",
+                            predicate=predicate,
+                            object=value,
+                            confidence=0.6,
+                            context=context[:120],
+                        )
+                    )
 
         # 3) 版本/时间事实
         facts.extend(
-            Fact(subject="版本", predicate="版本号", object=match.group(1),
-                 confidence=0.5, context=context[:120])
+            Fact(
+                subject="版本",
+                predicate="版本号",
+                object=match.group(1),
+                confidence=0.5,
+                context=context[:120],
+            )
             for match in re.finditer(r"v?(\d+\.\d+(?:\.\d+)?)", text)
         )
 
@@ -102,7 +123,7 @@ class FactExtractor:
                 enhanced = self._llm(text, facts)
                 if enhanced:
                     facts = enhanced
-            except Exception:  # noqa: S110 - LLM 失败保持启发式结果
+            except Exception:
                 pass
         return facts
 
@@ -110,10 +131,13 @@ class FactExtractor:
 def extract_facts(text: str, context: str = "") -> list[dict[str, Any]]:
     """便捷入口，返回 dict 列表（供记忆精炼后台子 Agent 调用）。"""
     extractor = FactExtractor()
-    return [{
-        "subject": f.subject,
-        "predicate": f.predicate,
-        "object": f.object,
-        "confidence": f.confidence,
-        "context": f.context,
-    } for f in extractor.extract(text, context)]
+    return [
+        {
+            "subject": f.subject,
+            "predicate": f.predicate,
+            "object": f.object,
+            "confidence": f.confidence,
+            "context": f.context,
+        }
+        for f in extractor.extract(text, context)
+    ]

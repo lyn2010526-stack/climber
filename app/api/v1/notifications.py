@@ -27,6 +27,7 @@ async def send_notification(
 ) -> dict:
     try:
         from app.main import app
+
         service = app.state.notification_service
         ok = await service.send(payload.title, payload.message, urgency=payload.urgency)
         return {"ok": ok}
@@ -40,6 +41,7 @@ async def send_notification(
 async def test_notification() -> dict:
     try:
         from app.main import app
+
         service = app.state.notification_service
         ok = await service.send("Climber", "通知系统测试成功")
         return {"ok": ok}

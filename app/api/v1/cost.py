@@ -26,7 +26,11 @@ router = APIRouter()
 async def get_cost_usage(request: Request) -> dict[str, Any]:
     async with async_session() as db:
         user_id = current_user_id(request)
-        stmt = select(func.sum(CostRecord.total_cost), func.sum(CostRecord.total_tokens), func.count(CostRecord.id)).where(CostRecord.user_id == user_id)
+        stmt = select(
+            func.sum(CostRecord.total_cost),
+            func.sum(CostRecord.total_tokens),
+            func.count(CostRecord.id),
+        ).where(CostRecord.user_id == user_id)
         row = (await db.execute(stmt)).one()
         total_cost = row[0] or 0
         total_tokens = row[1] or 0

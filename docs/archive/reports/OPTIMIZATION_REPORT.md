@@ -188,16 +188,17 @@ import redis
 from functools import wraps
 
 redis_client = redis.Redis(
-    host=os.getenv('REDIS_HOST', 'localhost'),
-    port=int(os.getenv('REDIS_PORT', 6379)),
-    db=int(os.getenv('REDIS_DB', 0)),
-    decode_responses=True
+    host=os.getenv("REDIS_HOST", "localhost"),
+    port=int(os.getenv("REDIS_PORT", 6379)),
+    db=int(os.getenv("REDIS_DB", 0)),
+    decode_responses=True,
 )
+
 
 # 缓存预热函数
 def warmup_cache():
     """Warm up frequently accessed data"""
-    endpoints = ['/health', '/metrics', '/api/v1/settings']
+    endpoints = ["/health", "/metrics", "/api/v1/settings"]
     for endpoint in endpoints:
         try:
             redis_client.set(f"cached:{endpoint}", "warm", ex=300)
@@ -226,13 +227,14 @@ def warmup_cache():
 
 # CPU 核心数计算最佳 worker 数
 import multiprocessing
+
 OPTIMAL_WORKERS = (multiprocessing.cpu_count() * 2) + 1
 
 # 动态调整
-workers = int(os.getenv('GUNICORN_WORKERS', str(OPTIMAL_WORKERS)))
-worker_connections = int(os.getenv('GUNICORN_WORKER_CONNECTIONS', '2000'))
-timeout = int(os.getenv('GUNICORN_TIMEOUT', '180'))
-keepalive = int(os.getenv('GUNICORN_KEEPALIVE', '10'))
+workers = int(os.getenv("GUNICORN_WORKERS", str(OPTIMAL_WORKERS)))
+worker_connections = int(os.getenv("GUNICORN_WORKER_CONNECTIONS", "2000"))
+timeout = int(os.getenv("GUNICORN_TIMEOUT", "180"))
+keepalive = int(os.getenv("GUNICORN_KEEPALIVE", "10"))
 
 # 启用预加载应用以共享内存
 preload_app = os.getenv("GUNICORN_PRELOAD", "true").lower() in ("true", "1", "yes")

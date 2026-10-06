@@ -42,8 +42,6 @@ from app.storage.database import Agent as AgentModel
 from app.storage.database import Message as MessageModel
 from app.storage.database import Session as SessionModel
 
-# ruff: noqa: SLF001 - engine internals are accessed through the same seams chat.py uses.
-
 router = APIRouter(tags=["chat-commands"])
 
 _registry = default_registry
@@ -62,9 +60,12 @@ def build_service(engine: AgentEngine | None = None) -> SlashCommandService:
 
     async def load_session(session_id: str, user_id: str) -> SessionModel | None:
         async with async_session() as db:
-            return await db.scalar(select(SessionModel).where(
-                SessionModel.id == session_id, SessionModel.user_id == user_id,
-            ))
+            return await db.scalar(
+                select(SessionModel).where(
+                    SessionModel.id == session_id,
+                    SessionModel.user_id == user_id,
+                )
+            )
 
     return SlashCommandService(
         _registry,
@@ -93,15 +94,25 @@ def _stream_local(events: list[AgentEvent]):
 async def _resolve_run_context(session_id: str, user_id: str) -> dict[str, Any]:
     """Resolve ownership + credentials exactly like the chat endpoint does."""
     async with async_session() as db:
-        row = await db.scalar(select(SessionModel).where(
-            SessionModel.id == session_id, SessionModel.user_id == user_id,
-        ))
+        row = await db.scalar(
+            select(SessionModel).where(
+                SessionModel.id == session_id,
+                SessionModel.user_id == user_id,
+            )
+        )
         if row is None:
             raise HTTPException(404, detail="Session not found")
         agent_id = row.agent_id or ""
-        agent = await db.scalar(select(AgentModel).where(
-            AgentModel.id == agent_id, AgentModel.user_id == user_id,
-        )) if agent_id else None
+        agent = (
+            await db.scalar(
+                select(AgentModel).where(
+                    AgentModel.id == agent_id,
+                    AgentModel.user_id == user_id,
+                )
+            )
+            if agent_id
+            else None
+        )
         if agent_id and agent is None:
             raise HTTPException(404, detail="Agent not found")
         settings = _clean_model_settings(row.model_settings)
@@ -146,7 +157,10 @@ def _prepare_engine(context: dict[str, Any], session_id: str, user_id: str) -> A
         raise HTTPException(403, detail="Forbidden")
     try:
         engine.model_registry = _ChatModelRegistry(
-            context["provider"], context["model_id"], context["api_key"], context["base_url"],
+            context["provider"],
+            context["model_id"],
+            context["api_key"],
+            context["base_url"],
         )
     except Exception as exc:
         raise HTTPException(422, detail="Model credential could not be initialized") from exc
@@ -161,7 +175,9 @@ async def list_commands() -> dict[str, Any]:
 
 
 @router.post("/chat-commands/parse")
-async def parse_command(request: ParseRequest, user_id: str = Depends(get_current_user)) -> dict[str, Any]:
+async def parse_command(
+    request: ParseRequest, user_id: str = Depends(get_current_user)
+) -> dict[str, Any]:
     """Parse input without executing; the client uses this for live validation."""
     outcome = parse_input(request.message, _registry)
     result: dict[str, Any] = {
@@ -225,11 +241,16 @@ async def slash_command(
     running = session_id in _chat_inflight
     service = build_service(engine)
     execution = await service.execute(
-        outcome, session_id=session_id, user_id=user_id, running=running,
+        outcome,
+        session_id=session_id,
+        user_id=user_id,
+        running=running,
     )
 
     if execution.kind == "error":
-        return _stream_local([_error_event(execution.reply.content if execution.reply else "Command failed")])
+        return _stream_local(
+            [_error_event(execution.reply.content if execution.reply else "Command failed")]
+        )
     if execution.kind == "passthrough":
         if execution.agent_message is None:
             # /retry: re-run the last persisted user message as a fresh turn.
@@ -238,26 +259,36 @@ async def slash_command(
 
     reply = execution.reply
     content = reply.content if reply else "Done."
-    return _stream_local([
-        AgentEvent(type=AgentEventType.TEXT, data={"content": content}),
-        AgentEvent(type=AgentEventType.DONE, data={
-            "status": "completed",
-            "command": outcome.command,
-            "effect": reply.effect if reply else None,
-            "payload": reply.payload if reply else {},
-        }),
-    ])
+    return _stream_local(
+        [
+            AgentEvent(type=AgentEventType.TEXT, data={"content": content}),
+            AgentEvent(
+                type=AgentEventType.DONE,
+                data={
+                    "status": "completed",
+                    "command": outcome.command,
+                    "effect": reply.effect if reply else None,
+                    "payload": reply.payload if reply else {},
+                },
+            ),
+        ]
+    )
 
 
 async def _retry_last_turn(session_id: str, user_id: str):
     context = await _resolve_run_context(session_id, user_id)
     async with async_session() as db:
-        row = (await db.scalars(
-            select(MessageModel).where(
-                MessageModel.session_id == session_id,
-                MessageModel.role == "user",
-            ).order_by(MessageModel.created_at.desc(), MessageModel.id.desc()).limit(1)
-        )).first()
+        row = (
+            await db.scalars(
+                select(MessageModel)
+                .where(
+                    MessageModel.session_id == session_id,
+                    MessageModel.role == "user",
+                )
+                .order_by(MessageModel.created_at.desc(), MessageModel.id.desc())
+                .limit(1)
+            )
+        ).first()
     if row is None or not (row.content or "").strip():
         return _stream_local([_error_event("Nothing to retry yet: no previous user message")])
     # /retry re-runs the stored text as a NEW user turn; the original turn's
@@ -278,7 +309,6 @@ async def _stream_engine_turn(
     lock = engine._session_locks.get(session_id)
     if session_id in _chat_inflight or (lock is not None and lock.locked()):
         return _stream_local([_error_event("Session is already running")])
-    is_new_session = session is None
     if session is None:
         session = engine.create_session(
             agent_id=context["agent_id"],
@@ -310,7 +340,9 @@ async def _stream_engine_turn(
             async for event in engine.run(session, message):
                 yield _sse(event)
         except Exception:
-            yield _sse(_error_event("Model execution failed; verify the selected credential and model"))
+            yield _sse(
+                _error_event("Model execution failed; verify the selected credential and model")
+            )
         finally:
             _chat_inflight.discard(session_id)
 

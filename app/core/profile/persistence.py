@@ -66,15 +66,22 @@ class ProfileStore:
             return settings_payload(await load_settings(db, user_id))
 
     async def update_settings(
-        self, user_id: str, *, enabled: bool, consent_version: str | None = None,
+        self,
+        user_id: str,
+        *,
+        enabled: bool,
+        consent_version: str | None = None,
         show_raw_profile: bool | None = None,
     ) -> dict[str, Any]:
-        if type(enabled) is not bool or (show_raw_profile is not None and type(show_raw_profile) is not bool):
+        if type(enabled) is not bool or (
+            show_raw_profile is not None and type(show_raw_profile) is not bool
+        ):
             raise ValueError("settings must be boolean")
         async with async_session() as db:
             row = await load_settings(db, user_id, lock=True)
             if (
-                enabled and not (row and row.consent_version == NOTICE_VERSION and row.consented_at)
+                enabled
+                and not (row and row.consent_version == NOTICE_VERSION and row.consented_at)
                 and consent_version != NOTICE_VERSION
             ):
                 raise ValueError("explicit consent to the current notice is required")
@@ -186,15 +193,23 @@ class ProfileStore:
     async def _load_service(self, user_id: str) -> ProfileLoopService:
         """Replay one user's stored events into a fresh in-memory service."""
         async with async_session() as db:
-            if not self._service_kwargs["enabled"] or not learning_enabled(await load_settings(db, user_id)):
+            if not self._service_kwargs["enabled"] or not learning_enabled(
+                await load_settings(db, user_id)
+            ):
                 return ProfileLoopService(**{**self._service_kwargs, "enabled": False})
             # Select the recent window first, then replay it oldest-first.
-            rows = (await db.execute(
-                select(UserProfileEvent)
-                .where(UserProfileEvent.user_id == user_id)
-                .order_by(UserProfileEvent.occurred_at.desc(), UserProfileEvent.id.desc())
-                .limit(REPLAY_EVENT_LIMIT)
-            )).scalars().all()
+            rows = (
+                (
+                    await db.execute(
+                        select(UserProfileEvent)
+                        .where(UserProfileEvent.user_id == user_id)
+                        .order_by(UserProfileEvent.occurred_at.desc(), UserProfileEvent.id.desc())
+                        .limit(REPLAY_EVENT_LIMIT)
+                    )
+                )
+                .scalars()
+                .all()
+            )
         service = ProfileLoopService(**self._service_kwargs)
         for row in reversed(rows):
             service.record(self._to_event(row))

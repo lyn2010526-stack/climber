@@ -35,9 +35,11 @@ class MemoryLifecycle:
     def expire_ttl(self) -> list[MemoryAuditEntry]:
         """清理 TTL 过期记忆，输出审计。"""
         expired = self.store.expire_ttl()
-        return [
-            MemoryAuditEntry(action="expire", reason=f"TTL 过期清理（共 {expired} 条）")
-        ] if expired else []
+        return (
+            [MemoryAuditEntry(action="expire", reason=f"TTL 过期清理（共 {expired} 条）")]
+            if expired
+            else []
+        )
 
     def decay_all(self, now: datetime | None = None) -> list[MemoryAuditEntry]:
         """对所有记忆应用时间衰减（不降 trust，降检索权重 decay）。"""
@@ -49,19 +51,31 @@ class MemoryLifecycle:
             age_days = (now - item.last_accessed_at).total_seconds() / 86400
             if age_days >= 14:
                 new_decay = 0.5
-                audits.append(MemoryAuditEntry(
-                    action="downgrade", memory_id=item.id, kind=item.kind,
-                    text_preview=item.text[:50], score_before=item.decay, score_after=new_decay,
-                    reason=f"14 天未访问，衰减权重 {item.decay}->{new_decay}",
-                ))
+                audits.append(
+                    MemoryAuditEntry(
+                        action="downgrade",
+                        memory_id=item.id,
+                        kind=item.kind,
+                        text_preview=item.text[:50],
+                        score_before=item.decay,
+                        score_after=new_decay,
+                        reason=f"14 天未访问，衰减权重 {item.decay}->{new_decay}",
+                    )
+                )
                 self.store.update_trust(item.id, item.trust_score, decay=new_decay)
             elif age_days >= 7:
                 new_decay = 0.8
-                audits.append(MemoryAuditEntry(
-                    action="downgrade", memory_id=item.id, kind=item.kind,
-                    text_preview=item.text[:50], score_before=item.decay, score_after=new_decay,
-                    reason=f"7 天未访问，衰减权重 {item.decay}->{new_decay}",
-                ))
+                audits.append(
+                    MemoryAuditEntry(
+                        action="downgrade",
+                        memory_id=item.id,
+                        kind=item.kind,
+                        text_preview=item.text[:50],
+                        score_before=item.decay,
+                        score_after=new_decay,
+                        reason=f"7 天未访问，衰减权重 {item.decay}->{new_decay}",
+                    )
+                )
                 self.store.update_trust(item.id, item.trust_score, decay=new_decay)
         return audits
 
@@ -82,10 +96,15 @@ class MemoryLifecycle:
                 if dup.trust_score > keep.trust_score:
                     keep.trust_score = dup.trust_score
                     self.store.update_trust(keep.id, keep.trust_score)
-                audits.append(MemoryAuditEntry(
-                    action="merge", memory_id=dup.id, kind=dup.kind,
-                    text_preview=dup.text[:50], reason=f"与 {keep.id} 重复，合并",
-                ))
+                audits.append(
+                    MemoryAuditEntry(
+                        action="merge",
+                        memory_id=dup.id,
+                        kind=dup.kind,
+                        text_preview=dup.text[:50],
+                        reason=f"与 {keep.id} 重复，合并",
+                    )
+                )
                 self.store.delete(dup.id)
         return audits
 
@@ -94,17 +113,23 @@ class MemoryLifecycle:
         audits: list[MemoryAuditEntry] = []
         for item in self.store.list_all():
             if item.trust_score < threshold:
-                audits.append(MemoryAuditEntry(
-                    action="downgrade", memory_id=item.id, kind=item.kind,
-                    text_preview=item.text[:50], score_before=item.trust_score,
-                    score_after=item.trust_score * 0.5,
-                    reason=f"可信度 {item.trust_score:.2f} < {threshold}，下调权重",
-                ))
+                audits.append(
+                    MemoryAuditEntry(
+                        action="downgrade",
+                        memory_id=item.id,
+                        kind=item.kind,
+                        text_preview=item.text[:50],
+                        score_before=item.trust_score,
+                        score_after=item.trust_score * 0.5,
+                        reason=f"可信度 {item.trust_score:.2f} < {threshold}，下调权重",
+                    )
+                )
                 self.store.update_trust(item.id, item.trust_score * 0.5)
         return audits
 
-    def extract_and_store(self, text: str, source_session: str | None = None,
-                          context: str = "") -> list[MemoryAuditEntry]:
+    def extract_and_store(
+        self, text: str, source_session: str | None = None, context: str = ""
+    ) -> list[MemoryAuditEntry]:
         """事实抽取并入库（供精炼子 Agent 使用）。"""
         audits: list[MemoryAuditEntry] = []
         extractor = FactExtractor()
@@ -118,19 +143,29 @@ class MemoryLifecycle:
                 doc_length=len(fact.object),
                 trust_score=fact.confidence,
                 source_session=source_session,
-                structured={"subject": fact.subject, "predicate": fact.predicate,
-                            "object": fact.object, "confidence": fact.confidence},
+                structured={
+                    "subject": fact.subject,
+                    "predicate": fact.predicate,
+                    "object": fact.object,
+                    "confidence": fact.confidence,
+                },
             )
             existing_id = self.store.upsert(item)
-            audits.append(MemoryAuditEntry(
-                action="add", memory_id=existing_id, kind=MemoryKind.FACT,
-                text_preview=item.text[:50], score_after=item.trust_score,
-                reason="后台精炼事实抽取入库",
-            ))
+            audits.append(
+                MemoryAuditEntry(
+                    action="add",
+                    memory_id=existing_id,
+                    kind=MemoryKind.FACT,
+                    text_preview=item.text[:50],
+                    score_after=item.trust_score,
+                    reason="后台精炼事实抽取入库",
+                )
+            )
         return audits
 
-    def run_full_refinement(self, session_log: str, source_session: str | None = None,
-                            context: str = "") -> list[MemoryAuditEntry]:
+    def run_full_refinement(
+        self, session_log: str, source_session: str | None = None, context: str = ""
+    ) -> list[MemoryAuditEntry]:
         """完整精炼流程：抽取 → 合并 → TTL 清理 → 衰减 → 低可信降权。
 
         返回记忆审计日志（用户要求：输出记忆审计日志）。

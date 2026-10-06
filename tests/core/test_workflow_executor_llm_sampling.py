@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from app.core import AgentEvent, AgentEventType
 from app.core.engine.llm_calls import call_llm, sampling_kwargs, stream_chat
 from app.workflow import NodeType, WorkflowNode
@@ -59,7 +57,7 @@ class _RecordingAdapter:
 def _agent_session(**overrides: Any):
     from app.core.session import AgentSession
 
-    base = dict(user_id="u", provider="openai", model_id="m", api_key="k")
+    base = {"user_id": "u", "provider": "openai", "model_id": "m", "api_key": "k"}
     base.update(overrides)
     return AgentSession(**base)
 

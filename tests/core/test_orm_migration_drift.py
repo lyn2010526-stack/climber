@@ -14,23 +14,22 @@ import sys
 from pathlib import Path
 
 import pytest
-import sqlalchemy as sa
 from sqlalchemy import create_engine, inspect
 
-import app.storage  # noqa: F401
-import app.storage.database  # noqa: F401
-import app.storage.models_cost  # noqa: F401
-import app.storage.models_eval  # noqa: F401
-import app.storage.models_feedback  # noqa: F401
-import app.storage.models_files  # noqa: F401
-import app.storage.models_groups  # noqa: F401
-import app.storage.models_instruction_traces  # noqa: F401
-import app.storage.models_memory  # noqa: F401
-import app.storage.models_platform  # noqa: F401
-import app.storage.models_plugins  # noqa: F401
-import app.storage.models_reasoning  # noqa: F401
-import app.storage.models_skills  # noqa: F401
-import app.storage.models_traces  # noqa: F401
+import app.storage
+import app.storage.database
+import app.storage.models_cost
+import app.storage.models_eval
+import app.storage.models_feedback
+import app.storage.models_files
+import app.storage.models_groups
+import app.storage.models_instruction_traces
+import app.storage.models_memory
+import app.storage.models_platform
+import app.storage.models_plugins
+import app.storage.models_reasoning
+import app.storage.models_skills
+import app.storage.models_traces
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -69,7 +68,9 @@ def test_migrated_schema_matches_orm_columns(migrated_db) -> None:
         assert table in metadata.tables, table
         orm_columns = {column.name for column in metadata.tables[table].columns}
         db_columns = {column["name"] for column in inspector.get_columns(table)}
-        assert not (orm_columns - db_columns), f"{table} ORM-only columns: {orm_columns - db_columns}"
+        assert not (orm_columns - db_columns), (
+            f"{table} ORM-only columns: {orm_columns - db_columns}"
+        )
 
 
 def test_nullable_columns_match_orm(migrated_db) -> None:

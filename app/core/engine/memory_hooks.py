@@ -20,6 +20,7 @@ def set_agent_mode(session: Any) -> None:
     """
     try:
         from app.core.file_patch import set_current_agent_mode
+
         set_current_agent_mode(session.mode)
     except Exception:
         pass
@@ -43,13 +44,20 @@ async def inject_memory_context(engine: Any, session: Any, message: str) -> None
         if memory_context:
             for i, msg in enumerate(session.messages):
                 if msg.get("content", "").startswith(memory_marker):
-                    session.messages[i] = {"role": MessageRole.SYSTEM, "content": memory_marker + "\n" + memory_context}
+                    session.messages[i] = {
+                        "role": MessageRole.SYSTEM,
+                        "content": memory_marker + "\n" + memory_context,
+                    }
                     break
             else:
-                session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": memory_marker + "\n" + memory_context})
+                session.messages.insert(
+                    -1,
+                    {"role": MessageRole.SYSTEM, "content": memory_marker + "\n" + memory_context},
+                )
         else:
             session.messages[:] = [
-                msg for msg in session.messages
+                msg
+                for msg in session.messages
                 if not msg.get("content", "").startswith(memory_marker)
             ]
     except Exception:
@@ -64,19 +72,27 @@ async def inject_core_memory(session: Any) -> None:
     """
     try:
         from app.core.core_memory import core_memory
+
         blocks = await core_memory.get_blocks(user_id=session.user_id, agent_id=session.agent_id)
         core_marker = "<!-- CORE_MEMORY -->"
         if blocks:
             core_memory_xml = core_memory.format_for_prompt(blocks)
             for i, msg in enumerate(session.messages):
                 if msg.get("content", "").startswith(core_marker):
-                    session.messages[i] = {"role": MessageRole.SYSTEM, "content": core_marker + "\n" + core_memory_xml}
+                    session.messages[i] = {
+                        "role": MessageRole.SYSTEM,
+                        "content": core_marker + "\n" + core_memory_xml,
+                    }
                     break
             else:
-                session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": core_marker + "\n" + core_memory_xml})
+                session.messages.insert(
+                    -1,
+                    {"role": MessageRole.SYSTEM, "content": core_marker + "\n" + core_memory_xml},
+                )
         else:
             session.messages[:] = [
-                msg for msg in session.messages
+                msg
+                for msg in session.messages
                 if not msg.get("content", "").startswith(core_marker)
             ]
     except Exception:
@@ -114,6 +130,7 @@ def trigger_memory_reflection(engine: Any, session: Any) -> None:
     """
     try:
         from app.core.memory_reflection import memory_reflection
+
         engine._spawn(memory_reflection.maybe_reflect(session.user_id))
     except Exception:
         pass
@@ -148,4 +165,5 @@ async def archive_instruction(session: Any, message: str) -> None:
         session._instruction_trace_id = trace.id
     except Exception as exc:
         import structlog
+
         structlog.get_logger().warning("instruction_trace_archive_failed", error=str(exc))

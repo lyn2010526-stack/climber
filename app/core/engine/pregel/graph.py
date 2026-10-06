@@ -208,7 +208,9 @@ class StateGraph:
         if not self._nodes:
             raise ValueError("Graph has no nodes")
         if not self._entry_point and "__start__" not in self._conditional_edges:
-            raise ValueError("No entry point set. Call set_entry_point() or set_conditional_entry_point()")
+            raise ValueError(
+                "No entry point set. Call set_entry_point() or set_conditional_entry_point()"
+            )
         if self._entry_point and self._entry_point not in self._nodes:
             raise ValueError(f"Entry point '{self._entry_point}' is not a registered node")
         for src, dst in self._edges:
@@ -216,7 +218,7 @@ class StateGraph:
                 raise ValueError(f"Edge source '{src}' is not a registered node")
             if dst not in self._nodes and dst != "__end__":
                 raise ValueError(f"Edge target '{dst}' is not a registered node")
-        for src, branch in self._conditional_edges.items():
+        for src, _branch in self._conditional_edges.items():
             if src != "__start__" and src not in self._nodes:
                 raise ValueError(f"Conditional edge source '{src}' is not a registered node")
 

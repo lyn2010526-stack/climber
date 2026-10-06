@@ -21,6 +21,7 @@ from app.simulation.models import ExperimentSpec
 @dataclass
 class ParamDim:
     """One parameter dimension of the search space."""
+
     name: str
     values: list[Any] | None = None
     min: float | None = None
@@ -49,6 +50,7 @@ class ParamDim:
 @dataclass
 class ExperimentPlan:
     """An explicit, bounded list of candidate experiments."""
+
     tool_name: str
     objective: str = ""
     base_parameters: dict[str, Any] = field(default_factory=dict)
@@ -56,7 +58,7 @@ class ExperimentPlan:
     experiments: list[ExperimentSpec] = field(default_factory=list)
     total: int = 0
 
-    def build(self) -> "ExperimentPlan":
+    def build(self) -> ExperimentPlan:
         """Materialize the Cartesian sweep into concrete experiments."""
         if self.experiments:
             return self
@@ -70,7 +72,7 @@ class ExperimentPlan:
         self.experiments = []
         for combo in combos:
             params = dict(self.base_parameters)
-            for label, value in zip(labels, combo):
+            for label, value in zip(labels, combo, strict=False):
                 if value is not None:
                     params[label] = value
             self.experiments.append(
@@ -128,13 +130,15 @@ def plan_from_schema(
     dims: list[ParamDim] = []
     for name, dim_spec in sweep_spec.items():
         if isinstance(dim_spec, dict):
-            dims.append(ParamDim(
-                name=name,
-                values=dim_spec.get("values"),
-                min=dim_spec.get("min"),
-                max=dim_spec.get("max"),
-                steps=int(dim_spec.get("steps", 10)),
-            ))
+            dims.append(
+                ParamDim(
+                    name=name,
+                    values=dim_spec.get("values"),
+                    min=dim_spec.get("min"),
+                    max=dim_spec.get("max"),
+                    steps=int(dim_spec.get("steps", 10)),
+                )
+            )
         else:
             if isinstance(dim_spec, list):
                 dims.append(ParamDim(name=name, values=list(dim_spec)))

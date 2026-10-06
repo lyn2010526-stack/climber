@@ -11,7 +11,11 @@ from app.core.engine.safety import setup_default_permissions, validate_tool_call
 from app.core.interfaces import ExecutionResult, ExecutionStatus
 from app.core.security import DockerSandbox
 from app.core.security_sandbox import (
-    AgentMode, PermissionLevel, PermissionOverlay, PermissionRule, SecuritySandbox,
+    AgentMode,
+    PermissionLevel,
+    PermissionOverlay,
+    PermissionRule,
+    SecuritySandbox,
 )
 from app.tools import builtins
 from app.utils.ssrf import blocked_reason
@@ -63,7 +67,9 @@ class DockerResultTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.error, "Docker not available")
 
     async def test_creation_failure_uses_real_result(self):
-        with patch.object(self.sandbox, "create_container", side_effect=RuntimeError("mock failure")):
+        with patch.object(
+            self.sandbox, "create_container", side_effect=RuntimeError("mock failure")
+        ):
             result = await self.sandbox.execute(["echo", "hello"], ".")
         self.assertIs(type(result), ExecutionResult)
         self.assertEqual(result.status, ExecutionStatus.FAILED)
@@ -86,22 +92,31 @@ class ExistingSafetyChainTests(unittest.TestCase):
     def setUp(self):
         self.permissions = PermissionOverlay()
         self.sandbox = SecuritySandbox()
-        definition = SimpleNamespace(parameters={
-            "type": "object",
-            "properties": {"command": {"type": "string"}},
-            "required": ["command"],
-        })
+        definition = SimpleNamespace(
+            parameters={
+                "type": "object",
+                "properties": {"command": {"type": "string"}},
+                "required": ["command"],
+            }
+        )
         self.registry = SimpleNamespace(get_tool=Mock(return_value=definition))
 
     def validate(self, arguments, mode=AgentMode.ACT):
         return validate_tool_call(
-            self.sandbox, self.permissions, mode, self.registry, "run_command", arguments,
+            self.sandbox,
+            self.permissions,
+            mode,
+            self.registry,
+            "run_command",
+            arguments,
         )
 
     def allow_execution(self):
-        self.permissions.set_defaults([
-            PermissionRule("execute", "*", PermissionLevel.ALLOW),
-        ])
+        self.permissions.set_defaults(
+            [
+                PermissionRule("execute", "*", PermissionLevel.ALLOW),
+            ]
+        )
 
     def test_default_approval_gate_remains_active(self):
         setup_default_permissions(self.permissions)
@@ -117,7 +132,9 @@ class ExistingSafetyChainTests(unittest.TestCase):
 
     def test_allowed_command_reaches_real_sandbox(self):
         self.allow_execution()
-        with patch.object(self.sandbox, "validate_command", wraps=self.sandbox.validate_command) as validate:
+        with patch.object(
+            self.sandbox, "validate_command", wraps=self.sandbox.validate_command
+        ) as validate:
             self.assertEqual(self.validate({"command": "echo hello"}), (True, "OK"))
         validate.assert_called_once_with("echo hello")
 
@@ -131,15 +148,22 @@ class ExistingSafetyChainTests(unittest.TestCase):
 class FetchUrlTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.requests = []
-        self.checker = self.enterContext(patch.object(builtins, "blocked_reason", wraps=blocked_reason))
-        self.enterContext(patch(
-            "app.utils.ssrf.socket.getaddrinfo",
-            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 443))],
-        ))
-        self.enterContext(patch.object(
-            httpx.AsyncHTTPTransport, "handle_async_request",
-            side_effect=AssertionError("Real HTTP transport is forbidden in this test"),
-        ))
+        self.checker = self.enterContext(
+            patch.object(builtins, "blocked_reason", wraps=blocked_reason)
+        )
+        self.enterContext(
+            patch(
+                "app.utils.ssrf.socket.getaddrinfo",
+                return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 443))],
+            )
+        )
+        self.enterContext(
+            patch.object(
+                httpx.AsyncHTTPTransport,
+                "handle_async_request",
+                side_effect=AssertionError("Real HTTP transport is forbidden in this test"),
+            )
+        )
 
     def client(self, handler):
         def dispatch(request):
@@ -148,8 +172,7 @@ class FetchUrlTests(unittest.IsolatedAsyncioTestCase):
             return handler(request)
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(dispatch))
-        factory = self.enterContext(patch.object(builtins.httpx, "AsyncClient", return_value=client))
-        return factory
+        return self.enterContext(patch.object(builtins.httpx, "AsyncClient", return_value=client))
 
     async def test_success_keeps_output_limit_and_timeout(self):
         factory = self.client(lambda request: httpx.Response(200, text="x" * 6000))
@@ -167,7 +190,11 @@ class FetchUrlTests(unittest.IsolatedAsyncioTestCase):
 
         self.client(response)
         result = await builtins.fetch_url("https://example.com/start")
-        urls = ["https://example.com/start", "https://example.com/next", "https://www.example.com/final"]
+        urls = [
+            "https://example.com/start",
+            "https://example.com/next",
+            "https://www.example.com/final",
+        ]
         self.assertEqual(self.requests, urls)
         self.assertEqual(self.checker.call_args_list, [call(url) for url in urls])
         self.assertTrue(result.endswith("finished"))

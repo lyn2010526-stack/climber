@@ -131,9 +131,7 @@ def test_failing_registration_does_not_block_remaining_skills(
     broken_id = DECLARED_IDS[0]
     original_register = SkillRegistry.register
 
-    def _register(
-        self: SkillRegistry, skill: SkillInfo, handler: Callable | None = None
-    ) -> None:
+    def _register(self: SkillRegistry, skill: SkillInfo, handler: Callable | None = None) -> None:
         if skill.id == broken_id:
             raise RuntimeError("registration exploded")
         original_register(self, skill, handler)

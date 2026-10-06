@@ -1,4 +1,5 @@
 """Session manager — handles agent sessions."""
+
 from __future__ import annotations
 
 import uuid

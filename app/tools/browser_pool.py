@@ -53,7 +53,9 @@ class BrowserSession:
             try:
                 await closer()
             except Exception as exc:  # pragma: no cover - best effort teardown
-                logger.debug("browser_session_close_error", session_id=self.session_id, error=str(exc))
+                logger.debug(
+                    "browser_session_close_error", session_id=self.session_id, error=str(exc)
+                )
 
 
 class BrowserPool:
@@ -122,7 +124,9 @@ class BrowserPool:
         victim_id = min(self._sessions, key=lambda k: self._sessions[k].last_used)
         victim = self._sessions.pop(victim_id)
         self._evictions += 1
-        logger.info("browser_session_evicted", session_id=victim_id, idle=round(victim.idle_seconds, 1))
+        logger.info(
+            "browser_session_evicted", session_id=victim_id, idle=round(victim.idle_seconds, 1)
+        )
         await victim.close()
 
     async def release(self, session_id: str) -> None:
@@ -174,9 +178,7 @@ class BrowserPool:
     async def reclaim_idle(self) -> int:
         """Close sessions idle beyond the timeout. Returns count reclaimed."""
         async with self._lock:
-            stale = [
-                sid for sid, s in self._sessions.items() if s.idle_seconds > self.idle_timeout
-            ]
+            stale = [sid for sid, s in self._sessions.items() if s.idle_seconds > self.idle_timeout]
             victims = [self._sessions.pop(sid) for sid in stale]
         for victim in victims:
             await victim.close()

@@ -229,7 +229,8 @@ class TextSummarizer:
 
 def _prompt(text: str, *, mode: str, scope: str) -> str:
     instruction = (
-        "produce a one-line abstract (at most 256 characters)" if mode == "abstract"
+        "produce a one-line abstract (at most 256 characters)"
+        if mode == "abstract"
         else "outline the directory contents and quick navigation (at most 4000 characters)"
     )
     return (

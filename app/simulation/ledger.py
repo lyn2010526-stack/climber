@@ -39,38 +39,40 @@ class ExperimentLedger:
 
     def record_attempt(self, attempt: ExperimentAttempt) -> None:
         """Write a single attempt record."""
-        self._write({
-            "type": "attempt",
-            "round": attempt.round,
-            "spec_id": attempt.spec_id,
-            "tool_name": attempt.tool_name,
-            "parameters": attempt.parameters,
-            "output": attempt.output,
-            "success": attempt.success,
-            "error": attempt.error,
-            "duration_ms": attempt.duration_ms,
-            "probe": attempt.probe.model_dump(),
-            "verdict": attempt.verdict.value if attempt.verdict else None,
-            "reviewer_note": attempt.reviewer_note,
-            "timestamp": attempt.timestamp,
-        })
+        self._write(
+            {
+                "type": "attempt",
+                "round": attempt.round,
+                "spec_id": attempt.spec_id,
+                "tool_name": attempt.tool_name,
+                "parameters": attempt.parameters,
+                "output": attempt.output,
+                "success": attempt.success,
+                "error": attempt.error,
+                "duration_ms": attempt.duration_ms,
+                "probe": attempt.probe.model_dump(),
+                "verdict": attempt.verdict.value if attempt.verdict else None,
+                "reviewer_note": attempt.reviewer_note,
+                "timestamp": attempt.timestamp,
+            }
+        )
 
     def record_report(self, report: ExperimentReport) -> None:
         """Write the final per-experiment report."""
-        self._write({
-            "type": "report",
-            "spec": report.spec.model_dump(),
-            "rounds_used": report.rounds_used,
-            "max_rounds": report.max_rounds,
-            "accepted_parameters": (
-                report.accepted_attempt.parameters
-                if report.accepted_attempt else None
-            ),
-            "accepted_output": (
-                report.accepted_attempt.output
-                if report.accepted_attempt else None
-            ),
-        })
+        self._write(
+            {
+                "type": "report",
+                "spec": report.spec.model_dump(),
+                "rounds_used": report.rounds_used,
+                "max_rounds": report.max_rounds,
+                "accepted_parameters": (
+                    report.accepted_attempt.parameters if report.accepted_attempt else None
+                ),
+                "accepted_output": (
+                    report.accepted_attempt.output if report.accepted_attempt else None
+                ),
+            }
+        )
 
     def record_plan_round(
         self,
@@ -83,38 +85,41 @@ class ExperimentLedger:
         feedback: str,
     ) -> None:
         """Write one orchestrator plan-round summary."""
-        self._write({
-            "type": "plan_round",
-            "round_number": round_number,
-            "tool_name": tool_name,
-            "plan_total": plan_total,
-            "accepted": accepted,
-            "rejected": rejected,
-            "satisfied": satisfied,
-            "feedback": feedback,
-        })
+        self._write(
+            {
+                "type": "plan_round",
+                "round_number": round_number,
+                "tool_name": tool_name,
+                "plan_total": plan_total,
+                "accepted": accepted,
+                "rejected": rejected,
+                "satisfied": satisfied,
+                "feedback": feedback,
+            }
+        )
 
     def record_final_report(self, final_report: dict[str, Any]) -> None:
         """Write the orchestrator's final synthesized report."""
-        self._write({
-            "type": "final_report",
-            "final_report": final_report,
-        })
+        self._write(
+            {
+                "type": "final_report",
+                "final_report": final_report,
+            }
+        )
 
     def _write(self, record: dict[str, Any]) -> None:
         record["_schema"] = _LEDGER_SCHEMA
         record["run_id"] = self.run_id
         line = json.dumps(record, ensure_ascii=False) + "\n"
-        with self._lock:
-            with open(self.path, "a", encoding="utf-8") as fh:
-                fh.write(line)
+        with self._lock, open(self.path, "a", encoding="utf-8") as fh:
+            fh.write(line)
 
     def read_all(self) -> list[dict[str, Any]]:
         """Read all records in write order."""
         if not self.path.exists():
             return []
         records: list[dict[str, Any]] = []
-        with open(self.path, "r", encoding="utf-8") as fh:
+        with open(self.path, encoding="utf-8") as fh:
             for line in fh:
                 line = line.strip()
                 if line:

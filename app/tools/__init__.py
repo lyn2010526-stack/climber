@@ -13,12 +13,14 @@ logger = structlog.get_logger()
 
 # Inventory-only marker for native tools superseded by controlled built-ins.
 # Registration and execution remain unchanged.
-DEPRECATED_TOOL_NAMES: frozenset[str] = frozenset({
-    "native_read_file",
-    "native_write_file",
-    "native_list_dir",
-    "native_web_search",
-})
+DEPRECATED_TOOL_NAMES: frozenset[str] = frozenset(
+    {
+        "native_read_file",
+        "native_write_file",
+        "native_list_dir",
+        "native_web_search",
+    }
+)
 
 
 class ToolDefinition(BaseModel):
@@ -61,6 +63,7 @@ class ToolRegistry:
         mcp_tool_name: str,
     ) -> None:
         """Register an MCP tool that delegates to an MCP server."""
+
         async def _mcp_wrapper(**kwargs):
             return await mcp_client.call_tool(mcp_tool_name, kwargs)
 
@@ -151,6 +154,7 @@ class ToolRegistry:
                 return result
             if isinstance(result, (dict, list)):
                 import json
+
                 return json.dumps(result, ensure_ascii=False, default=str)
             return str(result)
         except Exception as e:
@@ -161,14 +165,16 @@ class ToolRegistry:
         """Return tools in OpenAI function calling format."""
         result = []
         for _name, defn in self._definitions.items():
-            result.append({
-                "type": "function",
-                "function": {
-                    "name": defn.name,
-                    "description": defn.description,
-                    "parameters": defn.parameters,
-                },
-            })
+            result.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": defn.name,
+                        "description": defn.description,
+                        "parameters": defn.parameters,
+                    },
+                }
+            )
         return result
 
     def list_tools(self) -> list[ToolDefinition]:

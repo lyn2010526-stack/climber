@@ -105,7 +105,11 @@ class MemorySidecarService:
             )
             rows.append(row)
             await self._semantic.index(
-                body, scope=scope, level=level, doc_id=str(row.id), user_id=user_id,
+                body,
+                scope=scope,
+                level=level,
+                doc_id=str(row.id),
+                user_id=user_id,
                 kind="sidecar",
             )
         if memfs is not None:
@@ -179,7 +183,9 @@ class MemorySidecarService:
             return (await db.execute(stmt)).scalar_one_or_none()
 
     async def read_pair(
-        self, user_id: str, scope: str,
+        self,
+        user_id: str,
+        scope: str,
     ) -> tuple[MemorySidecar | None, MemorySidecar | None]:
         """Read (L0, L1); either may be None when it was never generated."""
         l0 = await self.read(user_id, scope, 0)
@@ -191,11 +197,17 @@ class MemorySidecarService:
 
     async def list_scopes(self, user_id: str) -> list[str]:
         async with async_session() as db:
-            rows = (await db.execute(
-                select(MemorySidecar.scope)
-                .where(MemorySidecar.user_id == user_id)
-                .distinct()
-            )).scalars().all()
+            rows = (
+                (
+                    await db.execute(
+                        select(MemorySidecar.scope)
+                        .where(MemorySidecar.user_id == user_id)
+                        .distinct()
+                    )
+                )
+                .scalars()
+                .all()
+            )
         return sorted(rows)
 
     async def summarize_directory(
@@ -248,7 +260,11 @@ class MemorySidecarService:
         return f"- `{path}`: {first}" if first else f"- `{path}`"
 
     async def _write_memfs_sidecars(
-        self, memfs: Any, scope: str, abstract: str, overview: str,
+        self,
+        memfs: Any,
+        scope: str,
+        abstract: str,
+        overview: str,
     ) -> None:
         """Mirror sidecars as hidden files inside the MemFS scope directory."""
         for _, body, fname in (

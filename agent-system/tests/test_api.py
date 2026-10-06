@@ -50,9 +50,13 @@ def test_router_health_and_run() -> None:
         assert r.status_code == 200
         assert r.json()["status"] == "ok"
 
-        created = client.post("/api/agent/run", json={
-            "objective": "查询并按部门汇总", "session_id": "http-1",
-        })
+        created = client.post(
+            "/api/agent/run",
+            json={
+                "objective": "查询并按部门汇总",
+                "session_id": "http-1",
+            },
+        )
         assert created.status_code == 200
         assert created.json()["state"] == "running"
 

@@ -1,7 +1,6 @@
 """Standalone profile checks: no app configuration or shared test database."""
 
 # Standalone unittest execution deliberately avoids the pytest DB fixtures.
-# ruff: noqa: PT009, PT027
 import sys
 import unittest
 from datetime import UTC, datetime, timedelta
@@ -49,7 +48,12 @@ NOW = datetime(2026, 10, 2, tzinfo=UTC)
 
 
 def event(**fields):
-    values = {"instruction": "local task", "task_type": "coding", "outcome": "success", "occurred_at": NOW}
+    values = {
+        "instruction": "local task",
+        "task_type": "coding",
+        "outcome": "success",
+        "occurred_at": NOW,
+    }
     values.update(fields)
     return ProfileEvent(**values)
 
@@ -66,7 +70,9 @@ class ProfileAlgorithmTests(unittest.TestCase):
         service.record(event(task_type="successful"))
         service.record(event(task_type="failed", outcome="failure"))
         summary = service.summary(as_of=NOW)
-        self.assertGreater(summary.task_preferences["successful"], summary.task_preferences["failed"])
+        self.assertGreater(
+            summary.task_preferences["successful"], summary.task_preferences["failed"]
+        )
         self.assertEqual(summary.success_rate, 0.5)
 
     def test_embedding_is_deterministic_normalized_and_excludes_instruction(self):
@@ -119,15 +125,21 @@ class ProfileStoreBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def test_disabled_record_event_rejects_before_opening_database(self):
         store = ProfileStore(enabled=False)
         with (
-            patch.object(persistence, "async_session", side_effect=AssertionError("database opened")),
+            patch.object(
+                persistence, "async_session", side_effect=AssertionError("database opened")
+            ),
             self.assertRaisesRegex(ValueError, "profile learning is disabled"),
         ):
-            await store.record_event("user", instruction="private text", task_type="coding", outcome="success")
+            await store.record_event(
+                "user", instruction="private text", task_type="coding", outcome="success"
+            )
         self.assertEqual(await self.count_events(), 0)
 
     async def test_disabled_record_run_does_not_persist(self):
         with self.assertRaisesRegex(ValueError, "profile learning is disabled"):
-            await ProfileStore(enabled=False).record_run("user", instruction="local run", outcome="failure")
+            await ProfileStore(enabled=False).record_run(
+                "user", instruction="local run", outcome="failure"
+            )
         self.assertEqual(await self.count_events(), 0)
 
     async def test_disabled_attempt_preserves_existing_events_and_no_hints(self):
@@ -142,7 +154,9 @@ class ProfileStoreBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(summary.confidence, 0.0)
         context = await store.suggestions("user", "current goal")
         self.assertFalse(context["enabled"])
-        self.assertEqual(context["suggestions"], {"task_type": None, "tool": None, "reasoning_level": None})
+        self.assertEqual(
+            context["suggestions"], {"task_type": None, "tool": None, "reasoning_level": None}
+        )
 
     async def test_enabled_record_replays_only_own_user_without_raw_instruction(self):
         await ProfileStore().update_settings("user", enabled=True, consent_version=NOTICE_VERSION)
@@ -157,7 +171,9 @@ class ProfileStoreBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_external_source_does_not_persist(self):
         with self.assertRaises(ValueError):
-            await ProfileStore().record_event("user", instruction="text", task_type="coding", outcome="success", source="external")
+            await ProfileStore().record_event(
+                "user", instruction="text", task_type="coding", outcome="success", source="external"
+            )
         self.assertEqual(await self.count_events(), 0)
 
     async def test_default_requires_explicit_current_notice_consent(self):
@@ -174,7 +190,9 @@ class ProfileStoreBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await self.count_events(), 0)
 
     async def test_user_settings_isolation_and_fresh_instance_persistence(self):
-        settings = await ProfileStore().update_settings("alice", enabled=True, consent_version=NOTICE_VERSION)
+        settings = await ProfileStore().update_settings(
+            "alice", enabled=True, consent_version=NOTICE_VERSION
+        )
         self.assertTrue(settings["enabled"])
         self.assertIsNotNone(settings["consented_at"])
         self.assertTrue((await ProfileStore().get_settings("alice"))["enabled"])
@@ -199,7 +217,9 @@ class ProfileStoreBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(disabled.task_preferences, {})
         self.assertEqual(disabled.prompt_hints, ())
         async with self.sessions() as db:
-            self.assertEqual((await db.execute(select(UserProfileSnapshot))).scalar_one().payload, snapshot)
+            self.assertEqual(
+                (await db.execute(select(UserProfileSnapshot))).scalar_one().payload, snapshot
+            )
         await ProfileStore().update_settings("user", enabled=True)
         resumed = await ProfileStore().summary("user")
         self.assertEqual(resumed.task_preferences, first.task_preferences)
@@ -229,7 +249,10 @@ class ProfileStoreBoundaryTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(denied.status_code, 400)
             invalid = await client.put(prefix + "/settings", json={"enabled": "true"})
             self.assertEqual(invalid.status_code, 422)
-            enabled = await client.put(prefix + "/settings", json={"enabled": True, "consent_version": initial.json()["notice_version"]})
+            enabled = await client.put(
+                prefix + "/settings",
+                json={"enabled": True, "consent_version": initial.json()["notice_version"]},
+            )
             self.assertEqual(enabled.status_code, 200)
             self.assertTrue(enabled.json()["enabled"])
             other = await client.get(prefix + "/settings", headers={"test-user": "bob"})
@@ -238,18 +261,24 @@ class ProfileStoreBoundaryTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await client.post(prefix + "/events", json=fields)).status_code, 200)
             self.assertEqual((await client.get(prefix + "/summary")).status_code, 403)
             self.assertEqual((await client.get(prefix + "/suggestions")).status_code, 403)
-            shown = await client.put(prefix + "/settings", json={"enabled": True, "show_raw_profile": True})
+            shown = await client.put(
+                prefix + "/settings", json={"enabled": True, "show_raw_profile": True}
+            )
             self.assertEqual(shown.status_code, 200)
             self.assertEqual((await client.get(prefix + "/summary")).status_code, 200)
             design = await client.get(prefix + "/clear-design")
             self.assertFalse(design.json()["implemented"])
             self.assertEqual((await client.post(prefix + "/clear")).status_code, 404)
             self.assertEqual(await self.count_events(), 1)
-            self.assertEqual((await client.put(prefix + "/settings", json={"enabled": False})).status_code, 200)
+            self.assertEqual(
+                (await client.put(prefix + "/settings", json={"enabled": False})).status_code, 200
+            )
             self.assertEqual((await client.post(prefix + "/events", json=fields)).status_code, 400)
             paused = await client.get(prefix + "/summary")
             self.assertEqual(paused.json()["task_preferences"], {})
-            self.assertEqual((await client.put(prefix + "/settings", json={"enabled": True})).status_code, 200)
+            self.assertEqual(
+                (await client.put(prefix + "/settings", json={"enabled": True})).status_code, 200
+            )
             self.assertTrue((await client.get(prefix + "/summary")).json()["task_preferences"])
             self.assertEqual(await self.count_events(), 1)
 

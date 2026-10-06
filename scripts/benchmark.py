@@ -17,9 +17,9 @@ RESULTS = {}
 
 
 def section(title):
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"  {title}")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
 
 def record(category, metric, value, unit=""):
@@ -71,7 +71,11 @@ async def benchmark_response_times():
             else:
                 avg = statistics.mean(latencies)
                 med = statistics.median(latencies)
-                p95 = sorted(latencies)[int(len(latencies) * 0.95)] if len(latencies) > 1 else latencies[0]
+                p95 = (
+                    sorted(latencies)[int(len(latencies) * 0.95)]
+                    if len(latencies) > 1
+                    else latencies[0]
+                )
                 name = path.replace("/api/v1/", "").replace("?", "_q")
                 record("response_time", f"{method} {name} (avg)", f"{avg:.1f}", "ms")
                 record("response_time", f"{method} {name} (median)", f"{med:.1f}", "ms")
@@ -95,7 +99,9 @@ async def make_request(client, sem, path):
 
 async def benchmark_concurrent(concurrency, path="/health", total_requests=200):
     sem = asyncio.Semaphore(concurrency)
-    async with httpx.AsyncClient(base_url=BASE_URL, timeout=60, limits=httpx.Limits(max_connections=concurrency+10)) as client:
+    async with httpx.AsyncClient(
+        base_url=BASE_URL, timeout=60, limits=httpx.Limits(max_connections=concurrency + 10)
+    ) as client:
         tasks = [make_request(client, sem, path) for _ in range(total_requests)]
         start = time.perf_counter()
         results = await asyncio.gather(*tasks)
@@ -135,17 +141,11 @@ def benchmark_memory():
     section("3. Memory Usage")
 
     # Get server PID
-    result = subprocess.run(
-        ["pgrep", "-f", "uvicorn app.main:app"],
-        capture_output=True, text=True
-    )
+    result = subprocess.run(["pgrep", "-f", "uvicorn app.main:app"], capture_output=True, text=True)
     pids = result.stdout.strip().split("\n")
     if not pids or not pids[0]:
         # try finding the python process
-        result = subprocess.run(
-            ["pgrep", "-f", "app.main:app"],
-            capture_output=True, text=True
-        )
+        result = subprocess.run(["pgrep", "-f", "app.main:app"], capture_output=True, text=True)
         pids = result.stdout.strip().split("\n")
 
     if not pids or not pids[0]:
@@ -162,7 +162,9 @@ def benchmark_memory():
     # Run concurrent load to stress memory
     async def stress():
         sem = asyncio.Semaphore(50)
-        async with httpx.AsyncClient(base_url=BASE_URL, timeout=30, limits=httpx.Limits(max_connections=60)) as client:
+        async with httpx.AsyncClient(
+            base_url=BASE_URL, timeout=30, limits=httpx.Limits(max_connections=60)
+        ) as client:
             tasks = [make_request(client, sem, "/health") for _ in range(500)]
             await asyncio.gather(*tasks)
 
@@ -179,8 +181,8 @@ def benchmark_memory():
     # System memory
     with open("/proc/meminfo") as f:
         lines = f.readlines()
-    mem_total = next((l for l in lines if "MemTotal" in l), "")
-    mem_avail = next((l for l in lines if "MemAvailable" in l), "")
+    mem_total = next((line for line in lines if "MemTotal" in line), "")
+    mem_avail = next((line for line in lines if "MemAvailable" in line), "")
     if mem_total and mem_avail:
         total_kb = int(mem_total.split()[1])
         avail_kb = int(mem_avail.split()[1])
@@ -200,10 +202,7 @@ def get_process_memory(pid):
     except (FileNotFoundError, PermissionError):
         pass
     # Fallback: use ps
-    result = subprocess.run(
-        ["ps", "-p", pid, "-o", "rss="],
-        capture_output=True, text=True
-    )
+    result = subprocess.run(["ps", "-p", pid, "-o", "rss="], capture_output=True, text=True)
     try:
         return int(result.stdout.strip()) / 1024
     except ValueError:
@@ -228,7 +227,9 @@ async def benchmark_db_queries():
                 if resp.status_code == 200:
                     latencies.append(elapsed)
             if latencies:
-                record("db_query", f"tasks_limit={limit}", f"{statistics.mean(latencies):.1f}", "ms")
+                record(
+                    "db_query", f"tasks_limit={limit}", f"{statistics.mean(latencies):.1f}", "ms"
+                )
 
         # Test sessions endpoint with different limits
         for limit in [10, 50, 100]:
@@ -241,7 +242,9 @@ async def benchmark_db_queries():
                 if resp.status_code == 200:
                     latencies.append(elapsed)
             if latencies:
-                record("db_query", f"sessions_limit={limit}", f"{statistics.mean(latencies):.1f}", "ms")
+                record(
+                    "db_query", f"sessions_limit={limit}", f"{statistics.mean(latencies):.1f}", "ms"
+                )
 
         # Test settings endpoint (likely cached)
         latencies = []
@@ -270,7 +273,9 @@ async def benchmark_db_queries():
             if resp.status_code == 200:
                 data = resp.json()
                 count = len(data) if isinstance(data, list) else "N/A"
-                record("db_query", f"{endpoint.split('?')[0].split('/')[-1]}_count", count, "records")
+                record(
+                    "db_query", f"{endpoint.split('?')[0].split('/')[-1]}_count", count, "records"
+                )
 
 
 # ──────────────────────────────────────────────────────────────
@@ -289,11 +294,7 @@ def benchmark_frontend_build():
         print("  Installing frontend dependencies...")
         start = time.perf_counter()
         subprocess.run(
-            ["npm", "install"],
-            cwd=frontend_dir,
-            capture_output=True,
-            text=True,
-            timeout=120
+            ["npm", "install"], cwd=frontend_dir, capture_output=True, text=True, timeout=120
         )
         install_time = time.perf_counter() - start
         record("frontend", "npm_install_time", f"{install_time:.1f}", "s")
@@ -307,11 +308,7 @@ def benchmark_frontend_build():
     print("  Running npm run build...")
     start = time.perf_counter()
     result = subprocess.run(
-        ["npm", "run", "build"],
-        cwd=frontend_dir,
-        capture_output=True,
-        text=True,
-        timeout=180
+        ["npm", "run", "build"], cwd=frontend_dir, capture_output=True, text=True, timeout=180
     )
     build_time = time.perf_counter() - start
 
@@ -329,7 +326,7 @@ def benchmark_frontend_build():
                     fp = os.path.join(root, f)
                     total_size += os.path.getsize(fp)
                     file_count += 1
-            record("frontend", "dist_total_size", f"{total_size / (1024*1024):.2f}", "MB")
+            record("frontend", "dist_total_size", f"{total_size / (1024 * 1024):.2f}", "MB")
             record("frontend", "dist_file_count", file_count, "files")
 
             # Breakdown by type
@@ -367,16 +364,14 @@ async def async_main():
     await benchmark_db_queries()
     await benchmark_health_deep()
 
+
 def main():
     print("Agent Engine Performance Benchmark")
     print(f"Target: {BASE_URL}")
     print(f"Time: {datetime.now().isoformat()}")
 
     # Record baseline memory before async work
-    result = subprocess.run(
-        ["pgrep", "-f", "uvicorn app.main:app"],
-        capture_output=True, text=True
-    )
+    result = subprocess.run(["pgrep", "-f", "uvicorn app.main:app"], capture_output=True, text=True)
     pids = result.stdout.strip().split("\n")
     server_pid = pids[0] if pids and pids[0] else None
     mem_before = 0
@@ -402,11 +397,15 @@ def main():
     # Save results
     output_path = "/workspace/agent-engine/benchmark_results.json"
     with open(output_path, "w") as f:
-        json.dump({
-            "timestamp": datetime.now().isoformat(),
-            "target": BASE_URL,
-            "results": RESULTS,
-        }, f, indent=2)
+        json.dump(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "target": BASE_URL,
+                "results": RESULTS,
+            },
+            f,
+            indent=2,
+        )
     print(f"\nResults saved to {output_path}")
 
 

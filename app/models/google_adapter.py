@@ -19,7 +19,13 @@ logger = structlog.get_logger()
 class GoogleGeminiAdapter(ModelAdapter):
     """Google Gemini adapter using the native Google AI API format."""
 
-    def __init__(self, model_id: str, api_key: str, base_url: str | None = None, capabilities: ModelCapability | None = None):
+    def __init__(
+        self,
+        model_id: str,
+        api_key: str,
+        base_url: str | None = None,
+        capabilities: ModelCapability | None = None,
+    ):
         self._model_id = model_id
         self._api_key = api_key
         self._base_url = base_url or "https://generativelanguage.googleapis.com/v1beta"
@@ -78,7 +84,9 @@ class GoogleGeminiAdapter(ModelAdapter):
                     parts.append(image_part)
                 else:
                     logger.warning(
-                        "chat_image_part_unmapped", provider="google", url_prefix=str(part)[:32],
+                        "chat_image_part_unmapped",
+                        provider="google",
+                        url_prefix=str(part)[:32],
                     )
         return parts or [{"text": ""}]
 
@@ -122,10 +130,12 @@ class GoogleGeminiAdapter(ModelAdapter):
                 continue
             if role == "tool":
                 # Tool result
-                contents.append({
-                    "role": "user",
-                    "parts": [{"text": content or ""}],
-                })
+                contents.append(
+                    {
+                        "role": "user",
+                        "parts": [{"text": content or ""}],
+                    }
+                )
                 continue
 
             gemini_role = "user" if role == "user" else "model"
@@ -143,16 +153,18 @@ class GoogleGeminiAdapter(ModelAdapter):
             payload["systemInstruction"] = {"parts": [{"text": "\n\n".join(system_parts)}]}
 
         if tools:
-            payload["tools"] = [{
-                "functionDeclarations": [
-                    {
-                        "name": t["function"]["name"],
-                        "description": t["function"].get("description", ""),
-                        "parameters": t["function"].get("parameters", {}),
-                    }
-                    for t in tools
-                ]
-            }]
+            payload["tools"] = [
+                {
+                    "functionDeclarations": [
+                        {
+                            "name": t["function"]["name"],
+                            "description": t["function"].get("description", ""),
+                            "parameters": t["function"].get("parameters", {}),
+                        }
+                        for t in tools
+                    ]
+                }
+            ]
 
         url = f"{self._base_url}/models/{self._model_id}:generateContent?key={self._api_key}"
         async with httpx.AsyncClient(timeout=60) as client:
@@ -176,14 +188,16 @@ class GoogleGeminiAdapter(ModelAdapter):
             if "functionCall" in part:
                 fc = part["functionCall"]
                 args = fc.get("args", {})
-                tool_calls.append({
-                    "id": str(uuid.uuid4()),
-                    "type": "function",
-                    "function": {
-                        "name": fc.get("name", ""),
-                        "arguments": args if isinstance(args, dict) else {},
-                    },
-                })
+                tool_calls.append(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "type": "function",
+                        "function": {
+                            "name": fc.get("name", ""),
+                            "arguments": args if isinstance(args, dict) else {},
+                        },
+                    }
+                )
 
         return ChatResult(
             content="".join(text_parts),

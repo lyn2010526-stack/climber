@@ -17,6 +17,7 @@ without a running server.
 
 from __future__ import annotations
 
+import contextlib
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -40,7 +41,9 @@ class SlashReply:
 
     command: str
     content: str
-    effect: str | None = None  # "cleared" | "model_updated" | "level_updated" | "stop_requested" | None
+    effect: str | None = (
+        None  # "cleared" | "model_updated" | "level_updated" | "stop_requested" | None
+    )
     payload: dict[str, Any] = field(default_factory=dict)
 
 
@@ -99,11 +102,13 @@ class SlashCommandService:
     @staticmethod
     def _session_state(engine_session: Any) -> dict[str, Any]:
         return {
-            "state": getattr(getattr(engine_session, "state_machine", None), "state", None) and engine_session.state_machine.state.value,
+            "state": getattr(getattr(engine_session, "state_machine", None), "state", None)
+            and engine_session.state_machine.state.value,
             "iterations": getattr(engine_session, "_last_iteration", 0) or 0,
             "max_iterations": getattr(engine_session, "max_iterations", 0) or 0,
             "messages": len(getattr(engine_session, "messages", []) or []),
-            "tokens_used": getattr(getattr(engine_session, "metrics", None), "total_tokens_used", 0) or 0,
+            "tokens_used": getattr(getattr(engine_session, "metrics", None), "total_tokens_used", 0)
+            or 0,
             "stop_requested": bool(getattr(engine_session, "_stop_requested", False)),
             "restart_count": getattr(engine_session, "restart_count", 0) or 0,
         }
@@ -122,18 +127,32 @@ class SlashCommandService:
         if outcome.kind == "passthrough":
             return SlashExecution(kind="passthrough", raw=outcome.raw, agent_message=outcome.raw)
         if outcome.kind == "error":
-            return SlashExecution(kind="error", raw=outcome.raw, reply=SlashReply(
-                command=outcome.command or "", content=outcome.error or "Invalid command arguments",
-            ))
+            return SlashExecution(
+                kind="error",
+                raw=outcome.raw,
+                reply=SlashReply(
+                    command=outcome.command or "",
+                    content=outcome.error or "Invalid command arguments",
+                ),
+            )
         if outcome.spec is None:  # pragma: no cover - registry guarantees spec
-            return SlashExecution(kind="error", raw=outcome.raw, reply=SlashReply(
-                command="", content="Unknown command",
-            ))
+            return SlashExecution(
+                kind="error",
+                raw=outcome.raw,
+                reply=SlashReply(
+                    command="",
+                    content="Unknown command",
+                ),
+            )
         if running and not outcome.spec.allowed_while_streaming:
-            return SlashExecution(kind="error", raw=outcome.raw, reply=SlashReply(
-                command=outcome.command or "",
-                content=f"/{outcome.command} cannot run while a turn is streaming. Use /stop first.",
-            ))
+            return SlashExecution(
+                kind="error",
+                raw=outcome.raw,
+                reply=SlashReply(
+                    command=outcome.command or "",
+                    content=f"/{outcome.command} cannot run while a turn is streaming. Use /stop first.",
+                ),
+            )
 
         handlers = {
             "help": self._cmd_help,
@@ -149,23 +168,39 @@ class SlashCommandService:
             # is a registry/service desync.
             if outcome.command == "retry":
                 return SlashExecution(kind="passthrough", raw=outcome.raw, agent_message=None)
-            return SlashExecution(kind="error", raw=outcome.raw, reply=SlashReply(
-                command=outcome.command or "",
-                content=f"/{outcome.command} is not executable in this context",
-            ))
+            return SlashExecution(
+                kind="error",
+                raw=outcome.raw,
+                reply=SlashReply(
+                    command=outcome.command or "",
+                    content=f"/{outcome.command} is not executable in this context",
+                ),
+            )
         try:
             reply = await handler(outcome, session_id=session_id, user_id=user_id)
         except SlashCommandError as exc:
-            return SlashExecution(kind="error", raw=outcome.raw, reply=SlashReply(
-                command=outcome.command or "", content=str(exc),
-            ))
+            return SlashExecution(
+                kind="error",
+                raw=outcome.raw,
+                reply=SlashReply(
+                    command=outcome.command or "",
+                    content=str(exc),
+                ),
+            )
         except LookupError as exc:
-            return SlashExecution(kind="error", raw=outcome.raw, reply=SlashReply(
-                command=outcome.command or "", content=str(exc),
-            ))
+            return SlashExecution(
+                kind="error",
+                raw=outcome.raw,
+                reply=SlashReply(
+                    command=outcome.command or "",
+                    content=str(exc),
+                ),
+            )
         return SlashExecution(kind="reply", raw=outcome.raw, reply=reply)
 
-    async def _cmd_help(self, outcome: ParseOutcome, *, session_id: str, user_id: str) -> SlashReply:
+    async def _cmd_help(
+        self, outcome: ParseOutcome, *, session_id: str, user_id: str
+    ) -> SlashReply:
         topic = outcome.args[0] if outcome.args else None
         if topic:
             spec = self.registry.get(topic)
@@ -184,7 +219,9 @@ class SlashCommandService:
             content = "\n".join(lines)
         return SlashReply(command="help", content=content)
 
-    async def _cmd_status(self, outcome: ParseOutcome, *, session_id: str, user_id: str) -> SlashReply:
+    async def _cmd_status(
+        self, outcome: ParseOutcome, *, session_id: str, user_id: str
+    ) -> SlashReply:
         row = await self._require_owned_session(session_id, user_id)
         settings = dict(getattr(row, "model_settings", None) or {})
         warm = self.engine_session(session_id)
@@ -205,22 +242,33 @@ class SlashCommandService:
             ]
         else:
             lines.append("Engine: cold (no in-memory session)")
-        return SlashReply(command="status", content="\n".join(lines), payload={
-            "session_id": session_id,
-            "title": getattr(row, "title", None),
-            "status": getattr(row, "status", None),
-            "model_settings": settings,
-            "engine": self._session_state(warm) if warm is not None else None,
-        })
+        return SlashReply(
+            command="status",
+            content="\n".join(lines),
+            payload={
+                "session_id": session_id,
+                "title": getattr(row, "title", None),
+                "status": getattr(row, "status", None),
+                "model_settings": settings,
+                "engine": self._session_state(warm) if warm is not None else None,
+            },
+        )
 
-    async def _cmd_model(self, outcome: ParseOutcome, *, session_id: str, user_id: str) -> SlashReply:
+    async def _cmd_model(
+        self, outcome: ParseOutcome, *, session_id: str, user_id: str
+    ) -> SlashReply:
         row = await self._require_owned_session(session_id, user_id)
         settings = dict(getattr(row, "model_settings", None) or {})
         if not outcome.args:
             current = f"{settings.get('provider') or '-'}:{settings.get('model_id') or '-'}"
-            return SlashReply(command="model", content=f"Current model: {current}", payload={
-                "provider": settings.get("provider"), "model_id": settings.get("model_id"),
-            })
+            return SlashReply(
+                command="model",
+                content=f"Current model: {current}",
+                payload={
+                    "provider": settings.get("provider"),
+                    "model_id": settings.get("model_id"),
+                },
+            )
         spec_value = outcome.args[0]
         if ":" not in spec_value:
             raise SlashCommandError("Expected provider:model_id, e.g. /model openai:gpt-4o-mini")
@@ -244,10 +292,16 @@ class SlashCommandService:
                 setattr(warm, attr, settings[attr])
             if getattr(warm, "session_config", None) is not None:
                 setattr(warm.session_config, attr, settings[attr])
-        return SlashReply(command="model", content=f"Model switched to {provider}:{model_id}",
-                          effect="model_updated", payload={"provider": provider, "model_id": model_id})
+        return SlashReply(
+            command="model",
+            content=f"Model switched to {provider}:{model_id}",
+            effect="model_updated",
+            payload={"provider": provider, "model_id": model_id},
+        )
 
-    async def _assert_credential_matches(self, user_id: str, credential_id: str, provider: str) -> None:
+    async def _assert_credential_matches(
+        self, user_id: str, credential_id: str, provider: str
+    ) -> None:
         if self._db_factory is None:
             raise LookupError("Credential storage is not configured")
         from sqlalchemy import select
@@ -255,9 +309,15 @@ class SlashCommandService:
         from app.storage.database import ApiKey
 
         async with self._db_factory() as db:
-            row = (await db.execute(select(ApiKey).where(
-                ApiKey.id == credential_id, ApiKey.user_id == user_id, ApiKey.is_active.is_(True),
-            ))).scalar_one_or_none()
+            row = (
+                await db.execute(
+                    select(ApiKey).where(
+                        ApiKey.id == credential_id,
+                        ApiKey.user_id == user_id,
+                        ApiKey.is_active.is_(True),
+                    )
+                )
+            ).scalar_one_or_none()
         if row is None:
             raise LookupError("Selected model credential is unavailable or revoked")
         if row.provider != provider:
@@ -275,12 +335,16 @@ class SlashCommandService:
             attached.model_settings = settings
             await db.commit()
 
-    async def _cmd_level(self, outcome: ParseOutcome, *, session_id: str, user_id: str) -> SlashReply:
+    async def _cmd_level(
+        self, outcome: ParseOutcome, *, session_id: str, user_id: str
+    ) -> SlashReply:
         row = await self._require_owned_session(session_id, user_id)
         if not outcome.args:
-            return SlashReply(command="level", content=(
-                "Reasoning levels: " + ", ".join(REASONING_LEVELS)
-            ), payload={"levels": list(REASONING_LEVELS)})
+            return SlashReply(
+                command="level",
+                content=("Reasoning levels: " + ", ".join(REASONING_LEVELS)),
+                payload={"levels": list(REASONING_LEVELS)},
+            )
         level = outcome.args[0]
         context_data = dict(getattr(row, "context_data", None) or {})
         context_data["reasoning_level"] = level
@@ -292,10 +356,16 @@ class SlashCommandService:
                 raise LookupError(f"Session {row.id} not found")
             attached.context_data = context_data
             await db.commit()
-        return SlashReply(command="level", content=f"Reasoning level set to '{level}'.",
-                          effect="level_updated", payload={"level": level})
+        return SlashReply(
+            command="level",
+            content=f"Reasoning level set to '{level}'.",
+            effect="level_updated",
+            payload={"level": level},
+        )
 
-    async def _cmd_clear(self, outcome: ParseOutcome, *, session_id: str, user_id: str) -> SlashReply:
+    async def _cmd_clear(
+        self, outcome: ParseOutcome, *, session_id: str, user_id: str
+    ) -> SlashReply:
         row = await self._require_owned_session(session_id, user_id)
         if self._db_factory is None:
             raise LookupError("Session storage is not configured")
@@ -311,25 +381,29 @@ class SlashCommandService:
             await db.commit()
         dropped_warm = self._clear_engine_session(session_id)
         note = " In-memory context will rebuild on the next message." if dropped_warm else ""
-        return SlashReply(command="clear", content="Session history cleared." + note, effect="cleared")
+        return SlashReply(
+            command="clear", content="Session history cleared." + note, effect="cleared"
+        )
 
-    async def _cmd_stop(self, outcome: ParseOutcome, *, session_id: str, user_id: str) -> SlashReply:
+    async def _cmd_stop(
+        self, outcome: ParseOutcome, *, session_id: str, user_id: str
+    ) -> SlashReply:
         warm = self.engine_session(session_id)
         if warm is None:
-            return SlashReply(command="stop", content="No running turn to interrupt.",
-                              effect=None)
+            return SlashReply(command="stop", content="No running turn to interrupt.", effect=None)
         # Cooperative cancel: the engine's iteration/stream loops poll
         # `_stop_requested` (agent_engine._iteration_loop) and unwind without
         # losing the session. No task_worker involvement for session chats.
         warm._stop_requested = True
         stop = getattr(warm, "stop", None)
         if stop is not None:
-            try:
+            with contextlib.suppress(Exception):  # pragma: no cover - state machine edge cases
                 stop()
-            except Exception:  # pragma: no cover - state machine edge cases
-                pass
-        return SlashReply(command="stop", content="Stop requested; the running turn will halt.",
-                          effect="stop_requested")
+        return SlashReply(
+            command="stop",
+            content="Stop requested; the running turn will halt.",
+            effect="stop_requested",
+        )
 
 
 def last_user_message(messages: list[dict[str, Any]]) -> str | None:

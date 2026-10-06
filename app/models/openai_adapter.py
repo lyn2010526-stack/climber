@@ -48,7 +48,9 @@ class OpenAIAdapter(ModelAdapter):
             # Providers/models without image support get plain text; the request
             # still completes (with a warning) instead of failing on image parts.
             messages = degrade_image_parts(
-                messages, provider=getattr(self, "provider", "openai"), model_id=self._model_id,
+                messages,
+                provider=getattr(self, "provider", "openai"),
+                model_id=self._model_id,
             )
         payload: dict[str, Any] = {
             "model": self._model_id,
@@ -82,11 +84,13 @@ class OpenAIAdapter(ModelAdapter):
         for tc in tool_calls_delta:
             idx = tc.get("index", 0)
             while len(result) <= idx:
-                result.append({
-                    "id": "",
-                    "type": "function",
-                    "function": {"name": "", "arguments": ""},
-                })
+                result.append(
+                    {
+                        "id": "",
+                        "type": "function",
+                        "function": {"name": "", "arguments": ""},
+                    }
+                )
             if tc.get("id"):
                 result[idx]["id"] = tc["id"]
             if tc.get("function", {}).get("name"):
@@ -99,7 +103,7 @@ class OpenAIAdapter(ModelAdapter):
     def _parse_xml_tool_calls(text: str) -> list[dict]:
         """Parse XML-style tool calls like <function=browser_navigate>..."""
         results: list[dict] = []
-        for m in re.finditer(r'<function=([^>]+)>(.*?)</\1>', text, re.DOTALL | re.IGNORECASE):
+        for m in re.finditer(r"<function=([^>]+)>(.*?)</\1>", text, re.DOTALL | re.IGNORECASE):
             name = m.group(1).strip()
             args_text = m.group(2).strip()
             args: dict[str, Any] = {}
@@ -108,11 +112,13 @@ class OpenAIAdapter(ModelAdapter):
                     args = json.loads(args_text)
                 except json.JSONDecodeError:
                     args = {"text": args_text}
-            results.append({
-                "id": f"call_{uuid.uuid4().hex[:24]}",
-                "type": "function",
-                "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)},
-            })
+            results.append(
+                {
+                    "id": f"call_{uuid.uuid4().hex[:24]}",
+                    "type": "function",
+                    "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)},
+                }
+            )
         return results
 
     async def stream_chat(
@@ -131,7 +137,13 @@ class OpenAIAdapter(ModelAdapter):
         """
         payload = self._build_payload(messages, tools, stream=True, **kwargs)
         import structlog
-        structlog.get_logger().debug("adapter_request", model=self._model_id, message_count=len(messages), messages_preview=str(payload.get("messages", []))[:500])
+
+        structlog.get_logger().debug(
+            "adapter_request",
+            model=self._model_id,
+            message_count=len(messages),
+            messages_preview=str(payload.get("messages", []))[:500],
+        )
         headers = {
             "Content-Type": "application/json",
         }
@@ -159,9 +171,7 @@ class OpenAIAdapter(ModelAdapter):
             try:
                 while True:
                     try:
-                        await asyncio.wait_for(
-                            idle_event.wait(), timeout=idle_timeout
-                        )
+                        await asyncio.wait_for(idle_event.wait(), timeout=idle_timeout)
                         idle_event.clear()
                     except TimeoutError:
                         if response is not None:
@@ -205,7 +215,8 @@ class OpenAIAdapter(ModelAdapter):
 
                     if line == "data: [DONE]":
                         yield _result(
-                            finish_reason=finish_reason or ("tool_calls" if accumulated_tool_calls else "stop"),
+                            finish_reason=finish_reason
+                            or ("tool_calls" if accumulated_tool_calls else "stop"),
                             tokens_used=tokens_used,
                             accumulated_content=accumulated_content,
                         )
@@ -231,14 +242,24 @@ class OpenAIAdapter(ModelAdapter):
                         new_calls = self._parse_tool_calls_from_delta(delta["tool_calls"])
                         for i, tc in enumerate(new_calls):
                             while len(accumulated_tool_calls) <= i:
-                                accumulated_tool_calls.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+                                accumulated_tool_calls.append(
+                                    {
+                                        "id": "",
+                                        "type": "function",
+                                        "function": {"name": "", "arguments": ""},
+                                    }
+                                )
                             if tc.get("id"):
                                 accumulated_tool_calls[i]["id"] = tc["id"]
                             if tc.get("function", {}).get("name"):
-                                accumulated_tool_calls[i]["function"]["name"] = tc["function"]["name"]
+                                accumulated_tool_calls[i]["function"]["name"] = tc["function"][
+                                    "name"
+                                ]
                             if tc.get("function", {}).get("arguments"):
                                 args = tc["function"]["arguments"]
-                                accumulated_tool_calls[i]["function"]["arguments"] += args if isinstance(args, str) else str(args)
+                                accumulated_tool_calls[i]["function"]["arguments"] += (
+                                    args if isinstance(args, str) else str(args)
+                                )
                     if chunk.get("usage"):
                         raw_usage = chunk["usage"]
                         tokens_used = raw_usage.get("total_tokens", tokens_used)
@@ -281,14 +302,24 @@ class OpenAIAdapter(ModelAdapter):
                             new_calls = self._parse_tool_calls_from_delta(delta["tool_calls"])
                             for i, tc in enumerate(new_calls):
                                 while len(accumulated_tool_calls) <= i:
-                                    accumulated_tool_calls.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+                                    accumulated_tool_calls.append(
+                                        {
+                                            "id": "",
+                                            "type": "function",
+                                            "function": {"name": "", "arguments": ""},
+                                        }
+                                    )
                                 if tc.get("id"):
                                     accumulated_tool_calls[i]["id"] = tc["id"]
                                 if tc.get("function", {}).get("name"):
-                                    accumulated_tool_calls[i]["function"]["name"] = tc["function"]["name"]
+                                    accumulated_tool_calls[i]["function"]["name"] = tc["function"][
+                                        "name"
+                                    ]
                                 if tc.get("function", {}).get("arguments"):
                                     args = tc["function"]["arguments"]
-                                    accumulated_tool_calls[i]["function"]["arguments"] += args if isinstance(args, str) else str(args)
+                                    accumulated_tool_calls[i]["function"]["arguments"] += (
+                                        args if isinstance(args, str) else str(args)
+                                    )
                         if chunk.get("usage"):
                             raw_usage = chunk["usage"]
                             tokens_used = raw_usage.get("total_tokens", tokens_used)
@@ -391,11 +422,13 @@ class OpenAIAdapter(ModelAdapter):
                 parsed_tool_calls = []
                 for tc in tool_calls:
                     if tc.get("type") == "function":
-                        parsed_tool_calls.append({
-                            "id": tc.get("id", ""),
-                            "type": "function",
-                            "function": tc.get("function", {}),
-                        })
+                        parsed_tool_calls.append(
+                            {
+                                "id": tc.get("id", ""),
+                                "type": "function",
+                                "function": tc.get("function", {}),
+                            }
+                        )
                 tool_calls = parsed_tool_calls
             else:
                 tool_calls = []

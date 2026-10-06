@@ -8,10 +8,9 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
-
-from app.core.auth_manager import require_scopes
 from sqlalchemy import select
 
+from app.core.auth_manager import require_scopes
 from app.core.principal import CurrentPrincipal, Principal
 from app.core.skill_composition import skill_tester, skill_version_manager
 from app.schemas.api_v1.base import EmptyRequest
@@ -123,7 +122,9 @@ async def list_skills(principal: CurrentPrincipal) -> list[dict[str, Any]]:
 @router.post("/skills")
 @router.post("/skills/", include_in_schema=False)
 async def create_skill(
-    payload: SkillCreateRequest, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
+    payload: SkillCreateRequest,
+    principal: CurrentPrincipal,
+    _auth: dict = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Create a new skill."""
     data = payload.model_dump()
@@ -313,7 +314,10 @@ async def list_skill_versions(skill_id: str, principal: CurrentPrincipal) -> dic
 
 @router.post("/skills/{skill_id}/versions/{version_id}/activate")
 async def activate_skill_version(
-    skill_id: str, version_id: str, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
+    skill_id: str,
+    version_id: str,
+    principal: CurrentPrincipal,
+    _auth: dict = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Activate a stored version and deprecate the previously active one."""
     user_id = principal.subject_id
@@ -404,7 +408,10 @@ async def list_test_cases(skill_id: str, principal: CurrentPrincipal) -> dict[st
 
 @router.post("/skills/{skill_id}/test-cases/{case_id}/run")
 async def run_test_case(
-    skill_id: str, case_id: str, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
+    skill_id: str,
+    case_id: str,
+    principal: CurrentPrincipal,
+    _auth: dict = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Run one test case in static mode and persist a SkillTestResult.
 

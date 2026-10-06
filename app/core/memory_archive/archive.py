@@ -39,7 +39,9 @@ class SessionArchiveService:
         agent_id: str | None = None,
     ) -> dict[str, Any]:
         """Persist one structured session archive with its memory diff."""
-        records = [self._to_record(message) for message in (messages or []) if self._is_archivable(message)]
+        records = [
+            self._to_record(message) for message in (messages or []) if self._is_archivable(message)
+        ]
         one_line = self._one_line_summary(records, title)
         stats = await self._extractor.extract(user_id, session_id, records, agent_id=agent_id)
         memory_diff = {
@@ -62,32 +64,46 @@ class SessionArchiveService:
             db.add(row)
             await db.commit()
             await db.refresh(row)
-        logger.info("session_archived", user_id=user_id, session_id=session_id, messages=len(records))
+        logger.info(
+            "session_archived", user_id=user_id, session_id=session_id, messages=len(records)
+        )
         return self._payload(row)
 
     async def get(self, user_id: str, archive_id: str) -> dict[str, Any] | None:
         async with async_session() as db:
-            row = (await db.execute(
-                select(SessionArchive).where(
-                    SessionArchive.user_id == user_id,
-                    SessionArchive.id == archive_id,
+            row = (
+                await db.execute(
+                    select(SessionArchive).where(
+                        SessionArchive.user_id == user_id,
+                        SessionArchive.id == archive_id,
+                    )
                 )
-            )).scalar_one_or_none()
+            ).scalar_one_or_none()
         return self._payload(row) if row else None
 
     async def list_by_session(
-        self, user_id: str, session_id: str, *, limit: int = 20,
+        self,
+        user_id: str,
+        session_id: str,
+        *,
+        limit: int = 20,
     ) -> list[dict[str, Any]]:
         async with async_session() as db:
-            rows = list((await db.execute(
-                select(SessionArchive)
-                .where(
-                    SessionArchive.user_id == user_id,
-                    SessionArchive.session_id == session_id,
+            rows = list(
+                (
+                    await db.execute(
+                        select(SessionArchive)
+                        .where(
+                            SessionArchive.user_id == user_id,
+                            SessionArchive.session_id == session_id,
+                        )
+                        .order_by(SessionArchive.created_at.desc(), SessionArchive.id.desc())
+                        .limit(limit)
+                    )
                 )
-                .order_by(SessionArchive.created_at.desc(), SessionArchive.id.desc())
-                .limit(limit)
-            )).scalars().all())
+                .scalars()
+                .all()
+            )
         return [self._payload(row, include_messages=False) for row in rows]
 
     async def latest(self, user_id: str, session_id: str) -> dict[str, Any] | None:

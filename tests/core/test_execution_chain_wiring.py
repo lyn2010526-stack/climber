@@ -7,8 +7,6 @@ happen there — not merely exist as unused services.
 
 from __future__ import annotations
 
-import pytest
-
 from app.core.task_worker import _check_objective, _injected_system_prompt
 
 

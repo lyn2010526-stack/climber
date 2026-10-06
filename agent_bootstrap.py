@@ -42,7 +42,7 @@ class _SourceLoader(importlib.abc.Loader):
         with open(self._origin, "rb") as fh:
             code = compile(fh.read(), self._origin, "exec", dont_inherit=True)
         # 源码装载器必须用 exec 注入模块命名空间（固定 file 非用户输入）
-        exec(code, module.__dict__)  # noqa: S102
+        exec(code, module.__dict__)
 
 
 class _AgentSystemFinder(importlib.abc.MetaPathFinder):
@@ -51,7 +51,8 @@ class _AgentSystemFinder(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname: str, _path=None, _target=None):
         if fullname == _TARGET_NAME:
             return importlib.util.spec_from_loader(
-                fullname, _SourceLoader(os.path.join(_AGENT_SYSTEM_DIR, "__init__.py")),
+                fullname,
+                _SourceLoader(os.path.join(_AGENT_SYSTEM_DIR, "__init__.py")),
                 is_package=True,
             )
         if fullname.startswith(_TARGET_NAME + "."):

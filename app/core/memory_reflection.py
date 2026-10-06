@@ -30,7 +30,9 @@ class MemoryReflectionService:
     - After session completion
     """
 
-    def __init__(self, reflection_interval: int = 3600, memory_threshold: int = 50, vector_memory: Any = None):
+    def __init__(
+        self, reflection_interval: int = 3600, memory_threshold: int = 50, vector_memory: Any = None
+    ):
         self.reflection_interval = reflection_interval  # seconds
         self.memory_threshold = memory_threshold
         self.vector_memory = vector_memory
@@ -90,7 +92,9 @@ class MemoryReflectionService:
         logger.info("Memory reflection complete", **stats)
         return stats
 
-    async def _add_reflection_memory(self, db: AsyncSession, user_id: str, content: str) -> EpisodicMemory:
+    async def _add_reflection_memory(
+        self, db: AsyncSession, user_id: str, content: str
+    ) -> EpisodicMemory:
         """Add a system-generated reflection memory."""
         memory = EpisodicMemory(
             user_id=user_id,
@@ -111,9 +115,7 @@ class MemoryReflectionService:
         blockers: list[str] | None = None,
         improvements: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Generate structured reflection after task completion.
-
-        """
+        """Generate structured reflection after task completion."""
         blockers = blockers or []
         improvements = improvements or []
 

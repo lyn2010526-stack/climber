@@ -14,7 +14,9 @@ from app.core.prompt_engine.models import PromptTemplate
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_TEMPLATE_REPOSITORY_PATH = os.environ.get("TEMPLATE_REPOSITORY_PATH", ".climber/templates.json")
+DEFAULT_TEMPLATE_REPOSITORY_PATH = os.environ.get(
+    "TEMPLATE_REPOSITORY_PATH", ".climber/templates.json"
+)
 
 BUILTIN_TEMPLATES: list[PromptTemplate] = [
     PromptTemplate(
@@ -135,7 +137,9 @@ class PromptTemplateRepository:
     def __init__(self, path: str | os.PathLike | None = None) -> None:
         self._lock = threading.RLock()
         self._templates: dict[str, PromptTemplate] = {}
-        self._path: str | None = os.fspath(path) if path is not None else DEFAULT_TEMPLATE_REPOSITORY_PATH
+        self._path: str | None = (
+            os.fspath(path) if path is not None else DEFAULT_TEMPLATE_REPOSITORY_PATH
+        )
         self._load_builtins()
         if self._path:
             self._load_from_disk()

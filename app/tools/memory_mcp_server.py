@@ -290,7 +290,11 @@ def handle_frame(frame: dict[str, Any]) -> dict[str, Any] | None:
     if method == "tools/call":
         name = params.get("name")
         if not isinstance(name, str) or not name:
-            return {"jsonrpc": "2.0", "id": frame_id, "error": {"code": -32602, "message": "missing tool name"}}
+            return {
+                "jsonrpc": "2.0",
+                "id": frame_id,
+                "error": {"code": -32602, "message": "missing tool name"},
+            }
         arguments = params.get("arguments") or {}
         if not isinstance(arguments, dict):
             return {

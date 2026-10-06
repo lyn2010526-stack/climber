@@ -57,7 +57,10 @@ class WorkspaceSandbox:
         candidate = (self.root / path).resolve()
         if not candidate.is_relative_to(self.root):
             raise ValueError("Path escapes workspace")
-        if any(part == ".git" or part.startswith(".env") for part in candidate.relative_to(self.root).parts):
+        if any(
+            part == ".git" or part.startswith(".env")
+            for part in candidate.relative_to(self.root).parts
+        ):
             raise ValueError("Protected workspace path")
         return candidate
 
@@ -148,7 +151,7 @@ class WorkspaceSandbox:
 
     @property
     def tools(self) -> list:
-        return TOOLS + [COMMAND_TOOL] if self.allow_commands else TOOLS
+        return [*TOOLS, COMMAND_TOOL] if self.allow_commands else TOOLS
 
 
 TOOLS = [
@@ -168,7 +171,11 @@ TOOLS = [
     for name, description, properties in [
         ("list_files", "List one directory, using . for root", {"path": {"type": "string"}}),
         ("read_file", "Read a UTF-8 file", {"path": {"type": "string"}}),
-        ("write_file", "Write a UTF-8 file", {"path": {"type": "string"}, "content": {"type": "string"}}),
+        (
+            "write_file",
+            "Write a UTF-8 file",
+            {"path": {"type": "string"}, "content": {"type": "string"}},
+        ),
     ]
 ]
 

@@ -124,9 +124,7 @@ def continuous_goal(
     ones. Any missing (``None``) or non-positive signal yields 0.0.
     """
     signals = [
-        0.0
-        if signal is None
-        else min(max(_finite(signal, "progress signal"), 0.0), 1.0)
+        0.0 if signal is None else min(max(_finite(signal, "progress signal"), 0.0), 1.0)
         for signal in progress_signals
     ]
     if not signals:

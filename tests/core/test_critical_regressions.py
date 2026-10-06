@@ -38,7 +38,19 @@ async def test_run_agent_simple_accepts_group_id_and_role(monkeypatch) -> None:
 
     calls: dict = {}
 
-    async def fake_run(agent_id, provider, model_id, api_key, system_prompt, user_message, tools, base_url, principal, group_id=None, task_name=None):
+    async def fake_run(
+        agent_id,
+        provider,
+        model_id,
+        api_key,
+        system_prompt,
+        user_message,
+        tools,
+        base_url,
+        principal,
+        group_id=None,
+        task_name=None,
+    ):
         calls["agent_id"] = agent_id
         yield AgentEvent(type=AgentEventType.TEXT, data={"content": '{"passed":true,"issues":[]}'})
         yield AgentEvent(type=AgentEventType.DONE, data={"tokens_used": 1})
@@ -74,7 +86,11 @@ async def test_dag_task_with_reviewer_runs(monkeypatch) -> None:
     task_id = "crit-review-task"
 
     async with async_session() as db:
-        db.add(AgentGroup(id=group_id, name="rev-group", user_id="default-user", process_type="sequential"))
+        db.add(
+            AgentGroup(
+                id=group_id, name="rev-group", user_id="default-user", process_type="sequential"
+            )
+        )
         db.add(
             AgentGroupMember(
                 id=worker_member_id,

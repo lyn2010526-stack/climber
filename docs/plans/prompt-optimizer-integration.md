@@ -313,11 +313,12 @@ class PromptOptimizerService:
     async def optimize(self, target_prompt: str, mode: str = "user") -> OptimizedPrompt: ...
     async def iterate(self, last_optimized: str, requirement: str) -> OptimizedPrompt: ...
 
+
 @dataclass
 class OptimizedPrompt:
-    optimized: str            # 结构化改写结果
-    improvements: list[str]   # 可选评估反馈
-    questions: list[str]      # 追问建议（来自模板输出约定）
+    optimized: str  # 结构化改写结果
+    improvements: list[str]  # 可选评估反馈
+    questions: list[str]  # 追问建议（来自模板输出约定）
     model_spec: str
     duration_ms: int
 ```

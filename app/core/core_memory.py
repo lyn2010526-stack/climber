@@ -39,7 +39,9 @@ class CoreMemoryService:
             result = await db.execute(query)
             return list(result.scalars().all())
 
-    async def get_block(self, user_id: str, label: str, agent_id: str | None = None) -> CoreMemoryBlock | None:
+    async def get_block(
+        self, user_id: str, label: str, agent_id: str | None = None
+    ) -> CoreMemoryBlock | None:
         async with async_session() as db:
             query = select(CoreMemoryBlock).where(
                 CoreMemoryBlock.user_id == user_id,
@@ -121,7 +123,7 @@ class CoreMemoryService:
             return await self.create_or_update_block(user_id, label, text, agent_id=agent_id)
         if block.read_only:
             return block
-        new_value = (block.value + "\n" + text).strip()[:block.limit]
+        new_value = (block.value + "\n" + text).strip()[: block.limit]
         block.value = new_value
         await self._update_block(block)
         return block
@@ -164,6 +166,7 @@ class CoreMemoryService:
         """Update an existing block using UPDATE instead of merge."""
         from app.storage import async_session
         from app.storage.models_memory import CoreMemoryBlock
+
         async with async_session() as db:
             await db.execute(
                 CoreMemoryBlock.__table__.update()

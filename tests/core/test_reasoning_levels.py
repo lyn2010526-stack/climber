@@ -19,8 +19,8 @@ from app.api.v1.routes import reasoning as reasoning_module
 from app.api.v1.routes.reasoning import (
     DEFAULT_REASONING_LEVEL,
     LEVEL_PARAMS,
-    LevelAwareModelRegistry,
     REASONING_LEVELS,
+    LevelAwareModelRegistry,
     level_from_context,
     level_params,
 )
@@ -70,10 +70,16 @@ class ScriptedAdapter:
 
 
 def make_session(context_data=None):
-    return AgentSession(SessionConfig(
-        session_id="s-1", agent_id="", user_id="u-1",
-        provider="scripted", model_id="fake-model",
-    ), context=context_data)
+    return AgentSession(
+        SessionConfig(
+            session_id="s-1",
+            agent_id="",
+            user_id="u-1",
+            provider="scripted",
+            model_id="fake-model",
+        ),
+        context=context_data,
+    )
 
 
 class LevelAffectsModelCallTests(unittest.IsolatedAsyncioTestCase):
@@ -96,10 +102,12 @@ class LevelAffectsModelCallTests(unittest.IsolatedAsyncioTestCase):
             Agent,
             CheckpointRecord,
             Message,
-            Session as SessionRow,
             SessionInput,
             Turn,
             UsageLog,
+        )
+        from app.storage.database import (
+            Session as SessionRow,
         )
         from app.storage.models_cost import CostRecord
 
@@ -152,19 +160,26 @@ class LevelAffectsModelCallTests(unittest.IsolatedAsyncioTestCase):
         # The turn's model-call path is what matters here; storage, sandbox and
         # notification side effects are stubbed like the runtime audit tests do.
         for name in (
-            "_save_checkpoint", "_set_agent_mode", "_send_start_notification",
-            "_send_completion_notification", "_send_failure_notification",
+            "_save_checkpoint",
+            "_set_agent_mode",
+            "_send_start_notification",
+            "_send_completion_notification",
+            "_send_failure_notification",
             "_trigger_memory_reflection",
         ):
             setattr(engine, name, AsyncMock(return_value=None))
         for name in (
-            "_inject_memory_context", "_inject_core_memory", "_store_episodic_memory",
+            "_inject_memory_context",
+            "_inject_core_memory",
+            "_store_episodic_memory",
         ):
             setattr(engine, name, AsyncMock(return_value=None))
         engine.sandbox = None
         engine.permission_overlay = None
         engine.agent_mode = None
-        with patch("app.core.agent_engine.persist_message", new_callable=AsyncMock, return_value="m-1"):
+        with patch(
+            "app.core.agent_engine.persist_message", new_callable=AsyncMock, return_value="m-1"
+        ):
             session = make_session()
             async for _event in engine.run(session, "hello"):
                 pass
@@ -188,7 +203,8 @@ class LevelAffectsModelCallTests(unittest.IsolatedAsyncioTestCase):
     async def test_streaming_path_yields_text_and_done(self):
         adapter = ScriptedAdapter()
         base_registry = SimpleNamespace(
-            get_or_create=lambda *args, **kwargs: adapter, get_default=lambda: adapter,
+            get_or_create=lambda *args, **kwargs: adapter,
+            get_default=lambda: adapter,
         )
         engine = AgentEngine(
             model_registry=LevelAwareModelRegistry(base_registry, level_params("medium")),
@@ -202,7 +218,9 @@ class LevelAffectsModelCallTests(unittest.IsolatedAsyncioTestCase):
         engine.sandbox = None
         engine.permission_overlay = None
         engine.agent_mode = None
-        with patch("app.core.agent_engine.persist_message", new_callable=AsyncMock, return_value="m-1"):
+        with patch(
+            "app.core.agent_engine.persist_message", new_callable=AsyncMock, return_value="m-1"
+        ):
             events = [event async for event in engine.run(make_session(), "hello")]
         kinds = [event.type for event in events]
         self.assertIn(AgentEventType.TEXT, kinds)
@@ -212,7 +230,9 @@ class LevelAffectsModelCallTests(unittest.IsolatedAsyncioTestCase):
 class RegistryProxyTests(unittest.TestCase):
     def test_proxy_injects_params_and_explicit_kwargs_win(self):
         base = ScriptedAdapter()
-        registry = LevelAwareModelRegistry(SimpleNamespace(get_default=lambda: base), level_params("high"))
+        registry = LevelAwareModelRegistry(
+            SimpleNamespace(get_default=lambda: base), level_params("high")
+        )
         adapter = registry.get_default()
         self.assertIs(adapter.capabilities, base.capabilities)
         self.assertEqual(base.calls, [])
@@ -241,15 +261,23 @@ class ReasoningEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.database = create_async_engine("sqlite+aiosqlite:///:memory:")
         self.addAsyncCleanup(self.database.dispose)
         async with self.database.begin() as connection:
-            await connection.run_sync(lambda conn: Base.metadata.create_all(
-                conn, tables=[SessionModel.__table__],
-            ))
+            await connection.run_sync(
+                lambda conn: Base.metadata.create_all(
+                    conn,
+                    tables=[SessionModel.__table__],
+                )
+            )
         self.db = async_sessionmaker(self.database, expire_on_commit=False)
         async with self.db() as db:
-            db.add(SessionModel(
-                id="s-1", user_id="owner-a", title="T", status="idle",
-                context_data={"reasoning_level": "low"},
-            ))
+            db.add(
+                SessionModel(
+                    id="s-1",
+                    user_id="owner-a",
+                    title="T",
+                    status="idle",
+                    context_data={"reasoning_level": "low"},
+                )
+            )
             db.add(SessionModel(id="s-2", user_id="owner-b", title="O", status="idle"))
             await db.commit()
 
@@ -266,7 +294,8 @@ class ReasoningEndpointTests(unittest.IsolatedAsyncioTestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.client = httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app), base_url="http://test",
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://test",
         )
         self.addAsyncCleanup(self.client.aclose)
 
@@ -285,7 +314,7 @@ class ReasoningEndpointTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertEqual(body["level"], "low")
-        self.assertEqual(body["params"], {**{"id": "low"}, **LEVEL_PARAMS["low"]})
+        self.assertEqual(body["params"], {"id": "low", **LEVEL_PARAMS["low"]})
 
     async def test_get_session_level_defaults_when_unset(self):
         async with self.db() as db:
@@ -301,7 +330,8 @@ class ReasoningEndpointTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_put_updates_context_data(self):
         response = await self.client.put(
-            "/api/v1/reasoning/sessions/s-1/reasoning-level", json={"level": "high"},
+            "/api/v1/reasoning/sessions/s-1/reasoning-level",
+            json={"level": "high"},
         )
         self.assertEqual(response.status_code, 200)
         body = response.json()
@@ -317,7 +347,8 @@ class ReasoningEndpointTests(unittest.IsolatedAsyncioTestCase):
             row.context_data = {"reasoning_level": "low", "keep": "me"}
             await db.commit()
         response = await self.client.put(
-            "/api/v1/reasoning/sessions/s-1/reasoning-level", json={"level": "medium"},
+            "/api/v1/reasoning/sessions/s-1/reasoning-level",
+            json={"level": "medium"},
         )
         self.assertEqual(response.status_code, 200)
         async with self.db() as db:
@@ -326,7 +357,8 @@ class ReasoningEndpointTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_put_unknown_level_is_422(self):
         response = await self.client.put(
-            "/api/v1/reasoning/sessions/s-1/reasoning-level", json={"level": "warp"},
+            "/api/v1/reasoning/sessions/s-1/reasoning-level",
+            json={"level": "warp"},
         )
         self.assertEqual(response.status_code, 422)
         async with self.db() as db:
@@ -336,7 +368,8 @@ class ReasoningEndpointTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_put_on_other_users_session_is_404(self):
         response = await self.client.put(
-            "/api/v1/reasoning/sessions/s-2/reasoning-level", json={"level": "high"},
+            "/api/v1/reasoning/sessions/s-2/reasoning-level",
+            json={"level": "high"},
         )
         self.assertEqual(response.status_code, 404)
 

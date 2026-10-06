@@ -70,8 +70,13 @@ class BackgroundMemoryRefiner:
         self._tasks: set[asyncio.Task] = set()
         self._results: list[RefinementResult] = []
 
-    def start_refinement(self, session_id: str, session_log: str | None = None,
-                         context: str = "", triggered_by: str = "") -> str:
+    def start_refinement(
+        self,
+        session_id: str,
+        session_log: str | None = None,
+        context: str = "",
+        triggered_by: str = "",
+    ) -> str:
         """异步启动一次后台精炼（fire-and-forget，不阻塞主循环）。
 
         复用 claw-code 子 Agent 隔离运行能力：在独立 asyncio.Task 中执行，
@@ -87,9 +92,11 @@ class BackgroundMemoryRefiner:
         task.add_done_callback(self._tasks.discard)
         return task.get_name()
 
-    async def _run_refinement(self, session_id: str, session_log: str | None,
-                              context: str, triggered_by: str) -> RefinementResult:
+    async def _run_refinement(
+        self, session_id: str, session_log: str | None, context: str, triggered_by: str
+    ) -> RefinementResult:
         import time
+
         started = time.monotonic()
         try:
             log_text = session_log
@@ -110,31 +117,48 @@ class BackgroundMemoryRefiner:
             decay_audits = self.lifecycle.decay_all()
             low_trust_audits = self.lifecycle.downgrade_low_trust()
 
-            all_audits = fact_audits + failure_audits + merge_audits + expire_audits + decay_audits + low_trust_audits
+            all_audits = (
+                fact_audits
+                + failure_audits
+                + merge_audits
+                + expire_audits
+                + decay_audits
+                + low_trust_audits
+            )
             result = RefinementResult(
                 audits=all_audits,
                 facts_added=len(fact_audits),
                 failures_added=len(failure_audits),
                 duplicates_merged=sum(1 for a in merge_audits if a.action == "merge"),
                 expired=sum(1 for a in expire_audits if a.action == "expire"),
-                downgraded=sum(1 for a in (decay_audits + low_trust_audits) if a.action == "downgrade"),
+                downgraded=sum(
+                    1 for a in (decay_audits + low_trust_audits) if a.action == "downgrade"
+                ),
                 duration_ms=(time.monotonic() - started) * 1000,
                 triggered_by=triggered_by,
             )
             self._results.append(result)
-            logger.info("memory_refinement_done session_id=%s facts=%s audits=%s",
-                        session_id, result.facts_added, len(all_audits))
-            return result  # noqa: TRY300 - 隔离运行中保留 try 包裹以便统一异常兜底
+            logger.info(
+                "memory_refinement_done session_id=%s facts=%s audits=%s",
+                session_id,
+                result.facts_added,
+                len(all_audits),
+            )
+            return result
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             # 隔离失败：记录但不阻塞主循环（claw-code 子 Agent 隔离思路）
-            logger.warning("memory_refinement_failed session_id=%s error=%s",
-                           session_id, type(exc).__name__)
+            logger.warning(
+                "memory_refinement_failed session_id=%s error=%s", session_id, type(exc).__name__
+            )
             result = RefinementResult(triggered_by=triggered_by)
-            result.audits.append(MemoryAuditEntry(
-                action="kept_below_trust", reason=f"精炼失败隔离: {type(exc).__name__}",
-            ))
+            result.audits.append(
+                MemoryAuditEntry(
+                    action="kept_below_trust",
+                    reason=f"精炼失败隔离: {type(exc).__name__}",
+                )
+            )
             self._results.append(result)
             return result
 
@@ -147,22 +171,27 @@ class BackgroundMemoryRefiner:
             if not any(m in line for m in markers):
                 continue
             # 收集失败行及其上下文（前后各 2 行）
-            window = "\n".join(lines[max(0, i - 2): i + 3])
+            window = "\n".join(lines[max(0, i - 2) : i + 3])
             item = MemoryItem(
                 kind=MemoryKind.FAILURE,
                 text=window[:2000],
                 title=f"失败案例: {line.strip()[:80]}",
                 doc_type="failure",
-                trust_score=0.3,   # 失败案例可信度默认较低
+                trust_score=0.3,  # 失败案例可信度默认较低
                 source_session=session_id,
                 metadata={"marker": next((m for m in markers if m in line), ""), "line": i},
             )
             existing_id = self.store.upsert(item)
-            audits.append(MemoryAuditEntry(
-                action="add", memory_id=existing_id, kind=MemoryKind.FAILURE,
-                text_preview=item.text[:50], score_after=item.trust_score,
-                reason="失败案例沉淀入库",
-            ))
+            audits.append(
+                MemoryAuditEntry(
+                    action="add",
+                    memory_id=existing_id,
+                    kind=MemoryKind.FAILURE,
+                    text_preview=item.text[:50],
+                    score_after=item.trust_score,
+                    reason="失败案例沉淀入库",
+                )
+            )
         return audits
 
     async def wait_all(self) -> list[RefinementResult]:

@@ -173,7 +173,9 @@ class PregelEngine:
                 state.step = context.step
                 context.active_nodes = step_result.next_active
                 if step_result.interrupted:
-                    logger.info("execution_interrupted", node=step_result.active_nodes, step=context.step)
+                    logger.info(
+                        "execution_interrupted", node=step_result.active_nodes, step=context.step
+                    )
                     break
 
         try:
@@ -189,7 +191,9 @@ class PregelEngine:
 
         return state
 
-    async def astream(self, state: GraphState, config: dict | None = None) -> AsyncIterator[GraphState]:
+    async def astream(
+        self, state: GraphState, config: dict | None = None
+    ) -> AsyncIterator[GraphState]:
         """Stream state after each super-step.
 
         Args:
@@ -257,7 +261,9 @@ class PregelEngine:
             self._merge_error_update(state, handler_result)
             yield state.clone()
 
-    async def astream_events(self, state: GraphState, config: dict | None = None) -> AsyncIterator[StreamEvent]:
+    async def astream_events(
+        self, state: GraphState, config: dict | None = None
+    ) -> AsyncIterator[StreamEvent]:
         """Stream detailed execution events.
 
         Args:
@@ -309,7 +315,9 @@ class PregelEngine:
             async with asyncio.timeout(self._timeout_policy.run_timeout):
                 for _ in range(max_steps):
                     if not context.active_nodes:
-                        yield StreamEvent(type=StreamEventType.END, data={"total_steps": context.step})
+                        yield StreamEvent(
+                            type=StreamEventType.END, data={"total_steps": context.step}
+                        )
                         break
 
                     for node in context.active_nodes:
@@ -417,7 +425,10 @@ class PregelEngine:
 
         tasks = []
         for node_name in active_nodes:
-            if node_name in self._interrupt_before and node_name not in context.skip_interrupt_before:
+            if (
+                node_name in self._interrupt_before
+                and node_name not in context.skip_interrupt_before
+            ):
                 state["__interrupted__"] = True
                 state["__interrupt_node__"] = node_name
                 checkpoint = await self._save_checkpoint(
@@ -556,11 +567,16 @@ class PregelEngine:
             if self._timeout_policy.node_timeout is None:
                 result = await execution
             else:
-                result = await asyncio.wait_for(execution, timeout=self._timeout_policy.node_timeout)
+                result = await asyncio.wait_for(
+                    execution, timeout=self._timeout_policy.node_timeout
+                )
 
             if node_name in self._interrupt_after:
                 if not is_command(result):
-                    result = Command(update=result if isinstance(result, dict) else None, metadata={"interrupt": True})
+                    result = Command(
+                        update=result if isinstance(result, dict) else None,
+                        metadata={"interrupt": True},
+                    )
                 else:
                     result.metadata["interrupt"] = True
 
@@ -574,7 +590,9 @@ class PregelEngine:
         """Parse a node's output into update, goto, resume components."""
         return parse_node_output(output)
 
-    async def _route_next(self, current_node: str, goto: str | list[str] | None, state: GraphState) -> list[str]:
+    async def _route_next(
+        self, current_node: str, goto: str | list[str] | None, state: GraphState
+    ) -> list[str]:
         """Determine next nodes based on explicit goto or graph edges."""
         if goto is not None:
             if isinstance(goto, list):
@@ -596,8 +614,7 @@ class PregelEngine:
             return []
 
         # Use static edges
-        outgoing = self._graph.get_outgoing_edges(current_node)
-        return outgoing
+        return self._graph.get_outgoing_edges(current_node)
 
     async def _resolve_router(self, router: callable, state: GraphState) -> str:
         """Resolve a router function to a node name."""

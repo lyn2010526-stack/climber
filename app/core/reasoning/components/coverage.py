@@ -128,7 +128,9 @@ class CoverageChecker:
         combined_content = self._combine_candidates(candidates)
 
         try:
-            raw_report = await self._call_llm(task, combined_content, candidates, model_adapter, timeout)
+            raw_report = await self._call_llm(
+                task, combined_content, candidates, model_adapter, timeout
+            )
         except Exception as exc:
             logger.error(
                 "Coverage LLM call failed",

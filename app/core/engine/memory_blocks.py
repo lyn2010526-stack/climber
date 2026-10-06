@@ -15,7 +15,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, ClassVar
 
 import structlog
 
@@ -34,6 +34,7 @@ class BlockType(StrEnum):
 @dataclass
 class MemoryBlock:
     """A single memory block with metadata."""
+
     label: str
     value: str
     block_type: BlockType = BlockType.CORE
@@ -50,7 +51,7 @@ class MemoryBlock:
         if self.read_only:
             return False
         if len(new_value) > self.limit:
-            new_value = new_value[:self.limit]
+            new_value = new_value[: self.limit]
         self.value = new_value
         self.updated_at = time.monotonic()
         return True
@@ -71,6 +72,7 @@ class MemoryBlock:
 @dataclass
 class PassageRecord:
     """A single archival memory passage."""
+
     content: str
     source: str = ""  # Where this passage came from
     timestamp: float = field(default_factory=time.monotonic)
@@ -139,7 +141,9 @@ class MemoryBlockStore:
 
         return "\n\n".join(sections)
 
-    def add_passage(self, content: str, source: str = "", metadata: dict[str, Any] | None = None) -> str:
+    def add_passage(
+        self, content: str, source: str = "", metadata: dict[str, Any] | None = None
+    ) -> str:
         """Add a passage to archival memory."""
         passage = PassageRecord(
             content=content,
@@ -148,7 +152,7 @@ class MemoryBlockStore:
         )
         self._archive.append(passage)
         if len(self._archive) > self._max_archive_size:
-            self._archive = self._archive[-self._max_archive_size // 2:]
+            self._archive = self._archive[-self._max_archive_size // 2 :]
         return passage.passage_id
 
     def search_archive(self, query: str, max_results: int = 5) -> list[PassageRecord]:
@@ -190,12 +194,12 @@ class EntityExtractor:
     """
 
     # Simple patterns for entity extraction
-    PATTERNS = {
-        "person": r'\b([A-Z][a-z]+ [A-Z][a-z]+)\b',  # Full names
-        "email": r'\b[\w.+-]+@[\w-]+\.[\w.-]+\b',
-        "url": r'https?://[^\s<>\"\')\]]+',
-        "file_path": r'(?:[\w./\\]+/)+\.\w{2,4}',
-        "date": r'\b\d{4}-\d{2}-\d{2}\b',
+    PATTERNS: ClassVar[dict[str, str]] = {
+        "person": r"\b([A-Z][a-z]+ [A-Z][a-z]+)\b",  # Full names
+        "email": r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b",
+        "url": r"https?://[^\s<>\"\')\]]+",
+        "file_path": r"(?:[\w./\\]+/)+\.\w{2,4}",
+        "date": r"\b\d{4}-\d{2}-\d{2}\b",
     }
 
     @classmethod
@@ -250,7 +254,8 @@ class MemoryConsolidator:
 
         # Remove empty blocks (except read-only)
         to_remove = [
-            label for label, block in self._store._blocks.items()
+            label
+            for label, block in self._store._blocks.items()
             if not block.read_only and not block.value.strip()
         ]
         for label in to_remove:
@@ -300,17 +305,17 @@ def create_persona_block(agent_id: str, persona_data: dict) -> MemoryBlock:
     persona blocks keyed by agent_id.
     """
     lines = [f"Agent: {persona_data.get('name', 'Unknown')}"]
-    if persona_data.get('role'):
+    if persona_data.get("role"):
         lines.append(f"Role: {persona_data['role']}")
-    if persona_data.get('personality_traits'):
+    if persona_data.get("personality_traits"):
         lines.append(f"Traits: {', '.join(persona_data['personality_traits'])}")
-    if persona_data.get('expertise'):
+    if persona_data.get("expertise"):
         lines.append(f"Expertise: {', '.join(persona_data['expertise'])}")
-    if persona_data.get('communication_style'):
+    if persona_data.get("communication_style"):
         lines.append(f"Style: {persona_data['communication_style']}")
-    if persona_data.get('goals'):
+    if persona_data.get("goals"):
         lines.append("Goals:")
-        lines.extend(f"  - {g}" for g in persona_data['goals'])
+        lines.extend(f"  - {g}" for g in persona_data["goals"])
 
     return MemoryBlock(
         label=f"persona_{agent_id}",

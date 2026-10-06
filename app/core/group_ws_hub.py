@@ -235,13 +235,19 @@ class GroupWebSocketHub:
 
     async def connect(self, group_id: str, websocket: Any) -> None:
         _group_connections[group_id].add(websocket)
-        logger.info("group_ws_connected", group_id=group_id, total=len(_group_connections[group_id]))
+        logger.info(
+            "group_ws_connected", group_id=group_id, total=len(_group_connections[group_id])
+        )
 
     async def disconnect(self, group_id: str, websocket: Any) -> None:
         conns = _group_connections.get(group_id)
         if conns and websocket in conns:
             conns.remove(websocket)
-        logger.info("group_ws_disconnected", group_id=group_id, total=len(_group_connections.get(group_id, [])))
+        logger.info(
+            "group_ws_disconnected",
+            group_id=group_id,
+            total=len(_group_connections.get(group_id, [])),
+        )
 
     async def broadcast(self, group_id: str, message: dict[str, Any]) -> None:
         """Broadcast a legacy event frame, then mirror it canonically.
@@ -386,7 +392,9 @@ class GroupWebSocketHub:
             if "current_round" in payload:
                 task.current_round = int(payload["current_round"])
             await db.commit()
-            await self.broadcast(group_id, {"type": "task_update", "data": {"id": task.id, "status": task.status}})
+            await self.broadcast(
+                group_id, {"type": "task_update", "data": {"id": task.id, "status": task.status}}
+            )
             return {"ok": True, "id": task_id}
 
     async def _handle_human_review(self, group_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -415,10 +423,13 @@ class GroupWebSocketHub:
                 task.status = "failed"
             await db.commit()
         event_type = "human_review_approved" if decision == "approved" else "human_review_rejected"
-        await self.broadcast(group_id, {
-            "type": event_type,
-            "data": {"task_id": task_id, "comment": comment},
-        })
+        await self.broadcast(
+            group_id,
+            {
+                "type": event_type,
+                "data": {"task_id": task_id, "comment": comment},
+            },
+        )
         return {"ok": True, "id": task_id, "decision": decision}
 
 

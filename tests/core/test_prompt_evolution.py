@@ -23,7 +23,9 @@ from app.storage.repository_prompt_genome import get_best_genome
 
 
 def make_genome(text: str, temperature: float = 0.7) -> PromptGenome:
-    return PromptGenome(id=f"g_{text[:12]}", prompt_text=text, model_params={"temperature": temperature})
+    return PromptGenome(
+        id=f"g_{text[:12]}", prompt_text=text, model_params={"temperature": temperature}
+    )
 
 
 def clarity_evaluator(genome: PromptGenome) -> dict[str, float]:
@@ -57,11 +59,15 @@ def test_same_seed_is_deterministic() -> None:
     result_a, history_a = engine_a.run_evolution(population, clarity_evaluator)
     result_b, history_b = engine_b.run_evolution(population_b, clarity_evaluator)
     assert history_a == history_b
-    assert [genome.prompt_text for genome in result_a] == [genome.prompt_text for genome in result_b]
+    assert [genome.prompt_text for genome in result_a] == [
+        genome.prompt_text for genome in result_b
+    ]
 
 
 def test_elite_genomes_survive_unchanged() -> None:
-    config = EvolutionConfig(population_size=4, elite_count=1, crossover_rate=0.0, mutation_rate=0.0, random_seed=7)
+    config = EvolutionConfig(
+        population_size=4, elite_count=1, crossover_rate=0.0, mutation_rate=0.0, random_seed=7
+    )
     best = make_genome("Restate the user's underlying goal before acting.")
     weak = make_genome("do stuff")
     engine = PromptEvolutionEngine(config)
@@ -71,7 +77,9 @@ def test_elite_genomes_survive_unchanged() -> None:
 
 
 def test_elite_slot_keeps_highest_fitness_genome() -> None:
-    config = EvolutionConfig(population_size=3, elite_count=1, crossover_rate=0.0, mutation_rate=0.0, random_seed=9)
+    config = EvolutionConfig(
+        population_size=3, elite_count=1, crossover_rate=0.0, mutation_rate=0.0, random_seed=9
+    )
     best = make_genome("Verify the goal before acting")
     mid = make_genome("plain prompt alpha")
     weak = make_genome("do stuff")
@@ -83,14 +91,21 @@ def test_elite_slot_keeps_highest_fitness_genome() -> None:
 
 def test_scored_ranks_descending_by_composite() -> None:
     engine = PromptEvolutionEngine(EvolutionConfig(random_seed=1))
-    ranked = engine._scored([make_genome("do stuff"), make_genome("Verify the goal"), make_genome("plain prompt")])
+    ranked = engine._scored(
+        [make_genome("do stuff"), make_genome("Verify the goal"), make_genome("plain prompt")]
+    )
     scores = [score for score, _ in ranked]
     assert scores == sorted(scores, reverse=True)
 
 
 def test_safety_penalty_lowers_composite() -> None:
     weights = FitnessWeights()
-    clean = {"task_success": 1.0, "metaphor_comprehension": 1.0, "meta_correction": 1.0, "safety_violation": 0.0}
+    clean = {
+        "task_success": 1.0,
+        "metaphor_comprehension": 1.0,
+        "meta_correction": 1.0,
+        "safety_violation": 0.0,
+    }
     unsafe = dict(clean, safety_violation=0.5)
     assert weights.composite(unsafe) < weights.composite(clean)
 
@@ -324,7 +339,9 @@ async def test_save_and_load_population_round_trip() -> None:
         assert total.scalar_one() == 3
 
     latest_generation = max(genome.generation for genome in population)
-    latest_ids = sorted(genome.id for genome in population if genome.generation == latest_generation)
+    latest_ids = sorted(
+        genome.id for genome in population if genome.generation == latest_generation
+    )
     loaded = await load_population("user-evo", session_factory=sessions)
     assert sorted(genome.id for genome in loaded) == latest_ids
     assert all(genome.generation == latest_generation for genome in loaded)
@@ -403,7 +420,9 @@ def test_score_cache_is_reused_across_generations() -> None:
         make_genome("shared prompt"),
         make_genome("other prompt"),
     ]
-    _population, history = PromptEvolutionEngine(config).run_evolution(population, counting_evaluator)
+    _population, history = PromptEvolutionEngine(config).run_evolution(
+        population, counting_evaluator
+    )
     assert len(history) == 3
     assert sorted(calls) == ["other prompt", "shared prompt"]
 
@@ -529,7 +548,9 @@ def test_llm_operator_none_preserves_default_behavior() -> None:
     population_a = [make_genome("plain prompt one"), make_genome("plain prompt two")]
     population_b = [make_genome("plain prompt one"), make_genome("plain prompt two")]
     result_a, history_a = PromptEvolutionEngine(base).run_evolution(population_a, clarity_evaluator)
-    result_b, history_b = PromptEvolutionEngine(explicit).run_evolution(population_b, clarity_evaluator)
+    result_b, history_b = PromptEvolutionEngine(explicit).run_evolution(
+        population_b, clarity_evaluator
+    )
     assert history_a == history_b
     assert [genome.to_dict() for genome in result_a] == [genome.to_dict() for genome in result_b]
 
@@ -597,7 +618,9 @@ async def test_async_evaluator_closes_real_tick_with_cache_and_persistence() -> 
     assert all(genome.scores for genome in restored)
 
 
-async def test_evolution_tick_reports_missing_evaluator_and_failures(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_evolution_tick_reports_missing_evaluator_and_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     skipped = await evolution_module.run_evolution_tick("tick-user")
     assert skipped == {"status": "skipped", "reason": "evaluator_required", "user_id": "tick-user"}
 

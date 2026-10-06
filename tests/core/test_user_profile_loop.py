@@ -37,7 +37,10 @@ def test_old_events_decay_exponentially() -> None:
     service = ProfileLoopService(half_life_days=10)
     service.record(event(task_type="now", occurred_at=NOW))
     service.record(event(task_type="past", occurred_at=NOW - timedelta(days=10)))
-    assert service.summary(as_of=NOW).task_preferences["now"] > service.summary(as_of=NOW).task_preferences["past"]
+    assert (
+        service.summary(as_of=NOW).task_preferences["now"]
+        > service.summary(as_of=NOW).task_preferences["past"]
+    )
 
 
 def test_success_reinforces_preference() -> None:
@@ -74,7 +77,7 @@ def test_disabled_mode_discards_events_and_context() -> None:
     summary = service.summary(as_of=NOW)
     assert summary.enabled is False
     assert summary.confidence == 0.0
-    assert service.auxiliary_context("当前明确指令") ["suggestions"] == {
+    assert service.auxiliary_context("当前明确指令")["suggestions"] == {
         "task_type": None,
         "tool": None,
         "reasoning_level": None,
@@ -102,9 +105,7 @@ def test_summary_exposes_prompt_hints() -> None:
 
 
 def test_blend_smooths_numeric_and_preference_values() -> None:
-    current = ProfileSummary(
-        {"coding": 1.0}, {}, {}, 0.0, 0.0, 0.0, 0.2, ("old",), True
-    )
+    current = ProfileSummary({"coding": 1.0}, {}, {}, 0.0, 0.0, 0.0, 0.2, ("old",), True)
     incoming = ProfileSummary(
         {"coding": 0.0, "review": 1.0}, {}, {}, 1.0, 0.5, 1.0, 1.0, ("new",), True
     )

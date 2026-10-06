@@ -136,7 +136,9 @@ class GoalDynamicAdjuster:
         if needs_db and not has_db:
             gaps.append("database_access")
 
-        needs_browser = any(kw in goal_lower for kw in ["screenshot", "scrape", "web page", "browser"])
+        needs_browser = any(
+            kw in goal_lower for kw in ["screenshot", "scrape", "web page", "browser"]
+        )
         has_browser = "browser" in tools
         if needs_browser and not has_browser:
             gaps.append("browser_access")

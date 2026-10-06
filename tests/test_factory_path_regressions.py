@@ -39,12 +39,17 @@ def _patch_stream(monkeypatch: pytest.MonkeyPatch, lines: list[bytes]) -> None:
     monkeypatch.setattr(OpenAIAdapter, "get_client", classmethod(lambda cls: _Client()))
 
 
-async def test_openai_done_marker_emits_single_final_result(monkeypatch: pytest.MonkeyPatch) -> None:
-    _patch_stream(monkeypatch, [
-        _sse({"choices": [{"delta": {"content": "Hel"}}]}),
-        _sse({"choices": [{"delta": {"content": "lo"}}]}),
-        b"data: [DONE]\n\n",
-    ])
+async def test_openai_done_marker_emits_single_final_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_stream(
+        monkeypatch,
+        [
+            _sse({"choices": [{"delta": {"content": "Hel"}}]}),
+            _sse({"choices": [{"delta": {"content": "lo"}}]}),
+            b"data: [DONE]\n\n",
+        ],
+    )
 
     adapter = OpenAIAdapter(model_id="gpt-4o-mini", api_key="k")
     chunks = [c async for c in adapter.stream_chat([{"role": "user", "content": "hi"}])]
@@ -57,22 +62,30 @@ async def test_openai_done_marker_emits_single_final_result(monkeypatch: pytest.
     assert final.accumulated_content == "Hello"
 
 
-async def test_openai_tool_call_deltas_accumulate_without_duplication(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_openai_tool_call_deltas_accumulate_without_duplication(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     first = {
         "choices": [
             {
-                "delta": {"tool_calls": [
-                    {"index": 0, "id": "call_1",
-                     "function": {"name": "web_search", "arguments": '{"q"'}}
-                ]},
+                "delta": {
+                    "tool_calls": [
+                        {
+                            "index": 0,
+                            "id": "call_1",
+                            "function": {"name": "web_search", "arguments": '{"q"'},
+                        }
+                    ]
+                },
             }
         ]
     }
     second = {
         "choices": [
-            {"delta": {"tool_calls": [
-                {"index": 0, "function": {"arguments": ': "x"}'}}
-            ]}, "finish_reason": "tool_calls"}
+            {
+                "delta": {"tool_calls": [{"index": 0, "function": {"arguments": ': "x"}'}}]},
+                "finish_reason": "tool_calls",
+            }
         ]
     }
     _patch_stream(monkeypatch, [_sse(first), _sse(second), b"data: [DONE]\n\n"])
@@ -90,11 +103,14 @@ async def test_openai_tool_call_deltas_accumulate_without_duplication(monkeypatc
 
 
 async def test_openai_chat_aggregates_stream_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    _patch_stream(monkeypatch, [
-        _sse({"choices": [{"delta": {"content": "part1"}}]}),
-        _sse({"choices": [{"delta": {"content": "part2"}}]}),
-        b"data: [DONE]\n\n",
-    ])
+    _patch_stream(
+        monkeypatch,
+        [
+            _sse({"choices": [{"delta": {"content": "part1"}}]}),
+            _sse({"choices": [{"delta": {"content": "part2"}}]}),
+            b"data: [DONE]\n\n",
+        ],
+    )
     adapter = OpenAIAdapter(model_id="gpt-4o-mini", api_key="k")
     result = await adapter.chat([{"role": "user", "content": "hi"}])
     assert result.content == "part1part2"
@@ -109,6 +125,7 @@ def test_capabilities_uses_current_model_fields() -> None:
 
 
 # --- Task manager -----------------------------------------------------------
+
 
 async def test_task_submit_persists_objective_without_api_key() -> None:
     from app.core.task_worker import TaskManager
@@ -207,6 +224,7 @@ async def test_task_control_loop_persists_pause_resume_and_progress() -> None:
 
 # --- API contracts ----------------------------------------------------------
 
+
 async def test_sessions_messages_expose_tool_call_fields(client) -> None:
     session_resp = await client.post("/api/v1/sessions/", json={"title": "tools"})
     assert session_resp.status_code == 200
@@ -219,10 +237,20 @@ async def test_sessions_messages_expose_tool_call_fields(client) -> None:
         session_id,
         MessageRole.ASSISTANT,
         content="",
-        tool_calls=[{"id": "call_9", "type": "function", "function": {"name": "web_search", "arguments": "{}"}}],
+        tool_calls=[
+            {
+                "id": "call_9",
+                "type": "function",
+                "function": {"name": "web_search", "arguments": "{}"},
+            }
+        ],
     )
     await persist_message(
-        session_id, MessageRole.TOOL, content="result", tool_name="web_search", tool_call_id="call_9"
+        session_id,
+        MessageRole.TOOL,
+        content="result",
+        tool_name="web_search",
+        tool_call_id="call_9",
     )
 
     resp = await client.get(f"/api/v1/sessions/{session_id}/messages")
@@ -440,14 +468,20 @@ def test_permission_config_roundtrips_through_dict() -> None:
     assert restored.denied_tools == ["file_delete"]
 
 
-async def test_engine_persists_and_propagates_permission_config(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_engine_persists_and_propagates_permission_config(
+    tmp_path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from app.core.agent_engine import AgentEngine
     from app.core.permission_rules import PermissionConfig, PermissionMode
 
     monkeypatch.setenv("CLIMBER_DATA_DIR", str(tmp_path))
     engine = AgentEngine()
     session = engine.create_session(
-        agent_id="t", user_id="u", provider="openai", model_id="m", api_key="k",
+        agent_id="t",
+        user_id="u",
+        provider="openai",
+        model_id="m",
+        api_key="k",
     )
     new_config = PermissionConfig(mode=PermissionMode.AUTO)
     engine.update_permission_config(new_config)
@@ -467,17 +501,32 @@ async def test_budget_endpoint_returns_current_spend(client) -> None:
 
     async with async_session() as db:
         db.add(BudgetConfig(user_id="default-user", amount=25.0, period="monthly", is_active=True))
-        db.add(CostRecord(
-            user_id="default-user", provider="openai", model_id="gpt-4o-mini",
-            prompt_tokens=10, completion_tokens=5, total_tokens=15,
-            input_cost=0.01, output_cost=0.02, total_cost=0.03,
-        ))
+        db.add(
+            CostRecord(
+                user_id="default-user",
+                provider="openai",
+                model_id="gpt-4o-mini",
+                prompt_tokens=10,
+                completion_tokens=5,
+                total_tokens=15,
+                input_cost=0.01,
+                output_cost=0.02,
+                total_cost=0.03,
+            )
+        )
         await db.commit()
 
     resp = await client.get("/api/v1/cost/budget")
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) >= {"amount", "period", "is_active", "current_spend", "per_session_limit", "per_request_limit"}
+    assert set(body) >= {
+        "amount",
+        "period",
+        "is_active",
+        "current_spend",
+        "per_session_limit",
+        "per_request_limit",
+    }
     assert body["amount"] == 25.0
     assert body["is_active"] is True
     assert body["current_spend"] == round(0.03, 6)
@@ -761,12 +810,18 @@ async def test_workflow_export_blocks_cross_tenant_access(
         intruder_row = await ac.get("/api/v1/workflows/", headers=intruder_h)
         assert all(w["id"] != wf_id for w in intruder_row.json())
 
-        denied_post = await ac.post(f"/api/v1/workflows/{wf_id}/export", json={"format": "json"}, headers=intruder_h)
+        denied_post = await ac.post(
+            f"/api/v1/workflows/{wf_id}/export", json={"format": "json"}, headers=intruder_h
+        )
         denied_get = await ac.get(f"/api/v1/workflows/{wf_id}/export", headers=intruder_h)
         assert denied_post.status_code == 404
         assert denied_get.status_code == 404
 
-        allowed = await ac.post(f"/api/v1/workflows/{wf_id}/export", json={"format": "json"}, headers=owner_h)
+        allowed = await ac.post(
+            f"/api/v1/workflows/{wf_id}/export", json={"format": "json"}, headers=owner_h
+        )
         assert allowed.status_code == 200
-        admin_view = await ac.post(f"/api/v1/workflows/{wf_id}/export", json={"format": "json"}, headers=admin_h)
+        admin_view = await ac.post(
+            f"/api/v1/workflows/{wf_id}/export", json={"format": "json"}, headers=admin_h
+        )
         assert admin_view.status_code == 200

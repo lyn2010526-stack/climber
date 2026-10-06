@@ -21,7 +21,7 @@ def _run(coro):
         "/etc/passwd",
         "/root/.ssh/id_rsa",
         "/proc/self/environ",
-        "/tmp/../etc/shadow",  # noqa: S108
+        "/tmp/../etc/shadow",
     ],
 )
 def test_read_file_rejects_sensitive_paths(path):

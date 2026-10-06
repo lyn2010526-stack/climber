@@ -51,6 +51,7 @@ def init_sandbox(engine: Any) -> None:
             SandboxConfig,
             SecuritySandbox,
         )
+
         workdir = os.environ.get("CLIMBER_SANDBOX_WORKDIR") or os.getcwd()
         engine.sandbox = SecuritySandbox(SandboxConfig(workdir=workdir))
         engine.permission_overlay = PermissionOverlay()
@@ -70,11 +71,13 @@ def init_permissions(engine: Any) -> None:
     """
     try:
         from app.core.permission_rules import get_default_config
+
         persisted = engine._load_permission_config()
         engine._default_permission_config = persisted or get_default_config()
     except Exception:
         try:
             from app.core.permission_rules import get_default_config
+
             engine._default_permission_config = get_default_config()
         except Exception:
             engine._default_permission_config = None
@@ -87,6 +90,7 @@ def permission_config_path() -> str:
         The path string under CLIMBER_DATA_DIR (default "data").
     """
     import os
+
     data_dir = os.environ.get("CLIMBER_DATA_DIR", "data")
     return os.path.join(data_dir, "permission_config.json")
 
@@ -99,6 +103,7 @@ def load_permission_config() -> Any:
     """
     import json
     import os
+
     path = permission_config_path()
     if not os.path.exists(path):
         return None
@@ -106,6 +111,7 @@ def load_permission_config() -> Any:
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
         from app.core.permission_rules import PermissionConfig
+
         return PermissionConfig.from_dict(data)
     except Exception:
         return None
@@ -119,6 +125,7 @@ def save_permission_config(config: Any) -> None:
     """
     import json
     import os
+
     path = permission_config_path()
     try:
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
@@ -135,10 +142,31 @@ def setup_default_permissions(engine: Any) -> None:
         engine: The AgentEngine instance with a ``permission_overlay`` attribute.
     """
     from app.core.security_sandbox import PermissionLevel, PermissionRule
+
     defaults = [
-        PermissionRule(action="read", resource_pattern="*", level=PermissionLevel.ALLOW, description="Read any file"),
-        PermissionRule(action="write", resource_pattern="*", level=PermissionLevel.ASK, description="Write requires approval"),
-        PermissionRule(action="execute", resource_pattern="*", level=PermissionLevel.ASK, description="Execute requires approval"),
-        PermissionRule(action="delete", resource_pattern="*", level=PermissionLevel.DENY, description="Delete forbidden"),
+        PermissionRule(
+            action="read",
+            resource_pattern="*",
+            level=PermissionLevel.ALLOW,
+            description="Read any file",
+        ),
+        PermissionRule(
+            action="write",
+            resource_pattern="*",
+            level=PermissionLevel.ASK,
+            description="Write requires approval",
+        ),
+        PermissionRule(
+            action="execute",
+            resource_pattern="*",
+            level=PermissionLevel.ASK,
+            description="Execute requires approval",
+        ),
+        PermissionRule(
+            action="delete",
+            resource_pattern="*",
+            level=PermissionLevel.DENY,
+            description="Delete forbidden",
+        ),
     ]
     engine.permission_overlay.set_defaults(defaults)

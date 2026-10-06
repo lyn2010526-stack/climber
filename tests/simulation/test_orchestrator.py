@@ -5,13 +5,12 @@ from __future__ import annotations
 import asyncio
 import json
 
-from app.simulation.llm_planner import LLMExperimentPlanner
+from app.simulation.ledger import ExperimentLedger
 from app.simulation.orchestrator import (
     AggregateReviewContext,
     OrchestratorOptions,
     ScienceSimulationAgent,
 )
-from app.simulation.ledger import ExperimentLedger
 from app.tools import ToolRegistry
 
 
@@ -49,11 +48,13 @@ def _registry_with_mcp(behavior: str = "ok") -> tuple[ToolRegistry, _FakeMCPClie
 
 
 async def _plan_llm(prompt: str, system: str) -> str:
-    return json.dumps({
-        "objective": "maximize throughput",
-        "sweep": {"rate": {"min": 1.0, "max": 4.0, "steps": 4}},
-        "base": {},
-    })
+    return json.dumps(
+        {
+            "objective": "maximize throughput",
+            "sweep": {"rate": {"min": 1.0, "max": 4.0, "steps": 4}},
+            "base": {},
+        }
+    )
 
 
 def test_orchestrator_runs_plan_and_satisfies():
@@ -110,11 +111,13 @@ def test_orchestrator_refines_and_reruns():
         )
 
         async def refined_planner_llm(prompt: str, system: str) -> str:
-            return json.dumps({
-                "objective": "maximize throughput",
-                "sweep": {"rate": {"min": 8.0, "max": 10.0, "steps": 2}},
-                "base": {},
-            })
+            return json.dumps(
+                {
+                    "objective": "maximize throughput",
+                    "sweep": {"rate": {"min": 8.0, "max": 10.0, "steps": 2}},
+                    "base": {},
+                }
+            )
 
         agent = ScienceSimulationAgent(
             registry,
@@ -138,7 +141,7 @@ def test_orchestrator_aggregate_review_can_refine_once():
     """A custom aggregate reviewer can demand one refine round then pass."""
 
     async def go():
-        registry, client = _registry_with_mcp("ok")
+        registry, _client = _registry_with_mcp("ok")
         calls = {"n": 0}
 
         async def reviewer(ctx: AggregateReviewContext) -> tuple[bool, str]:
@@ -165,7 +168,8 @@ def test_orchestrator_default_tool_selection():
     """Without default_tool, the selector picks the simulation tool."""
 
     async def go():
-        registry, client = _registry_with_mcp("ok")
+        registry, _client = _registry_with_mcp("ok")
+
         # Register a second, non-simulation tool to force selection
         async def helper(**kwargs):
             return "helping"
@@ -185,7 +189,7 @@ def test_orchestrator_default_tool_selection():
 
 def test_orchestrator_ledger_persists_full_loop(tmp_path):
     async def go():
-        registry, client = _registry_with_mcp("ok")
+        registry, _client = _registry_with_mcp("ok")
         ledger = ExperimentLedger(tmp_path)
         agent = ScienceSimulationAgent(
             registry,
@@ -196,12 +200,12 @@ def test_orchestrator_ledger_persists_full_loop(tmp_path):
         result = await agent.run("tune throughput")
         return result, ledger
 
-    result, ledger = asyncio.run(go())
+    _result, ledger = asyncio.run(go())
     records = ledger.read_all()
     types = {r["type"] for r in records}
     assert {"goal", "plan_round", "final_report"} <= types
     rounds = [r for r in records if r["type"] == "plan_round"]
     assert len(rounds) == 1
     assert rounds[0]["satisfied"] is True
-    final = [r for r in records if r["type"] == "final_report"][0]
+    final = next(r for r in records if r["type"] == "final_report")
     assert final["final_report"]["satisfied"] is True

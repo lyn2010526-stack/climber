@@ -94,9 +94,15 @@ def test_extract_persists_episodic_memories() -> None:
 
     async def _load() -> list[EpisodicMemory]:
         async with async_session() as db:
-            return list((await db.execute(
-                select(EpisodicMemory).where(EpisodicMemory.source_session_id == session)
-            )).scalars().all())
+            return list(
+                (
+                    await db.execute(
+                        select(EpisodicMemory).where(EpisodicMemory.source_session_id == session)
+                    )
+                )
+                .scalars()
+                .all()
+            )
 
     rows = _run(_load())
     assert len(rows) == 4
@@ -134,9 +140,9 @@ def test_extracted_scope_metadata_is_memory() -> None:
 
     async def _load() -> EpisodicMemory:
         async with async_session() as db:
-            return (await db.execute(
-                select(E).where(E.source_session_id == session)
-            )).scalars().one()
+            return (
+                (await db.execute(select(E).where(E.source_session_id == session))).scalars().one()
+            )
 
     row = _run(_load())
     assert row.memory_type == "project_fact"

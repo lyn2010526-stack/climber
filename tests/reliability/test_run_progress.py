@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import tempfile
 import unittest
 from datetime import timedelta
@@ -17,9 +17,9 @@ from app.core.agent_engine import AgentEngine
 from app.core.checkpoint import InMemoryCheckpointStore
 from app.core.engine.run_progress import (
     RunProgressStore,
+    _now,
     build_loop_snapshot,
     record_loop_progress,
-    _now,
 )
 from app.core.engine.run_storage import RunStorage
 from app.core.session import AgentSession, SessionConfig
@@ -76,17 +76,24 @@ class RunProgressStoreTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="run-progress-")
         self.addCleanup(self.tmp.cleanup)
-        self.db_engine = create_async_engine("sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "progress.db"))
+        self.db_engine = create_async_engine(
+            "sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "progress.db")
+        )
         self.addAsyncCleanup(self.db_engine.dispose)
         self.factory = async_sessionmaker(self.db_engine, expire_on_commit=False)
         async with self.db_engine.begin() as conn:
-            await conn.run_sync(lambda db: Base.metadata.create_all(db, tables=[t.__table__ for t in TABLES]))
+            await conn.run_sync(
+                lambda db: Base.metadata.create_all(db, tables=[t.__table__ for t in TABLES])
+            )
         self.store = RunProgressStore(self.factory)
 
     async def test_record_and_read_snapshot(self):
         ok = await self.store.record_progress(
-            "s1", user_id="u1", turn_id="t1",
-            outer_round=3, current_subtask="subtask-b",
+            "s1",
+            user_id="u1",
+            turn_id="t1",
+            outer_round=3,
+            current_subtask="subtask-b",
             completed_subtasks=["subtask-a", "subtask-b"],
             followup_queue=["next-step", "after-step"],
             steering_queue=["steer"],
@@ -103,8 +110,16 @@ class RunProgressStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(snapshot["user_id"], "u1")
 
     async def test_record_upserts_latest_snapshot(self):
-        await self.store.record_progress("s1", user_id="u1", outer_round=1, current_subtask="one", completed_subtasks=["one"])
-        await self.store.record_progress("s1", user_id="u1", outer_round=2, current_subtask="two", completed_subtasks=["one", "two"])
+        await self.store.record_progress(
+            "s1", user_id="u1", outer_round=1, current_subtask="one", completed_subtasks=["one"]
+        )
+        await self.store.record_progress(
+            "s1",
+            user_id="u1",
+            outer_round=2,
+            current_subtask="two",
+            completed_subtasks=["one", "two"],
+        )
         rows = await self.store.get_progress("s1")
         self.assertEqual(rows["outer_round"], 2)
         self.assertEqual(rows["current_subtask"], "two")
@@ -150,7 +165,9 @@ class RunProgressStoreTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_loop_snapshot_builder(self):
         session = SimpleNamespace(
-            session_id="s1", user_id="u1", current_turn_id="t1",
+            session_id="s1",
+            user_id="u1",
+            current_turn_id="t1",
         )
         payload = {
             "outer_round": 4,
@@ -170,11 +187,15 @@ class EngineWiringTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="run-progress-engine-")
         self.addCleanup(self.tmp.cleanup)
-        self.db_engine = create_async_engine("sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "engine.db"))
+        self.db_engine = create_async_engine(
+            "sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "engine.db")
+        )
         self.addAsyncCleanup(self.db_engine.dispose)
         self.factory = async_sessionmaker(self.db_engine, expire_on_commit=False)
         async with self.db_engine.begin() as conn:
-            await conn.run_sync(lambda db: Base.metadata.create_all(db, tables=[t.__table__ for t in TABLES]))
+            await conn.run_sync(
+                lambda db: Base.metadata.create_all(db, tables=[t.__table__ for t in TABLES])
+            )
         async with self.factory() as db:
             db.add(Session(id="s", user_id="u", context_data={}))
             await db.commit()
@@ -203,15 +224,29 @@ class EngineWiringTests(unittest.IsolatedAsyncioTestCase):
         engine.sandbox = engine.permission_overlay = engine.agent_mode = None
         engine._validate_tool_call = Mock(return_value=(True, "scripted test tool"))
         engine._build_tools_for_session = Mock(return_value=[])
-        for name in ("_set_agent_mode", "_send_start_notification", "_send_completion_notification",
-                     "_send_failure_notification", "_trigger_memory_reflection", "_record_profile_outcome",
-                     "_tick_evolution"):
+        for name in (
+            "_set_agent_mode",
+            "_send_start_notification",
+            "_send_completion_notification",
+            "_send_failure_notification",
+            "_trigger_memory_reflection",
+            "_record_profile_outcome",
+            "_tick_evolution",
+        ):
             setattr(engine, name, Mock())
-        for name in ("_inject_memory_context", "_inject_core_memory", "_inject_profile_context",
-                     "_store_episodic_memory", "_archive_instruction"):
+        for name in (
+            "_inject_memory_context",
+            "_inject_core_memory",
+            "_inject_profile_context",
+            "_store_episodic_memory",
+            "_archive_instruction",
+        ):
             setattr(engine, name, AsyncMock())
-        session = AgentSession(SessionConfig(session_id="s", user_id="u", agent_id="",
-                                             provider="scripted", model_id="fake"))
+        session = AgentSession(
+            SessionConfig(
+                session_id="s", user_id="u", agent_id="", provider="scripted", model_id="fake"
+            )
+        )
         return engine, session, model
 
     async def test_loop_records_progress_and_finalizes_completed(self):
@@ -230,10 +265,9 @@ class EngineWiringTests(unittest.IsolatedAsyncioTestCase):
         await self.engine_submit()
         await self.engine_submit("followup-1", kind="follow_up")
         engine, session, _ = self.engine([ChatResult(content="first"), RuntimeError("boom")])
-        try:
-            events = [event async for event in engine.run(session, "initial")]
-        except RuntimeError:
-            events = []
+        with contextlib.suppress(RuntimeError):
+            async for _event in engine.run(session, "initial"):
+                pass
         snapshot = await self.store.get_progress("s")
         self.assertIsNotNone(snapshot)
         self.assertEqual(snapshot["status"], "interrupted")
@@ -264,11 +298,18 @@ class HelperTests(unittest.IsolatedAsyncioTestCase):
         self.addAsyncCleanup(db_engine.dispose)
         factory = async_sessionmaker(db_engine, expire_on_commit=False)
         async with db_engine.begin() as conn:
-            await conn.run_sync(lambda db: Base.metadata.create_all(db, tables=[t.__table__ for t in TABLES]))
+            await conn.run_sync(
+                lambda db: Base.metadata.create_all(db, tables=[t.__table__ for t in TABLES])
+            )
         engine = SimpleNamespace(_run_store=SimpleNamespace(session_factory=factory))
         session = SimpleNamespace(session_id="s", user_id="u", current_turn_id="t")
-        payload = {"outer_round": 2, "current_input": "step", "completed": ["step"],
-                   "followup_queue": [], "steering_queue": []}
+        payload = {
+            "outer_round": 2,
+            "current_input": "step",
+            "completed": ["step"],
+            "followup_queue": [],
+            "steering_queue": [],
+        }
         self.assertTrue(await record_loop_progress(engine, session, payload))
         store = RunProgressStore(factory)
         snapshot = await store.get_progress("s")

@@ -21,10 +21,12 @@ def test_run_cycle_records_selected_hypothesis_and_causal_edge():
 
 def test_run_cycle_exposes_contradictions_and_risk():
     orchestrator = MetacognitionOrchestrator()
-    orchestrator.initialize(ExecutionContext(
-        goal="implement and verify",
-        available_tools=["read_file", "write_file"],
-    ))
+    orchestrator.initialize(
+        ExecutionContext(
+            goal="implement and verify",
+            available_tools=["read_file", "write_file"],
+        )
+    )
     orchestrator._state.simulation.paths[0].risk_factors.append("uncertain outcome")
 
     result = orchestrator.run_cycle(

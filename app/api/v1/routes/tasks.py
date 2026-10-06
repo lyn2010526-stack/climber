@@ -1,4 +1,5 @@
 """Task execution API — submit, query, cancel long-running tasks."""
+
 from __future__ import annotations
 
 import asyncio
@@ -53,6 +54,7 @@ _ws_clients: list[WebSocket] = []
 async def _ws_broadcast(task_id: str, data: dict):
     """Broadcast task progress to all connected WebSocket clients."""
     import json
+
     msg = json.dumps({"task_id": task_id, **data})
     disconnected = []
     for ws in _ws_clients:
@@ -111,9 +113,7 @@ async def list_tasks(
 async def cancel_task(task_id: str, _auth: dict = Depends(require_scopes("write"))):
     """Cancel a running task. Owners may cancel their own tasks; admins may cancel any."""
     is_admin = _auth.get("role") == "admin" or "admin" in _auth.get("scopes", [])
-    record = await task_manager.get_status(
-        task_id, owner_id=_auth["id"], include_all=is_admin
-    )
+    record = await task_manager.get_status(task_id, owner_id=_auth["id"], include_all=is_admin)
     if record is None:
         raise HTTPException(404, "Task not found")
     success = await task_manager.cancel(task_id)
@@ -185,7 +185,9 @@ async def task_events(task_id: str, _auth: dict = Depends(require_scopes("read")
 @router.get("/{task_id}/snapshot")
 async def task_snapshot(task_id: str, _auth: dict = Depends(require_scopes("read"))):
     snapshot = await task_manager.event_snapshot(
-        task_id, _auth["id"], _auth.get("role") == "admin" or "admin" in _auth.get("scopes", []),
+        task_id,
+        _auth["id"],
+        _auth.get("role") == "admin" or "admin" in _auth.get("scopes", []),
     )
     if snapshot is None:
         raise HTTPException(404, "Task not found")
@@ -193,24 +195,34 @@ async def task_snapshot(task_id: str, _auth: dict = Depends(require_scopes("read
 
 
 @router.get("/{task_id}/subtasks")
-async def list_subtasks(task_id: str, status: str | None = None, _auth: dict = Depends(require_scopes("read"))):
+async def list_subtasks(
+    task_id: str, status: str | None = None, _auth: dict = Depends(require_scopes("read"))
+):
     """List persisted subtasks, optionally filtered by lifecycle status."""
     is_admin = _auth.get("role") == "admin" or "admin" in _auth.get("scopes", [])
-    subtasks = await task_manager.list_subtasks(task_id, owner_id=_auth["id"], include_all=is_admin, status=status)
+    subtasks = await task_manager.list_subtasks(
+        task_id, owner_id=_auth["id"], include_all=is_admin, status=status
+    )
     if subtasks is None:
         raise HTTPException(404, "Task not found")
     return {"task_id": task_id, "subtasks": subtasks}
 
 
 @router.post("/{task_id}/subtasks/claim")
-async def claim_subtasks(task_id: str, req: ClaimSubtasksRequest, _auth: dict = Depends(require_scopes("write"))):
+async def claim_subtasks(
+    task_id: str, req: ClaimSubtasksRequest, _auth: dict = Depends(require_scopes("write"))
+):
     """Claim ready subtasks with a compare-and-set update."""
     if not 1 <= req.limit <= 50 or not 1 <= req.lease_seconds <= 86400:
         raise HTTPException(422, "limit must be 1..50 and lease_seconds must be 1..86400")
     is_admin = _auth.get("role") == "admin" or "admin" in _auth.get("scopes", [])
     subtasks = await task_manager.claim_subtasks(
-        task_id, owner_id=_auth["id"], agent_id=req.agent_id, limit=req.limit,
-        include_all=is_admin, lease_seconds=req.lease_seconds,
+        task_id,
+        owner_id=_auth["id"],
+        agent_id=req.agent_id,
+        limit=req.limit,
+        include_all=is_admin,
+        lease_seconds=req.lease_seconds,
     )
     if subtasks is None:
         raise HTTPException(404, "Task not found")
@@ -218,12 +230,22 @@ async def claim_subtasks(task_id: str, req: ClaimSubtasksRequest, _auth: dict = 
 
 
 @router.post("/{task_id}/subtasks/{subtask_id}/complete")
-async def complete_subtask(task_id: str, subtask_id: str, req: CompleteSubtaskRequest, _auth: dict = Depends(require_scopes("write"))):
+async def complete_subtask(
+    task_id: str,
+    subtask_id: str,
+    req: CompleteSubtaskRequest,
+    _auth: dict = Depends(require_scopes("write")),
+):
     """Report a subtask result; only the claiming agent may complete it."""
     is_admin = _auth.get("role") == "admin" or "admin" in _auth.get("scopes", [])
     subtask = await task_manager.complete_subtask(
-        task_id, subtask_id, owner_id=_auth["id"], agent_id=req.agent_id,
-        result=req.result, error=req.error, include_all=is_admin,
+        task_id,
+        subtask_id,
+        owner_id=_auth["id"],
+        agent_id=req.agent_id,
+        result=req.result,
+        error=req.error,
+        include_all=is_admin,
     )
     if subtask is None:
         raise HTTPException(409, "Subtask is missing, already completed, or owned by another agent")

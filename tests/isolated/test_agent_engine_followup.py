@@ -43,7 +43,9 @@ class _FakeQueue:
         row = {
             "id": f"row-{len(self.submitted) + 1}",
             "client_request_id": client_request_id,
-            "kind": kind, "message": message, "status": "queued",
+            "kind": kind,
+            "message": message,
+            "status": "queued",
         }
         if any(r["client_request_id"] == client_request_id for r in self.submitted):
             return next(r for r in self.submitted if r["client_request_id"] == client_request_id)
@@ -104,8 +106,8 @@ class OuterStallGuardTests(unittest.TestCase):
 
 class EnqueueFollowUpTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.engine = AgentEngine.__new__(AgentEngine)  # noqa: SLF001
-        self.engine._input_queue = _FakeQueue()  # noqa: SLF001
+        self.engine = AgentEngine.__new__(AgentEngine)
+        self.engine._input_queue = _FakeQueue()
 
     def test_enqueue_dedupes_same_message(self) -> None:
         async def run() -> None:
@@ -129,9 +131,13 @@ class PiAutoContinueTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="pi-auto-continue-")
-        self.db_engine = create_async_engine("sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "pi.db"))
+        self.db_engine = create_async_engine(
+            "sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "pi.db")
+        )
         self.factory = async_sessionmaker(self.db_engine, expire_on_commit=False)
-        tables = [m.__table__ for m in (Agent, Session, SessionInput, Turn, Message, UsageLog, CostRecord)]
+        tables = [
+            m.__table__ for m in (Agent, Session, SessionInput, Turn, Message, UsageLog, CostRecord)
+        ]
         async with self.db_engine.begin() as conn:
             await conn.run_sync(lambda db: Base.metadata.create_all(db, tables=tables))
         async with self.factory() as db:
@@ -170,26 +176,50 @@ class PiAutoContinueTests(unittest.IsolatedAsyncioTestCase):
 
         model = ScriptedModel()
         registry = ToolRegistry()
-        engine = AgentEngine(model_registry=SimpleNamespace(get_or_create=lambda **_kwargs: model),
-                             tool_registry=registry, checkpoint_store=InMemoryCheckpointStore(),
-                             run_store=RunStorage(self.factory))
+        engine = AgentEngine(
+            model_registry=SimpleNamespace(get_or_create=lambda **_kwargs: model),
+            tool_registry=registry,
+            checkpoint_store=InMemoryCheckpointStore(),
+            run_store=RunStorage(self.factory),
+        )
         engine.sandbox = engine.permission_overlay = engine.agent_mode = None
         engine._validate_tool_call = Mock(return_value=(True, "scripted test tool"))
         engine._build_tools_for_session = Mock(return_value=[])
-        for name in ("_set_agent_mode", "_send_start_notification", "_send_completion_notification",
-                     "_send_failure_notification", "_trigger_memory_reflection", "_record_profile_outcome", "_tick_evolution"):
+        for name in (
+            "_set_agent_mode",
+            "_send_start_notification",
+            "_send_completion_notification",
+            "_send_failure_notification",
+            "_trigger_memory_reflection",
+            "_record_profile_outcome",
+            "_tick_evolution",
+        ):
             setattr(engine, name, Mock())
-        for name in ("_inject_memory_context", "_inject_core_memory", "_inject_profile_context",
-                     "_store_episodic_memory", "_archive_instruction"):
+        for name in (
+            "_inject_memory_context",
+            "_inject_core_memory",
+            "_inject_profile_context",
+            "_store_episodic_memory",
+            "_archive_instruction",
+        ):
             setattr(engine, name, AsyncMock())
-        session = AgentSession(SessionConfig(session_id="s", user_id="u", agent_id="",
-                                             provider="scripted", model_id="fake",
-                                             max_iterations=max_iterations))
+        session = AgentSession(
+            SessionConfig(
+                session_id="s",
+                user_id="u",
+                agent_id="",
+                provider="scripted",
+                model_id="fake",
+                max_iterations=max_iterations,
+            )
+        )
         session.context["pi_auto_continue"] = True
         return engine, session, model
 
     async def test_agent_self_enqueues_and_outer_loop_auto_runs(self):
-        engine, session, _ = self.engine([ChatResult(content="第一轮结果"), ChatResult(content="第二轮结果")])
+        engine, session, _ = self.engine(
+            [ChatResult(content="第一轮结果"), ChatResult(content="第二轮结果")]
+        )
         engine._decide_followup = AsyncMock(
             side_effect=[
                 {"finished": False, "next_subtask": "下一步：生成报告", "reason": "继续"},
@@ -205,7 +235,7 @@ class PiAutoContinueTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(loop_statuses), 2)
         self.assertIn("下一步：生成报告", loop_statuses[0]["followup_queue"])
         self.assertEqual(loop_statuses[1]["outer_round"], 2)
-        rows = await engine._input_queue.list("s", "u")  # noqa: SLF001
+        rows = await engine._input_queue.list("s", "u")
         self.assertEqual([r["message"] for r in rows], ["下一步：生成报告"])
         self.assertEqual(rows[0]["status"], "completed")
         self.assertEqual(rows[0]["kind"], "follow_up")
@@ -217,13 +247,13 @@ class PiAutoContinueTests(unittest.IsolatedAsyncioTestCase):
         )
         events = [e async for e in engine.run(session, "initial")]
         self.assertEqual(sum(e.type == AgentEventType.TURN_STARTED for e in events), 1)
-        self.assertEqual((await engine._input_queue.list("s", "u")), [])  # noqa: SLF001
+        self.assertEqual((await engine._input_queue.list("s", "u")), [])
 
     async def test_outer_cap_stops_auto_continue(self):
         engine, session, _ = self.engine([ChatResult(content="一轮即止")], max_iterations=1)
         engine._decide_followup = AsyncMock()
         events = [e async for e in engine.run(session, "initial")]
-        engine._decide_followup.assert_not_called()  # noqa: SLF001
+        engine._decide_followup.assert_not_called()
         final_done = next(e for e in events if e.type == AgentEventType.DONE)
         self.assertEqual(final_done.data["status"], "max_iterations_reached")
 
@@ -232,7 +262,7 @@ class PiAutoContinueTests(unittest.IsolatedAsyncioTestCase):
         session.context["pi_auto_continue"] = False
         events = [e async for e in engine.run(session, "initial")]
         self.assertEqual(sum(e.type == AgentEventType.TURN_STARTED for e in events), 1)
-        self.assertEqual((await engine._input_queue.list("s", "u")), [])  # noqa: SLF001
+        self.assertEqual((await engine._input_queue.list("s", "u")), [])
 
 
 if __name__ == "__main__":

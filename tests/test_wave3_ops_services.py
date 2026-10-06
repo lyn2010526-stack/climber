@@ -3,6 +3,7 @@
 Self-contained unittest module; does not depend on the shared pytest
 fixtures so it can run standalone with `python -m pytest`.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -47,7 +48,10 @@ class OllamaQueueNoCallbackTest(unittest.IsolatedAsyncioTestCase):
         queue._execute_payload = lambda req: _record(executed, req)
         queue._ollama_online = True
         queue._last_check = time.time()
-        with patch.object(ollama_module.logger, "info"), patch.object(ollama_module.logger, "warning"):
+        with (
+            patch.object(ollama_module.logger, "info"),
+            patch.object(ollama_module.logger, "warning"),
+        ):
             await queue.process_queue()
 
         self.assertEqual(executed, ["r1"])
@@ -65,7 +69,9 @@ class SettingsServiceInjectionTest(unittest.IsolatedAsyncioTestCase):
         engine = create_async_engine(f"sqlite+aiosqlite:///{tmp.name}/s.db")
         self.addAsyncCleanup(engine.dispose)
         async with engine.begin() as conn:
-            await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=[UserSettings.__table__]))
+            await conn.run_sync(
+                lambda c: Base.metadata.create_all(c, tables=[UserSettings.__table__])
+            )
         return engine
 
     async def test_uses_injected_db_and_get_or_creates(self):
@@ -78,7 +84,9 @@ class SettingsServiceInjectionTest(unittest.IsolatedAsyncioTestCase):
         async with sessions() as db:
             row = (
                 await db.execute(
-                    __import__("sqlalchemy").select(UserSettings).where(UserSettings.user_id == "alice")
+                    __import__("sqlalchemy")
+                    .select(UserSettings)
+                    .where(UserSettings.user_id == "alice")
                 )
             ).scalar_one_or_none()
             self.assertIsNotNone(row)
@@ -92,7 +100,9 @@ class SettingsServiceInjectionTest(unittest.IsolatedAsyncioTestCase):
         async with sessions() as db:
             row = (
                 await db.execute(
-                    __import__("sqlalchemy").select(UserSettings).where(UserSettings.user_id == "bob")
+                    __import__("sqlalchemy")
+                    .select(UserSettings)
+                    .where(UserSettings.user_id == "bob")
                 )
             ).scalar_one_or_none()
             self.assertIsNotNone(row)
@@ -198,7 +208,9 @@ class EventBusPersistenceTest(unittest.IsolatedAsyncioTestCase):
 class NotificationDeliveryTest(unittest.IsolatedAsyncioTestCase):
     def test_compute_availability(self):
         with patch("app.services.notifications.SMTP_CONFIGURED", True):
-            status = compute_delivery_availability({"webhook_configured": True, "email_address": "a@b.c"})
+            status = compute_delivery_availability(
+                {"webhook_configured": True, "email_address": "a@b.c"}
+            )
             self.assertTrue(status["webhook"])
             self.assertTrue(status["email"])
             self.assertTrue(status["available"])

@@ -50,6 +50,7 @@ def get_chroma_collection():
     if _chroma_collection is None:
         try:
             import chromadb
+
             _chroma_client = chromadb.PersistentClient(path="./data/chroma")
             _chroma_collection = _chroma_client.get_or_create_collection(
                 name="documents",
@@ -72,9 +73,7 @@ def _delete_chroma_documents(doc_ids: list[str], user_id: str) -> None:
         try:
             # ChromaDB rejects multi-key where clauses in delete/query (v1.5+),
             # so combine the conditions with an explicit $and filter.
-            collection.delete(
-                where={"$and": [{"doc_id": doc_id}, {"user_id": user_id}]}
-            )
+            collection.delete(where={"$and": [{"doc_id": doc_id}, {"user_id": user_id}]})
         except Exception as exc:
             logger.warning("documents.chroma_delete_failed", doc_id=doc_id, error=str(exc))
 
@@ -164,14 +163,26 @@ async def list_documents(request: Request):
     user_id = current_user_id(request)
     async with async_session() as session:
         from sqlalchemy import select
+
         result = await session.execute(
-            select(Document).where(
+            select(Document)
+            .where(
                 Document.user_id == user_id,
                 Document.status != "superseded",
-            ).order_by(Document.created_at.desc())
+            )
+            .order_by(Document.created_at.desc())
         )
         docs = result.scalars().all()
-        return [{"id": d.id, "name": d.filename, "status": d.status, "chunks": d.chunk_count, "size": d.size_bytes} for d in docs]
+        return [
+            {
+                "id": d.id,
+                "name": d.filename,
+                "status": d.status,
+                "chunks": d.chunk_count,
+                "size": d.size_bytes,
+            }
+            for d in docs
+        ]
 
 
 @router.post("/")
@@ -253,12 +264,14 @@ async def search_documents(request: Request, query: str, n_results: int = 5):
                     for i, doc in enumerate(response["documents"][0]):
                         meta = response["metadatas"][0][i] if response.get("metadatas") else {}
                         distance = response["distances"][0][i] if response.get("distances") else 0
-                        q_results.append({
-                            "id": str(meta.get("doc_id", "") or f"vec-{i}"),
-                            "text": doc,
-                            "metadata": meta,
-                            "score": 1.0 - distance,
-                        })
+                        q_results.append(
+                            {
+                                "id": str(meta.get("doc_id", "") or f"vec-{i}"),
+                                "text": doc,
+                                "metadata": meta,
+                                "score": 1.0 - distance,
+                            }
+                        )
                 per_query.append(q_results)
             # Fuse the per-query lists with reciprocal rank fusion.
             fused = reciprocal_rank_fusion(per_query, k=60)
@@ -278,20 +291,26 @@ async def search_documents(request: Request, query: str, n_results: int = 5):
     # already returned hits for other documents.
     async with async_session() as session:
         from sqlalchemy import or_, select
+
         pattern = f"%{query}%"
         result = await session.execute(
-            select(Document).where(
+            select(Document)
+            .where(
                 Document.user_id == user_id,
                 Document.status != "superseded",
-                or_(Document.filename.ilike(pattern), Document.content.ilike(pattern))
-            ).limit(n_results * 2)
+                or_(Document.filename.ilike(pattern), Document.content.ilike(pattern)),
+            )
+            .limit(n_results * 2)
         )
-        like_results.extend({
-            "id": d.id,
-            "text": d.content or "",
-            "metadata": {"filename": d.filename, "doc_id": d.id},
-            "score": 0.5,
-        } for d in result.scalars().all())
+        like_results.extend(
+            {
+                "id": d.id,
+                "text": d.content or "",
+                "metadata": {"filename": d.filename, "doc_id": d.id},
+                "score": 0.5,
+            }
+            for d in result.scalars().all()
+        )
 
     # Merge vector and LIKE hits, deduplicating by document id.
     merged: list[dict[str, Any]] = []
@@ -319,13 +338,16 @@ async def delete_document(
     user_id = current_user_id(request)
     async with async_session() as session:
         from sqlalchemy import delete, select
+
         result = await session.execute(
             select(Document).where(Document.id == doc_id, Document.user_id == user_id)
         )
         doc = result.scalar_one_or_none()
         if not doc:
             raise HTTPException(status_code=404, detail="Document not found")
-        await session.execute(delete(Document).where(Document.id == doc_id, Document.user_id == user_id))
+        await session.execute(
+            delete(Document).where(Document.id == doc_id, Document.user_id == user_id)
+        )
         await session.commit()
 
     # Remove matching chunks from Chroma.

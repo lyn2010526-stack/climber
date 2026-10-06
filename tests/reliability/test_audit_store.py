@@ -6,6 +6,7 @@ import asyncio
 import tempfile
 import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import patch
 
 from httpx import ASGITransport, AsyncClient
@@ -24,17 +25,24 @@ class AuditStoreTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="audit-store-")
         self.addCleanup(self.tmp.cleanup)
-        self.db_engine = create_async_engine("sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "audit.db"))
+        self.db_engine = create_async_engine(
+            "sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "audit.db")
+        )
         self.addAsyncCleanup(self.db_engine.dispose)
         self.factory = async_sessionmaker(self.db_engine, expire_on_commit=False)
         async with self.db_engine.begin() as conn:
-            await conn.run_sync(lambda db: Base.metadata.create_all(
-                db, tables=[AuditLog.__table__, Session.__table__]))
+            await conn.run_sync(
+                lambda db: Base.metadata.create_all(
+                    db, tables=[AuditLog.__table__, Session.__table__]
+                )
+            )
         self.store = DurableAuditStore(self.factory)
 
     async def test_login_success_and_failure(self):
         self.assertTrue(await self.store.log_login(user_id="42", username="alice", success=True))
-        self.assertTrue(await self.store.log_login(username="alice", success=False, reason="bad password"))
+        self.assertTrue(
+            await self.store.log_login(username="alice", success=False, reason="bad password")
+        )
         entries = await self.store.list_events()
         self.assertEqual(len(entries), 2)
         success = next(e for e in entries if e["result"] == "granted")
@@ -48,11 +56,22 @@ class AuditStoreTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_permission_file_and_agent_events(self):
         await self.store.log_permission_decision(
-            session_id="s1", user_id="u1", tool_name="write_file", allowed=False, reason="read-only tier")
+            session_id="s1",
+            user_id="u1",
+            tool_name="write_file",
+            allowed=False,
+            reason="read-only tier",
+        )
         await self.store.log_file_change(
-            session_id="s1", user_id="u1", operation="write", path="/tmp/a.py", details={"bytes": 12})
+            session_id="s1",
+            user_id="u1",
+            operation="write",
+            path="/tmp/a.py",
+            details={"bytes": 12},
+        )
         await self.store.log_agent_action(
-            session_id="s1", user_id="u1", action="run_started", details={"turn_id": "t1"})
+            session_id="s1", user_id="u1", action="run_started", details={"turn_id": "t1"}
+        )
         self.assertEqual(await self.store.count_events(), 3)
         entry = (await self.store.list_events(action="permission:decision"))[0]
         self.assertEqual(entry["details"]["allowed"], False)
@@ -93,7 +112,7 @@ class _Session:
     agent_id = "agent"
     user_id = "user"
     session_id = "session-1"
-    _approved_tool_calls: set[str] = set()
+    _approved_tool_calls: ClassVar[set[str]] = set()
 
     def __init__(self, config: PermissionConfig) -> None:
         self.permission_config = config
@@ -103,17 +122,23 @@ class PermissionMirrorTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="audit-mirror-")
         self.addCleanup(self.tmp.cleanup)
-        self.db_engine = create_async_engine("sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "mirror.db"))
+        self.db_engine = create_async_engine(
+            "sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "mirror.db")
+        )
         self.addAsyncCleanup(self.db_engine.dispose)
         self.factory = async_sessionmaker(self.db_engine, expire_on_commit=False)
         async with self.db_engine.begin() as conn:
-            await conn.run_sync(lambda db: Base.metadata.create_all(db, tables=[AuditLog.__table__]))
+            await conn.run_sync(
+                lambda db: Base.metadata.create_all(db, tables=[AuditLog.__table__])
+            )
         self.store = DurableAuditStore(self.factory)
 
     async def test_permission_decision_mirrors_durably(self):
         config = PermissionConfig(tier=PermissionTier.READ_ONLY)
         with patch("app.core.observability.audit_store.audit_log", self.store):
-            allowed, _ = validate_tool_call(_Session(config), "write_file", {"path": "a.py", "content": "x"})
+            allowed, _ = validate_tool_call(
+                _Session(config), "write_file", {"path": "a.py", "content": "x"}
+            )
             self.assertFalse(allowed)
             for _ in range(40):
                 if await self.store.count_events(action="permission:decision"):
@@ -141,6 +166,8 @@ class AuditLogEndpointTests(unittest.IsolatedAsyncioTestCase):
             actions = {entry["action"] for entry in payload["entries"]}
             self.assertIn("auth:login", actions)
             self.assertIn("agent:run_started", actions)
-            filtered = await client.get("/api/v1/observability/audit-log", params={"severity": "info"})
+            filtered = await client.get(
+                "/api/v1/observability/audit-log", params={"severity": "info"}
+            )
             self.assertEqual(filtered.status_code, 200)
             self.assertGreaterEqual(filtered.json()["total"], 1)

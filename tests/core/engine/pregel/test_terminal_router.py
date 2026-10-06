@@ -29,7 +29,9 @@ async def test_conditional_entry_returning_end_completes_cleanly():
 
 
 async def test_conditional_entry_returning_uppercase_end_is_ignored():
-    result = await build_conditional_entry(lambda state: "END").invoke({}, {"thread_id": "END-entry"})
+    result = await build_conditional_entry(lambda state: "END").invoke(
+        {}, {"thread_id": "END-entry"}
+    )
 
     assert result.get("ran") is None
 
@@ -111,7 +113,9 @@ async def test_execute_node_defends_against_terminal_sentinels():
     engine = PregelEngine(graph)
 
     for sentinel in ("__end__", "END"):
-        result = await engine._execute_node(sentinel, GraphState(), {}, ExecutionContext(thread_id="x"))
+        result = await engine._execute_node(
+            sentinel, GraphState(), {}, ExecutionContext(thread_id="x")
+        )
         assert result is None
 
 
@@ -154,4 +158,3 @@ async def test_astream_resume_after_terminal_interrupt_does_not_replay_entry():
     # Entry node must not be re-executed on resume.
     assert calls == ["a", "b"]
     assert resumed[-1].get("b") is True
-

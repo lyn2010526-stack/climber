@@ -105,10 +105,7 @@ class ResultAggregator:
         consensus = self.get_consensus(task_id)
         if not consensus.consensus_reached:
             return list(results)
-        return [
-            r for r in results
-            if r.agent_id in consensus.divergent_agents
-        ]
+        return [r for r in results if r.agent_id in consensus.divergent_agents]
 
     def get_weighted_result(self, task_id: str) -> AggregationResult:
         """Get result using weighted average strategy."""
@@ -187,10 +184,7 @@ class ResultAggregator:
         results: list[AgentResult],
     ) -> AggregationResult:
         """Weighted average: combine numeric results by confidence weight."""
-        numeric_results = [
-            (r, r.confidence) for r in results
-            if isinstance(r.result, (int, float))
-        ]
+        numeric_results = [(r, r.confidence) for r in results if isinstance(r.result, (int, float))]
 
         if not numeric_results:
             return self._best_confidence(task_id, results)
@@ -211,13 +205,9 @@ class ResultAggregator:
         consensus_reached = max_confidence >= self._consensus_threshold and numerically_agreed
 
         consensus_agents = {
-            r.agent_id
-            for r, _ in numeric_results
-            if abs(r.result - avg_value) <= tolerance
+            r.agent_id for r, _ in numeric_results if abs(r.result - avg_value) <= tolerance
         }
-        divergent = [
-            r.agent_id for r in results if r.agent_id not in consensus_agents
-        ]
+        divergent = [r.agent_id for r in results if r.agent_id not in consensus_agents]
 
         return AggregationResult(
             task_id=task_id,
@@ -239,8 +229,7 @@ class ResultAggregator:
         consensus_reached = best.confidence >= self._consensus_threshold
 
         divergent = [
-            r.agent_id for r in results
-            if r.agent_id != best.agent_id and r.result != best.result
+            r.agent_id for r in results if r.agent_id != best.agent_id and r.result != best.result
         ]
 
         return AggregationResult(

@@ -61,6 +61,7 @@ app_secret_key: str = Field(default_factory=lambda: secrets.token_hex(32))
 ```python
 LOCAL_USER_ID = "default-user"
 
+
 def get_current_user() -> str:
     return LOCAL_USER_ID
 ```

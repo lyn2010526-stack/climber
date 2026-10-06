@@ -52,20 +52,26 @@ class MemoryContextBypass:
             l0, l1 = await self._sidecars.read_pair(user_id, scope)
             if l0 is None:
                 continue
-            summaries.append({
-                "scope": scope,
-                "abstract": l0.body,
-                "overview": l1.body if include_l1 and l1 is not None else "",
-            })
+            summaries.append(
+                {
+                    "scope": scope,
+                    "abstract": l0.body,
+                    "overview": l1.body if include_l1 and l1 is not None else "",
+                }
+            )
         hits: list[dict[str, Any]] = []
         if query and "memories" in selected:
-            result = await self._retriever.search(user_id, "memories", query, level=2, top_k=memory_top_k)
+            result = await self._retriever.search(
+                user_id, "memories", query, level=2, top_k=memory_top_k
+            )
             for hit in result["hits"]:
                 meta = hit.get("metadata") or {}
-                hits.append({
-                    "memory_type": meta.get("memory_type", "memory"),
-                    "content": hit.get("text", ""),
-                })
+                hits.append(
+                    {
+                        "memory_type": meta.get("memory_type", "memory"),
+                        "content": hit.get("text", ""),
+                    }
+                )
         return {
             "content": self._render(summaries, include_l1=include_l1),
             "injected_summaries": len(summaries),

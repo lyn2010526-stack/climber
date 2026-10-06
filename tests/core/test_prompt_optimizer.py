@@ -21,16 +21,32 @@ def fixture(monkeypatch):
     monkeypatch.setenv("USER_PROMPT_OPT_MODE", "auto")
     original = "优化它, 保留 {{target}}, 禁止部署"
     session = SimpleNamespace(
-        session_id="s", mode="act", provider="openai", model_id="fake",
-        api_key="project-test-key", base_url="https://project.example/v1",
+        session_id="s",
+        mode="act",
+        provider="openai",
+        model_id="fake",
+        api_key="project-test-key",
+        base_url="https://project.example/v1",
         messages=[{"role": "user", "content": original}],
     )
-    adapter = SimpleNamespace(chat=AsyncMock(return_value=ChatResult(
-        content=json.dumps({"evidence": [original], "questions": ["它具体指什么?"],
-                            "missing_information": True}, ensure_ascii=False),
-        finish_reason="stop",
-    )))
-    engine = SimpleNamespace(model_registry=SimpleNamespace(get_or_create=Mock(return_value=adapter)))
+    adapter = SimpleNamespace(
+        chat=AsyncMock(
+            return_value=ChatResult(
+                content=json.dumps(
+                    {
+                        "evidence": [original],
+                        "questions": ["它具体指什么?"],
+                        "missing_information": True,
+                    },
+                    ensure_ascii=False,
+                ),
+                finish_reason="stop",
+            )
+        )
+    )
+    engine = SimpleNamespace(
+        model_registry=SimpleNamespace(get_or_create=Mock(return_value=adapter))
+    )
     return engine, session, adapter, original
 
 
@@ -48,7 +64,9 @@ async def test_reference_preserves_raw_constraints_placeholders_and_project_cred
     assert payload["clarification_required"] is True
     assert "它具体指什么?" in payload["questions"]
     engine.model_registry.get_or_create.assert_called_once_with(
-        provider="openai", model_id="fake", api_key="project-test-key",
+        provider="openai",
+        model_id="fake",
+        api_key="project-test-key",
         base_url="https://project.example/v1",
     )
     kwargs = adapter.chat.call_args.kwargs
@@ -60,12 +78,17 @@ async def test_reference_preserves_raw_constraints_placeholders_and_project_cred
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("mode", "original", "autonomous"), [
-    ("off", "优化它", False), ("always", "优化它", False),
-    ("auto", "实现二分查找, 必须返回索引", False),
-    ("auto", "", False), ("auto", "x" * 2001, False),
-    ("auto", "优化它", True),
-])
+@pytest.mark.parametrize(
+    ("mode", "original", "autonomous"),
+    [
+        ("off", "优化它", False),
+        ("always", "优化它", False),
+        ("auto", "实现二分查找, 必须返回索引", False),
+        ("auto", "", False),
+        ("auto", "x" * 2001, False),
+        ("auto", "优化它", True),
+    ],
+)
 async def test_skip_without_model_call(fixture, monkeypatch, mode, original, autonomous):
     engine, session, adapter, _ = fixture
     monkeypatch.setenv("USER_PROMPT_OPT_MODE", mode)
@@ -80,8 +103,10 @@ async def test_skip_without_model_call(fixture, monkeypatch, mode, original, aut
 @pytest.mark.asyncio
 async def test_low_confidence_alone_triggers(fixture, monkeypatch):
     engine, session, adapter, original = fixture
-    monkeypatch.setattr("app.core.prompt_optimizer.service.understand_instruction", lambda *_a, **_k:
-                        InstructionUnderstanding(original, original, confidence=0.2))
+    monkeypatch.setattr(
+        "app.core.prompt_optimizer.service.understand_instruction",
+        lambda *_a, **_k: InstructionUnderstanding(original, original, confidence=0.2),
+    )
     await maybe_optimize_instruction(engine, session, original)
     adapter.chat.assert_awaited_once()
     assert len(session.messages) == 2
@@ -90,22 +115,31 @@ async def test_low_confidence_alone_triggers(fixture, monkeypatch):
 @pytest.mark.asyncio
 async def test_high_confidence_needs_clarification_triggers(fixture, monkeypatch):
     engine, session, adapter, original = fixture
-    monkeypatch.setattr("app.core.prompt_optimizer.service.understand_instruction", lambda *_a, **_k:
-                        InstructionUnderstanding(original, original, confidence=0.99,
-                                                 progress="needs_clarification"))
+    monkeypatch.setattr(
+        "app.core.prompt_optimizer.service.understand_instruction",
+        lambda *_a, **_k: InstructionUnderstanding(
+            original, original, confidence=0.99, progress="needs_clarification"
+        ),
+    )
     await maybe_optimize_instruction(engine, session, original)
     adapter.chat.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("content", [
-    "", "not json", "[]", '{"evidence":[]}',
-    '{"evidence":["发布到生产"],"questions":[],"missing_information":false}',
-    '{"evidence":[3],"questions":[],"missing_information":false}',
-    '{"evidence":["优化它"],"questions":"ask","missing_information":true}',
-    '{"evidence":["优化它"],"questions":[],"missing_information":"yes"}',
-    "x" * 4097,
-])
+@pytest.mark.parametrize(
+    "content",
+    [
+        "",
+        "not json",
+        "[]",
+        '{"evidence":[]}',
+        '{"evidence":["发布到生产"],"questions":[],"missing_information":false}',
+        '{"evidence":[3],"questions":[],"missing_information":false}',
+        '{"evidence":["优化它"],"questions":"ask","missing_information":true}',
+        '{"evidence":["优化它"],"questions":[],"missing_information":"yes"}',
+        "x" * 4097,
+    ],
+)
 async def test_invalid_or_scope_expanding_result_keeps_original(fixture, content):
     engine, session, adapter, original = fixture
     adapter.chat.return_value.content = content
@@ -128,9 +162,13 @@ async def test_unfinished_response_falls_back(fixture, finish):
 async def test_missing_goal_and_missing_question_get_local_clarification(fixture):
     engine, session, adapter, _ = fixture
     session.messages[-1]["content"] = "继续"
-    adapter.chat.return_value.content = json.dumps({
-        "evidence": ["继续"], "questions": [], "missing_information": True,
-    })
+    adapter.chat.return_value.content = json.dumps(
+        {
+            "evidence": ["继续"],
+            "questions": [],
+            "missing_information": True,
+        }
+    )
     await maybe_optimize_instruction(engine, session, "继续")
     payload = json.loads(session.messages[0]["content"].split("\n")[-1])
     assert payload["clarification_required"]
@@ -141,11 +179,17 @@ async def test_missing_goal_and_missing_question_get_local_clarification(fixture
 @pytest.mark.asyncio
 async def test_model_reported_missing_info_always_gets_a_question(fixture, monkeypatch):
     engine, session, adapter, original = fixture
-    monkeypatch.setattr("app.core.prompt_optimizer.service.understand_instruction", lambda *_a, **_k:
-                        InstructionUnderstanding(original, original, confidence=0.2))
-    adapter.chat.return_value.content = json.dumps({
-        "evidence": [original], "questions": [], "missing_information": True,
-    })
+    monkeypatch.setattr(
+        "app.core.prompt_optimizer.service.understand_instruction",
+        lambda *_a, **_k: InstructionUnderstanding(original, original, confidence=0.2),
+    )
+    adapter.chat.return_value.content = json.dumps(
+        {
+            "evidence": [original],
+            "questions": [],
+            "missing_information": True,
+        }
+    )
     await maybe_optimize_instruction(engine, session, original)
     payload = json.loads(session.messages[0]["content"].split("\n")[-1])
     assert payload["clarification_required"]
@@ -220,8 +264,10 @@ async def test_tool_response_is_rejected_even_with_valid_content(fixture):
 @pytest.mark.asyncio
 async def test_multimodal_user_content_is_untouched(fixture):
     engine, session, _, original = fixture
-    content = [{"type": "text", "text": original},
-               {"type": "image_url", "image_url": {"url": "https://project.example/image.png"}}]
+    content = [
+        {"type": "text", "text": original},
+        {"type": "image_url", "image_url": {"url": "https://project.example/image.png"}},
+    ]
     session.messages[-1]["content"] = content
     await maybe_optimize_instruction(engine, session, original)
     assert session.messages[-1]["content"] is content
@@ -235,7 +281,10 @@ def test_only_owned_system_references_expire(fixture):
         {"role": "user", "content": original, "source": "prompt_optimizer"},
         {"role": "system", "content": "memory", "source": "memory"},
     ]
-    session.messages = [*preserved, {"role": "system", "content": "old", "source": "prompt_optimizer"}]
+    session.messages = [
+        *preserved,
+        {"role": "system", "content": "old", "source": "prompt_optimizer"},
+    ]
     clear_reference(session)
     assert session.messages == preserved
 

@@ -22,7 +22,9 @@ _factories: dict[type[T] | str, Callable[[], T]] = {}
 _scoped: dict[str, dict[type[T] | str, T]] = {}
 
 
-def register(service_type: type[T] | str, factory: Callable[[], T] | T, singleton: bool = True) -> None:
+def register(
+    service_type: type[T] | str, factory: Callable[[], T] | T, singleton: bool = True
+) -> None:
     _container[service_type] = (factory, singleton)
 
 

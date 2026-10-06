@@ -35,6 +35,7 @@ class SessionConfig:
     Encapsulates all session parameters to avoid excessive function arguments.
     All identity fields default to empty strings so partial configs are valid.
     """
+
     session_id: str = ""
     agent_id: str = ""
     user_id: str = ""
@@ -88,7 +89,11 @@ class AgentSession:
         Supports either a single SessionConfig positional argument or explicit
         keyword arguments (optionally combined with a session_config override).
         """
-        base = copy.deepcopy(config if config is not None else (session_config if session_config is not None else SessionConfig()))
+        base = copy.deepcopy(
+            config
+            if config is not None
+            else (session_config if session_config is not None else SessionConfig())
+        )
         overrides = {
             "session_id": session_id,
             "agent_id": agent_id,
@@ -133,7 +138,9 @@ class AgentSession:
         self.tool_results: list[dict[str, Any]] = []
         self.session_memory = _SessionMemory(self)
         self.current_turn_id: str | None = None
-        self.state_machine = TaskStateMachine(task_id=self.session_id or "session", initial_state=TaskState.PENDING)
+        self.state_machine = TaskStateMachine(
+            task_id=self.session_id or "session", initial_state=TaskState.PENDING
+        )
         self.debug_attempts: dict[str, int] = {}
         self.restart_count: int = 0
         self.paused_at: str | None = None
@@ -196,11 +203,7 @@ class AgentSession:
         config_data["api_key"] = api_key
         allowed_config_fields = SessionConfig.__dataclass_fields__
         config = SessionConfig(
-            **{
-                key: value
-                for key, value in config_data.items()
-                if key in allowed_config_fields
-            }
+            **{key: value for key, value in config_data.items() if key in allowed_config_fields}
         )
         raw_context = snapshot.get("context")
         session = cls(
@@ -208,9 +211,7 @@ class AgentSession:
             context=copy.deepcopy(raw_context) if isinstance(raw_context, dict) else {},
         )
         raw_messages = snapshot.get("messages")
-        session.messages = (
-            copy.deepcopy(raw_messages) if isinstance(raw_messages, list) else []
-        )
+        session.messages = copy.deepcopy(raw_messages) if isinstance(raw_messages, list) else []
         raw_tool_results = snapshot.get("tool_results")
         session.tool_results = (
             copy.deepcopy(raw_tool_results) if isinstance(raw_tool_results, list) else []
@@ -276,6 +277,7 @@ class AgentSession:
         """Initialize the permission system for this session."""
         try:
             from app.core.permission_rules import get_default_config
+
             self.permission_config = get_default_config()
         except Exception:
             self.permission_config = None
@@ -302,7 +304,11 @@ class AgentSession:
         """Seconds remaining before the session deadline."""
         if self._session_deadline is not None:
             return max(0.0, self._session_deadline - time.monotonic())
-        return self.session_config.timeouts.per_session_seconds if self.session_config.timeouts else 1800.0
+        return (
+            self.session_config.timeouts.per_session_seconds
+            if self.session_config.timeouts
+            else 1800.0
+        )
 
     def stop(self) -> None:
         """Request the session to stop processing."""
@@ -361,6 +367,7 @@ class AgentSession:
             The created asyncio Task.
         """
         import asyncio
+
         task = asyncio.create_task(coro)
         self._pending_tasks.add(task)
 
@@ -375,6 +382,7 @@ class AgentSession:
     async def _await_pending_tasks(self) -> None:
         """Await all pending fire-and-forget tasks and clear the set."""
         import asyncio
+
         while self._pending_tasks:
             tasks = tuple(self._pending_tasks)
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -382,12 +390,20 @@ class AgentSession:
 
     def start_session_timer(self) -> None:
         """Start the overall session deadline timer."""
-        timeout = self.session_config.timeouts.per_session_seconds if self.session_config.timeouts else 1800.0
+        timeout = (
+            self.session_config.timeouts.per_session_seconds
+            if self.session_config.timeouts
+            else 1800.0
+        )
         self._session_deadline = time.monotonic() + timeout
 
     def start_iteration_timer(self) -> None:
         """Start the per-iteration deadline timer."""
-        timeout = self.session_config.timeouts.per_iteration_seconds if self.session_config.timeouts else 120.0
+        timeout = (
+            self.session_config.timeouts.per_iteration_seconds
+            if self.session_config.timeouts
+            else 120.0
+        )
         self._iteration_deadline = time.monotonic() + timeout
 
     def check_timeouts(self) -> None:
@@ -401,7 +417,9 @@ class AgentSession:
         if self._session_deadline is not None and now > self._session_deadline:
             raise SessionTimeoutError(f"Session deadline exceeded for session '{self.session_id}'")
         if self._iteration_deadline is not None and now > self._iteration_deadline:
-            raise IterationTimeoutError(f"Iteration deadline exceeded for session '{self.session_id}'")
+            raise IterationTimeoutError(
+                f"Iteration deadline exceeded for session '{self.session_id}'"
+            )
 
     async def graceful_shutdown(self) -> None:
         """Gracefully stop the session, draining pending tasks and closing metrics."""

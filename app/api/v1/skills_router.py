@@ -61,7 +61,9 @@ async def _factory_agent_payload(user_id: str, data: dict[str, Any]) -> dict[str
     if bool(requested_provider) != bool(requested_model):
         raise HTTPException(status_code=422, detail="provider and model must be selected together")
     if agent_id and requested_provider:
-        raise HTTPException(status_code=422, detail="Select either an agent or a provider/model pair")
+        raise HTTPException(
+            status_code=422, detail="Select either an agent or a provider/model pair"
+        )
 
     async with async_session() as db:
         agent_query = (
@@ -124,9 +126,7 @@ async def _factory_agent_payload(user_id: str, data: dict[str, Any]) -> dict[str
         agent_tools = list(agent.tool_ids or []) if agent else []
 
     requested_tools = [
-        tool
-        for skill in data.get("skills", [])
-        for tool in _FACTORY_TOOLS.get(str(skill), [])
+        tool for skill in data.get("skills", []) for tool in _FACTORY_TOOLS.get(str(skill), [])
     ]
     tools = list(dict.fromkeys(requested_tools or agent_tools))
     prompt_name = str(data.get("prompt_template", "senior-engineer"))
@@ -203,19 +203,20 @@ async def run_autonomous_skill(
 
     owner_id = current_user_id(request)
     task_payload = await _factory_agent_payload(owner_id, data)
-    task_id = await task_manager.submit(
-        "factory_run", task_payload, owner_id=owner_id
-    )
+    task_id = await task_manager.submit("factory_run", task_payload, owner_id=owner_id)
 
     async def stream() -> AsyncIterator[str]:
         queue = task_manager.subscribe(task_id)
         try:
-            yield _sse("factory_config", {
-                "task_id": task_id,
-                "agent_id": task_payload["agent_id"],
-                "provider": task_payload["provider"],
-                "model": task_payload["model"],
-            })
+            yield _sse(
+                "factory_config",
+                {
+                    "task_id": task_id,
+                    "agent_id": task_payload["agent_id"],
+                    "provider": task_payload["provider"],
+                    "model": task_payload["model"],
+                },
+            )
             while True:
                 if await request.is_disconnected():
                     await task_manager.cancel(task_id)
@@ -225,9 +226,7 @@ async def run_autonomous_skill(
                     yield _sse(event["type"], event["data"])
                 except TimeoutError:
                     pass
-                status = await task_manager.get_status(
-                    task_id, owner_id=owner_id
-                )
+                status = await task_manager.get_status(task_id, owner_id=owner_id)
                 if status is None or status["status"] in {
                     TaskStatus.COMPLETED.value,
                     TaskStatus.FAILED.value,
@@ -237,16 +236,22 @@ async def run_autonomous_skill(
                         event = queue.get_nowait()
                         yield _sse(event["type"], event["data"])
                     if status is None:
-                        yield _sse("factory_failed", {
-                            "task_id": task_id,
-                            "error": "Factory task status is unavailable",
-                        })
+                        yield _sse(
+                            "factory_failed",
+                            {
+                                "task_id": task_id,
+                                "error": "Factory task status is unavailable",
+                            },
+                        )
                     elif status["status"] in {TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}:
-                        yield _sse("factory_failed", {
-                            "task_id": task_id,
-                            "status": status["status"],
-                            "error": status.get("error") or status["status"],
-                        })
+                        yield _sse(
+                            "factory_failed",
+                            {
+                                "task_id": task_id,
+                                "status": status["status"],
+                                "error": status.get("error") or status["status"],
+                            },
+                        )
                     else:
                         yield _sse("factory_completed", {"task_id": task_id})
                     break

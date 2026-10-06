@@ -38,6 +38,7 @@ class SubagentState(StrEnum):
 @dataclass
 class SubagentSpec:
     """Specification for a sub-agent task."""
+
     task_id: str = field(default_factory=lambda: str(uuid.uuid4())[:12])
     description: str = ""
     model: str = ""
@@ -55,6 +56,7 @@ class SubagentSpec:
 @dataclass
 class SubagentUsage:
     """Token and cost tracking for a single sub-agent."""
+
     tokens_in: int = 0
     tokens_out: int = 0
     cost_usd: float = 0.0
@@ -74,6 +76,7 @@ class SubagentUsage:
 @dataclass
 class SubagentRecord:
     """Full record of a sub-agent execution."""
+
     spec: SubagentSpec
     state: SubagentState = SubagentState.PENDING
     usage: SubagentUsage = field(default_factory=SubagentUsage)
@@ -253,7 +256,7 @@ class SubagentManager:
 
         if task in done:
             return task.result()
-        raise asyncio.CancelledError()
+        raise asyncio.CancelledError
 
     def cancel(self, task_id: str) -> bool:
         """Cancel a running sub-agent and optionally cascade to children."""
@@ -299,7 +302,9 @@ class SubagentManager:
             elapsed = now - (record.started_at or now)
             if elapsed > self._orphan_timeout:
                 record.state = SubagentState.ORPHANED
-                record.error = f"Orphaned (parent {spec.parent_id} inactive, timeout {elapsed:.0f}s)"
+                record.error = (
+                    f"Orphaned (parent {spec.parent_id} inactive, timeout {elapsed:.0f}s)"
+                )
                 record.completed_at = now
                 orphaned.append(spec.task_id)
                 logger.warning("subagent.orphaned", task_id=spec.task_id, parent_id=spec.parent_id)

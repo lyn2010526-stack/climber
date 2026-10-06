@@ -9,7 +9,12 @@ Public surface:
 from __future__ import annotations
 
 from app.core.slash.registry import build_default_registry, default_registry
-from app.core.slash.service import SlashCommandService, SlashExecution, SlashReply, last_user_message
+from app.core.slash.service import (
+    SlashCommandService,
+    SlashExecution,
+    SlashReply,
+    last_user_message,
+)
 from app.core.slash.specs import (
     COMMAND_PREFIX,
     REASONING_LEVELS,

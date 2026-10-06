@@ -14,7 +14,9 @@ from app.storage.models_reasoning import ReasoningFeedbackDB, ReasoningTraceDB
 class ReasoningTraceRepository:
     """CRUD operations for reasoning traces."""
 
-    def __init__(self, session: AsyncSession, feedback_repository: ReasoningFeedbackRepository | None = None):
+    def __init__(
+        self, session: AsyncSession, feedback_repository: ReasoningFeedbackRepository | None = None
+    ):
         self._session = session
         self._feedback = feedback_repository
 

@@ -264,7 +264,9 @@ async def run_function_guardrail(
         if asyncio.iscoroutinefunction(fn):
             result = await result
     except Exception as e:
-        logger.exception("function_guardrail_failed", func_path=func_path, error=str(e), strict=strict)
+        logger.exception(
+            "function_guardrail_failed", func_path=func_path, error=str(e), strict=strict
+        )
         return False, [_exception_issue(f"Function guardrail '{func_path}' raised", e)]
 
     if isinstance(result, bool):

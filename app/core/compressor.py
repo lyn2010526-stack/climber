@@ -32,7 +32,9 @@ class ContextCompressor:
     def needs_compression(self, messages: list[dict[str, Any]]) -> bool:
         return estimate_tokens(messages) > self._config.max_tokens
 
-    async def compress(self, messages: list[dict[str, Any]], model: Any, *, meter=None) -> list[dict[str, Any]]:
+    async def compress(
+        self, messages: list[dict[str, Any]], model: Any, *, meter=None
+    ) -> list[dict[str, Any]]:
         strategy = self._config.compression_strategy
         if strategy == CompressionStrategy.TRUNCATE:
             return self._truncate(messages)
@@ -60,7 +62,9 @@ class ContextCompressor:
         result.extend(messages[-(keep):])
         return result
 
-    async def _summarize(self, messages: list[dict[str, Any]], model: Any, *, meter=None) -> list[dict[str, Any]]:
+    async def _summarize(
+        self, messages: list[dict[str, Any]], model: Any, *, meter=None
+    ) -> list[dict[str, Any]]:
         """Summarize older messages into a single system message using the LLM.
 
         Keeps the first system prompt, summarizes the middle, retains the
@@ -75,7 +79,7 @@ class ContextCompressor:
 
         head = messages[:1] if messages and messages[0].get("role") == MessageRole.SYSTEM else []
         tail = messages[-keep:]
-        middle = messages[len(head): -keep] if len(messages) > len(head) + keep else []
+        middle = messages[len(head) : -keep] if len(messages) > len(head) + keep else []
         if not middle:
             return messages
 
@@ -109,10 +113,12 @@ class ContextCompressor:
             return self._truncate(messages)
 
         out = list(head)
-        out.append({
-            "role": MessageRole.SYSTEM,
-            "content": f"[Summary of earlier conversation]\n{summary_text}",
-        })
+        out.append(
+            {
+                "role": MessageRole.SYSTEM,
+                "content": f"[Summary of earlier conversation]\n{summary_text}",
+            }
+        )
         out.extend(tail)
         return out
 
@@ -155,6 +161,6 @@ class ContextCompressor:
                 "role": "system",
                 "content": f"<summary of {summarized_count} earlier messages>",
             }
-            return system_msgs + [summary] + kept
+            return [*system_msgs, summary, *kept]
 
         return system_msgs + kept

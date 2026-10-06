@@ -23,8 +23,7 @@ from typing import Any
 
 import structlog
 
-from app.simulation.models import ExperimentSpec
-from app.simulation.planner import ExperimentPlan, ParamDim, plan_from_schema
+from app.simulation.planner import ExperimentPlan, plan_from_schema
 
 logger = structlog.get_logger()
 
@@ -34,9 +33,9 @@ _SYSTEM_PROMPT = (
     "You are an experimental designer. Convert a natural-language "
     "engineering goal into a structured parameter search plan for the "
     "given simulation tool. Return ONLY a JSON object, no prose:\n"
-    "{\"objective\": \"<one line>\", "
-    "\"sweep\": {<param_name>: {\"values\": [...]} or {\"min\": <num>, \"max\": <num>, \"steps\": <int>}}, "
-    "\"base\": {<fixed param_name>: <value>}}\n"
+    '{"objective": "<one line>", '
+    '"sweep": {<param_name>: {"values": [...]} or {"min": <num>, "max": <num>, "steps": <int>}}, '
+    '"base": {<fixed param_name>: <value>}}\n'
     "Only use parameter names from the tool schema. Keep the total "
     "combination count small (aim under 32 experiments)."
 )
@@ -174,7 +173,11 @@ class LLMExperimentPlanner:
         if isinstance(self._tool_def, dict):
             return self._tool_def.get("parameters") or {}
         if self._tool_def is not None:
-            return (self._tool_def.parameters or {}) if getattr(self._tool_def, "parameters", None) else {}
+            return (
+                (self._tool_def.parameters or {})
+                if getattr(self._tool_def, "parameters", None)
+                else {}
+            )
         return {}
 
     def _fallback_plan(self) -> ExperimentPlan:

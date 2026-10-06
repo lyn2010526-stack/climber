@@ -18,7 +18,10 @@ def send_start_notification(engine: Any, session: Any) -> None:
     """
     try:
         from app.services.notifications import notification_service
-        engine._spawn(notification_service.agent_message(session.agent_id or "Agent", "开始执行任务..."))
+
+        engine._spawn(
+            notification_service.agent_message(session.agent_id or "Agent", "开始执行任务...")
+        )
     except Exception:
         pass
 
@@ -33,7 +36,13 @@ def send_completion_notification(engine: Any, session: Any, result: Any) -> None
     """
     try:
         from app.services.notifications import notification_service
-        engine._spawn(notification_service.task_complete(f"Agent {session.agent_id}", result.content[:100] if result and result.content else None))
+
+        engine._spawn(
+            notification_service.task_complete(
+                f"Agent {session.agent_id}",
+                result.content[:100] if result and result.content else None,
+            )
+        )
     except Exception:
         pass
 
@@ -48,6 +57,7 @@ def send_failure_notification(engine: Any, session: Any, error: str) -> None:
     """
     try:
         from app.services.notifications import notification_service
+
         engine._spawn(notification_service.task_failed(f"Agent {session.agent_id}", error))
     except Exception:
         pass
