@@ -44,7 +44,7 @@ async def reason_with_slash(
     req: ReasoningRequest,
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = RateLimit,
-    _auth: dict = Depends(_require_scopes("write")),
+    _auth: dict[str, Any] = Depends(_require_scopes("write")),
 ) -> ReasoningResult:
     from app.api.v1 import get_engine
 
@@ -106,7 +106,7 @@ async def reason_stream(
     request: Request,
     req: ReasoningRequest,
     db: AsyncSession = Depends(get_db),
-    _auth: dict = Depends(_require_scopes("write")),
+    _auth: dict[str, Any] = Depends(_require_scopes("write")),
 ) -> EventSourceResponse:
     from app.api.v1 import get_engine
 

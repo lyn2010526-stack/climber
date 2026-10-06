@@ -15,7 +15,7 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -113,7 +113,7 @@ class EventBus:
             try:
                 result = handler(event)
                 if hasattr(result, "__await__"):
-                    await result
+                    await cast("Coroutine[Any, Any, None]", result)
             except Exception as e:
                 logger.warning("event_bus.handler_execution_failed", error=str(e))
 

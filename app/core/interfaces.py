@@ -119,7 +119,7 @@ class IModelAdapter(ABC):
 class IToolRegistry(ABC):
     @abstractmethod
     def register(
-        self, name: str, description: str, parameters: dict[str, Any], func: Callable
+        self, name: str, description: str, parameters: dict[str, Any], func: Callable[..., Any]
     ) -> None:
         raise NotImplementedError
 

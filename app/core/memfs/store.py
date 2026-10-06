@@ -19,6 +19,7 @@ Memory directory structure:
 from __future__ import annotations
 
 import asyncio
+import builtins
 import os
 import shutil
 import subprocess
@@ -294,7 +295,7 @@ class MemFS:
         async with self._lock:
             return await asyncio.to_thread(self._list_sync, prefix)
 
-    def _list_sync(self, prefix: str = "") -> list[str]:
+    def _list_sync(self, prefix: str = "") -> builtins.list[str]:
         results: list[str] = []
 
         search_dir = self._base_path
@@ -305,7 +306,7 @@ class MemFS:
             return []
 
         if search_dir.is_file():
-            rel = search_dir.relative_to(self._base_path)
+            rel: Path | str = search_dir.relative_to(self._base_path)
             return [str(rel)]
 
         for root, dirs, files in os.walk(str(search_dir)):
@@ -397,7 +398,7 @@ class MemFS:
     def _exists_sync(self, path: str) -> bool:
         return self._resolve_path(path).exists()
 
-    async def get_history(self, path: str, limit: int = 10) -> list[dict[str, Any]]:
+    async def get_history(self, path: str, limit: int = 10) -> builtins.list[dict[str, Any]]:
         """Get git history for a memory file.
 
         Args:
@@ -413,7 +414,7 @@ class MemFS:
         async with self._lock:
             return await asyncio.to_thread(self._get_history_sync, path, limit)
 
-    def _get_history_sync(self, path: str, limit: int) -> list[dict[str, Any]]:
+    def _get_history_sync(self, path: str, limit: int) -> builtins.list[dict[str, Any]]:
         try:
             result = subprocess.run(
                 [
@@ -448,7 +449,7 @@ class MemFS:
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return []
 
-    async def search(self, query: str) -> list[dict[str, Any]]:
+    async def search(self, query: str) -> builtins.list[dict[str, Any]]:
         """Search memory files by content (grep-based).
 
         Args:
@@ -460,7 +461,7 @@ class MemFS:
         async with self._lock:
             return await asyncio.to_thread(self._search_sync, query)
 
-    def _search_sync(self, query: str) -> list[dict[str, Any]]:
+    def _search_sync(self, query: str) -> builtins.list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
 
         for root, dirs, files in os.walk(str(self._base_path)):
@@ -492,7 +493,7 @@ class MemFS:
 
         return results
 
-    async def init_defaults(self) -> list[str]:
+    async def init_defaults(self) -> builtins.list[str]:
         """Initialize default system memory files if they don't exist.
 
         Returns:

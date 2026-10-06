@@ -49,7 +49,7 @@ class TaskExecutionEngine:
         self._circuit_breaker = circuit_breaker or CircuitBreaker()
         self._timeout = timeout_manager or TimeoutManager()
         self._subtask_executor = subtask_executor or self._default_subtask_executor
-        self._running_tasks: dict[str, asyncio.Task] = {}
+        self._running_tasks: dict[str, asyncio.Task[Any]] = {}
 
     async def execute_task(self, task: Task) -> Task:
         """Execute a task and its sub-tasks according to DAG dependencies."""

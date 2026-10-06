@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from sqlalchemy import select
@@ -109,7 +109,9 @@ async def run_hierarchical_process(task: Any, group: Any, principal: Any = None)
             t.completed_at = datetime.now(UTC)
             await db.commit()
 
-    await store_memory(task.group_id, task.id, manager_member.agent_id, final_output, "task_result")
+    await store_memory(
+        task.group_id, task.id, cast(str, manager_member.agent_id), final_output, "task_result"
+    )
     await invoke_task_callback(task, final_output)
 
     await group_ws_hub.broadcast(

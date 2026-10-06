@@ -7,14 +7,16 @@ import hashlib
 import json
 import uuid
 from collections import OrderedDict, defaultdict, deque
-from collections.abc import AsyncIterator, Callable, Coroutine
+from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from functools import partial
+from typing import Any, cast
 
 import structlog
+from sqlalchemy import CursorResult
 
 from app.config import settings
 from app.storage import async_session
@@ -131,13 +133,15 @@ class TaskManager:
     """Manages task lifecycle: submit, execute, track, cancel."""
 
     def __init__(self, max_workers: int | None = None, max_task_retries: int = 2):
-        self._handlers: dict[str, Callable[..., Coroutine]] = {}
+        self._handlers: dict[str, Callable[..., Coroutine[Any, Any, Any]]] = {}
         self._max_workers = settings.max_concurrent_subtasks if max_workers is None else max_workers
         self._max_task_retries = max(0, max_task_retries)
         self._max_claim_attempts = 3
         self._semaphore = asyncio.Semaphore(self._max_workers)
-        self._active_tasks: dict[str, asyncio.Task] = {}
-        self._progress_callbacks: list[Callable[[str, dict], Coroutine]] = []
+        self._active_tasks: dict[str, asyncio.Task[Any]] = {}
+        self._progress_callbacks: list[
+            Callable[[str, dict[str, Any]], Coroutine[Any, Any, Any]]
+        ] = []
         self._event_history: OrderedDict[str, deque[dict[str, Any]]] = OrderedDict()
         self._event_subscribers: dict[str, set[asyncio.Queue[dict[str, Any]]]] = defaultdict(set)
         self._event_epoch = str(uuid.uuid4())
@@ -157,10 +161,12 @@ class TaskManager:
         async with self._semaphore:
             yield
 
-    def register(self, task_type: str, handler: Callable[..., Coroutine]) -> None:
+    def register(self, task_type: str, handler: Callable[..., Coroutine[Any, Any, Any]]) -> None:
         self._handlers[task_type] = handler
 
-    def on_progress(self, callback: Callable[[str, dict], Coroutine]) -> None:
+    def on_progress(
+        self, callback: Callable[[str, dict[str, Any]], Coroutine[Any, Any, Any]]
+    ) -> None:
         self._progress_callbacks.append(callback)
 
     def subscribe(self, task_id: str, *, replay: bool = True) -> asyncio.Queue[dict[str, Any]]:
@@ -212,7 +218,7 @@ class TaskManager:
 
     async def event_snapshot(
         self, task_id: str, owner_id: str, include_all: bool = False
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         sequence = self._event_sequence
         history = list(self._event_history.get(task_id, ()))
         state = await self.get_status(task_id, owner_id=owner_id, include_all=include_all)
@@ -304,7 +310,7 @@ class TaskManager:
         from sqlalchemy import select
 
         queued = 0
-        ready = []
+        ready: list[tuple[str, str, dict[str, Any]]] = []
         async with async_session() as session:
             rows = (
                 await session.scalars(
@@ -362,9 +368,7 @@ class TaskManager:
                 self._run_task(task_id, task_type, payload, resolve_credentials=True, managed=True)
             )
             self._active_tasks[task_id] = worker
-            worker.add_done_callback(
-                lambda done, task_id=task_id: self._release_worker(task_id, done)
-            )
+            worker.add_done_callback(partial(self._release_worker, task_id))
             queued += 1
         return queued
 
@@ -654,7 +658,7 @@ class TaskManager:
                 )
                 .values(objective=json.dumps(envelope, ensure_ascii=False), updated_at=now)
             )
-            if updated.rowcount != 1:
+            if cast(CursorResult[Any], updated).rowcount != 1:
                 return []
             await session.commit()
         await self._emit_progress(
@@ -715,7 +719,7 @@ class TaskManager:
                     objective=json.dumps(envelope, ensure_ascii=False), updated_at=datetime.now(UTC)
                 )
             )
-            if updated.rowcount != 1:
+            if cast(CursorResult[Any], updated).rowcount != 1:
                 return None
             await session.commit()
         await self._emit_progress(
@@ -723,10 +727,10 @@ class TaskManager:
         )
         return dict(target)
 
-    def _owns_worker(self, task_id: str, worker: asyncio.Task | None) -> bool:
+    def _owns_worker(self, task_id: str, worker: asyncio.Task[Any] | None) -> bool:
         return worker is None or self._active_tasks.get(task_id) is worker
 
-    def _release_worker(self, task_id: str, worker: asyncio.Task) -> None:
+    def _release_worker(self, task_id: str, worker: asyncio.Task[Any]) -> None:
         if self._active_tasks.get(task_id) is worker:
             self._active_tasks.pop(task_id, None)
 
@@ -788,7 +792,7 @@ class TaskManager:
                             )
                         )
                         await session.commit()
-                    if claimed.rowcount == 1:
+                    if cast(CursorResult[Any], claimed).rowcount == 1:
                         break
                     return
                 except asyncio.CancelledError:
@@ -817,7 +821,7 @@ class TaskManager:
             await self._emit_progress(task_id, {"status": TaskStatus.RUNNING.value})
             try:
 
-                async def _progress_cb(step: int, total: int, message: str = ""):
+                async def _progress_cb(step: int, total: int, message: str = "") -> None:
                     await self._persist_progress(task_id, step, total, message, worker=worker)
 
                 if resolve_credentials and task_type in {"agent_run", "factory_run"}:
@@ -926,12 +930,12 @@ class TaskManager:
         task_type: str,
         owner_id: str,
         payload: dict[str, Any],
-        handler: Callable[..., Coroutine],
+        handler: Callable[..., Coroutine[Any, Any, Any]],
         error: str,
         exc: Exception,
         *,
-        on_progress: Callable[..., Coroutine] | None = None,
-        worker: asyncio.Task | None = None,
+        on_progress: Callable[..., Coroutine[Any, Any, Any]] | None = None,
+        worker: asyncio.Task[Any] | None = None,
         resolve_credentials: bool = False,
     ) -> None:
         """Retry a failed task run before marking it failed.
@@ -944,7 +948,7 @@ class TaskManager:
         """
         if on_progress is None:
 
-            async def on_progress(step: int, total: int, message: str = ""):
+            async def on_progress(step: int, total: int, message: str = "") -> None:
                 await self._persist_progress(task_id, step, total, message, worker=worker)
 
         attempts = 0
@@ -1043,7 +1047,7 @@ class TaskManager:
         total: int,
         message: str = "",
         *,
-        worker: asyncio.Task | None = None,
+        worker: asyncio.Task[Any] | None = None,
     ) -> None:
         evaluation = {
             "percent": round((step / total) * 100, 2) if total else 0,
@@ -1073,7 +1077,7 @@ class TaskManager:
             task_id, {"step": step, "total": total, **evaluation, "evaluation": evaluation}
         )
 
-    async def _emit_progress(self, task_id: str, data: dict) -> None:
+    async def _emit_progress(self, task_id: str, data: dict[str, Any]) -> None:
         await self.emit_event(task_id, "task_update", data)
         for cb in self._progress_callbacks:
             with suppress(Exception):
@@ -1226,7 +1230,9 @@ def _injected_system_prompt(payload: dict[str, Any]) -> str:
         return ""
 
 
-async def handle_agent_run(payload: dict[str, Any], on_progress) -> dict[str, Any]:
+async def handle_agent_run(
+    payload: dict[str, Any], on_progress: Callable[[int, int, str], Awaitable[None]]
+) -> dict[str, Any]:
     """Execute an autonomous agent run with the given objective."""
     from app.core.agent_engine import AgentEngine
     from app.core.di import resolve as di_resolve
@@ -1241,7 +1247,7 @@ async def handle_agent_run(payload: dict[str, Any], on_progress) -> dict[str, An
 
     max_steps = int(payload.get("max_steps", 10))
     try:
-        engine = di_resolve("AgentEngine")
+        engine: AgentEngine = di_resolve("AgentEngine")
     except KeyError:
         engine = AgentEngine()
     session = engine.create_session(
@@ -1372,7 +1378,9 @@ _FACTORY_SKILL_TOOLS = {
 }
 
 
-async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, Any]:
+async def handle_factory_run(
+    payload: dict[str, Any], on_progress: Callable[[int, int, str], Awaitable[None]]
+) -> dict[str, Any]:
     """Run a planned multi-stage workflow; failed tool steps require manual review."""
     task_id = str(payload["_task_id"])
     goal = str(payload.get("objective", "")).strip()
@@ -1402,7 +1410,7 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
         ):
             raise ValueError("Invalid factory checkpoint; manual review required")
         plan = saved.get("plan")
-        results = saved.get("results")
+        results: Any = saved.get("results")
         if (
             not isinstance(plan, list)
             or not plan
@@ -1533,7 +1541,7 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
         precheck["index"]: precheck for precheck in _precheck_plan_steps(plan, permission_mode)
     }
 
-    results: list[dict[str, Any]] = list(saved["results"]) if saved is not None else []
+    results = list(saved["results"]) if saved is not None else []
     await save_boundary(None)
     for index, step in enumerate(plan, start=1):
         if index <= len(results):
@@ -1690,7 +1698,9 @@ async def handle_factory_run(payload: dict[str, Any], on_progress) -> dict[str, 
     return {"output": report, "plan": plan, "steps": results}
 
 
-async def handle_data_processing(payload: dict[str, Any], on_progress) -> dict[str, Any]:
+async def handle_data_processing(
+    payload: dict[str, Any], on_progress: Callable[[int, int, str], Awaitable[None]]
+) -> dict[str, Any]:
     """Process data: transform, filter, aggregate.
 
     Results beyond the default 100-row window stay reachable through the
@@ -1727,7 +1737,9 @@ async def handle_data_processing(payload: dict[str, Any], on_progress) -> dict[s
     }
 
 
-async def handle_workflow(payload: dict[str, Any], on_progress) -> dict[str, Any]:
+async def handle_workflow(
+    payload: dict[str, Any], on_progress: Callable[[int, int, str], Awaitable[None]]
+) -> dict[str, Any]:
     """Execute a multi-step workflow."""
     from app.multi_agent.flow import Flow
 
@@ -1744,7 +1756,7 @@ task_manager.register("data_processing", handle_data_processing)
 task_manager.register("workflow", handle_workflow)
 
 
-async def run_standalone_worker():
+async def run_standalone_worker() -> None:
     """Poll never-started TaskManager rows; do not start AutoLoop recovery here."""
     logger.info("standalone_worker_started")
     while True:

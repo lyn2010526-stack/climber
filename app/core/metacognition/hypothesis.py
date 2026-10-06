@@ -200,7 +200,7 @@ class HypothesisSimulator:
             else:
                 source = "verifier"
 
-            async def invoke():
+            async def invoke() -> dict[str, Any]:
                 outcome = verifier(payload)
                 return await outcome if inspect.isawaitable(outcome) else outcome
 
@@ -244,9 +244,10 @@ class HypothesisSimulator:
                 raise RuntimeError("experiment runner is not configured")
             if not real_execution_enabled():
                 raise RuntimeError("real execution disabled")
+            runner = self._experiment_runner
 
-            async def invoke():
-                outcome = self._experiment_runner(payload)
+            async def invoke() -> dict[str, Any]:
+                outcome = runner(payload)
                 return await outcome if inspect.isawaitable(outcome) else outcome
 
             outcome = await asyncio.wait_for(invoke(), self._verification_timeout)
@@ -285,7 +286,9 @@ class HypothesisSimulator:
         """Verify a belief and blend the verdict into its confidence."""
         return await self.verify_hypothesis(belief, goal, context)
 
-    async def _verify_paths(self, goal: str, paths: list[ExecutionPath], context=None) -> None:
+    async def _verify_paths(
+        self, goal: str, paths: list[ExecutionPath], context: dict[str, Any] | None = None
+    ) -> None:
         """Verify the top paths and blend their verdicts into scores."""
         if self._verifier is None and self._experiment_runner is None:
             return

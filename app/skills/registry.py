@@ -46,9 +46,9 @@ class SkillInfo(BaseModel):
 class SkillRegistry:
     def __init__(self) -> None:
         self._skills: dict[str, SkillInfo] = {}
-        self._handlers: dict[str, Callable] = {}
+        self._handlers: dict[str, Callable[..., Any]] = {}
 
-    def register(self, skill: SkillInfo, handler: Callable | None = None) -> None:
+    def register(self, skill: SkillInfo, handler: Callable[..., Any] | None = None) -> None:
         self._skills[skill.id] = skill
         if handler:
             self._handlers[skill.id] = handler
@@ -64,7 +64,7 @@ class SkillRegistry:
     def get(self, skill_id: str) -> SkillInfo | None:
         return self._skills.get(skill_id)
 
-    def get_handler(self, skill_id: str) -> Callable | None:
+    def get_handler(self, skill_id: str) -> Callable[..., Any] | None:
         return self._handlers.get(skill_id)
 
     def list_skills(self, category: str | None = None) -> list[dict[str, Any]]:
@@ -111,7 +111,9 @@ class SkillRegistry:
         return handler(**params)
 
     @staticmethod
-    def _validate_params(skill_id: str, handler: Callable, params: dict[str, Any]) -> None:
+    def _validate_params(
+        skill_id: str, handler: Callable[..., Any], params: dict[str, Any]
+    ) -> None:
         """Reject unknown keyword arguments before invoking a fixed handler.
 
         Type checking is deliberately left to the handler; only the

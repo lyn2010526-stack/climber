@@ -8,11 +8,11 @@ from typing import Any
 class PromptManager:
     """Manages prompt assembly for agents."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._templates: dict[str, str] = {}
         self._constraints: list[str] = []
 
-    def assemble_prompt(self, context: dict[str, Any] | None = None, **kwargs) -> str:
+    def assemble_prompt(self, context: dict[str, Any] | None = None, **kwargs: Any) -> str:
         """Assemble a prompt from template and context."""
         base = self._templates.get("default", "You are a helpful assistant.")
         if context:

@@ -17,7 +17,7 @@ from typing import Any
 
 import structlog
 
-from app.core.parallel import ParallelToolExecutor
+from app.core.parallel import ParallelToolExecutor, ValidatorLike
 from app.simulation.adjuster import ParameterAdjuster
 from app.simulation.ledger import ExperimentLedger
 from app.simulation.models import (
@@ -65,7 +65,7 @@ class SimulationHarness:
         adjuster: ParameterAdjuster | None = None,
         ledger: ExperimentLedger | None = None,
         options: HarnessOptions | None = None,
-        validate_tool_call=None,
+        validate_tool_call: ValidatorLike | None = None,
     ):
         self.tool_registry = tool_registry
         self.reviewer = reviewer or HarnessReviewer()
@@ -88,7 +88,10 @@ class SimulationHarness:
         """
         result = HarnessRunResult(plan=plan)
         if self.ledger is not None:
-            self.ledger.record_goal(goal, plan.to_dict())
+            # ExperimentLedger.record_goal is annotated list[dict] but the plan
+            # snapshot passed by every caller (here and in the orchestrator) is
+            # a dict; the ledger stores it verbatim.
+            self.ledger.record_goal(goal, plan.to_dict())  # type: ignore[arg-type]
 
         if not plan.experiments:
             return result

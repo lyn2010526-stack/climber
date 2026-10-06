@@ -13,10 +13,10 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -243,7 +243,9 @@ class SubagentManager:
             return await runner(spec)
 
         # Create a task that can be cancelled
-        task = asyncio.create_task(runner(spec))
+        task: asyncio.Task[tuple[str, SubagentUsage]] = asyncio.create_task(
+            cast("Coroutine[Any, Any, tuple[str, SubagentUsage]]", runner(spec))
+        )
         cancel_task = asyncio.create_task(cancel_event.wait())
 
         done, pending = await asyncio.wait(

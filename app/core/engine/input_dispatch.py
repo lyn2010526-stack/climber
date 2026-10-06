@@ -1,15 +1,27 @@
 """Explicit idle dispatch; committed history only, never checkpoint replay."""
 
+from typing import TYPE_CHECKING, Any
+
 from sqlalchemy import or_, select, update
 
 from app.storage.database import Message, Session, SessionInput, Turn
+
+if TYPE_CHECKING:
+    from app.core.engine.input_queue import SessionInputQueue
 
 
 class InputDispatchConflict(ValueError):
     pass
 
 
-async def prepare_dispatch(queue, session_id, user_id, *, claim=False, session=None):
+async def prepare_dispatch(
+    queue: "SessionInputQueue",
+    session_id: str,
+    user_id: str,
+    *,
+    claim: bool = False,
+    session: Any = None,
+) -> dict[str, Any]:
     async with queue.session_factory() as db:
         # Serialize the safety check and first claim with queue producers/consumers.
         result = await db.execute(

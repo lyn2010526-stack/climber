@@ -14,12 +14,14 @@ framework (HTTPException / RequestValidationError) and persistence
 from __future__ import annotations
 
 import re
+from typing import cast
 
 import structlog
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
+from starlette.types import ExceptionHandler
 
 from app.core.exceptions import AgentEngineError, BaseAppException
 from app.core.logging_setup import write_crash_dump
@@ -263,9 +265,11 @@ def register_exception_handlers(app: FastAPI) -> None:
     Args:
         app: The FastAPI application instance to register handlers on.
     """
-    app.add_exception_handler(BaseAppException, handle_app_exception)
-    app.add_exception_handler(AgentEngineError, handle_agent_engine_error)
-    app.add_exception_handler(RequestValidationError, handle_request_validation_error)
-    app.add_exception_handler(HTTPException, handle_http_exception)
-    app.add_exception_handler(IntegrityError, handle_integrity_error)
+    app.add_exception_handler(BaseAppException, cast("ExceptionHandler", handle_app_exception))
+    app.add_exception_handler(AgentEngineError, cast("ExceptionHandler", handle_agent_engine_error))
+    app.add_exception_handler(
+        RequestValidationError, cast("ExceptionHandler", handle_request_validation_error)
+    )
+    app.add_exception_handler(HTTPException, cast("ExceptionHandler", handle_http_exception))
+    app.add_exception_handler(IntegrityError, cast("ExceptionHandler", handle_integrity_error))
     app.add_exception_handler(Exception, handle_unhandled_exception)

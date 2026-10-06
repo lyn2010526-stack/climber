@@ -9,13 +9,13 @@ into a :class:`Trajectory`.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import aclosing
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
-from app.core.evaluation.judges import DEFAULT_JUDGE
+from app.core.evaluation.judges import DEFAULT_JUDGE, DeterministicJudge
 from app.core.evaluation.models import (
     CallRecord,
     EvalScenario,
@@ -28,6 +28,9 @@ from app.core.evaluation.models import (
 
 # agent_fn(scenario, candidate_index) -> Trajectory
 AgentFn = Callable[[EvalScenario, int], Awaitable[Trajectory]]
+
+# An injectable judge: either a plain callable or an object exposing ``judge``.
+JudgeLike = Callable[..., EvaluationResult] | DeterministicJudge
 
 
 def pass_at_k(n: int, c: int, k: int) -> float:
@@ -57,7 +60,7 @@ def pass_hat_k(n: int, c: int, k: int) -> float:
 async def evaluate_trajectory(
     trajectory: Trajectory,
     rubric: list[RubricItem],
-    judge: Callable[..., EvaluationResult] | None = None,
+    judge: JudgeLike | None = None,
     *,
     scenario_id: str = "",
     expected_points: list[str] | None = None,
@@ -69,7 +72,7 @@ async def evaluate_trajectory(
     """
     judge = judge or DEFAULT_JUDGE
     judge_fn = judge if callable(judge) else judge.judge
-    result = judge_fn(
+    result: Any = judge_fn(
         trajectory,
         rubric,
         scenario_id=scenario_id or trajectory.scenario_id,
@@ -81,7 +84,7 @@ async def evaluate_trajectory(
         result.score = 0.0
         result.passed = False
         result.failure_reasons.append(f"trajectory failed: {trajectory.error or trajectory.status}")
-    return result
+    return cast(EvaluationResult, result)
 
 
 def make_engine_agent_fn(
@@ -126,7 +129,13 @@ def make_engine_agent_fn(
         async with aclosing(engine.run(session, scenario.user_input)) as events:
             return await _consume(events, session, scenario, candidate_index, owner)
 
-    async def _consume(events, session, scenario, candidate_index, owner) -> Trajectory:
+    async def _consume(
+        events: AsyncIterator[Any],
+        session: Any,
+        scenario: EvalScenario,
+        candidate_index: int,
+        owner: Any,
+    ) -> Trajectory:
         calls: list[CallRecord] = []
         output_parts: list[str] = []
         tokens = 0
@@ -224,11 +233,11 @@ def _fake_error_trajectory(
 async def run_evaluation(
     scenarios: list[EvalScenario],
     agent_fn: AgentFn,
-    judge: Callable[..., EvaluationResult] | None = None,
+    judge: JudgeLike | None = None,
     *,
     k: int = 1,
     report_id: str | None = None,
-    metadata: dict | None = None,
+    metadata: dict[str, Any] | None = None,
     samples: int | None = None,
     timeout: float = 60.0,
     token_budget: int = 8000,

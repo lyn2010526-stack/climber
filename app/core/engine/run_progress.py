@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 from sqlalchemy import select
 
@@ -24,7 +25,7 @@ def _now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-def _default_factory():
+def _default_factory() -> Any:
     from app.storage import async_session
 
     return async_session
@@ -33,7 +34,7 @@ def _default_factory():
 class RunProgressStore:
     """Upsert-only snapshot store keyed by session id."""
 
-    def __init__(self, session_factory=None):
+    def __init__(self, session_factory: Any = None) -> None:
         self.session_factory = session_factory or _default_factory()
 
     async def record_progress(
@@ -171,13 +172,13 @@ class RunProgressStore:
             return 0
 
 
-def build_loop_snapshot(session: object, loop_payload: dict[str, object]) -> dict[str, object]:
+def build_loop_snapshot(session: object, loop_payload: dict[str, object]) -> dict[str, Any]:
     """Project a LOOP_STATUS payload onto the snapshot row fields."""
     return {
         "session_id": str(getattr(session, "session_id", "")),
         "user_id": getattr(session, "user_id", None),
         "turn_id": getattr(session, "current_turn_id", None),
-        "outer_round": int(loop_payload.get("outer_round", 0) or 0),
+        "outer_round": int(cast(Any, loop_payload.get("outer_round", 0)) or 0),
         "current_subtask": loop_payload.get("current_input"),
         "completed_subtasks": loop_payload.get("completed", []),
         "followup_queue": loop_payload.get("followup_queue", []),
@@ -185,7 +186,7 @@ def build_loop_snapshot(session: object, loop_payload: dict[str, object]) -> dic
     }
 
 
-def _engine_factory(engine: object):
+def _engine_factory(engine: object) -> Any:
     return (
         getattr(getattr(engine, "_run_store", None), "session_factory", None) or _default_factory()
     )
@@ -209,11 +210,11 @@ async def finalize_run_progress(engine: object, session: object) -> bool:
     interrupted so startup recovery can surface untracked sessions.
     """
     try:
-        status = getattr(session, "_run_status_override", None) or session.status.value
+        status = getattr(session, "_run_status_override", None) or cast(Any, session).status.value
         store = RunProgressStore(_engine_factory(engine))
         if status == "completed":
-            return await store.mark_completed(str(session.session_id))
+            return await store.mark_completed(str(cast(Any, session).session_id))
         reason = getattr(session, "_last_error", None) or status or "interrupted"
-        return await store.mark_interrupted(str(session.session_id), reason=str(reason))
+        return await store.mark_interrupted(str(cast(Any, session).session_id), reason=str(reason))
     except Exception:
         return False

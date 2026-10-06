@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter
 
 from app.api.v1 import api_keys as api_keys_router
@@ -30,6 +32,9 @@ from app.api.v1.routes.arcbench import router as arcbench_router
 from app.api.v1.routes.research import router as research_router
 from app.core.reasoning import api as reasoning_router
 from app.core.security import api as security_router
+
+if TYPE_CHECKING:
+    from app.core.agent_engine import AgentEngine
 
 router = APIRouter()
 router.include_router(ui_rules_router.router)
@@ -82,12 +87,12 @@ for route in skills_router_module.router.routes:
 
 
 @router.get("/health", tags=["system"])
-async def api_health() -> dict:
+async def api_health() -> dict[str, str]:
     """API-level health check."""
     return {"status": "ok"}
 
 
-def get_engine():
+def get_engine() -> AgentEngine:
     from app.api.v1.chat import get_engine as _get_engine
 
     return _get_engine()

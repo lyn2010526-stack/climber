@@ -1,12 +1,21 @@
 """Explicit boundary/retention validation gate; never activates a proposal itself."""
 
+from typing import Any
+
 from app.core.evaluation.baseline import compare_to_baseline
-from app.core.evaluation.runner import run_evaluation
+from app.core.evaluation.models import EvalScenario
+from app.core.evaluation.runner import AgentFn, JudgeLike, run_evaluation
 
 
 async def evaluate_proposal(
-    boundary, retention, agent_fn, *, retention_baseline, judge=None, **run_options
-):
+    boundary: list[EvalScenario],
+    retention: list[EvalScenario],
+    agent_fn: AgentFn,
+    *,
+    retention_baseline: dict[str, Any],
+    judge: JudgeLike | None = None,
+    **run_options: Any,
+) -> dict[str, Any]:
     if not boundary or not retention or not retention_baseline.get("scores"):
         raise ValueError("boundary, retention and a retention baseline are required")
     boundary_report = await run_evaluation(boundary, agent_fn, judge, **run_options)

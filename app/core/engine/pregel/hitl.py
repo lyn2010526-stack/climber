@@ -60,7 +60,7 @@ class HITLManager:
         self._thread_index: dict[str, list[str]] = {}
         self._lock = asyncio.Lock()
         self._default_timeout = default_timeout
-        self._expire_tasks: set[asyncio.Task] = set()
+        self._expire_tasks: set[asyncio.Task[Any]] = set()
 
     async def interrupt(
         self,

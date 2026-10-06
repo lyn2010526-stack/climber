@@ -183,7 +183,7 @@ class AnthropicAdapter(ModelAdapter):
             )
         return result
 
-    async def stream_chat(
+    async def stream_chat(  # type: ignore[override]  # base declares async->AsyncIterator; impl is an async generator consumed via `async for`
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,

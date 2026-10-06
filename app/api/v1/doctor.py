@@ -5,6 +5,7 @@ from __future__ import annotations
 import platform
 import sys
 from pathlib import Path
+from typing import Any
 
 import structlog
 from fastapi import APIRouter
@@ -15,7 +16,7 @@ router = APIRouter()
 logger = structlog.get_logger(__name__)
 
 
-def _check_python_runtime() -> dict:
+def _check_python_runtime() -> dict[str, Any]:
     return {
         "section": "python_runtime",
         "checks": [
@@ -28,7 +29,7 @@ def _check_python_runtime() -> dict:
     }
 
 
-def _check_dependencies() -> dict:
+def _check_dependencies() -> dict[str, Any]:
     checks = []
     for mod in ("fastapi", "sqlalchemy", "aiosqlite", "structlog", "pydantic", "pydantic_settings"):
         try:
@@ -42,7 +43,7 @@ def _check_dependencies() -> dict:
     return {"section": "core_dependencies", "checks": checks}
 
 
-def _check_workspace() -> dict:
+def _check_workspace() -> dict[str, Any]:
     # app/api/v1/doctor.py -> project root is four levels up.
     root = Path(__file__).resolve().parent.parent.parent.parent
     checks = []
@@ -52,7 +53,7 @@ def _check_workspace() -> dict:
     return {"section": "workspace", "checks": checks}
 
 
-def _check_services_sync() -> dict:
+def _check_services_sync() -> dict[str, Any]:
     from app.core.memory_guardian import get_memory_guardian
     from app.core.watchdog import get_watchdog
     from app.tools.browser_pool import get_browser_pool
@@ -90,7 +91,7 @@ def _check_services_sync() -> dict:
     return {"section": "services", "checks": checks}
 
 
-async def _check_database() -> dict:
+async def _check_database() -> dict[str, Any]:
     from app.storage import db_health
 
     checks = []
@@ -117,7 +118,7 @@ async def _check_database() -> dict:
     return {"section": "database", "checks": checks}
 
 
-async def _check_redis() -> dict:
+async def _check_redis() -> dict[str, Any]:
     from app.storage.cache import get_redis
 
     checks = []
@@ -136,7 +137,7 @@ async def _check_redis() -> dict:
     return {"section": "services", "checks": checks}
 
 
-async def _run_diagnostics() -> dict:
+async def _run_diagnostics() -> dict[str, Any]:
     sections = [
         _check_python_runtime(),
         _check_dependencies(),

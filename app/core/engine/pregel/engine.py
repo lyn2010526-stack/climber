@@ -14,7 +14,7 @@ import asyncio
 import uuid
 from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -25,7 +25,7 @@ from app.core.engine.pregel.checkpoint import (
     InMemoryCheckpointSaver,
 )
 from app.core.engine.pregel.command import Command, is_command, parse_node_output
-from app.core.engine.pregel.graph import StateGraph
+from app.core.engine.pregel.graph import RouterFunc, StateGraph
 from app.core.engine.pregel.hitl import HITLManager
 from app.core.engine.pregel.policies import (
     DefaultErrorHandler,
@@ -108,7 +108,7 @@ class PregelEngine:
         self._hitl = hitl_manager or HITLManager()
         self._debug = debug
 
-    async def run(self, state: GraphState, config: dict | None = None) -> GraphState:
+    async def run(self, state: GraphState, config: dict[str, Any] | None = None) -> GraphState:
         """Run the graph until completion.
 
         Args:
@@ -192,7 +192,7 @@ class PregelEngine:
         return state
 
     async def astream(
-        self, state: GraphState, config: dict | None = None
+        self, state: GraphState, config: dict[str, Any] | None = None
     ) -> AsyncIterator[GraphState]:
         """Stream state after each super-step.
 
@@ -262,7 +262,7 @@ class PregelEngine:
             yield state.clone()
 
     async def astream_events(
-        self, state: GraphState, config: dict | None = None
+        self, state: GraphState, config: dict[str, Any] | None = None
     ) -> AsyncIterator[StreamEvent]:
         """Stream detailed execution events.
 
@@ -374,7 +374,7 @@ class PregelEngine:
             )
             yield StreamEvent(type=StreamEventType.END, data={"total_steps": context.step})
 
-    async def get_state(self, config: dict) -> GraphState:
+    async def get_state(self, config: dict[str, Any]) -> GraphState:
         """Get current state from the latest checkpoint."""
         thread_id = config.get("thread_id", "default")
         checkpoint_config = CheckpointConfig(thread_id=thread_id)
@@ -385,7 +385,7 @@ class PregelEngine:
             return state
         return GraphState(schema=self._graph.schema)
 
-    async def update_state(self, config: dict, values: dict) -> dict:
+    async def update_state(self, config: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:
         """Update state by saving a new checkpoint."""
         thread_id = config.get("thread_id", "default")
         checkpoint_config = CheckpointConfig(thread_id=thread_id)
@@ -406,7 +406,7 @@ class PregelEngine:
         await self._checkpointer.put(checkpoint_config, checkpoint)
         return config
 
-    async def resume_with(self, config: dict, value: Any) -> dict:
+    async def resume_with(self, config: dict[str, Any], value: Any) -> dict[str, Any]:
         """Resume from an interrupt with a human-provided value."""
         # Inject resume value into config so run() can apply it after checkpoint restore
         config = {**config, "__resume_value__": value}
@@ -415,7 +415,7 @@ class PregelEngine:
         return dict(result)
 
     async def _execute_super_step(
-        self, state: GraphState, config: dict, context: ExecutionContext
+        self, state: GraphState, config: dict[str, Any], context: ExecutionContext
     ) -> SuperStepResult:
         """Execute a single super-step: run all active nodes in parallel."""
         context.step += 1
@@ -472,7 +472,7 @@ class PregelEngine:
 
             next_nodes = await self._route_next(node_name, goto, state)
             next_active.extend(next_nodes)
-            if is_command(result) and result.metadata.get("interrupt"):
+            if is_command(result) and cast(Any, result).metadata.get("interrupt"):
                 all_interrupted = True
                 interrupt_node = node_name
 
@@ -544,7 +544,7 @@ class PregelEngine:
         return checkpoint
 
     async def _execute_node(
-        self, node_name: str, state: GraphState, config: dict, context: ExecutionContext
+        self, node_name: str, state: GraphState, config: dict[str, Any], context: ExecutionContext
     ) -> Any:
         """Execute a single node with retry and timeout."""
         if node_name in TERMINAL_NODES:
@@ -586,7 +586,9 @@ class PregelEngine:
             logger.error("node_failed", node=node_name, error=str(e))
             raise
 
-    def _parse_output(self, output: Any) -> tuple[dict | None, str | list[str] | None, Any]:
+    def _parse_output(
+        self, output: Any
+    ) -> tuple[dict[str, Any] | None, str | list[str] | None, Any]:
         """Parse a node's output into update, goto, resume components."""
         return parse_node_output(output)
 
@@ -616,7 +618,7 @@ class PregelEngine:
         # Use static edges
         return self._graph.get_outgoing_edges(current_node)
 
-    async def _resolve_router(self, router: callable, state: GraphState) -> str:
+    async def _resolve_router(self, router: RouterFunc, state: GraphState) -> str:
         """Resolve a router function to a node name."""
         try:
             result = router(state)

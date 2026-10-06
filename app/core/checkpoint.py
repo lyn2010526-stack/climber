@@ -6,12 +6,15 @@
 
 from __future__ import annotations
 
+import builtins
 import json
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
+
+from sqlalchemy import CursorResult
 
 from app.storage import async_session
 
@@ -32,7 +35,8 @@ class CheckpointData:
     channel_values: dict[str, Any] = field(default_factory=dict)  # 状态通道快照
     channel_versions: dict[str, int] = field(default_factory=dict)  # 通道版本号
     versions_seen: dict[str, dict[str, int]] = field(default_factory=dict)  # 节点见过的版本
-    pending_writes: list[dict[str, Any]] = field(default_factory=list)  # 待处理写入
+    # 待处理写入：既可能是 dict（已序列化），也可能是 PendingWrite 对象。
+    pending_writes: list[Any] = field(default_factory=list)
 
 
 @dataclass
@@ -59,7 +63,7 @@ def sanitize_checkpoint(
         "client_secret",
     }
 
-    def clean(value):
+    def clean(value: Any) -> Any:
         if isinstance(value, dict):
             return {
                 key: "[REDACTED]"
@@ -81,7 +85,7 @@ def sanitize_checkpoint(
 class InMemoryCheckpointStore:
     """Simple in-memory checkpoint store with LangGraph-style enhancements."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._store: dict[str, CheckpointData] = {}
         self._parents: dict[str, str | None] = {}
         self._pending_writes: dict[str, list[PendingWrite]] = {}
@@ -199,6 +203,7 @@ class SQLiteCheckpointStore:
             "parent_id": parent_id,
             "created_at": saved_at,
         }
+        base: Any
         if _db_engine.dialect.name == "postgresql":
             from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -284,7 +289,7 @@ class SQLiteCheckpointStore:
 
         await ensure_checkpoint_schema()
         async with async_session() as db:
-            rows = (
+            rows: Any = (
                 (
                     await db.execute(
                         __import__("sqlalchemy")
@@ -327,7 +332,7 @@ class SQLiteCheckpointStore:
 
         await ensure_checkpoint_schema()
         async with async_session() as db:
-            rows = (
+            rows: Any = (
                 (
                     await db.execute(
                         __import__("sqlalchemy")
@@ -345,7 +350,7 @@ class SQLiteCheckpointStore:
         from app.storage.database import CheckpointRecord
 
         async with async_session() as db:
-            rows = (
+            rows: Any = (
                 (
                     await db.execute(
                         __import__("sqlalchemy")
@@ -377,9 +382,10 @@ class SQLiteCheckpointStore:
                 .where(CheckpointRecord.id == checkpoint_id)
             )
             await db.commit()
-            return result.rowcount > 0
+            # 运行期返回 CursorResult（有 rowcount）；stub 仅声明 Result。
+            return cast(CursorResult[Any], result).rowcount > 0
 
-    async def put_writes(self, checkpoint_id: str, writes: list[PendingWrite]) -> None:
+    async def put_writes(self, checkpoint_id: str, writes: builtins.list[PendingWrite]) -> None:
         from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
 
         await ensure_checkpoint_schema()
@@ -398,7 +404,7 @@ class SQLiteCheckpointStore:
             record.pending_writes = json.dumps(pending, ensure_ascii=False)
             await db.commit()
 
-    async def get_writes(self, checkpoint_id: str) -> list[PendingWrite]:
+    async def get_writes(self, checkpoint_id: str) -> builtins.list[PendingWrite]:
         from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
 
         await ensure_checkpoint_schema()
@@ -426,7 +432,7 @@ class SQLiteCheckpointStore:
             return default
 
     @staticmethod
-    def _parse_pending_writes(raw: Any) -> list[PendingWrite]:
+    def _parse_pending_writes(raw: Any) -> builtins.list[PendingWrite]:
         if not isinstance(raw, list):
             return []
         try:

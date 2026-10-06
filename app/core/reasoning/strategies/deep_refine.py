@@ -362,7 +362,7 @@ class DeepRefineStrategy:
         ]
         try:
             result = await model_adapter.chat(messages, temperature=0.5, max_tokens=8000)
-            improved = result.content.strip()
+            improved: str = result.content.strip()
             if len(improved) < len(content) * 0.3:
                 return None
             return improved
@@ -397,8 +397,9 @@ class DeepRefineStrategy:
                 temperature=0.3,
                 max_tokens=500,
             )
-            data = json.loads(result.content.strip())
-            return data.get("decision", "continue")
+            data: dict[str, Any] = json.loads(result.content.strip())
+            decision: str = data.get("decision", "continue")
+            return decision
         except Exception:
             return "continue"
 

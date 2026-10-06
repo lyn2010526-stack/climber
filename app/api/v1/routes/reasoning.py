@@ -55,7 +55,7 @@ LEVEL_PARAMS: dict[ThinkingLevel, dict[str, Any]] = {
 def level_params(level: str) -> dict[str, Any]:
     """Map a level id onto its model-call parameters; raises on unknown ids."""
     try:
-        return dict(LEVEL_PARAMS[level])  # type: ignore[index]
+        return dict(LEVEL_PARAMS[level])  # type: ignore[index]  # level validated via KeyError below
     except KeyError:
         raise ValueError(f"Unknown thinking level: {level}") from None
 
@@ -63,7 +63,7 @@ def level_params(level: str) -> dict[str, Any]:
 def level_from_context(context_data: dict[str, Any] | None) -> ThinkingLevel:
     """Read the persisted level, falling back to the default when unset."""
     value = (context_data or {}).get("reasoning_level")
-    return value if value in LEVEL_PARAMS else DEFAULT_REASONING_LEVEL  # type: ignore[return-value]
+    return value if value in LEVEL_PARAMS else DEFAULT_REASONING_LEVEL
 
 
 # The three plain-language tiers the settings panel offers, and the enforced
@@ -114,7 +114,7 @@ async def list_reasoning_levels(_user: str = Depends(get_current_user)) -> dict[
 @router.get("/reasoning/permission-tiers")
 async def get_permission_tiers(
     engine: AgentEngine = Depends(get_engine),
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Three-tier permission view plus each canonical tool's live decision.
 
@@ -158,7 +158,7 @@ async def update_session_reasoning_level(
     session_id: str,
     update: LevelUpdate,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Persist the per-session override (same store as the /level command)."""
     async with async_session() as db:
@@ -215,11 +215,13 @@ class _LevelAdapter:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._adapter, name)
 
-    async def chat(self, messages: list, tools: Any = None, **kwargs: Any) -> Any:
+    async def chat(self, messages: list[dict[str, Any]], tools: Any = None, **kwargs: Any) -> Any:
         merged = {**self._params, **kwargs}
         return await self._adapter.chat(messages=messages, tools=tools, **merged)
 
-    async def stream_chat(self, messages: list, tools: Any = None, **kwargs: Any) -> Any:
+    async def stream_chat(
+        self, messages: list[dict[str, Any]], tools: Any = None, **kwargs: Any
+    ) -> Any:
         merged = {**self._params, **kwargs}
         async for chunk in self._adapter.stream_chat(messages=messages, tools=tools, **merged):
             yield chunk

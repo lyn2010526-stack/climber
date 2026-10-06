@@ -285,7 +285,7 @@ async def _broadcast_worker_done(task: Any, worker: Any, output: str, tokens: in
     )
 
 
-async def _broadcast_guardrail_retry(task: Any, round_num: int, feedback: list) -> None:
+async def _broadcast_guardrail_retry(task: Any, round_num: int, feedback: list[Any]) -> None:
     """Broadcast guardrail retry."""
     await group_ws_hub.broadcast(
         task.group_id,
@@ -431,7 +431,7 @@ async def _checkpoint_and_broadcast(
     task: Any,
     round_num: int,
     output: str,
-    issues: list,
+    issues: list[dict[str, Any]],
     status: str = "running",
 ) -> None:
     """Save checkpoint and broadcast."""

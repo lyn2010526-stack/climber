@@ -6,12 +6,13 @@ import json
 import secrets
 from collections.abc import Awaitable, Callable
 from ipaddress import ip_address, ip_network
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import structlog
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.types import ASGIApp
 
 from app.core.principal import get_context_principal
 from app.storage.usage import usage_tracker
@@ -29,7 +30,7 @@ CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add comprehensive security headers to all responses."""
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         try:
             response = await call_next(request)
         except Exception as exc:
@@ -85,7 +86,7 @@ class CsrfProtectionMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,
+        app: ASGIApp,
         excluded_paths: set[str] | None = None,
         enabled: bool = True,
     ):
@@ -146,7 +147,7 @@ class CsrfProtectionMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-def _check_json_depth(obj, depth: int = 0) -> bool:
+def _check_json_depth(obj: Any, depth: int = 0) -> bool:
     """Return True if JSON depth exceeds MAX_JSON_DEPTH."""
     if depth > MAX_JSON_DEPTH:
         return False
@@ -162,7 +163,7 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
 
     SKIP_PATHS: ClassVar[set[str]] = {"/health", "/health/logs", "/metrics"}
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.url.path in self.SKIP_PATHS:
             return await call_next(request)
 
@@ -202,7 +203,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     SKIP_PATHS: ClassVar[set[str]] = {"/health", "/health/logs"}
 
-    def __init__(self, app, trusted_proxies: list[str] | None = None):
+    def __init__(self, app: ASGIApp, trusted_proxies: list[str] | None = None):
         super().__init__(app)
         self.trusted_proxies = tuple(
             ip_network(proxy, strict=False) for proxy in (trusted_proxies or [])
@@ -245,7 +246,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         except RuntimeError:
             return self._get_client_ip(request)
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.method == "OPTIONS" or request.url.path in self.SKIP_PATHS:
             return await call_next(request)
 

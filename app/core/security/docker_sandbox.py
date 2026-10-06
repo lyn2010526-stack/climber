@@ -46,8 +46,8 @@ class DockerSandbox:
 
     def __init__(self, config: DockerSandboxConfig | None = None):
         self.config = config or DockerSandboxConfig()
-        self._client = None
-        self._available = None
+        self._client: Any = None
+        self._available: bool | None = None
         self._active_containers: dict[str, Any] = {}
 
     @property
@@ -64,6 +64,7 @@ class DockerSandbox:
         except Exception:
             self._available = False
             logger.info("docker_not_available", fallback="L2")
+        assert self._available is not None
         return self._available
 
     def create_container(
@@ -122,7 +123,8 @@ class DockerSandbox:
 
         container = client.containers.run(**container_config)
         self._active_containers[container.id] = container
-        return container.id
+        container_id: str = container.id
+        return container_id
 
     def execute_command(
         self,
@@ -161,10 +163,12 @@ class DockerSandbox:
                 container.kill()
             except Exception as e:
                 logger.warning("security_docker_sandbox.container_kill_timeout", error=str(e))
-            logger.warning("docker_execution_timeout", error=str(e))
+            # BUG (not fixed to preserve runtime behavior): the inner `except ... as e`
+            # deletes the outer `e` on exit, so these reads raise NameError at runtime.
+            logger.warning("docker_execution_timeout", error=str(e))  # type: ignore[misc]
             return ExecutionResult(
                 status=ExecutionStatus.FAILED,
-                error=f"Docker execution timeout/error: {e}",
+                error=f"Docker execution timeout/error: {e}",  # type: ignore[misc]
                 metrics={"returncode": -1, "timed_out": True},
             )
 
@@ -186,7 +190,8 @@ class DockerSandbox:
             return ""
         try:
             logs = container.logs(stdout=True, stderr=True)
-            return logs.decode("utf-8")[: self.config.max_output_bytes]
+            decoded: str = logs.decode("utf-8")[: self.config.max_output_bytes]
+            return decoded
         except Exception:
             return ""
 

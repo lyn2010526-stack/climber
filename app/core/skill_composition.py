@@ -30,7 +30,7 @@ def _dump_json_list(value: Any) -> str:
     return json.dumps(list(value or []), ensure_ascii=False)
 
 
-def _load_json_list(value: Any) -> list:
+def _load_json_list(value: Any) -> list[Any]:
     """Parse a text JSON column back into a list."""
     if isinstance(value, str):
         try:
@@ -178,7 +178,7 @@ class SkillVersionManager:
             await db.commit()
             return version_id
 
-    async def get_versions(self, skill_id: str) -> list[dict]:
+    async def get_versions(self, skill_id: str) -> list[dict[str, Any]]:
         """Get all versions of a skill."""
         async with async_session() as db:
             result = await db.execute(
@@ -201,7 +201,7 @@ class SkillVersionManager:
                 for v in versions
             ]
 
-    async def get_version(self, skill_id: str, version: str) -> dict | None:
+    async def get_version(self, skill_id: str, version: str) -> dict[str, Any] | None:
         """Get a specific version of a skill."""
         async with async_session() as db:
             result = await db.execute(
@@ -225,7 +225,7 @@ class SkillVersionManager:
                 "changelog": v.changelog,
             }
 
-    async def rollback(self, skill_id: str, version: str) -> dict | None:
+    async def rollback(self, skill_id: str, version: str) -> dict[str, Any] | None:
         """Rollback to a specific version (creates a new version with old content)."""
         target = await self.get_version(skill_id, version)
         if not target:

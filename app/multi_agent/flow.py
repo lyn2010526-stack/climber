@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from enum import StrEnum
 from typing import Any
 
@@ -53,17 +53,17 @@ class FlowState(BaseModel):
 # ── Decorator markers ──
 
 
-def start() -> Callable:
+def start() -> Callable[..., Any]:
     """Mark a method as a flow entry point."""
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         func._flow_start = True  # type: ignore[attr-defined]
         return func
 
     return decorator
 
 
-def listen(*methods: str | Callable) -> Callable:
+def listen(*methods: str | Callable[..., Any]) -> Callable[..., Any]:
     """Mark a method to trigger when specified methods complete."""
     method_names = []
     for m in methods:
@@ -72,7 +72,7 @@ def listen(*methods: str | Callable) -> Callable:
         elif isinstance(m, str):
             method_names.append(m)
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         func._flow_listens = method_names  # type: ignore[attr-defined]
         func._flow_trigger = "all"  # type: ignore[attr-defined]
         return func
@@ -80,7 +80,7 @@ def listen(*methods: str | Callable) -> Callable:
     return decorator
 
 
-def listen_or(*methods: str | Callable) -> Callable:
+def listen_or(*methods: str | Callable[..., Any]) -> Callable[..., Any]:
     """Listen to multiple methods, fire when ANY completes."""
     method_names = []
     for m in methods:
@@ -89,7 +89,7 @@ def listen_or(*methods: str | Callable) -> Callable:
         elif isinstance(m, str):
             method_names.append(m)
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         func._flow_listens = method_names  # type: ignore[attr-defined]
         func._flow_trigger = "any"  # type: ignore[attr-defined]
         return func
@@ -97,7 +97,7 @@ def listen_or(*methods: str | Callable) -> Callable:
     return decorator
 
 
-def router(*methods: str | Callable) -> Callable:
+def router(*methods: str | Callable[..., Any]) -> Callable[..., Any]:
     """Mark a method as a conditional router.
 
     The decorated method must return a string label.
@@ -110,7 +110,7 @@ def router(*methods: str | Callable) -> Callable:
         elif isinstance(m, str):
             method_names.append(m)
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         func._flow_router_for = method_names  # type: ignore[attr-defined]
         func._flow_returns_routes = True  # type: ignore[attr-defined]
         return func
@@ -118,10 +118,10 @@ def router(*methods: str | Callable) -> Callable:
     return decorator
 
 
-def listen_route(router_method: Callable, route_label: str) -> Callable:
+def listen_route(router_method: Callable[..., Any], route_label: str) -> Callable[..., Any]:
     """Listen to a router method for a specific route label."""
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         func._flow_listens = [router_method.__name__]  # type: ignore[attr-defined]
         func._flow_route_label = route_label  # type: ignore[attr-defined]
         func._flow_trigger = "route"  # type: ignore[attr-defined]
@@ -163,7 +163,7 @@ class FlowExecutor:
         methods = self._discover_methods(flow_instance)
         completed: set[str] = set()
         failed: set[str] = set()
-        running_tasks: dict[str, asyncio.Task] = {}
+        running_tasks: dict[str, asyncio.Task[Any]] = {}
 
         # Start methods run first
         start_methods = methods.get("start", [])
@@ -231,7 +231,7 @@ class FlowExecutor:
 
     async def _run_method(
         self,
-        method: Callable,
+        method: Callable[..., Any],
         state: FlowState,
         instance: Any,
     ) -> Any:
@@ -242,9 +242,9 @@ class FlowExecutor:
             return await result
         return result
 
-    def _discover_methods(self, instance: Any) -> dict[str, list[tuple[str, Callable]]]:
+    def _discover_methods(self, instance: Any) -> dict[str, list[tuple[Any, ...]]]:
         """Categorize methods by their flow role."""
-        methods: dict[str, list[tuple[str, Callable]]] = {
+        methods: dict[str, list[tuple[Any, ...]]] = {
             "start": [],
             "listen": [],
             "router": [],
@@ -277,14 +277,14 @@ class FlowExecutor:
 
     def _find_triggered_methods(
         self,
-        methods: dict,
+        methods: dict[str, list[tuple[Any, ...]]],
         completed: set[str],
         failed: set[str],
         state: FlowState,
-        running: dict[str, asyncio.Task],
-    ) -> list[tuple[str, Callable]]:
+        running: dict[str, asyncio.Task[Any]],
+    ) -> list[tuple[str, Callable[..., Any]]]:
         """Find methods that should run now."""
-        triggered: list[tuple[str, Callable]] = []
+        triggered: list[tuple[str, Callable[..., Any]]] = []
 
         # Check router methods (listen to their deps like "all" trigger)
         for entry in methods.get("router", []):
@@ -374,7 +374,7 @@ class Flow:
     async def execute(
         self,
         params: dict[str, Any] | None = None,
-        on_progress=None,
+        on_progress: Callable[[int, int, str], Awaitable[None]] | None = None,
     ) -> dict[str, Any]:
         from app.workflow.engine import WorkflowEngine
 
@@ -395,7 +395,7 @@ class Flow:
         from app.core.di import resolve as di_resolve
 
         try:
-            agent_engine = di_resolve("AgentEngine")
+            agent_engine: AgentEngine = di_resolve("AgentEngine")
         except KeyError:
             from app.core.agent_engine import AgentEngine
 

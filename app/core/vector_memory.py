@@ -13,7 +13,7 @@ import hashlib
 import math
 import re
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -25,8 +25,8 @@ try:
     import chromadb
     from chromadb.api.types import EmbeddingFunction
 except Exception:  # pragma: no cover - Chroma is optional
-    chromadb = None
-    EmbeddingFunction = Any
+    chromadb = None  # type: ignore[assignment]  # optional dependency absent
+    EmbeddingFunction = Any  # type: ignore[misc, assignment]  # dynamic fallback base
 
 _COLLECTION_NAME_RE = re.compile(r"[^a-zA-Z0-9._-]")
 
@@ -35,16 +35,17 @@ _COLLECTION_NAME_RE = re.compile(r"[^a-zA-Z0-9._-]")
 _EMBED_DIM = 384
 
 
-class _DefaultEmbeddingWrapper(EmbeddingFunction):
+class _DefaultEmbeddingWrapper(EmbeddingFunction):  # type: ignore[type-arg]  # chromadb protocol is generic
     """Wrap ChromaDB's default embedding function for stability across versions."""
 
     def __init__(self) -> None:
         self._default_ef: Any = None
 
-    def name(self) -> str:
+    @staticmethod
+    def name() -> str:
         return "default"
 
-    def __call__(self, input: list[str]) -> list[list[float]]:
+    def __call__(self, input: list[str]) -> list[list[float]]:  # type: ignore[override]  # protocol returns ndarrays
         return self.embed(input)
 
     def embed(self, input: list[str]) -> list[list[float]]:
@@ -52,12 +53,14 @@ class _DefaultEmbeddingWrapper(EmbeddingFunction):
         if chromadb is not None:
             if self._default_ef is None:
                 try:
-                    self._default_ef = chromadb.utils.embedding_functions.DefaultEmbeddingFunction()
+                    self._default_ef = cast(
+                        "Any", chromadb
+                    ).utils.embedding_functions.DefaultEmbeddingFunction()
                 except Exception:
                     self._default_ef = None
             if self._default_ef is not None:
                 try:
-                    return self._default_ef(input)
+                    return cast("list[list[float]]", self._default_ef(input))
                 except Exception:
                     logger.debug("default embedding failed, using offline fallback")
         return self._fallback_embed(input)
@@ -247,7 +250,7 @@ class VectorMemoryService:
     async def count(self, collection: str) -> int:
         """Count documents in a collection."""
         coll = await self._get_collection(collection)
-        return await self._run(coll.count)
+        return cast("int", await self._run(coll.count))
 
 
 # Global singleton

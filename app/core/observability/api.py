@@ -7,7 +7,7 @@ All endpoints require authentication.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -16,6 +16,9 @@ from app.core.observability.alignment import GoalTracker
 from app.core.observability.audit import AuditChain
 from app.core.observability.emergency_stop import EmergencyStopManager
 from app.core.observability.trace import TraceCollector
+
+if TYPE_CHECKING:
+    from app.core.observability.audit_store import DurableAuditStore
 
 router = APIRouter(prefix="/api/v1/observability", tags=["observability"])
 
@@ -94,7 +97,7 @@ async def get_trace(
 # --- Audit Endpoints ---
 
 
-def _durable_audit():
+def _durable_audit() -> DurableAuditStore:
     from app.core.observability.audit_store import audit_log
 
     return audit_log

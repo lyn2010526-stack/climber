@@ -113,7 +113,7 @@ async def list_mcp_categories() -> list[str]:
 @router.post("/mcp/servers/{server_id}/install")
 async def install_mcp_server(
     server_id: str,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     async with async_session() as db:
         existing = (
@@ -149,7 +149,7 @@ async def install_mcp_server(
 @router.delete("/mcp/servers/{server_id}")
 async def delete_mcp_market_server(
     server_id: str,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     async with async_session() as db:
         server = (

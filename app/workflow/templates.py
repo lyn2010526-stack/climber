@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.workflow import (
     NodeType,
     Workflow,
@@ -222,7 +224,7 @@ class WorkflowTemplates:
         model_id: str,
         api_key: str,
         tool_name: str,
-        schema: dict | None = None,
+        schema: dict[str, Any] | None = None,
         max_rounds: int = 8,
     ) -> Workflow:
         """Run a simulation-experiment sweep through the SimulationHarness.

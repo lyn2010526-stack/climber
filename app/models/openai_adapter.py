@@ -78,9 +78,11 @@ class OpenAIAdapter(ModelAdapter):
             cls._client = None
 
     @staticmethod
-    def _parse_tool_calls_from_delta(tool_calls_delta: list[dict]) -> list[dict]:
+    def _parse_tool_calls_from_delta(
+        tool_calls_delta: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Parse tool calls from OpenAI streaming delta format."""
-        result = []
+        result: list[dict[str, Any]] = []
         for tc in tool_calls_delta:
             idx = tc.get("index", 0)
             while len(result) <= idx:
@@ -100,9 +102,9 @@ class OpenAIAdapter(ModelAdapter):
         return result
 
     @staticmethod
-    def _parse_xml_tool_calls(text: str) -> list[dict]:
+    def _parse_xml_tool_calls(text: str) -> list[dict[str, Any]]:
         """Parse XML-style tool calls like <function=browser_navigate>..."""
-        results: list[dict] = []
+        results: list[dict[str, Any]] = []
         for m in re.finditer(r"<function=([^>]+)>(.*?)</\1>", text, re.DOTALL | re.IGNORECASE):
             name = m.group(1).strip()
             args_text = m.group(2).strip()
@@ -121,7 +123,7 @@ class OpenAIAdapter(ModelAdapter):
             )
         return results
 
-    async def stream_chat(
+    async def stream_chat(  # type: ignore[override]  # base declares async->AsyncIterator; impl is an async generator consumed via `async for`
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
@@ -153,7 +155,7 @@ class OpenAIAdapter(ModelAdapter):
         total_timeout = kwargs.get("timeout", 120)
         idle_timeout = kwargs.get("idle_timeout", 15)
         accumulated_content = ""
-        accumulated_tool_calls: list[dict] = []
+        accumulated_tool_calls: list[dict[str, Any]] = []
         finish_reason = None
         tokens_used = 0
         usage: dict[str, Any] | None = None
@@ -163,10 +165,10 @@ class OpenAIAdapter(ModelAdapter):
 
         client = self.get_client()
         response: httpx.Response | None = None
-        watchdog_task: asyncio.Task | None = None
+        watchdog_task: asyncio.Task[Any] | None = None
         idle_event = asyncio.Event()
 
-        async def _watchdog():
+        async def _watchdog() -> None:
             """Close the response when idle timeout fires."""
             try:
                 while True:
@@ -297,7 +299,7 @@ class OpenAIAdapter(ModelAdapter):
                         delta_content = delta.get("content") or ""
                         if delta_content:
                             accumulated_content += delta_content
-                        new_calls: list[dict] = []
+                        new_calls = []
                         if delta.get("tool_calls"):
                             new_calls = self._parse_tool_calls_from_delta(delta["tool_calls"])
                             for i, tc in enumerate(new_calls):
@@ -460,7 +462,7 @@ class OpenAIAdapter(ModelAdapter):
             return ChatResult(content="", tool_calls=[], finish_reason="stop", tokens_used=0)
         chunks[-1]
         full_content = "".join(c.content or "" for c in chunks)
-        all_tool_calls: list[dict] = []
+        all_tool_calls: list[dict[str, Any]] = []
         for c in chunks:
             self._accumulate_tool_call_deltas(all_tool_calls, c.tool_calls)
         total_tokens = max((c.tokens_used or 0 for c in chunks), default=0)

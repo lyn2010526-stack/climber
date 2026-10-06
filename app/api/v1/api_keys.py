@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -34,7 +36,7 @@ class ApiKeyOut(BaseModel):
 @router.get("", response_model=list[ApiKeyOut])
 @router.get("/", response_model=list[ApiKeyOut])
 async def list_api_keys(
-    request: Request, _auth: dict = Depends(require_scopes("read"))
+    request: Request, _auth: dict[str, Any] = Depends(require_scopes("read"))
 ) -> list[ApiKeyOut]:
     user_id = current_user_id(request)
     async with async_session() as session:
@@ -60,7 +62,9 @@ async def list_api_keys(
 @router.post("", response_model=ApiKeyOut)
 @router.post("/", response_model=ApiKeyOut)
 async def add_api_key(
-    payload: ApiKeyCreate, request: Request, _auth: dict = Depends(require_scopes("write"))
+    payload: ApiKeyCreate,
+    request: Request,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> ApiKeyOut:
     provider = payload.provider.strip().lower()
     name = payload.name.strip()
@@ -94,8 +98,8 @@ async def add_api_key(
 
 @router.delete("/{key_id}")
 async def delete_api_key(
-    key_id: str, request: Request, _auth: dict = Depends(require_scopes("write"))
-) -> dict:
+    key_id: str, request: Request, _auth: dict[str, Any] = Depends(require_scopes("write"))
+) -> dict[str, Any]:
     user_id = current_user_id(request)
     async with async_session() as session:
         result = await session.execute(

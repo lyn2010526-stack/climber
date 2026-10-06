@@ -12,7 +12,7 @@ from __future__ import annotations
 import contextlib
 import re
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 from app.core import (
@@ -31,7 +31,7 @@ from app.models.vision import build_user_content, content_text
 TASK_MEMORY_MARKER = "<!-- TASK_MEMORY_CONTEXT -->"
 
 
-def _meter_summarize(engine: Any, session: Any, iteration: int):
+def _meter_summarize(engine: Any, session: Any, iteration: int) -> Callable[[Any], Awaitable[None]]:
     """Build a meter callback that records a summarizer model call's usage.
 
     The compression step performs an extra LLM call that the main loop would

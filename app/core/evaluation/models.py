@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 
@@ -52,13 +53,13 @@ class EvalScenario:
     scenario_id: str = field(default_factory=lambda: str(uuid4()))
     difficulty: str = "normal"  # easy | normal | hard
     canary: str | None = None  # leakage marker copied into trajectory meta
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict) -> EvalScenario:
+    def from_dict(cls, data: dict[str, Any]) -> EvalScenario:
         rubric = [RubricItem(**item) for item in data.get("rubric", [])]
         return cls(
             scenario_id=data.get("scenario_id") or str(uuid4()),
@@ -79,7 +80,7 @@ class CallRecord:
     step: int
     kind: str  # "llm" | "tool"
     name: str = ""  # tool name (kind=tool) or model id (kind=llm)
-    arguments: dict = field(default_factory=dict)
+    arguments: dict[str, Any] = field(default_factory=dict)
     output: str = ""
     tokens_used: int = 0
 
@@ -96,7 +97,7 @@ class Trajectory:
     status: str = "completed"  # completed | failed | error
     error: str | None = None
     duration_ms: float = 0.0
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def add_call(self, record: CallRecord) -> None:
         self.calls.append(record)
@@ -125,7 +126,7 @@ class EvaluationResult:
     failure_reasons: list[str] = field(default_factory=list)
     judge: str = "deterministic"
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -142,7 +143,7 @@ class ScenarioReport:
     passed: bool = False  # best candidate passed (pass@1 = any-pass)
     trajectories: list[Trajectory] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "scenario_id": self.scenario_id,
             "scenario_name": self.scenario_name,
@@ -165,13 +166,13 @@ class EvaluationReport:
     total_scenarios: int = 0
     passed_scenarios: int = 0
     average_score: float = 0.0
-    pass_at_k: dict[str, float] = field(default_factory=dict)
-    pass_hat_k: dict[str, float] = field(default_factory=dict)
+    pass_at_k: dict[str, Any] = field(default_factory=dict)
+    pass_hat_k: dict[str, Any] = field(default_factory=dict)
     total_tokens: int = 0
     duration_ms: float = 0.0
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "report_id": self.report_id,
             "created_at": self.created_at,
@@ -186,7 +187,7 @@ class EvaluationReport:
             "scenarios": [s.to_dict() for s in self.scenarios],
         }
 
-    def to_baseline(self) -> dict:
+    def to_baseline(self) -> dict[str, Any]:
         """Compact baseline snapshot: per-scenario best score only."""
         return {
             "report_id": self.report_id,

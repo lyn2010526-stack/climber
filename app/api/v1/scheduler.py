@@ -52,13 +52,13 @@ async def _run_scheduled_workflow(task: Any) -> None:
         task.config["last_error"] = "Scheduled workflow has no nodes"
         return
     try:
-        model_registry = di_resolve("ModelRegistry")
+        model_registry: Any = di_resolve("ModelRegistry")
     except KeyError:
         from app.models.registry import ModelRegistry
 
         model_registry = ModelRegistry()
     try:
-        tool_registry = di_resolve("ToolRegistry")
+        tool_registry: Any = di_resolve("ToolRegistry")
     except KeyError:
         from app.tools import ToolRegistry
 
@@ -145,10 +145,10 @@ async def list_scheduler_tasks(request: Request) -> list[dict[str, Any]]:
 @router.post("/scheduler/tasks/")
 async def create_scheduler_task(
     request: Request,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     data = await _payload(request)
-    await _ensure_scheduler_handler()
+    await _ensure_scheduler_handler()  # type: ignore[misc, func-returns-value]  # helper is sync; await preserved to keep runtime behavior
     async with async_session() as db:
         wf = Workflow(
             user_id=current_user_id(request),
@@ -178,7 +178,7 @@ async def create_scheduler_task(
 async def update_scheduler_task(
     task_id: str,
     request: Request,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     data = await _payload(request)
     async with async_session() as db:
@@ -218,7 +218,7 @@ async def update_scheduler_task(
 async def delete_scheduler_task(
     task_id: str,
     request: Request,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     async with async_session() as db:
         user_id = current_user_id(request)

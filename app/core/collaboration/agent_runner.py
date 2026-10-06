@@ -57,6 +57,8 @@ async def _broadcast_agent_event(
             agent_id=agent_id,
             role=role,
         )
+        if tracker is None:
+            return
         data: dict[str, Any] = {"role": role, "agent_id": agent_id}
         if event.type in (AgentEventType.TEXT, AgentEventType.THINKING):
             data["event"] = "thinking" if event.type == AgentEventType.THINKING else "text"
@@ -95,6 +97,8 @@ async def _open_task_node(
     """Register a sub-agent turn as a node in the group task tree."""
     try:
         tree = get_task_tree(group_id, create=True)
+        if tree is None:
+            return None, None
         root = await tree.ensure_root(task_name or f"task:{group_id}")
         node = await tree.add_node(
             root.node_id,
@@ -125,6 +129,8 @@ async def _ensure_task_root(group_id: str, task_name: str | None) -> None:
     """Ensure the group task tree root exists so turn nodes nest correctly."""
     try:
         tree = get_task_tree(group_id, create=True)
+        if tree is None:
+            return
         await tree.ensure_root(task_name or f"task:{group_id}")
     except Exception as exc:
         logger.warning("task_tree_root_open_failed", group_id=group_id, error=str(exc))
@@ -181,12 +187,12 @@ async def run_agent(
         AgentEvent instances from the agent engine.
     """
     # Keep provider constructors and registry behavior, but isolate role credentials.
-    model_registry = copy(di_resolve("ModelRegistry"))
+    model_registry: Any = copy(di_resolve("ModelRegistry"))
     model_registry._models = {}
     model_registry._user_keys = {}
     adapter = model_registry.register_model(model_id, provider, api_key, base_url)
     model_registry.get_default = lambda: adapter
-    tool_registry = di_resolve("ToolRegistry")
+    tool_registry: Any = di_resolve("ToolRegistry")
     engine = AgentEngine(model_registry=model_registry, tool_registry=tool_registry)
     principal = principal or get_context_principal()
     session = engine.create_session(

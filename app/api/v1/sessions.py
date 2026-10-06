@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -117,11 +117,12 @@ class SessionRuntimeReport(BaseModel):
 async def session_input_report(
     session_id: str,
     user_id: str = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     from app.core.engine.input_queue import SessionInputQueue
 
     try:
-        return await SessionInputQueue(async_session).report(session_id, user_id)
+        queue: Any = cast(Any, SessionInputQueue)(async_session)
+        return cast(dict[str, Any], await queue.report(session_id, user_id))
     except LookupError as exc:
         raise HTTPException(404, detail=str(exc)) from exc
 
@@ -131,13 +132,14 @@ async def resume_session_inputs(
     session_id: str,
     payload: SessionInputReview,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     from app.core.engine.input_queue import SessionInputQueue
 
     try:
+        queue: Any = cast(Any, SessionInputQueue)(async_session)
         return {
-            "items": await SessionInputQueue(async_session).resume_reviewed(
+            "items": await queue.resume_reviewed(
                 session_id,
                 user_id,
                 payload.review_confirmed,
@@ -152,17 +154,21 @@ async def submit_session_input(
     session_id: str,
     payload: SessionInputCreate,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     from app.core.engine.input_queue import SessionInputQueue
 
     try:
-        return await SessionInputQueue(async_session).submit(
-            session_id,
-            user_id,
-            payload.client_request_id,
-            payload.kind,
-            payload.message,
+        queue: Any = cast(Any, SessionInputQueue)(async_session)
+        return cast(
+            dict[str, Any],
+            await queue.submit(
+                session_id,
+                user_id,
+                payload.client_request_id,
+                payload.kind,
+                payload.message,
+            ),
         )
     except LookupError as exc:
         raise HTTPException(404, detail=str(exc)) from exc
@@ -174,11 +180,12 @@ async def submit_session_input(
 async def list_session_inputs(
     session_id: str,
     user_id: str = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     from app.core.engine.input_queue import SessionInputQueue
 
     try:
-        return {"items": await SessionInputQueue(async_session).list(session_id, user_id)}
+        queue: Any = cast(Any, SessionInputQueue)(async_session)
+        return {"items": await queue.list(session_id, user_id)}
     except LookupError as exc:
         raise HTTPException(404, detail=str(exc)) from exc
 
@@ -255,8 +262,8 @@ async def list_sessions_no_slash(user_id: str = Depends(get_current_user)) -> li
 async def create_session_with_slash(
     payload: SessionCreate,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     async with async_session() as session:
         agent = None
         if payload.agent_id:
@@ -295,8 +302,8 @@ async def create_session_with_slash(
 async def create_session_no_slash(
     payload: SessionCreate,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     return await create_session_with_slash(payload, user_id)
 
 
@@ -304,8 +311,8 @@ async def create_session_no_slash(
 async def create_session_legacy(
     payload: SessionCreate,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     return await create_session_with_slash(payload, user_id)
 
 
@@ -314,7 +321,9 @@ class MessagesResponse(BaseModel):
 
 
 @router.get("/{session_id}/messages", response_model=MessagesResponse)
-async def get_session_messages(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+async def get_session_messages(
+    session_id: str, user_id: str = Depends(get_current_user)
+) -> dict[str, Any]:
     async with async_session() as session:
         owner = await session.scalar(
             select(SessionModel).where(
@@ -349,8 +358,8 @@ async def get_session_messages(session_id: str, user_id: str = Depends(get_curre
 async def clear_session(
     session_id: str,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     async with async_session() as session:
         result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
         row = result.scalar_one_or_none()
@@ -364,7 +373,7 @@ async def clear_session(
 
 
 @router.get("/{session_id}")
-async def get_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+async def get_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict[str, Any]:
     async with async_session() as session:
         result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
         row = result.scalar_one_or_none()
@@ -392,8 +401,8 @@ async def get_session(session_id: str, user_id: str = Depends(get_current_user))
 async def delete_session(
     session_id: str,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     async with async_session() as session:
         result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
         row = result.scalar_one_or_none()
@@ -432,7 +441,7 @@ async def _load_owned_session(db: Any, session_id: str, user_id: str) -> Session
     ).scalar_one_or_none()
     if not row or (row.user_id and row.user_id != user_id):
         raise HTTPException(status_code=404, detail="Session not found")
-    return row
+    return cast(SessionModel, row)
 
 
 def _load_checkpoints(row: SessionModel) -> list[dict[str, Any]]:
@@ -451,8 +460,8 @@ async def save_checkpoint(
     session_id: str,
     body: CheckpointRequest,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     async with async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)
@@ -477,7 +486,9 @@ async def save_checkpoint(
 
 
 @router.get("/{session_id}/checkpoint")
-async def get_latest_checkpoint(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+async def get_latest_checkpoint(
+    session_id: str, user_id: str = Depends(get_current_user)
+) -> dict[str, Any]:
     async with async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)
@@ -487,7 +498,9 @@ async def get_latest_checkpoint(session_id: str, user_id: str = Depends(get_curr
 
 
 @router.get("/{session_id}/history")
-async def get_checkpoint_history(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+async def get_checkpoint_history(
+    session_id: str, user_id: str = Depends(get_current_user)
+) -> dict[str, Any]:
     async with async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)
@@ -499,8 +512,8 @@ async def fork_session(
     session_id: str,
     body: ForkRequest,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     async with async_session() as session:
         source = await _load_owned_session(session, session_id, user_id)
         new_id = body.new_session_id or str(uuid.uuid4())
@@ -556,8 +569,8 @@ async def fork_session(
 async def resume_session(
     session_id: str,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     async with async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)

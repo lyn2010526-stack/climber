@@ -323,7 +323,7 @@ class SelfRefineLoop:
                 temperature=0.5,
                 max_tokens=8000,
             )
-            improved = result.content.strip()
+            improved: str = result.content.strip()
         except Exception as exc:
             logger.error(
                 "Improvement LLM call failed",

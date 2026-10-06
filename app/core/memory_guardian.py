@@ -13,7 +13,7 @@ import gc
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -41,7 +41,7 @@ class MemoryGuardian:
 
     _relief_callbacks: list[Callable[[], Awaitable[None]]] = field(default_factory=list)
     _history: list[MemorySample] = field(default_factory=list)
-    _task: asyncio.Task | None = None
+    _task: asyncio.Task[None] | None = None
     _gc_runs: int = 0
     _relief_runs: int = 0
     _peak_mb: float = 0.0
@@ -57,7 +57,7 @@ class MemoryGuardian:
         try:
             import psutil
 
-            return psutil.Process().memory_info().rss / (1024 * 1024)
+            return cast(float, psutil.Process().memory_info().rss / (1024 * 1024))
         except Exception:
             try:
                 import resource

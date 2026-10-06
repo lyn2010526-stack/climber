@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import AsyncIterator, Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 
@@ -31,7 +31,7 @@ class ReActLoopExecutor:
         tool_registry: ToolRegistry,
         checkpoint_store: InMemoryCheckpointStore,
         tool_prioritizer: ToolPrioritizer,
-        build_tools_fn: Callable[[list[str], str], list[dict[str, Any]]],
+        build_tools_fn: Callable[..., list[dict[str, Any]]],
         validate_tool_call_fn: Callable[[str, dict[str, Any]], tuple[bool, str]] | None = None,
     ):
         self.model_registry = model_registry
@@ -88,12 +88,16 @@ class ReActLoopExecutor:
                 try:
                     if adapter.capabilities.streaming:
                         full_content = ""
-                        accumulated_tool_calls = []
-                        async for chunk in adapter.stream_chat(
-                            messages=session.messages,
-                            tools=tools or None,
-                            **sampling_kwargs(session),
-                        ):
+                        accumulated_tool_calls: list[dict[str, Any]] = []
+                        stream = cast(
+                            "AsyncIterator[ChatResult]",
+                            adapter.stream_chat(
+                                messages=session.messages,
+                                tools=tools or None,
+                                **sampling_kwargs(session),
+                            ),
+                        )
+                        async for chunk in stream:
                             if chunk.content:
                                 full_content += chunk.content
                                 yield AgentEvent(

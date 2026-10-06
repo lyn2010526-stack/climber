@@ -20,7 +20,7 @@ from __future__ import annotations
 import math
 from collections import Counter
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -80,10 +80,10 @@ class Judgment:
         dissent = payload.get("dissent") or []
         return cls(
             claim=str(payload["claim"]),
-            confidence=float(payload["confidence"]),
-            scale=float(payload["scale"]),
-            dissent=tuple(str(item) for item in dissent),
-            sources=int(payload.get("sources") or 0),
+            confidence=float(cast("float | str", payload["confidence"])),
+            scale=float(cast("float | str", payload["scale"])),
+            dissent=tuple(str(item) for item in cast("Sequence[object]", dissent)),
+            sources=int(cast("int | str", payload.get("sources") or 0)),
         )
 
 

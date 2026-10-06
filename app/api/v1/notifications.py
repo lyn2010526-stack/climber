@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import structlog
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -23,8 +25,8 @@ class NotifyRequest(BaseModel):
 @router.post("send")
 async def send_notification(
     payload: NotifyRequest,
-    _auth: dict = Depends(require_admin()),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_admin()),
+) -> dict[str, Any]:
     try:
         from app.main import app
 
@@ -38,7 +40,7 @@ async def send_notification(
 
 @router.get("/test")
 @router.get("test")
-async def test_notification() -> dict:
+async def test_notification() -> dict[str, Any]:
     try:
         from app.main import app
 

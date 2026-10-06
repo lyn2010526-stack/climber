@@ -65,6 +65,8 @@ def _parse_verdict(text: str) -> Verdict | None:
     except json.JSONDecodeError:
         return None
     verdict = parsed.get("verdict") if isinstance(parsed, dict) else None
+    if not isinstance(verdict, str):
+        return None
     try:
         return Verdict(verdict)
     except ValueError:

@@ -57,7 +57,7 @@ async def list_templates(
 
 @router.post("")
 async def create_template(
-    body: dict[str, Any], _auth: dict = Depends(require_scopes("write"))
+    body: dict[str, Any], _auth: dict[str, Any] = Depends(require_scopes("write"))
 ) -> dict[str, Any]:
     """Create a new prompt template."""
     repo = get_repository()
@@ -82,7 +82,7 @@ async def create_template(
 
 @router.post("/import")
 async def import_template(
-    body: dict[str, Any], _auth: dict = Depends(require_scopes("write"))
+    body: dict[str, Any], _auth: dict[str, Any] = Depends(require_scopes("write"))
 ) -> dict[str, Any]:
     """Import a template from JSON."""
     repo = get_repository()
@@ -99,7 +99,7 @@ async def import_template(
 
 @router.post("/import-bulk")
 async def import_bulk(
-    body: dict[str, Any], _auth: dict = Depends(require_scopes("write"))
+    body: dict[str, Any], _auth: dict[str, Any] = Depends(require_scopes("write"))
 ) -> dict[str, Any]:
     """Import multiple templates from JSON array."""
     repo = get_repository()
@@ -134,7 +134,7 @@ async def get_template(template_id: str) -> dict[str, Any]:
 
 @router.put("/{template_id}")
 async def update_template(
-    template_id: str, body: dict[str, Any], _auth: dict = Depends(require_scopes("write"))
+    template_id: str, body: dict[str, Any], _auth: dict[str, Any] = Depends(require_scopes("write"))
 ) -> dict[str, Any]:
     """Update an existing template."""
     repo = get_repository()
@@ -151,7 +151,7 @@ async def update_template(
 
 @router.delete("/{template_id}")
 async def delete_template(
-    template_id: str, _auth: dict = Depends(require_scopes("write"))
+    template_id: str, _auth: dict[str, Any] = Depends(require_scopes("write"))
 ) -> dict[str, str]:
     """Delete a template."""
     repo = get_repository()
@@ -164,7 +164,7 @@ async def delete_template(
 async def duplicate_template(
     template_id: str,
     body: dict[str, Any] | None = None,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Duplicate an existing template."""
     repo = get_repository()
@@ -179,7 +179,7 @@ async def duplicate_template(
 async def render_template(
     template_id: str,
     body: dict[str, Any] | None = None,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, str]:
     """Render a template with variable substitution."""
     repo = get_repository()

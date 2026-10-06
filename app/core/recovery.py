@@ -50,7 +50,9 @@ class RecoveryManager:
             recovered["checkpoint"],
             interrupted=recovered["interrupted"],
         )
-        session._last_checkpoint_id = recovered["checkpoint_id"]
+        # ``_last_checkpoint_id`` is an undeclared dynamic session attribute
+        # consumed via getattr elsewhere, so silence the attr-defined error.
+        session._last_checkpoint_id = recovered["checkpoint_id"]  # type: ignore[attr-defined]
         if not recovered["interrupted"] and recovered["status"] in {
             "failed",
             "cancelled",

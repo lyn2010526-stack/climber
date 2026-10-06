@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from sqlalchemy import JSON, String, delete, select
@@ -162,7 +162,7 @@ class PersonaStore:
         async with async_session() as db:
             result = await db.execute(delete(PersonaModel).where(PersonaModel.agent_id == agent_id))
             await db.commit()
-            deleted = result.rowcount > 0
+            deleted: bool = cast(Any, result).rowcount > 0
             if deleted:
                 logger.info("persona_deleted", agent_id=agent_id)
             return deleted

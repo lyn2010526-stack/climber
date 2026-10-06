@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Literal
+from typing import Any, Literal, cast
 from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import select, update
@@ -22,7 +22,7 @@ def rule_id(owner_id: str, kind: str) -> str:
     return str(uuid5(NAMESPACE_URL, f"climber:ui-rule:{owner_id}:{kind}"))
 
 
-async def list_rules(owner_id: str) -> list[dict]:
+async def list_rules(owner_id: str) -> list[dict[str, Any]]:
     async with async_session() as db:
         rows = (
             await db.scalars(
@@ -47,7 +47,9 @@ async def list_rules(owner_id: str) -> list[dict]:
         ]
 
 
-async def save_rule(owner_id: str, kind: RuleKind, content: str, revision: str | None) -> dict:
+async def save_rule(
+    owner_id: str, kind: RuleKind, content: str, revision: str | None
+) -> dict[str, Any]:
     """Compare-and-set prevents stale editors from overwriting saved context."""
     digest = hashlib.sha256(content.encode()).hexdigest()
     identity = rule_id(owner_id, kind)
@@ -81,7 +83,7 @@ async def save_rule(owner_id: str, kind: RuleKind, content: str, revision: str |
                 )
                 .values(**values)
             )
-            if result.rowcount != 1:
+            if cast(Any, result).rowcount != 1:
                 await db.rollback()
                 raise ValueError("Rule changed; reload its current revision")
             await db.commit()
@@ -96,7 +98,7 @@ async def save_rule(owner_id: str, kind: RuleKind, content: str, revision: str |
     }
 
 
-async def refresh_rule_context(session) -> None:
+async def refresh_rule_context(session: Any) -> None:
     """Refresh user instructions without changing system policy or permissions."""
     rules = await list_rules(session.user_id)
     session.messages[:] = [

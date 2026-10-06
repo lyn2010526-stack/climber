@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
@@ -30,7 +30,7 @@ router = APIRouter()
 async def group_snapshot(
     group_id: str,
     principal: CurrentPrincipal,
-    _auth: dict = Depends(require_scopes("read")),
+    _auth: dict[str, Any] = Depends(require_scopes("read")),
 ) -> dict[str, Any]:
     from app.core.group_ws_hub import get_group_state_snapshot
 
@@ -47,7 +47,7 @@ async def _get_owned_group(
     stmt = select(AgentGroup).where(AgentGroup.id == group_id, AgentGroup.user_id == user_id)
     if with_members:
         stmt = stmt.options(selectinload(AgentGroup.members))
-    return (await db.execute(stmt)).scalars().first()
+    return cast("AgentGroup | None", (await db.execute(stmt)).scalars().first())
 
 
 @router.get("/groups")
@@ -76,7 +76,7 @@ async def list_groups(principal: CurrentPrincipal) -> list[dict[str, Any]]:
 async def create_group(
     payload: GroupCreateRequest,
     principal: CurrentPrincipal,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Create a new group, optionally with default template members."""
     data = payload.model_dump()
@@ -99,7 +99,8 @@ async def create_group(
         if data.get("template") == "default":
             await _add_default_members(db, group.id, user_id)
 
-        group = (
+        group = cast(
+            AgentGroup,
             (
                 await db.execute(
                     select(AgentGroup)
@@ -108,7 +109,7 @@ async def create_group(
                 )
             )
             .scalars()
-            .first()
+            .first(),
         )
         return _group_dict(group, members=_build_member_dicts(group.members if group else []))
 
@@ -158,7 +159,9 @@ async def get_group(group_id: str, principal: CurrentPrincipal) -> dict[str, Any
 
 @router.delete("/groups/{group_id}")
 async def delete_group(
-    group_id: str, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
+    group_id: str,
+    principal: CurrentPrincipal,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, bool]:
     """Delete a group by ID."""
     user_id = principal.subject_id
@@ -176,7 +179,7 @@ async def add_group_member(
     group_id: str,
     payload: GroupMemberCreateRequest,
     principal: CurrentPrincipal,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Add a member to a group."""
     data = payload.model_dump()
@@ -251,7 +254,7 @@ async def remove_group_member(
     group_id: str,
     member_id: str,
     principal: CurrentPrincipal,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, bool | str]:
     """Remove a member from a group."""
     user_id = principal.subject_id
@@ -280,7 +283,7 @@ async def update_group_member(
     member_id: str,
     payload: GroupMemberUpdateRequest,
     principal: CurrentPrincipal,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Update a group member's fields."""
     data = payload.model_dump(exclude_unset=True)
@@ -306,7 +309,7 @@ async def update_group_member(
         if "is_worker" in data:
             member.is_worker = bool(data["is_worker"])
         if "current_task_id" in data:
-            member.current_task_id = data["current_task_id"]
+            cast(Any, member).current_task_id = data["current_task_id"]
         await db.commit()
         return _member_dict(member)
 

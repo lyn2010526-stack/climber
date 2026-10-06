@@ -10,7 +10,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +209,7 @@ class GitHubClient:
         try:
             session = await self._get_session()
             response = await session.get("/user")
-            return response.status_code == 200
+            return cast(bool, response.status_code == 200)
         except Exception as e:
             raise GitHubError(f"Connection test failed: {e}") from e
 
@@ -612,7 +612,7 @@ class GitHubClient:
                 response.status_code,
             )
 
-        return response.json()
+        return cast(dict[str, Any], response.json())
 
 
 __all__ = [

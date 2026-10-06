@@ -16,7 +16,7 @@ import random
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 from app.core.exceptions import AgentEngineError
 
@@ -186,7 +186,8 @@ class RetryHandler:
         return False
 
     def _calculate_delay(self, attempt: int) -> float:
-        delay = self.config.base_delay * (2**attempt)
+        # mypy 2.3.1 将字面量基数 `2 ** variable` 推断为 Any，这里显式收窄为 float。
+        delay: float = cast(float, self.config.base_delay * (2**attempt))
         delay = min(delay, self.config.max_delay)
         if self.config.jitter:
             delay = random.uniform(0.0, delay)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import urlsplit
 
 import httpx
@@ -24,7 +25,7 @@ class JiraClient:
     def __init__(self, config: JiraConfig | None = None):
         self.config = config or JiraConfig()
 
-    async def create_issue(self, summary: str, description: str = "") -> dict:
+    async def create_issue(self, summary: str, description: str = "") -> dict[str, Any]:
         """Create a Jira Cloud issue using email/API-token Basic authentication.
 
         Contract: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/

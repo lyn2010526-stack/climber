@@ -80,7 +80,7 @@ class DebateAgent:
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
-            response = result.content
+            response: str = result.content
             usage = getattr(result, "usage", None) or {}
             self.total_tokens += getattr(result, "tokens_used", 0) or usage.get("total_tokens", 0)
         except Exception as exc:

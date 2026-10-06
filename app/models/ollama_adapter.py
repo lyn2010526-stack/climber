@@ -80,12 +80,14 @@ class OllamaAdapter(ModelAdapter):
                 resp.raise_for_status()
                 return resp.json()
 
-    async def stream_chat(
+    async def stream_chat(  # type: ignore[override]
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[ChatResult]:
+        # 父类 ModelAdapter.stream_chat 被标注成协程返回 AsyncIterator，
+        # 但实际应为异步生成器；此处无法修改父类，故忽略 override 检查。
         # Ollama models have no image mapping here; vision parts degrade to text.
         messages = degrade_image_parts(messages, provider=self.provider, model_id=self._model_id)
         payload: dict[str, Any] = {

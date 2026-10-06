@@ -4,9 +4,10 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from contextlib import aclosing
 from copy import copy
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -21,6 +22,7 @@ from app.core.auth import get_current_user
 from app.core.auth_manager import require_scopes
 from app.core.di import resolve as di_resolve
 from app.core.recovery import RecoveryManager
+from app.models import ModelAdapter
 from app.models.registry import MODEL_ALIASES, ModelRegistry
 from app.models.vision import validate_attachments, validate_images
 from app.storage import async_session
@@ -49,7 +51,7 @@ class _ChatModelRegistry:
         model_id: str = "",
         api_key: str = "",
         base_url: str | None = None,
-    ):
+    ) -> ModelAdapter:
         if not model_id:
             provider, model_id = MODEL_ALIASES.get(
                 provider,
@@ -63,18 +65,18 @@ class _ChatModelRegistry:
             raise ValueError("Requested credentials do not match the session binding")
         return self._adapter
 
-    def get_default(self):
+    def get_default(self) -> ModelAdapter:
         return self._adapter
 
-    def get_model(self, provider: str, model_id: str):
+    def get_model(self, provider: str, model_id: str) -> ModelAdapter:
         return self.get_or_create(provider, model_id)
 
 
 def get_engine() -> AgentEngine:
     global _engine
     if _engine is None:
-        model_registry = di_resolve("ModelRegistry")
-        tool_registry = di_resolve("ToolRegistry")
+        model_registry: Any = di_resolve("ModelRegistry")
+        tool_registry: Any = di_resolve("ToolRegistry")
         _engine = AgentEngine(model_registry=model_registry, tool_registry=tool_registry)
     return _engine
 
@@ -92,7 +94,7 @@ async def chat(
     request: ChatRequest,
     user_id: str = Depends(get_current_user),
     _scope_check: None = Depends(require_scopes("write")),
-):
+) -> StreamingResponse:
     return await _session_stream(session_id, request, user_id)
 
 
@@ -101,13 +103,13 @@ async def start_session_inputs(
     session_id: str,
     user_id: str = Depends(get_current_user),
     _scope_check: None = Depends(require_scopes("write")),
-):
+) -> StreamingResponse:
     return await _session_stream(session_id, ChatRequest(message=""), user_id, queued_only=True)
 
 
 async def _session_stream(
-    session_id: str, request: ChatRequest, user_id: str, *, queued_only=False
-):
+    session_id: str, request: ChatRequest, user_id: str, *, queued_only: bool = False
+) -> StreamingResponse:
     try:
         images = validate_images(request.images)
         attachments = validate_attachments(request.attachments)
@@ -147,7 +149,7 @@ async def _session_stream(
         system_prompt = getattr(agent, "system_prompt", None) or ""
         tool_ids = list(getattr(agent, "tool_ids", None) or [])
         if credential is not None:
-            encrypted_key = credential.api_key_encrypted
+            encrypted_key: str | None = credential.api_key_encrypted
             base_url = credential.base_url
         else:
             if agent is None or provider != agent.provider:
@@ -175,7 +177,8 @@ async def _session_stream(
         from app.core.engine.input_dispatch import InputDispatchConflict, prepare_dispatch
 
         try:
-            await prepare_dispatch(engine._input_queue, session_id, user_id)
+            dispatch_fn: Any = prepare_dispatch
+            await dispatch_fn(engine._input_queue, session_id, user_id)
         except InputDispatchConflict as exc:
             raise HTTPException(409, detail=str(exc)) from exc
     try:
@@ -241,7 +244,8 @@ async def _session_stream(
     async def _stream() -> Any:
         try:
             # Only pass the new field when present so engines predating images keep working.
-            runner = (
+            runner = cast(
+                "AsyncGenerator[AgentEvent, None]",
                 engine.run_inputs(session)
                 if queued_only
                 else engine.run(session, request.message, images=images)
@@ -250,7 +254,7 @@ async def _session_stream(
                     engine.run(session, request.message, attachments=attachments)
                     if attachments
                     else engine.run(session, request.message)
-                )
+                ),
             )
             async with aclosing(runner):
                 async for event in runner:

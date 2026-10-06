@@ -8,7 +8,7 @@ instead of being instantiated at module level.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 import structlog
 
@@ -16,10 +16,11 @@ logger = structlog.get_logger()
 
 T = TypeVar("T")
 
-# Global service locator instance
-_container: dict[type[T] | str, tuple[Callable[[], T] | T, bool]] = {}
-_factories: dict[type[T] | str, Callable[[], T]] = {}
-_scoped: dict[str, dict[type[T] | str, T]] = {}
+# Global service locator instance. Values are dynamic (factories or instances
+# of arbitrary service types), so they are stored as ``Any``.
+_container: dict[type[Any] | str, tuple[Any, bool]] = {}
+_factories: dict[type[Any] | str, Callable[[], Any]] = {}
+_scoped: dict[str, dict[type[Any] | str, Any]] = {}
 
 
 def register(
@@ -36,10 +37,10 @@ def resolve(service_type: type[T] | str) -> T:
     if service_type in _container:
         factory_or_instance, is_singleton = _container[service_type]
         if callable(factory_or_instance) and not is_singleton:
-            return factory_or_instance()
+            return cast(T, factory_or_instance())
         if not callable(factory_or_instance):
-            return factory_or_instance
-        instance = factory_or_instance()
+            return cast(T, factory_or_instance)
+        instance: T = factory_or_instance()
         if is_singleton:
             _container[service_type] = (instance, True)
         return instance
@@ -63,7 +64,7 @@ def create_scope(scope_name: str) -> ScopeContext:
 class ScopeContext:
     def __init__(self, name: str) -> None:
         self.name = name
-        self._saved: dict[type[T] | str, tuple[Callable[[], T] | T, bool]] = {}
+        self._saved: dict[type[Any] | str, tuple[Any, bool]] = {}
 
     def __enter__(self) -> ScopeContext:
         _scoped[self.name] = {}
@@ -84,8 +85,8 @@ def get_scoped(scope_name: str, service_type: type[T] | str) -> T | None:
     if instance is None:
         return None
     if callable(instance):
-        return instance()
-    return instance
+        return cast(T, instance())
+    return cast(T, instance)
 
 
 def set_scoped(scope_name: str, service_type: type[T] | str, instance: T) -> None:

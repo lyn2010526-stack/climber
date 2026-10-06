@@ -7,7 +7,7 @@ seamlessly integrating with the existing memory subsystem.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from mem0 import Memory
 
@@ -32,9 +32,10 @@ class Mem0MemoryService:
         try:
             self._client = Memory()
             self._initialized = True
-            logger.info("mem0_initialized", collection=self._collection)
+            # stdlib logger 不支持自定义 kwargs（潜在 bug，已上报）。
+            logger.info("mem0_initialized", collection=self._collection)  # type: ignore[call-arg]
         except Exception as exc:
-            logger.warning("mem0_init_failed", error=str(exc))
+            logger.warning("mem0_init_failed", error=str(exc))  # type: ignore[call-arg]
             self._initialized = False
 
     @property
@@ -50,6 +51,7 @@ class Mem0MemoryService:
         """Add a memory entry."""
         if not self.is_available:
             return None
+        assert self._client is not None
 
         try:
             result = self._client.add(
@@ -62,10 +64,10 @@ class Mem0MemoryService:
                 if isinstance(result, dict)
                 else str(result)
             )
-            logger.debug("memory_added", memory_id=memory_id)
+            logger.debug("memory_added", memory_id=memory_id)  # type: ignore[call-arg]
             return memory_id
         except Exception as exc:
-            logger.warning("memory_add_failed", error=str(exc))
+            logger.warning("memory_add_failed", error=str(exc))  # type: ignore[call-arg]
             return None
 
     async def search(
@@ -77,6 +79,7 @@ class Mem0MemoryService:
         """Search memories by semantic similarity."""
         if not self.is_available:
             return []
+        assert self._client is not None
 
         try:
             results = self._client.search(
@@ -85,10 +88,10 @@ class Mem0MemoryService:
                 limit=limit,
             )
             if isinstance(results, dict):
-                return results.get("results", [])
+                return cast(list[dict[str, Any]], results.get("results", []))
             return results if isinstance(results, list) else []
         except Exception as exc:
-            logger.warning("memory_search_failed", error=str(exc))
+            logger.warning("memory_search_failed", error=str(exc))  # type: ignore[call-arg]
             return []
 
     async def get_all(
@@ -98,38 +101,41 @@ class Mem0MemoryService:
         """Get all memories for a user."""
         if not self.is_available:
             return []
+        assert self._client is not None
 
         try:
             results = self._client.get_all(user_id=user_id or self._user_id)
             if isinstance(results, dict):
-                return results.get("results", [])
+                return cast(list[dict[str, Any]], results.get("results", []))
             return results if isinstance(results, list) else []
         except Exception as exc:
-            logger.warning("memory_get_all_failed", error=str(exc))
+            logger.warning("memory_get_all_failed", error=str(exc))  # type: ignore[call-arg]
             return []
 
     async def delete(self, memory_id: str) -> bool:
         """Delete a memory by ID."""
         if not self.is_available:
             return False
+        assert self._client is not None
 
         try:
             self._client.delete(memory_id)
             return True
         except Exception as exc:
-            logger.warning("memory_delete_failed", error=str(exc))
+            logger.warning("memory_delete_failed", error=str(exc))  # type: ignore[call-arg]
             return False
 
     async def delete_all(self, user_id: str | None = None) -> bool:
         """Delete all memories for a user."""
         if not self.is_available:
             return False
+        assert self._client is not None
 
         try:
             self._client.delete_all(user_id=user_id or self._user_id)
             return True
         except Exception as exc:
-            logger.warning("memory_delete_all_failed", error=str(exc))
+            logger.warning("memory_delete_all_failed", error=str(exc))  # type: ignore[call-arg]
             return False
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
@@ -26,9 +26,12 @@ router = APIRouter()
 
 async def _owned_crew(db: Any, crew_id: str, user_id: str) -> Crew | None:
     """Fetch a crew owned by the given user, or None."""
-    return (
-        await db.execute(select(Crew).where(Crew.id == crew_id, Crew.user_id == user_id))
-    ).scalar_one_or_none()
+    return cast(
+        "Crew | None",
+        (
+            await db.execute(select(Crew).where(Crew.id == crew_id, Crew.user_id == user_id))
+        ).scalar_one_or_none(),
+    )
 
 
 @router.get("/crews")
@@ -54,7 +57,7 @@ async def list_crews(principal: CurrentPrincipal) -> list[dict[str, Any]]:
 async def create_crew(
     payload: CrewCreateRequest,
     principal: CurrentPrincipal,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Create a new crew."""
     data = payload.model_dump()
@@ -99,7 +102,9 @@ async def create_crew(
 
 @router.delete("/crews/{crew_id}")
 async def delete_crew(
-    crew_id: str, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
+    crew_id: str,
+    principal: CurrentPrincipal,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, bool | str]:
     """Delete a crew and its run history."""
     user_id = principal.subject_id
@@ -118,7 +123,7 @@ async def run_crew(
     crew_id: str,
     payload: CrewRunRequest,
     principal: CurrentPrincipal,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Run a crew's tasks sequentially through the agent engine."""
     from app.core.agent_engine import AgentEngine
@@ -150,8 +155,8 @@ async def run_crew(
     if not crew_tasks:
         raise HTTPException(status_code=422, detail="Crew has no tasks defined")
 
-    model_registry = di_resolve("ModelRegistry")
-    tool_registry = di_resolve("ToolRegistry")
+    model_registry: Any = di_resolve("ModelRegistry")
+    tool_registry: Any = di_resolve("ToolRegistry")
     engine = AgentEngine(model_registry=model_registry, tool_registry=tool_registry)
 
     task_results, transcript, status, error = await _execute_crew_tasks(

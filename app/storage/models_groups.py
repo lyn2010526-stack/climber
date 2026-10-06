@@ -254,18 +254,20 @@ class AgentGroupTaskCheckpoint(Base):
     total_tokens: Mapped[int] = mapped_column(Integer, default=0)
 
     # Full state snapshot
-    history: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    history: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     current_artifact: Mapped[str] = mapped_column(Text, default="")
-    all_issues: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    all_issues: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
 
     # Member configs for resumption
-    worker_config: Mapped[dict] = mapped_column(JSON, default=dict)
-    reviewer_configs: Mapped[list[dict]] = mapped_column(JSON, default=list)
-    manager_config: Mapped[dict] = mapped_column(JSON, default=dict)
+    worker_config: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    reviewer_configs: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    manager_config: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
     # Task description and context
     task_description: Mapped[str] = mapped_column(Text, default="")
-    context_data: Mapped[dict] = mapped_column(JSON, default=dict)  # outputs from dependent tasks
+    context_data: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict
+    )  # outputs from dependent tasks
 
     # Structured output state
     output_schema: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)

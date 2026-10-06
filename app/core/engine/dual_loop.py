@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import inspect
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 
@@ -164,7 +164,7 @@ class DualLoopCoordinator:
         for name in _EVOLUTION_ENTRY_NAMES:
             candidate = getattr(evolution_module, name, None)
             if callable(candidate):
-                return candidate
+                return cast("Callable[..., Any]", candidate)
         return None
 
     @staticmethod
@@ -175,7 +175,11 @@ class DualLoopCoordinator:
         except (TypeError, ValueError):
             return entry(user_id)
 
-        candidates = (((user_id,), {}), ((), {"user_id": user_id}), ((), {}))
+        candidates: tuple[tuple[tuple[Any, ...], dict[str, Any]], ...] = (
+            ((user_id,), {}),
+            ((), {"user_id": user_id}),
+            ((), {}),
+        )
         for args, kwargs in candidates:
             try:
                 signature.bind(*args, **kwargs)

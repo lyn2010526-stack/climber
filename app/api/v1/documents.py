@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -45,7 +45,7 @@ _chroma_client = None
 _chroma_collection = None
 
 
-def get_chroma_collection():
+def get_chroma_collection() -> Any:
     global _chroma_client, _chroma_collection
     if _chroma_collection is None:
         try:
@@ -106,9 +106,9 @@ async def index_text(
     request: Request,
     text: str = Form(""),
     name: str = Form("untitled"),
-    payload: dict | None = None,
-    _auth: dict = Depends(require_scopes("write")),
-):
+    payload: dict[str, Any] | None = None,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> IndexTextResponse:
     if not text and payload:
         text = payload.get("text", "")
         name = payload.get("name", "untitled")
@@ -159,7 +159,7 @@ async def index_text(
 
 
 @router.get("/")
-async def list_documents(request: Request):
+async def list_documents(request: Request) -> list[dict[str, Any]]:
     user_id = current_user_id(request)
     async with async_session() as session:
         from sqlalchemy import select
@@ -188,9 +188,9 @@ async def list_documents(request: Request):
 @router.post("/")
 async def create_document(
     request: Request,
-    payload: dict,
-    _auth: dict = Depends(require_scopes("write")),
-):
+    payload: dict[str, Any],
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     user_id = current_user_id(request)
     filename = payload.get("filename", "untitled")
     content = payload.get("content") or ""
@@ -242,7 +242,7 @@ async def create_document(
 
 
 @router.post("/search", response_model=SearchResponse)
-async def search_documents(request: Request, query: str, n_results: int = 5):
+async def search_documents(request: Request, query: str, n_results: int = 5) -> SearchResponse:
     user_id = current_user_id(request)
     collection = get_chroma_collection()
     vector_results: list[dict[str, Any]] = []
@@ -274,7 +274,9 @@ async def search_documents(request: Request, query: str, n_results: int = 5):
                         )
                 per_query.append(q_results)
             # Fuse the per-query lists with reciprocal rank fusion.
-            fused = reciprocal_rank_fusion(per_query, k=60)
+            fused = reciprocal_rank_fusion(
+                cast("list[list[dict[str, Any] | tuple[str, float]]]", per_query), k=60
+            )
             fused_ids = {str(doc_id) for doc_id, _ in fused}
             seen: set[str] = set()
             for r in [item for sub in per_query for item in sub]:
@@ -333,8 +335,8 @@ async def search_documents(request: Request, query: str, n_results: int = 5):
 async def delete_document(
     doc_id: str,
     request: Request,
-    _auth: dict = Depends(require_scopes("write")),
-):
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     user_id = current_user_id(request)
     async with async_session() as session:
         from sqlalchemy import delete, select

@@ -12,8 +12,9 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime, timedelta
+from typing import Any, TypeVar, cast
 
-from sqlalchemy import Select, func, select, update
+from sqlalchemy import CursorResult, Select, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.storage.models_instruction_traces import (
@@ -22,6 +23,8 @@ from app.storage.models_instruction_traces import (
 )
 
 DEFAULT_DEDUP_WINDOW_SECONDS = 300
+
+_T = TypeVar("_T")
 
 
 def compute_text_hash(raw_text: str) -> str:
@@ -41,11 +44,11 @@ def _window_start(now: datetime, window_seconds: int) -> datetime:
 
 
 def _apply_scope(
-    stmt: Select[tuple[InstructionTrace]],
+    stmt: Select[_T],
     *,
     session_id: str | None,
     user_id: str | None,
-) -> Select[tuple[InstructionTrace]]:
+) -> Select[_T]:
     """Restrict a select to one session and/or one user when given."""
     if session_id is not None:
         stmt = stmt.where(InstructionTrace.session_id == session_id)
@@ -78,7 +81,7 @@ async def find_duplicate(
 
 async def create_trace(
     db: AsyncSession,
-    payload: dict,
+    payload: dict[str, Any],
     *,
     dedup_window_seconds: int = DEFAULT_DEDUP_WINDOW_SECONDS,
     token_count: int | None = None,
@@ -128,7 +131,7 @@ async def create_trace(
 
 async def create_traces_bulk(
     db: AsyncSession,
-    payloads: Iterable[dict],
+    payloads: Iterable[dict[str, Any]],
     *,
     dedup_window_seconds: int = DEFAULT_DEDUP_WINDOW_SECONDS,
 ) -> tuple[list[InstructionTrace], int]:
@@ -265,7 +268,7 @@ async def update_trace_outcome(
     result = await db.execute(
         update(InstructionTrace).where(InstructionTrace.turn_id == turn_id).values(**values)
     )
-    return int(result.rowcount or 0)
+    return int(cast("CursorResult[Any]", result).rowcount or 0)
 
 
 async def retrieve_traces(
@@ -291,7 +294,7 @@ async def retrieve_traces(
 
     def score(row: InstructionTrace) -> float:
         age_days = max(0.0, (now - (row.created_at or now)).total_seconds() / 86400)
-        recency = 0.5 ** (age_days / half_life_days)
+        recency: float = 0.5 ** (age_days / half_life_days)
         text = f"{row.raw_text} {row.intent_summary or ''}".lower()
         matches = sum(term in text for term in terms)
         return recency * (1.0 + matches / max(1, len(terms)))
@@ -318,13 +321,16 @@ async def mark_archived(
     ids = [tid for tid in trace_ids if tid]
     if not ids:
         return 0
-    values: dict = {"is_archived": True, "updated_at": datetime.now(UTC).replace(tzinfo=None)}
+    values: dict[str, Any] = {
+        "is_archived": True,
+        "updated_at": datetime.now(UTC).replace(tzinfo=None),
+    }
     if compressed_into_id is not None:
         values["compressed_into_id"] = compressed_into_id
     result = await db.execute(
         update(InstructionTrace).where(InstructionTrace.id.in_(ids)).values(**values)
     )
-    return int(result.rowcount or 0)
+    return int(cast("CursorResult[Any]", result).rowcount or 0)
 
 
 async def compress_into_summary(
@@ -332,7 +338,7 @@ async def compress_into_summary(
     trace_ids: Sequence[str],
     *,
     summary: str,
-    task_spec: dict | None = None,
+    task_spec: dict[str, Any] | None = None,
     source: InstructionSource = InstructionSource.API,
 ) -> InstructionTrace:
     """Fold old instructions into one new summary row without losing originals.

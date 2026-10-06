@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
@@ -35,9 +35,12 @@ _PROMPT_VARIABLE_RE = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
 
 async def _owned_skill(db: Any, skill_id: str, user_id: str) -> Skill | None:
     """Fetch a skill owned by the given user, or None."""
-    return (
-        await db.execute(select(Skill).where(Skill.id == skill_id, Skill.user_id == user_id))
-    ).scalar_one_or_none()
+    return cast(
+        "Skill | None",
+        (
+            await db.execute(select(Skill).where(Skill.id == skill_id, Skill.user_id == user_id))
+        ).scalar_one_or_none(),
+    )
 
 
 async def _require_owned_skill(db: Any, skill_id: str, user_id: str) -> Skill:
@@ -124,7 +127,7 @@ async def list_skills(principal: CurrentPrincipal) -> list[dict[str, Any]]:
 async def create_skill(
     payload: SkillCreateRequest,
     principal: CurrentPrincipal,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Create a new skill."""
     data = payload.model_dump()
@@ -150,7 +153,7 @@ async def enable_skill(
     skill_id: str,
     principal: CurrentPrincipal,
     payload: EmptyRequest | None = None,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Enable a skill by ID."""
     del payload
@@ -162,7 +165,7 @@ async def disable_skill(
     skill_id: str,
     principal: CurrentPrincipal,
     payload: EmptyRequest | None = None,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Disable a skill by ID."""
     del payload
@@ -171,7 +174,9 @@ async def disable_skill(
 
 @router.delete("/skills/{skill_id}")
 async def delete_skill(
-    skill_id: str, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
+    skill_id: str,
+    principal: CurrentPrincipal,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, bool | str]:
     """Delete a skill by ID."""
     user_id = principal.subject_id
@@ -255,7 +260,7 @@ async def create_skill_version(
     skill_id: str,
     principal: CurrentPrincipal,
     payload: SkillVersionCreateRequest | None = None,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Store the skill's current content as a new version and make it active."""
     data = payload.model_dump() if payload is not None else {}
@@ -317,7 +322,7 @@ async def activate_skill_version(
     skill_id: str,
     version_id: str,
     principal: CurrentPrincipal,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Activate a stored version and deprecate the previously active one."""
     user_id = principal.subject_id
@@ -349,10 +354,10 @@ async def create_test_case(
     skill_id: str,
     principal: CurrentPrincipal,
     payload: SkillTestCaseCreateRequest | None = None,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Add a test case for a skill."""
-    data = payload.model_dump()
+    data = cast(SkillTestCaseCreateRequest, payload).model_dump()
     user_id = principal.subject_id
     async with async_session() as db:
         await _require_owned_skill(db, skill_id, user_id)
@@ -411,7 +416,7 @@ async def run_test_case(
     skill_id: str,
     case_id: str,
     principal: CurrentPrincipal,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Run one test case in static mode and persist a SkillTestResult.
 

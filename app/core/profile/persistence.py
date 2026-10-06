@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select
 
@@ -21,6 +21,7 @@ from app.core.profile import (
     ProfileLoopService,
     ProfileSummary,
 )
+from app.core.profile.loop import Feedback, Outcome
 from app.core.profile.settings import (
     NOTICE_VERSION,
     ProfileLearningSettings,
@@ -220,10 +221,10 @@ class ProfileStore:
         return ProfileEvent(
             instruction=REPLAYED_INSTRUCTION,
             task_type=row.task_type,
-            outcome=row.outcome,
+            outcome=cast(Outcome, row.outcome),
             tool=row.tool,
             reasoning_level=row.reasoning_level,
-            feedback=row.feedback or "neutral",
+            feedback=cast(Feedback, row.feedback or "neutral"),
             interrupted=row.interrupted,
             retried=row.retried,
             occurred_at=row.occurred_at,

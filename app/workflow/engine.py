@@ -15,7 +15,7 @@ import ast
 import asyncio
 import json
 import time
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -190,10 +190,13 @@ class WorkflowEngine:
             elif node.type == NodeType.TOOL:
                 output = await self._execute_tool_node(node, resolved_inputs)
             elif node.type == NodeType.CONDITION:
-                output, skip_targets = self._execute_condition_node(
-                    node,
-                    resolved_inputs,
-                    workflow,
+                output, skip_targets = cast(
+                    tuple[dict[str, Any], list[str]],
+                    self._execute_condition_node(
+                        node,
+                        resolved_inputs,
+                        workflow,
+                    ),
                 )
                 # Mark downstream nodes for skipping
                 for target_id in skip_targets:
@@ -371,7 +374,7 @@ class WorkflowEngine:
             capabilities=capabilities,
         )
         executor = ParallelToolExecutor(registry, validator=validator)
-        tool_result = await executor.execute_all(
+        tool_results = await executor.execute_all(
             [
                 {
                     "id": f"wf-{node.id}",
@@ -382,7 +385,7 @@ class WorkflowEngine:
                 }
             ]
         )
-        tool_result = tool_result[0]
+        tool_result = tool_results[0]
 
         if not tool_result.success:
             raise RuntimeError(tool_result.error or f"Tool '{tool_name}' execution failed")
@@ -667,7 +670,7 @@ class WorkflowEngine:
                 _os.environ.get(api_key_env, "") if api_key_env else node.config.get("api_key", "")
             )
 
-            async def _llm_call(prompt: str, system_prompt: str):
+            async def _llm_call(prompt: str, system_prompt: str) -> str:
                 from app.core.engine.session_runner import run_llm_single
 
                 return await run_llm_single(
@@ -730,13 +733,15 @@ class WorkflowEngine:
                 tool_def=tool_def,
             )
 
-        result = await harness.run_requirement(goal, tool_name, schema, llm_planner=llm_planner)
+        harness_result = await harness.run_requirement(
+            goal, tool_name, schema, llm_planner=llm_planner
+        )
 
         return {
-            "accepted": result.accepted,
-            "rejected": result.rejected,
-            "reports": [r.model_dump() for r in result.reports],
-            "ledger_path": result.ledger_path,
+            "accepted": harness_result.accepted,
+            "rejected": harness_result.rejected,
+            "reports": [r.model_dump() for r in harness_result.reports],
+            "ledger_path": harness_result.ledger_path,
             "node_id": node.id,
             "node_name": node.name,
         }

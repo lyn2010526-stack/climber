@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 
 class SkillPackageManager:
     """Manages skill packages."""
 
-    def __init__(self):
-        self._packages = {}
+    def __init__(self) -> None:
+        self._packages: dict[str, dict[str, Any]] = {}
 
-    def get(self, skill_id: str) -> dict | None:
+    def get(self, skill_id: str) -> dict[str, Any] | None:
         return self._packages.get(skill_id)
 
-    def register(self, skill_id: str, package: dict) -> None:
+    def register(self, skill_id: str, package: dict[str, Any]) -> None:
         self._packages[skill_id] = package
 
-    def list_all(self) -> list[dict]:
+    def list_all(self) -> list[dict[str, Any]]:
         return list(self._packages.values())
 
 

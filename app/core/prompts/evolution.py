@@ -26,7 +26,7 @@ import logging
 import random
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, cast
 
 from app.core.metacognition.safety_gate import gated_fitness, screen
 
@@ -161,11 +161,13 @@ class PromptGenome:
         return cls(
             id=str(payload["id"]),
             prompt_text=str(payload["prompt_text"]),
-            model_params=dict(payload.get("model_params") or {}),
-            scores=dict(payload.get("scores") or {}),
-            generation=int(payload.get("generation") or 0),
-            parent_ids=tuple(str(item) for item in parents),
-            fitness_breakdown=dict(payload.get("fitness_breakdown") or {}),
+            model_params=dict(cast("dict[str, float]", payload.get("model_params") or {})),
+            scores=dict(cast("ScoreMap", payload.get("scores") or {})),
+            generation=int(cast("int | str", payload.get("generation") or 0)),
+            parent_ids=tuple(str(item) for item in cast("Sequence[object]", parents)),
+            fitness_breakdown=dict(
+                cast("dict[str, object]", payload.get("fitness_breakdown") or {})
+            ),
         )
 
 
@@ -215,7 +217,7 @@ class PromptEvolutionEngine:
     def composite(self, genome: PromptGenome) -> float:
         audited = genome.fitness_breakdown.get("composite")
         if audited is not None:
-            return float(audited)
+            return float(cast("float | str", audited))
         return self.weights.composite(genome.scores)
 
     def mutate(self, genome: PromptGenome) -> PromptGenome:
@@ -226,7 +228,7 @@ class PromptEvolutionEngine:
         """Score a genome once per prompt text, reusing cached results afterwards."""
         cached = self._score_cache.get(genome.prompt_text)
         if cached is None:
-            cached = dict(evaluator(genome))
+            cached = dict(cast("ScoreMap", evaluator(genome)))
             self._score_cache[genome.prompt_text] = cached
         self._audit_fitness(genome, cached)
         return dict(cached)
@@ -270,11 +272,12 @@ class PromptEvolutionEngine:
 
     @staticmethod
     def _blend_params(first: PromptGenome, second: PromptGenome) -> dict[str, float]:
-        params = {}
+        params: dict[str, float] = {}
         for key in set(first.model_params) | set(second.model_params):
             left = first.model_params.get(key)
             right = second.model_params.get(key)
-            params[key] = left if right is None else right if left is None else (left + right) / 2.0
+            blended = left if right is None else right if left is None else (left + right) / 2.0
+            params[key] = cast("float", blended)
         if "temperature" in params:
             params["temperature"] = min(1.5, max(0.0, params["temperature"]))
         return params
@@ -334,9 +337,11 @@ class PromptEvolutionEngine:
         """Build an offspring from the injected LLM operator's prompt text."""
         parents = (first,) if second is None else (first, second)
         params = dict(first.model_params) if second is None else self._blend_params(first, second)
+        operator = self.config.llm_operator
+        assert operator is not None
         return PromptGenome(
             id=f"o_{first.id}_{self._rng.randint(0, 9999)}",
-            prompt_text=self.config.llm_operator(parents),
+            prompt_text=operator(parents),
             model_params=params,
             generation=first.generation + 1,
             parent_ids=tuple(parent.id for parent in parents),

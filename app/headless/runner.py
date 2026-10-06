@@ -6,6 +6,7 @@ import time
 from dataclasses import asdict, dataclass
 from enum import IntEnum
 from pathlib import Path
+from typing import Any, TextIO
 
 from .model import ModelError
 from .workspace import TOOLS, WorkspaceSandbox
@@ -27,7 +28,7 @@ class Budget:
     max_tokens: int = 32000
     max_seconds: float = 120
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         for value in (self.max_turns, self.max_tool_calls, self.max_tokens):
             if type(value) is not int or value <= 0:
                 raise ValueError("Count budgets must be positive integers")
@@ -48,11 +49,11 @@ class RunResult:
     verification: str = "not_run"
     tool_errors: int = 0
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {**asdict(self), "status": int(self.status), "status_name": self.status.name.lower()}
 
 
-def load_task(path: str | Path) -> dict:
+def load_task(path: str | Path) -> dict[str, Any]:
     path = Path(path)
     with path.open("rb") as stream:
         raw = stream.read(262145)
@@ -71,18 +72,22 @@ def load_task(path: str | Path) -> dict:
 
 
 class HeadlessRunner:
-    def __init__(self, model, workspace: WorkspaceSandbox, budget: Budget | None = None):
+    def __init__(
+        self, model: Any, workspace: WorkspaceSandbox, budget: Budget | None = None
+    ) -> None:
         self.model = model
         self.workspace = workspace
         self.budget = budget or Budget()
 
-    def run(self, task: dict, trace, system_prompt: str | None = None) -> RunResult:
+    def run(
+        self, task: dict[str, Any], trace: TextIO, system_prompt: str | None = None
+    ) -> RunResult:
         budget = self.budget
         result = RunResult(ExitStatus.ERROR, task["id"], self.model.label)
         started = time.monotonic()
         tools = getattr(self.workspace, "tools", TOOLS)
 
-        def emit(event, **fields):
+        def emit(event: str, **fields: Any) -> None:
             trace.write(
                 json.dumps(
                     {"event": event, "elapsed_seconds": time.monotonic() - started, **fields},
@@ -92,7 +97,7 @@ class HeadlessRunner:
             )
             trace.flush()
 
-        def exhausted(reason):
+        def exhausted(reason: str) -> None:
             result.status = ExitStatus.BUDGET_EXHAUSTED
             result.reason = reason
 

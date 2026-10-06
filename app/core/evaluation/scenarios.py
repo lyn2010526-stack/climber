@@ -8,11 +8,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from app.core.evaluation.models import EvalScenario
 
 
-def scenarios_from_dict(data: dict | list[dict]) -> list[EvalScenario]:
+def scenarios_from_dict(data: dict[str, Any] | list[dict[str, Any]]) -> list[EvalScenario]:
     """Build scenarios from a parsed JSON payload.
 
     Accepts either ``{"scenarios": [...]}`` or a bare list of scenario
@@ -51,7 +52,7 @@ def load_scenarios(path: str | Path) -> list[EvalScenario]:
     return scenarios_from_dict(data)
 
 
-_BUILTIN_SCENARIOS: list[dict] = [
+_BUILTIN_SCENARIOS: list[dict[str, Any]] = [
     {
         "name": "capital-fact-essential",
         "user_input": "What is the capital of Australia?",

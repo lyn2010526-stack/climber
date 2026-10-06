@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -185,7 +185,7 @@ class TerminalExecuteRequest(BaseModel):
 async def terminal_execute(
     request: Request,
     body: TerminalExecuteRequest,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Execute a sandboxed shell command and return stdout / exit status."""
     from app.core.di import resolve as di_resolve
@@ -194,7 +194,7 @@ async def terminal_execute(
     if not command:
         raise HTTPException(status_code=422, detail="command is required")
     try:
-        sandbox = di_resolve("SandboxExecutor")
+        sandbox: Any = di_resolve("SandboxExecutor")
     except Exception as exc:
         logger.warning("sandbox_executor_unavailable", error=str(exc))
         raise HTTPException(status_code=503, detail="sandbox is unavailable") from exc
@@ -230,7 +230,7 @@ async def list_cluster_nodes() -> list[dict[str, Any]]:
 @router.post("/cluster/create")
 async def create_cluster_node(
     request: Request,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Create a new cluster node."""
     data = await parse_request_payload(request)
@@ -283,7 +283,7 @@ async def get_cluster_stats() -> dict[str, Any]:
 @router.delete("/cluster/{node_id}")
 async def delete_cluster_node(
     node_id: str,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, bool | str]:
     """Delete a cluster node."""
     async with async_session() as db:
@@ -383,7 +383,7 @@ async def get_plugin_categories() -> list[str]:
 async def install_plugin(
     plugin_key: str,
     request: Request,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Install a plugin from the marketplace or with custom data."""
     from app.config import settings
@@ -423,7 +423,7 @@ async def install_plugin(
 @router.post("/plugins/{plugin_id}/enable")
 async def enable_plugin(
     plugin_id: str,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Enable a plugin by ID or key."""
     return await _set_plugin_enabled(plugin_id, True)
@@ -432,7 +432,7 @@ async def enable_plugin(
 @router.post("/plugins/{plugin_id}/disable")
 async def disable_plugin(
     plugin_id: str,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Disable a plugin by ID or key."""
     return await _set_plugin_enabled(plugin_id, False)
@@ -442,7 +442,7 @@ async def disable_plugin(
 @router.post("/plugins/{plugin_id}/uninstall")
 async def uninstall_plugin(
     plugin_id: str,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, bool | str]:
     """Uninstall a plugin by ID or key."""
     async with async_session() as db:
@@ -471,7 +471,7 @@ async def get_plugin_status(plugin_id: str) -> dict[str, Any]:
 @router.post("/plugins/import")
 async def import_plugin(
     request: Request,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Import a custom plugin."""
     data = await parse_request_payload(request)
@@ -534,7 +534,7 @@ async def list_scheduled(request: Request) -> list[dict[str, Any]]:
 @router.post("/scheduler/")
 async def create_scheduled(
     request: Request,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Create a scheduled workflow."""
     data = await parse_request_payload(request)
@@ -573,7 +573,7 @@ async def list_mcp_servers() -> list[dict[str, Any]]:
 @router.post("/mcp/")
 async def create_mcp_server(
     request: Request,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Create a new MCP server."""
     data = await parse_request_payload(request)
@@ -600,7 +600,7 @@ async def create_mcp_server(
 @router.post("/mcp/{server_id}/start")
 async def start_mcp_server(
     server_id: str,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Start an MCP server."""
     async with async_session() as db:
@@ -613,7 +613,7 @@ async def start_mcp_server(
 @router.post("/mcp/{server_id}/stop")
 async def stop_mcp_server(
     server_id: str,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Stop an MCP server."""
     async with async_session() as db:
@@ -626,7 +626,7 @@ async def stop_mcp_server(
 @router.delete("/mcp/{server_id}")
 async def delete_mcp_server(
     server_id: str,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, bool | str]:
     """Delete an MCP server."""
     async with async_session() as db:
@@ -665,7 +665,7 @@ async def list_eval_datasets(request: Request) -> list[dict[str, Any]]:
 @router.post("/eval/datasets/")
 async def create_eval_dataset(
     request: Request,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Create an evaluation dataset.
 
@@ -683,7 +683,8 @@ async def create_eval_dataset(
         raise HTTPException(status_code=400, detail="Request body must be valid JSON") from exc
     if not isinstance(raw, dict):
         raise HTTPException(status_code=422, detail="Request body must be a JSON object")
-    data = raw.get("data") if isinstance(raw.get("data"), dict) else raw
+    nested_data = raw.get("data")
+    data: dict[str, Any] = nested_data if isinstance(nested_data, dict) else raw
 
     data_json = data.get("data_json", "[]")
     if isinstance(data_json, list):
@@ -721,7 +722,7 @@ async def create_eval_dataset(
 @router.post("/eval/run/")
 async def run_evaluation(
     request: Request,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Create an evaluation run record."""
     from app.storage.database import Agent
@@ -803,7 +804,7 @@ class EvalAssessRequest(BaseModel):
 @router.post("/eval/assess/")
 async def assess_eval_output(
     payload: EvalAssessRequest,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Score arbitrary agent output against a rubric with the offline judge.
 
@@ -1044,16 +1045,19 @@ async def _find_plugin(db: Any, plugin_id: str) -> PluginRecord | None:
     Returns:
         The PluginRecord if found, None otherwise.
     """
-    return (
+    return cast(
+        "PluginRecord | None",
         (
-            await db.execute(
-                select(PluginRecord).where(
-                    (PluginRecord.id == plugin_id) | (PluginRecord.plugin_key == plugin_id)
+            (
+                await db.execute(
+                    select(PluginRecord).where(
+                        (PluginRecord.id == plugin_id) | (PluginRecord.plugin_key == plugin_id)
+                    )
                 )
             )
-        )
-        .scalars()
-        .first()
+            .scalars()
+            .first()
+        ),
     )
 
 

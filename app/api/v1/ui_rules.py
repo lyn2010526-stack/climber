@@ -1,5 +1,7 @@
 """Editable anchored UI rules; account scope is explicit in every response."""
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,12 +18,14 @@ class RuleUpdate(BaseModel):
 
 
 @router.get("")
-async def get_rules(auth: dict = Depends(require_scopes("read"))):
+async def get_rules(auth: dict[str, Any] = Depends(require_scopes("read"))) -> list[dict[str, Any]]:
     return await list_rules(auth["id"])
 
 
 @router.put("/{kind}")
-async def put_rule(kind: RuleKind, body: RuleUpdate, auth: dict = Depends(require_scopes("write"))):
+async def put_rule(
+    kind: RuleKind, body: RuleUpdate, auth: dict[str, Any] = Depends(require_scopes("write"))
+) -> dict[str, Any]:
     try:
         return await save_rule(auth["id"], kind, body.content, body.revision)
     except ValueError as exc:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import (
@@ -55,7 +56,7 @@ class TraceSpanRecord(Base):
     # Timestamps
     started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize to dict."""
         return {
             "id": self.id,

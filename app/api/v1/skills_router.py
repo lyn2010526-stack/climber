@@ -165,7 +165,7 @@ def _skill_dict(s: Skill) -> dict[str, Any]:
 
 @router.patch("/skills/{skill_id}")
 async def update_skill(
-    skill_id: str, request: Request, _auth: dict = Depends(require_scopes("write"))
+    skill_id: str, request: Request, _auth: dict[str, Any] = Depends(require_scopes("write"))
 ) -> dict[str, Any]:
     data = await _payload(request)
     user_id = current_user_id(request)
@@ -194,7 +194,7 @@ async def update_skill(
 
 @router.post("/skills/autonomous/run")
 async def run_autonomous_skill(
-    request: Request, _auth: dict = Depends(require_scopes("write"))
+    request: Request, _auth: dict[str, Any] = Depends(require_scopes("write"))
 ) -> StreamingResponse:
     data = await _payload(request)
     goal = str(data.get("goal", "")).strip()

@@ -10,7 +10,7 @@ from app.core.session import AgentSession
 
 # Keep strong references to fire-and-forget audit tasks so they are not
 # garbage-collected before they finish.
-_BACKGROUND_TASKS: set[asyncio.Task] = set()
+_BACKGROUND_TASKS: set[asyncio.Task[Any]] = set()
 
 # Tool names that accept a shell command under a "command" parameter
 # Keys are canonical names — aliases (bash/shell/command/...) resolve via normalize_tool_name

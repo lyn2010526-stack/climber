@@ -65,7 +65,7 @@ class GroupCollaborationEngine:
         )
         self._task_semaphore = asyncio.Semaphore(self._max_concurrent)
         self._review_states: dict[str, dict[str, str]] = {}
-        self._running_tasks: dict[str, asyncio.Task] = {}
+        self._running_tasks: dict[str, asyncio.Task[Any]] = {}
 
     async def _run_sequential_process(
         self,
@@ -165,10 +165,11 @@ class GroupCollaborationEngine:
         """
         db_task = None
         db_worker = None
-        db_reviewers = []
+        db_reviewers: list[Any] = []
         db_group = None
 
         current_task = asyncio.current_task()
+        assert current_task is not None  # run_task always executes inside a task
         self._running_tasks[task_id] = current_task
         try:
             try:
@@ -550,7 +551,7 @@ class GroupCollaborationEngine:
         return summary
 
 
-async def _load_task_context(task_id: str) -> tuple:
+async def _load_task_context(task_id: str) -> tuple[Any, Any, Any, Any]:
     """Load task, worker, reviewers, and group from database.
 
     Args:
@@ -775,7 +776,7 @@ def get_group_collaboration_engine() -> GroupCollaborationEngine:
     global _group_collaboration_engine
     if _group_collaboration_engine is None:
         try:
-            model_registry = di_resolve("ModelRegistry")
+            model_registry: Any = di_resolve("ModelRegistry")
         except KeyError:
             from app.models.registry import ModelRegistry
 

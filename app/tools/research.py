@@ -222,7 +222,7 @@ def _fetch_url_sync(url: str, timeout_s: int) -> str:
     request = Request(url, headers={"User-Agent": _USER_AGENT, "Accept-Language": "en,en-US;q=0.9"})
     with urlopen(request, timeout=timeout_s) as response:
         charset = response.headers.get_content_charset() or "utf-8"
-        payload = response.read(_MAX_BYTES)
+        payload: bytes = response.read(_MAX_BYTES)
     return payload.decode(charset, errors="replace")
 
 
@@ -287,6 +287,7 @@ async def _collect_browser(
     candidates: list[str], query: str, timeout_s: int
 ) -> list[dict[str, Any]]:
     from app.tools import browser_tools
+    from app.tools.browser_pool import get_browser_pool
 
     findings: list[dict[str, Any]] = []
     try:
@@ -307,7 +308,7 @@ async def _collect_browser(
                 findings.append(finding)
     finally:
         with contextlib.suppress(Exception):
-            await browser_tools.get_browser_pool().close_all()
+            await get_browser_pool().close_all()
     return findings
 
 

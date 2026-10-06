@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections import OrderedDict, defaultdict, deque
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from sqlalchemy import select
@@ -181,7 +181,7 @@ SUPPORTED_EVENT_TYPES = {
 # stop tasks; the log keeps recording while tasks continue.
 _MAX_TRACKED_GROUPS = 512
 _MAX_GROUP_EVENTS = 200
-_group_event_log: OrderedDict[str, deque] = OrderedDict()
+_group_event_log: OrderedDict[str, deque[dict[str, Any]]] = OrderedDict()
 
 
 def _utc_now_iso() -> str:
@@ -366,7 +366,9 @@ class GroupWebSocketHub:
             if "status" in payload:
                 member.status = payload["status"]
             if "current_task_id" in payload:
-                member.current_task_id = payload["current_task_id"]
+                # AgentGroupMember has no current_task_id column; keep the
+                # dynamic-attribute assignment the API route also relies on.
+                cast(Any, member).current_task_id = payload["current_task_id"]
             await db.commit()
             return {"ok": True, "id": member_id}
 

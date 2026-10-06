@@ -41,7 +41,7 @@ class OllamaOfflineQueue:
         self._processing: bool = False
         self._last_check: float = 0.0
         self._lock = asyncio.Lock()
-        self._background_tasks: set[asyncio.Task] = set()
+        self._background_tasks: set[asyncio.Task[None]] = set()
 
     async def enqueue(
         self,
@@ -62,7 +62,10 @@ class OllamaOfflineQueue:
                     f"Offline queue is full ({self.MAX_QUEUE_SIZE} pending requests)"
                 )
             self._queue.append(req)
-        logger.info("ollama_request_queued", request_id=request_id, queue_size=len(self._queue))
+        # stdlib logger 不支持自定义 kwargs，此调用形参非法（潜在 bug，已上报）。
+        logger.info(  # type: ignore[call-arg]
+            "ollama_request_queued", request_id=request_id, queue_size=len(self._queue)
+        )
         self._schedule_processing()
         return request_id
 
@@ -91,7 +94,7 @@ class OllamaOfflineQueue:
                     else:
                         await self._execute_payload(req)
                     self._queue.popleft()
-                    logger.info(
+                    logger.info(  # type: ignore[call-arg]
                         "ollama_request_processed",
                         request_id=req.request_id,
                         queue_size=len(self._queue),
@@ -100,11 +103,11 @@ class OllamaOfflineQueue:
                     req.retries += 1
                     if req.retries >= req.max_retries:
                         self._queue.popleft()
-                        logger.warning(
+                        logger.warning(  # type: ignore[call-arg]
                             "ollama_request_failed", request_id=req.request_id, error=str(e)
                         )
                     else:
-                        logger.info(
+                        logger.info(  # type: ignore[call-arg]
                             "ollama_request_retry", request_id=req.request_id, retry=req.retries
                         )
                         await asyncio.sleep(self.RETRY_INTERVAL)

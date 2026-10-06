@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import structlog
 from dotenv import load_dotenv
@@ -173,7 +173,7 @@ class Settings(BaseSettings):
     key_cooldown_seconds: int = Field(default=60)
 
     # Plugin marketplace catalog
-    plugin_marketplace: list[dict] = Field(
+    plugin_marketplace: list[dict[str, Any]] = Field(
         default_factory=lambda: [
             {
                 "plugin_key": "web-scraper",

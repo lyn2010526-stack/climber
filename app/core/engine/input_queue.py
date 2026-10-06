@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import builtins
 import json
+from collections.abc import Sequence
+from typing import Any, cast
 
 from sqlalchemy import func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.storage.database import Session, SessionInput
 
 
-def stalled_batch(calls, results):
+def stalled_batch(calls: list[Any], results: list[Any]) -> str | None:
     """Only explicitly read-only tools can establish unchanged-work evidence."""
     if not calls or len(calls) != len(results):
         return None
@@ -58,7 +62,7 @@ def stalled_batch(calls, results):
     return json.dumps(evidence, sort_keys=True, default=str)
 
 
-def input_item(row):
+def input_item(row: Any) -> dict[str, Any]:
     return {
         key: getattr(row, key)
         for key in (
@@ -74,12 +78,12 @@ def input_item(row):
 
 
 class SessionInputQueue:
-    def __init__(self, session_factory):
+    def __init__(self, session_factory: Any) -> None:
         self.session_factory = session_factory
 
-    async def _lock(self, db, session_id, user_id):
+    async def _lock(self, db: AsyncSession, session_id: str, user_id: str) -> Session:
         # Acquire the writer lock before reading: also avoids SQLite lock upgrades.
-        result = await db.execute(
+        result: Any = await db.execute(
             update(Session)
             .where(
                 Session.id == session_id,
@@ -89,9 +93,16 @@ class SessionInputQueue:
         )
         if result.rowcount != 1:
             raise LookupError("Session not found")
-        return await db.get(Session, session_id)
+        return cast(Session, await db.get(Session, session_id))
 
-    async def submit(self, session_id, user_id, client_request_id, kind, message):
+    async def submit(
+        self,
+        session_id: str,
+        user_id: str,
+        client_request_id: str,
+        kind: str,
+        message: str,
+    ) -> dict[str, Any]:
         async with self.session_factory() as db:
             session = await self._lock(db, session_id, user_id)
             existing = await db.scalar(
@@ -137,7 +148,7 @@ class SessionInputQueue:
             await db.commit()
             return input_item(row)
 
-    async def list(self, session_id, user_id):
+    async def list(self, session_id: str, user_id: str) -> builtins.list[dict[str, Any]]:
         async with self.session_factory() as db:
             owner = await db.scalar(
                 select(Session.id).where(
@@ -158,7 +169,7 @@ class SessionInputQueue:
             ).all()
             return [input_item(row) for row in rows]
 
-    async def claim(self, session_id, user_id, kind):
+    async def claim(self, session_id: str, user_id: str, kind: str) -> dict[str, Any] | None:
         async with self.session_factory() as db:
             session = await self._lock(db, session_id, user_id)
             if (session.context_data or {}).get("input_queue_frozen"):
@@ -179,7 +190,9 @@ class SessionInputQueue:
             await db.commit()
             return input_item(row) if row else None
 
-    async def report(self, session_id, user_id, active_message=None):
+    async def report(
+        self, session_id: str, user_id: str, active_message: str | None = None
+    ) -> dict[str, builtins.list[str]]:
         async with self.session_factory() as db:
             session = await db.scalar(
                 select(Session).where(
@@ -198,7 +211,12 @@ class SessionInputQueue:
                     .order_by(SessionInput.sequence)
                 )
             ).all()
-            report = {"completed": [], "executing": [], "queued": [], "risks": []}
+            report: dict[str, builtins.list[str]] = {
+                "completed": [],
+                "executing": [],
+                "queued": [],
+                "risks": [],
+            }
             categories = {
                 "completed": "completed",
                 "applied": "completed",
@@ -219,7 +237,14 @@ class SessionInputQueue:
                 report["risks"].append(reason)
             return report
 
-    async def finish(self, session_id, user_id, input_id, status, error=None):
+    async def finish(
+        self,
+        session_id: str,
+        user_id: str,
+        input_id: str,
+        status: str,
+        error: str | None = None,
+    ) -> dict[str, Any]:
         if status not in {"applied", "completed", "blocked", "failed"}:
             raise ValueError("Invalid input terminal status")
         async with self.session_factory() as db:
@@ -242,7 +267,9 @@ class SessionInputQueue:
             await db.commit()
             return input_item(row)
 
-    async def freeze(self, session_id, user_id, reason):
+    async def freeze(
+        self, session_id: str, user_id: str, reason: str
+    ) -> builtins.list[dict[str, Any]]:
         if not isinstance(reason, str) or not reason.strip():
             raise ValueError("A nonempty freeze reason is required")
         async with self.session_factory() as db:
@@ -251,7 +278,7 @@ class SessionInputQueue:
             await db.commit()
             return [input_item(row) for row in rows]
 
-    async def _freeze(self, db, session, reason):
+    async def _freeze(self, db: AsyncSession, session: Session, reason: str) -> Sequence[Any]:
         context = dict(session.context_data or {})
         rows = (
             await db.scalars(
@@ -277,7 +304,9 @@ class SessionInputQueue:
         }
         return rows
 
-    async def resume_reviewed(self, session_id, user_id, review_confirmed):
+    async def resume_reviewed(
+        self, session_id: str, user_id: str, review_confirmed: bool
+    ) -> builtins.list[dict[str, Any]]:
         async with self.session_factory() as db:
             session = await self._lock(db, session_id, user_id)
             if review_confirmed is not True:
@@ -301,7 +330,7 @@ class SessionInputQueue:
             await db.commit()
             return [input_item(row) for row in rows]
 
-    async def recover(self, session_id, user_id):
+    async def recover(self, session_id: str, user_id: str) -> builtins.list[dict[str, Any]]:
         async with self.session_factory() as db:
             session = await self._lock(db, session_id, user_id)
             # Keep interruption detection and freezing under the same writer lock.

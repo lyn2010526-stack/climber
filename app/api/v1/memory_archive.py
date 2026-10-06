@@ -50,8 +50,8 @@ class SidecarRequest(BaseModel):
 async def create_archive(
     payload: ArchiveRequest,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     """Archive a finished session and extract its long-term memories."""
     try:
         return await _archiver.archive(
@@ -69,7 +69,7 @@ async def create_archive(
 async def get_archive(
     archive_id: str,
     user_id: str = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Read one structured session archive."""
     row = await _archiver.get(user_id, archive_id)
     if row is None:
@@ -82,7 +82,7 @@ async def list_archives(
     session_id: str,
     limit: int = Query(default=20, ge=1, le=100),
     user_id: str = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """List archives for a session, newest first."""
     rows = await _archiver.list_by_session(user_id, session_id, limit=limit)
     return {"total": len(rows), "archives": rows}
@@ -93,8 +93,8 @@ async def refresh_sidecars(
     scope: str,
     payload: SidecarRequest,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     """Generate and persist L0/L1 sidecars for a memory directory scope."""
     try:
         bundle = await _sidecars.summarize_directory(
@@ -112,7 +112,7 @@ async def get_sidecars(
     scope: str,
     level: int | None = Query(default=None, ge=0, le=2),
     user_id: str = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Read L0/L1 sidecars for a scope (optionally one level)."""
     try:
         pair = await _sidecars.read_pair(user_id, scope)
@@ -121,7 +121,8 @@ async def get_sidecars(
     if level is None:
         records = [row for row in pair if row is not None]
     elif level in (0, 1):
-        records = [pair[level]] if pair[level] is not None else []
+        sidecar = pair[level]
+        records = [sidecar] if sidecar is not None else []
     else:
         records = []
     return {
@@ -147,7 +148,7 @@ async def search_scope(
     level: int | None = Query(default=None, ge=0, le=2),
     top_k: int = Query(default=5, ge=1, le=20),
     user_id: str = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Directory-scoped semantic retrieval (no whole-index scan)."""
     try:
         return await _retriever.search(user_id, scope, query, level=level, top_k=top_k)
@@ -162,7 +163,7 @@ async def context_bundle(
     scopes: str = "",
     include_l1: bool = False,
     user_id: str = Depends(get_current_user),
-) -> dict:
+) -> dict[str, Any]:
     """Token-cheap summary bundle a hook may attach to the conversation."""
     selected = tuple(s.strip() for s in scopes.split(",") if s.strip()) or None
     bundle = await _bypass.build(

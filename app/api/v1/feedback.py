@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -41,14 +43,15 @@ async def submit_feedback(
     reason: str | None = None,
     comment: str | None = None,
     payload: FeedbackRequest | None = None,
-) -> dict:
+) -> dict[str, Any]:
     user_id = current_user_id(request)
+    effective_rating: str | int | None = rating
     if payload is not None:
         message_id = payload.message_id or message_id
-        rating = payload.rating if payload.rating is not None else rating
+        effective_rating = payload.rating if payload.rating is not None else rating
         reason = payload.reason or reason
         comment = payload.comment or comment
-    rating_str = str(rating) if rating is not None else ""
+    rating_str = str(effective_rating) if effective_rating is not None else ""
     async with async_session() as db:
         if not message_id:
             raise HTTPException(status_code=422, detail="message_id is required")
@@ -98,7 +101,7 @@ async def submit_feedback(
 
 @router.get("/stats")
 @router.get("stats")
-async def feedback_stats(request: Request) -> dict:
+async def feedback_stats(request: Request) -> dict[str, Any]:
     user_id = current_user_id(request)
     async with async_session() as db:
         rows = (
@@ -141,8 +144,8 @@ async def submit_reasoning_feedback(
     trace_id: str,
     request: Request,
     payload: ReasoningFeedbackRequest,
-    _auth: dict = Depends(require_scopes("write")),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     user_id = current_user_id(request)
     thumbs = payload.thumbs
     if isinstance(payload.rating, int):
@@ -175,7 +178,7 @@ async def submit_reasoning_feedback(
         if existing is not None:
             existing.rating = rating
             existing.thumbs = thumbs
-            existing.comment = payload.comment
+            existing.comment = cast(str, payload.comment)
             try:
                 await db.commit()
             except IntegrityError as exc:
@@ -205,7 +208,7 @@ async def submit_reasoning_feedback(
 
 @router.get("/reason/{trace_id}/feedback")
 @router.get("reason/{trace_id}/feedback")
-async def get_reasoning_feedback(trace_id: str, request: Request) -> list[dict]:
+async def get_reasoning_feedback(trace_id: str, request: Request) -> list[dict[str, Any]]:
     user_id = current_user_id(request)
     async with async_session() as db:
         rows = (

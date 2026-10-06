@@ -14,8 +14,8 @@ import asyncio
 import contextlib
 import hashlib
 import sys
-from collections.abc import AsyncIterator
-from typing import Any
+from collections.abc import AsyncGenerator, AsyncIterator
+from typing import Any, cast
 
 from anyio import CancelScope
 
@@ -104,7 +104,7 @@ def _follow_up_hash(message: str) -> str:
     return hashlib.sha256(message.encode("utf-8")).hexdigest()[:12]
 
 
-def _outer_turn_signature(session: Any) -> tuple:
+def _outer_turn_signature(session: Any) -> tuple[str, str | None]:
     """Per-turn overall-progress signature for the Pi outer-loop stall guard.
 
     Progress means a new assistant output (different last assistant content) or
@@ -121,7 +121,11 @@ def _outer_turn_signature(session: Any) -> tuple:
     return (session.status.value, last_assistant)
 
 
-def _outer_stall_update(signature: tuple, previous: tuple | None, count: int) -> tuple[int, tuple]:
+def _outer_stall_update(
+    signature: tuple[str, str | None],
+    previous: tuple[str, str | None] | None,
+    count: int,
+) -> tuple[int, tuple[str, str | None]]:
     """Update the consecutive stall counter; returns (count, latest_signature)."""
     if previous is not None and signature == previous:
         return count + 1, signature
@@ -175,13 +179,16 @@ class AgentEngine:
         self._checkpoints = (
             checkpoint_store if checkpoint_store is not None else SQLiteCheckpointStore()
         )
-        self._run_store = run_store if run_store is not None else RunStorage()
+        # RunStorage/SessionInputQueue live in engine/* which are still annotated by
+        # another workstream; cast to Any so these cross-module untyped callables
+        # type-check without pinning a stale signature.
+        self._run_store: Any = run_store if run_store is not None else cast(Any, RunStorage)()
         from app.core.engine.input_queue import SessionInputQueue
 
-        self._input_queue = SessionInputQueue(self._run_store.session_factory)
+        self._input_queue: Any = cast(Any, SessionInputQueue)(self._run_store.session_factory)
         self._sessions: dict[str, AgentSession] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
-        self._background_tasks: set[asyncio.Task] = set()
+        self._background_tasks: set[asyncio.Task[Any]] = set()
         self._shutdown_event = asyncio.Event()
         self.resource_tracker = ResourceTracker()
         self.memory_service = PersistentMemoryService()
@@ -368,7 +375,7 @@ class AgentEngine:
                 if queued_only:
                     from app.core.engine.input_dispatch import prepare_dispatch
 
-                    item = await prepare_dispatch(
+                    item = await cast(Any, prepare_dispatch)(
                         self._input_queue,
                         session.session_id,
                         session.user_id,
@@ -426,7 +433,10 @@ class AgentEngine:
                             ),
                         )
                         async with contextlib.aclosing(
-                            self._run_locked(session, message, images, attachments)
+                            cast(
+                                AsyncGenerator[AgentEvent, None],
+                                self._run_locked(session, message, images, attachments),
+                            )
                         ) as events:
                             async for event in events:
                                 if event.type in {AgentEventType.DONE, AgentEventType.ERROR}:
@@ -653,7 +663,7 @@ class AgentEngine:
                 self._session_locks.pop(session.session_id, None)
 
     @contextlib.asynccontextmanager
-    async def _track_run_with_cleanup(self, session: AgentSession):
+    async def _track_run_with_cleanup(self, session: AgentSession) -> AsyncIterator[None]:
         manager = track_run(session, self._run_store)
         await manager.__aenter__()
         try:
@@ -891,7 +901,7 @@ class AgentEngine:
         return await save_checkpoint(self._checkpoints, session, channels, pending_writes)
 
     async def _call_llm(
-        self, adapter: Any, session: AgentSession, tools: list
+        self, adapter: Any, session: AgentSession, tools: list[dict[str, Any]]
     ) -> ChatResult | None:
         """Call the LLM adapter and return the result.
 
@@ -930,7 +940,7 @@ class AgentEngine:
         return await call_llm_with_resilience(self, session, model_adapter, messages, iteration)
 
     async def _stream_accumulate(
-        self, adapter: Any, messages: list[dict[str, Any]], tools: list
+        self, adapter: Any, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
     ) -> ChatResult:
         """Accumulate a streaming response into a single ChatResult.
 
@@ -945,7 +955,7 @@ class AgentEngine:
         return await stream_accumulate(adapter, messages, tools)
 
     async def _stream_chat(
-        self, adapter: Any, session: AgentSession, tools: list
+        self, adapter: Any, session: AgentSession, tools: list[dict[str, Any]]
     ) -> ChatResult | None:
         """Handle streaming chat response for a session.
 
@@ -1175,7 +1185,7 @@ class AgentEngine:
             summary = await TaskMemory(self._run_store.session_factory).summarize_turn(
                 session.session_id,
                 session.user_id,
-                session.current_turn_id,
+                cast(str, session.current_turn_id),
             )
             session.task_memory_summary_diagnostics = {
                 "status": "stored",

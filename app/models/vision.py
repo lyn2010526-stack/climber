@@ -71,7 +71,7 @@ def validate_images(images: list[str] | None) -> list[str]:
     return list(images)
 
 
-def validate_attachments(attachments: list[dict] | None) -> list[ChatAttachment]:
+def validate_attachments(attachments: list[dict[str, Any]] | None) -> list[ChatAttachment]:
     if not attachments:
         return []
     if len(attachments) > MAX_CHAT_ATTACHMENTS:

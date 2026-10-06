@@ -9,7 +9,7 @@ the current instruction by construction.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -21,6 +21,7 @@ from app.core.profile.persistence import ProfileStore
 from app.schemas.api_v1.base import PublicResponse, StrictRequest
 
 if TYPE_CHECKING:
+    from app.core.profile.loop import ProfileSummary
     from app.storage.models_user_profile import UserProfileEvent
 
 router = APIRouter()
@@ -37,7 +38,7 @@ class ProfileSettingsUpdate(StrictRequest):
 
 
 @router.get("/settings")
-async def get_profile_settings(user_id: str = Depends(get_current_user)) -> dict:
+async def get_profile_settings(user_id: str = Depends(get_current_user)) -> dict[str, Any]:
     return await store.get_settings(user_id)
 
 
@@ -45,8 +46,8 @@ async def get_profile_settings(user_id: str = Depends(get_current_user)) -> dict
 async def update_profile_settings(
     payload: ProfileSettingsUpdate,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     try:
         return await store.update_settings(user_id, **payload.model_dump())
     except ValueError as exc:
@@ -54,7 +55,7 @@ async def update_profile_settings(
 
 
 @router.get("/clear-design")
-async def profile_clear_design(_user_id: str = Depends(get_current_user)) -> dict:
+async def profile_clear_design(_user_id: str = Depends(get_current_user)) -> dict[str, Any]:
     """Describe a future clear action without performing a data mutation."""
     return {
         "implemented": False,
@@ -132,7 +133,7 @@ def _to_read(row: UserProfileEvent) -> ProfileEventRead:
 async def record_profile_event(
     payload: ProfileEventCreate,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> ProfileEventRead:
     """Persist one profile event after the privacy-boundary check."""
     fields = payload.model_dump()
@@ -152,7 +153,7 @@ async def record_profile_event(
 @router.get("/summary", response_model=ProfileSummaryRead)
 async def get_profile_summary(
     user_id: str = Depends(get_current_user),
-) -> ProfileSummaryRead:
+) -> ProfileSummary:
     """Rebuild the user's profile summary from the stored event log."""
     if not (await store.get_settings(user_id))["show_raw_profile"]:
         raise HTTPException(

@@ -11,8 +11,8 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import defaultdict
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Awaitable, Callable
+from typing import Any, cast
 
 from app.core.agent_engine import AgentEngine
 from app.core.engine.pregel.graph import StateGraph
@@ -128,7 +128,9 @@ class PregelWorkflowAdapter:
         targets = {e.target for e in workflow.edges}
         return {n.id for n in workflow.nodes if n.id not in targets}
 
-    def _make_start_node(self, workflow: Workflow, entry_id: str):
+    def _make_start_node(
+        self, workflow: Workflow, entry_id: str
+    ) -> Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]:
         """Return a node that seeds user inputs into Pregel state."""
 
         async def start(state: dict[str, Any]) -> dict[str, Any]:
@@ -137,7 +139,9 @@ class PregelWorkflowAdapter:
 
         return start
 
-    def _make_workflow_node(self, node: WorkflowNode, workflow: Workflow, user_id: str):
+    def _make_workflow_node(
+        self, node: WorkflowNode, workflow: Workflow, user_id: str
+    ) -> Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]:
         """Return an async Pregel node bound to the WorkflowEngine executor."""
 
         async def run_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -170,7 +174,7 @@ class PregelWorkflowAdapter:
                 output = resolved
             return {node.id: output}
 
-        run_node.__pregel_node_id__ = node.id
+        cast(Any, run_node).__pregel_node_id__ = node.id
         return run_node
 
     def _add_edges(self, graph: StateGraph, workflow: Workflow) -> None:
@@ -198,7 +202,9 @@ class PregelWorkflowAdapter:
             if not any(edge.source == node.id for edge in workflow.edges):
                 graph.add_edge(node.id, "__end__")
 
-    def _condition_router(self, node_id: str, workflow: Workflow):
+    def _condition_router(
+        self, node_id: str, workflow: Workflow
+    ) -> Callable[[dict[str, Any]], Awaitable[str]]:
         """Return a router reading a condition node's boolean result."""
 
         async def router(state: dict[str, Any]) -> str:

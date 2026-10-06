@@ -155,7 +155,7 @@ class Message(Base):
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     tool_call_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    tool_calls: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    tool_calls: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     tool_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     tokens: Mapped[int] = mapped_column(Integer, default=0)
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
@@ -291,7 +291,7 @@ class RunProgressRecord(Base):
     )
 
 
-async def ensure_checkpoint_schema(database_engine: Any | None = None) -> None:
+async def ensure_checkpoint_schema(database_engine: Any = None) -> None:
     """Add checkpoint payload columns to existing SQLite databases."""
     if database_engine is None:
         from app.storage import engine as database_engine

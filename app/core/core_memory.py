@@ -8,9 +8,10 @@
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from typing import Any, cast
 
 import structlog
-from sqlalchemy import delete, select
+from sqlalchemy import CursorResult, Table, delete, select
 from sqlalchemy.exc import IntegrityError
 
 from app.storage import async_session
@@ -159,7 +160,7 @@ class CoreMemoryService:
                 query = query.where(CoreMemoryBlock.agent_id.is_(None))
             result = await db.execute(query)
             await db.commit()
-            return result.rowcount > 0
+            return cast(CursorResult[Any], result).rowcount > 0
 
     @staticmethod
     async def _update_block(block: CoreMemoryBlock) -> None:
@@ -169,7 +170,8 @@ class CoreMemoryService:
 
         async with async_session() as db:
             await db.execute(
-                CoreMemoryBlock.__table__.update()
+                cast(Table, CoreMemoryBlock.__table__)
+                .update()
                 .where(CoreMemoryBlock.id == block.id)
                 .values(value=block.value)
             )

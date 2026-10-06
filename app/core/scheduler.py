@@ -34,25 +34,25 @@ class ScheduledTask:
 class TaskScheduler:
     """Manages scheduled tasks for periodic execution."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._tasks: dict[str, ScheduledTask] = {}
-        self._handlers: dict[str, Callable] = {}
+        self._handlers: dict[str, Callable[..., Any]] = {}
         self._running = False
 
-    def register_handler(self, task_type: str, handler: Callable):
+    def register_handler(self, task_type: str, handler: Callable[..., Any]) -> None:
         """Register a handler for a task type."""
         self._handlers[task_type] = handler
 
-    def add_task(self, task: ScheduledTask):
+    def add_task(self, task: ScheduledTask) -> None:
         """Add a scheduled task."""
         self._tasks[task.id] = task
         task.next_run = self._calc_next_run(task.cron_expression)
 
-    def remove_task(self, task_id: str):
+    def remove_task(self, task_id: str) -> None:
         """Remove a scheduled task."""
         self._tasks.pop(task_id, None)
 
-    def toggle_task(self, task_id: str):
+    def toggle_task(self, task_id: str) -> None:
         """Toggle task enabled/disabled."""
         task = self._tasks.get(task_id)
         if task:
@@ -67,7 +67,7 @@ class TaskScheduler:
         now = time.time()
         return [t for t in self._tasks.values() if t.enabled and t.next_run and t.next_run <= now]
 
-    async def run_pending(self):
+    async def run_pending(self) -> None:
         """Run all due tasks."""
         due = self.get_due_tasks()
         for task in due:

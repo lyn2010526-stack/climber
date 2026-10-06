@@ -192,6 +192,8 @@ class SandboxExecutor:
                 await proc.wait()
                 return f"TIMEOUT: Command exceeded {effective_timeout}s limit"
 
+            # communicate() has returned, so the process has exited.
+            assert proc.returncode is not None
             return self._build_output(stdout, stderr, proc.returncode)
 
         except Exception as e:

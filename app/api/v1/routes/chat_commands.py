@@ -17,7 +17,7 @@ chat endpoint.
 from __future__ import annotations
 
 from copy import copy
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -83,7 +83,7 @@ def _error_event(message: str) -> AgentEvent:
     return AgentEvent(type=AgentEventType.ERROR, data={"error": message})
 
 
-def _stream_local(events: list[AgentEvent]):
+def _stream_local(events: list[AgentEvent]) -> StreamingResponse:
     async def _gen() -> Any:
         for event in events:
             yield _sse(event)
@@ -122,7 +122,7 @@ async def _resolve_run_context(session_id: str, user_id: str) -> dict[str, Any]:
         system_prompt = getattr(agent, "system_prompt", None) or ""
         tool_ids = list(getattr(agent, "tool_ids", None) or [])
         if credential is not None:
-            encrypted_key = credential.api_key_encrypted
+            encrypted_key: str | None = credential.api_key_encrypted
             base_url = credential.base_url
         else:
             if agent is None or provider != agent.provider:
@@ -198,7 +198,7 @@ async def parse_command(
 async def cancel_session_turn(
     session_id: str,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Interrupt the in-flight turn of this session (cooperative engine stop)."""
     engine = get_engine()
@@ -224,8 +224,8 @@ async def slash_command(
     session_id: str,
     request: SlashRequest,
     user_id: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-):
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> StreamingResponse:
     """Execute one slash command; unmatched input streams through the engine.
 
     Replies are always SSE: local commands emit synthetic ``text``/``done``
@@ -275,7 +275,7 @@ async def slash_command(
     )
 
 
-async def _retry_last_turn(session_id: str, user_id: str):
+async def _retry_last_turn(session_id: str, user_id: str) -> StreamingResponse:
     context = await _resolve_run_context(session_id, user_id)
     async with async_session() as db:
         row = (
@@ -293,7 +293,7 @@ async def _retry_last_turn(session_id: str, user_id: str):
         return _stream_local([_error_event("Nothing to retry yet: no previous user message")])
     # /retry re-runs the stored text as a NEW user turn; the original turn's
     # output stays in history for contrast.
-    return await _stream_engine_turn(session_id, user_id, row.content, context)
+    return await _stream_engine_turn(session_id, user_id, cast(str, row.content), context)
 
 
 async def _stream_engine_turn(
@@ -301,7 +301,7 @@ async def _stream_engine_turn(
     user_id: str,
     message: str,
     context: dict[str, Any] | None = None,
-):
+) -> StreamingResponse:
     """Stream one engine turn with chat.py's credential/lock discipline."""
     context = context or await _resolve_run_context(session_id, user_id)
     engine = _prepare_engine(context, session_id, user_id)

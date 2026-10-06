@@ -10,6 +10,7 @@ import contextvars
 import difflib
 import re
 from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -172,8 +173,8 @@ class FilePatchService:
                 line_ending = "\n"
                 break
 
-        hunks = []
-        current_hunk = None
+        hunks: list[dict[str, Any]] = []
+        current_hunk: dict[str, Any] | None = None
 
         for line in patch_lines:
             if line.startswith(("--- ", "+++ ")):

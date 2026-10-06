@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 from copy import deepcopy
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 from app.core.evaluation.judges import DeterministicJudge
 from app.core.evaluation.models import RubricItem, Trajectory
 from app.core.metacognition.orchestrator import MetacognitionOrchestrator
 from app.core.metacognition.real_execution import (
     LLMHypothesisVerifier,
+    SubTaskExecution,
     make_engine_subtask_executor,
 )
 
@@ -78,7 +79,7 @@ def build_session_orchestrator(engine: Any, session: Any) -> MetacognitionOrches
         except Exception as exc:
             reason = f"unconfigured: model unavailable ({type(exc).__name__})"
 
-    async def unavailable(goal: str, context: dict | None):
+    async def unavailable(goal: str, context: dict[str, Any] | None) -> SubTaskExecution:
         del goal, context
         raise RuntimeError(reason)
 
@@ -99,13 +100,14 @@ def build_session_orchestrator(engine: Any, session: Any) -> MetacognitionOrches
         spent = 0
         executions = 0
 
-        async def judgment_chat(**options: Any):
+        async def judgment_chat(**options: Any) -> Any:
             nonlocal spent
             async with lock:
                 remaining = budget - spent - getattr(session, "_run_tokens", 0)
                 if getattr(session, "_stop_requested", False) or remaining <= 0:
                     raise RuntimeError("parent stopped or token budget exhausted")
                 options["max_tokens"] = min(options.get("max_tokens", remaining), remaining)
+                assert owner is not None
                 principal_token = set_current_principal(owner)
                 try:
                     response = await adapter.chat(**options)
@@ -123,7 +125,7 @@ def build_session_orchestrator(engine: Any, session: Any) -> MetacognitionOrches
                     raise ValueError("model judgment token budget exceeded")
                 return response
 
-        async def bounded(goal: str, context: dict | None):
+        async def bounded(goal: str, context: dict[str, Any] | None) -> SubTaskExecution:
             nonlocal spent, executions
             async with lock:
                 remaining = budget - spent - getattr(session, "_run_tokens", 0)
@@ -154,7 +156,7 @@ def build_session_orchestrator(engine: Any, session: Any) -> MetacognitionOrches
         sub_agent_executor=executor,
     )
 
-    async def experiment(payload: dict) -> dict:
+    async def experiment(payload: dict[str, Any]) -> dict[str, Any]:
         context = payload.get("context") or {}
         rubric_data = context.get("rubric")
         if not rubric_data:
@@ -162,7 +164,7 @@ def build_session_orchestrator(engine: Any, session: Any) -> MetacognitionOrches
         rubric = [
             item if isinstance(item, RubricItem) else RubricItem(**item) for item in rubric_data
         ]
-        goal = payload.get("goal") or payload.get("hypothesis")
+        goal = cast("str", payload.get("goal") or payload.get("hypothesis"))
         result = (await orchestrator.dispatch_subtasks([{"goal": goal, "context": context}]))[0]
         if not result.success:
             raise RuntimeError(result.result)

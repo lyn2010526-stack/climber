@@ -140,7 +140,8 @@ def _parse_json_safe(value: Any) -> dict[str, Any]:
     if not value:
         return {}
     try:
-        return json.loads(str(value))
+        parsed: dict[str, Any] = json.loads(str(value))
+        return parsed
     except (json.JSONDecodeError, TypeError):
         return {}
 
@@ -175,7 +176,7 @@ async def execute_visual_workflow(
     if engine is None:
         from app.tools import tool_registry
 
-        model_registry = di_resolve("ModelRegistry")
+        model_registry: Any = di_resolve("ModelRegistry")
         engine = AgentEngine(
             model_registry=model_registry,
             tool_registry=tool_registry,

@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import math
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from typing import Any, cast
 from uuid import uuid4
+
+from sqlalchemy import Table
 
 from app.core.engine.session_runner import response_usage
 
 
-def _now():
+def _now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-def _session_context_value(session, key: str) -> str | None:
+def _session_context_value(session: Any, key: str) -> str | None:
     """Read an attribution value from the session context.
 
     Group tasks stamp ``group_id``/``task_id`` into the session context at
@@ -29,14 +33,14 @@ def _session_context_value(session, key: str) -> str | None:
 
 
 class RunStorage:
-    def __init__(self, session_factory=None):
+    def __init__(self, session_factory: Any = None) -> None:
         if session_factory is None:
             from app.storage import async_session
 
             session_factory = async_session
         self.session_factory = session_factory
 
-    async def begin(self, session):
+    async def begin(self, session: Any) -> None:
         from app.storage.database import Agent, Session, Turn
 
         async with self.session_factory() as db:
@@ -80,7 +84,7 @@ class RunStorage:
             await db.commit()
         await self._audit_run_action(session, "run_started")
 
-    async def _audit_run_action(self, session, action: str, status: str | None = None) -> None:
+    async def _audit_run_action(self, session: Any, action: str, status: str | None = None) -> None:
         try:
             from app.core.observability.audit_store import DurableAuditStore
 
@@ -91,13 +95,15 @@ class RunStorage:
                 details={
                     "turn_id": getattr(session, "current_turn_id", None),
                     "agent_id": getattr(session, "agent_id", None),
-                    "status": status or getattr(session, "status", None).value,
+                    "status": status or cast(Any, getattr(session, "status", None)).value,
                 },
             )
         except Exception:
             return
 
-    async def record_response(self, session, response, iteration, *, complete=True):
+    async def record_response(
+        self, session: Any, response: Any, iteration: int, *, complete: bool = True
+    ) -> None:
         from app.middleware.metrics import TOKEN_USAGE
         from app.storage.database import Session, Turn, UsageLog
         from app.storage.models_cost import CostRecord
@@ -105,7 +111,7 @@ class RunStorage:
         usage = response_usage(response)
         # Existing schemas require numeric cost columns. Unknown costs live in
         # Turn metadata; only authoritative priced responses create CostRecord.
-        costs = [
+        costs: list[Any] = [
             getattr(response, name, None) for name in ("input_cost", "output_cost", "total_cost")
         ]
         known_cost = complete and all(
@@ -149,7 +155,9 @@ class RunStorage:
             # Never split total tokens using an assumed ratio.
             if complete_usage:
                 await db.execute(
-                    UsageLog.__table__.insert().values(
+                    cast(Table, UsageLog.__table__)
+                    .insert()
+                    .values(
                         id=call_id,
                         user_id=session.user_id,
                         session_id=session.session_id,
@@ -160,7 +168,9 @@ class RunStorage:
                 )
             if known_cost and complete_usage:
                 await db.execute(
-                    CostRecord.__table__.insert().values(
+                    cast(Table, CostRecord.__table__)
+                    .insert()
+                    .values(
                         id=call_id,
                         user_id=session.user_id,
                         session_id=session.session_id,
@@ -203,9 +213,9 @@ class RunStorage:
             if usage[field] is not None:
                 TOKEN_USAGE.labels(
                     provider=session.provider, model_id=session.model_id, type=kind
-                ).inc(usage[field])
+                ).inc(cast(float, usage[field]))
 
-    async def finish(self, session):
+    async def finish(self, session: Any) -> None:
         from app.storage.database import Session, Turn
 
         async with self.session_factory() as db:
@@ -239,7 +249,7 @@ class RunStorage:
 
 
 @asynccontextmanager
-async def track_run(session, store):
+async def track_run(session: Any, store: Any) -> AsyncIterator[None]:
     from app.middleware.metrics import ACTIVE_SESSIONS, AGENT_ITERATION_COUNT, AGENT_RUN_TOTAL
 
     await store.begin(session)

@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -90,7 +90,7 @@ class SubAgentOrchestrator:
             raise ValueError("subagent limits must be positive")
         self._token_budget = token_budget
         self._tokens_used = 0
-        self._running: dict[str, asyncio.Task] = {}
+        self._running: dict[str, asyncio.Task[Any]] = {}
 
     def create_agent(
         self,
@@ -182,7 +182,12 @@ class SubAgentOrchestrator:
                 raise RuntimeError("subagent token budget exhausted")
             executor: SubTaskExecutor = self._executor or self._default_executor
             context = {**agent.memory, "token_budget": remaining}
-            running = asyncio.create_task(executor(agent.goal, context))
+            running = asyncio.create_task(
+                cast(
+                    "Coroutine[Any, Any, tuple[str, int] | SubTaskExecution]",
+                    executor(agent.goal, context),
+                )
+            )
             self._running[agent.id] = running
             execution = await asyncio.wait_for(running, timeout=self._execution_timeout)
             if isinstance(execution, SubTaskExecution):
@@ -263,7 +268,7 @@ class SubAgentOrchestrator:
 
     def merge_results(self, task_ids: list[str]) -> dict[str, Any]:
         """Merge results from multiple sub-agents."""
-        merged = {
+        merged: dict[str, Any] = {
             "goals": [],
             "total_tokens": 0,
             "total_iterations": 0,

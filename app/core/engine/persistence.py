@@ -12,7 +12,7 @@ async def persist_message(
     session_id: str,
     role: str,
     content: str | None = None,
-    tool_calls: list[dict] | None = None,
+    tool_calls: list[dict[str, Any]] | None = None,
     tool_name: str | None = None,
     tool_call_id: str | None = None,
     tokens: int = 0,

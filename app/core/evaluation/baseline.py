@@ -9,16 +9,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from app.core.evaluation.models import EvaluationReport
 
 
-def report_to_baseline(report: EvaluationReport) -> dict:
+def report_to_baseline(report: EvaluationReport) -> dict[str, Any]:
     """Compact baseline snapshot from a report."""
     return report.to_baseline()
 
 
-def save_baseline(report: EvaluationReport, path: str | Path) -> dict:
+def save_baseline(report: EvaluationReport, path: str | Path) -> dict[str, Any]:
     """Write a baseline JSON file for a report and return the snapshot."""
     baseline = report.to_baseline()
     target = Path(path)
@@ -29,17 +30,18 @@ def save_baseline(report: EvaluationReport, path: str | Path) -> dict:
     return baseline
 
 
-def load_baseline(path: str | Path) -> dict:
+def load_baseline(path: str | Path) -> dict[str, Any]:
     """Load a baseline JSON file."""
     with open(path, encoding="utf-8") as handle:
-        return json.load(handle)
+        loaded: dict[str, Any] = json.load(handle)
+        return loaded
 
 
 def compare_to_baseline(
     report: EvaluationReport,
-    baseline: dict,
+    baseline: dict[str, Any],
     threshold: float = 0.05,
-) -> dict:
+) -> dict[str, Any]:
     """Compare a fresh report against a baseline and flag regressions.
 
     A regression means a score dropped below the baseline by more than
@@ -49,7 +51,7 @@ def compare_to_baseline(
     current = report.to_baseline()
     if threshold < 0:
         raise ValueError("threshold must be non-negative")
-    scenario_rows: list[dict] = []
+    scenario_rows: list[dict[str, Any]] = []
     for scenario_id, base_score in (baseline.get("scores") or {}).items():
         if scenario_id in current["scores"]:
             score = current["scores"][scenario_id]

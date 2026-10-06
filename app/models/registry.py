@@ -55,7 +55,7 @@ _MODELS_SOFT_LIMIT = 200
 class ModelRegistry:
     """In-memory registry of configured models. Later backed by database."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._models: dict[str, ModelAdapter] = {}
         self._user_keys: dict[str, dict[str, dict[str, str]]] = {}
         self._size_warning_emitted = False

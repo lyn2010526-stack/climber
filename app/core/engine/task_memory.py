@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select, update
 
@@ -38,7 +38,7 @@ class TaskMemory:
             raise LookupError("Session not found")
 
     @staticmethod
-    def _item(source: str, row: Any, text: str, status: str, **details: Any) -> dict:
+    def _item(source: str, row: Any, text: str, status: str, **details: Any) -> dict[str, Any]:
         return {
             "source_id": f"{source}:{row.id}",
             "text": text,
@@ -49,7 +49,7 @@ class TaskMemory:
 
     async def _layers(
         self, db: Any, session_id: str, user_id: str, turn_id: str | None = None
-    ) -> dict:
+    ) -> dict[str, Any]:
         traces_query = (
             select(InstructionTrace)
             .where(
@@ -78,7 +78,7 @@ class TaskMemory:
             ).all()
         )
         by_turn = {row.id: row for row in turns}
-        layers: dict[str, list] = {"planning": [], "completed": [], "todo": []}
+        layers: dict[str, list[Any]] = {"planning": [], "completed": [], "todo": []}
         for trace in traces:
             # Compression creates derived trace rows; retain original instructions only.
             if trace.id in summary_ids:
@@ -137,7 +137,9 @@ class TaskMemory:
                 layers["completed" if row.status == "completed" else "todo"].append(item)
         return layers
 
-    async def restore(self, session_id: str, user_id: str, *, token_budget: int = 2048) -> dict:
+    async def restore(
+        self, session_id: str, user_id: str, *, token_budget: int = 2048
+    ) -> dict[str, Any]:
         """Return complete layers plus a bounded context, independently of model.
 
         UTF-8 byte length is a conservative text-token upper bound. Whole JSON
@@ -170,9 +172,12 @@ class TaskMemory:
 
     async def task_context(self, session_id: str, user_id: str, *, token_budget: int = 2048) -> str:
         """Prompt hook convenience entry point; use restore for omission diagnostics."""
-        return (await self.restore(session_id, user_id, token_budget=token_budget))["task_context"]
+        return cast(
+            str,
+            (await self.restore(session_id, user_id, token_budget=token_budget))["task_context"],
+        )
 
-    async def summarize_turn(self, session_id: str, user_id: str, turn_id: str) -> dict:
+    async def summarize_turn(self, session_id: str, user_id: str, turn_id: str) -> dict[str, Any]:
         """Idempotently store a lossless structured recap in Turn.metadata_.
 
         Serializes this module's writers via the owned session row. Mainline

@@ -7,8 +7,9 @@ import hashlib
 import hmac
 import json
 import secrets
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from fastapi import HTTPException, Request
 
@@ -76,7 +77,7 @@ def verify_token(token: str, expected_type: str = "access") -> dict[str, Any]:
     if not hmac.compare_digest(sig, expected_sig):
         raise HTTPException(401, "Invalid token signature")
     try:
-        payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode()))
+        payload: dict[str, Any] = json.loads(base64.urlsafe_b64decode(payload_b64.encode()))
     except Exception:
         raise HTTPException(401, "Malformed token") from None
     exp = payload.get("exp")
@@ -139,16 +140,18 @@ async def authenticate_user(username: str, password: str) -> dict[str, Any]:
             select(User).where(User.username == username, User.status == UserStatus.ACTIVE.value)
         )
         user = result.scalar_one_or_none()
-        if user and verify_password(password, user.hashed_password):
+        if user and verify_password(password, cast(str, user.hashed_password)):
             from datetime import datetime
 
-            user.last_login_at = datetime.utcnow()
+            # users.py uses legacy Column(...) declarations, so the instrumented
+            # attribute is typed Column[datetime]; cast keeps the runtime value.
+            user.last_login_at = cast(Any, datetime.utcnow())
             await session.commit()
             return {
                 "user_id": str(user.id),
                 "username": user.username,
                 "role": user.role,
-                "scopes": scopes_for_role(user.role),
+                "scopes": scopes_for_role(cast("str | None", user.role)),
             }
     raise HTTPException(401, "Invalid credentials")
 
@@ -188,7 +191,7 @@ def _has_scope(principal: dict[str, Any], scope: str) -> bool:
     )
 
 
-def require_admin():
+def require_admin() -> Callable[[Request], Awaitable[dict[str, Any]]]:
     """Dependency factory that rejects callers without admin scope."""
 
     async def _check(request: Request) -> dict[str, Any]:
@@ -203,7 +206,7 @@ def require_admin():
     return _check
 
 
-def require_scopes(*required_scopes: str):
+def require_scopes(*required_scopes: str) -> Callable[[Request], Awaitable[dict[str, Any]]]:
     """Dependency factory that enforces each required scope."""
 
     async def _check(request: Request) -> dict[str, Any]:
@@ -241,7 +244,9 @@ async def validate_api_key(raw_key: str) -> dict[str, Any]:
             if datetime.now(UTC) >= expires:
                 raise HTTPException(401, "API key expired")
         try:
-            decoded_scopes = json.loads(record.scopes) if record.scopes else ["read", "write"]
+            decoded_scopes = (
+                json.loads(cast(str, record.scopes)) if record.scopes else ["read", "write"]
+            )
         except (TypeError, ValueError):
             raise HTTPException(401, "Invalid API key scopes") from None
         if not isinstance(decoded_scopes, list) or not all(
@@ -249,7 +254,7 @@ async def validate_api_key(raw_key: str) -> dict[str, Any]:
         ):
             raise HTTPException(401, "Invalid API key scopes")
         scopes = decoded_scopes
-        record.last_used_at = datetime.utcnow()
+        record.last_used_at = cast(Any, datetime.utcnow())
         await session.commit()
 
     return {

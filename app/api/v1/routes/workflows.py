@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
@@ -30,23 +30,29 @@ router = APIRouter()
 
 async def _visible_workflow(db: Any, workflow_id: str, user_id: str) -> Workflow | None:
     """Fetch a workflow the given user may read (owned, or a shared template)."""
-    return (
-        await db.execute(
-            select(Workflow).where(
-                Workflow.id == workflow_id,
-                or_(Workflow.user_id == user_id, Workflow.is_template == True),  # noqa: E712
+    return cast(
+        "Workflow | None",
+        (
+            await db.execute(
+                select(Workflow).where(
+                    Workflow.id == workflow_id,
+                    or_(Workflow.user_id == user_id, Workflow.is_template == True),  # noqa: E712
+                )
             )
-        )
-    ).scalar_one_or_none()
+        ).scalar_one_or_none(),
+    )
 
 
 async def _owned_workflow(db: Any, workflow_id: str, user_id: str) -> Workflow | None:
     """Fetch a workflow owned by the given user, or None."""
-    return (
-        await db.execute(
-            select(Workflow).where(Workflow.id == workflow_id, Workflow.user_id == user_id)
-        )
-    ).scalar_one_or_none()
+    return cast(
+        "Workflow | None",
+        (
+            await db.execute(
+                select(Workflow).where(Workflow.id == workflow_id, Workflow.user_id == user_id)
+            )
+        ).scalar_one_or_none(),
+    )
 
 
 @router.get("/workflows")
@@ -67,7 +73,7 @@ async def list_workflows(principal: CurrentPrincipal) -> list[dict[str, Any]]:
 async def create_workflow(
     payload: WorkflowCreateRequest,
     principal: CurrentPrincipal,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Create a new workflow."""
     data = payload.model_dump()
@@ -102,7 +108,7 @@ async def update_workflow(
     workflow_id: str,
     payload: WorkflowUpdateRequest,
     principal: CurrentPrincipal,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Update a workflow's editable fields."""
     data = payload.model_dump(exclude_unset=True)
@@ -121,7 +127,9 @@ async def update_workflow(
 
 @router.delete("/workflows/{workflow_id}")
 async def delete_workflow(
-    workflow_id: str, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
+    workflow_id: str,
+    principal: CurrentPrincipal,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, bool | str]:
     """Delete a workflow and its run history."""
     user_id = principal.subject_id
@@ -140,7 +148,7 @@ async def run_workflow(
     workflow_id: str,
     payload: WorkflowRunRequest,
     principal: CurrentPrincipal,
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Execute a stored workflow, or an ad-hoc graph supplied in the body."""
     from app.storage.database import Agent
@@ -254,13 +262,13 @@ async def _execute_workflow(
     from app.workflow.engine import WorkflowEngine
 
     try:
-        model_registry = di_resolve("ModelRegistry")
+        model_registry: Any = di_resolve("ModelRegistry")
     except KeyError:
         from app.models.registry import ModelRegistry
 
         model_registry = ModelRegistry()
     try:
-        tool_registry = di_resolve("ToolRegistry")
+        tool_registry: Any = di_resolve("ToolRegistry")
     except KeyError:
         from app.tools import ToolRegistry
 

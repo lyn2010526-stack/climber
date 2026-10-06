@@ -175,7 +175,7 @@ class InstructionUnderstandingService:
         constraints = tuple(self._extract_constraints(raw_text))
         ambiguities = tuple(self._extract_ambiguities(raw_text, goal))
         missing = goal is None
-        questions = ("请说明这次操作要达成的主目标。",) if missing else ()
+        questions: tuple[str, ...] = ("请说明这次操作要达成的主目标。",) if missing else ()
         if ambiguities:
             questions += ("请明确以下表达的具体含义：" + "、".join(ambiguities),)
         confidence = self._confidence(goal, constraints, ambiguities, context)

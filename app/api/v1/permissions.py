@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -42,8 +44,8 @@ class PermissionConfigUpdate(BaseModel):
 async def resolve_permission(
     request: PermissionResolveRequest,
     _user: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-):
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     engine = get_engine()
     tool_call_id = request.tool_call_id
     decision = request.decision
@@ -62,7 +64,7 @@ async def resolve_permission(
 
 
 @router.get("/config")
-async def get_permission_config(_auth: dict = Depends(require_admin())):
+async def get_permission_config(_auth: dict[str, Any] = Depends(require_admin())) -> dict[str, Any]:
     # Reading the policy discloses the enforced mode together with the
     # allowed_tools/denied_tools allow- and deny-lists, so this endpoint carries
     # the same admin gate as the write path below. The path is absent from
@@ -95,8 +97,8 @@ async def get_permission_config(_auth: dict = Depends(require_admin())):
 @router.put("/config")
 async def update_permission_config(
     update: PermissionConfigUpdate,
-    _auth: dict = Depends(require_admin()),
-):
+    _auth: dict[str, Any] = Depends(require_admin()),
+) -> dict[str, Any]:
     engine = get_engine()
     current = engine.get_permission_config()
 

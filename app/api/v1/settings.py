@@ -43,7 +43,7 @@ async def get_settings(
 async def update_settings(
     principal: CurrentPrincipal,
     data: dict[str, Any],
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Update user settings."""

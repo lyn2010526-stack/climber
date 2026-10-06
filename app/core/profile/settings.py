@@ -2,8 +2,10 @@
 
 # Chinese user-facing notice uses Chinese punctuation.
 from datetime import datetime
+from typing import Any, cast
 
-from sqlalchemy import Boolean, DateTime, String, select, text
+from sqlalchemy import Boolean, DateTime, String, Table, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.storage import Base
@@ -28,14 +30,16 @@ class ProfileLearningSettings(Base):
     consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-async def load_settings(db, user_id: str, *, lock: bool = False):
+async def load_settings(
+    db: AsyncSession, user_id: str, *, lock: bool = False
+) -> ProfileLearningSettings | None:
     # Local installs can use this feature before a schema migration is applied.
     connection = await db.connection()
     if lock and connection.dialect.name == "sqlite":
         # Serialize setting updates with event acceptance on SQLite too.
         await db.execute(text("BEGIN IMMEDIATE"))
     await connection.run_sync(
-        lambda conn: ProfileLearningSettings.__table__.create(conn, checkfirst=True)
+        lambda conn: cast(Table, ProfileLearningSettings.__table__).create(conn, checkfirst=True)
     )
     query = select(ProfileLearningSettings).where(ProfileLearningSettings.user_id == user_id)
     if lock:
@@ -43,11 +47,11 @@ async def load_settings(db, user_id: str, *, lock: bool = False):
     return (await db.execute(query)).scalar_one_or_none()
 
 
-def learning_enabled(row) -> bool:
+def learning_enabled(row: ProfileLearningSettings | None) -> bool:
     return bool(row and row.enabled and row.consent_version == NOTICE_VERSION and row.consented_at)
 
 
-def settings_payload(row) -> dict:
+def settings_payload(row: ProfileLearningSettings | None) -> dict[str, Any]:
     return {
         "enabled": learning_enabled(row),
         "show_raw_profile": bool(row and row.show_raw_profile),

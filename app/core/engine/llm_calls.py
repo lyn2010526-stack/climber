@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import Any
+from typing import Any, cast
 
 from app.core import ChatResult
 from app.core.engine.session_runner import merge_stream_chunk
@@ -75,7 +75,7 @@ def accumulate_stream_tool_calls(
 async def stream_accumulate(
     adapter: Any,
     messages: list[dict[str, Any]],
-    tools: list,
+    tools: list[dict[str, Any]],
     sampling: dict[str, Any] | None = None,
 ) -> ChatResult:
     """Accumulate a streaming response into a single ChatResult.
@@ -123,7 +123,7 @@ def sampling_kwargs(session: Any) -> dict[str, Any]:
     return kwargs
 
 
-async def stream_chat(adapter: Any, session: Any, tools: list) -> ChatResult | None:
+async def stream_chat(adapter: Any, session: Any, tools: list[dict[str, Any]]) -> ChatResult | None:
     """Handle streaming chat response for a session.
 
     Args:
@@ -146,7 +146,7 @@ async def stream_chat(adapter: Any, session: Any, tools: list) -> ChatResult | N
     return result
 
 
-async def call_llm(adapter: Any, session: Any, tools: list) -> ChatResult | None:
+async def call_llm(adapter: Any, session: Any, tools: list[dict[str, Any]]) -> ChatResult | None:
     """Call the LLM adapter and return the result.
 
     Args:
@@ -162,8 +162,11 @@ async def call_llm(adapter: Any, session: Any, tools: list) -> ChatResult | None
     if session._stop_requested:
         await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
         return None
-    return await adapter.chat(
-        messages=session.messages, tools=tools or None, **sampling_kwargs(session)
+    return cast(
+        ChatResult | None,
+        await adapter.chat(
+            messages=session.messages, tools=tools or None, **sampling_kwargs(session)
+        ),
     )
 
 
@@ -213,15 +216,18 @@ async def call_llm_with_resilience(
                 return await stream_accumulate(
                     model_adapter, messages or session.messages, tools, sampling
                 )
-            return await model_adapter.chat(
-                messages=messages or session.messages, tools=tools or None, **sampling
+            return cast(
+                ChatResult,
+                await model_adapter.chat(
+                    messages=messages or session.messages, tools=tools or None, **sampling
+                ),
             )
 
         async def _attempt() -> ChatResult:
             return await asyncio.wait_for(_single(), timeout=timeout_config.per_call_seconds)
 
         try:
-            return await breaker.call(_attempt)
+            return cast(ChatResult, await breaker.call(_attempt))
         except CircuitBreakerOpenError:
             raise
         except RetryExhaustedError:

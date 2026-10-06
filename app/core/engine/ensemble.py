@@ -19,7 +19,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -108,7 +108,7 @@ class EnsembleEngine:
         for r in responses:
             if isinstance(r, Exception):
                 continue
-            valid_responses.append(r)
+            valid_responses.append(cast(ModelResponse, r))
 
         if not valid_responses:
             return ConsensusResult(

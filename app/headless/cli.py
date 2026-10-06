@@ -10,7 +10,7 @@ from .runner import Budget, ExitStatus, HeadlessRunner, load_task
 from .workspace import WorkspaceSandbox
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Local headless coding harness (file tools only)")
     parser.add_argument("--task", required=True, help="UTF-8 text or JSON {id, prompt}")
     parser.add_argument("--workspace", required=True, help="Existing dedicated directory")
@@ -28,6 +28,7 @@ def main(argv=None):
         trace_path = Path(args.trace).resolve()
         if trace_path.is_relative_to(workspace.root):
             raise ValueError("Trace must be outside workspace")
+        model: ScriptedFakeModel | OpenAICompatibleModel
         if args.fake_model:
             with Path(args.fake_model).open("rb") as stream:
                 raw = stream.read(2_000_001)

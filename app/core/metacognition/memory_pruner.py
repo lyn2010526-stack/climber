@@ -162,7 +162,7 @@ class LongTermMemoryPruner:
         frequency) falls below ``survival_threshold``. Frequently written
         memories therefore decay first and get forgotten last.
         """
-        removed = []
+        removed: list[str] = []
         target_size = int(self._max_entries * 0.8)
 
         if len(self._memories) <= target_size:

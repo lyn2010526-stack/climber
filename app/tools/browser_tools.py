@@ -22,7 +22,7 @@ async def _get_session(session_id: str) -> Any:
     return await get_browser_pool().acquire(session_id)
 
 
-async def _get_or_create_page(session_id: str):
+async def _get_or_create_page(session_id: str) -> Any:
     """Get current page or create a new one."""
     session = await _get_session(session_id)
     context = session.context

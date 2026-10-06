@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import APIRouter
@@ -90,7 +90,7 @@ def _read_run_summary(run_dir: Path) -> dict[str, Any] | None:
     if not path.is_file():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
     except (OSError, json.JSONDecodeError) as exc:
         logger.warning("arcbench_summary_read_failed", path=str(path), error=str(exc))
         return None
@@ -177,7 +177,7 @@ async def arcbench_status() -> ArcBenchStatus:
     last_events = []
     for raw in events[-_MAX_EVENTS:]:
         payload = dict(raw)
-        event = {
+        event: dict[str, Any] = {
             "type": str(payload.pop("type", "")),
             "timestamp": str(payload.pop("timestamp", "") or ""),
         }

@@ -31,7 +31,7 @@ class AdjustmentResult:
 class GoalDynamicAdjuster:
     """Detects infeasible goals and proposes alternatives."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._adjustment_history: list[AdjustmentResult] = []
         self._max_adjustments = 3
 

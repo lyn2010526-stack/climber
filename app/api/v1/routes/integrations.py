@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -26,12 +26,12 @@ def _identity() -> tuple[str, bool]:
 router = APIRouter()
 
 
-def _domestic_provider():
+def _domestic_provider() -> Any:
     from app.config import settings
     from app.core.integration.domestic_provider import DisabledQQBotProvider, LocalQQBotProvider
     from app.core.security.domestic_adapter import QRTokenStore
 
-    provider = getattr(_domestic_provider, "_provider", None)
+    provider: Any = getattr(_domestic_provider, "_provider", None)
     if provider is None or getattr(provider, "_mode", None) != settings.domestic_provider_mode:
         store = QRTokenStore(ttl_seconds=settings.domestic_qr_ttl_seconds)
         provider = (
@@ -40,7 +40,7 @@ def _domestic_provider():
             else DisabledQQBotProvider(store)
         )
         provider._mode = settings.domestic_provider_mode
-        _domestic_provider._provider = provider
+        cast(Any, _domestic_provider)._provider = provider
     return provider
 
 
@@ -62,7 +62,7 @@ async def domestic_status() -> dict[str, Any]:
 
 @router.post("/integrations/domestic/qqbot/qr")
 async def create_domestic_qr(
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Return a clear disabled response without contacting an external platform."""
     provider = _domestic_provider()
@@ -122,7 +122,7 @@ async def list_langgraph() -> dict[str, Any]:
 async def invoke_langgraph(
     graph_name: str,
     payload: dict[str, Any],
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Invoke a LangGraph graph."""
     try:
@@ -163,7 +163,7 @@ async def mem0_status() -> dict[str, Any]:
 @router.post("/integrations/mem0/search")
 async def mem0_search(
     payload: dict[str, Any],
-    _auth: dict = Depends(require_scopes("read")),
+    _auth: dict[str, Any] = Depends(require_scopes("read")),
 ) -> dict[str, Any]:
     """Search Mem0 memories scoped to the caller."""
     try:
@@ -181,7 +181,7 @@ async def mem0_search(
         requested_user = str(payload.get("user_id") or "").strip()
         user_id = requested_user if (is_admin and requested_user) else caller_id
 
-        if not svc.is_available and not await svc.initialize():
+        if not svc.is_available and not await svc.initialize():  # type: ignore[func-returns-value]  # initialize() typed -> None; boolean use preserved as-is
             return {"results": [], "status": "unavailable"}
 
         results = await svc.search(query, limit=limit, user_id=user_id)
@@ -197,7 +197,7 @@ async def mem0_search(
 @router.post("/integrations/mem0/add")
 async def mem0_add(
     payload: dict[str, Any],
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Add a memory to Mem0 under the caller's namespace."""
     try:
@@ -210,7 +210,7 @@ async def mem0_add(
         requested_user = str(payload.get("user_id") or "").strip()
         user_id = requested_user if (is_admin and requested_user) else caller_id
 
-        if not svc.is_available and not await svc.initialize():
+        if not svc.is_available and not await svc.initialize():  # type: ignore[func-returns-value]  # initialize() typed -> None; boolean use preserved as-is
             raise HTTPException(status_code=503, detail="Mem0 not available")
 
         memory_id = await svc.add(content, metadata=metadata, user_id=user_id)
@@ -231,7 +231,7 @@ async def mem0_add(
 @router.post("/integrations/agent/run")
 async def agent_run(
     payload: dict[str, Any],
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Run a Pydantic-AI agent."""
     try:

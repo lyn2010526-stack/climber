@@ -95,6 +95,7 @@ def _deserialize_workflow(data: dict[str, Any]) -> Workflow:
 class WorkflowIO:
     @staticmethod
     def export_workflow(workflow: Workflow) -> dict[str, Any]:
+        created_at = getattr(workflow, "created_at", None)
         return {
             "version": CURRENT_VERSION,
             "exported_at": _now_iso(),
@@ -102,9 +103,7 @@ class WorkflowIO:
                 "name": workflow.name,
                 "description": workflow.description or "",
                 "tags": getattr(workflow, "tags", []),
-                "created_at": workflow.created_at.isoformat()
-                if getattr(workflow, "created_at", None)
-                else _now_iso(),
+                "created_at": created_at.isoformat() if created_at else _now_iso(),
             },
             "nodes": _serialize_workflow(workflow)["nodes"],
             "edges": _serialize_workflow(workflow)["edges"],
@@ -116,7 +115,7 @@ class WorkflowIO:
         path = Path(file_path)
         if fmt.lower() == "yaml":
             try:
-                import yaml  # type: ignore[import-untyped]
+                import yaml
 
                 content = yaml.dump(data, allow_unicode=True, sort_keys=False)
             except ImportError:

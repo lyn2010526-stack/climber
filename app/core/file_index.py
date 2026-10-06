@@ -26,7 +26,7 @@ class FileIndexEntry:
 class FileIndexService:
     """Track and index files incrementally using SHA256 content hashing."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._index: dict[str, FileIndexEntry] = {}
 
     def compute_hash(self, content: str) -> str:

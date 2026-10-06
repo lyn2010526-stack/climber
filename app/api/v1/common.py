@@ -6,7 +6,7 @@ functions used across all route modules.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from fastapi import HTTPException, Request
 from sqlalchemy import select
@@ -16,7 +16,7 @@ from app.api.v1.schemas.response import ApiResponse, ErrorResponse, PaginatedRes
 from app.core.principal import LOCAL_SUBJECT_ID, get_context_principal
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
 DEFAULT_USER: str = LOCAL_SUBJECT_ID
 
@@ -85,13 +85,17 @@ async def get_or_404(
     Raises:
         HTTPException: 404 if the entity is not found.
     """
-    result = (await db.execute(select(model).where(model.id == entity_id))).scalar_one_or_none()
+    result = (
+        await db.execute(select(model).where(cast(Any, model).id == entity_id))
+    ).scalar_one_or_none()
     if result is None:
         raise HTTPException(status_code=404, detail=detail or f"{model.__name__} not found")
-    return result
+    return cast(T, result)
 
 
-def entities_to_dicts(entities: Sequence[T], dict_fn: callable) -> list[dict[str, Any]]:
+def entities_to_dicts(
+    entities: Sequence[T], dict_fn: Callable[[T], dict[str, Any]]
+) -> list[dict[str, Any]]:
     """Convert a sequence of database entities to dictionaries using a mapping function.
 
     Args:

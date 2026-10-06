@@ -32,7 +32,7 @@ class SupervisedTask:
 
     name: str
     factory: Callable[[], Awaitable[Any]]
-    task: asyncio.Task | None = None
+    task: asyncio.Task[Any] | None = None
     restarts: int = 0
     failures: int = 0
     last_error: str | None = None
@@ -64,7 +64,7 @@ class Watchdog:
     def __init__(self, check_interval: float = 10.0) -> None:
         self.check_interval = check_interval
         self._tasks: dict[str, SupervisedTask] = {}
-        self._monitor: asyncio.Task | None = None
+        self._monitor: asyncio.Task[Any] | None = None
         self._running = False
 
     def register(self, name: str, factory: Callable[[], Awaitable[Any]]) -> SupervisedTask:

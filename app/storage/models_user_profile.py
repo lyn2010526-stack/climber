@@ -12,6 +12,7 @@ the statistical fields.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import (
@@ -74,7 +75,7 @@ class UserProfileSnapshot(Base):
     __tablename__ = "user_profile_snapshots"
 
     user_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

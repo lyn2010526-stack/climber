@@ -1,6 +1,7 @@
 """Skill definitions — builtin SkillInfo registry and handler mapping."""
 
 from collections.abc import Callable
+from typing import Any
 
 import structlog
 
@@ -588,7 +589,7 @@ Templates: technical design, API docs, README, runbook, postmortem
     ),
 ]
 
-BUILTIN_HANDLER_MAP: dict[str, Callable] = {
+BUILTIN_HANDLER_MAP: dict[str, Callable[..., Any]] = {
     "recursive_research": skill_recursive_research,
     "task_decomposition": skill_task_decomposition,
     "self_evolving": skill_self_evolving,

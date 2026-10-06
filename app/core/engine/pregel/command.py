@@ -6,7 +6,7 @@ the next node(s) to execute, replacing the need for separate return values.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -55,7 +55,7 @@ class Command:
     @property
     def is_interrupt(self) -> bool:
         """Check if this command represents an interrupt request."""
-        return self.metadata.get("interrupt", False)
+        return cast(bool, self.metadata.get("interrupt", False))
 
     @property
     def is_end(self) -> bool:

@@ -216,7 +216,7 @@ class LLMRubricJudge:
 
     def _parse_verdicts(self, content: str, rubric: list[RubricItem]) -> list[ItemVerdict]:
         """Parse the judge JSON; unparseable or missing items fail closed."""
-        parsed: dict[str, dict] = {}
+        parsed: dict[str, dict[str, Any]] = {}
         try:
             data = json.loads(content)
             if isinstance(data, dict):

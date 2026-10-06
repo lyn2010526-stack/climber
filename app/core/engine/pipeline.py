@@ -20,7 +20,8 @@ import structlog
 from app.core import AgentEvent, AgentEventType
 
 try:
-    from app.models import ToolDef
+    # app.models never exports ToolDef; the fallback below is always used at runtime.
+    from app.models import ToolDef  # type: ignore[attr-defined]
 except ImportError:
 
     class ToolDef:  # type: ignore[no-redef]
@@ -28,7 +29,7 @@ except ImportError:
 
         name: str = ""
         description: str = ""
-        parameters: dict | None = None
+        parameters: dict[str, Any] | None = None
 
 
 logger = structlog.get_logger()

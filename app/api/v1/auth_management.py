@@ -6,7 +6,7 @@ import hashlib
 import json
 import secrets
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -133,9 +133,9 @@ async def refresh_token(payload: RefreshTokenRequest) -> RefreshTokenResponse:
         if not user:
             raise HTTPException(status_code=401, detail="User not found or inactive")
 
-        scopes = auth_manager.scopes_for_role(user.role)
+        scopes = auth_manager.scopes_for_role(cast(str, user.role))
 
-    new_token = auth_manager.create_access_token(user_id, scopes)
+    new_token = auth_manager.create_access_token(cast(str, user_id), scopes)
 
     return RefreshTokenResponse(
         access_token=new_token,
@@ -144,7 +144,7 @@ async def refresh_token(payload: RefreshTokenRequest) -> RefreshTokenResponse:
 
 
 @router.post("/logout")
-async def logout(request: Request) -> dict:
+async def logout(request: Request) -> dict[str, Any]:
     """Logout and invalidate current session."""
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
@@ -165,7 +165,7 @@ async def logout(request: Request) -> dict:
 
 
 @router.get("/me", response_model=dict)
-async def get_me(current_user: str = Depends(get_current_user)) -> dict:
+async def get_me(current_user: str = Depends(get_current_user)) -> dict[str, Any]:
     """Get current user information."""
     if not settings.enable_auth:
         return {"id": current_user, "username": current_user, "email": "", "role": "local"}
@@ -187,8 +187,8 @@ async def get_me(current_user: str = Depends(get_current_user)) -> dict:
 async def change_password(
     payload: ChangePasswordRequest,
     current_user: str = Depends(get_current_user),
-    _auth: dict = Depends(require_scopes("write")),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     """Change current user password."""
     async with async_session() as session:
         result = await session.execute(select(User).where(User.id == current_user))
@@ -196,10 +196,12 @@ async def change_password(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        if not auth_manager.verify_password(payload.current_password, user.hashed_password):
+        if not auth_manager.verify_password(
+            payload.current_password, cast(str, user.hashed_password)
+        ):
             raise HTTPException(status_code=400, detail="Current password is incorrect")
 
-        user.hashed_password = auth_manager.hash_password(payload.new_password)
+        cast(Any, user).hashed_password = auth_manager.hash_password(payload.new_password)
         await session.commit()
 
     return {"message": "Password changed successfully"}
@@ -208,7 +210,7 @@ async def change_password(
 @router.post("/keys", response_model=CreateApiKeyResponse)
 async def create_api_key(
     payload: CreateApiKeyRequest,
-    current_user: dict = Depends(require_scopes("write")),
+    current_user: dict[str, Any] = Depends(require_scopes("write")),
 ) -> CreateApiKeyResponse:
     """Create a new API key for programmatic access."""
     if not settings.enable_auth:
@@ -259,7 +261,7 @@ async def create_api_key(
 
 @router.get("/keys", response_model=ListKeysResponse)
 async def list_api_keys(
-    current_user: dict = Depends(require_scopes("read")),
+    current_user: dict[str, Any] = Depends(require_scopes("read")),
 ) -> ListKeysResponse:
     """List all API keys."""
     if not settings.enable_auth:
@@ -296,8 +298,8 @@ async def list_api_keys(
 @router.delete("/keys/{key_id}")
 async def revoke_api_key(
     key_id: str,
-    current_user: dict = Depends(require_scopes("write")),
-) -> dict:
+    current_user: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     """Revoke (deactivate) an API key."""
     if not settings.enable_auth:
         raise HTTPException(status_code=400, detail="Authentication is disabled")
@@ -312,14 +314,14 @@ async def revoke_api_key(
         owner = str(current_user.get("id") or current_user.get("user_id"))
         if not is_admin and key_record.owner != owner:
             raise HTTPException(status_code=403, detail="You may only revoke your own API keys")
-        key_record.is_active = False
+        cast(Any, key_record).is_active = False
         await session.commit()
 
     return {"message": f"API key {key_id} revoked successfully"}
 
 
 @router.get("/health")
-async def health_check(request: Request) -> dict:
+async def health_check(request: Request) -> dict[str, Any]:
     """Check authentication system status."""
     auth_enabled = settings.enable_auth
     auth_method = "disabled"

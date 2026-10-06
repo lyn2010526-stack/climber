@@ -15,6 +15,7 @@ import structlog
 from app.tools.mcp_models import (
     MCPContent,
     MCPPrompt,
+    MCPPromptArgument,
     MCPResource,
     MCPTool,
     MCPToolResult,
@@ -28,9 +29,9 @@ try:  # optional dependency — keeps import safe when mcp is not installed
     _MCP_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _MCP_AVAILABLE = False
-    ClientSession = None  # type: ignore[assignment]
-    stdio_client = None  # type: ignore[assignment]
-    streamablehttp_client = None  # type: ignore[assignment]
+    ClientSession = None
+    stdio_client = None
+    streamablehttp_client = None
 
 logger = structlog.get_logger()
 
@@ -72,7 +73,7 @@ class MCPClient:
         self._server_info: dict[str, Any] = {}
         self._connect_cm: Any = None
         self._connect_ctx: Any = None
-        self._notification_handlers: dict[str, list[Callable]] = {}
+        self._notification_handlers: dict[str, list[Callable[..., Any]]] = {}
 
     @property
     def is_connected(self) -> bool:
@@ -179,6 +180,7 @@ class MCPClient:
 
     async def _discover_capabilities(self) -> None:
         """Discover tools, resources, and prompts from server."""
+        assert self.session is not None
         caps = self._server_info.get("capabilities", {})
 
         if "tools" in caps:
@@ -215,10 +217,12 @@ class MCPClient:
                 raw_prompts = await self.session.list_prompts()
                 self.prompts = {}
                 for p in raw_prompts.prompts:
-                    args = None
+                    args: list[MCPPromptArgument] | None = None
                     if hasattr(p, "arguments") and p.arguments:
                         args = [
-                            {"name": a.name, "description": getattr(a, "description", None)}
+                            MCPPromptArgument(
+                                name=a.name, description=getattr(a, "description", None)
+                            )
                             for a in p.arguments
                         ]
                     self.prompts[p.name] = MCPPrompt(
@@ -366,10 +370,10 @@ class MCPClient:
         result = await self.session.list_prompts()
         prompts = []
         for p in result.prompts:
-            args = None
+            args: list[MCPPromptArgument] | None = None
             if hasattr(p, "arguments") and p.arguments:
                 args = [
-                    {"name": a.name, "description": getattr(a, "description", None)}
+                    MCPPromptArgument(name=a.name, description=getattr(a, "description", None))
                     for a in p.arguments
                 ]
             prompts.append(
@@ -396,19 +400,19 @@ class MCPClient:
         parts = []
         for msg in result.messages:
             content = getattr(msg, "content", None)
-            if hasattr(content, "text"):
+            if content is not None and hasattr(content, "text"):
                 parts.append(content.text)
             elif isinstance(content, dict):
                 parts.append(content.get("text", ""))
         return "\n".join(parts)
 
-    async def subscribe(self, channel: str, callback: Callable) -> None:
+    async def subscribe(self, channel: str, callback: Callable[..., Any]) -> None:
         """Subscribe to real-time notifications."""
         if channel not in self._notification_handlers:
             self._notification_handlers[channel] = []
         self._notification_handlers[channel].append(callback)
 
-    async def unsubscribe(self, channel: str, callback: Callable) -> None:
+    async def unsubscribe(self, channel: str, callback: Callable[..., Any]) -> None:
         """Unsubscribe from notifications."""
         handlers = self._notification_handlers.get(channel, [])
         if callback in handlers:

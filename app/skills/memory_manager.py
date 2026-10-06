@@ -33,7 +33,7 @@ class MemoryEntry:
 class PersistentMemory:
     """Simple persistent memory store."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._cache: deque[MemoryEntry] = deque(maxlen=_CACHE_MAX_ENTRIES)
 
     def store(
@@ -41,7 +41,7 @@ class PersistentMemory:
         content: str,
         memory_type: MemoryType = MemoryType.FACT,
         source: str = "system",
-        **kwargs,
+        **kwargs: Any,
     ) -> MemoryEntry:
         entry = MemoryEntry(
             id=str(uuid.uuid4())[:12],

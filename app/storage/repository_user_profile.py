@@ -9,7 +9,7 @@ of accumulating summary history.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -87,7 +87,7 @@ async def upsert_snapshot(
     db: AsyncSession,
     *,
     user_id: str,
-    payload: dict,
+    payload: dict[str, Any],
     confidence: float,
 ) -> UserProfileSnapshot:
     """Write the latest summary projection, folding into the existing row."""

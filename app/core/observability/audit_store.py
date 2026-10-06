@@ -7,13 +7,15 @@ outage never changes the operation it is auditing nor raises into the caller.
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import func, select
 
 LOGIN_ACTION = "auth:login"
 PERMISSION_ACTION = "permission:decision"
 
 
-def _default_factory():
+def _default_factory() -> Any:
     from app.storage import async_session
 
     return async_session
@@ -22,10 +24,10 @@ def _default_factory():
 class DurableAuditStore:
     """Persistent, append-only audit writer for login, permission, file and agent events."""
 
-    def __init__(self, session_factory=None):
+    def __init__(self, session_factory: Any = None) -> None:
         self.session_factory = session_factory
 
-    def _sf(self):
+    def _sf(self) -> Any:
         return self.session_factory or _default_factory()
 
     async def log(
@@ -57,7 +59,13 @@ class DurableAuditStore:
         except Exception:
             return False
 
-    async def log_login(self, user_id=None, username=None, success=True, reason="") -> bool:
+    async def log_login(
+        self,
+        user_id: str | None = None,
+        username: str | None = None,
+        success: bool = True,
+        reason: str = "",
+    ) -> bool:
         return await self.log(
             user_id=user_id,
             action=LOGIN_ACTION,
@@ -68,11 +76,11 @@ class DurableAuditStore:
 
     async def log_permission_decision(
         self,
-        session_id=None,
-        user_id=None,
-        tool_name=None,
-        allowed=None,
-        reason="",
+        session_id: str | None = None,
+        user_id: str | None = None,
+        tool_name: str | None = None,
+        allowed: bool | None = None,
+        reason: str = "",
     ) -> bool:
         return await self.log(
             session_id=session_id,
@@ -84,7 +92,12 @@ class DurableAuditStore:
         )
 
     async def log_file_change(
-        self, session_id=None, user_id=None, operation=None, path=None, details=None
+        self,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        operation: str | None = None,
+        path: str | None = None,
+        details: dict[str, Any] | None = None,
     ) -> bool:
         return await self.log(
             session_id=session_id,
@@ -96,7 +109,11 @@ class DurableAuditStore:
         )
 
     async def log_agent_action(
-        self, session_id=None, user_id=None, action=None, details=None
+        self,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        action: str | None = None,
+        details: dict[str, Any] | None = None,
     ) -> bool:
         return await self.log(
             session_id=session_id,

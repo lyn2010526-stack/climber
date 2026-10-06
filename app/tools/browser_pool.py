@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -45,11 +46,12 @@ class BrowserSession:
         return time.monotonic() - self.last_used
 
     async def close(self) -> None:
-        for closer in (
+        closers: tuple[Callable[[], Any], ...] = (
             lambda: self.context.close(),
             lambda: self.browser.close(),
             lambda: self.playwright.stop(),
-        ):
+        )
+        for closer in closers:
             try:
                 await closer()
             except Exception as exc:  # pragma: no cover - best effort teardown
@@ -72,7 +74,7 @@ class BrowserPool:
         self.sweep_interval = sweep_interval
         self._sessions: dict[str, BrowserSession] = {}
         self._lock = asyncio.Lock()
-        self._sweeper: asyncio.Task | None = None
+        self._sweeper: asyncio.Task[Any] | None = None
         self._evictions = 0
         self._reclaimed = 0
 

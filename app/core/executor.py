@@ -125,13 +125,15 @@ class UnifiedExecutor(IExecutor):
             )
         return await adapter.execute(context, **kwargs)
 
-    async def execute_stream(self, context: ExecutionContext, **kwargs: Any) -> AsyncIterator[Any]:
+    async def execute_stream(  # type: ignore[override]  # IExecutor declares async->AsyncIterator; impls are async generators consumed via `async for`
+        self, context: ExecutionContext, **kwargs: Any
+    ) -> AsyncIterator[Any]:
         executor_type = kwargs.get("executor_type", "workflow")
         adapter = self._adapters.get(executor_type)
         if adapter is None:
             raise ValueError(f"Unknown executor type: {executor_type}")
         if hasattr(adapter, "execute_stream"):
-            async for chunk in adapter.execute_stream(context, **kwargs):
+            async for chunk in adapter.execute_stream(context, **kwargs):  # type: ignore[attr-defined]  # concrete executors' execute_stream are async generators
                 yield chunk
         else:
             result = await adapter.execute(context, **kwargs)

@@ -28,7 +28,11 @@ from app.core.metacognition.resource import (
     ResourceStatus,
     TaskComplexity,
 )
-from app.core.metacognition.sub_agent import SubAgentOrchestrator, SubTaskExecutor
+from app.core.metacognition.sub_agent import (
+    DispatchResult,
+    SubAgentOrchestrator,
+    SubTaskExecutor,
+)
 
 
 @dataclass
@@ -272,7 +276,7 @@ class MetacognitionOrchestrator:
         selected = updated[0] if updated else None
         final_success = success if success is not None else not outcome.lower().startswith("error")
         attribution = self._causal.analyze(goal, outcome, final_success)
-        record = {
+        record: dict[str, Any] = {
             "iteration": iteration,
             "action": action,
             "outcome": outcome,
@@ -334,11 +338,16 @@ class MetacognitionOrchestrator:
         self,
         sub_tasks: list[dict[str, Any]],
         parent_id: str | None = None,
-    ) -> list:
+    ) -> list[DispatchResult]:
         """Dispatch sub-tasks through the real sub-agent executor."""
         return await self._sub_agents.dispatch(sub_tasks, parent_id)
 
-    async def run_experiment(self, hypothesis, goal: str = "", context=None) -> dict[str, Any]:
+    async def run_experiment(
+        self,
+        hypothesis: ExecutionPath | HypothesisBelief | str,
+        goal: str = "",
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         return await self._simulator.run_experiment(hypothesis, goal, context)
 
     def configure_experiment_runner(self, runner: HypothesisVerifier) -> None:

@@ -14,7 +14,12 @@ from typing import Any
 
 import structlog
 from sqlalchemy import event, inspect, text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import StaticPool
 
@@ -38,7 +43,7 @@ def _ensure_sqlite_dir(url: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
-def _build_engine():
+def _build_engine() -> AsyncEngine:
     if _is_sqlite:
         _ensure_sqlite_dir(db_url)
         if ":memory:" in db_url:
@@ -76,7 +81,7 @@ engine = _build_engine()
 if _is_sqlite:
 
     @event.listens_for(engine.sync_engine, "connect")
-    def _apply_sqlite_pragmas(dbapi_connection, connection_record):
+    def _apply_sqlite_pragmas(dbapi_connection: Any, connection_record: Any) -> None:
         """WAL + tuning pragmas, applied per connection."""
         cursor = dbapi_connection.cursor()
         try:

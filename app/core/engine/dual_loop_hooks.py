@@ -7,6 +7,7 @@ unavailable so a failure never blocks a normal agent run.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import aclosing
 from contextvars import ContextVar
 from typing import Any
@@ -20,7 +21,7 @@ def install_metacognition_scope(engine: Any) -> None:
         return
     iteration_loop = engine._iteration_loop
 
-    async def scoped(session: Any, executor: Any, compressor: Any):
+    async def scoped(session: Any, executor: Any, compressor: Any) -> AsyncIterator[Any]:
         token = _meta_session.set((engine, session))
         try:
             async with aclosing(iteration_loop(session, executor, compressor)) as events:

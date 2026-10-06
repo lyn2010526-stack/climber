@@ -17,6 +17,7 @@ import contextlib
 import json
 import math
 import os
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -56,7 +57,9 @@ class SubTaskExecution:
     error: str | None = None
 
 
-def make_engine_subtask_executor(engine: Any, *, principal: Any, **session_options: Any):
+def make_engine_subtask_executor(
+    engine: Any, *, principal: Any, **session_options: Any
+) -> Callable[[str, dict[str, Any] | None], Awaitable[SubTaskExecution]]:
     """Adapt the existing engine interface without bypassing its permission chain."""
     from app.core.evaluation.models import EvalScenario
     from app.core.evaluation.runner import make_engine_agent_fn

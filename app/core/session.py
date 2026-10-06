@@ -63,6 +63,14 @@ class SessionConfig:
 class AgentSession:
     """Represents a single agent interaction session with state management."""
 
+    # Runtime-set flags/diagnostics written and read by the engine submodules
+    # (runner, tool_exec, run_progress, run_storage) and the engine facade.
+    _continuing_input: bool
+    _outer_rounds: int
+    _run_status_override: str | None
+    task_memory_diagnostics: dict[str, Any]
+    task_memory_summary_diagnostics: dict[str, Any]
+
     def __init__(
         self,
         config: SessionConfig | None = None,
@@ -148,7 +156,7 @@ class AgentSession:
         self._init_permission_system()
         self._pending_permission: dict[str, Any] | None = None
         self._permission_event: asyncio.Event | None = None
-        self._pending_tasks: set[asyncio.Task] = set()
+        self._pending_tasks: set[asyncio.Task[Any]] = set()
         self.metrics = SessionMetrics(session_id=self.session_id or "session")
         self._session_deadline: float | None = None
         self._iteration_deadline: float | None = None
@@ -276,9 +284,9 @@ class AgentSession:
     def _init_permission_system(self) -> None:
         """Initialize the permission system for this session."""
         try:
-            from app.core.permission_rules import get_default_config
+            from app.core.permission_rules import PermissionConfig, get_default_config
 
-            self.permission_config = get_default_config()
+            self.permission_config: PermissionConfig | None = get_default_config()
         except Exception:
             self.permission_config = None
 
@@ -357,7 +365,7 @@ class AgentSession:
         self.termination_reason = None
         self.paused_at = None
 
-    def _fire_and_forget(self, coro: Any) -> asyncio.Task:
+    def _fire_and_forget(self, coro: Any) -> asyncio.Task[Any]:
         """Create a background task and track it for cleanup.
 
         Args:
@@ -371,7 +379,7 @@ class AgentSession:
         task = asyncio.create_task(coro)
         self._pending_tasks.add(task)
 
-        def on_done(completed: asyncio.Task) -> None:
+        def on_done(completed: asyncio.Task[Any]) -> None:
             self._pending_tasks.discard(completed)
             if not completed.cancelled():
                 completed.exception()

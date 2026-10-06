@@ -7,16 +7,22 @@ import contextlib
 import importlib.util
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import AsyncIterator, Callable
+
+    from starlette.middleware.base import RequestResponseEndpoint
 
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+# NOTE: imported at runtime (not under TYPE_CHECKING) because FastAPI resolves
+# endpoint annotations via get_type_hints() when building the OpenAPI schema.
+from starlette.responses import Response
 
 from app.api.v1 import router as api_router
 from app.config import settings
@@ -87,8 +93,8 @@ def _register_core_services() -> None:
     agent_engine = AgentEngine(model_registry=model_registry, tool_registry=tool_registry_instance)
     auto_loop_engine = AutoLoopEngine()
 
-    di_register(IModelAdapter, model_registry)
-    di_register(IToolRegistry, tool_registry_instance)
+    di_register(IModelAdapter, cast(IModelAdapter, model_registry))
+    di_register(IToolRegistry, cast(IToolRegistry, tool_registry_instance))
     di_register(ISkillRegistry, LegacySkillRegistry(skill_registry))
     di_register("ModelRegistry", model_registry)
     di_register("ToolRegistry", tool_registry_instance)
@@ -101,9 +107,11 @@ def _register_core_services() -> None:
     workflow_engine = WorkflowEngine(engine=agent_engine, model_registry=model_registry)
     skill_composer = SkillComposer(skill_registry=skill_registry)
     unified = UnifiedExecutor()
-    unified.register_adapter("workflow", WorkflowExecutorAdapter(workflow_engine))
-    unified.register_adapter("crew", CrewExecutorAdapter(Crew([], [], agent_engine)))
-    unified.register_adapter("skill", SkillComposerExecutorAdapter(skill_composer))
+    unified.register_adapter("workflow", cast(IExecutor, WorkflowExecutorAdapter(workflow_engine)))
+    unified.register_adapter(
+        "crew", cast(IExecutor, CrewExecutorAdapter(Crew([], [], agent_engine)))
+    )
+    unified.register_adapter("skill", cast(IExecutor, SkillComposerExecutorAdapter(skill_composer)))
     di_register(IExecutor, unified)
     di_register("UnifiedExecutor", unified)
     di_register("SkillComposer", skill_composer)
@@ -116,7 +124,8 @@ def _local_ip() -> str:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
             s.settimeout(0.2)
             s.connect(("8.8.8.8", 80))
-            return s.getsockname()[0]
+            addr: str = s.getsockname()[0]
+            return addr
     except Exception:
         try:
             return socket.gethostbyname(socket.gethostname())
@@ -127,7 +136,7 @@ def _local_ip() -> str:
 SHUTDOWN_STEP_TIMEOUT = 10.0
 
 
-async def _run_cleanup_step(name: str, coro) -> None:
+async def _run_cleanup_step(name: str, coro: Any) -> None:
     """Run one teardown step with a hard timeout and failure isolation.
 
     A hanging or raising teardown coroutine must never block or abort the
@@ -142,7 +151,7 @@ async def _run_cleanup_step(name: str, coro) -> None:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log_dir = configure_logging(settings.app_log_level)
     logger.info(
         "Agent Engine starting",
@@ -189,7 +198,7 @@ async def lifespan(app: FastAPI):
 
             register_builtins()
 
-            auto_loop_engine = di_resolve("AutoLoopEngine")
+            auto_loop_engine: Any = di_resolve("AutoLoopEngine")
             _wire_auto_loop_runner(auto_loop_engine)
             recovered = await auto_loop_engine.recover_interrupted_sessions()
             if recovered:
@@ -251,8 +260,8 @@ async def lifespan(app: FastAPI):
             try:
                 from app.services.telegram_bot import configure_bot, start_telegram_bot
 
-                model_registry = di_resolve("ModelRegistry")
-                tool_registry = di_resolve("ToolRegistry")
+                model_registry: Any = di_resolve("ModelRegistry")
+                tool_registry: Any = di_resolve("ToolRegistry")
                 configure_bot(model_registry, tool_registry)
                 telegram_started = await start_telegram_bot()
                 if telegram_started:
@@ -312,13 +321,13 @@ async def _drain_background_tasks() -> None:
     spawns (notifications, memory reflection, evolution ticks). A bounded timeout
     keeps shutdown fast even when a handler hangs.
     """
-    pending: list[asyncio.Task] = []
+    pending: list[asyncio.Task[Any]] = []
     with contextlib.suppress(Exception):
         from app.core.task_worker import task_manager
 
         pending.extend(task_manager._active_tasks.values())
     with contextlib.suppress(Exception):
-        agent_engine = di_resolve("AgentEngine")
+        agent_engine: Any = di_resolve("AgentEngine")
         pending.extend(agent_engine._background_tasks)
     if not pending:
         return
@@ -339,13 +348,17 @@ async def _dispose_db_engine() -> None:
         logger.warning("main.db_engine_dispose_failed", error=str(exc))
 
 
-def _wire_auto_loop_runner(auto_loop_engine) -> None:
+def _wire_auto_loop_runner(auto_loop_engine: Any) -> None:
     """Wire owner-configured agent execution and persist reported progress."""
+    # NOTE: imported locally because tests/isolated/test_review6_task_recovery.py
+    # extracts this function via AST and execs it with a bare namespace.
+    from typing import cast
+
     from app.core.auto_loop import AutoLoopRecord
     from app.core.task_worker import handle_agent_run, resolve_owner_agent_payload
 
     async def autonomous_runner(record: AutoLoopRecord) -> None:
-        payload = await resolve_owner_agent_payload(record.owner_id)
+        payload = await resolve_owner_agent_payload(cast(str, record.owner_id))
 
         async def on_progress(step: int, total: int, message: str = "") -> None:
             import time
@@ -415,8 +428,8 @@ def create_app() -> FastAPI:
 
 
 @app.get("/health")
-async def health() -> dict:
-    checks: dict = {"status": "ok", "version": _APP_VERSION}
+async def health() -> dict[str, Any]:
+    checks: dict[str, Any] = {"status": "ok", "version": _APP_VERSION}
     try:
         checks["database"] = await db_health()
     except Exception as e:
@@ -460,12 +473,14 @@ async def health() -> dict:
     )
     checks["status"] = "degraded" if degraded else "ok"
     if degraded:
-        return JSONResponse(status_code=503, content=checks)
+        # Declared return type stays a JSON-serialisable dict so FastAPI's response
+        # model inference works; FastAPI passes a returned Response through as-is.
+        return cast(dict[str, Any], JSONResponse(status_code=503, content=checks))
     return checks
 
 
 @app.get("/health/logs")
-async def health_logs(lines: int = 200, errors_only: bool = False) -> dict:
+async def health_logs(lines: int = 200, errors_only: bool = False) -> dict[str, Any]:
     return {
         "lines": get_recent_logs(lines=min(lines, 2000), error_only=errors_only),
         "log_dir": settings.log_dir,
@@ -473,7 +488,7 @@ async def health_logs(lines: int = 200, errors_only: bool = False) -> dict:
 
 
 @app.get("/metrics")
-async def metrics():
+async def metrics() -> Response:
     return await metrics_endpoint()
 
 
@@ -490,11 +505,13 @@ if FRONTEND_DIR.exists():
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
     @app.get("/")
-    async def serve_frontend():
+    async def serve_frontend() -> FileResponse:
         return FileResponse(frontend_index)
 
     @app.middleware("http")
-    async def spa_fallback_middleware(request: Request, call_next):
+    async def spa_fallback_middleware(
+        request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         # SPA fallback: only intercept responses where the request was NOT
         # routed to a registered endpoint (i.e. a 404) and the path is not a
         # backend/API path. Registered routes, including dynamically added
@@ -516,7 +533,7 @@ if FRONTEND_DIR.exists():
 else:
 
     @app.get("/")
-    async def redirect_to_frontend():
+    async def redirect_to_frontend() -> JSONResponse:
         return JSONResponse(
             {
                 "message": "Climber Agent Engine API",

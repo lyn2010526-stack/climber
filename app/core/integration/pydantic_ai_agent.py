@@ -7,7 +7,7 @@ and structured responses with validation.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from typing import Any, TypeVar
 
 from pydantic import BaseModel, Field
@@ -84,7 +84,7 @@ class PydanticAIAgent:
                 metadata={"error": str(exc)},
             )
 
-    async def run_stream(self, prompt: str):
+    async def run_stream(self, prompt: str) -> AsyncIterator[Any]:
         """Run the agent with streaming output."""
         try:
             from pydantic_ai import Agent

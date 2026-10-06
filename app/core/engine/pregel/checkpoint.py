@@ -9,6 +9,7 @@ Checkpoints capture the full state at super-step boundaries, enabling:
 from __future__ import annotations
 
 import asyncio
+import builtins
 import json
 import sqlite3
 import time
@@ -260,7 +261,7 @@ class SqliteCheckpointSaver:
         config: CheckpointConfig,
         limit: int,
         before: str | None,
-    ) -> list[Checkpoint]:
+    ) -> builtins.list[Checkpoint]:
         with sqlite3.connect(self._db_path) as conn:
             conn.row_factory = sqlite3.Row
             if before:

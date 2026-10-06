@@ -33,8 +33,8 @@ class ToolDefinition(BaseModel):
 class ToolRegistry:
     """Central registry for all available tools."""
 
-    def __init__(self):
-        self._tools: dict[str, Callable] = {}
+    def __init__(self) -> None:
+        self._tools: dict[str, Callable[..., Any]] = {}
         self._definitions: dict[str, ToolDefinition] = {}
         self._mcp_clients: list[Any] = []
 
@@ -43,7 +43,7 @@ class ToolRegistry:
         name: str,
         description: str,
         parameters: dict[str, Any],
-        func: Callable,
+        func: Callable[..., Any],
     ) -> None:
         """Register a callable tool."""
         self._tools[name] = func
@@ -64,7 +64,7 @@ class ToolRegistry:
     ) -> None:
         """Register an MCP tool that delegates to an MCP server."""
 
-        async def _mcp_wrapper(**kwargs):
+        async def _mcp_wrapper(**kwargs: Any) -> Any:
             return await mcp_client.call_tool(mcp_tool_name, kwargs)
 
         self._tools[name] = _mcp_wrapper
@@ -81,10 +81,10 @@ class ToolRegistry:
         name: str | None = None,
         description: str = "",
         parameters: dict[str, Any] | None = None,
-    ) -> Callable:
+    ) -> Callable[..., Any]:
         """Decorator to register a function as a tool."""
 
-        def decorator(func: Callable) -> Callable:
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             tool_name = name or func.__name__
             tool_desc = description or func.__doc__ or ""
             tool_params = parameters or self._infer_schema(func)
@@ -93,7 +93,7 @@ class ToolRegistry:
 
         return decorator
 
-    def _infer_schema(self, func: Callable) -> dict[str, Any]:
+    def _infer_schema(self, func: Callable[..., Any]) -> dict[str, Any]:
         """Infer JSON Schema from function signature (basic)."""
         import inspect
         import typing
@@ -212,7 +212,7 @@ def tool(
     name: str | None = None,
     description: str = "",
     parameters: dict[str, Any] | None = None,
-) -> Callable:
+) -> Callable[..., Any]:
     """Convenience decorator using global registry."""
     return tool_registry.tool(name, description, parameters)
 

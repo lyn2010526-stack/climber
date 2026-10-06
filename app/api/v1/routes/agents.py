@@ -22,7 +22,7 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 
-def _owner_filter(principal) -> bool:
+def _owner_filter(principal: CurrentPrincipal) -> bool:
     """Local-only mode shows all data; authenticated mode filters by owner."""
     return principal.auth_method != "local"
 
@@ -71,7 +71,7 @@ async def create_agent(
             agent.max_tokens = data["max_tokens"]
         if not getattr(agent, "tool_ids", None):
             try:
-                tool_registry = di_resolve("ToolRegistry")
+                tool_registry: Any = di_resolve("ToolRegistry")
                 agent.tool_ids = [tool.name for tool in tool_registry.list_tools()]
             except KeyError:
                 agent.tool_ids = []

@@ -302,7 +302,9 @@ class ProfileLoopService:
             return ProfileSummary({}, {}, {}, 0.0, 0.0, 0.0, 0.0, (), False, prompt_hints=())
 
         reference = _utc(as_of or datetime.now(UTC))
-        task, tools, reasoning = {}, {}, {}
+        task: dict[str, _FeatureStats] = {}
+        tools: dict[str, _FeatureStats] = {}
+        reasoning: dict[str, _FeatureStats] = {}
         total = success = retries = interruptions = 0.0
         for event in self._events:
             weight = self._weight(event, reference)
@@ -457,7 +459,7 @@ def _ratio(numerator: float, denominator: float) -> float:
 
 
 def _top(values: dict[str, float]) -> str | None:
-    return max(values, key=values.get) if values else None
+    return max(values, key=lambda key: values[key]) if values else None
 
 
 def _prompt_hints(

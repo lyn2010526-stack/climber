@@ -6,7 +6,7 @@ import time
 
 from fastapi import Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, Info, generate_latest
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 # Request metrics
 REQUEST_COUNT = Counter(
@@ -71,7 +71,7 @@ APP_INFO = Info(
 class MetricsMiddleware(BaseHTTPMiddleware):
     """Middleware to collect request metrics."""
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         start_time = time.time()
         method = request.method
         path = request.url.path

@@ -67,7 +67,9 @@ class ProgressTracker:
     latest_input_tokens: int = 0
     cumulative_output_tokens: int = 0
     tool_use_count: int = 0
-    recent_activities: deque = field(default_factory=lambda: deque(maxlen=RECENT_ACTIVITY_LIMIT))
+    recent_activities: deque[dict[str, Any]] = field(
+        default_factory=lambda: deque(maxlen=RECENT_ACTIVITY_LIMIT)
+    )
     stalled_warned: bool = False
 
     def record_activity(self, label: str, now: float | None = None) -> None:

@@ -134,7 +134,7 @@ BUILTIN_TEMPLATES: list[PromptTemplate] = [
 class PromptTemplateRepository:
     """Repository for managing prompt templates with persistence."""
 
-    def __init__(self, path: str | os.PathLike | None = None) -> None:
+    def __init__(self, path: str | os.PathLike[str] | None = None) -> None:
         self._lock = threading.RLock()
         self._templates: dict[str, PromptTemplate] = {}
         self._path: str | None = (
@@ -151,6 +151,8 @@ class PromptTemplateRepository:
 
     def _load_from_disk(self) -> None:
         """Load persisted custom templates from disk. Missing or corrupt files degrade silently."""
+        if not self._path:
+            return
         try:
             with open(self._path, encoding="utf-8") as f:
                 data = json.load(f)

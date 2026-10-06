@@ -8,7 +8,7 @@ import math
 import re
 import urllib.parse
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
 
@@ -16,6 +16,9 @@ from app.core.di import resolve as di_resolve
 from app.core.security.network_allowlist import network_allowlist
 from app.tools import native_tools, tool
 from app.utils.ssrf import blocked_reason
+
+if TYPE_CHECKING:
+    from app.core.collaboration.base import GroupCollaborationEngine
 
 _SAFE_EVAL_BUILTINS = {
     "len": len,
@@ -268,8 +271,8 @@ async def list_files(directory: str = ".") -> str:
 
 @tool(description="Run a shell command and return output")
 async def run_command(command: str) -> str:
-    sandbox = di_resolve("SandboxExecutor")
-    return await sandbox.execute(command)
+    sandbox: Any = di_resolve("SandboxExecutor")
+    return cast("str", await sandbox.execute(command))
 
 
 @tool(description="Generate an image using a text description (via pollinations.ai)")
@@ -308,7 +311,7 @@ async def translate(text: str, target_language: str = "en", source_language: str
                 },
             )
             if resp.status_code == 200:
-                return resp.json().get("translatedText", "Translation failed")
+                return cast("str", resp.json().get("translatedText", "Translation failed"))
             # Fallback: return a note
             return f"Translation service unavailable. Text: {text}"
     except Exception as e:
@@ -473,7 +476,7 @@ async def file_info(path: str) -> str:
         return f"Error getting file info: {e!s}"
 
 
-def _get_group_engine():
+def _get_group_engine() -> GroupCollaborationEngine:
     from app.core.group_collaboration import get_group_collaboration_engine
 
     return get_group_collaboration_engine()
@@ -602,8 +605,8 @@ async def stream_command(command: str, timeout: int = 120, workdir: str = "") ->
     try:
         from app.core.di import resolve as di_resolve
 
-        sandbox = di_resolve("SandboxExecutor")
-        return await sandbox.execute(command)
+        sandbox: Any = di_resolve("SandboxExecutor")
+        return cast("str", await sandbox.execute(command))
     except Exception as e:
         return f"Error executing command: {e!s}"
 

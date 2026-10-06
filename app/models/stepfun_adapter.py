@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from app.models.openai_adapter import ModelCapability, OpenAIAdapter
+from app.core import ChatResult
+from app.models import ModelCapability
+from app.models.openai_adapter import OpenAIAdapter
 
 
 class StepFunAdapter(OpenAIAdapter):
@@ -41,6 +43,6 @@ class StepFunAdapter(OpenAIAdapter):
         messages: list[dict[str, object]],
         tools: list[dict[str, object]] | None = None,
         **kwargs: object,
-    ) -> object:
+    ) -> ChatResult:
         """Non-streaming chat completion for StepFun."""
         return await self._chat_non_streaming(messages, tools, **kwargs)

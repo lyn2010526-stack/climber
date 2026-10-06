@@ -124,7 +124,7 @@ class UserProfile(Base):
     timezone: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Freeform facts about the user (persistent across all sessions)
-    facts: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    facts: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     # Each fact: {"category": "work", "content": "Software engineer at Google", "confidence": 0.9}
 
     # Identity memory — inviolable rules, values, principles
@@ -133,7 +133,7 @@ class UserProfile(Base):
     principles: Mapped[list[str]] = mapped_column(JSON, default=list)
 
     # Behavioral patterns
-    common_topics: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    common_topics: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     # Each: {"topic": "Python", "frequency": 15, "last_mentioned": "2024-01-15"}  # noqa: ERA001
 
     # Interaction summary

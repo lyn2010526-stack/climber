@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
-from typing import Any
+from typing import Any, cast
 
 from app.core.memory.lifecycle import MemoryLifecycleManager, MemoryRetrieveResult
 
@@ -135,7 +135,7 @@ def sync_memory_status(user_id: str = DEFAULT_USER_ID) -> dict[str, Any]:
             ).scalar() or 0
             return {"total": total, "archived": archived, "active": total - archived}
 
-    counts = _run(_counts())
+    counts: dict[str, Any] = _run(_counts())
     counts["user_id"] = user_id
     return counts
 
@@ -304,7 +304,7 @@ def handle_frame(frame: dict[str, Any]) -> dict[str, Any] | None:
             }
         return {"jsonrpc": "2.0", "id": frame_id, "result": _run_tool(name, arguments)}
 
-    if method.startswith("notifications/"):
+    if cast(str, method).startswith("notifications/"):
         return None
 
     return {
@@ -320,6 +320,7 @@ def main() -> None:
         line = line.strip()
         if not line:
             continue
+        response: dict[str, Any] | None
         try:
             frame = json.loads(line)
         except json.JSONDecodeError as exc:

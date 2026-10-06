@@ -45,7 +45,7 @@ async def compress_if_needed(
     adapter: Any,
     compressor: Any,
     *,
-    meter=None,
+    meter: Any = None,
 ) -> tuple[list[dict[str, Any]] | None, int]:
     """Compress session messages when the context grows too large.
 
@@ -115,7 +115,7 @@ async def save_checkpoint(
         pending_writes=pending_writes or [],
     )
     cp = sanitize_checkpoint(cp, secrets=(session.api_key,))
-    cid = await checkpoint_store.save(
+    cid: str = await checkpoint_store.save(
         None,
         cp,
         thread_id=session.current_turn_id or "",

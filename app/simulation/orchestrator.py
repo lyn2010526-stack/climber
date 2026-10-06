@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -84,11 +84,11 @@ class ScienceSimulationAgent:
         self,
         tool_registry: Any,
         options: OrchestratorOptions | None = None,
-        llm_call=None,
+        llm_call: Any = None,
         ledger: ExperimentLedger | None = None,
         global_reviewer: GlobalReviewFn | None = None,
         tool_selector: ToolSelectFn | None = None,
-        validate_tool_call=None,
+        validate_tool_call: Any = None,
     ):
         self.tool_registry = tool_registry
         self.options = options or OrchestratorOptions()
@@ -101,7 +101,9 @@ class ScienceSimulationAgent:
     async def run(self, requirement: str) -> OrchestratorResult:
         result = OrchestratorResult(requirement=requirement)
         if self.ledger is not None:
-            self.ledger.record_goal(requirement, {"mode": "orchestrator"})
+            # ledger.record_goal 注解为 list[dict]，但 plan 快照实际传 dict
+            # （与 harness.py 中同一处注解不一致），ledger 原样存储。
+            self.ledger.record_goal(requirement, {"mode": "orchestrator"})  # type: ignore[arg-type]
 
         feedback = ""
         for round_number in range(1, self.options.max_plan_rounds + 1):
@@ -159,7 +161,7 @@ class ScienceSimulationAgent:
     async def _select_tool(self, requirement: str) -> str:
         if self.options.default_tool:
             return self.options.default_tool
-        available = [
+        available: list[dict[str, str]] = [
             {
                 "name": d.name,
                 "description": d.description,
@@ -184,8 +186,8 @@ class ScienceSimulationAgent:
         for tool in tools:
             desc = (tool.get("description") or "").lower()
             if any(k in desc for k in ("simulate", "simulation", "solver", "compute")):
-                return tool["name"]
-        return tools[0]["name"]
+                return cast(str, tool["name"])
+        return cast(str, tools[0]["name"])
 
     async def _default_global_review(self, ctx: AggregateReviewContext) -> tuple[bool, str]:
         """Deterministic aggregate gate: satisfied when at least one

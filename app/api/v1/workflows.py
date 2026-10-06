@@ -296,7 +296,7 @@ async def export_workflow_get(
 def _build_export_response(workflow: Workflow, workflow_id: str, fmt: str) -> Response:
     if fmt == "yaml":
         try:
-            import yaml  # type: ignore[import-untyped]
+            import yaml
 
             content = yaml.dump(
                 WorkflowIO.export_workflow(workflow), allow_unicode=True, sort_keys=False

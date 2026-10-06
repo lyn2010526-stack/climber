@@ -33,7 +33,7 @@ class ContextCompressor:
         return estimate_tokens(messages) > self._config.max_tokens
 
     async def compress(
-        self, messages: list[dict[str, Any]], model: Any, *, meter=None
+        self, messages: list[dict[str, Any]], model: Any, *, meter: Any = None
     ) -> list[dict[str, Any]]:
         strategy = self._config.compression_strategy
         if strategy == CompressionStrategy.TRUNCATE:
@@ -63,7 +63,7 @@ class ContextCompressor:
         return result
 
     async def _summarize(
-        self, messages: list[dict[str, Any]], model: Any, *, meter=None
+        self, messages: list[dict[str, Any]], model: Any, *, meter: Any = None
     ) -> list[dict[str, Any]]:
         """Summarize older messages into a single system message using the LLM.
 
@@ -145,7 +145,7 @@ class ContextCompressor:
         system_tokens = sum(estimate_tokens([m]) for m in system_msgs)
         remaining_budget = max_tokens - system_tokens
 
-        kept = []
+        kept: list[dict[str, Any]] = []
         used_tokens = 0
         for msg in reversed(non_system):
             msg_tokens = estimate_tokens([msg])

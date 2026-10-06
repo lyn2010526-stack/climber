@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import AsyncIterator
 from contextlib import suppress
 from typing import Any
 
@@ -51,7 +52,7 @@ class TaskResponse(BaseModel):
 _ws_clients: list[WebSocket] = []
 
 
-async def _ws_broadcast(task_id: str, data: dict):
+async def _ws_broadcast(task_id: str, data: dict[str, Any]) -> None:
     """Broadcast task progress to all connected WebSocket clients."""
     import json
 
@@ -71,7 +72,9 @@ task_manager.on_progress(_ws_broadcast)
 
 
 @router.post("/submit", response_model=TaskResponse)
-async def submit_task(req: SubmitTaskRequest, _auth: dict = Depends(require_scopes("write"))):
+async def submit_task(
+    req: SubmitTaskRequest, _auth: dict[str, Any] = Depends(require_scopes("write"))
+) -> TaskResponse:
     """Submit a new long-running task."""
     try:
         task_id = await task_manager.submit(req.task_type, req.payload, owner_id=_auth["id"])
@@ -81,7 +84,9 @@ async def submit_task(req: SubmitTaskRequest, _auth: dict = Depends(require_scop
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
-async def get_task(task_id: str, _auth: dict = Depends(require_scopes("read"))):
+async def get_task(
+    task_id: str, _auth: dict[str, Any] = Depends(require_scopes("read"))
+) -> TaskResponse:
     """Get task status and result."""
     info = await task_manager.get_status(
         task_id,
@@ -98,8 +103,8 @@ async def list_tasks(
     status_filter: str | None = None,
     status: str | None = None,
     limit: int = Query(default=50, ge=1, le=500),
-    _auth: dict = Depends(require_scopes("read")),
-):
+    _auth: dict[str, Any] = Depends(require_scopes("read")),
+) -> list[dict[str, Any]]:
     """List recent tasks, optionally filtered by status."""
     return await task_manager.list_tasks(
         status_filter or status,
@@ -110,7 +115,9 @@ async def list_tasks(
 
 
 @router.post("/{task_id}/cancel")
-async def cancel_task(task_id: str, _auth: dict = Depends(require_scopes("write"))):
+async def cancel_task(
+    task_id: str, _auth: dict[str, Any] = Depends(require_scopes("write"))
+) -> dict[str, Any]:
     """Cancel a running task. Owners may cancel their own tasks; admins may cancel any."""
     is_admin = _auth.get("role") == "admin" or "admin" in _auth.get("scopes", [])
     record = await task_manager.get_status(task_id, owner_id=_auth["id"], include_all=is_admin)
@@ -122,7 +129,7 @@ async def cancel_task(task_id: str, _auth: dict = Depends(require_scopes("write"
     return {"task_id": task_id, "cancelled": True}
 
 
-async def _control(task_id: str, action: str, auth: dict) -> dict[str, Any]:
+async def _control(task_id: str, action: str, auth: dict[str, Any]) -> dict[str, Any]:
     is_admin = auth.get("role") == "admin" or "admin" in auth.get("scopes", [])
     if await task_manager.get_status(task_id, owner_id=auth["id"], include_all=is_admin) is None:
         raise HTTPException(404, "Task not found")
@@ -133,33 +140,43 @@ async def _control(task_id: str, action: str, auth: dict) -> dict[str, Any]:
 
 
 @router.post("/{task_id}/pause")
-async def pause_task(task_id: str, _auth: dict = Depends(require_scopes("write"))):
+async def pause_task(
+    task_id: str, _auth: dict[str, Any] = Depends(require_scopes("write"))
+) -> dict[str, Any]:
     return await _control(task_id, "pause", _auth)
 
 
 @router.post("/{task_id}/resume")
-async def resume_task(task_id: str, _auth: dict = Depends(require_scopes("write"))):
+async def resume_task(
+    task_id: str, _auth: dict[str, Any] = Depends(require_scopes("write"))
+) -> dict[str, Any]:
     return await _control(task_id, "resume", _auth)
 
 
 @router.post("/{task_id}/retry")
-async def retry_task(task_id: str, _auth: dict = Depends(require_scopes("write"))):
+async def retry_task(
+    task_id: str, _auth: dict[str, Any] = Depends(require_scopes("write"))
+) -> dict[str, Any]:
     return await _control(task_id, "retry", _auth)
 
 
 @router.post("/{task_id}/rollback")
-async def rollback_task(task_id: str, _auth: dict = Depends(require_scopes("write"))):
+async def rollback_task(
+    task_id: str, _auth: dict[str, Any] = Depends(require_scopes("write"))
+) -> dict[str, Any]:
     return await _control(task_id, "rollback", _auth)
 
 
 @router.get("/{task_id}/events")
-async def task_events(task_id: str, _auth: dict = Depends(require_scopes("read"))):
+async def task_events(
+    task_id: str, _auth: dict[str, Any] = Depends(require_scopes("read"))
+) -> StreamingResponse:
     is_admin = _auth.get("role") == "admin" or "admin" in _auth.get("scopes", [])
     if await task_manager.get_status(task_id, owner_id=_auth["id"], include_all=is_admin) is None:
         raise HTTPException(404, "Task not found")
     queue = task_manager.subscribe(task_id, replay=False)
 
-    async def stream():
+    async def stream() -> AsyncIterator[str]:
         try:
             snapshot = await task_manager.event_snapshot(task_id, _auth["id"], is_admin)
             if snapshot is None:
@@ -183,7 +200,9 @@ async def task_events(task_id: str, _auth: dict = Depends(require_scopes("read")
 
 
 @router.get("/{task_id}/snapshot")
-async def task_snapshot(task_id: str, _auth: dict = Depends(require_scopes("read"))):
+async def task_snapshot(
+    task_id: str, _auth: dict[str, Any] = Depends(require_scopes("read"))
+) -> dict[str, Any]:
     snapshot = await task_manager.event_snapshot(
         task_id,
         _auth["id"],
@@ -196,8 +215,8 @@ async def task_snapshot(task_id: str, _auth: dict = Depends(require_scopes("read
 
 @router.get("/{task_id}/subtasks")
 async def list_subtasks(
-    task_id: str, status: str | None = None, _auth: dict = Depends(require_scopes("read"))
-):
+    task_id: str, status: str | None = None, _auth: dict[str, Any] = Depends(require_scopes("read"))
+) -> dict[str, Any]:
     """List persisted subtasks, optionally filtered by lifecycle status."""
     is_admin = _auth.get("role") == "admin" or "admin" in _auth.get("scopes", [])
     subtasks = await task_manager.list_subtasks(
@@ -210,8 +229,10 @@ async def list_subtasks(
 
 @router.post("/{task_id}/subtasks/claim")
 async def claim_subtasks(
-    task_id: str, req: ClaimSubtasksRequest, _auth: dict = Depends(require_scopes("write"))
-):
+    task_id: str,
+    req: ClaimSubtasksRequest,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     """Claim ready subtasks with a compare-and-set update."""
     if not 1 <= req.limit <= 50 or not 1 <= req.lease_seconds <= 86400:
         raise HTTPException(422, "limit must be 1..50 and lease_seconds must be 1..86400")
@@ -234,8 +255,8 @@ async def complete_subtask(
     task_id: str,
     subtask_id: str,
     req: CompleteSubtaskRequest,
-    _auth: dict = Depends(require_scopes("write")),
-):
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     """Report a subtask result; only the claiming agent may complete it."""
     is_admin = _auth.get("role") == "admin" or "admin" in _auth.get("scopes", [])
     subtask = await task_manager.complete_subtask(
@@ -253,7 +274,7 @@ async def complete_subtask(
 
 
 @router.websocket("/ws")
-async def task_websocket(websocket: WebSocket):
+async def task_websocket(websocket: WebSocket) -> None:
     """WebSocket for real-time task progress notifications."""
     from app.middleware.auth import authenticate_credentials
 

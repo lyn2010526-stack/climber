@@ -54,7 +54,7 @@ class PermissionRule:
 class PermissionOverlay:
     """Three-layer permission overlay: defaults → agent-level → user-level."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._defaults: list[PermissionRule] = []
         self._agent_overrides: dict[str, list[PermissionRule]] = {}
         self._user_overrides: dict[str, list[PermissionRule]] = {}
@@ -542,7 +542,7 @@ class PermissionApprovalSystem:
     4. If granted: temporarily elevate permission, execute, then revoke
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._requests: dict[str, PermissionRequest] = {}
         self._active_grants: dict[str, list[str]] = {}  # session_id -> [granted_actions]
 
@@ -601,7 +601,7 @@ class PermissionApprovalSystem:
         grants = self._active_grants.get(session_id, [])
         return action in grants
 
-    def revoke_permission(self, session_id: str, action: str):
+    def revoke_permission(self, session_id: str, action: str) -> None:
         """Revoke a temporary permission grant."""
         grants = self._active_grants.get(session_id, [])
         if action in grants:
@@ -615,7 +615,7 @@ class PermissionApprovalSystem:
             requests = [r for r in requests if r.session_id == session_id]
         return requests
 
-    def clear_session(self, session_id: str):
+    def clear_session(self, session_id: str) -> None:
         """Clear all permissions for a session."""
         self._active_grants.pop(session_id, None)
 
@@ -646,9 +646,9 @@ class AuditSystem:
     Persists to database for long-term storage.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._entries: list[AuditEntry] = []
-        self._persist_tasks: set[asyncio.Task] = set()
+        self._persist_tasks: set[asyncio.Task[Any]] = set()
 
     def _spawn_persist(self, coro: Any) -> None:
         """Schedule a persist coroutine, keeping a reference until it finishes."""
@@ -663,7 +663,7 @@ class AuditSystem:
         path: str,
         details: dict[str, Any] | None = None,
         user_id: str | None = None,
-    ):
+    ) -> None:
         """Log a file operation."""
         severity = "critical" if operation in ("delete", "modify") else "info"
         self._entries.append(
@@ -693,7 +693,7 @@ class AuditSystem:
         result: str = "",
         blocked: bool = False,
         user_id: str | None = None,
-    ):
+    ) -> None:
         """Log a command execution."""
         self._entries.append(
             AuditEntry(
@@ -724,7 +724,7 @@ class AuditSystem:
         status_code: int,
         duration_ms: float,
         user_id: str | None = None,
-    ):
+    ) -> None:
         """Log an API call."""
         self._entries.append(
             AuditEntry(
@@ -753,7 +753,7 @@ class AuditSystem:
         granted: bool,
         reason: str = "",
         user_id: str | None = None,
-    ):
+    ) -> None:
         """Log a permission event."""
         self._entries.append(
             AuditEntry(

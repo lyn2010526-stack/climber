@@ -11,7 +11,7 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from sqlalchemy import select, update
@@ -58,7 +58,7 @@ class AutoLoopRecord:
     started_at: float | None = None
     finished_at: float | None = None
     heartbeat_at: float | None = None
-    asyncio_task: asyncio.Task | None = None
+    asyncio_task: asyncio.Task[Any] | None = None
     state_machine: TaskStateMachine = field(
         default_factory=lambda: TaskStateMachine(task_id=str(uuid.uuid4()))
     )
@@ -83,7 +83,7 @@ class AutoLoopEngine:
         self._tasks: dict[str, AutoLoopRecord] = {}
         self._runners: dict[str, Callable[..., Coroutine[Any, Any, None]]] = {}
         self._running = False
-        self._monitor: asyncio.Task | None = None
+        self._monitor: asyncio.Task[Any] | None = None
         self._heartbeat_timeout = heartbeat_timeout
         self._recovery_check_interval = recovery_check_interval
 
@@ -273,7 +273,7 @@ class AutoLoopEngine:
             "finished_at": record.finished_at,
         }
 
-    def register_runner(self, task_type: str, runner: Callable) -> None:
+    def register_runner(self, task_type: str, runner: Callable[..., Any]) -> None:
         """Register a task runner coroutine factory."""
         self._runners[task_type] = runner
 
@@ -405,7 +405,8 @@ class AutoLoopEngine:
                             )
                         )
                         await db.commit()
-                        return claimed.rowcount == 1
+                        updated: bool = cast(Any, claimed).rowcount == 1
+                        return updated
                     existing.status = status.value
                     existing.current_step = record.current_step
                     existing.updated_at = now

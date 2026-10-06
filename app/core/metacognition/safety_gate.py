@@ -245,5 +245,5 @@ def coupled_decay(
     age = max(0.0, age_days)
     clamped_importance = min(1.0, max(0.0, importance))
     effective_half_life = half_life_days * (1.0 + _normalize_frequency(write_frequency))
-    survival = clamped_importance * 0.5 ** (age / effective_half_life)
+    survival: float = clamped_importance * 0.5 ** (age / effective_half_life)
     return round(min(1.0, max(0.0, survival)), 6)

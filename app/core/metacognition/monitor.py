@@ -47,7 +47,7 @@ class MonitoringResult:
 class MetaCognitionMonitor:
     """Analyzes agent execution trace for defects and health issues."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._call_history: list[dict[str, Any]] = []
         self._goal: str = ""
         self._token_budget: int = 8000
@@ -103,7 +103,8 @@ class MetaCognitionMonitor:
         keys = set(predicted) | set(actual)
         if not keys:
             return 0.0
-        return round(sum(predicted.get(key) != actual.get(key) for key in keys) / len(keys), 4)
+        mismatches = sum(bool(predicted.get(key) != actual.get(key)) for key in keys)
+        return round(mismatches / len(keys), 4)
 
     def check_contradictions(self, candidates: list[dict[str, Any]]) -> list[str]:
         contradictions = []

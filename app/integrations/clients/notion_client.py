@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import quote
 
 from ._http import IntegrationError, request_json, require_config, response_id, validate_text
@@ -20,7 +21,7 @@ class NotionClient:
     def __init__(self, config: NotionConfig | None = None):
         self.config = config or NotionConfig()
 
-    async def create_page(self, title: str, content: str = "") -> dict:
+    async def create_page(self, title: str, content: str = "") -> dict[str, Any]:
         """Create a database page and return the API object plus the legacy title.
 
         Contracts: https://developers.notion.com/reference/post-page

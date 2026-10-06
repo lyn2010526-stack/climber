@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import httpx
 
@@ -41,7 +42,7 @@ def validate_text(value: str, name: str, limit: int, *, allow_empty: bool = Fals
         raise ValueError(f"{name} exceeds the supported limit of {limit} characters")
 
 
-def response_id(data: dict, field: str, service: str) -> str:
+def response_id(data: dict[str, Any], field: str, service: str) -> str:
     value = data.get(field)
     if not isinstance(value, str) or not value.strip():
         raise IntegrationError(service, f"response is missing a valid {field}; outcome unknown")
@@ -55,10 +56,10 @@ async def request_json(
     *,
     headers: dict[str, str],
     timeout: float,
-    payload: dict | None = None,
+    payload: dict[str, Any] | None = None,
     auth: httpx.Auth | None = None,
     expected_status: int = 200,
-) -> dict:
+) -> dict[str, Any]:
     if (
         isinstance(timeout, bool)
         or not isinstance(timeout, (int, float))

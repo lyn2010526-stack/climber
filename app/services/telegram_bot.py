@@ -28,7 +28,7 @@ def _allowed_chat_ids() -> set[int]:
     return {int(value.strip()) for value in raw.split(",") if value.strip().lstrip("-").isdigit()}
 
 
-def configure_bot(model_registry, tool_registry) -> None:
+def configure_bot(model_registry: Any, tool_registry: Any) -> None:
     """Configure the bot with engine dependencies."""
     global _registry, _tool_registry
     _registry = model_registry

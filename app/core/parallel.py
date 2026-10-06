@@ -7,7 +7,7 @@ import inspect
 import json
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from app.tools import ToolRegistry
@@ -105,7 +105,9 @@ class ParallelToolExecutor:
                 else:
                     # Sync validators (e.g. guardrails-ai Validator.validate) must not
                     # block the event loop, so they run in the default thread pool.
-                    allowed, reason = await asyncio.to_thread(self._validator, name, arguments)
+                    allowed, reason = await asyncio.to_thread(
+                        cast(SyncValidator, self._validator), name, arguments
+                    )
             except Exception as e:
                 return ToolExecutionResult(
                     tool_name=name,

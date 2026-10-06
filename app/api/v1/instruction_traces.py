@@ -7,6 +7,8 @@ retry a submission without creating a second archive row.
 
 from __future__ import annotations
 
+from typing import cast
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
@@ -18,7 +20,7 @@ from app.schemas.api_v1.instruction_traces import (
     InstructionTraceRead,
 )
 from app.storage import async_session
-from app.storage.models_instruction_traces import InstructionTrace
+from app.storage.models_instruction_traces import InstructionSource, InstructionTrace
 from app.storage.repository_instruction_traces import (
     DEFAULT_DEDUP_WINDOW_SECONDS,
     count_traces,
@@ -40,7 +42,7 @@ def _to_read(trace: InstructionTrace) -> InstructionTraceRead:
         intent_summary=trace.intent_summary,
         task_spec=trace.task_spec,
         goal_preserved=bool(trace.goal_preserved),
-        source=trace.source,
+        source=cast(InstructionSource, trace.source),
         token_count=trace.token_count,
         compressed_into_id=trace.compressed_into_id,
         is_archived=bool(trace.is_archived),

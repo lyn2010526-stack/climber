@@ -10,9 +10,9 @@ from typing import Any
 class ReflectionResult:
     score: float = 0.0
     feedback: str = ""
-    suggestions: list[str] = None
+    suggestions: list[str] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.suggestions is None:
             self.suggestions = []
 
