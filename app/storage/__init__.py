@@ -175,6 +175,7 @@ async def init_db() -> None:
         models_memory_archive,  # noqa: F401
         models_platform,  # noqa: F401
         models_plugins,  # noqa: F401
+        models_prompt_genome,  # noqa: F401
         models_reasoning,  # noqa: F401
         models_skills,  # noqa: F401
         models_traces,  # noqa: F401

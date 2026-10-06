@@ -193,7 +193,7 @@ class PermissionTierApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.config.evaluate("edit_file"), RuleDecision.ALLOW)
 
     async def test_real_engine_save_reload_and_existing_session_policy(self):
-        directory = tempfile.mkdtemp(prefix="permission-tier-", dir="/tmp/opencode")
+        directory = tempfile.mkdtemp(prefix="permission-tier-")
         engine = AgentEngine.__new__(AgentEngine)
         engine._default_permission_config = self.config
         session = SimpleNamespace(permission_config=self.config)

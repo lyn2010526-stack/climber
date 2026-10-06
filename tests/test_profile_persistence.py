@@ -11,12 +11,18 @@ from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.profile import router as profile_router
 from app.core.profile.persistence import ProfileStore
+from app.core.profile.settings import NOTICE_VERSION
 from app.storage import async_session
 from app.storage.repository_user_profile import get_snapshot, list_events, upsert_snapshot
 
 
 def _user() -> str:
     return str(uuid.uuid4())
+
+
+async def _enable(user: str) -> None:
+    """Profile learning is opt-in: consent must be recorded before any event."""
+    await ProfileStore().update_settings(user, enabled=True, consent_version=NOTICE_VERSION)
 
 
 def _client():
@@ -27,6 +33,7 @@ def _client():
 
 async def test_record_then_summary_reflects_event() -> None:
     user = _user()
+    await _enable(user)
     store = ProfileStore()
     await store.record_event(
         user,
@@ -43,6 +50,7 @@ async def test_record_then_summary_reflects_event() -> None:
 
 async def test_record_run_persists_run_outcome() -> None:
     user = _user()
+    await _enable(user)
     store = ProfileStore()
     await store.record_run(user, instruction="fix the login bug", outcome="success")
     await store.record_run(user, instruction="retry deploy", outcome="failure", retried=True)
@@ -53,6 +61,7 @@ async def test_record_run_persists_run_outcome() -> None:
 
 async def test_summary_replays_from_database_not_memory() -> None:
     user = _user()
+    await _enable(user)
     store = ProfileStore()
     await store.record_event(
         user,
@@ -77,6 +86,7 @@ async def test_summary_replays_from_database_not_memory() -> None:
 
 async def test_snapshot_is_persisted_and_readable() -> None:
     user = _user()
+    await _enable(user)
     store = ProfileStore()
     await store.record_event(
         user,
@@ -95,14 +105,18 @@ async def test_snapshot_is_persisted_and_readable() -> None:
         assert snapshot.payload["retry_rate"] == summary.retry_rate
 
 
-async def test_summary_snapshot_blends_with_previous_snapshot() -> None:
+async def test_summary_replays_events_without_blending_cached_snapshot() -> None:
     user = _user()
+    await _enable(user)
     store = ProfileStore()
     await store.record_event(user, instruction="ship", task_type="coding", outcome="success")
     first = await store.summary(user)
+    assert first.success_rate == pytest.approx(1.0)
     await store.record_event(user, instruction="review", task_type="review", outcome="failure")
     second = await store.summary(user)
-    assert second.success_rate == pytest.approx(first.success_rate * 0.7 + 0.5 * 0.3)
+    # ``summary()`` replays the whole event log; the cached snapshot is not
+    # blended back, because that would double-count the first event.
+    assert second.success_rate == pytest.approx(0.5)
     assert second.task_preferences["coding"] > 0.0
     assert second.task_preferences["review"] > 0.0
 
@@ -145,6 +159,7 @@ async def test_summary_for_unknown_user_is_empty() -> None:
 
 async def test_list_events_honors_occurred_after() -> None:
     user = _user()
+    await _enable(user)
     store = ProfileStore()
     await store.record_event(user, instruction="first pass", task_type="coding", outcome="success")
     cutoff = datetime.now(UTC)
@@ -161,6 +176,11 @@ async def test_list_events_honors_occurred_after() -> None:
 
 async def test_api_event_then_summary_and_suggestions() -> None:
     async with _client() as client:
+        enabled = await client.put(
+            "/profile/settings",
+            json={"enabled": True, "consent_version": NOTICE_VERSION, "show_raw_profile": True},
+        )
+        assert enabled.status_code == 200, enabled.text
         created = await client.post(
             "/profile/events",
             json={

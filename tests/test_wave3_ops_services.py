@@ -60,7 +60,7 @@ async def _record(bucket, req):
 
 class SettingsServiceInjectionTest(unittest.IsolatedAsyncioTestCase):
     async def _engine(self):
-        tmp = tempfile.TemporaryDirectory(prefix="wave3-settings-", dir="/tmp/opencode")
+        tmp = tempfile.TemporaryDirectory(prefix="wave3-settings-")
         self.addCleanup(tmp.cleanup)
         engine = create_async_engine(f"sqlite+aiosqlite:///{tmp.name}/s.db")
         self.addAsyncCleanup(engine.dispose)
@@ -166,7 +166,7 @@ class WatchdogHealthTest(unittest.TestCase):
 
 class EventBusPersistenceTest(unittest.IsolatedAsyncioTestCase):
     async def test_persistence_and_pending_recovery(self):
-        with tempfile.TemporaryDirectory(prefix="wave3-events-", dir="/tmp/opencode") as tmp:
+        with tempfile.TemporaryDirectory(prefix="wave3-events-") as tmp:
             path = str(Path(tmp) / "events.db")
             bus = EventBus(db_path=path)
             try:

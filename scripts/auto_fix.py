@@ -78,7 +78,7 @@ class AutoFixReport:
         return {
             "timestamp": self.timestamp,
             "duration_seconds": round(self.duration_seconds, 2),
-            "total_fixes": total_fixes,
+            "total_fixes": self.total_fixes,
             "fixes_by_category": self.fixes_by_category,
             "fixes_by_file": self.fixes_by_file,
             "remaining_issues": self.remaining_issues,

@@ -35,7 +35,7 @@ groups_route = load_route("review_groups_route", "app/api/v1/routes/groups.py")
 
 class SettingsClusterReviewTest(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        temp = tempfile.TemporaryDirectory(prefix="settings-cluster-", dir="/tmp/opencode")
+        temp = tempfile.TemporaryDirectory(prefix="settings-cluster-")
         self.addCleanup(temp.cleanup)
         self.engine = create_async_engine(f"sqlite+aiosqlite:///{temp.name}/review.db")
         self.addAsyncCleanup(self.engine.dispose)

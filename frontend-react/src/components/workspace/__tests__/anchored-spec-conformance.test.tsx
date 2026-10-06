@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { relative, resolve } from 'node:path';
 import { INFO_CARD_ORDER } from '../../../store/anchored';
 
 /**
@@ -12,8 +12,25 @@ import { INFO_CARD_ORDER } from '../../../store/anchored';
 
 const SRC = resolve(process.cwd(), 'src');
 
-function source(relative: string): string {
-  return readFileSync(resolve(SRC, relative), 'utf-8');
+function source(relativePath: string): string {
+  return readFileSync(resolve(SRC, relativePath), 'utf-8');
+}
+
+/** 递归收集 `dir` 下的 .ts/.tsx 文件，返回相对 SRC 的路径。
+ *
+ * 不使用 `fs.globSync`：该 API 在 Node 22 才提供，而 CI 运行在 Node 20。
+ */
+function collectSourceFiles(dir: string): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = resolve(dir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...collectSourceFiles(full));
+    } else if (/\.tsx?$/.test(entry.name)) {
+      found.push(relative(SRC, full));
+    }
+  }
+  return found;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,9 +101,8 @@ describe('设计令牌颜色契约', () => {
     'styles/workbench.css',
   ]);
 
-  it('组件源码不出现硬编码 hex 颜色', async () => {
-    const { globSync } = await import('node:fs');
-    const files = globSync('components/**/*.{ts,tsx}', { cwd: SRC })
+  it('组件源码不出现硬编码 hex 颜色', () => {
+    const files = collectSourceFiles(resolve(SRC, 'components'))
       .filter((file) => !/\.(test|spec)\./.test(file) && !file.includes('__tests__'));
 
     const violations: string[] = [];

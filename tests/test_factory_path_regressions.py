@@ -176,8 +176,11 @@ async def test_task_control_loop_persists_pause_resume_and_progress() -> None:
     release = asyncio.Event()
 
     async def _handler(payload, on_progress):
-        started.set()
+        # Signal ``started`` only after step 1 is durably persisted: otherwise
+        # the pause that follows can win the race and the progress write is
+        # discarded (``_persist_progress`` bails once the row is PAUSED).
         await on_progress(1, 2, "checkpoint")
+        started.set()
         await release.wait()
         await on_progress(2, 2, "complete")
         return {"output": "ok"}

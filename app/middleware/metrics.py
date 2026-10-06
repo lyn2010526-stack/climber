@@ -52,7 +52,7 @@ TOOL_CALL_LATENCY = Histogram(
 TOKEN_USAGE = Counter(
     "token_usage_total",
     "Token usage",
-    ["provider", "model_id", "type"],  # type: prompt/completion/total
+    ["provider", "model_id", "type"],  # values: prompt/completion/total
 )
 
 # Active sessions

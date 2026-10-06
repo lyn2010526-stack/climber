@@ -43,7 +43,7 @@ from app.models.vision import (
     validate_attachments,
 )
 from app.storage import Base
-from app.storage.database import Agent, ApiKey, CheckpointRecord, Message, Session, Turn, UsageLog
+from app.storage.database import Agent, ApiKey, CheckpointRecord, Message, Session, SessionInput, Turn, UsageLog
 
 PNG_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=="
 JPEG_DATA_URL = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/"
@@ -286,7 +286,8 @@ class EngineImageStorageTests(unittest.IsolatedAsyncioTestCase):
 
         self.factory = async_sessionmaker(self.db_engine, expire_on_commit=False)
         tables = [
-            model.__table__ for model in (Agent, Session, Turn, Message, UsageLog, CheckpointRecord)
+            model.__table__
+            for model in (Agent, Session, SessionInput, Turn, Message, UsageLog, CheckpointRecord)
         ]
         async with self.db_engine.begin() as connection:
             await connection.run_sync(lambda conn: Base.metadata.create_all(conn, tables=tables))
