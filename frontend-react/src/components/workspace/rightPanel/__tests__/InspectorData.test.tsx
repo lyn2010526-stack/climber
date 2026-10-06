@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { api } from '../../../../api';
 import { ActivitySection } from '../sections/ActivitySection';
 import { DagSection, TraceSection } from '../sections/ExecutionSection';
@@ -43,7 +43,10 @@ describe('inspector data fidelity', () => {
     ]);
     render(<ActivitySection sessionId="s1" onCount={onCount} />);
     await screen.findByRole('button', { name: 'read' });
-    expect(onCount).toHaveBeenLastCalledWith(2);
+    // The tally is reported from an effect. Querying the DOM resolves on the
+    // mutation, which can precede the passive effect flush, so wait for the
+    // report instead of asserting straight after the query.
+    await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(2));
   });
 
   it('shows request failure and supports retry', async () => {
@@ -93,6 +96,6 @@ describe('inspector data fidelity', () => {
     const onCount = vi.fn();
     render(<DagSection onCount={onCount} />);
     await screen.findByText('right_panel.states.empty_dag');
-    expect(onCount).toHaveBeenLastCalledWith(0);
+    await waitFor(() => expect(onCount).toHaveBeenLastCalledWith(0));
   });
 });
