@@ -110,7 +110,7 @@ def _raw_tool(name="search", **extra):
     fields = {
         "name": name,
         "description": "desc",
-        "inputSchema": {"type": "object"},
+        "input_schema": {"type": "object"},
     }
     fields.update(extra)
     return SimpleNamespace(**fields)
@@ -119,8 +119,8 @@ def _raw_tool(name="search", **extra):
 def _init_result(capabilities=None):
     caps = capabilities if capabilities is not None else SimpleNamespace(model_dump=lambda: {})
     return SimpleNamespace(
-        serverInfo=SimpleNamespace(name="srv", version="1.0"),
-        protocolVersion="2024-11-05",
+        server_info=SimpleNamespace(name="srv", version="1.0"),
+        protocol_version="2024-11-05",
         capabilities=caps,
     )
 
@@ -274,19 +274,29 @@ async def test_connect_http_requires_url(monkeypatch):
 
 async def test_connect_http_success(monkeypatch):
     monkeypatch.setattr(mcp_client, "_MCP_AVAILABLE", True)
-    seen = {}
+    seen: dict[str, dict] = {"transport": {}}
 
     def _http_client(**kwargs):
-        seen.update(kwargs)
-        return FakeTransportCM(("read", "write", "extra"))
+        seen["transport"].update(kwargs)
+        # mcp >= 2 yields only (read, write).
+        return FakeTransportCM(("read", "write"))
 
-    monkeypatch.setattr(mcp_client, "streamablehttp_client", _http_client)
+    def _http_conn(**kwargs):
+        seen["http"] = kwargs
+        return kwargs
+
+    monkeypatch.setattr(mcp_client, "streamable_http_client", _http_client)
+    monkeypatch.setattr(mcp_client, "create_mcp_http_client", _http_conn)
     session = FakeSession(_init_result())
     monkeypatch.setattr(mcp_client, "ClientSession", lambda r, w: session)
 
     client = MCPClient(name="x", transport="streamable_http", url="http://u", headers={"A": "b"})
     await client._connect_http()
-    assert seen == {"url": "http://u", "headers": {"A": "b"}}
+    assert seen["http"] == {"headers": {"A": "b"}}
+    assert seen["transport"] == {
+        "url": "http://u",
+        "http_client": {"headers": {"A": "b"}},
+    }
     assert client.session is session
 
 
@@ -335,7 +345,7 @@ async def test_initialize_with_capabilities_model_dump():
     caps = SimpleNamespace(model_dump=lambda: {"tools": {}})
     session = FakeSession(
         _init_result(caps),
-        list_tools_page=SimpleNamespace(tools=[], nextCursor=None),
+        list_tools_page=SimpleNamespace(tools=[], next_cursor=None),
     )
     client = MCPClient(name="x")
     client.session = session
@@ -360,7 +370,7 @@ async def test_initialize_capabilities_without_model_dump():
 async def test_discover_capabilities_all_sections():
     raw_tools = SimpleNamespace(tools=[_raw_tool("t1", title="T1", annotations={"x": 1})])
     raw_resources = SimpleNamespace(
-        resources=[SimpleNamespace(uri="u1", name="n1", description="d", mimeType="text/plain")]
+        resources=[SimpleNamespace(uri="u1", name="n1", description="d", mime_type="text/plain")]
     )
     raw_prompts = SimpleNamespace(
         prompts=[
@@ -422,7 +432,7 @@ async def test_list_tools_not_connected():
 
 
 async def test_list_tools_single_page():
-    session = FakeSession(list_tools_page=SimpleNamespace(tools=[_raw_tool("a")], nextCursor=None))
+    session = FakeSession(list_tools_page=SimpleNamespace(tools=[_raw_tool("a")], next_cursor=None))
     client = MCPClient(name="x")
     client.session = session
     tools = await client.list_tools()
@@ -436,8 +446,8 @@ async def test_list_tools_pagination():
         async def list_tools(self, **kwargs):
             self.list_tools_calls.append(kwargs)
             if kwargs.get("cursor") == "c1":
-                return SimpleNamespace(tools=[_raw_tool("b")], nextCursor=None)
-            return SimpleNamespace(tools=[_raw_tool("a")], nextCursor="c1")
+                return SimpleNamespace(tools=[_raw_tool("b")], next_cursor=None)
+            return SimpleNamespace(tools=[_raw_tool("a")], next_cursor="c1")
 
     session = PagedSession()
     client = MCPClient(name="x")
@@ -459,8 +469,8 @@ async def test_call_tool_not_connected():
 async def test_call_tool_success_and_lists_tools():
     result = SimpleNamespace(
         content=[
-            SimpleNamespace(type="text", text="ok", data=None, mimeType=None, uri=None),
-            SimpleNamespace(type="image", text=None, data="aGk=", mimeType="image/png", uri=None),
+            SimpleNamespace(type="text", text="ok", data=None, mime_type=None, uri=None),
+            SimpleNamespace(type="image", text=None, data="aGk=", mime_type="image/png", uri=None),
         ],
         isError=False,
     )
@@ -533,7 +543,7 @@ async def test_list_resources_not_connected():
 
 async def test_list_resources_success():
     result = SimpleNamespace(
-        resources=[SimpleNamespace(uri="u", name="n", description="d", mimeType="text/plain")]
+        resources=[SimpleNamespace(uri="u", name="n", description="d", mime_type="text/plain")]
     )
     session = FakeSession(list_resources_result=result)
     client = MCPClient(name="x")
@@ -553,8 +563,8 @@ async def test_read_resource_text_and_blob():
     result = SimpleNamespace(
         contents=[
             SimpleNamespace(text="line1"),
-            SimpleNamespace(blob=b"\x00", mimeType="image/png"),
-            SimpleNamespace(blob=b"\x01", mimeType=None),  # unknown mime type
+            SimpleNamespace(blob=b"\x00", mime_type="image/png"),
+            SimpleNamespace(blob=b"\x01", mime_type=None),  # unknown mime type
             SimpleNamespace(),  # neither text nor blob: skipped
             SimpleNamespace(text="line2"),
         ]

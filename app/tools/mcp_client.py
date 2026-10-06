@@ -21,17 +21,31 @@ from app.tools.mcp_models import (
     MCPToolResult,
 )
 
-try:  # optional dependency — keeps import safe when mcp is not installed
-    from mcp import ClientSession
-    from mcp.client.stdio import stdio_client
-    from mcp.client.streamable_http import streamablehttp_client
+# `mcp` is an optional dependency. The public names below are rebound to the
+# real SDK symbols when it is installed and stay None otherwise; the imports are
+# aliased so mypy sees these module attributes as dynamically typed rather than
+# as the (possibly unavailable) SDK types.
+ClientSession: Any
+stdio_client: Any
+create_mcp_http_client: Any
+streamable_http_client: Any
+_MCP_AVAILABLE = False
 
+try:  # optional dependency — keeps import safe when mcp is not installed
+    from mcp import ClientSession as _ClientSession
+    from mcp.client.stdio import stdio_client as _stdio_client
+    from mcp.client.streamable_http import (
+        streamable_http_client as _streamable_http_client,
+    )
+    from mcp.shared._httpx_utils import create_mcp_http_client as _create_mcp_http_client
+
+    ClientSession = _ClientSession
+    stdio_client = _stdio_client
+    create_mcp_http_client = _create_mcp_http_client
+    streamable_http_client = _streamable_http_client
     _MCP_AVAILABLE = True
 except ImportError:  # pragma: no cover
-    _MCP_AVAILABLE = False
-    ClientSession = None
-    stdio_client = None
-    streamablehttp_client = None
+    pass
 
 logger = structlog.get_logger()
 
@@ -66,7 +80,7 @@ class MCPClient:
         self.headers = headers or {}
         self.env = env or {}
 
-        self.session: ClientSession | None = None
+        self.session: Any = None
         self.tools: dict[str, MCPTool] = {}
         self.resources: dict[str, MCPResource] = {}
         self.prompts: dict[str, MCPPrompt] = {}
@@ -132,11 +146,14 @@ class MCPClient:
         if not self.url:
             raise ValueError("streamable_http transport requires 'url' parameter")
 
-        self._connect_cm = streamablehttp_client(
+        # mcp >= 2 dropped the `headers` kwarg: headers travel on the httpx
+        # client the transport builds its session with, and the transport now
+        # yields only (read, write).
+        self._connect_cm = streamable_http_client(
             url=self.url,
-            headers=self.headers,
+            http_client=create_mcp_http_client(headers=self.headers or None),
         )
-        read, write, _ = await self._connect_cm.__aenter__()
+        read, write = await self._connect_cm.__aenter__()
 
         self.session = ClientSession(read, write)
         await self.session.__aenter__()
@@ -168,9 +185,9 @@ class MCPClient:
 
         result = await self.session.initialize()
         self._server_info = {
-            "name": result.serverInfo.name,
-            "version": result.serverInfo.version,
-            "protocol_version": result.protocolVersion,
+            "name": result.server_info.name,
+            "version": result.server_info.version,
+            "protocol_version": result.protocol_version,
             "capabilities": result.capabilities.model_dump()
             if hasattr(result.capabilities, "model_dump")
             else {},
@@ -192,7 +209,7 @@ class MCPClient:
                         name=t.name,
                         title=getattr(t, "title", None),
                         description=t.description or "",
-                        inputSchema=t.inputSchema,
+                        inputSchema=t.input_schema,
                         annotations=getattr(t, "annotations", None),
                     )
             except Exception as e:
@@ -207,7 +224,7 @@ class MCPClient:
                         uri=r.uri,
                         name=r.name,
                         description=getattr(r, "description", None),
-                        mimeType=getattr(r, "mimeType", None),
+                        mimeType=getattr(r, "mime_type", None),
                     )
             except Exception as e:
                 logger.warning("Failed to list resources", server=self.name, error=str(e))
@@ -261,12 +278,12 @@ class MCPClient:
                         name=t.name,
                         title=getattr(t, "title", None),
                         description=t.description or "",
-                        inputSchema=t.inputSchema,
+                        inputSchema=t.input_schema,
                         annotations=getattr(t, "annotations", None),
                     )
                 )
 
-            cursor = getattr(result, "nextCursor", None)
+            cursor = getattr(result, "next_cursor", None)
             if not cursor:
                 break
 
@@ -291,7 +308,7 @@ class MCPClient:
                         type=getattr(item, "type", "text"),
                         text=getattr(item, "text", None),
                         data=getattr(item, "data", None),
-                        mimeType=getattr(item, "mimeType", None),
+                        mimeType=getattr(item, "mime_type", None),
                         uri=getattr(item, "uri", None),
                     )
                 )
@@ -341,7 +358,7 @@ class MCPClient:
                     uri=r.uri,
                     name=r.name,
                     description=getattr(r, "description", None),
-                    mimeType=getattr(r, "mimeType", None),
+                    mimeType=getattr(r, "mime_type", None),
                 )
             )
 
@@ -359,7 +376,7 @@ class MCPClient:
             if hasattr(item, "text"):
                 parts.append(item.text)
             elif hasattr(item, "blob"):
-                parts.append(f"[binary: {item.mimeType or 'unknown'}]")
+                parts.append(f"[binary: {getattr(item, 'mime_type', None) or 'unknown'}]")
         return "\n".join(parts)
 
     async def list_prompts(self) -> list[MCPPrompt]:

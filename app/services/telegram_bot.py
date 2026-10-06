@@ -174,10 +174,14 @@ async def start_telegram_bot() -> bool:
     application.add_handler(CommandHandler("models", cmd_list_models))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+    updater = application.updater
+    if updater is None:
+        raise RuntimeError("Telegram application has no updater; cannot start polling")
+
     _bot_app = application
     await application.initialize()
     await application.start()
-    await application.updater.start_polling()
+    await updater.start_polling()
     logger.info("Telegram bot started")
     return True
 
