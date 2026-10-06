@@ -344,7 +344,23 @@ jobs:
 
       - name: Verify frontend image
         run: |
-          docker run --rm agent-engine-frontend:ci-test node -e "console.log('Frontend image OK')"
+          # The production stage is nginx:alpine — there is no `node` binary in
+          # it. Smoke-test what the image is actually for: serving the built SPA.
+          docker run -d --name fe-check agent-engine-frontend:ci-test
+          ok=0
+          for _ in $(seq 1 15); do
+            if docker exec fe-check curl -fsS http://localhost/ 2>/dev/null | grep -qi 'id="root"'; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          docker rm -f fe-check >/dev/null
+          if [ "$ok" != "1" ]; then
+            echo "::error::frontend image did not serve index.html"
+            exit 1
+          fi
+          echo "Frontend image OK"
 
   # ===========================================================================
   # Stage 7: Quality Gate
