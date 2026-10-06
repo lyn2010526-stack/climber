@@ -85,7 +85,7 @@ export function ThinkingDetails({
   return (
     <div
       data-thinking-details
-      className={cn('my-2 min-w-0 max-w-full overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]', className)}
+      className={cn('my-2 min-w-0 max-w-full overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] transition-colors duration-150 hover:border-[var(--color-border-default)] motion-reduce:transition-none', className)}
     >
       <button
         type="button"
@@ -94,6 +94,13 @@ export function ThinkingDetails({
         onClick={handleToggle}
         className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-xs text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-secondary)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] motion-reduce:transition-none"
       >
+        <span
+          aria-hidden="true"
+          className={cn(
+            'size-[6px] shrink-0 rounded-[var(--radius-pill)]',
+            isComplete ? 'bg-[var(--color-text-muted)]' : 'bg-[var(--color-accent-foreground)] motion-safe:animate-pulse',
+          )}
+        />
         <ChevronRight
           size={12}
           aria-hidden="true"

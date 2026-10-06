@@ -2,7 +2,32 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
+
+
+def parse_review_result(output: str) -> tuple[bool, list[dict[str, Any]]]:
+    """Accept only an explicit JSON verdict; malformed reviews block completion."""
+    invalid = [{"description": "Invalid structured review result", "severity": "high"}]
+    try:
+        result = json.loads(output)
+    except (ValueError, TypeError):
+        return False, invalid
+    if not isinstance(result, dict) or set(result) != {"passed", "issues"}:
+        return False, invalid
+    if type(result["passed"]) is not bool or not isinstance(result["issues"], list):
+        return False, invalid
+    issues = []
+    for issue in result["issues"]:
+        if isinstance(issue, str) and issue.strip():
+            issue = {"description": issue}
+        if (not isinstance(issue, dict) or not isinstance(issue.get("description"), str)
+                or not issue["description"].strip()):
+            return False, invalid
+        issues.append(dict(issue))
+    if result["passed"] and not issues:
+        return True, []
+    return False, issues or [{"description": "Reviewer rejected the output", "severity": "high"}]
 
 
 def build_initial_prompt(task_description: str, context: str) -> str:
@@ -117,9 +142,10 @@ Manager plan: {plan}
 Subtask outputs:
 {outputs_text}
 
-Respond with:
-1. "通过" if the combined outputs satisfy the task requirements, or "不通过" if not.
-2. If not passing, list specific issues or missing requirements."""
+Return only a JSON object with exactly these fields:
+{{"passed": true, "issues": []}}
+Use passed=false for rejection and describe missing requirements in issues as objects
+with a non-empty description. Approval requires an empty issues list."""
 
 
 def build_worker_prompt(task_description: str) -> str:
@@ -175,9 +201,9 @@ Review the following output against the task requirements.
 Task: {task_description}
 Output: [WORKER_OUTPUT]
 
-Respond with:
-1. "通过" if the output meets all requirements, or "不通过" if not.
-2. If not passing, list specific issues found."""
+Return only JSON: {{"passed": true, "issues": []}}.
+Use passed=false for rejection. Each issue must have a non-empty description.
+Approval requires an empty issues list."""
 
 
 def build_review_prompt(task_description: str, worker_output: str) -> str:
@@ -195,9 +221,9 @@ def build_review_prompt(task_description: str, worker_output: str) -> str:
 Task: {task_description}
 Output: {worker_output}
 
-Respond with:
-1. "通过" if the output meets all requirements, or "不通过" if not.
-2. If not passing, list specific issues found."""
+Return only JSON: {{"passed": true, "issues": []}}.
+Use passed=false for rejection. Each issue must have a non-empty description.
+Approval requires an empty issues list."""
 
 
 def build_group_chat_prompt(role: str) -> str:

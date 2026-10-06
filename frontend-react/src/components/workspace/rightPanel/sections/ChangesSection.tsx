@@ -49,11 +49,11 @@ export function FilesSection() {
   const { data, loading, error, reload } = useAsyncData<DocumentEntry[]>(async () => {
     const payload = await api.listDocuments();
     const docs = Array.isArray(payload) ? payload : [];
-    return docs.map((doc: Record<string, unknown>, index: number) => {
-      const rawName = doc.filename ?? doc.name;
+    return docs.map((doc, index) => {
+      const rawName = doc.name;
       const rawChunks = doc.chunks;
       return {
-        id: String(doc.id ?? `doc-${index}`),
+        id: doc.id ?? `doc-${index}`,
         name: typeof rawName === 'string' ? rawName : '',
         chunks: typeof rawChunks === 'number' && Number.isFinite(rawChunks) && rawChunks > 0 ? rawChunks : 0,
       };

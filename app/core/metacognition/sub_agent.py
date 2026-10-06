@@ -2,14 +2,37 @@
 
 Spawns isolated sub-agents for independent sub-tasks, with independent
 memory sandboxes. Supports回收, destroy, and merge operations.
+
+Execution requires a user-owned injected executor. Results preserve reported
+output and usage. An unconfigured default executor fails explicitly.
+Disabling the switch returns an explicit failed result.
 """
 
 from __future__ import annotations
 
+import asyncio
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
+
+import structlog
+
+from app.core.metacognition.real_execution import (
+    DEFAULT_EXECUTION_TIMEOUT,
+    DEFAULT_MAX_OUTPUT_CHARS,
+    SubTaskExecution,
+    execute_subtask_llm,
+    real_execution_enabled,
+)
+
+logger = structlog.get_logger(__name__)
+
+# Executor contract: (goal, context) -> (output, tokens_used).
+SubTaskExecutor = Callable[
+    [str, dict[str, Any] | None], Awaitable[tuple[str, int] | SubTaskExecution]
+]
 
 
 class SubAgentState(StrEnum):
@@ -40,16 +63,34 @@ class DispatchResult:
     result: str
     tokens_used: int
     sub_results: list[dict[str, Any]] = field(default_factory=list)
+    source: str = "executor"
+    status: str = "completed"
 
 
 class SubAgentOrchestrator:
     """Manage hierarchical sub-agent lifecycle."""
 
-    def __init__(self, max_agents: int = 10, max_depth: int = 3):
+    def __init__(
+        self,
+        max_agents: int = 10,
+        max_depth: int = 3,
+        executor: SubTaskExecutor | None = None,
+        execution_timeout: float = DEFAULT_EXECUTION_TIMEOUT,
+        max_output_chars: int = DEFAULT_MAX_OUTPUT_CHARS,
+        token_budget: int = 8000,
+    ):
         self._max_agents = max_agents
         self._max_depth = max_depth
         self._agents: dict[str, SubAgentTask] = {}
         self._active_count = 0
+        self._executor = executor
+        self._execution_timeout = execution_timeout
+        self._max_output_chars = max_output_chars
+        if min(max_agents, max_depth, execution_timeout, max_output_chars, token_budget) <= 0:
+            raise ValueError("subagent limits must be positive")
+        self._token_budget = token_budget
+        self._tokens_used = 0
+        self._running: dict[str, asyncio.Task] = {}
 
     def create_agent(
         self,
@@ -61,6 +102,8 @@ class SubAgentOrchestrator:
         if self._active_count >= self._max_agents:
             return None
 
+        if parent_id is not None and parent_id not in self._agents:
+            raise ValueError("unknown parent agent")
         depth = self._get_depth(parent_id) + 1
         if depth > self._max_depth:
             return None
@@ -71,7 +114,7 @@ class SubAgentOrchestrator:
             goal=goal,
             parent_id=parent_id,
             state=SubAgentState.PENDING,
-            memory=context or {},
+            memory=dict(context or {}),
         )
         self._agents[task_id] = agent
         self._active_count += 1
@@ -81,12 +124,16 @@ class SubAgentOrchestrator:
 
         return agent
 
-    def dispatch(
+    async def dispatch(
         self,
         sub_tasks: list[dict[str, Any]],
         parent_id: str | None = None,
     ) -> list[DispatchResult]:
-        """Dispatch multiple sub-tasks and collect results."""
+        """Dispatch multiple sub-tasks and collect results.
+
+        Each sub-agent runs for real through the configured executor (or
+        the default bounded LLM turn). Awaiting this method is required.
+        """
         results = []
         agents: list[SubAgentTask] = []
 
@@ -99,43 +146,111 @@ class SubAgentOrchestrator:
             )
             if agent:
                 agents.append(agent)
+            else:
+                results.append(
+                    DispatchResult(
+                        "",
+                        False,
+                        "failed: agent limit exceeded",
+                        0,
+                        status="failed",
+                        source="unexecuted",
+                    )
+                )
 
-        # Simulate execution (in real system, these would be async)
-        for agent in agents:
-            result = self._execute_agent(agent)
-            results.append(result)
+        # Real execution (bounded, with fallback)
+        try:
+            for agent in agents:
+                results.append(await self._execute_agent(agent))
+        finally:
+            for agent in agents:
+                if agent.state == SubAgentState.PENDING:
+                    agent.state = SubAgentState.CANCELLED
+                    self._active_count -= 1
 
         return results
 
-    def _execute_agent(self, agent: SubAgentTask) -> DispatchResult:
-        """Execute a single sub-agent (simulated)."""
+    async def _execute_agent(self, agent: SubAgentTask) -> DispatchResult:
+        """Execute a single sub-agent with cost caps and failure fallback."""
         agent.state = SubAgentState.RUNNING
 
-        # In a real implementation, this would:
-        # 1. Create an isolated context
-        # 2. Run the agent loop
-        # 3. Collect results
-        # For now, simulate with metadata
+        try:
+            if not real_execution_enabled():
+                raise RuntimeError("real execution disabled")
+            remaining = self._token_budget - self._tokens_used
+            if remaining <= 0:
+                raise RuntimeError("subagent token budget exhausted")
+            executor: SubTaskExecutor = self._executor or self._default_executor
+            context = {**agent.memory, "token_budget": remaining}
+            running = asyncio.create_task(executor(agent.goal, context))
+            self._running[agent.id] = running
+            execution = await asyncio.wait_for(running, timeout=self._execution_timeout)
+            if isinstance(execution, SubTaskExecution):
+                output, tokens_used = execution.output, execution.tokens_used
+                iterations = execution.iterations
+                source = execution.source
+            else:
+                output, tokens_used = execution
+                iterations, source = 1, "injected_executor" if self._executor else "llm_turn"
+            if type(tokens_used) is not int or tokens_used < 0 or iterations < 0:
+                raise ValueError("executor returned invalid usage")
+            agent.tokens_used = tokens_used
+            agent.iterations = iterations
+            self._tokens_used += tokens_used
+            if tokens_used > remaining:
+                raise RuntimeError("subagent token budget exceeded")
+            if isinstance(execution, SubTaskExecution) and (
+                execution.status != "completed" or execution.error
+            ):
+                raise RuntimeError(execution.error or execution.status)
+            if not isinstance(output, str) or not output.strip():
+                raise ValueError("executor returned empty or invalid output")
+        except asyncio.CancelledError:
+            agent.state = SubAgentState.CANCELLED
+            agent.result = "cancelled"
+            raise
+        except Exception as exc:
+            reason = str(exc) or type(exc).__name__
+            agent.state = SubAgentState.FAILED
+            agent.result = f"failed: {type(exc).__name__}: {reason}"
+            logger.warning("sub_agent_fallback", task_id=agent.id, reason=reason)
+            return DispatchResult(
+                task_id=agent.id,
+                success=False,
+                result=agent.result,
+                tokens_used=agent.tokens_used,
+                status="failed",
+                source="unexecuted" if agent.iterations == 0 else "executor",
+            )
+        finally:
+            self._running.pop(agent.id, None)
+            self._active_count -= 1
 
         agent.state = SubAgentState.COMPLETED
-        agent.result = f"Completed: {agent.goal[:50]}"
-        agent.tokens_used = len(agent.goal) * 10  # simulated
-        agent.iterations = 3  # simulated
+        agent.result = output.strip()[: self._max_output_chars]
 
         return DispatchResult(
             task_id=agent.id,
             success=True,
             result=agent.result,
             tokens_used=agent.tokens_used,
+            source=source,
         )
+
+    async def _default_executor(self, goal: str, context: dict[str, Any] | None) -> tuple[str, int]:
+        """Fail closed until the owning application injects an executor."""
+        return await execute_subtask_llm(goal, context)
 
     def cancel_agent(self, task_id: str) -> bool:
         """Cancel a running sub-agent."""
         agent = self._agents.get(task_id)
         if not agent or agent.state != SubAgentState.RUNNING:
             return False
-        agent.state = SubAgentState.CANCELLED
-        self._active_count -= 1
+        running = self._running.get(task_id)
+        if running is not None:
+            running.cancel()
+        for child in agent.children:
+            self.cancel_agent(child)
         return True
 
     def destroy_agent(self, task_id: str) -> bool:
@@ -168,12 +283,14 @@ class SubAgentOrchestrator:
                 merged["success_count"] += 1
             elif agent.state == SubAgentState.FAILED:
                 merged["fail_count"] += 1
-            merged["results"].append({
-                "id": agent.id,
-                "goal": agent.goal,
-                "state": agent.state.value,
-                "result": agent.result,
-            })
+            merged["results"].append(
+                {
+                    "id": agent.id,
+                    "goal": agent.goal,
+                    "state": agent.state.value,
+                    "result": agent.result,
+                }
+            )
 
         return merged
 
@@ -206,5 +323,10 @@ class SubAgentOrchestrator:
         return depth
 
     def reset(self) -> None:
+        for running in self._running.values():
+            running.cancel()
+        if self._running:
+            raise RuntimeError("await cancelled dispatches before resetting")
         self._agents.clear()
         self._active_count = 0
+        self._tokens_used = 0

@@ -15,11 +15,16 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+class OllamaQueueFullError(RuntimeError):
+    """Raised when the offline queue is already at capacity."""
+
+
 @dataclass
 class QueuedRequest:
     request_id: str
     payload: dict[str, Any]
     callback: Callable[[], Awaitable[None]] | None = None
+    base_url: str | None = None
     created_at: float = field(default_factory=time.time)
     retries: int = 0
     max_retries: int = 3
@@ -31,23 +36,40 @@ class OllamaOfflineQueue:
     HEALTH_CHECK_URL = "http://localhost:11434/api/tags"
 
     def __init__(self) -> None:
-        self._queue: deque[QueuedRequest] = deque(maxlen=self.MAX_QUEUE_SIZE)
+        self._queue: deque[QueuedRequest] = deque()
         self._ollama_online: bool = False
         self._processing: bool = False
         self._last_check: float = 0.0
         self._lock = asyncio.Lock()
+        self._background_tasks: set[asyncio.Task] = set()
 
-    async def enqueue(self, payload: dict[str, Any], callback: Callable[[], Awaitable[None]] | None = None) -> str:
+    async def enqueue(self, payload: dict[str, Any], callback: Callable[[], Awaitable[None]] | None = None, base_url: str | None = None) -> str:
         request_id = f"ollama-{int(time.time() * 1000)}"
         req = QueuedRequest(
             request_id=request_id,
             payload=payload,
             callback=callback,
+            base_url=base_url,
         )
         async with self._lock:
+            if len(self._queue) >= self.MAX_QUEUE_SIZE:
+                raise OllamaQueueFullError(
+                    f"Offline queue is full ({self.MAX_QUEUE_SIZE} pending requests)"
+                )
             self._queue.append(req)
         logger.info("ollama_request_queued", request_id=request_id, queue_size=len(self._queue))
+        self._schedule_processing()
         return request_id
+
+    def _schedule_processing(self) -> None:
+        """Kick the consumption loop once, guarded by ``_processing``.
+
+        Keeps strong references to the created tasks so they are not
+        garbage-collected mid-flight; completed tasks are pruned.
+        """
+        task = asyncio.create_task(self.process_queue())
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
 
     async def process_queue(self) -> None:
         if self._processing:
@@ -61,6 +83,8 @@ class OllamaOfflineQueue:
                 try:
                     if req.callback:
                         await req.callback()
+                    else:
+                        await self._execute_payload(req)
                     self._queue.popleft()
                     logger.info("ollama_request_processed", request_id=req.request_id, queue_size=len(self._queue))
                 except Exception as e:
@@ -73,6 +97,19 @@ class OllamaOfflineQueue:
                         await asyncio.sleep(self.RETRY_INTERVAL)
         finally:
             self._processing = False
+
+    async def _execute_payload(self, req: QueuedRequest) -> None:
+        """Post a queued payload to Ollama, completing the consumption chain.
+
+        A queued request without a callback has nowhere for the reply to go,
+        so it is replayed to the model for a side-effect-carrying retry.
+        """
+        base = (req.base_url or self.HEALTH_CHECK_URL.rsplit("/", 1)[0]).rstrip("/")
+        payload = dict(req.payload)
+        payload["stream"] = False
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(f"{base}/api/chat", json=payload)
+            resp.raise_for_status()
 
     async def _check_ollama_health(self) -> bool:
         now = time.time()

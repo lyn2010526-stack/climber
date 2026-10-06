@@ -166,6 +166,42 @@ async def test_task_cancel_marks_record_cancelled() -> None:
     assert await manager.cancel(task_id) is False
 
 
+async def test_task_control_loop_persists_pause_resume_and_progress() -> None:
+    from app.core.task_worker import TaskManager, TaskStatus
+    from app.storage import async_session
+    from app.storage.models_platform import AutoLoopTask
+
+    manager = TaskManager(max_workers=1)
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def _handler(payload, on_progress):
+        started.set()
+        await on_progress(1, 2, "checkpoint")
+        await release.wait()
+        await on_progress(2, 2, "complete")
+        return {"output": "ok"}
+
+    manager.register("data_processing", _handler)
+    task_id = await manager.submit("data_processing", {})
+    await asyncio.wait_for(started.wait(), timeout=5)
+    assert await manager.pause(task_id) is True
+
+    async with async_session() as session:
+        record = await session.get(AutoLoopTask, task_id)
+        assert record.status == TaskStatus.PAUSED.value
+        assert record.checkpoint["step"] == 1
+        assert record.progress_evaluation["percent"] == 50.0
+
+    assert await manager.resume(task_id) is True
+    release.set()
+    worker = manager._active_tasks[task_id]
+    await asyncio.wait_for(worker, timeout=5)
+    status = await manager.get_status(task_id)
+    assert status["status"] == TaskStatus.COMPLETED.value
+    assert status["progress_evaluation"]["percent"] == 100.0
+
+
 # --- API contracts ----------------------------------------------------------
 
 async def test_sessions_messages_expose_tool_call_fields(client) -> None:

@@ -465,6 +465,7 @@ export const settings = {
 
 export const permissionConfig: PermissionConfigOut = {
   mode: 'ask',
+  tier: 'partial_write',
   rules: [
     { decision: 'allow', tool: 'read_file', pattern: null, description: '只读文件无需确认' },
     { decision: 'ask', tool: 'write_file', pattern: 'src/**', description: '写入源码目录需要确认' },

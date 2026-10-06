@@ -29,8 +29,8 @@ from sqlalchemy import select
 from app.api.v1.chat import get_engine
 from app.core.agent_engine import AgentEngine
 from app.core.auth import get_current_user
-from app.core.auth_manager import require_admin
-from app.core.permission_rules import PermissionMode, RuleDecision
+from app.core.auth_manager import require_admin, require_scopes
+from app.core.permission_rules import PermissionMode, PermissionTier
 from app.storage import async_session
 from app.storage.database import Session as SessionModel
 
@@ -69,27 +69,17 @@ def level_from_context(context_data: dict[str, Any] | None) -> ThinkingLevel:
 # The three plain-language tiers the settings panel offers, and the enforced
 # mode each one writes through the existing PUT /permissions/config write path.
 TIER_MODES: dict[str, PermissionMode] = {
-    "read_only": PermissionMode.PLAN,
-    "partial": PermissionMode.DEFAULT,
-    "full": PermissionMode.AUTO,
-}
-
-# Where an arbitrary enforced mode lands on the three-tier scale. plan/strict
-# refuse mutations, default/acceptEdits confirm writes, auto/bypass act freely.
-_MODE_TO_TIER: dict[str, str] = {
-    PermissionMode.PLAN.value: "read_only",
-    PermissionMode.STRICT.value: "read_only",
-    PermissionMode.DEFAULT.value: "partial",
-    PermissionMode.ACCEPT_EDITS.value: "partial",
-    PermissionMode.AUTO.value: "full",
-    PermissionMode.BYPASS.value: "full",
+    PermissionTier.READ_ONLY.value: PermissionMode.PLAN,
+    PermissionTier.PARTIAL_WRITE.value: PermissionMode.DEFAULT,
+    PermissionTier.FULL_WRITE.value: PermissionMode.AUTO,
 }
 
 # Canonical tool names the tier view reports decisions for; aliases are folded
 # in by the rule engine itself, so reporting the canonical set is enough.
 _CANONICAL_TOOLS: tuple[str, ...] = (
     "read_file", "list_directory", "search", "glob",
-    "write_file", "edit_file", "append_file",
+    "write_file", "edit_file", "append_file", "apply_patch",
+    "file_exists", "file_info", "file_diff",
     "run_command", "web_search", "file_delete",
 )
 
@@ -137,7 +127,7 @@ async def get_permission_tiers(
         "tiers": tiers,
         "current": {
             "mode": mode_value,
-            "tier": _MODE_TO_TIER.get(mode_value) if mode_value else None,
+            "tier": config.tier.value if config is not None else None,
         },
         "tool_states": tool_states,
     }
@@ -161,6 +151,7 @@ async def update_session_reasoning_level(
     session_id: str,
     update: LevelUpdate,
     user_id: str = Depends(get_current_user),
+    _auth: dict = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Persist the per-session override (same store as the /level command)."""
     async with async_session() as db:

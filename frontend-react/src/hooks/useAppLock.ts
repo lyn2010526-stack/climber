@@ -12,8 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
  *   the lock while a refresh keeps the user in.
  * - The WebAuthn credential id lives in `localStorage` after registration.
  *
- * Every browser API access is wrapped so an exotic environment (private mode,
- * missing WebAuthn, jsdom) degrades to the passcode path instead of crashing.
+ * Browser API failures are handled; enrollment requires successful persistence.
  */
 
 export type AppLockStatus = 'setup' | 'locked' | 'unlocked';
@@ -31,6 +30,11 @@ export const PRIVACY_STORAGE_KEYS = {
 } as const;
 
 const DEFAULT_AUTO_LOCK_MS = 5 * 60 * 1000;
+const LOCK_CHANGED_EVENT = 'climber:privacy-lock-changed';
+
+function notifyLockChanged(): void {
+  window.dispatchEvent(new Event(LOCK_CHANGED_EVENT));
+}
 const WEB_AUTHN_TIMEOUT_MS = 60_000;
 const WEB_AUTHN_RP_NAME = 'Climber';
 const WEB_AUTHN_USER_NAME = 'climber-local';
@@ -263,7 +267,7 @@ export interface UseAppLockResult {
   registerWebAuthn(): Promise<boolean>;
   markUnlocked(): void;
   lock(): void;
-  disableLock(): void;
+  disableLock(pin: string): Promise<boolean>;
   setAutoLockMs(ms: number): void;
 }
 
@@ -285,6 +289,24 @@ export function useAppLock(options: UseAppLockOptions = {}): UseAppLockResult {
     const parsed = Number.parseInt(stored, 10);
     return Number.isFinite(parsed) ? normalizeAutoLock(parsed) : DEFAULT_AUTO_LOCK_MS;
   });
+
+  useEffect(() => {
+    const sync = () => {
+      setPinHash(readStorage(safeStorage('local'), PRIVACY_STORAGE_KEYS.pin));
+      setCredentialId(readStorage(safeStorage('local'), PRIVACY_STORAGE_KEYS.credential));
+      setStatus(readStatusFromStorage());
+      if (requestedAutoLockMs === undefined) {
+        const stored = readStorage(safeStorage('local'), PRIVACY_STORAGE_KEYS.autoLockMs);
+        setAutoLockMsState(stored === null ? DEFAULT_AUTO_LOCK_MS : normalizeAutoLock(Number(stored)));
+      }
+    };
+    window.addEventListener(LOCK_CHANGED_EVENT, sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener(LOCK_CHANGED_EVENT, sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, [requestedAutoLockMs]);
 
   useEffect(() => {
     let cancelled = false;
@@ -311,28 +333,35 @@ export function useAppLock(options: UseAppLockOptions = {}): UseAppLockResult {
     if (!readStorage(safeStorage('local'), PRIVACY_STORAGE_KEYS.pin)) return;
     writeStorage(safeStorage('session'), PRIVACY_STORAGE_KEYS.session, '1');
     setStatus((prev) => (prev === 'locked' ? 'unlocked' : prev));
+    notifyLockChanged();
   }, []);
 
   const lock = useCallback(() => {
     removeStorage(safeStorage('session'), PRIVACY_STORAGE_KEYS.session);
     setStatus(readStatusFromStorage());
+    notifyLockChanged();
   }, []);
 
   const setupPin = useCallback(async (pin: string): Promise<boolean> => {
-    if (!PIN_PATTERN.test(pin)) return false;
+    if (!PIN_PATTERN.test(pin) || readStorage(safeStorage('local'), PRIVACY_STORAGE_KEYS.pin)) return false;
     const encoded = await hashPin(pin);
     if (!encoded) return false;
+    if (readStorage(safeStorage('local'), PRIVACY_STORAGE_KEYS.pin)) return false;
     writeStorage(safeStorage('local'), PRIVACY_STORAGE_KEYS.pin, encoded);
+    if (readStorage(safeStorage('local'), PRIVACY_STORAGE_KEYS.pin) !== encoded) return false;
     removeStorage(safeStorage('local'), PRIVACY_STORAGE_KEYS.skipped);
     writeStorage(safeStorage('session'), PRIVACY_STORAGE_KEYS.session, '1');
     setPinHash(encoded);
     setStatus('unlocked');
+    notifyLockChanged();
     return true;
   }, []);
 
   const skipSetup = useCallback(() => {
+    if (readStorage(safeStorage('local'), PRIVACY_STORAGE_KEYS.pin)) return;
     writeStorage(safeStorage('local'), PRIVACY_STORAGE_KEYS.skipped, '1');
     setStatus('unlocked');
+    notifyLockChanged();
   }, []);
 
   const unlockWithPin = useCallback(
@@ -359,13 +388,18 @@ export function useAppLock(options: UseAppLockOptions = {}): UseAppLockResult {
     if (ok) {
       setCredentialId(readStorage(safeStorage('local'), PRIVACY_STORAGE_KEYS.credential));
       setPlatformAvailable(true);
+      notifyLockChanged();
     }
     return ok;
   }, []);
 
-  const disableLock = useCallback(() => {
+  const disableLock = useCallback(async (pin: string): Promise<boolean> => {
     const local = safeStorage('local');
+    const stored = readStorage(local, PRIVACY_STORAGE_KEYS.pin);
+    if (!stored || !PIN_PATTERN.test(pin) || !(await verifyPin(pin, stored))) return false;
+    if (readStorage(local, PRIVACY_STORAGE_KEYS.pin) !== stored) return false;
     removeStorage(local, PRIVACY_STORAGE_KEYS.pin);
+    if (readStorage(local, PRIVACY_STORAGE_KEYS.pin)) return false;
     removeStorage(local, PRIVACY_STORAGE_KEYS.skipped);
     removeStorage(local, PRIVACY_STORAGE_KEYS.credential);
     removeStorage(local, PRIVACY_STORAGE_KEYS.autoLockMs);
@@ -374,12 +408,15 @@ export function useAppLock(options: UseAppLockOptions = {}): UseAppLockResult {
     setCredentialId(null);
     setPlatformAvailable(false);
     setStatus('setup');
+    notifyLockChanged();
+    return true;
   }, []);
 
   const setAutoLockMs = useCallback((ms: number) => {
     const next = normalizeAutoLock(ms);
     writeStorage(safeStorage('local'), PRIVACY_STORAGE_KEYS.autoLockMs, String(next));
     setAutoLockMsState(next);
+    notifyLockChanged();
   }, []);
 
   // Auto-lock: while unlocked with a passcode set, any activity re-arms the

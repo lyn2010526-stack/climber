@@ -235,9 +235,14 @@ export const nodeTypes = {
   output: OutputNode,
 };
 
+let nodeSequence = 0;
+
 export function createWorkflowNode(type: string, position: { x: number; y: number }, data: Record<string, any> = {}) {
+  nodeSequence += 1;
   return {
-    id: `${type}-${Date.now()}`,
+    // A monotonic suffix keeps ids unique even when two nodes are created in
+    // the same millisecond (e.g. rapid double-add), which Date.now() alone does not (R12-H03).
+    id: `${type}-${Date.now()}-${nodeSequence}`,
     type,
     position,
     data: { label: type.charAt(0).toUpperCase() + type.slice(1), ...data },

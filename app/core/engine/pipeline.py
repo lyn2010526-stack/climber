@@ -119,7 +119,7 @@ class StepResult:
     data: dict[str, Any] = field(default_factory=dict)
 
 
-class PipelineError(Exception):
+class EnginePipelineError(Exception):
     """Raised when pipeline execution cannot continue."""
     def __init__(self, step_name: str, reason: str, partial_ctx: TurnContext | None = None):
         super().__init__(f"Pipeline failed at [{step_name}]: {reason}")
@@ -147,7 +147,7 @@ async def run_pipeline(
         Tuple of (final context, list of step results)
 
     Raises:
-        PipelineError: If fail_open=False and a step fails
+        EnginePipelineError: If fail_open=False and a step fails
     """
     results: list[StepResult] = []
     current_ctx = ctx
@@ -172,7 +172,7 @@ async def run_pipeline(
         duration = (time.monotonic() - start) * 1000
 
         if not success and not fail_open:
-            raise PipelineError(step_name, error or "unknown", current_ctx)
+            raise EnginePipelineError(step_name, error or "unknown", current_ctx)
 
         if not success and fail_open:
             warning = f"Step {step_name} failed (fail-open): {error}"

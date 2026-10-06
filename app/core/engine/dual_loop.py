@@ -94,6 +94,8 @@ class DualLoopCoordinator:
             if confidence < PROFILE_MIN_CONFIDENCE:
                 return ""
             hints = await store.suggestions(user_id, instruction)
+            if not isinstance(hints, dict) or hints.get("enabled") is not True:
+                return ""
             return self._format_profile_context(summary, hints)
         except Exception as exc:
             logger.debug("dual_loop.profile_context_failed", error=str(exc))

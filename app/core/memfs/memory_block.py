@@ -55,13 +55,16 @@ class MemoryBlock:
             self._infer_category()
 
     def _infer_category(self) -> None:
-        """Infer category from path prefix."""
+        """Infer category from a recognized path prefix.
+
+        Only catalogued top-level directories map to a category; unknown
+        prefixes leave the category unset rather than mislabeling the block
+        as ``reference``.
+        """
         if self.path:
             parts = self.path.split("/")
             if parts[0] in ("system", "reference", "skills", "conversations"):
                 self.metadata["category"] = parts[0]
-            else:
-                self.metadata["category"] = "reference"
 
     def to_markdown(self) -> str:
         """Serialize to markdown with YAML frontmatter."""
@@ -138,8 +141,7 @@ def _serialize_yaml(data: dict[str, Any], indent: int = 0) -> list[str]:
                 lines.append(f"{prefix}{key}: []")
             else:
                 lines.append(f"{prefix}{key}:")
-                for item in value:
-                    lines.append(f"{prefix}  - {_yaml_scalar(item)}")
+                lines.extend(f"{prefix}  - {_yaml_scalar(str(item))}" for item in value)
         elif isinstance(value, dict):
             lines.append(f"{prefix}{key}:")
             lines.extend(_serialize_yaml(value, indent + 1))
@@ -147,18 +149,42 @@ def _serialize_yaml(data: dict[str, Any], indent: int = 0) -> list[str]:
             lines.append(f"{prefix}{key}: {'true' if value else 'false'}")
         elif isinstance(value, (int, float)):
             lines.append(f"{prefix}{key}: {value}")
+        elif value is None:
+            lines.append(f"{prefix}{key}: null")
         else:
-            lines.append(f"{prefix}{key}: {_yaml_scalar(str(value))}")
+            lines.append(f"{prefix}{key}: {_yaml_scalar(value)}")
     return lines
 
 
 def _yaml_scalar(value: str) -> str:
-    """Quote a string value if it contains special YAML characters."""
-    needs_quote = any(c in value for c in ":{}[]&*?|-><!%@`#,\"\\")
-    if needs_quote:
-        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-        return f'"{escaped}"'
-    return value
+    """Quote a string so it round-trips losslessly through the YAML parser.
+
+    Quoting applies when the value is empty, could otherwise be re-read as a
+    different type (bool/int/float/null), or contains characters that plain
+    YAML scalars interpret structurally.
+    """
+    if value == "":
+        return '""'
+    if value != value.strip():
+        return _quote(value)
+    lowered = value.lower()
+    if lowered in {"true", "false", "null", "~"}:
+        return _quote(value)
+    if value[0] in "-?:,[]{}#&*!|>'\"%@`" or " " in value:
+        return _quote(value)
+    if "\n" in value or any(c in value for c in ":{}[]&*?|-><!%@`#,\"\\"):
+        return _quote(value)
+    try:
+        int(value)
+    except ValueError:
+        return value
+    return _quote(value)
+
+
+def _quote(value: str) -> str:
+    """Quote a string value with double quotes, escaping embedded escapes."""
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+    return f'"{escaped}"'
 
 
 def _parse_yaml(text: str) -> dict[str, Any]:
@@ -174,7 +200,7 @@ def _parse_yaml(text: str) -> dict[str, Any]:
 
         if stripped.startswith("- "):
             if current_key is not None:
-                current_list.append(stripped[2:].strip().strip('"').strip("'"))
+                current_list.append(_parse_yaml_value(stripped[2:].strip()))
             continue
 
         if ":" in stripped:
@@ -199,11 +225,11 @@ def _parse_yaml(text: str) -> dict[str, Any]:
 
 
 def _parse_yaml_value(value: str) -> Any:
-    """Parse a single YAML scalar value."""
-    if value.startswith('"') and value.endswith('"'):
-        return value[1:-1]
-    if value.startswith("'") and value.endswith("'"):
-        return value[1:-1]
+    """Parse a single YAML scalar value (lossless for quoted strings)."""
+    if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
+        return _unescape(value[1:-1])
+    if len(value) >= 2 and value[0] == "'" and value[-1] == "'":
+        return value[1:-1].replace("''", "'")
     if value.lower() == "true":
         return True
     if value.lower() == "false":
@@ -219,3 +245,25 @@ def _parse_yaml_value(value: str) -> Any:
     except ValueError:
         pass
     return value
+
+
+def _unescape(value: str) -> str:
+    """Unescape double-quoted YAML escapes (\", \\, \\n)."""
+    out: list[str] = []
+    i = 0
+    n = len(value)
+    while i < n:
+        char = value[i]
+        if char == "\\" and i + 1 < n:
+            nxt = value[i + 1]
+            if nxt == "n":
+                out.append("\n")
+            elif nxt in ('"', "\\"):
+                out.append(nxt)
+            else:
+                out.append(nxt)
+            i += 2
+        else:
+            out.append(char)
+            i += 1
+    return "".join(out)

@@ -1,9 +1,10 @@
 """Tests for guardrail validation.
 
-Covers the default fail-open behavior (validator exceptions never block),
-the strict fail-closed mode (exceptions block with an exception-category
-issue carrying the error reason), and the GuardrailAction on-fail enum
-(refrain blocks, filter/allow only record feedback).
+Covers fail-closed behavior for validator exceptions (both LLM and function
+guardrails block with an exception-category issue carrying the error reason),
+the GuardrailAction on-fail enum (refrain blocks, filter/allow only record
+feedback), and the default-issue path: a guardrail FAIL without issue details
+still blocks the output with a generated default issue.
 
 Run with pytest; run_agent_simple, credential resolution and the websocket
 broadcast are mocked. No live LLM.
@@ -14,6 +15,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from app.core.collaboration import guardrails
+from app.core.collaboration.prompts import parse_review_result
 from app.core.collaboration.guardrails import (
     CATEGORY_EXCEPTION,
     CATEGORY_VALIDATION,
@@ -40,6 +42,10 @@ def _sync_false_bare(_output: str) -> bool:
 
 def _sync_false_with_feedback(_output: str) -> tuple[bool, list[dict]]:
     return False, [{"description": "bad output detected", "severity": "high"}]
+
+
+def _sync_false_empty_feedback(_output: str) -> tuple[bool, list[dict]]:
+    return False, []
 
 
 def test_action_enum_members():
@@ -110,14 +116,18 @@ class GuardrailsRunTests(unittest.IsolatedAsyncioTestCase):
         assert issues[0]["action"] == GuardrailAction.REFRAIN.value
         assert issues[0]["category"] == CATEGORY_VALIDATION
 
-    async def test_llm_exception_default_fail_open(self):
+    async def test_llm_exception_fails_closed_by_default(self):
         task = self._task([{"type": "llm", "name": "review"}])
         with patch.object(
             guardrails, "run_agent_simple", new_callable=AsyncMock, side_effect=RuntimeError("boom")
         ):
             passed, issues = await run_guardrails(task, "worker output")
-        assert passed is True
-        assert issues == []
+        assert passed is False
+        assert len(issues) == 1
+        assert issues[0]["category"] == CATEGORY_EXCEPTION
+        assert issues[0]["action"] == GuardrailAction.REFRAIN.value
+        assert "boom" in issues[0]["description"]
+        assert issues[0]["details"] == "boom"
 
     async def test_llm_exception_strict_fail_closed(self):
         task = self._task([{"type": "llm", "name": "review"}])
@@ -137,11 +147,23 @@ class GuardrailsRunTests(unittest.IsolatedAsyncioTestCase):
         assert passed is True
         assert issues == []
 
-    async def test_function_exception_default_fail_open(self):
+    async def test_role_review_json_contract_is_fail_closed(self):
+        assert parse_review_result('{"passed":true,"issues":[]}') == (True, [])
+        for output in ("approved, looks good", "不通过", "not approved",
+                       '{"passed":false,"issues":[]}', '{"passed":"true","issues":[]}'):
+            passed, issues = parse_review_result(output)
+            assert passed is False
+            assert issues
+
+    async def test_function_exception_fails_closed_by_default(self):
         task = self._function_task("_sync_boom")
         passed, issues = await run_guardrails(task, "output")
-        assert passed is True
-        assert issues == []
+        assert passed is False
+        assert len(issues) == 1
+        assert issues[0]["category"] == CATEGORY_EXCEPTION
+        assert issues[0]["action"] == GuardrailAction.REFRAIN.value
+        assert "boom" in issues[0]["description"]
+        assert "_sync_boom" in issues[0]["description"]
 
     async def test_function_exception_strict_fail_closed(self):
         task = self._function_task("_sync_boom")
@@ -167,6 +189,27 @@ class GuardrailsRunTests(unittest.IsolatedAsyncioTestCase):
         assert len(issues) == 1
         assert issues[0]["action"] == GuardrailAction.REFRAIN.value
         assert issues[0]["category"] == CATEGORY_VALIDATION
+
+    async def test_function_fail_with_empty_feedback_generates_default_issue(self):
+        task = self._function_task("_sync_false_empty_feedback")
+        passed, issues = await run_guardrails(task, "output")
+        assert passed is False
+        assert len(issues) == 1
+        assert "fn-check" in issues[0]["description"]
+        assert issues[0]["action"] == GuardrailAction.REFRAIN.value
+
+    async def test_llm_fail_without_parseable_issues_still_blocks(self):
+        task = self._task([{"type": "llm", "name": "review"}])
+        with patch.object(
+            guardrails,
+            "run_agent_simple",
+            new_callable=AsyncMock,
+            return_value=("needs rework entirely", []),
+        ):
+            passed, issues = await run_guardrails(task, "worker output")
+        assert passed is False
+        assert len(issues) == 1
+        assert issues[0]["action"] == GuardrailAction.REFRAIN.value
 
     async def test_action_filter_records_without_blocking(self):
         task = self._function_task(

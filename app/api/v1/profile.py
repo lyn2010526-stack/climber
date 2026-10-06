@@ -11,10 +11,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import Field
+from pydantic import Field, StrictBool
 
 from app.core.auth import get_current_user
+from app.core.auth_manager import require_scopes
 from app.core.profile.persistence import ProfileStore
 from app.schemas.api_v1.base import PublicResponse, StrictRequest
 
@@ -23,7 +25,46 @@ if TYPE_CHECKING:
 
 router = APIRouter()
 
+logger = structlog.get_logger(__name__)
+
 store = ProfileStore()
+
+
+class ProfileSettingsUpdate(StrictRequest):
+    enabled: StrictBool
+    consent_version: str | None = None
+    show_raw_profile: StrictBool | None = None
+
+
+@router.get("/settings")
+async def get_profile_settings(user_id: str = Depends(get_current_user)) -> dict:
+    return await store.get_settings(user_id)
+
+
+@router.put("/settings")
+async def update_profile_settings(
+    payload: ProfileSettingsUpdate,
+    user_id: str = Depends(get_current_user),
+    _auth: dict = Depends(require_scopes("write")),
+) -> dict:
+    try:
+        return await store.update_settings(user_id, **payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/clear-design")
+async def profile_clear_design(_user_id: str = Depends(get_current_user)) -> dict:
+    """Describe a future clear action without performing a data mutation."""
+    return {
+        "implemented": False,
+        "proposed_method": "POST",
+        "proposed_path": "/profile/clear",
+        "requires_confirmation": True,
+        "scope": ["user_profile_events", "user_profile_snapshots"],
+        "settings_policy": "disable learning; retain consent audit metadata",
+        "instruction_traces_policy": "separate explicit action required",
+    }
 
 
 class ProfileEventCreate(StrictRequest):
@@ -91,6 +132,7 @@ def _to_read(row: UserProfileEvent) -> ProfileEventRead:
 async def record_profile_event(
     payload: ProfileEventCreate,
     user_id: str = Depends(get_current_user),
+    _auth: dict = Depends(require_scopes("write")),
 ) -> ProfileEventRead:
     """Persist one profile event after the privacy-boundary check."""
     fields = payload.model_dump()
@@ -99,6 +141,8 @@ async def record_profile_event(
     try:
         row = await store.record_event(user_id, **fields)
     except ValueError as exc:
+        logger.warning("profile_event_rejected", user_id=user_id, error=str(exc))
+        # Controlled validation message from the profile loop; pinned by contract tests.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if row.id is None:
         raise HTTPException(status_code=500, detail="Profile event was not stored")
@@ -110,6 +154,8 @@ async def get_profile_summary(
     user_id: str = Depends(get_current_user),
 ) -> ProfileSummaryRead:
     """Rebuild the user's profile summary from the stored event log."""
+    if not (await store.get_settings(user_id))["show_raw_profile"]:
+        raise HTTPException(status_code=403, detail="Raw profile display is disabled in profile settings")
     return await store.summary(user_id)
 
 
@@ -119,4 +165,6 @@ async def get_profile_suggestions(
     user_id: str = Depends(get_current_user),
 ) -> dict[str, object]:
     """Return profile hints that never override the current instruction."""
+    if not (await store.get_settings(user_id))["show_raw_profile"]:
+        raise HTTPException(status_code=403, detail="Raw profile display is disabled in profile settings")
     return await store.suggestions(user_id, current_instruction or "")

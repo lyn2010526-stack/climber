@@ -35,6 +35,9 @@ class MonitoringResult:
     health_score: float = 1.0  # 1.0 = perfect, 0.0 = critical
     should_stop: bool = False
     should_escalate: bool = False
+    prediction_error: float = 0.0
+    contradiction_count: int = 0
+    risk_score: float = 0.0
 
     @property
     def has_critical(self) -> bool:
@@ -93,6 +96,21 @@ class MetaCognitionMonitor:
             should_stop=should_stop,
             should_escalate=should_escalate,
         )
+
+    def check_prediction_error(self, predicted: dict[str, Any], actual: dict[str, Any]) -> float:
+        keys = set(predicted) | set(actual)
+        if not keys:
+            return 0.0
+        return round(sum(predicted.get(key) != actual.get(key) for key in keys) / len(keys), 4)
+
+    def check_contradictions(self, candidates: list[dict[str, Any]]) -> list[str]:
+        contradictions = []
+        for index, candidate in enumerate(candidates):
+            for other in candidates[index + 1:]:
+                shared = set(candidate) & set(other)
+                if any(candidate[key] != other[key] for key in shared):
+                    contradictions.append(f"Candidates {index} and {index + 1} disagree")
+        return contradictions
 
     def _check_redundant_calls(self, iteration: int) -> list[DefectReport]:
         defects = []

@@ -59,6 +59,7 @@ class AuditChain:
         self._db_path = db_path
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        self._pending_events: list[AuditEntry] = []
         self._create_tables()
 
     def _create_tables(self) -> None:
@@ -187,27 +188,36 @@ class AuditChain:
         return [self._row_to_entry(row) for row in rows]
 
     def _persist_entry(self, entry: AuditEntry) -> None:
-        self._conn.execute(
-            """
-            INSERT INTO audit_entries
-            (id, timestamp, agent_id, session_id, decision_type,
-             input_summary, output_summary, rationale, confidence, alternatives_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                entry.id,
-                entry.timestamp,
-                entry.agent_id,
-                entry.session_id,
-                entry.decision_type,
-                entry.input_summary,
-                entry.output_summary,
-                entry.rationale,
-                entry.confidence,
-                json.dumps(entry.alternatives_considered),
-            ),
-        )
-        self._conn.commit()
+        try:
+            self._conn.execute(
+                """
+                INSERT INTO audit_entries
+                (id, timestamp, agent_id, session_id, decision_type,
+                 input_summary, output_summary, rationale, confidence, alternatives_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (entry.id, entry.timestamp, entry.agent_id, entry.session_id,
+                 entry.decision_type, entry.input_summary, entry.output_summary,
+                 entry.rationale, entry.confidence, json.dumps(entry.alternatives_considered)),
+            )
+            self._conn.commit()
+        except sqlite3.Error:
+            try:
+                self._conn.rollback()
+            except sqlite3.Error:
+                pass
+            # Keep the event available for a later retry; fail-closed callers
+            # still receive their security decision immediately.
+            if entry not in self._pending_events:
+                self._pending_events.append(entry)
+
+    def retry_pending(self) -> int:
+        """Retry buffered audit events after a transient storage failure."""
+        pending = list(self._pending_events)
+        self._pending_events.clear()
+        for entry in pending:
+            self._persist_entry(entry)
+        return len(pending) - len(self._pending_events)
 
     def _row_to_entry(self, row: sqlite3.Row) -> AuditEntry:
         return AuditEntry(
@@ -225,3 +235,8 @@ class AuditChain:
 
     def close(self) -> None:
         self._conn.close()
+
+
+# The validation chain uses this process-local append-only chain by default.
+# Applications may still inject a durable AuditChain when they own lifecycle.
+security_audit_chain = AuditChain()

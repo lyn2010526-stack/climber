@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ClimberMark } from '../brand/ClimberMark';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useI18n } from '../../i18n';
+import { usePrefersReducedMotion } from '../../hooks/usePrefersReducedMotion';
 import { PIN_LENGTH } from '../../hooks/useAppLock';
 import { PinDots, PinPad, PRIVACY_SHAKE_STYLE } from './LockScreen';
+import { LOCK_EASE, LOCK_ENTRANCE_MS, lockSec } from './lockTiming';
+import { LockBackdrop, LockBrand } from './lockMotion';
 
 /**
  * First-run passcode enrollment: enter the six digits twice, mismatches shake
@@ -17,9 +20,24 @@ export interface PinSetupProps {
 }
 
 const SHAKE_RESET_MS = 480;
+const STEP_EXIT_MS = 100;
+const STEP_ENTER_MS = 120;
+
+/**
+ * Enter/exit timings for the animated step swap. Held as a hoisted constant so
+ * the per-value `exit` override survives structural assignability to
+ * framer-motion's `Transition` (excess properties are only rejected on inline
+ * literals); the runtime transition resolution is unchanged either way.
+ */
+const STEP_TRANSITION = {
+  duration: lockSec(STEP_ENTER_MS),
+  ease: LOCK_EASE,
+  exit: { duration: lockSec(STEP_EXIT_MS), ease: LOCK_EASE },
+};
 
 export function PinSetup({ onConfirm, onSkip }: PinSetupProps) {
   const { t } = useI18n();
+  const reducedMotion = usePrefersReducedMotion();
   const [firstPin, setFirstPin] = useState<string | null>(null);
   const [pin, setPin] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -93,59 +111,103 @@ export function PinSetup({ onConfirm, onSkip }: PinSetupProps) {
     setPin((prev) => prev.slice(0, -1));
   }, [submitting]);
 
+  const step = firstPin === null ? 'set' : 'confirm';
   const stepText = firstPin === null ? t('privacy.pin_step_set') : t('privacy.pin_step_confirm');
 
+  const stage = (
+    <>
+      <PinDots count={pin.length} error={Boolean(error)} />
+      <p
+        className="mt-3 h-5 text-center text-[13px] text-[var(--color-error)]"
+        data-testid="pin-error"
+        role="alert"
+      >
+        {error}
+      </p>
+      <p className="mt-1 text-[14px] font-medium text-[var(--color-text-primary)]" role="status">
+        {stepText}
+      </p>
+    </>
+  );
+
   return (
-    <div className="fixed inset-0 z-[var(--z-modal)] flex flex-col items-center justify-center overflow-hidden px-6">
+    <div
+      className="fixed inset-0 z-[var(--z-modal)] flex flex-col items-center justify-center overflow-hidden px-6"
+      data-lock-intro={reducedMotion ? 'instant' : 'play'}
+    >
       <style>{PRIVACY_SHAKE_STYLE}</style>
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-[var(--color-bg-page)]/80 backdrop-blur-2xl"
-      />
+      <LockBackdrop reducedMotion={reducedMotion} />
       <div className="relative flex w-full max-w-xs flex-col items-center">
-        <div className="flex flex-col items-center gap-2">
-          <span className="flex h-16 w-16 items-center justify-center rounded-[22px] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)]/70 shadow-[var(--shadow-panel)]">
-            <ClimberMark size={30} color="var(--color-accent-foreground)" />
-          </span>
-          <h1 className="mt-2 text-[17px] font-semibold tracking-tight text-[var(--color-text-primary)]">
-            {t('privacy.setup_title')}
-          </h1>
-          <p className="text-center text-[13px] leading-relaxed text-[var(--color-text-secondary)]">
-            {t('privacy.setup_subtitle')}
-          </p>
-        </div>
+        <LockBrand
+          reducedMotion={reducedMotion}
+          title={t('privacy.setup_title')}
+          subtitle={t('privacy.setup_subtitle')}
+          subtitleClassName="text-center text-[13px] leading-relaxed text-[var(--color-text-secondary)]"
+        />
 
         <div
           className={`mt-7 flex flex-col items-center ${shaking ? 'privacy-lock-shake' : ''}`}
           data-shake={shaking ? 'true' : undefined}
           aria-live="polite"
         >
-          <PinDots count={pin.length} error={Boolean(error)} />
-          <p
-            className="mt-3 h-5 text-center text-[13px] text-[var(--color-error)]"
-            data-testid="pin-error"
-            role="alert"
-          >
-            {error}
-          </p>
+          {reducedMotion ? (
+            <div className="flex flex-col items-center" data-lock-step={step}>
+              {stage}
+            </div>
+          ) : (
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={step}
+                className="flex flex-col items-center"
+                data-lock-step={step}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={STEP_TRANSITION}
+              >
+                {stage}
+              </motion.div>
+            </AnimatePresence>
+          )}
         </div>
 
-        <p className="mt-1 text-[14px] font-medium text-[var(--color-text-primary)]" role="status">
-          {stepText}
-        </p>
-
-        <div className="mt-4">
-          <PinPad onPress={press} onBackspace={backspace} disabled={submitting} />
-        </div>
+        <motion.div
+          className="mt-4"
+          initial={reducedMotion ? false : { opacity: 0, y: 28 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={
+            reducedMotion
+              ? { duration: 0 }
+              : {
+                  type: 'spring',
+                  stiffness: 380,
+                  damping: 26,
+                  delay: lockSec(LOCK_ENTRANCE_MS.keypadDelay),
+                }
+          }
+        >
+          <PinPad
+            onPress={press}
+            onBackspace={backspace}
+            disabled={submitting}
+            error={Boolean(error)}
+          />
+        </motion.div>
 
         {onSkip ? (
-          <button
+          <motion.button
             type="button"
             className="mt-7 inline-flex min-h-[44px] items-center rounded-[var(--radius-pill)] px-5 text-[14px] font-medium text-[var(--color-text-muted)] transition-colors duration-150 hover:text-[var(--color-text-secondary)] active:opacity-80"
+            initial={reducedMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{
+              duration: lockSec(LOCK_ENTRANCE_MS.hint),
+              delay: reducedMotion ? 0 : lockSec(LOCK_ENTRANCE_MS.faceDelay),
+            }}
             onClick={onSkip}
           >
             {t('privacy.skip_setup')}
-          </button>
+          </motion.button>
         ) : null}
       </div>
     </div>

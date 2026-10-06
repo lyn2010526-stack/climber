@@ -1,4 +1,9 @@
-"""Guardrail validation for group collaboration output."""
+"""Guardrail validation for group collaboration output.
+
+Validator exceptions fail closed for both LLM and function guardrails: a
+raised exception returns (False, [issue]) with an exception-category issue
+carrying the error reason, instead of the previous fail-open behavior.
+"""
 
 from __future__ import annotations
 
@@ -95,9 +100,8 @@ async def run_guardrails(
     Args:
         task: The task entity with guardrail configuration.
         output: The output text to validate.
-        strict: When True, validator exceptions fail closed (produce a blocking
-            issue with category "exception") instead of the default fail-open
-            behavior.
+        strict: Retained for API compatibility; validator exceptions always
+            fail closed with an issue of category "exception".
 
     Returns:
         A tuple of (passed, feedback_issues). Each issue carries "category"
@@ -175,10 +179,12 @@ async def run_llm_guardrail(
         task: The task entity for context.
         output: The output to validate.
         guardrail: The guardrail configuration.
-        strict: When True, validator exceptions fail closed.
+        strict: Retained for API compatibility; validator exceptions always
+            fail closed.
 
     Returns:
-        A tuple of (passed, issues).
+        A tuple of (passed, issues). Validator exceptions fail closed with an
+        exception-category issue.
     """
     from app.core.collaboration.constants import TASK_TIMEOUT
 
@@ -209,10 +215,8 @@ Respond with:
                 tools=[],
             )
     except Exception as e:
-        logger.exception("llm_guardrail_failed", task_id=task.id, error=str(e))
-        if strict:
-            return False, [_exception_issue("LLM guardrail validator raised", e)]
-        return True, []
+        logger.exception("llm_guardrail_failed", task_id=task.id, error=str(e), strict=strict)
+        return False, [_exception_issue("LLM guardrail validator raised", e)]
 
     lower_output = review_output.lower()
     passed = any(k in lower_output for k in ["通过", "pass", "approved", "looks good", "accept"])
@@ -239,10 +243,12 @@ async def run_function_guardrail(
     Args:
         output: The output to validate.
         guardrail: The guardrail configuration with validation_function.
-        strict: When True, validator exceptions fail closed.
+        strict: Retained for API compatibility; validator exceptions always
+            fail closed.
 
     Returns:
-        A tuple of (passed, issues).
+        A tuple of (passed, issues). Validator exceptions fail closed with an
+        exception-category issue instead of passing the output through.
     """
     import importlib
 
@@ -258,10 +264,8 @@ async def run_function_guardrail(
         if asyncio.iscoroutinefunction(fn):
             result = await result
     except Exception as e:
-        logger.exception("function_guardrail_failed", func_path=func_path, error=str(e))
-        if strict:
-            return False, [_exception_issue(f"Function guardrail '{func_path}' raised", e)]
-        return True, []
+        logger.exception("function_guardrail_failed", func_path=func_path, error=str(e), strict=strict)
+        return False, [_exception_issue(f"Function guardrail '{func_path}' raised", e)]
 
     if isinstance(result, bool):
         return result, []

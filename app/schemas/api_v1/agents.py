@@ -18,6 +18,8 @@ class AgentCreateRequest(StrictRequest):
     system_prompt: str = ""
     tool_ids: list[str] = Field(default_factory=list)
     skill_ids: list[str] = Field(default_factory=list)
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    max_tokens: int | None = Field(default=None, ge=1)
 
 
 class AgentResponse(PublicResponse):
@@ -30,4 +32,6 @@ class AgentResponse(PublicResponse):
     base_url: str | None = None
     tool_ids: list[str] = Field(default_factory=list)
     skill_ids: list[str] = Field(default_factory=list)
+    temperature: float = 0.7
+    max_tokens: int | None = None
     created_at: str | None = None

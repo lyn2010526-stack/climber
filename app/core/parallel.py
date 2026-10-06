@@ -23,6 +23,17 @@ class ToolExecutionResult:
     arguments: dict[str, Any] | None = None
     tool_call_id: str = ""
 
+    def observation(self) -> dict[str, Any]:
+        """Expose only execution facts; no inferred tool semantics."""
+        return {
+            "tool": self.tool_name,
+            "arguments": dict(self.arguments or {}),
+            "result": self.result,
+            "error": self.error,
+            "success": self.success,
+            "duration_ms": self.duration_ms,
+        }
+
 
 # Validator callback: (tool_name, arguments) -> (allowed, reason)
 # `Validator` remains the sync alias so existing registrars are unaffected;
@@ -102,11 +113,11 @@ class ParallelToolExecutor:
                 timeout=self._timeout,
             )
             duration = (asyncio.get_event_loop().time() - start) * 1000
-            if isinstance(result, str) and result.startswith("Error executing "):
+            if self._is_error_result(result):
                 return ToolExecutionResult(
                     tool_name=name,
-                    result=result,
-                    error=result,
+                    result=str(result),
+                    error=str(result),
                     success=False,
                     duration_ms=duration,
                     arguments=arguments,
@@ -116,6 +127,35 @@ class ParallelToolExecutor:
         except TimeoutError:
             return ToolExecutionResult(tool_name=name, error="timeout", success=False, arguments=arguments, tool_call_id=tool_call_id)
         except asyncio.CancelledError:
-            return ToolExecutionResult(tool_name=name, error="cancelled", success=False, arguments=arguments, tool_call_id=tool_call_id)
+            # Cancellation must propagate; swallowing it would keep the parent
+            # task alive and report a cancelled tool as an ordinary failure.
+            raise
         except Exception as e:
             return ToolExecutionResult(tool_name=name, error=str(e), success=False, arguments=arguments, tool_call_id=tool_call_id)
+
+    @staticmethod
+    def _is_error_result(result: Any) -> bool:
+        """Detect failure results beyond the known "Error executing" prefix.
+
+        Registry-level exceptions are formatted with the "Error executing"
+        prefix, but tools may also return structured errors (JSON with an
+        error message, success:false, or isError:true). Those shapes must be
+        reported as failures so the model receives the real failure reason.
+        """
+        if isinstance(result, str):
+            if result.startswith("Error executing "):
+                return True
+            try:
+                parsed = json.loads(result)
+            except (json.JSONDecodeError, ValueError, TypeError):
+                return False
+        else:
+            parsed = result
+        if isinstance(parsed, dict):
+            if isinstance(parsed.get("error"), str) and parsed.get("error"):
+                return True
+            if parsed.get("success") is False:
+                return True
+            if parsed.get("isError") is True:
+                return True
+        return False

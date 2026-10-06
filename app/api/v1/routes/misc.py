@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -179,7 +179,8 @@ async def terminal_execute(
     try:
         sandbox = di_resolve("SandboxExecutor")
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"sandbox unavailable: {exc}") from exc
+        logger.warning("sandbox_executor_unavailable", error=str(exc))
+        raise HTTPException(status_code=503, detail="sandbox is unavailable") from exc
     effective_timeout = min(body.timeout or 30, 120)
     output = await sandbox.execute(command, timeout=effective_timeout)
     logger.info("terminal_command_executed", command=command, user_id=current_user_id(request), timeout=effective_timeout)
@@ -271,7 +272,7 @@ async def delete_cluster_node(
 
 @router.get("/traces")
 @router.get("/traces/")
-async def list_traces(request: Request, limit: int = 100) -> list[dict[str, Any]]:
+async def list_traces(request: Request, limit: int = Query(default=100, ge=1, le=500)) -> list[dict[str, Any]]:
     """List the current user's traces ordered by creation date (newest first)."""
     user_id = current_user_id(request)
     async with async_session() as db:
@@ -600,17 +601,47 @@ async def list_eval_datasets(request: Request) -> list[dict[str, Any]]:
 async def create_eval_dataset(request: Request,
     _auth: dict = Depends(require_scopes("write")),
 )  -> dict[str, Any]:
-    """Create an evaluation dataset."""
+    """Create an evaluation dataset.
+
+    Rejects malformed or non-object JSON bodies instead of silently creating a
+    default dataset, and derives ``case_count`` from ``data_json`` so the value
+    mirrors the stored cases.
+    """
+    import json as _json
+
     from app.storage.models_eval import EvalDataset
 
-    data = await parse_request_payload(request)
+    try:
+        raw = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Request body must be valid JSON")
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=422, detail="Request body must be a JSON object")
+    data = raw.get("data") if isinstance(raw.get("data"), dict) else raw
+
+    data_json = data.get("data_json", "[]")
+    if isinstance(data_json, list):
+        case_count = len(data_json)
+        data_json = _json.dumps(data_json, ensure_ascii=False)
+    elif isinstance(data_json, str):
+        try:
+            parsed = _json.loads(data_json)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="data_json must be a valid JSON array")
+        if not isinstance(parsed, list):
+            raise HTTPException(status_code=422, detail="data_json must be a JSON array")
+        case_count = len(parsed)
+    else:
+        raise HTTPException(status_code=422, detail="data_json must be a JSON array or string")
+
     user_id = current_user_id(request)
     async with async_session() as db:
         ds = EvalDataset(
             user_id=user_id,
             name=data.get("name", "New Dataset"),
             description=data.get("description", ""),
-            data_json=data.get("data_json", "[]"),
+            data_json=data_json,
+            case_count=case_count,
         )
         db.add(ds)
         await db.commit()
@@ -642,15 +673,28 @@ async def run_evaluation(request: Request,
         agent = await db.get(Agent, agent_id)
         if agent is None or agent.user_id != user_id:
             raise HTTPException(status_code=404, detail="Agent not found")
+
+        def _as_int(value: Any, field: str) -> int:
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=422, detail=f"{field} must be an integer")
+
+        def _as_float(value: Any, field: str) -> float:
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=422, detail=f"{field} must be a number")
+
         run = EvalRun(
             user_id=user_id,
             dataset_id=dataset_id,
             agent_id=agent_id,
-            total_cases=int(data.get("total_cases") or 0),
-            passed_cases=int(data.get("passed_cases") or 0),
-            failed_cases=int(data.get("failed_cases") or 0),
-            average_score=float(data.get("average_score") or 0.0),
-            pass_rate=float(data.get("pass_rate") or 0.0),
+            total_cases=_as_int(data.get("total_cases") or 0, "total_cases"),
+            passed_cases=_as_int(data.get("passed_cases") or 0, "passed_cases"),
+            failed_cases=_as_int(data.get("failed_cases") or 0, "failed_cases"),
+            average_score=_as_float(data.get("average_score") or 0.0, "average_score"),
+            pass_rate=_as_float(data.get("pass_rate") or 0.0, "pass_rate"),
             results_json=data.get("results_json", "[]"),
         )
         db.add(run)
@@ -661,6 +705,102 @@ async def run_evaluation(request: Request,
             raise HTTPException(status_code=409, detail="Evaluation run conflicts with stored data") from exc
         await db.refresh(run)
         return _eval_run_dict(run)
+
+
+class EvalAssessItem(BaseModel):
+    """One rubric criterion for the offline scoring endpoint."""
+
+    item_id: str
+    description: str = ""
+    contains_any: list[str] = []
+    not_contains_any: list[str] = []
+    weight: float = 1.0
+    essential: bool = False
+    veto: bool = False
+
+
+class EvalAssessRequest(BaseModel):
+    """Payload for ``POST /eval/assess``: score arbitrary output offline."""
+
+    output: str = ""
+    rubric: list[EvalAssessItem] = []
+    scenario_id: str = ""
+    expected_points: list[str] = []
+
+
+@router.post("/eval/assess")
+@router.post("/eval/assess/")
+async def assess_eval_output(
+    payload: EvalAssessRequest,
+    _auth: dict = Depends(require_scopes("write")),
+) -> dict[str, Any]:
+    """Score arbitrary agent output against a rubric with the offline judge.
+
+    Reuses the core ``DeterministicJudge`` (keyword evidence, weighted mean,
+    essential/veto semantics). No LLM call is made, so this gives an immediate,
+    reproducible pass/score verdict that a task or skill can gate on.
+    """
+    from app.core.evaluation.judges import DeterministicJudge
+    from app.core.evaluation.models import RubricItem, Trajectory
+
+    if not payload.output.strip():
+        raise HTTPException(status_code=422, detail="output is required")
+    if not payload.rubric:
+        raise HTTPException(status_code=422, detail="rubric must not be empty")
+
+    trajectory = Trajectory(
+        scenario_id=payload.scenario_id or "assess",
+        user_input=payload.scenario_id or "",
+        output=payload.output,
+    )
+    rubric = [
+        RubricItem(
+            item_id=item.item_id,
+            description=item.description,
+            contains_any=list(item.contains_any),
+            not_contains_any=list(item.not_contains_any),
+            weight=item.weight,
+            essential=item.essential,
+            veto=item.veto,
+        )
+        for item in payload.rubric
+    ]
+    result = DeterministicJudge().judge(
+        trajectory,
+        rubric,
+        scenario_id=payload.scenario_id or "assess",
+        expected_points=list(payload.expected_points),
+    )
+    return result.to_dict()
+
+
+@router.get("/eval/reports")
+@router.get("/eval/reports/")
+async def list_eval_reports(
+    request: Request,
+) -> list[dict[str, Any]]:
+    """List in-memory evaluation reports most recent first."""
+    from app.core.evaluation.report_store import REPORT_STORE
+
+    del request
+    reports = REPORT_STORE.list_all()
+    reports.reverse()
+    return [_eval_report_summary(r) for r in reports[:50]]
+
+
+@router.get("/eval/reports/{report_id}")
+async def get_eval_report(
+    report_id: str,
+    request: Request,
+) -> dict[str, Any]:
+    """Return one stored evaluation report with per-scenario detail."""
+    from app.core.evaluation.report_store import REPORT_STORE
+
+    del request
+    report = REPORT_STORE.get(report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Evaluation report not found")
+    return report.to_dict()
 
 
 # ─── Cost ───────────────────────────────────────────────────────────────────
@@ -695,10 +835,21 @@ async def get_budget(request: Request) -> dict[str, Any]:
     async with async_session() as db:
         cfg = (await db.execute(select(BudgetConfig).where(BudgetConfig.user_id == user_id))).scalars().first()
         if cfg is None:
-            cfg = BudgetConfig(user_id=user_id)
-            db.add(cfg)
-            await db.commit()
-            await db.refresh(cfg)
+            # Concurrent requests may race on the check-then-insert; the unique
+            # user_id constraint turns the loser into an IntegrityError, and the
+            # re-query makes this endpoint idempotent instead of raising 500.
+            db.add(BudgetConfig(user_id=user_id))
+            try:
+                await db.commit()
+            except IntegrityError:
+                await db.rollback()
+                cfg = (
+                    await db.execute(select(BudgetConfig).where(BudgetConfig.user_id == user_id))
+                ).scalars().first()
+            else:
+                await db.refresh(cfg)
+        if cfg is None:
+            raise HTTPException(status_code=503, detail="预算配置暂不可用")
         current_spend = 0.0
         try:
             window_start = _budget_window_start(cfg.period)
@@ -712,7 +863,8 @@ async def get_budget(request: Request) -> dict[str, Any]:
             ).scalar()
             if total is not None:
                 current_spend = round(float(total), 6)
-        except Exception:
+        except Exception as exc:
+            logger.warning("budget_current_spend_query_failed", user_id=user_id, period=cfg.period, error=str(exc))
             current_spend = 0.0
         return {
             "amount": cfg.amount,
@@ -734,10 +886,20 @@ async def get_quota(request: Request) -> dict[str, Any]:
     async with async_session() as db:
         q = (await db.execute(select(UsageQuota).where(UsageQuota.user_id == user_id))).scalars().first()
         if q is None:
-            q = UsageQuota(user_id=user_id)
-            db.add(q)
-            await db.commit()
-            await db.refresh(q)
+            # Same check-then-insert race as get_budget: degrade to an
+            # idempotent re-query when a concurrent request wins the insert.
+            db.add(UsageQuota(user_id=user_id))
+            try:
+                await db.commit()
+            except IntegrityError:
+                await db.rollback()
+                q = (
+                    await db.execute(select(UsageQuota).where(UsageQuota.user_id == user_id))
+                ).scalars().first()
+            else:
+                await db.refresh(q)
+        if q is None:
+            raise HTTPException(status_code=503, detail="用量配额暂不可用")
         return {
             "max_requests_per_day": q.max_requests_per_day,
             "max_tokens_per_day": q.max_tokens_per_day,
@@ -753,7 +915,9 @@ async def get_quota(request: Request) -> dict[str, Any]:
 
 @router.get("/search")
 @router.get("/search/")
-async def search_documents(request: Request, q: str = "", limit: int = 20) -> list[dict[str, Any]]:
+async def search_documents(
+    request: Request, q: str = "", limit: int = Query(default=20, ge=1, le=500)
+) -> list[dict[str, Any]]:
     """Search the current user's document chunks by content (case-insensitive LIKE)."""
     if not q:
         return []
@@ -892,11 +1056,25 @@ def _mcp_dict(m: MCPServerRecord) -> dict[str, Any]:
 
 def _eval_dataset_dict(e: Any) -> dict[str, Any]:
     """Convert an EvalDataset model instance to a response dictionary."""
+    case_count = e.case_count
+    if not case_count and getattr(e, "data_json", None):
+        # Legacy rows stored a default case_count of 0; derive it from the
+        # stored JSON payload so the reported count is never a hard-coded 0.
+        import json as _json
+
+        raw = e.data_json
+        if isinstance(raw, str):
+            try:
+                raw = _json.loads(raw)
+            except (TypeError, ValueError):
+                raw = None
+        if isinstance(raw, list):
+            case_count = len(raw)
     return {
         "id": e.id,
         "name": e.name,
         "description": e.description,
-        "case_count": e.case_count,
+        "case_count": case_count,
         "created_at": e.created_at.isoformat() if e.created_at else "",
     }
 
@@ -913,6 +1091,22 @@ def _eval_run_dict(r: Any) -> dict[str, Any]:
         "pass_rate": r.pass_rate,
         "average_score": r.average_score,
         "created_at": r.created_at.isoformat() if r.created_at else "",
+    }
+
+
+def _eval_report_summary(r: Any) -> dict[str, Any]:
+    """Compact summary of a stored evaluation report for list responses."""
+    return {
+        "report_id": r.report_id,
+        "created_at": r.created_at,
+        "total_scenarios": r.total_scenarios,
+        "passed_scenarios": r.passed_scenarios,
+        "average_score": r.average_score,
+        "pass_at_k": r.pass_at_k,
+        "pass_hat_k": r.pass_hat_k,
+        "total_tokens": r.total_tokens,
+        "duration_ms": r.duration_ms,
+        "metadata": r.metadata,
     }
 
 

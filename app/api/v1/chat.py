@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from copy import copy
+from contextlib import aclosing
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,10 +19,11 @@ from app.core import AgentEvent, AgentEventType
 from app.core.agent_engine import AgentEngine
 from app.core.api_key_crypto import decrypt_api_key
 from app.core.auth import get_current_user
+from app.core.auth_manager import require_scopes
 from app.core.di import resolve as di_resolve
 from app.core.recovery import RecoveryManager
 from app.models.registry import MODEL_ALIASES, ModelRegistry
-from app.models.vision import validate_images
+from app.models.vision import validate_attachments, validate_images
 from app.storage import async_session
 from app.storage.database import Agent as AgentModel
 from app.storage.database import Session as SessionModel
@@ -76,6 +78,7 @@ class ChatRequest(BaseModel):
     message: str
     # Optional image references (base64 data URLs or http(s) URLs) for multimodal chat.
     images: list[str] | None = None
+    attachments: list[dict[str, Any]] | None = None
 
 
 @router.post("/{session_id}/chat")
@@ -83,9 +86,28 @@ async def chat(
     session_id: str,
     request: ChatRequest,
     user_id: str = Depends(get_current_user),
+    _scope_check: None = Depends(require_scopes("write")),
 ):
+    return await _session_stream(session_id, request, user_id)
+
+
+@router.post("/{session_id}/inputs/start")
+async def start_session_inputs(
+    session_id: str,
+    user_id: str = Depends(get_current_user),
+    _scope_check: None = Depends(require_scopes("write")),
+):
+    return await _session_stream(session_id, ChatRequest(message=""), user_id, queued_only=True)
+
+
+async def _session_stream(session_id: str, request: ChatRequest, user_id: str, *, queued_only=False):
     try:
         images = validate_images(request.images)
+        attachments = validate_attachments(request.attachments)
+        if images and attachments:
+            raise ValueError("Use images or attachments, not both")
+        if images:
+            attachments = []
     except ValueError as exc:
         raise HTTPException(422, detail=str(exc)) from exc
     # Always resolve persisted ownership and credentials, including warm sessions.
@@ -132,11 +154,27 @@ async def chat(
     lock = engine._session_locks.get(session_id)
     if session_id in _chat_inflight or (lock is not None and lock.locked()):
         raise HTTPException(409, detail="Session is already running")
+    if queued_only:
+        from app.core.engine.input_dispatch import InputDispatchConflict, prepare_dispatch
+
+        try:
+            await prepare_dispatch(engine._input_queue, session_id, user_id)
+        except InputDispatchConflict as exc:
+            raise HTTPException(409, detail=str(exc)) from exc
     try:
         engine.model_registry = _ChatModelRegistry(provider, model_id, api_key, base_url)
     except Exception as exc:
         raise HTTPException(422, detail="Selected model credential could not be initialized") from exc
+    adapter = engine.model_registry.get_default()
+    if attachments and any(item.kind == "image" for item in attachments) and not adapter.capabilities.vision:
+        raise HTTPException(422, detail=f"Model {provider}/{model_id} does not support image attachments")
+    if attachments and any(item.kind == "file" for item in attachments) and not adapter.capabilities.file_attachments:
+        raise HTTPException(422, detail=f"Model {provider}/{model_id} does not support file attachments")
     engine._init_reasoning()
+    # Preflight awaits database I/O; another request may have reserved the stream.
+    lock = engine._session_locks.get(session_id)
+    if session_id in _chat_inflight or (lock is not None and lock.locked()):
+        raise HTTPException(409, detail="Session is already running")
     _chat_inflight.add(session_id)
     is_new_session = session is None
     try:
@@ -146,7 +184,8 @@ async def chat(
                 api_key=api_key, base_url=base_url, system_prompt=system_prompt,
                 tools=tool_ids, session_id=session_id,
             )
-            await RecoveryManager().restore_session(session)
+            if not queued_only:
+                await RecoveryManager().restore_session(session)
         # Rebind after recovery and on every turn so rotation takes effect.
         for name, value in {
             "provider": provider, "model_id": model_id, "api_key": api_key, "base_url": base_url,
@@ -163,11 +202,18 @@ async def chat(
         try:
             # Only pass the new field when present so engines predating images keep working.
             runner = (
+                engine.run_inputs(session) if queued_only else
                 engine.run(session, request.message, images=images)
-                if images else engine.run(session, request.message)
+                if images
+                else (
+                    engine.run(session, request.message, attachments=attachments)
+                    if attachments
+                    else engine.run(session, request.message)
+                )
             )
-            async for event in runner:
-                yield event.to_sse()
+            async with aclosing(runner):
+                async for event in runner:
+                    yield event.to_sse()
         except Exception as e:
             import structlog
             structlog.get_logger().error("chat_stream_error", session_id=session_id, error_type=type(e).__name__)
@@ -176,6 +222,7 @@ async def chat(
                 data={"error": "Model execution failed; verify the selected credential and model"},
             )
             yield error_event.to_sse()
+            yield AgentEvent(type=AgentEventType.DONE, data={"status": "failed"}).to_sse()
         finally:
             _chat_inflight.discard(session_id)
 

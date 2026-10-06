@@ -52,7 +52,7 @@ export function MCPPage() {
       setError(e instanceof Error ? e.message : t('common.error'));
     }
     setLoading(false);
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     fetchServers();
@@ -111,6 +111,7 @@ export function MCPPage() {
         <PageHeader
           title={t('navigation.mcp')}
           icon={<Server size={20} aria-hidden="true" />}
+          className="border-b border-[var(--color-border-subtle)] pb-[var(--space-4)] [&_h1]:text-[length:var(--text-base)] [&_h1]:md:text-[length:var(--text-base)] [&_p]:text-[var(--color-text-muted)]"
           actions={
             <Button variant="outline" size="sm" icon={<RefreshCw size={14} />} disabled={loading} onClick={fetchServers}>
               {t('common.refresh')}
@@ -133,7 +134,7 @@ export function MCPPage() {
             <div className="w-full max-w-xs">
               <Input
                 size="sm"
-                placeholder="搜索 MCP 服务器..."
+                placeholder={t('mcp.search_placeholder')}
                 aria-label={t('common.search')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -146,7 +147,7 @@ export function MCPPage() {
               onChange={(e) => setSelectedCategory(e.target.value)}
               className={selectClass}
             >
-              <option value="">全部分类</option>
+              <option value="">{t('mcp.all_categories')}</option>
               {categories.map(cat => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
@@ -158,10 +159,10 @@ export function MCPPage() {
                 onChange={e => setInstalledOnly(e.target.checked)}
                 className="h-3.5 w-3.5 accent-[var(--color-accent)]"
               />
-              已安装
+              {t('mcp.installed')}
             </label>
             <span className="shrink-0 text-xs tabular-nums text-[var(--color-text-muted)]" aria-live="polite">
-              {filteredServers.length} / {servers.length} · {installedCount} 已安装
+              {filteredServers.length} / {servers.length} · {t('mcp.installed_count', { installed: installedCount })}
             </span>
           </div>
         )}
@@ -231,7 +232,7 @@ export function MCPPage() {
                         : server.is_installed
                         ? <CheckCircle2 size={13} aria-hidden="true" className="shrink-0" />
                         : <CircleSlash size={13} aria-hidden="true" className="shrink-0" />}
-                      {server.is_installed === undefined ? '未上报' : server.is_installed ? '已安装' : '未安装'}
+                      {server.is_installed === undefined ? t('mcp.status_unreported') : server.is_installed ? t('mcp.status_installed') : t('mcp.status_not_installed')}
                     </span>
                     <button
                       type="button"
@@ -241,7 +242,7 @@ export function MCPPage() {
                       className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-[var(--radius-md)] px-1.5 text-xs text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)] sm:min-w-0"
                     >
                       <ServerCog size={13} aria-hidden="true" />
-                      <span className="hidden sm:inline">安装配置</span>
+                      <span className="hidden sm:inline">{t('mcp.install_config')}</span>
                       <ChevronRight size={12} aria-hidden="true" className={isExpanded ? 'rotate-90 transition-transform' : 'transition-transform'} />
                     </button>
                     {server.is_installed === true ? (
@@ -252,10 +253,10 @@ export function MCPPage() {
                         onClick={() => uninstallServer(server.id)}
                         disabled={installing !== null}
                         loading={installing === server.id}
-                        aria-label={`卸载 ${server.name}`}
+                        aria-label={t('mcp.uninstall_aria', { name: server.name })}
                         className="shrink-0 text-[var(--color-error)] hover:bg-[var(--color-error-subtle)]"
                       >
-                        卸载
+                        {t('mcp.uninstall')}
                       </Button>
                     ) : server.is_installed === false ? (
                       <Button
@@ -267,10 +268,10 @@ export function MCPPage() {
                         loading={installing === server.id}
                         className="shrink-0"
                       >
-                        安装
+                        {t('mcp.install')}
                       </Button>
                     ) : (
-                      <Button variant="outline" size="sm" disabled aria-label="状态未上报">未上报</Button>
+                      <Button variant="outline" size="sm" disabled aria-label={t('mcp.status_unreported')}>{t('mcp.status_unreported')}</Button>
                     )}
                   </div>
                   {isExpanded && (
@@ -280,7 +281,7 @@ export function MCPPage() {
                          <div><span className="text-[var(--color-text-muted)]">Tools</span><p className="mt-0.5">{toolCount ?? t('common.none')}</p></div>
                          <div><span className="text-[var(--color-text-muted)]">Resources</span><p className="mt-0.5">{resourceCount ?? t('common.none')}</p></div>
                        </div>
-                       <p className="mt-2 break-words">配置字段：{configFields.join(', ') || t('common.none')}</p>
+                       <p className="mt-2 break-words">{t('mcp.config_fields', { fields: configFields.join(', ') || t('common.none') })}</p>
                        {tools.length > 0 && (
                          <div className="mt-2 border-l border-[var(--color-border-default)] pl-3">
                            <p className="text-[var(--color-text-muted)]">Tools</p>

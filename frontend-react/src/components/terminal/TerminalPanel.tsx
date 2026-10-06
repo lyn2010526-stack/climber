@@ -4,6 +4,7 @@ import { Terminal, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { cn } from '../../lib/utils';
+import { useI18n } from '../../i18n';
 
 interface TerminalPanelProps {
   onCommand?: (command: string) => void | string | string[] | Promise<void | string | string[]>;
@@ -79,6 +80,7 @@ const readTerminalTheme = (source: Element): ITheme => {
 };
 
 export const TerminalPanel: React.FC<TerminalPanelProps> = ({ onCommand, className, readOnly = false }) => {
+  const { t } = useI18n();
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -195,17 +197,17 @@ export const TerminalPanel: React.FC<TerminalPanelProps> = ({ onCommand, classNa
   }, [onCommand, readOnly]);
 
   return (
-    <section aria-label="沙箱终端" className={cn('flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-[var(--color-border-subtle)]', className)}>
+    <section aria-label={t('terminal.title', { defaultValue: '沙箱终端' })} className={cn('flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-[var(--color-border-subtle)]', className)}>
       <div className="flex min-h-10 flex-wrap items-center gap-2 border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-3 text-xs">
         <TerminalSquare size={14} aria-hidden="true" />
-        <span className="font-medium">沙箱终端</span>
+        <span className="font-medium">{t('terminal.title', { defaultValue: '沙箱终端' })}</span>
         <span role="status" className="flex items-center gap-1.5 text-[var(--color-text-muted)]">
           {executing && <LoaderCircle size={12} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
-          {readOnly || !onCommand ? '只读' : executing ? '执行中' : '等待命令'}
+          {readOnly || !onCommand ? t('terminal.read_only', { defaultValue: '只读' }) : executing ? t('terminal.executing', { defaultValue: '执行中' }) : t('terminal.waiting', { defaultValue: '等待命令' })}
         </span>
         <button type="button" onClick={() => { xtermRef.current?.clear(); xtermRef.current?.focus(); }}
           disabled={executing} className="ml-auto inline-flex min-h-9 items-center gap-1.5 rounded px-2 text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] focus-visible:outline-2 focus-visible:outline-[var(--color-accent)] disabled:opacity-50">
-          <Eraser size={14} aria-hidden="true" />清屏
+          <Eraser size={14} aria-hidden="true" />{t('terminal.clear', { defaultValue: '清屏' })}
         </button>
       </div>
       <div className="min-h-0 flex-1 bg-[var(--color-code-bg)] p-2">

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 import structlog
@@ -31,14 +32,14 @@ class ContextCompressor:
     def needs_compression(self, messages: list[dict[str, Any]]) -> bool:
         return estimate_tokens(messages) > self._config.max_tokens
 
-    async def compress(self, messages: list[dict[str, Any]], model: Any) -> list[dict[str, Any]]:
+    async def compress(self, messages: list[dict[str, Any]], model: Any, *, meter=None) -> list[dict[str, Any]]:
         strategy = self._config.compression_strategy
         if strategy == CompressionStrategy.TRUNCATE:
             return self._truncate(messages)
         if strategy == CompressionStrategy.SLIDING:
             return self._sliding(messages)
         if strategy == CompressionStrategy.SUMMARIZE:
-            return await self._summarize(messages, model)
+            return await self._summarize(messages, model, meter=meter)
         return messages
 
     def _truncate(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -59,12 +60,14 @@ class ContextCompressor:
         result.extend(messages[-(keep):])
         return result
 
-    async def _summarize(self, messages: list[dict[str, Any]], model: Any) -> list[dict[str, Any]]:
+    async def _summarize(self, messages: list[dict[str, Any]], model: Any, *, meter=None) -> list[dict[str, Any]]:
         """Summarize older messages into a single system message using the LLM.
 
         Keeps the first system prompt, summarizes the middle, retains the
         most recent `keep_recent_messages` verbatim for short-term recall.
-        Falls back to truncation if the model call fails.
+        Falls back to truncation if the model call fails. When ``meter`` is
+        provided, it receives the summarize response so the caller can
+        account for the extra model call's token usage.
         """
         keep = self._config.keep_recent_messages
         if len(messages) <= keep + 1:
@@ -93,6 +96,13 @@ class ContextCompressor:
             ]
             # Reuse the adapter; treat adapter.chat as the async entry.
             result = await model.chat(messages=hold_messages, tools=None)
+            if meter is not None:
+                try:
+                    maybe = meter(result)
+                    if inspect.isawaitable(maybe):
+                        await maybe
+                except Exception:
+                    logger.debug("summarize_meter_failed")
             summary_text = (result.content or "").strip() or "[Summary unavailable]"
         except Exception as e:
             logger.warning("summarize fallback to truncate", error=str(e))

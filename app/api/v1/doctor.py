@@ -6,10 +6,13 @@ import platform
 import sys
 from pathlib import Path
 
+import structlog
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 router = APIRouter()
+
+logger = structlog.get_logger(__name__)
 
 
 def _check_python_runtime() -> dict:
@@ -28,12 +31,14 @@ def _check_dependencies() -> dict:
             m = __import__(mod)
             checks.append({"name": mod, "ok": True, "detail": getattr(m, "__version__", "installed")})
         except Exception as exc:
-            checks.append({"name": mod, "ok": False, "detail": str(exc)})
+            logger.warning("doctor_dependency_check_failed", module=mod, error=str(exc))
+            checks.append({"name": mod, "ok": False, "detail": "依赖检查失败"})
     return {"section": "core_dependencies", "checks": checks}
 
 
 def _check_workspace() -> dict:
-    root = Path(__file__).resolve().parent.parent.parent
+    # app/api/v1/doctor.py -> project root is four levels up.
+    root = Path(__file__).resolve().parent.parent.parent.parent
     checks = []
     for rel in ("logs", "skills", "data", "workspace"):
         p = root / rel
@@ -50,15 +55,18 @@ def _check_services_sync() -> dict:
     try:
         checks.append({"name": "watchdog", "ok": get_watchdog().health().get("healthy", False), "detail": "running"})
     except Exception as exc:
-        checks.append({"name": "watchdog", "ok": False, "detail": str(exc)})
+        logger.warning("doctor_watchdog_check_failed", error=str(exc))
+        checks.append({"name": "watchdog", "ok": False, "detail": "watchdog 不可用"})
     try:
         checks.append({"name": "memory_guardian", "ok": True, "detail": f"soft={get_memory_guardian().stats().get('soft_threshold')}, hard={get_memory_guardian().stats().get('hard_threshold')}"})
     except Exception as exc:
-        checks.append({"name": "memory_guardian", "ok": False, "detail": str(exc)})
+        logger.warning("doctor_memory_guardian_check_failed", error=str(exc))
+        checks.append({"name": "memory_guardian", "ok": False, "detail": "memory guardian 不可用"})
     try:
         checks.append({"name": "browser_pool", "ok": True, "detail": str(get_browser_pool().stats())})
     except Exception as exc:
-        checks.append({"name": "browser_pool", "ok": False, "detail": str(exc)})
+        logger.warning("doctor_browser_pool_check_failed", error=str(exc))
+        checks.append({"name": "browser_pool", "ok": False, "detail": "browser pool 不可用"})
     return {"section": "services", "checks": checks}
 
 
@@ -72,7 +80,8 @@ async def _check_database() -> dict:
         if check.get("backend") == "sqlite":
             checks.append({"name": "wal_mode", "ok": str(check.get("journal_mode", "")).lower() == "wal", "detail": str(check.get("journal_mode"))})
     except Exception as exc:
-        checks.append({"name": "database_reachable", "ok": False, "detail": str(exc)})
+        logger.warning("doctor_database_check_failed", error=str(exc))
+        checks.append({"name": "database_reachable", "ok": False, "detail": "数据库不可达"})
     return {"section": "database", "checks": checks}
 
 
@@ -84,7 +93,8 @@ async def _check_redis() -> dict:
         redis = await get_redis()
         checks.append({"name": "redis", "ok": redis is not None, "detail": "connected" if redis else "disabled"})
     except Exception as exc:
-        checks.append({"name": "redis", "ok": False, "detail": str(exc)})
+        logger.warning("doctor_redis_check_failed", error=str(exc))
+        checks.append({"name": "redis", "ok": False, "detail": "redis 不可用"})
     return {"section": "services", "checks": checks}
 
 

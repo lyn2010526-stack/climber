@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
+import time
 from functools import wraps
 from typing import Any
 
@@ -12,6 +14,16 @@ import structlog
 logger = structlog.get_logger()
 
 _redis_client = None
+_redis_retry_after = 0.0
+_REDIS_FAILURE_COOLDOWN = 30.0
+
+
+async def _close_client(client: Any) -> None:
+    closer = getattr(client, "aclose", None) or getattr(client, "close", None)
+    if closer is None:
+        return
+    with contextlib.suppress(Exception):
+        await closer()
 
 
 async def get_redis():
@@ -20,8 +32,12 @@ async def get_redis():
     Returns None when the optional `redis` package is not installed or no
     server is reachable — callers must treat `None` as "caching disabled".
     """
-    global _redis_client
+    global _redis_client, _redis_retry_after
     if _redis_client is None:
+        # Negative cache: avoid reconnecting/pinging a known-unreachable server
+        # on every request.
+        if time.monotonic() < _redis_retry_after:
+            return None
         try:
             import redis.asyncio as redis
         except ImportError:
@@ -29,22 +45,29 @@ async def get_redis():
             return None
 
         from app.config import settings
+        client = None
         try:
-            _redis_client = redis.from_url(settings.redis_url, decode_responses=True)
-            await _redis_client.ping()
+            client = redis.from_url(settings.redis_url, decode_responses=True)
+            await client.ping()
+            _redis_client = client
+            _redis_retry_after = 0.0
             logger.info("Redis connected")
         except Exception:
             logger.warning("Redis unavailable, caching disabled")
             _redis_client = None
+            _redis_retry_after = time.monotonic() + _REDIS_FAILURE_COOLDOWN
+            if client is not None:
+                await _close_client(client)
     return _redis_client
 
 
 async def close_redis():
     """Close Redis connection."""
-    global _redis_client
+    global _redis_client, _redis_retry_after
     if _redis_client:
-        await _redis_client.close()
+        await _close_client(_redis_client)
         _redis_client = None
+    _redis_retry_after = 0.0
 
 
 class Cache:

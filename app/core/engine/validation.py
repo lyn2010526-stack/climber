@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from app.core.permission_rules import normalize_tool_name
@@ -22,6 +23,27 @@ _FILE_TOOLS: dict[str, tuple[str, str]] = {
     "file_diff": ("path", "read"),
     "list_directory": ("dir", "read"),
     "file_delete": ("path", "write"),
+}
+
+# Public capability tables for consumers that match against the raw
+# (un-normalized) tool name, e.g. the workflow tool-node validator and the
+# legacy safety shim.  The canonical tables above are the policy source of
+# truth; these mirror the same policy with command aliases listed explicitly
+# so no normalize_tool_name call is needed at lookup sites.
+COMMAND_TOOLS: frozenset[str] = frozenset({
+    "run_command", "shell", "execute_command", "bash",
+    "stream_command", "container_exec",
+})
+
+FILE_TOOLS: dict[str, tuple[str, str]] = {
+    "read_file": ("path", "read"),
+    "write_file": ("path", "write"),
+    "edit_file": ("path", "write"),
+    "append_file": ("path", "write"),
+    "file_exists": ("path", "read"),
+    "file_info": ("path", "read"),
+    "file_diff": ("path", "read"),
+    "list_directory": ("dir", "read"),
 }
 
 
@@ -58,8 +80,10 @@ def validate_tool_call(
     Returns:
         A tuple of (allowed, reason).
     """
+    audit = _security_audit()
     allowed, reason = _check_plan_mode(agent_mode, tool_name)
     if not allowed:
+        _audit_validation(audit, session, tool_name, "plan_denied", reason)
         return allowed, reason
 
     # A previously approved call skips the approval prompt, never the DENY rules.
@@ -74,6 +98,7 @@ def validate_tool_call(
         already_approved=already_approved,
     )
     if not allowed:
+        _audit_validation(audit, session, tool_name, "permission_denied", reason)
         return allowed, reason
 
     if not already_approved:
@@ -85,13 +110,68 @@ def validate_tool_call(
             user_id=session.user_id,
         )
         if not allowed:
+            _audit_validation(audit, session, tool_name, "overlay_denied", reason)
             return allowed, reason
 
     allowed, reason = _check_schema_validation(tool_registry, tool_name, arguments)
     if not allowed:
+        _audit_validation(audit, session, tool_name, "schema_denied", reason)
         return allowed, reason
 
-    return _check_sandbox(sandbox, tool_name, arguments)
+    allowed, reason = _check_sandbox(sandbox, tool_name, arguments)
+    if not allowed:
+        _audit_validation(audit, session, tool_name, "sandbox_denied", reason)
+        return allowed, reason
+    allowed, reason = _check_script_preflight(tool_name, arguments)
+    _audit_validation(audit, session, tool_name, "allowed" if allowed else "script_denied", reason)
+    return allowed, reason
+
+
+def _security_audit() -> Any:
+    from app.core.observability.audit import security_audit_chain
+    return security_audit_chain
+
+
+def _audit_validation(audit: Any, session: Any, tool_name: str, decision: str, reason: Any) -> None:
+    """Record security decisions without allowing audit storage to affect policy."""
+    try:
+        audit.log_decision(
+            decision_type=decision,
+            input_summary=tool_name,
+            output_summary=str(reason)[:500],
+            rationale="tool pre-execution validation",
+            agent_id=str(getattr(session, "agent_id", "")),
+            session_id=str(getattr(session, "session_id", "")),
+        )
+    except Exception:
+        # AuditChain itself buffers persistence failures; this final guard keeps
+        # an observability outage from changing a fail-closed security result.
+        return
+    _mirror_durable_permission_audit(session, tool_name, decision, reason)
+
+
+def _mirror_durable_permission_audit(session: Any, tool_name: str, decision: str, reason: Any) -> None:
+    """Mirror the decision onto the durable audit table without blocking policy."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+
+    async def _write() -> None:
+        from app.core.observability.audit_store import audit_log
+
+        await audit_log.log_permission_decision(
+            session_id=getattr(session, "session_id", None),
+            user_id=getattr(session, "user_id", None),
+            tool_name=tool_name,
+            allowed=decision == "allowed",
+            reason=str(reason)[:500],
+        )
+
+    try:
+        loop.create_task(_write())
+    except Exception:
+        return
 
 
 def _check_plan_mode(agent_mode: Any, tool_name: str) -> tuple[bool, str]:
@@ -246,7 +326,10 @@ def _check_sandbox(sandbox: Any, tool_name: str, arguments: dict[str, Any]) -> t
         file_capability = _file_capability(tool_name)
         if file_capability is not None:
             param, mode = file_capability
-            path = arguments.get(param) or arguments.get("path") or ""
+            # The canonical table pins one parameter key per tool, but real
+            # implementations differ (list_files uses "directory"), so probe
+            # the documented aliases as well before giving up.
+            path = arguments.get(param) or arguments.get("directory") or arguments.get("path") or ""
             if isinstance(path, str) and path:
                 result = sandbox.validate_file_access(path, mode)
                 if isinstance(result, tuple):
@@ -255,4 +338,16 @@ def _check_sandbox(sandbox: Any, tool_name: str, arguments: dict[str, Any]) -> t
                         return False, reason
     except Exception as e:
         return False, f"sandbox validation error: {e}"
+    return True, "OK"
+
+
+def _check_script_preflight(tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
+    """Statically test executable script payloads before the sandbox runs them."""
+    code = arguments.get("code") or arguments.get("script")
+    if not isinstance(code, str):
+        return True, "OK"
+    from app.core.security_sandbox import CodeSandbox
+    result = CodeSandbox().preflight_script(code)
+    if not result.allowed:
+        return False, f"Script preflight blocked: {result.reason}"
     return True, "OK"

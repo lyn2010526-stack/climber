@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   ReactFlow,
   Background,
@@ -37,11 +37,16 @@ const NODE_PALETTE = [
   { type: 'output', label: 'Output', icon: FileOutput, description: 'Return results' },
 ];
 
+// Stable empty references so the sync effects below do not fire on every render
+// for callers that omit initialNodes / initialEdges.
+const EMPTY_NODES: Node[] = [];
+const EMPTY_EDGES: Edge[] = [];
+
 export function WorkflowEditor({
   onSave,
   onRun,
-  initialNodes = [],
-  initialEdges = [],
+  initialNodes = EMPTY_NODES,
+  initialEdges = EMPTY_EDGES,
   workflowId,
   workflowName,
 }: WorkflowEditorProps) {
@@ -53,6 +58,24 @@ export function WorkflowEditor({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+
+  // useNodesState only seeds from the initial value; when the parent loads a
+  // workflow asynchronously the canvas must adopt it instead of staying empty (R13-49).
+  useEffect(() => {
+    setNodes(initialNodes);
+  }, [initialNodes, setNodes]);
+
+  useEffect(() => {
+    setEdges(initialEdges);
+  }, [initialEdges, setEdges]);
+
+  useEffect(() => {
+    if (workflowName !== undefined) setName(workflowName);
+  }, [workflowName]);
+
+  useEffect(() => {
+    setSelectedNode(null);
+  }, [workflowId]);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true }, eds)),

@@ -86,8 +86,12 @@ class TaskScheduler:
                         task.enabled = False
                 except Exception as e:
                     task.config["last_error"] = str(e)
-
-            task.next_run = self._calc_next_run(task.cron_expression)
+                task.next_run = self._calc_next_run(task.cron_expression)
+            else:
+                # No handler registered: surface the gap instead of silently
+                # pushing the run forward. The task stays due so the operator
+                # (health endpoint / UI) can see it is unserved.
+                task.config["last_error"] = f"No handler registered for task_type '{task.task_type}'"
 
     def _calc_next_run(self, cron: str) -> float:
         """Calculate the next run time for a standard five-field cron expression."""

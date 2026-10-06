@@ -6,11 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.api.v1.chat import get_engine
-from app.core.auth_manager import get_current_user, require_admin
+from app.core.auth_manager import get_current_user, require_admin, require_scopes
 from app.core.permission_rules import (
     PermissionConfig,
     PermissionMode,
     PermissionRule,
+    PermissionTier,
     RuleDecision,
 )
 
@@ -31,13 +32,18 @@ class PermissionRuleSchema(BaseModel):
 
 class PermissionConfigUpdate(BaseModel):
     mode: str | None = None
+    tier: str | None = None
     rules: list[PermissionRuleSchema] | None = None
     allowed_tools: list[str] | None = None
     denied_tools: list[str] | None = None
 
 
 @router.post("/resolve")
-async def resolve_permission(request: PermissionResolveRequest, _user: str = Depends(get_current_user)):
+async def resolve_permission(
+    request: PermissionResolveRequest,
+    _user: str = Depends(get_current_user),
+    _auth: dict = Depends(require_scopes("write")),
+):
     engine = get_engine()
     tool_call_id = request.tool_call_id
     decision = request.decision
@@ -45,7 +51,7 @@ async def resolve_permission(request: PermissionResolveRequest, _user: str = Dep
     if decision not in ("allow", "allow_session", "allow_always", "deny"):
         raise HTTPException(status_code=400, detail=f"Invalid decision: {decision}")
 
-    success = engine.resolve_permission(tool_call_id, decision)
+    success = engine.resolve_permission(tool_call_id, decision, owner_id=_auth["id"])
     if not success:
         raise HTTPException(status_code=404, detail=f"No pending permission request for tool_call_id: {tool_call_id}")
 
@@ -68,6 +74,7 @@ async def get_permission_config(_auth: dict = Depends(require_admin())):
 
     return {
         "mode": config.mode.value,
+        "tier": config.tier.value,
         "rules": [
             {
                 "decision": r.decision.value,
@@ -91,11 +98,18 @@ async def update_permission_config(
     current = engine.get_permission_config()
 
     mode = current.mode
-    if update.mode:
+    if update.mode is not None:
         try:
             mode = PermissionMode(update.mode)
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid mode: {update.mode}") from None
+
+    tier = current.tier
+    if update.tier is not None:
+        try:
+            tier = PermissionTier(update.tier)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid tier: {update.tier}") from None
 
     rules = current.rules
     if update.rules is not None:
@@ -125,7 +139,8 @@ async def update_permission_config(
         rules=rules,
         allowed_tools=allowed_tools,
         denied_tools=denied_tools,
+        tier=tier,
     )
     engine.update_permission_config(new_config)
 
-    return {"status": "updated", "mode": mode.value}
+    return {"status": "updated", "mode": mode.value, "tier": tier.value}

@@ -74,3 +74,13 @@ export function pluginViewDescriptor(status: PluginViewStatus, t: TFunction) {
     label: pluginViewLabel(status, t),
   };
 }
+
+/**
+ * True when the plugin is present on this machine in any lifecycle state
+ * (enabled, installed-but-dormant, disabled or errored). Shared by the catalog
+ * "installed" filter, its count and the row actions so the three never drift
+ * apart (R13-41).
+ */
+export function isInstalledStatus(status: PluginViewStatus): boolean {
+  return status === 'enabled' || status === 'installed' || status === 'disabled' || status === 'error';
+}

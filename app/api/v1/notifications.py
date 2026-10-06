@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import structlog
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from app.core.auth_manager import require_admin
 
 router = APIRouter()
+
+logger = structlog.get_logger(__name__)
 
 
 class NotifyRequest(BaseModel):
@@ -28,7 +31,8 @@ async def send_notification(
         ok = await service.send(payload.title, payload.message, urgency=payload.urgency)
         return {"ok": ok}
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        logger.warning("notification_send_failed", urgency=payload.urgency, error=str(exc))
+        return {"ok": False, "error": "通知发送失败"}
 
 
 @router.get("/test")
@@ -40,4 +44,5 @@ async def test_notification() -> dict:
         ok = await service.send("Climber", "通知系统测试成功")
         return {"ok": ok}
     except Exception as exc:
-        return {"ok": False, "error": str(exc)}
+        logger.warning("notification_test_failed", error=str(exc))
+        return {"ok": False, "error": "通知发送失败"}

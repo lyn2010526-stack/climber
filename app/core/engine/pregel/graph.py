@@ -166,6 +166,9 @@ class StateGraph:
         checkpointer: Any = None,
         interrupt_before: list[str] | None = None,
         interrupt_after: list[str] | None = None,
+        error_handler: Any = None,
+        retry_policy: Any = None,
+        timeout_policy: Any = None,
         debug: bool = False,
     ) -> CompiledGraph:
         """Compile the graph into an executable form.
@@ -174,6 +177,9 @@ class StateGraph:
             checkpointer: Optional checkpoint saver for persistence.
             interrupt_before: Nodes to interrupt before execution.
             interrupt_after: Nodes to interrupt after execution.
+            error_handler: Custom error handler after retries are exhausted.
+            retry_policy: Retry policy for node execution failures.
+            timeout_policy: Per-node or whole-run timeout policy.
             debug: Enable verbose debug logging.
 
         Returns:
@@ -190,6 +196,9 @@ class StateGraph:
                 checkpointer=checkpointer,
                 interrupt_before=interrupt_before or [],
                 interrupt_after=interrupt_after or [],
+                retry_policy=retry_policy,
+                timeout_policy=timeout_policy,
+                error_handler=error_handler,
                 debug=debug,
             ),
         )
@@ -207,6 +216,9 @@ class StateGraph:
                 raise ValueError(f"Edge source '{src}' is not a registered node")
             if dst not in self._nodes and dst != "__end__":
                 raise ValueError(f"Edge target '{dst}' is not a registered node")
+        for src, branch in self._conditional_edges.items():
+            if src != "__start__" and src not in self._nodes:
+                raise ValueError(f"Conditional edge source '{src}' is not a registered node")
 
     def get_node(self, name: str) -> NodeFunc | None:
         """Get a registered node function."""

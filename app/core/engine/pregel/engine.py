@@ -147,9 +147,12 @@ class PregelEngine:
         if resume_nodes:
             context.active_nodes = _drop_terminals(resume_nodes)
         elif not context.active_nodes:
-            # Check if we're resuming from an interrupt
+            # Resumed from an interrupt: the checkpoint records the pending
+            # successors (possibly none when the interrupt fired on the final
+            # node). Never fall back to the entry point in that case, or an
+            # interrupted terminal-adjacent node would replay the whole graph.
             interrupt_node = state.get("__interrupt_node__")
-            if interrupt_node and state.get("__interrupted__"):
+            if interrupt_node:
                 context.active_nodes = _drop_terminals(existing.next_nodes) if existing else []
             else:
                 entry = self._graph._entry_point
@@ -209,13 +212,30 @@ class PregelEngine:
             context.step = existing.step
             context.active_nodes = _drop_terminals(existing.next_nodes)
 
-        if not context.active_nodes:
-            entry = self._graph._entry_point
-            if entry is None:
-                branch = self._graph.get_conditional_edges("__start__")
-                if branch:
-                    entry = await self._resolve_router(branch.router, state)
-            context.active_nodes = _drop_terminals([entry]) if entry else []
+        resume_value = config.get("__resume_value__")
+        resume_nodes = config.get("__resume_nodes__")
+        if resume_value is not None:
+            state["__resume_value__"] = resume_value
+            state["__interrupted__"] = False
+
+        if resume_nodes:
+            context.active_nodes = _drop_terminals(resume_nodes)
+        elif not context.active_nodes:
+            # A restored interrupted graph has no pending nodes; only fall back
+            # to the entry point for a genuinely fresh run. Falling back here
+            # after an after-interrupt on a terminal-adjacent node would replay
+            # the whole graph from entry. The interrupt marker survives in
+            # state even though the __interrupted__ flag is cleared on resume.
+            interrupt_node = state.get("__interrupt_node__")
+            if interrupt_node:
+                context.active_nodes = _drop_terminals(existing.next_nodes) if existing else []
+            else:
+                entry = self._graph._entry_point
+                if entry is None:
+                    branch = self._graph.get_conditional_edges("__start__")
+                    if branch:
+                        entry = await self._resolve_router(branch.router, state)
+                context.active_nodes = _drop_terminals([entry]) if entry else []
 
         yield state.clone()
 
@@ -260,13 +280,28 @@ class PregelEngine:
             context.step = existing.step
             context.active_nodes = _drop_terminals(existing.next_nodes)
 
-        if not context.active_nodes:
-            entry = self._graph._entry_point
-            if entry is None:
-                branch = self._graph.get_conditional_edges("__start__")
-                if branch:
-                    entry = await self._resolve_router(branch.router, state)
-            context.active_nodes = _drop_terminals([entry]) if entry else []
+        resume_value = config.get("__resume_value__")
+        resume_nodes = config.get("__resume_nodes__")
+        if resume_value is not None:
+            state["__resume_value__"] = resume_value
+            state["__interrupted__"] = False
+
+        if resume_nodes:
+            context.active_nodes = _drop_terminals(resume_nodes)
+        elif not context.active_nodes:
+            # See astream(): only fall back to entry for a fresh run, never for
+            # a restored interrupt that legitimately has no pending nodes. The
+            # interrupt marker survives in state after resume clears the flag.
+            interrupt_node = state.get("__interrupt_node__")
+            if interrupt_node:
+                context.active_nodes = _drop_terminals(existing.next_nodes) if existing else []
+            else:
+                entry = self._graph._entry_point
+                if entry is None:
+                    branch = self._graph.get_conditional_edges("__start__")
+                    if branch:
+                        entry = await self._resolve_router(branch.router, state)
+                context.active_nodes = _drop_terminals([entry]) if entry else []
 
         yield StreamEvent(type=StreamEventType.START, data={"input": dict(state)})
 
@@ -552,6 +587,8 @@ class PregelEngine:
         branch = self._graph.get_conditional_edges(current_node)
         if branch:
             next_node = await self._resolve_router(branch.router, state)
+            if branch.path_map:
+                next_node = branch.path_map.get(next_node, next_node)
             if next_node in TERMINAL_NODES:
                 return []
             if next_node in self._graph.nodes:

@@ -1,18 +1,23 @@
-"""Minimal agent engine with ReAct loop.
+"""Agent engine facade with ReAct loop.
 
-This module provides the AgentEngine class that orchestrates agent execution
-with tool validation, streaming, and checkpoint management.
+The AgentEngine class orchestrates agent execution with tool validation,
+streaming, and checkpoint management. Implementation details live in
+``app.core.engine.*`` submodules; this facade keeps every historical
+override point (``_validate_tool_call``, ``_save_checkpoint``,
+``_persist_message``, ``_make_parallel_executor``, notification and memory
+hooks) so tests and subclasses can intercept them from one place.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
-import re
-import time
+import hashlib
+import sys
 from collections.abc import AsyncIterator
 from typing import Any
+
+from anyio import CancelScope
 
 from app.core import (
     AgentEvent,
@@ -22,37 +27,117 @@ from app.core import (
     MessageRole,
 )
 from app.core.checkpoint import InMemoryCheckpointStore, SQLiteCheckpointStore
-from app.core.compressor import ContextCompressor, estimate_tokens
 from app.core.di import resolve as di_resolve
-from app.core.engine.persistence import persist_message
+from app.core.engine.bootstrap import (
+    init_debug_loop,
+    init_permissions,
+    init_reasoning,
+    init_sandbox,
+    load_permission_config,
+    permission_config_path,
+    save_permission_config,
+    setup_default_permissions,
+)
+from app.core.engine.dual_loop_hooks import (
+    current_reasoning_level,
+    dual_loop_coordinator,
+    last_tool_name,
+    metacognition_enabled,
+    metacognition_orchestrator,
+)
+from app.core.engine.iteration import save_checkpoint
+from app.core.engine.llm_calls import (
+    accumulate_stream_tool_calls,
+    call_llm,
+    call_llm_with_resilience,
+    stream_accumulate,
+    stream_chat,
+)
+from app.core.engine.memory_hooks import (
+    archive_instruction,
+    inject_core_memory,
+    inject_memory_context,
+    set_agent_mode,
+    store_episodic_memory,
+    trigger_memory_reflection,
+)
+from app.core.engine.notifications import (
+    send_completion_notification,
+    send_failure_notification,
+    send_start_notification,
+)
+
+# Patch targets used by tests: tests patch these names on this facade module,
+# and the thin engine methods below resolve them at call time.
+from app.core.engine.persistence import persist_message  # noqa: F401
 from app.core.engine.run_storage import RunStorage, track_run
-from app.core.engine.session_runner import merge_stream_chunk, response_usage
-from app.core.engine.tools import build_tools
-from app.core.engine.validation import (
+from app.core.engine.runner import (
+    TASK_MEMORY_MARKER,
+    handle_text_result,
+    iteration_loop,
+    run_locked,
+)
+from app.core.engine.session_runner import (  # noqa: F401
+    merge_stream_chunk,
+    response_usage,
+)
+from app.core.engine.tool_exec import handle_tool_debug, handle_tool_execution
+from app.core.engine.tools import build_tools  # noqa: F401
+from app.core.engine.validation import (  # noqa: F401
     _COMMAND_TOOLS,
     _FILE_TOOLS,
     _approval_key,
     validate_tool_call,
 )
-from app.core.parallel import ParallelToolExecutor
+from app.core.parallel import ParallelToolExecutor  # noqa: F401
 from app.core.persistent_memory import PersistentMemoryService
-from app.core.resilience import (
-    CircuitBreaker,
-    CircuitBreakerConfig,
-    CircuitBreakerOpenError,
-    ResourceTracker,
-    RetryExhaustedError,
-    TimeoutConfig,
-)
+from app.core.resilience import ResourceTracker
 from app.core.session import AgentSession, SessionConfig
 from app.core.tool_prioritizer import ToolPrioritizer
 from app.models.registry import ModelRegistry
-from app.models.vision import build_user_content, content_text
+from app.models.vision import ChatAttachment
 from app.tools import ToolRegistry
 
 
+def _follow_up_hash(message: str) -> str:
+    """Deterministic short hash for agent self-continue follow-up dedupe."""
+    return hashlib.sha256(message.encode("utf-8")).hexdigest()[:12]
+
+
+def _outer_turn_signature(session: Any) -> tuple:
+    """Per-turn overall-progress signature for the Pi outer-loop stall guard.
+
+    Progress means a new assistant output (different last assistant content) or
+    a state transition. Two stalled turns share the same signature; any new
+    distinct assistant output changes it.
+    """
+    last_assistant: str | None = None
+    for msg in reversed(getattr(session, "messages", []) or []):
+        if msg.get("role") == MessageRole.ASSISTANT:
+            content = msg.get("content")
+            if isinstance(content, str) and content.strip():
+                last_assistant = content
+            break
+    return (session.status.value, last_assistant)
+
+
+def _outer_stall_update(signature: tuple, previous: tuple | None, count: int) -> tuple[int, tuple]:
+    """Update the consecutive stall counter; returns (count, latest_signature)."""
+    if previous is not None and signature == previous:
+        return count + 1, signature
+    return 0, signature
+
+
 def _resolve_registry(service_name: str, factory: Any) -> Any:
-    """Resolve a registry from DI, falling back to a fresh instance."""
+    """Resolve a registry from DI, falling back to a fresh instance.
+
+    Args:
+        service_name: The DI service name to resolve.
+        factory: Zero-arg factory used when DI resolution fails.
+
+    Returns:
+        The resolved registry instance.
+    """
     try:
         return di_resolve(service_name)
     except Exception:
@@ -74,10 +159,24 @@ class AgentEngine:
         checkpoint_store: InMemoryCheckpointStore | SQLiteCheckpointStore | None = None,
         run_store: RunStorage | None = None,
     ) -> None:
+        """Initialize the engine with registries, services and sub-hooks.
+
+        Args:
+            model_registry: Optional model registry (DI-resolved when absent).
+            tool_registry: Optional tool registry (DI-resolved when absent).
+            checkpoint_store: Optional checkpoint store (SQLite when absent).
+            run_store: Optional run storage (fresh RunStorage when absent).
+
+        Returns:
+            None
+        """
         self.model_registry = model_registry or _resolve_registry("ModelRegistry", ModelRegistry)
         self.tool_registry = tool_registry or _resolve_registry("ToolRegistry", ToolRegistry)
         self._checkpoints = checkpoint_store if checkpoint_store is not None else SQLiteCheckpointStore()
         self._run_store = run_store if run_store is not None else RunStorage()
+        from app.core.engine.input_queue import SessionInputQueue
+
+        self._input_queue = SessionInputQueue(self._run_store.session_factory)
         self._sessions: dict[str, AgentSession] = {}
         self._session_locks: dict[str, asyncio.Lock] = {}
         self._background_tasks: set[asyncio.Task] = set()
@@ -86,102 +185,49 @@ class AgentEngine:
         self.memory_service = PersistentMemoryService()
         self.tool_prioritizer = ToolPrioritizer()
         self._dual_loop: Any = None
+        self._metacognition: Any = None
         self.reasoning = None
         self._init_debug_loop()
         self._init_sandbox()
         self._init_permissions()
         self._init_reasoning()
 
+    # --- bootstrap hooks (patch points used by tests and subclasses) ---
+
     def _init_reasoning(self) -> None:
         """Initialize the multi-strategy reasoning service so the /reason API works."""
-        try:
-            from app.core.reasoning.service import ReasoningService
-
-            self.reasoning = ReasoningService(model_registry=self.model_registry)
-        except Exception:
-            self.reasoning = None
+        init_reasoning(self)
 
     def _init_debug_loop(self) -> None:
         """Debug loop extension point; wired when a debug engine is installed."""
-        self.debug_loop = None
+        init_debug_loop(self)
 
     def _init_sandbox(self) -> None:
-        """Initialize the security sandbox."""
-        try:
-            import os
-
-            from app.core.security_sandbox import (
-                AgentMode,
-                PermissionOverlay,
-                SandboxConfig,
-                SecuritySandbox,
-            )
-            workdir = os.environ.get("CLIMBER_SANDBOX_WORKDIR") or os.getcwd()
-            self.sandbox = SecuritySandbox(SandboxConfig(workdir=workdir))
-            self.permission_overlay = PermissionOverlay()
-            self._setup_default_permissions()
-            self.agent_mode = AgentMode.ACT
-        except Exception:
-            self.sandbox = None
-            self.permission_overlay = None
-            self.agent_mode = None
+        """Initialize the security sandbox, degrading to no sandbox on failure."""
+        init_sandbox(self)
 
     def _init_permissions(self) -> None:
-        """Initialize default permission configuration, reloading any persisted config."""
-        try:
-            from app.core.permission_rules import get_default_config
-            persisted = self._load_permission_config()
-            self._default_permission_config = persisted or get_default_config()
-        except Exception:
-            try:
-                from app.core.permission_rules import get_default_config
-                self._default_permission_config = get_default_config()
-            except Exception:
-                self._default_permission_config = None
+        """Initialize default permission configuration, reloading persisted config."""
+        init_permissions(self)
 
     @staticmethod
     def _permission_config_path() -> str:
-        import os
-        data_dir = os.environ.get("CLIMBER_DATA_DIR", "data")
-        return os.path.join(data_dir, "permission_config.json")
+        """Return the filesystem path of the persisted permission config."""
+        return permission_config_path()
 
     def _load_permission_config(self) -> Any:
         """Load the persisted default permission config, if any."""
-        import json
-        import os
-        path = self._permission_config_path()
-        if not os.path.exists(path):
-            return None
-        try:
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
-            from app.core.permission_rules import PermissionConfig
-            return PermissionConfig.from_dict(data)
-        except Exception:
-            return None
+        return load_permission_config()
 
     def _save_permission_config(self, config: Any) -> None:
         """Persist the default permission config so it survives restarts."""
-        import json
-        import os
-        path = self._permission_config_path()
-        try:
-            os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(config.to_dict(), f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+        save_permission_config(config)
 
     def _setup_default_permissions(self) -> None:
         """Setup default permission overlay, mirroring permission_rules DEFAULT mode."""
-        from app.core.security_sandbox import PermissionLevel, PermissionRule
-        defaults = [
-            PermissionRule(action="read", resource_pattern="*", level=PermissionLevel.ALLOW, description="Read any file"),
-            PermissionRule(action="write", resource_pattern="*", level=PermissionLevel.ASK, description="Write requires approval"),
-            PermissionRule(action="execute", resource_pattern="*", level=PermissionLevel.ASK, description="Execute requires approval"),
-            PermissionRule(action="delete", resource_pattern="*", level=PermissionLevel.DENY, description="Delete forbidden"),
-        ]
-        self.permission_overlay.set_defaults(defaults)
+        setup_default_permissions(self)
+
+    # --- session management ---
 
     def create_session(
         self,
@@ -197,6 +243,8 @@ class AgentEngine:
         session_id: str | None = None,
         session_config: SessionConfig | None = None,
         mode: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> AgentSession:
         """Create a new agent session.
 
@@ -213,12 +261,23 @@ class AgentEngine:
             session_id: Optional session ID (generated if not provided).
             session_config: Optional full session configuration to use as base.
             mode: Optional agent mode override.
+            temperature: Optional per-session sampling temperature override;
+                forwarded to the model adapter on every LLM call.
+            max_tokens: Optional per-session generation token cap override;
+                forwarded to the model adapter on every LLM call.
 
         Returns:
             The created AgentSession instance.
         """
         from uuid import uuid4
         sid = session_id or str(uuid4())
+        # Only pass sampling overrides when explicitly set so they do not
+        # clobber values already carried by ``session_config``.
+        sampling_overrides: dict[str, Any] = {}
+        if temperature is not None:
+            sampling_overrides["temperature"] = temperature
+        if max_tokens is not None:
+            sampling_overrides["max_tokens"] = max_tokens
         session = AgentSession(
             session_id=sid,
             agent_id=agent_id,
@@ -232,6 +291,7 @@ class AgentEngine:
             context_config=context_config,
             mode=mode,
             session_config=session_config,
+            **sampling_overrides,
         )
         if hasattr(self, "_default_permission_config") and self._default_permission_config is not None:
             session.permission_config = self._default_permission_config
@@ -240,45 +300,268 @@ class AgentEngine:
         self._sessions[sid] = session
         return session
 
+    def close_session(self, session: AgentSession | str) -> None:
+        """Remove a session from the in-memory registry.
+
+        One-shot callers (e.g. workflow sub-agent LLM calls) must release
+        sessions they create so the registry does not grow without bound.
+
+        Args:
+            session: The session instance or its session ID.
+        """
+        sid = session if isinstance(session, str) else getattr(session, "session_id", None)
+        if sid:
+            self._sessions.pop(sid, None)
+
     async def run(
         self, session: AgentSession, message: str, images: list[str] | None = None,
+        attachments: list[ChatAttachment] | None = None,
+        *, queued_only: bool = False,
     ) -> AsyncIterator[AgentEvent]:
         """Run the agent engine for a session and message.
+
+        Concurrent runs on the same session are rejected with a busy error
+        while a previous run still holds the session lock; the busy path
+        never releases or removes that lock.
 
         Args:
             session: The agent session.
             message: The user message.
-            images: Optional image references (base64 data URLs or http(s) URLs);
-                when present the user message is built as OpenAI vision content parts.
+            images: Optional image references (base64 data URLs or http(s)
+                URLs); when present the user message is built as OpenAI
+                vision content parts.
+            attachments: Optional chat attachments.
 
         Yields:
             AgentEvent instances during execution.
         """
-        if session.session_id not in self._session_locks:
-            self._session_locks[session.session_id] = asyncio.Lock()
-
-        lock = self._session_locks[session.session_id]
-        if lock.locked():
+        lock = self._session_locks.get(session.session_id)
+        if lock is not None and lock.locked():
             yield AgentEvent(type=AgentEventType.ERROR, data={"error": "Session is busy processing another request"})
             return
+        if lock is None:
+            lock = self._session_locks.setdefault(session.session_id, asyncio.Lock())
+            if lock.locked():
+                yield AgentEvent(type=AgentEventType.ERROR, data={"error": "Session is busy processing another request"})
+                return
 
         try:
             async with lock:
-                terminal = []
-                async with track_run(session, self._run_store):
-                    async with contextlib.aclosing(self._run_locked(session, message, images)) as events:
-                        async for event in events:
-                            if event.type in {AgentEventType.DONE, AgentEventType.ERROR}:
-                                terminal.append(event)
-                            else:
+                input_id = None
+                first = True
+                if queued_only:
+                    from app.core.engine.input_dispatch import prepare_dispatch
+
+                    item = await prepare_dispatch(self._input_queue, session.session_id, session.user_id,
+                                                  claim=True, session=session)
+                    input_id, message, first = item["id"], item["message"], False
+                    yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
+                outer_no_progress = 0
+                outer_prev_signature = None
+                outer_rounds = 0
+                completed_subtasks: list[str] = []
+                while True:
+                    session._continuing_input = not first
+                    if not first and session._stop_requested:
+                        for item in await self._input_queue.freeze(session.session_id, session.user_id, "Execution stopped"):
+                            yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
+                        yield AgentEvent(type=AgentEventType.RUNTIME_REPORT, data=await self._input_queue.report(
+                            session.session_id, session.user_id,
+                        ))
+                        yield AgentEvent(type=AgentEventType.DONE, data={"status": "stopped"})
+                        break
+                    terminal = []
+                    async with self._track_run_with_cleanup(session):
+                        if first:
+                            recovered = await self._input_queue.recover(session.session_id, session.user_id)
+                            for item in recovered:
+                                yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
+                            if recovered:
+                                raise RuntimeError("Interrupted input has unknown effects; manual review required")
+                        outer_rounds += 1
+                        session._outer_rounds = outer_rounds
+                        yield AgentEvent(type=AgentEventType.TURN_STARTED,
+                                         data={"input_id": input_id, "message": message})
+                        yield AgentEvent(type=AgentEventType.RUNTIME_REPORT, data=await self._input_queue.report(
+                            session.session_id, session.user_id, message if input_id is None else None,
+                        ))
+                        async with contextlib.aclosing(self._run_locked(session, message, images, attachments)) as events:
+                            async for event in events:
+                                if event.type in {AgentEventType.DONE, AgentEventType.ERROR}:
+                                    terminal.append(event)
+                                else:
+                                    yield event
+                                    if event.type == AgentEventType.INPUT_STATUS:
+                                        yield AgentEvent(type=AgentEventType.RUNTIME_REPORT, data=await self._input_queue.report(
+                                            session.session_id, session.user_id, message if input_id is None else None,
+                                        ))
+                    # The turn transaction is committed before acknowledging or claiming inputs.
+                    yield AgentEvent(type=AgentEventType.TURN_DONE, data={
+                        "input_id": input_id, "turn_id": session.current_turn_id,
+                        "status": getattr(session, "_run_status_override", None) or session.status.value,
+                        "message_id": getattr(session, "_last_assistant_message_id", None),
+                    })
+                    if getattr(session, "_run_status_override", None) or session.status.value == "completed":
+                        if message not in completed_subtasks:
+                            completed_subtasks.append(message)
+                    loop_payload: dict[str, Any] = {
+                        "outer_round": outer_rounds,
+                        "current_input": message,
+                        "completed": completed_subtasks,
+                        "followup_queue": [],
+                        "steering_queue": [],
+                        "no_progress_count": outer_no_progress,
+                    }
+                    try:
+                        for queued_item in await self._input_queue.list(session.session_id, session.user_id):
+                            if queued_item["status"] not in {"queued", "started"}:
+                                continue
+                            target = (
+                                loop_payload["followup_queue"] if queued_item["kind"] == "follow_up"
+                                else loop_payload["steering_queue"]
+                            )
+                            target.append(queued_item["message"])
+                    except LookupError:
+                        pass
+                    yield AgentEvent(type=AgentEventType.LOOP_STATUS, data=loop_payload)
+                    try:
+                        from app.core.engine.run_progress import record_loop_progress
+
+                        await record_loop_progress(self, session, loop_payload)
+                    except BaseException:
+                        pass
+                    if input_id:
+                        stopped = session._stop_requested or session.status.value in {"paused", "stopped", "cancelled"}
+                        finish_status = (
+                            "blocked" if stopped else
+                            "completed" if session.status.value == "completed" else "failed"
+                        )
+                        finish_error = session._last_error
+                        if finish_error is None and finish_status != "completed":
+                            finish_error = (
+                                "Execution stopped before the input completed"
+                                if stopped else
+                                "Input ended without a recorded error"
+                            )
+                        item = await self._input_queue.finish(
+                            session.session_id, session.user_id, input_id,
+                            finish_status,
+                            finish_error,
+                        )
+                        yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
+                    pi_auto = bool((getattr(session, "context", None) or {}).get("pi_auto_continue"))
+                    if pi_auto and session.max_iterations and outer_rounds >= session.max_iterations:
+                        reason = "Outer loop reached max iterations; pausing auto-continue"
+                        session._last_error = reason
+                        session._run_status_override = "max_iterations_reached"
+                        for item in await self._input_queue.freeze(session.session_id, session.user_id, reason):
+                            yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
+                        yield AgentEvent(type=AgentEventType.RUNTIME_REPORT, data=await self._input_queue.report(
+                            session.session_id, session.user_id,
+                        ))
+                        yield AgentEvent(type=AgentEventType.PROGRESS, data={"status": "paused", "reason": reason})
+                        yield AgentEvent(type=AgentEventType.DONE, data={"status": "max_iterations_reached", "error": reason})
+                        break
+                    if session._stop_requested or session.status.value != "completed":
+                        reason = session._last_error or "Execution stopped; queued inputs require review"
+                        for item in await self._input_queue.freeze(session.session_id, session.user_id, reason):
+                            yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
+                        yield AgentEvent(type=AgentEventType.RUNTIME_REPORT, data=await self._input_queue.report(
+                            session.session_id, session.user_id,
+                        ))
+                        for event in terminal:
+                            if event.type == AgentEventType.DONE and session._stop_requested:
+                                event = AgentEvent(type=AgentEventType.DONE, data={**event.data, "status": "stopped"})
+                            yield event
+                        if not any(event.type == AgentEventType.DONE for event in terminal):
+                            yield AgentEvent(type=AgentEventType.DONE, data={
+                                "status": getattr(session, "_run_status_override", None) or session.status.value,
+                                "error": session._last_error,
+                            })
+                        break
+                    # Pi outer loop: stall guard over the follow-up queue.
+                    # Two consecutive turns without overall progress (no new
+                    # iteration, no new output) pause the outer loop and dump state.
+                    turn_signature = _outer_turn_signature(session)
+                    outer_no_progress, outer_prev_signature = _outer_stall_update(
+                        turn_signature, outer_prev_signature, outer_no_progress)
+                    if outer_no_progress >= 2:
+                        reason = "Agent produced two consecutive turns without overall progress; pausing outer loop"
+                        session._last_error = reason
+                        session._run_status_override = "no_progress"
+                        for item in await self._input_queue.freeze(session.session_id, session.user_id, reason):
+                            yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
+                        yield AgentEvent(type=AgentEventType.RUNTIME_REPORT, data=await self._input_queue.report(
+                            session.session_id, session.user_id,
+                        ))
+                        yield AgentEvent(type=AgentEventType.PROGRESS, data={"status": "paused", "reason": reason})
+                        for event in terminal:
+                            if event.type != AgentEventType.DONE:
                                 yield event
-                for event in terminal:
-                    yield event
+                        yield AgentEvent(type=AgentEventType.DONE, data={
+                            "status": "no_progress", "error": reason,
+                        })
+                        break
+                    item = await self._input_queue.claim(session.session_id, session.user_id, "follow_up")
+                    if item is None:
+                        yield AgentEvent(type=AgentEventType.RUNTIME_REPORT, data=await self._input_queue.report(
+                            session.session_id, session.user_id,
+                        ))
+                        for event in terminal:
+                            yield event
+                        break
+                    input_id, message = item["id"], item["message"]
+                    images, attachments, first = None, None, False
+                    yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
+        except BaseException:
+            with CancelScope(shield=True):
+                await self._input_queue.freeze(session.session_id, session.user_id,
+                                               "Execution interrupted; manual review required")
+            raise
         finally:
-            self._session_locks.pop(session.session_id, None)
+            session._continuing_input = False
+            try:
+                from app.core.engine.run_progress import finalize_run_progress
+
+                with CancelScope(shield=True):
+                    await finalize_run_progress(self, session)
+            except BaseException:
+                pass
+            if self._session_locks.get(session.session_id) is lock:
+                self._session_locks.pop(session.session_id, None)
+
+    @contextlib.asynccontextmanager
+    async def _track_run_with_cleanup(self, session: AgentSession):
+        manager = track_run(session, self._run_store)
+        await manager.__aenter__()
+        try:
+            yield
+        except BaseException:
+            # SSE disconnect uses level cancellation; durable cleanup must survive it.
+            with CancelScope(shield=True):
+                suppressed = await manager.__aexit__(*sys.exc_info())
+                await self._summarize_task_memory(session)
+            if not suppressed:
+                raise
+        else:
+            with CancelScope(shield=True):
+                await manager.__aexit__(None, None, None)
+                await self._summarize_task_memory(session)
+
+    def run_inputs(self, session: AgentSession) -> AsyncIterator[AgentEvent]:
+        """Explicitly execute safe queued tasks without inventing a chat message."""
+        return self.run(session, "", queued_only=True)
 
     async def run_agent(self, session: AgentSession, message: str) -> dict[str, Any]:
-        """Consume the streaming API and return the legacy aggregate result."""
+        """Consume the streaming API and return the legacy aggregate result.
+
+        Args:
+            session: The agent session.
+            message: The user message.
+
+        Returns:
+            A dict with output, tokens_used, status, error and cost status.
+        """
         output_parts: list[str] = []
         tokens_used = 0
         status = None
@@ -301,212 +584,155 @@ class AgentEngine:
                 "cost_status": cost_status,
                 "usage_status": getattr(session, "_run_usage_status", "unknown")}
 
-    async def _run_locked(
+    # --- execution loop entry points (async-generator valued) ---
+
+    async def _consume_steering(self, session: AgentSession) -> AsyncIterator[AgentEvent]:
+        queue = getattr(self, "_input_queue", None)
+        if queue is None:
+            return
+        while not session._stop_requested:
+            item = await queue.claim(session.session_id, session.user_id, "steering")
+            if item is None:
+                break
+            yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
+            if session._stop_requested:
+                item = await self._input_queue.finish(session.session_id, session.user_id,
+                                                       item["id"], "blocked", "Execution stopped")
+                yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
+                break
+            session.messages.append({"role": MessageRole.USER, "content": item["message"]})
+            persisted = await self._persist_message(session.session_id, MessageRole.USER, content=item["message"])
+            if not persisted:
+                raise RuntimeError("Steering message persistence failed")
+            await self._save_checkpoint(session, {"steering_input_id": item["id"]})
+            item = await self._input_queue.finish(session.session_id, session.user_id, item["id"], "applied")
+            yield AgentEvent(type=AgentEventType.INPUT_STATUS, data={"item": item})
+
+    async def _enqueue_follow_up(self, session: AgentSession, message: str) -> str:
+        """Pi dual-loop: agent enqueues its own next subtask for auto-continue.
+
+        Deduped by (session_id, client_request_id); the id derives from the
+        session id and a stable hash of the message, so re-enqueueing the same
+        subtask keeps only one row.
+        """
+        client_request_id = f"agent-followup:{_follow_up_hash(message)}"
+        item = await self._input_queue.submit(
+            session.session_id, session.user_id, client_request_id,
+            "follow_up", message,
+        )
+        return str(item["id"])
+
+    async def _decide_followup(self, session: AgentSession, result: Any) -> dict[str, str | bool | None]:
+        """Pi dual-loop G1 default decider: one light LLM call, no context pollution.
+
+        Asks the model to return ``{"finished": bool, "next_subtask": str|None,
+        "reason": str}``. Never appends to the main message chain and never
+        touches the file system; anything unparsable means "finished".
+        """
+        from app.core.engine.session_runner import run_llm_single
+
+        evidence = ""
+        if result is not None:
+            evidence = result.accumulated_content or result.content or ""
+        prompt = (
+            "Continue deciding for a long-running task. The current turn ended with:\n"
+            f"{evidence[:4000]}\n\n"
+            'Return ONLY JSON: {"finished": true} when the task is done, or '
+            '{"finished": false, "next_subtask": "<one concrete next step>", "reason": "<why>"}.'
+        )
+        system = "You are an outer-loop controller. Decide if another subtask should run."
+        raw = await run_llm_single(
+            self, session.provider, session.model_id, session.api_key, system, prompt,
+            base_url=session.base_url, max_chars=2000,
+        )
+        try:
+            import json
+
+            decision = json.loads(raw[raw.find("{"): raw.rfind("}") + 1] or "{}")
+            if not isinstance(decision, dict):
+                raise ValueError("decision is not an object")
+        except (ValueError, TypeError):
+            return {"finished": True, "next_subtask": None, "reason": "unparsable decision"}
+        finished = bool(decision.get("finished", True))
+        next_subtask = decision.get("next_subtask")
+        if finished or not (isinstance(next_subtask, str) and next_subtask.strip()):
+            return {
+                "finished": finished, "next_subtask": None,
+                "reason": decision.get("reason", "finished" if finished else "empty subtask"),
+            }
+        return {
+            "finished": False, "next_subtask": next_subtask.strip(),
+            "reason": decision.get("reason", ""),
+        }
+
+    async def maybe_generate_followup(self, session: AgentSession, result: Any) -> dict[str, str | bool | None] | None:
+        """Pi dual-loop G1 gate: decide and enqueue the next auto-continue subtask.
+
+        Opt-in only (``session.context["pi_auto_continue"]``). Skipped while
+        stopped, frozen, or at the outer round cap. Returns the decision dict,
+        or ``None`` when no decision should be requested.
+        """
+        context = getattr(session, "context", None) or {}
+        if not context.get("pi_auto_continue"):
+            return None
+        if session._stop_requested or (context or {}).get("input_queue_frozen"):
+            return None
+        outer_rounds = int(getattr(session, "_outer_rounds", 0) or 0)
+        max_rounds = int(getattr(session, "max_iterations", 0) or 0)
+        if max_rounds and outer_rounds >= max_rounds:
+            return None
+        decision = await self._decide_followup(session, result)
+        if decision is not None and not decision.get("finished") and decision.get("next_subtask"):
+            await self._enqueue_follow_up(session, str(decision["next_subtask"]))
+        return decision
+
+    def _run_locked(
         self, session: AgentSession, message: str, images: list[str] | None = None,
+        attachments: list[ChatAttachment] | None = None,
     ) -> AsyncIterator[AgentEvent]:
         """Internal run method - executes under session lock."""
-        current = session.state_machine.state
-        from app.core.task_state_machine import TaskState
-        if current in (TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED):
-            await session.state_machine.transition(TaskState.PENDING, trigger="user_restart")
-        if session.state_machine.state != TaskState.PROCESSING:
-            await session.state_machine.transition(TaskState.PROCESSING, trigger="run_start")
-        resuming = session._resume_interrupted
-        if not resuming:
-            session._stop_requested = False
-            session._last_iteration = 0
-            content = build_user_content(message, images)
-            session.messages.append({"role": MessageRole.USER, "content": content})
-            await persist_message(
-                session.session_id, MessageRole.USER,
-                content=message, images=images,
-            )
+        return run_locked(self, session, message, images, attachments)
 
-        self._set_agent_mode(session)
-        self._send_start_notification(session)
-        if not resuming:
-            await self._inject_memory_context(session, message)
-            await self._inject_core_memory(session)
-            await self._inject_profile_context(session, message)
-
-        session._last_result = None
-        session._run_status_override = None
-        session._last_assistant_message_id = None
-        if not resuming:
-            await self._save_checkpoint(session, {})
-        executor = ParallelToolExecutor(
-            self.tool_registry,
-            validator=(lambda name, args: validate_tool_call(session, name, args, self.sandbox, self.permission_overlay, self.agent_mode, self.tool_registry)),
-            session=session,
-        )
-        compressor = ContextCompressor(session.context_config)
-        result: ChatResult | None = None
-
-        try:
-            async with contextlib.aclosing(self._iteration_loop(session, executor, compressor)) as events:
-                async for event in events:
-                    yield event
-        except Exception as e:
-            session._last_error = str(e)
-            if session._stop_requested:
-                await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
-            else:
-                await session.state_machine.transition(TaskState.FAILED, trigger="unhandled_error")
-            yield AgentEvent(type=AgentEventType.ERROR, data={"error": str(e)})
-            self._send_failure_notification(session, str(e))
-            self._record_profile_outcome(session, message)
-            self._tick_evolution(session)
-            return
-
-        if session.status.value == "failed" and session._run_status_override is None:
-            self._record_profile_outcome(session, message)
-            self._tick_evolution(session)
-            return
-
-        await self._store_episodic_memory(session, message)
-        self._trigger_memory_reflection(session)
-        self._record_profile_outcome(session, message)
-        self._tick_evolution(session)
-        result = session._last_result
-        yield AgentEvent(type=AgentEventType.DONE, data={
-            "status": session._run_status_override or session.status.value,
-            "iterations": session._last_iteration,
-            "content": result.content if result else "",
-            "tokens_used": getattr(session, "_run_tokens", 0),
-            "cost_status": getattr(session, "_run_cost_status", "unknown"),
-            "usage_status": getattr(session, "_run_usage_status", "unknown"),
-            "metrics": session.metrics.to_dict(),
-            "message_id": getattr(session, "_last_assistant_message_id", None),
-        })
-
-    async def _iteration_loop(
+    def _iteration_loop(
         self,
         session: AgentSession,
         executor: Any,
         compressor: Any,
     ) -> AsyncIterator[AgentEvent]:
         """Main iteration loop for agent execution."""
-        from app.core.task_state_machine import TaskState
+        return iteration_loop(self, session, executor, compressor)
 
-        iteration = session._last_iteration if session._resume_interrupted else 0
-        session._resume_interrupted = False
-        adapter = self.model_registry.get_or_create(
-            provider=session.provider,
-            model_id=session.model_id,
-            api_key=session.api_key,
-            base_url=session.base_url,
-        )
-        tools = build_tools(
-            self.tool_registry, session.tools, self.tool_prioritizer,
-            task_description=content_text(session.messages[-1].get("content", "")) if session.messages else "",
-        )
-        result: ChatResult | None = None
+    def _handle_text_result(self, session: AgentSession, result: Any, adapter: Any) -> AsyncIterator[AgentEvent]:
+        """Handle text content from LLM response."""
+        return handle_text_result(self, session, result, adapter)
 
-        while iteration < session.max_iterations and not session._stop_requested:
-            iteration += 1
-            session._last_iteration = iteration
-            session.metrics.total_iterations += 1
-            yield AgentEvent(type=AgentEventType.THINKING, data={"iteration": iteration})
+    def _handle_tool_execution(
+        self,
+        session: AgentSession,
+        executor: Any,
+        result: Any,
+        iteration: int,
+        ctx_tokens: int,
+        metacognition: Any = None,
+    ) -> AsyncIterator[AgentEvent]:
+        """Handle tool execution from LLM response."""
+        return handle_tool_execution(self, session, executor, result, iteration, ctx_tokens, metacognition=metacognition)
 
-            ctx_tokens = estimate_tokens(session.messages)
-            ctx_limit = getattr(adapter.capabilities, "max_tokens", None) or session.context_config.max_tokens
-            if compressor.needs_compression(session.messages) or (ctx_limit and ctx_tokens > ctx_limit * 0.8):
-                session.messages = await compressor.compress(session.messages, adapter)
-                yield AgentEvent(type=AgentEventType.CONTEXT_COMPRESSION, data={"iteration": iteration, "tokens": ctx_tokens, "limit": ctx_limit})
-
-            if adapter.capabilities.streaming:
-                result = ChatResult()
-                started = time.monotonic()
-                try:
-                    async for chunk in adapter.stream_chat(messages=session.messages, tools=tools or None):
-                        delta = merge_stream_chunk(result, chunk)
-                        if session._stop_requested:
-                            await self._run_store.record_response(session, result, iteration, complete=False)
-                            session.metrics.total_tokens_used += result.tokens_used
-                            result = None
-                            break
-                        if delta:
-                            yield AgentEvent(type=AgentEventType.TEXT, data={"content": delta})
-                        self._accumulate_stream_tool_calls(result.tool_calls, chunk.tool_calls)
-                except BaseException:
-                    if result is not None:
-                        await self._run_store.record_response(session, result, iteration, complete=False)
-                        session.metrics.total_tokens_used += result.tokens_used
-                    raise
-                finally:
-                    session.metrics.llm_call_durations.append(time.monotonic() - started)
-                if result is not None:
-                    result.finish_reason = result.finish_reason or ("tool_calls" if result.tool_calls else "stop")
-            else:
-                result = await self._call_llm_with_resilience(session, adapter, session.messages, iteration)
-            if result is None:
-                session._last_error = "LLM call failed or stopped"
-                await session.state_machine.transition(
-                    TaskState.CANCELLED if session._stop_requested else TaskState.FAILED,
-                    trigger="llm_stopped")
-                yield AgentEvent(type=AgentEventType.ERROR, data={"error": "LLM call failed or stopped"})
-                break
-            session._last_result = result
-            result.tokens_used = response_usage(result)["total_tokens"] or 0
-            await self._run_store.record_response(session, result, iteration, complete=result.finish_reason != "error")
-            session.metrics.total_tokens_used += getattr(result, "tokens_used", 0) or 0
-            if result.finish_reason == "error":
-                raise RuntimeError("Model reported an error response")
-
-            if result.content:
-                async for event in self._handle_text_result(session, result, adapter):
-                    yield event
-
-            if not result.tool_calls and not result.content:
-                session.messages.append({
-                    "role": MessageRole.SYSTEM,
-                    "content": "Your previous response was empty. Please provide a helpful response or use an appropriate tool.",
-                })
-                continue
-
-            if result.tool_calls:
-                async for _event in self._handle_tool_execution(session, executor, result, iteration, ctx_tokens):
-                    yield _event
-                continue
-
-            break
-
-        if session.status.value == "failed":
-            return
-        if not session._stop_requested and iteration >= session.max_iterations and (result is None or result.tool_calls or not result.content):
-            await session.state_machine.transition(TaskState.FAILED, trigger="max_iterations")
-            session._run_status_override = "max_iterations_reached"
-            session._last_error = "Maximum iterations reached"
-            await self._save_checkpoint(session, {"final_result": result.content if result else ""})
-            return
-
-        if session._stop_requested:
-            await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
-        else:
-            await session.state_machine.transition(TaskState.COMPLETED, trigger="run_complete")
-            self._send_completion_notification(session, result)
-        await self._save_checkpoint(session, {"final_result": result.content if result else ""})
-        yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration, "final": True})
+    # --- override points routed to engine submodules ---
 
     async def _save_checkpoint(self, session: AgentSession, channels: dict[str, Any],
                                pending_writes: list[dict[str, Any]] | None = None) -> str:
-        from uuid import uuid4
-        from app.core.checkpoint import CheckpointData, sanitize_checkpoint
+        """Persist a sanitized checkpoint snapshot of the session.
 
-        cp = CheckpointData(
-            session_id=session.session_id, messages=session.messages,
-            iteration=session._last_iteration, status=session.state_machine.state.value,
-            metadata={"thread_id": session.current_turn_id or "", "error": session._last_error},
-            channel_values=channels, channel_versions={"messages": session._last_iteration},
-            versions_seen={"node": {"messages": session._last_iteration}},
-            pending_writes=pending_writes or [],
-        )
-        cp = sanitize_checkpoint(cp, secrets=(session.api_key,))
-        cid = await self._checkpoints.save(None, cp,
-            thread_id=session.current_turn_id or "", checkpoint_id=str(uuid4()),
-            parent_id=getattr(session, "_last_checkpoint_id", None))
-        session._last_checkpoint_id = cid
-        return cid
+        Args:
+            session: The agent session to snapshot.
+            channels: Channel values to store alongside the checkpoint.
+            pending_writes: Optional pending writes to attach.
+
+        Returns:
+            The checkpoint id assigned by the checkpoint store.
+        """
+        return await save_checkpoint(self._checkpoints, session, channels, pending_writes)
 
     async def _call_llm(self, adapter: Any, session: AgentSession, tools: list) -> ChatResult | None:
         """Call the LLM adapter and return the result.
@@ -519,12 +745,7 @@ class AgentEngine:
         Returns:
             ChatResult or None if stopped.
         """
-        from app.core.task_state_machine import TaskState
-
-        if session._stop_requested:
-            await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
-            return None
-        return await adapter.chat(messages=session.messages, tools=tools or None)
+        return await call_llm(adapter, session, tools)
 
     async def _call_llm_with_resilience(
         self,
@@ -548,61 +769,43 @@ class AgentEngine:
             RetryExhaustedError: If the call fails after retries are exhausted.
             CircuitBreakerOpenError: If the circuit breaker is open.
         """
-        config = session.session_config
-        timeout_config = config.timeouts or TimeoutConfig()
-        circuit_config = config.circuit_breaker or CircuitBreakerConfig()
-        breaker = session._circuit_breaker or CircuitBreaker(
-            name=f"session-{session.session_id or 'default'}",
-            config=circuit_config,
-        )
-        session._circuit_breaker = breaker
-
-        tools = build_tools(
-            self.tool_registry,
-            session.tools,
-            self.tool_prioritizer,
-            task_description=(session.messages[-1].get("content", "") if session.messages else ""),
-        )
-
-        start = time.monotonic()
-        try:
-            async def _single() -> ChatResult:
-                if model_adapter.capabilities and getattr(model_adapter.capabilities, "streaming", False):
-                    return await self._stream_accumulate(model_adapter, messages or session.messages, tools)
-                return await model_adapter.chat(messages=messages or session.messages, tools=tools or None)
-
-            async def _attempt() -> ChatResult:
-                return await asyncio.wait_for(_single(), timeout=timeout_config.per_call_seconds)
-
-            try:
-                return await breaker.call(_attempt)
-            except CircuitBreakerOpenError:
-                raise
-            except RetryExhaustedError:
-                raise
-            except TimeoutError:
-                session.metrics.retry_count += 1
-                raise RetryExhaustedError("LLM call timed out") from None
-            except Exception as e:
-                raise e
-        finally:
-            session.metrics.llm_call_durations.append(time.monotonic() - start)
+        return await call_llm_with_resilience(self, session, model_adapter, messages, iteration)
 
     async def _stream_accumulate(self, adapter: Any, messages: list[dict[str, Any]], tools: list) -> ChatResult:
         """Accumulate a streaming response into a single ChatResult.
 
-        When the adapter reports authoritative cumulative content
-        (accumulated_content), it is trusted as-is; otherwise per-chunk
-        deltas are appended. No prefix-based dedup heuristic is needed.
+        Args:
+            adapter: The LLM adapter with a ``stream_chat`` method.
+            messages: The messages to send.
+            tools: Available tool definitions.
+
+        Returns:
+            A ChatResult with accumulated content and tool calls.
         """
-        result = ChatResult()
-        async for chunk in adapter.stream_chat(messages=messages, tools=tools or None):
-            merge_stream_chunk(result, chunk)
-            if getattr(chunk, "tool_calls", None):
-                self._accumulate_stream_tool_calls(result.tool_calls, chunk.tool_calls)
-        if result.finish_reason is None:
-            result.finish_reason = "tool_calls" if result.tool_calls else "stop"
-        return result
+        return await stream_accumulate(adapter, messages, tools)
+
+    async def _stream_chat(self, adapter: Any, session: AgentSession, tools: list) -> ChatResult | None:
+        """Handle streaming chat response for a session.
+
+        Args:
+            adapter: The LLM adapter.
+            session: The current session.
+            tools: Available tool definitions.
+
+        Returns:
+            ChatResult with accumulated content, or None if stopped.
+        """
+        return await stream_chat(adapter, session, tools)
+
+    @staticmethod
+    def _accumulate_stream_tool_calls(accumulated: list[dict[str, Any]], chunks: list[dict[str, Any]]) -> None:
+        """Merge streamed tool call deltas into complete tool calls.
+
+        Args:
+            accumulated: The list of accumulated tool calls (mutated in place).
+            chunks: The streamed tool call deltas to merge.
+        """
+        accumulate_stream_tool_calls(accumulated, chunks)
 
     def _validate_tool_call(self, session: AgentSession, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, str]:
         """Validate a tool call using the engine's configured sandbox/mode.
@@ -621,217 +824,57 @@ class AgentEngine:
         )
 
     def _build_tools(self, tool_names: list[str]) -> list[dict[str, Any]]:
-        """Build OpenAI-style tool definitions for the given tool names."""
+        """Build OpenAI-style tool definitions for the given tool names.
+
+        Args:
+            tool_names: The tool names to include.
+
+        Returns:
+            A list of tool definition dictionaries.
+        """
         return build_tools(self.tool_registry, list(tool_names or []), self.tool_prioritizer)
 
-    async def graceful_shutdown(self) -> None:
-        """Gracefully shut down the engine and all tracked sessions."""
-        self._shutdown_event.set()
-        for session in list(self._sessions.values()):
-            with contextlib.suppress(Exception):
-                await session.graceful_shutdown()
-        await self.resource_tracker.cleanup()
-
-    async def recover_session(self, session: AgentSession) -> bool:
-        """Attempt to recover a session from a saved checkpoint.
-
-        Returns:
-            True if a checkpoint was found and loaded, False otherwise.
-        """
-        from app.core.recovery import RecoveryManager
-
-        return await RecoveryManager(self._checkpoints).restore_session(session)
-
-    async def __aenter__(self) -> AgentEngine:
-        """Enter the engine context manager."""
-        return self
-
-    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Exit the engine context manager, marking shutdown."""
-        self._shutdown_event.set()
-
-    @staticmethod
-    def _accumulate_stream_tool_calls(accumulated: list[dict[str, Any]], chunks: list[dict[str, Any]]) -> None:
-        """Merge streamed tool call deltas into complete tool calls."""
-        for position, tool_call in enumerate(chunks):
-            call_id = tool_call.get("id")
-            existing = next((i for i, call in enumerate(accumulated)
-                             if call_id and call.get("id") == call_id), None)
-            if "index" in tool_call:
-                index = tool_call["index"]
-            elif existing is not None:
-                index = existing
-            elif call_id and position < len(accumulated) and accumulated[position].get("id"):
-                index = len(accumulated)
-            else:
-                index = position
-            while len(accumulated) <= index:
-                accumulated.append({
-                    "id": "",
-                    "type": "function",
-                    "function": {"name": "", "arguments": ""},
-                })
-            target = accumulated[index]
-            if tool_call.get("id"):
-                target["id"] = tool_call["id"]
-            function = tool_call.get("function", {})
-            if function.get("name"):
-                target["function"]["name"] = function["name"]
-            if function.get("arguments") is not None:
-                arguments = function["arguments"]
-                if isinstance(arguments, dict):
-                    arguments = json.dumps(arguments, ensure_ascii=False)
-                elif not isinstance(arguments, str):
-                    arguments = str(arguments)
-                if isinstance(function["arguments"], dict):
-                    target["function"]["arguments"] = arguments
-                else:
-                    target["function"]["arguments"] += arguments
-
-    async def _stream_chat(self, adapter: Any, session: AgentSession, tools: list) -> ChatResult | None:
-        """Handle streaming chat response.
+    def _build_tools_for_session(self, session: AgentSession, task_description: str = "") -> list[dict[str, Any]]:
+        """Build tool definitions for the session's enabled tools.
 
         Args:
-            adapter: The LLM adapter.
-            session: The current session.
-            tools: Available tool definitions.
+            session: The agent session providing the enabled tool names.
+            task_description: Task description for context-aware ranking.
 
         Returns:
-            ChatResult with accumulated content, or None if stopped.
+            A list of tool definition dictionaries.
         """
-        result = ChatResult()
-        async for chunk in adapter.stream_chat(messages=session.messages, tools=tools or None):
-            if session._stop_requested:
-                return None
-            merge_stream_chunk(result, chunk)
-            self._accumulate_stream_tool_calls(result.tool_calls, chunk.tool_calls)
-        result.finish_reason = result.finish_reason or ("tool_calls" if result.tool_calls else "stop")
-        return result
+        return build_tools(self.tool_registry, session.tools, self.tool_prioritizer, task_description=task_description)
 
-    async def _handle_text_result(self, session: AgentSession, result: Any, adapter: Any) -> AsyncIterator[AgentEvent]:
-        """Handle text content from LLM response.
+    def _make_parallel_executor(self, session: AgentSession) -> ParallelToolExecutor:
+        """Build the parallel tool executor bound to the facade validation.
+
+        The validator delegates to ``self._validate_tool_call`` so the facade
+        override point stays authoritative for every executed tool call.
 
         Args:
-            session: The current session.
-            result: The ChatResult.
-            adapter: The LLM adapter.
-
-        Yields:
-            TEXT events for non-streaming path.
-        """
-        from app.models.openai_adapter import OpenAIAdapter
-
-        if not result.tool_calls and result.content:
-            xml_tool_calls = OpenAIAdapter._parse_xml_tool_calls(result.content)
-            if xml_tool_calls:
-                result.tool_calls = xml_tool_calls
-                cleaned = re.sub(r"<function([^>]+)>.*?</\1>", "", result.content, flags=re.DOTALL | re.IGNORECASE).strip()
-                if not cleaned:
-                    result.content = ""
-
-        session.messages.append({"role": MessageRole.ASSISTANT, "content": result.content})
-        persisted_id = await persist_message(session.session_id, MessageRole.ASSISTANT, content=result.content, tokens=getattr(result, "tokens_used", 0))
-        if persisted_id:
-            session._last_assistant_message_id = persisted_id
-        if not (adapter.capabilities and adapter.capabilities.streaming):
-            yield AgentEvent(type=AgentEventType.TEXT, data={"content": result.content})
-
-    async def _handle_tool_execution(
-        self,
-        session: AgentSession,
-        executor: Any,
-        result: Any,
-        iteration: int,
-        ctx_tokens: int,
-    ) -> AsyncIterator[AgentEvent]:
-        """Handle tool execution from LLM response.
-
-        Args:
-            session: The current session.
-            executor: The parallel tool executor.
-            result: The ChatResult with tool calls.
-            iteration: Current iteration number.
-            ctx_tokens: Current context token count.
-
-        Yields:
-            TOOL_CALL, TOOL_RESULT, and CHECKPOINT events.
+            session: The agent session the executor runs for.
 
         Returns:
-            bool indicating whether to continue the loop.
+            A ParallelToolExecutor bound to the session.
         """
-        session.messages.append({"role": MessageRole.ASSISTANT, "content": "", "tool_calls": result.tool_calls})
-        await persist_message(session.session_id, MessageRole.ASSISTANT, content="", tool_calls=result.tool_calls)
-        for tc in result.tool_calls:
-            function = tc.get("function", {})
-            arguments = function.get("arguments", {})
-            if isinstance(arguments, str):
-                try:
-                    arguments = json.loads(arguments)
-                except json.JSONDecodeError:
-                    arguments = {}
-            tool_call_id = tc.get("id") or f"tool-{iteration}-{len(session.messages)}"
-            allowed, reason = self._validate_tool_call(session, function.get("name", ""), arguments)
-            event_data = {"id": tool_call_id, "name": function.get("name"), "arguments": arguments}
-            if not allowed and isinstance(reason, dict) and reason.get("requires_approval"):
-                event_data.update(reason)
-                event_data["tool_call_id"] = tool_call_id
-                event_data["timeout_seconds"] = self.permission_timeout_seconds
-                session._pending_permission = {**event_data, "decision": None}
-                session._permission_event = asyncio.Event()
-                yield AgentEvent(type=AgentEventType.TOOL_CALL, data=event_data)
-                try:
-                    await asyncio.wait_for(
-                        session._permission_event.wait(),
-                        timeout=self.permission_timeout_seconds,
-                    )
-                except TimeoutError:
-                    session._pending_permission["decision"] = "timeout"
-                decision = session._pending_permission.get("decision")
-                if decision in {"allow", "allow_session", "allow_always"}:
-                    approved = getattr(session, "_approved_tool_calls", None)
-                    if approved is None:
-                        approved = set()
-                        session._approved_tool_calls = approved
-                    approved.add(_approval_key(function.get("name", ""), arguments))
-                session._pending_permission = None
-                session._permission_event = None
-            else:
-                yield AgentEvent(type=AgentEventType.TOOL_CALL, data=event_data)
-        await self._save_checkpoint(session, {"last_tool_calls": result.tool_calls},
-            pending_writes=[{"channel": "tools", "value": tc,
-                             "write_id": tc.get("id", str(index)), "status": "pending"}
-                            for index, tc in enumerate(result.tool_calls)])
-        tool_results = await executor.execute_all(result.tool_calls)
-        session.metrics.total_tool_calls += len(result.tool_calls)
-        for tr in tool_results:
-            from app.middleware.metrics import TOOL_CALL_LATENCY, TOOL_CALL_TOTAL
+        return ParallelToolExecutor(
+            self.tool_registry,
+            validator=(lambda name, args: self._validate_tool_call(session, name, args)),
+            session=session,
+        )
 
-            TOOL_CALL_TOTAL.labels(tool_name=tr.tool_name, status="success" if tr.success else "error").inc()
-            TOOL_CALL_LATENCY.labels(tool_name=tr.tool_name).observe((tr.duration_ms or 0.0) / 1000.0)
-            session.metrics.tool_call_durations.append(getattr(tr, "duration_ms", 0.0) or 0.0)
-            self.tool_prioritizer.record_outcome(tr.tool_name, tr.success, tr.duration_ms)
-            yield AgentEvent(
-                type=AgentEventType.TOOL_RESULT,
-                data={
-                    "id": tr.tool_call_id,
-                    "tool_name": tr.tool_name,
-                    "result": tr.result,
-                    "error": tr.error,
-                },
-            )
-            await self._handle_tool_debug(session, tr)
-            session.messages.append({"role": MessageRole.TOOL, "content": tr.result, "tool_call_id": tr.tool_call_id or tr.tool_name})
-            await persist_message(
-                session.session_id,
-                MessageRole.TOOL,
-                content=tr.result,
-                tool_name=tr.tool_name,
-                tool_call_id=tr.tool_call_id,
-            )
+    async def _persist_message(self, *args: Any, **kwargs: Any) -> str | None:
+        """Persist a message through the patchable module-level hook.
 
-        await self._save_checkpoint(session, {"last_tool_calls": result.tool_calls,
-            "last_tool_results": [tr.result for tr in tool_results], "context_tokens": ctx_tokens})
-        yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration, "tool_calls": len(result.tool_calls)})
+        Args:
+            *args: Positional arguments forwarded to ``persist_message``.
+            **kwargs: Keyword arguments forwarded to ``persist_message``.
+
+        Returns:
+            The persisted message id, or None when persistence failed.
+        """
+        return await persist_message(*args, **kwargs)
 
     async def _handle_tool_debug(self, session: AgentSession, tr: Any) -> None:
         """Handle debug recovery for failed tool calls.
@@ -840,20 +883,7 @@ class AgentEngine:
             session: The current session.
             tr: The tool result to check for errors.
         """
-        if self.debug_loop and tr.error:
-            key = tr.tool_name
-            attempts = session.debug_attempts.get(key, 0)
-            if attempts < 3:
-                session.debug_attempts[key] = attempts + 1
-                fixed = await self.debug_loop.recover(
-                    tool_name=tr.tool_name,
-                    arguments=tr.arguments or {},
-                    error_output=tr.error or tr.result,
-                    retry_callback=lambda retry_tool, retry_args: self.tool_registry.execute(retry_tool, retry_args),
-                )
-                if fixed and fixed.success and fixed.output:
-                    tr.error = ""
-                    tr.result = fixed.output
+        await handle_tool_debug(self, session, tr)
 
     def _set_agent_mode(self, session: AgentSession) -> None:
         """Set the current agent mode for tool execution context.
@@ -861,11 +891,7 @@ class AgentEngine:
         Args:
             session: The agent session.
         """
-        try:
-            from app.core.file_patch import set_current_agent_mode
-            set_current_agent_mode(session.mode)
-        except Exception:
-            pass
+        set_agent_mode(session)
 
     def _send_start_notification(self, session: AgentSession) -> None:
         """Send notification when agent starts.
@@ -873,11 +899,7 @@ class AgentEngine:
         Args:
             session: The agent session.
         """
-        try:
-            from app.services.notifications import notification_service
-            self._spawn(notification_service.agent_message(session.agent_id or "Agent", "开始执行任务..."))
-        except Exception:
-            pass
+        send_start_notification(self, session)
 
     def _send_completion_notification(self, session: AgentSession, result: Any) -> None:
         """Send notification when agent completes.
@@ -886,11 +908,7 @@ class AgentEngine:
             session: The agent session.
             result: The final ChatResult.
         """
-        try:
-            from app.services.notifications import notification_service
-            self._spawn(notification_service.task_complete(f"Agent {session.agent_id}", result.content[:100] if result and result.content else None))
-        except Exception:
-            pass
+        send_completion_notification(self, session, result)
 
     def _send_failure_notification(self, session: AgentSession, error: str) -> None:
         """Send notification when agent fails.
@@ -899,14 +917,14 @@ class AgentEngine:
             session: The agent session.
             error: The error message.
         """
-        try:
-            from app.services.notifications import notification_service
-            self._spawn(notification_service.task_failed(f"Agent {session.agent_id}", error))
-        except Exception:
-            pass
+        send_failure_notification(self, session, error)
 
     def _spawn(self, coro: Any) -> None:
-        """Run a fire-and-forget task while holding a reference until it finishes."""
+        """Run a fire-and-forget task while holding a reference until it finishes.
+
+        Args:
+            coro: The coroutine to schedule.
+        """
         try:
             task = asyncio.create_task(coro)
             self._background_tasks.add(task)
@@ -923,22 +941,66 @@ class AgentEngine:
             session: The agent session.
             message: The user query for memory retrieval.
         """
+        await inject_memory_context(self, session, message)
+
+    async def _inject_task_memory_context(self, session: AgentSession, *, token_budget: int = 2048) -> None:
+        """Refresh a bounded durable task view without splitting tool exchanges."""
+        import structlog
+
+        from app.core.engine.task_memory import TaskMemory
+
+        session.messages = [msg for msg in session.messages if not (
+            msg.get("role") == MessageRole.SYSTEM
+            and isinstance(msg.get("content"), str)
+            and msg["content"].startswith(TASK_MEMORY_MARKER)
+        )]
         try:
-            memory_context = await self.memory_service.format_memories_for_prompt(
-                user_id=session.user_id,
-                query=message,
-                max_memories=5,
+            budget = min(2048, max(0, token_budget), max(0, session.context_config.max_tokens // 4))
+            prefix = TASK_MEMORY_MARKER + "\n"
+            view = await TaskMemory(self._run_store.session_factory).restore(
+                session.session_id, session.user_id,
+                token_budget=max(0, budget - len(prefix.encode("utf-8"))),
             )
-            if memory_context:
-                memory_marker = "<!-- MEMORY_CONTEXT -->"
-                for i, msg in enumerate(session.messages):
-                    if msg.get("content", "").startswith(memory_marker):
-                        session.messages[i] = {"role": MessageRole.SYSTEM, "content": memory_marker + "\n" + memory_context}
-                        break
-                else:
-                    session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": memory_marker + "\n" + memory_context})
-        except Exception:
-            pass
+            session.task_memory_diagnostics = {
+                "status": "restored", "budget_used": view["budget_used"], "omitted": view["omitted"],
+            }
+            if view["task_context"]:
+                position = 0
+                while position < len(session.messages) and session.messages[position].get("role") == MessageRole.SYSTEM:
+                    position += 1
+                session.messages.insert(position, {"role": MessageRole.SYSTEM,
+                                                   "content": prefix + view["task_context"]})
+        except Exception as exc:
+            session.task_memory_diagnostics = {"status": "restore_failed", "error": str(exc)}
+            structlog.get_logger().warning("task_memory_restore_failed", session_id=session.session_id,
+                                           turn_id=session.current_turn_id, error=str(exc))
+
+    async def _summarize_task_memory(self, session: AgentSession) -> None:
+        """Summarize committed outcomes under the existing session lock."""
+        import structlog
+
+        from app.core.engine.task_memory import TaskMemory
+
+        try:
+            summary = await TaskMemory(self._run_store.session_factory).summarize_turn(
+                session.session_id, session.user_id, session.current_turn_id,
+            )
+            session.task_memory_summary_diagnostics = {
+                "status": "stored", "revision": summary["revision"], "source_hash": summary["source_hash"],
+            }
+        except Exception as exc:
+            session.task_memory_summary_diagnostics = {"status": "summary_failed", "error": str(exc)}
+            structlog.get_logger().warning("task_memory_summary_failed", session_id=session.session_id,
+                                           turn_id=session.current_turn_id, error=str(exc))
+
+    async def _archive_instruction(self, session: AgentSession, message: str) -> None:
+        """Persist the verbatim instruction and its safe local parse.
+
+        Args:
+            session: The agent session.
+            message: The user instruction of this run.
+        """
+        await archive_instruction(session, message)
 
     async def _inject_core_memory(self, session: AgentSession) -> None:
         """Inject core memory blocks into session context.
@@ -946,135 +1008,7 @@ class AgentEngine:
         Args:
             session: The agent session.
         """
-        try:
-            from app.core.core_memory import core_memory
-            blocks = await core_memory.get_blocks(user_id=session.user_id, agent_id=session.agent_id)
-            if blocks:
-                core_memory_xml = core_memory.format_for_prompt(blocks)
-                core_marker = "<!-- CORE_MEMORY -->"
-                for i, msg in enumerate(session.messages):
-                    if msg.get("content", "").startswith(core_marker):
-                        session.messages[i] = {"role": MessageRole.SYSTEM, "content": core_marker + "\n" + core_memory_xml}
-                        break
-                else:
-                    session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": core_marker + "\n" + core_memory_xml})
-        except Exception:
-            pass
-
-    def _dual_loop_coordinator(self) -> Any:
-        """Lazily build the dual-loop coordinator; None when unavailable.
-
-        Returns:
-            The DualLoopCoordinator instance, or None if the module cannot be
-            imported or constructed.
-        """
-        coordinator = getattr(self, "_dual_loop", None)
-        if coordinator is None:
-            try:
-                from app.core.engine.dual_loop import DualLoopCoordinator
-                coordinator = DualLoopCoordinator()
-                self._dual_loop = coordinator
-            except Exception:
-                return None
-        return coordinator
-
-    async def _inject_profile_context(self, session: AgentSession, message: str) -> None:
-        """Inject the user-profile context into session context (dual loop 1).
-
-        Args:
-            session: The agent session.
-            message: The user query the profile is adapted to.
-        """
-        try:
-            coordinator = self._dual_loop_coordinator()
-            if coordinator is None:
-                return
-            user_id = getattr(session, "user_id", None) or "local"
-            profile_context = await coordinator.profile_context(user_id, message)
-            if profile_context:
-                profile_marker = "<!-- PROFILE_CONTEXT -->"
-                for i, msg in enumerate(session.messages):
-                    if msg.get("content", "").startswith(profile_marker):
-                        session.messages[i] = {"role": MessageRole.SYSTEM, "content": profile_marker + "\n" + profile_context}
-                        break
-                else:
-                    session.messages.insert(-1, {"role": MessageRole.SYSTEM, "content": profile_marker + "\n" + profile_context})
-        except Exception:
-            pass
-
-    def _record_profile_outcome(self, session: AgentSession, message: str) -> None:
-        """Feed the finished run back into the user profile (fire-and-forget).
-
-        Args:
-            session: The agent session.
-            message: The user instruction of this run.
-        """
-        try:
-            coordinator = self._dual_loop_coordinator()
-            if coordinator is None:
-                return
-            from app.core.task_state_machine import TaskState
-            outcome = "success" if session.state_machine.state == TaskState.COMPLETED else "failure"
-            metrics = getattr(session, "metrics", None)
-            user_id = getattr(session, "user_id", None) or "local"
-            self._spawn(
-                coordinator.record_run_outcome(
-                    user_id,
-                    message,
-                    outcome=outcome,
-                    interrupted=bool(getattr(session, "_stop_requested", False)),
-                    retried=bool(int(getattr(metrics, "retry_count", 0) or 0) > 0),
-                    reasoning_level=self._current_reasoning_level(session),
-                    tool=self._last_tool_name(session),
-                )
-            )
-        except Exception:
-            pass
-
-    def _tick_evolution(self, session: AgentSession) -> None:
-        """Advance the genetic evolution tick counter (fire-and-forget).
-
-        Args:
-            session: The agent session.
-        """
-        try:
-            coordinator = self._dual_loop_coordinator()
-            if coordinator is None:
-                return
-            user_id = getattr(session, "user_id", None) or "local"
-            self._spawn(coordinator.evolution_tick(user_id))
-        except Exception:
-            pass
-
-    @staticmethod
-    def _current_reasoning_level(session: AgentSession) -> str:
-        """Read this run's reasoning level, falling back to "standard"."""
-        context = getattr(session, "context", None)
-        if isinstance(context, dict):
-            context_data = context.get("context_data")
-            if isinstance(context_data, dict):
-                level = context_data.get("reasoning_level")
-                if isinstance(level, str) and level:
-                    return level
-            level = context.get("reasoning_level")
-            if isinstance(level, str) and level:
-                return level
-        return "standard"
-
-    @staticmethod
-    def _last_tool_name(session: AgentSession) -> str | None:
-        """Name of the last tool executed in this run, or None."""
-        for msg in reversed(getattr(session, "messages", []) or []):
-            if not isinstance(msg, dict):
-                continue
-            tool_calls = msg.get("tool_calls")
-            if not tool_calls:
-                continue
-            first = tool_calls[0] if isinstance(tool_calls[0], dict) else {}
-            name = (first.get("function") or {}).get("name")
-            if name:
-                return str(name)
-        return None
+        await inject_core_memory(session)
 
     async def _store_episodic_memory(self, session: AgentSession, message: str) -> None:
         """Store important interaction in episodic memory.
@@ -1083,18 +1017,7 @@ class AgentEngine:
             session: The agent session.
             message: The user message.
         """
-        try:
-            result = getattr(session, "_last_result", None)
-            if result and result.content and len(result.content) > 10:
-                await self.memory_service.create_episodic_memory(
-                    user_id=session.user_id,
-                    content=f"User: {message}\nAssistant: {result.content[:500]}",
-                    agent_id=session.agent_id,
-                    source_session_id=session.session_id,
-                    importance=0.7,
-                )
-        except Exception:
-            pass
+        await store_episodic_memory(self, session, message)
 
     def _trigger_memory_reflection(self, session: AgentSession) -> None:
         """Trigger memory reflection (fire-and-forget).
@@ -1102,13 +1025,122 @@ class AgentEngine:
         Args:
             session: The agent session.
         """
-        try:
-            from app.core.memory_reflection import memory_reflection
-            self._spawn(memory_reflection.maybe_reflect(session.user_id))
-        except Exception:
-            pass
+        trigger_memory_reflection(self, session)
 
-    def resolve_permission(self, tool_call_id: str, decision: str) -> bool:
+    # --- dual-loop and metacognition wiring ---
+
+    def _dual_loop_coordinator(self) -> Any:
+        """Lazily build the dual-loop coordinator; None when unavailable.
+
+        Returns:
+            The DualLoopCoordinator instance, or None if the module cannot
+            be imported or constructed.
+        """
+        return dual_loop_coordinator(self)
+
+    @property
+    def metacognition(self) -> Any:
+        """Lazily build the metacognition orchestrator; None when unavailable.
+
+        Returns:
+            MetacognitionOrchestrator instance, or None when the subsystem
+            cannot be imported. The orchestrator stays advisory in the main
+            loop, so a failure here never blocks a normal agent run.
+        """
+        return metacognition_orchestrator(self)
+
+    @property
+    def metacognition_enabled(self) -> bool:
+        """Whether the main loop should run the metacognition stage."""
+        return metacognition_enabled(self)
+
+    async def _inject_profile_context(self, session: AgentSession, message: str) -> None:
+        """Inject the user-profile context into session context (dual loop 1).
+
+        Args:
+            session: The agent session.
+            message: The user query the profile is adapted to.
+        """
+        from app.core.engine.dual_loop_hooks import inject_profile_context
+        await inject_profile_context(self, session, message)
+
+    def _record_profile_outcome(self, session: AgentSession, message: str) -> None:
+        """Feed the finished run back into the user profile (fire-and-forget).
+
+        Args:
+            session: The agent session.
+            message: The user instruction of this run.
+        """
+        from app.core.engine.dual_loop_hooks import record_profile_outcome
+        record_profile_outcome(self, session, message)
+
+    def _tick_evolution(self, session: AgentSession) -> None:
+        """Advance the genetic evolution tick counter (fire-and-forget).
+
+        Args:
+            session: The agent session.
+        """
+        from app.core.engine.dual_loop_hooks import tick_evolution
+        tick_evolution(self, session)
+
+    @staticmethod
+    def _current_reasoning_level(session: AgentSession) -> str:
+        """Read this run's reasoning level, falling back to "standard".
+
+        Args:
+            session: The agent session.
+
+        Returns:
+            The configured reasoning level string.
+        """
+        return current_reasoning_level(session)
+
+    @staticmethod
+    def _last_tool_name(session: AgentSession) -> str | None:
+        """Name of the last tool executed in this run, or None.
+
+        Args:
+            session: The agent session.
+
+        Returns:
+            The last tool name found in the message history.
+        """
+        return last_tool_name(session)
+
+    # --- lifecycle ---
+
+    async def graceful_shutdown(self) -> None:
+        """Gracefully shut down the engine and all tracked sessions."""
+        self._shutdown_event.set()
+        for session in list(self._sessions.values()):
+            with contextlib.suppress(Exception):
+                await session.graceful_shutdown()
+        await self.resource_tracker.cleanup()
+
+    async def recover_session(self, session: AgentSession) -> bool:
+        """Attempt to recover a session from a saved checkpoint.
+
+        Args:
+            session: The session to recover.
+
+        Returns:
+            True if a checkpoint was found and loaded, False otherwise.
+        """
+        from app.core.recovery import RecoveryManager
+
+        return await RecoveryManager(self._checkpoints).restore_session(session)
+
+    async def __aenter__(self) -> AgentEngine:
+        """Enter the engine context manager."""
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        """Exit the engine context manager, marking shutdown."""
+        self._shutdown_event.set()
+
+    # --- permission API ---
+
+    def resolve_permission(self, tool_call_id: str, decision: str, *, owner_id: str | None = None) -> bool:
         """Resolve a pending permission request.
 
         Args:
@@ -1119,6 +1151,8 @@ class AgentEngine:
             True if the permission was resolved, False if no pending request found.
         """
         for session in self._sessions.values():
+            if owner_id is not None and session.user_id != owner_id:
+                continue
             if session._pending_permission and session._pending_permission.get("tool_call_id") == tool_call_id:
                 session._pending_permission["decision"] = decision
                 if session._permission_event is not None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import structlog
 from dotenv import load_dotenv
@@ -91,6 +92,7 @@ class Settings(BaseSettings):
             "/openapi.json",
             "/favicon.ico",
             "/",
+            "/api/v1/integrations/domestic/qqbot/webhook",
         ]
     )
 
@@ -149,6 +151,20 @@ class Settings(BaseSettings):
     max_concurrent_subtasks: int = Field(default=DEFAULT_MAX_CONCURRENT_SUBTASKS)
 
     telegram_bot_token: str = Field(default="")
+
+    # Domestic adapters stay disabled until an operator supplies a provider-specific secret.
+    domestic_provider_mode: Literal["disabled", "local"] = Field(default="disabled")
+    domestic_integrations_enabled: bool = Field(default=False)
+    domestic_webhook_secret: str = Field(default="")
+    domestic_qr_ttl_seconds: int = Field(default=300, ge=1, le=900)
+    domestic_webhook_max_skew_seconds: int = Field(default=300, ge=1, le=3600)
+
+    # User-provided LLM for L0/L1 summarization and session memory extraction.
+    # Leave unset to degrade to deterministic rule-based generation; the
+    # summarizer never reads Agent environment credentials.
+    user_llm_api_key: str = Field(default="")
+    user_llm_base_url: str = Field(default="")
+    user_llm_model: str = Field(default="gpt-4o-mini")
 
     # API key rotation
     api_key_rotation_enabled: bool = Field(default=True)

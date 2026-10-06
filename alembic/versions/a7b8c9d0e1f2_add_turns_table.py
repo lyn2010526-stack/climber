@@ -14,6 +14,7 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 
 from alembic import op
+from migration_support import has_table as _table_exists
 
 revision: str = 'a7b8c9d0e1f2'
 down_revision: str | None = 'f1a2b3c4d5e6'
@@ -24,7 +25,7 @@ TABLE = 'turns'
 
 
 def _has_table() -> bool:
-    return TABLE in sa.inspect(op.get_bind()).get_table_names()
+    return _table_exists(TABLE)
 
 
 def upgrade() -> None:

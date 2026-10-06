@@ -1,18 +1,34 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { useWorkspaceStore } from '../../../store/workspace';
+import i18n from '../../../i18n/config';
 
-vi.mock('../../../api', () => ({
-  api: {
-    listSessions: vi.fn(),
-    createSession: vi.fn(),
-    deleteSession: vi.fn(),
-    listAgents: vi.fn(),
-    listModels: vi.fn(),
-  },
-}));
+vi.mock('../../../api', () => {
+  class ApiRequestError extends Error {
+    status: number;
+    data?: unknown;
+    constructor(status: number, message: string, data?: unknown) {
+      super(message);
+      this.name = 'ApiRequestError';
+      this.status = status;
+      this.data = data;
+    }
+  }
+  return {
+    ApiRequestError,
+    api: {
+      listSessions: vi.fn(),
+      createSession: vi.fn(),
+      deleteSession: vi.fn(),
+      listAgents: vi.fn(),
+      listModels: vi.fn(),
+      listApiKeys: vi.fn(),
+      discoverModels: vi.fn(),
+    },
+  };
+});
 
-import { api } from '../../../api';
+import { api, ApiRequestError } from '../../../api';
 import { SessionSidebar } from '../SessionSidebar';
 
 let currentOwner = 'owner-a';
@@ -33,8 +49,9 @@ async function deleteAction(title: string) {
 
 afterEach(() => vi.unstubAllGlobals());
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
+  await i18n.changeLanguage('zh-CN');
   currentOwner = 'owner-a';
   discoveryStatus = 200;
   vi.stubGlobal('fetch', vi.fn(async (url: string) => {
@@ -68,6 +85,16 @@ beforeEach(() => {
   vi.mocked(api.listModels).mockResolvedValue([
     { provider: 'openai', model_id: 'gpt-4o', label: 'gpt-4o' },
   ] as any);
+  vi.mocked(api.listApiKeys).mockResolvedValue([
+    { id: 'key-a', name: 'Saved key', provider: 'openai', is_active: true },
+  ] as any);
+  vi.mocked(api.discoverModels).mockImplementation(async () => {
+    if (discoveryStatus >= 400) throw new ApiRequestError(discoveryStatus, `discovery failed: ${discoveryStatus}`);
+    return {
+      credential_id: 'key-a', provider: 'openai', source: 'provider_api', status: 'ok',
+      models: [{ provider: 'openai', model_id: 'discovered-model', label: 'Provider model' }],
+    } as any;
+  });
   // `clearAllMocks` keeps any `mockResolvedValueOnce` a previous test queued, so
   // an unconsumed entry would answer the next test's first call. Reset instead.
   vi.mocked(api.listSessions).mockReset();

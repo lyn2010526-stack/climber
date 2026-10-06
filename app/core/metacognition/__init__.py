@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from app.core.metacognition.capability_discovery import CapabilityDiscovery
-from app.core.metacognition.causal import CausalAttribution
+from app.core.metacognition.causal import CausalAttribution, CausalGraph
 from app.core.metacognition.goal_adjuster import GoalDynamicAdjuster
-from app.core.metacognition.hypothesis import HypothesisSimulator
+from app.core.metacognition.hypothesis import HypothesisBelief, HypothesisSimulator, WorldState
 from app.core.metacognition.judgment import (
     Judgment,
     aggregate_dissent,
@@ -15,7 +15,7 @@ from app.core.metacognition.judgment import (
 )
 from app.core.metacognition.memory_pruner import LongTermMemoryPruner
 from app.core.metacognition.monitor import MetaCognitionMonitor
-from app.core.metacognition.orchestrator import ExecutionContext, MetacognitionOrchestrator
+from app.core.metacognition.orchestrator import ExecutionContext, MetacognitionCycleResult, MetacognitionOrchestrator
 from app.core.metacognition.resource import ResourceOrchestrator
 from app.core.metacognition.safety_gate import (
     BLOCK_THRESHOLD,
@@ -38,17 +38,21 @@ __all__ = [
     "MAX_CONSECUTIVE_BOOSTS",
     "CapabilityDiscovery",
     "CausalAttribution",
+    "CausalGraph",
     "ExecutionContext",
     "GoalDynamicAdjuster",
     "HypothesisSimulator",
+    "HypothesisBelief",
     "Judgment",
     "LongTermMemoryPruner",
     "MetaCognitionMonitor",
     "MetacognitionOrchestrator",
+    "MetacognitionCycleResult",
     "ResourceOrchestrator",
     "SafetyVerdict",
     "SelfModuleRefactor",
     "SubAgentOrchestrator",
+    "WorldState",
     "aggregate_dissent",
     "calibrate",
     "continuous_goal",

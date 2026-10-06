@@ -94,6 +94,40 @@ async def get_trace(
 # --- Audit Endpoints ---
 
 
+def _durable_audit():
+    from app.core.observability.audit_store import audit_log
+
+    return audit_log
+
+
+@router.get("/audit-log")
+async def list_durable_audit_entries(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    action: str | None = None,
+    severity: str | None = None,
+    session_id: str | None = None,
+    user_id: str | None = None,
+) -> dict[str, Any]:
+    """List persisted operation audit events (login, permission, file, agent)."""
+    store = _durable_audit()
+    entries = await store.list_events(
+        user_id=user_id,
+        session_id=session_id,
+        action=action,
+        severity=severity,
+        limit=limit,
+        offset=offset,
+    )
+    total = await store.count_events(
+        user_id=user_id,
+        session_id=session_id,
+        action=action,
+        severity=severity,
+    )
+    return {"entries": entries, "total": total, "limit": limit, "offset": offset}
+
+
 @router.get("/audit")
 async def list_audit_entries(
     limit: int = Query(50, ge=1, le=200),

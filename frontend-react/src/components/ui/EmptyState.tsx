@@ -5,7 +5,17 @@ import { StatusIcon } from './StatusIcon';
 
 /** The named empty-state options a caller can pass as `icon`. A caller that
  *  needs artwork no option covers passes the node itself. */
-export type EmptyStateIconName = 'inbox' | 'search' | 'file' | 'alert' | 'warning' | 'unreported' | 'queued' | 'approval';
+export type EmptyStateIconName =
+  | 'inbox'
+  | 'search'
+  | 'file'
+  | 'settings'
+  | 'locked'
+  | 'alert'
+  | 'warning'
+  | 'unreported'
+  | 'queued'
+  | 'approval';
 
 export interface EmptyStateProps {
   illustration?: React.ReactNode;
@@ -28,11 +38,15 @@ export interface EmptyStateProps {
 /**
  * Artwork options. `inbox`, `search` and `file` describe the shape of the
  * missing thing and stay on the muted rung; they are decoration, not state.
+ * `settings` and `locked` extend the same muted vocabulary to the two shared
+ * meanings an empty settings or privacy surface draws.
  */
 const ARTWORK = {
   inbox: icons.emptyInbox,
   search: icons.emptySearch,
   file: icons.emptyFile,
+  settings: icons.settings,
+  locked: icons.privacyLock,
 } as const satisfies Record<string, typeof icons.emptyInbox>;
 
 /**

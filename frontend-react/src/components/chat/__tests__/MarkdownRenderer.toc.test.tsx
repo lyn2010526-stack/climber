@@ -72,4 +72,27 @@ describe('MarkdownRenderer table of contents', () => {
     expect(items[1]!.getAttribute('style')).toContain('padding-left: 12px');
     expect(items[2]!.getAttribute('style')).toContain('padding-left: 24px');
   });
+
+  it('keeps toc anchors aligned when headings carry inline markdown', () => {
+    const content = [
+      '## **Bold** title',
+      '',
+      'text',
+      '',
+      '### `code` heading',
+      '',
+      'text',
+      '',
+      '#### [Linked](https://example.com) title',
+      '',
+      'text',
+    ].join('\n');
+    const { container } = render(<MarkdownRenderer content={content} />);
+    const links = screen.getAllByRole('link').filter(a => a.getAttribute('href')?.startsWith('#heading-'));
+    expect(links.map(a => a.textContent)).toEqual(['Bold title', 'code heading', 'Linked title']);
+    for (const link of links) {
+      const id = link.getAttribute('href')!.slice(1);
+      expect(container.querySelector(`#${CSS.escape(id)}`)).not.toBeNull();
+    }
+  });
 });

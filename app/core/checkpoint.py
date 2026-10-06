@@ -104,6 +104,20 @@ class InMemoryCheckpointStore:
     async def list_for_session(self, _thread_id: str | None, session_id: str) -> list[str]:
         return [cid for cid, cp in self._store.items() if cp.session_id == session_id]
 
+    async def list_recoverable_sessions(self) -> list[dict[str, Any]]:
+        """Enumerate sessions that have at least one checkpoint in this store.
+
+        The recovery manager routes candidate discovery through the injected
+        store so an in-memory store is not silently bypassed.
+        """
+        counts: dict[str, int] = {}
+        for checkpoint in self._store.values():
+            counts[checkpoint.session_id] = counts.get(checkpoint.session_id, 0) + 1
+        return [
+            {"session_id": session_id, "checkpoint_count": count}
+            for session_id, count in counts.items()
+        ]
+
     async def delete_for_session(self, _thread_id: str | None, session_id: str) -> int:
         to_delete = [cid for cid, cp in self._store.items() if cp.session_id == session_id]
         for cid in to_delete:
@@ -135,9 +149,8 @@ class SQLiteCheckpointStore:
         checkpoint_id: str = "",
         parent_id: str | None = None,
     ) -> str:
-        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-
         from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
+        from app.storage import engine as _db_engine
 
         await ensure_checkpoint_schema()
         checkpoint = sanitize_checkpoint(checkpoint)
@@ -152,41 +165,35 @@ class SQLiteCheckpointStore:
             asdict(write) if isinstance(write, PendingWrite) else write
             for write in checkpoint.pending_writes
         ]
+        values = {
+            "id": cid,
+            "session_id": checkpoint.session_id,
+            "thread_id": thread_id or "",
+            "messages": json.dumps(checkpoint.messages, ensure_ascii=False),
+            "iteration": checkpoint.iteration,
+            "status": checkpoint.status,
+            "tool_results": json.dumps(checkpoint.tool_results, ensure_ascii=False),
+            "metadata": json.dumps(metadata_payload, ensure_ascii=False),
+            "channel_values": json.dumps(checkpoint.channel_values, ensure_ascii=False),
+            "channel_versions": json.dumps(checkpoint.channel_versions, ensure_ascii=False),
+            "versions_seen": json.dumps(checkpoint.versions_seen, ensure_ascii=False),
+            "pending_writes": json.dumps(pending_writes, ensure_ascii=False),
+            "parent_id": parent_id,
+            "created_at": saved_at,
+        }
+        if _db_engine.dialect.name == "postgresql":
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            base = pg_insert(CheckpointRecord)
+        else:
+            from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+            base = sqlite_insert(CheckpointRecord)
+        stmt = base.values(**values).on_conflict_do_update(
+            index_elements=["id"],
+            set_={k: v for k, v in values.items() if k != "id"},
+        )
         async with async_session() as db:
-            stmt = sqlite_insert(CheckpointRecord).values(
-                id=cid,
-                session_id=checkpoint.session_id,
-                thread_id=thread_id or "",
-                messages=json.dumps(checkpoint.messages, ensure_ascii=False),
-                iteration=checkpoint.iteration,
-                status=checkpoint.status,
-                tool_results=json.dumps(checkpoint.tool_results, ensure_ascii=False),
-                metadata_=json.dumps(metadata_payload, ensure_ascii=False),
-                channel_values=json.dumps(checkpoint.channel_values, ensure_ascii=False),
-                channel_versions=json.dumps(checkpoint.channel_versions, ensure_ascii=False),
-                versions_seen=json.dumps(checkpoint.versions_seen, ensure_ascii=False),
-                pending_writes=json.dumps(pending_writes, ensure_ascii=False),
-                parent_id=parent_id,
-                created_at=saved_at,
-            )
-            stmt = stmt.on_conflict_do_update(
-                index_elements=["id"],
-                set_={
-                    "session_id": checkpoint.session_id,
-                    "thread_id": thread_id or "",
-                    "messages": json.dumps(checkpoint.messages, ensure_ascii=False),
-                    "iteration": checkpoint.iteration,
-                    "status": checkpoint.status,
-                    "tool_results": json.dumps(checkpoint.tool_results, ensure_ascii=False),
-                    "metadata": json.dumps(metadata_payload, ensure_ascii=False),
-                    "channel_values": json.dumps(checkpoint.channel_values, ensure_ascii=False),
-                    "channel_versions": json.dumps(checkpoint.channel_versions, ensure_ascii=False),
-                    "versions_seen": json.dumps(checkpoint.versions_seen, ensure_ascii=False),
-                    "pending_writes": json.dumps(pending_writes, ensure_ascii=False),
-                    "parent_id": parent_id,
-                    "created_at": saved_at,
-                },
-            )
             await db.execute(stmt)
             await db.commit()
         return cid
@@ -262,6 +269,30 @@ class SQLiteCheckpointStore:
                 )
             ).scalars().all()
             return list(rows)
+
+    async def list_recoverable_sessions(self) -> list[dict[str, Any]]:
+        """Enumerate sessions that hold at least one checkpoint row.
+
+        The recovery manager routes candidate discovery through the injected
+        store so the current backing store is the single source of truth.
+        """
+        from sqlalchemy import func
+
+        from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
+
+        await ensure_checkpoint_schema()
+        async with async_session() as db:
+            rows = (
+                await db.execute(
+                    __import__("sqlalchemy")
+                    .select(CheckpointRecord.session_id, func.count().label("cnt"))
+                    .group_by(CheckpointRecord.session_id)
+                )
+            ).all()
+            return [
+                {"session_id": row.session_id, "checkpoint_count": int(row.cnt)}
+                for row in rows
+            ]
 
     async def list(self, session_id: str) -> list[CheckpointData]:
         """Return all checkpoints for a session as CheckpointData objects."""

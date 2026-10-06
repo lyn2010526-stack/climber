@@ -132,7 +132,7 @@ def build_workflow_tool_validator(
         if sandbox is None:
             return True, "OK"
         try:
-            from app.core.engine.safety import COMMAND_TOOLS, FILE_TOOLS
+            from app.core.engine.validation import COMMAND_TOOLS, FILE_TOOLS
 
             if tool_name in COMMAND_TOOLS:
                 cmd = arguments.get("command") or ""

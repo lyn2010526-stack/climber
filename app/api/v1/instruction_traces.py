@@ -8,8 +8,10 @@ retry a submission without creating a second archive row.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from app.core.auth import get_current_user
+from app.core.instruction.understanding import understand_instruction
 from app.schemas.api_v1.instruction_traces import (
     InstructionTraceCreate,
     InstructionTracePage,
@@ -42,6 +44,10 @@ def _to_read(trace: InstructionTrace) -> InstructionTraceRead:
         token_count=trace.token_count,
         compressed_into_id=trace.compressed_into_id,
         is_archived=bool(trace.is_archived),
+        turn_id=trace.turn_id,
+        status=trace.status,
+        outcome=trace.outcome,
+        retrieval_count=trace.retrieval_count,
         created_at=trace.created_at,
         updated_at=trace.updated_at,
     )
@@ -84,17 +90,20 @@ async def create_instruction_trace(
 @router.get("/", response_model=InstructionTracePage)
 async def list_instruction_traces(
     session_id: str | None = None,
-    user_id: str | None = None,
+    requested_user_id: str | None = Query(default=None, alias="user_id"),
     is_archived: bool | None = None,
     limit: int = Query(default=50, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
+    current_user: str = Depends(get_current_user),
 ) -> InstructionTracePage:
     """List archived instructions with optional filters and pagination."""
+    if requested_user_id is not None and requested_user_id != current_user:
+        raise HTTPException(status_code=403, detail="Forbidden")
     async with async_session() as db:
         rows = await list_traces(
             db,
             session_id=session_id,
-            user_id=user_id,
+            user_id=current_user,
             is_archived=is_archived,
             limit=limit,
             offset=offset,
@@ -102,7 +111,7 @@ async def list_instruction_traces(
         total = await count_traces(
             db,
             session_id=session_id,
-            user_id=user_id,
+            user_id=current_user,
             is_archived=is_archived,
         )
         return InstructionTracePage(
@@ -111,3 +120,29 @@ async def list_instruction_traces(
             limit=limit,
             offset=offset,
         )
+
+
+class InstructionUnderstandRequest(BaseModel):
+    """Payload for the read-only instruction understanding endpoint."""
+
+    raw_text: str = ""
+    context: str | None = None
+
+
+@router.post("/understand")
+async def understand_instruction_endpoint(
+    payload: InstructionUnderstandRequest,
+) -> dict[str, object]:
+    """Return the structured, deterministic understanding of a user instruction.
+
+    Mirrors the trace ``task_spec`` shape: main goal, constraints, ambiguities,
+    confidence, clarification questions and a plain-language summary. This is a
+    read-only pass — nothing is archived and no profile data is exposed.
+    """
+    text = payload.raw_text.strip()
+    if not text:
+        raise HTTPException(status_code=422, detail="raw_text is required")
+    understanding = understand_instruction(text, context=payload.context)
+    spec = understanding.to_task_spec()
+    spec.pop("profile_evidence", None)
+    return spec

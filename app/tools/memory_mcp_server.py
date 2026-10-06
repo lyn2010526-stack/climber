@@ -54,12 +54,17 @@ def sync_write_memory(
     """Persist a memory through the lifecycle manager."""
     _ensure_tables()
     metadata = {"tags": tags or []} if tags else None
+    # Bound importance at the entry point so direct callers match the tool clamp.
+    try:
+        importance = max(0.0, min(1.0, float(importance)))
+    except (TypeError, ValueError):
+        importance = 0.5
     result = _run(
         _manager.write_memory(
             content=content,
             user_id=user_id,
             memory_type=memory_type,
-            importance=float(importance),
+            importance=importance,
             metadata=metadata,
         )
     )

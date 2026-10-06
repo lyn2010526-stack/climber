@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react';
-import { ApiError, apiClient } from '../../lib/api-client';
+import { ApiRequestError, api } from '../../api';
+import { useI18n } from '../../i18n';
 
 export interface ModelSelection {
   credential_id: string;
@@ -13,14 +14,6 @@ interface DiscoveredModel {
   label: string;
 }
 
-interface DiscoveryResult {
-  credential_id: string;
-  provider: string;
-  source: 'provider_api';
-  status: 'ok' | 'empty';
-  models: DiscoveredModel[];
-}
-
 export interface ModelSelectorProps {
   ownerKey: string;
   credentialId: string | null;
@@ -30,37 +23,36 @@ export interface ModelSelectorProps {
   disabled?: boolean;
 }
 
-const TIMEOUT_ERROR = '模型发现超时，请重试';
-
-const errors: Record<string, string> = {
-  missing_key: '请先为此凭据保存 API Key',
-  missing_endpoint: '请先保存公网 HTTPS 模型端点',
-  credential_not_found: '凭据已删除、停用或不属于当前用户',
-  credential_unreadable: '凭据无法解密，请重新保存',
-  unsupported_provider: '当前 provider 暂不支持模型发现',
-  discovery_unavailable: '此端点未提供模型发现接口',
-  provider_auth_failed: '供应商拒绝了已存凭据，请检查 Key 或权限',
-  rate_limited: '供应商限流，请稍后重试',
-  timeout: TIMEOUT_ERROR,
-  unsafe_endpoint: '发现仅允许公网 HTTPS 端点，私网和本机地址被禁用',
-  unsafe_redirect: '发现已拒绝供应商重定向',
-  invalid_response: '供应商返回的模型列表格式无效',
-  pagination_limit: '模型列表超出分页上限',
-  response_too_large: '模型列表超出大小上限',
-  network_error: '暂时无法连接供应商',
+const ERROR_KEY_BY_CODE: Record<string, string> = {
+  missing_key: 'chat.model_selector.missing_key',
+  missing_endpoint: 'chat.model_selector.missing_endpoint',
+  credential_not_found: 'chat.model_selector.credential_not_found',
+  credential_unreadable: 'chat.model_selector.credential_unreadable',
+  unsupported_provider: 'chat.model_selector.unsupported_provider',
+  discovery_unavailable: 'chat.model_selector.discovery_unavailable',
+  provider_auth_failed: 'chat.model_selector.provider_auth_failed',
+  rate_limited: 'chat.model_selector.rate_limited',
+  timeout: 'chat.model_selector.timeout',
+  unsafe_endpoint: 'chat.model_selector.unsafe_endpoint',
+  unsafe_redirect: 'chat.model_selector.unsafe_redirect',
+  invalid_response: 'chat.model_selector.invalid_response',
+  pagination_limit: 'chat.model_selector.pagination_limit',
+  response_too_large: 'chat.model_selector.response_too_large',
+  network_error: 'chat.model_selector.network_error',
 };
 
-function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) {
-    if (error.status === 401 || error.status === 403) return '当前身份无权获取模型列表';
+function errorMessage(error: unknown, t: (key: string) => string): string {
+  if (error instanceof ApiRequestError) {
+    if (error.status === 401 || error.status === 403) return t('chat.model_selector.unauthorized');
     const data = error.data as { detail?: { code?: string } } | undefined;
     const code = data?.detail?.code;
-    if (code && errors[code]) return errors[code];
+    if (code && ERROR_KEY_BY_CODE[code]) return t(ERROR_KEY_BY_CODE[code]);
   }
-  return '模型发现失败，请重试';
+  return t('chat.model_selector.generic_failed');
 }
 
 function ScopedModelSelector({ credentialId, provider, value, onChange, disabled }: ModelSelectorProps) {
+  const { t } = useI18n();
   const id = useId();
   const [models, setModels] = useState<DiscoveredModel[]>([]);
   const [loading, setLoading] = useState(false);
@@ -80,25 +72,22 @@ function ScopedModelSelector({ credentialId, provider, value, onChange, disabled
       controller.abort();
       if (active) {
         setLoading(false);
-        setError(TIMEOUT_ERROR);
+        setError(t('chat.model_selector.timeout'));
       }
     }, 15000);
-    apiClient.get<DiscoveryResult>(
-      `/models/discover?credential_id=${encodeURIComponent(credentialId)}`,
-      { signal: controller.signal },
-    ).then((result) => {
+    api.discoverModels(credentialId, controller.signal).then((result) => {
       if (!active || controller.signal.aborted) return;
       if (result.credential_id !== credentialId || result.provider !== provider ||
           result.source !== 'provider_api' || !['ok', 'empty'].includes(result.status) ||
           !Array.isArray(result.models) || result.models.some((model) =>
             !model || model.provider !== provider || typeof model.model_id !== 'string' ||
             !model.model_id || typeof model.label !== 'string')) {
-        throw new Error('Invalid discovery response');
+        throw new Error(t('chat.model_selector.invalid_payload'));
       }
       setModels(result.models);
       setLoaded(true);
     }).catch((reason: unknown) => {
-      if (active && !controller.signal.aborted) setError(errorMessage(reason));
+      if (active && !controller.signal.aborted) setError(errorMessage(reason, t));
     }).finally(() => {
       window.clearTimeout(timer);
       if (active) setLoading(false);
@@ -108,13 +97,13 @@ function ScopedModelSelector({ credentialId, provider, value, onChange, disabled
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [credentialId, provider, revision]);
+  }, [credentialId, provider, revision, t]);
 
   const selected = value?.credential_id === credentialId && value.provider === provider ? value.model_id : '';
   const missing = selected && !models.some((model) => model.model_id === selected);
   return (
     <div className="space-y-2">
-      <label htmlFor={id}>模型</label>
+      <label htmlFor={id}>{t('chat.model_selector.label')}</label>
       <select
         id={id} value={selected} aria-describedby={`${id}-status`}
         disabled={disabled || loading || !credentialId || !loaded || !models.length}
@@ -124,17 +113,17 @@ function ScopedModelSelector({ credentialId, provider, value, onChange, disabled
           if (credentialId && model) onChange({ credential_id: credentialId, provider, model_id: model.model_id });
         }}
       >
-        <option value="">请选择模型</option>
-        {missing && <option value={selected} disabled>{selected}（未在当前发现列表中）</option>}
+        <option value="">{t('chat.model_selector.empty_choice')}</option>
+        {missing && <option value={selected} disabled>{t('chat.model_selector.not_in_list', { name: selected })}</option>}
         {models.map((model) => <option key={model.model_id} value={model.model_id}>{model.label}</option>)}
       </select>
       <p id={`${id}-status`} role="status" className="text-xs text-[var(--color-text-secondary)]">
-        {!credentialId ? '请选择已保存的模型凭据' : loading ? '正在从供应商获取模型…' :
-          loaded ? (models.length ? '来源：供应商实时 API' : '供应商返回空列表，暂无可选模型') : ''}
+        {!credentialId ? t('chat.model_selector.no_credential') : loading ? t('chat.model_selector.loading_models') :
+          loaded ? (models.length ? t('chat.model_selector.source_live') : t('chat.model_selector.empty_list')) : ''}
       </p>
       {error && <p role="alert" className="text-sm text-[var(--color-error)]">{error}</p>}
       <button type="button" disabled={disabled || loading || !credentialId} onClick={() => setRevision((n) => n + 1)}>
-        {error ? '重试模型发现' : '刷新模型列表'}
+        {error ? t('chat.model_selector.retry') : t('chat.model_selector.refresh')}
       </button>
     </div>
   );

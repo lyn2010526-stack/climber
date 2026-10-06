@@ -273,10 +273,10 @@ class MCPClient:
             raise RuntimeError("Not connected")
 
         tool_def = self.tools.get(name)
-        if tool_def and tool_def.inputSchema:
-            self._validate_arguments(name, arguments, tool_def.inputSchema)
 
         try:
+            if tool_def and tool_def.inputSchema:
+                self._validate_arguments(name, arguments, tool_def.inputSchema)
             result = await self.session.call_tool(name, arguments)
             content = []
             for item in result.content:

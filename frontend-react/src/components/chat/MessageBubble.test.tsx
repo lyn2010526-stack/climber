@@ -22,7 +22,10 @@ describe('MessageBubble presentation', () => {
     expect(container.querySelector('[data-avatar]')).toBeNull();
     const body = container.querySelector('[data-message-body]')!;
     expect(body).toHaveClass('bg-[var(--color-accent-subtle)]');
-    expect(body).toHaveClass('rounded-2xl');
+    // Spec: codex 卡片语言（/tmp/opencode/dsh-codex-suite ConversationCard）——
+    // 用户气泡随卡片半径 12px（--radius-lg）+ hairline border，取代旧的 16px 圆角。
+    expect(body).toHaveClass('rounded-[var(--radius-lg)]');
+    expect(body).toHaveClass('border-[var(--color-border-subtle)]');
     expect(body.textContent).toBe('帮我看看');
   });
 

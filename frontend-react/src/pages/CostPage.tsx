@@ -1,31 +1,18 @@
 import { useState, useEffect } from 'react';
 import { DollarSign, AlertTriangle, RefreshCw } from 'lucide-react';
-import { api } from '../api';
+import { api, type CostBudgetOut, type CostUsageOut } from '../api';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { SkeletonList } from '../components/ui/Skeleton';
+import { CostQuotaIndicator } from '../components/cost/CostQuotaIndicator';
 import { useI18n } from '../i18n/utils';
 import { formatNumber } from '../i18n/utils';
 
-interface CostData {
-  total_cost: number;
-  total_tokens: number;
-  total_calls: number;
-  by_model: { model: string; cost: number; tokens: number; calls: number }[];
-  by_day: { date: string; cost: number; tokens: number }[];
-}
-
-interface BudgetData {
-  amount: number;
-  period: string;
-  is_active: boolean;
-  current_spend: number;
-  per_session_limit: number | null;
-  per_request_limit: number | null;
-}
+type CostData = CostUsageOut;
+type BudgetData = CostBudgetOut;
 
 function BudgetBar({ label, current, limit, percent }: { label: string; current: number; limit: number; percent: number }) {
   const color = percent >= 90 ? 'bg-[var(--color-error)]' : percent >= 70 ? 'bg-[var(--color-warning)]' : 'bg-[var(--color-accent)]';
@@ -35,8 +22,8 @@ function BudgetBar({ label, current, limit, percent }: { label: string; current:
         <span className="text-[var(--color-text-secondary)] font-medium">{label}</span>
         <span className="text-[var(--color-text-muted)]">${current.toFixed(2)} / ${limit.toFixed(2)}</span>
       </div>
-      <div className="w-full h-2 bg-[var(--color-bg-surface-3)] rounded-full overflow-hidden">
-        <div className={`h-full ${color} rounded-full transition-all duration-500`} style={{ width: `${percent}%` }} />
+      <div className="w-full h-2 bg-[var(--color-bg-surface-3)] rounded-[var(--radius-pill)] overflow-hidden">
+        <div className={`h-full ${color} rounded-[var(--radius-pill)] transition-all duration-500 motion-reduce:transition-none`} style={{ width: `${percent}%` }} />
       </div>
     </div>
   );
@@ -85,10 +72,14 @@ export default function CostPage() {
         <PageHeader
           title={t('cost.title')}
           icon={<DollarSign size={20} />}
+          className="border-b border-[var(--color-border-subtle)] pb-[var(--space-4)] [&_h1]:text-[length:var(--text-base)] [&_h1]:md:text-[length:var(--text-base)] [&_p]:text-[var(--color-text-muted)]"
           actions={
-            <Button variant="secondary" size="sm" onClick={fetchData} loading={loading} icon={<RefreshCw size={14} />}>
-              {t('common.refresh')}
-            </Button>
+            <div className="flex items-center gap-[var(--space-3)]">
+              <CostQuotaIndicator />
+              <Button variant="secondary" size="sm" onClick={fetchData} loading={loading} icon={<RefreshCw size={14} />}>
+                {t('common.refresh')}
+              </Button>
+            </div>
           }
         />
 

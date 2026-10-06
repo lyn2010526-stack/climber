@@ -38,7 +38,7 @@ export function ImagePreview({ attachment, onRemove, disabled = false, className
       data-testid="image-preview-chip"
     >
       <span className="relative size-8 shrink-0 overflow-hidden rounded-[var(--radius-sm)] bg-[var(--color-bg-surface-2)]">
-        {attachment.url
+        {attachment.url && (attachment.kind ?? 'image') === 'image'
           ? (
               <img
                 src={attachment.url}

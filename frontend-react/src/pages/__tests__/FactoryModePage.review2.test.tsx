@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { FactoryModePage } from '../FactoryModePage';
 import { api } from '../../api';
+import i18n from '../../i18n';
 
 vi.mock('../../api', () => ({
   api: {
@@ -16,7 +17,8 @@ vi.mock('../../api', () => ({
 
 const abortStream = vi.fn();
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('en');
   vi.resetAllMocks();
   vi.mocked(api.listAgents).mockResolvedValue([
     { id: 'configured-agent', name: 'Configured', provider: 'anthropic', model_id: 'user-model', is_active: true },

@@ -21,7 +21,9 @@ TABLE = "user_instruction_traces"
 
 
 def upgrade() -> None:
-    if TABLE in sa.inspect(op.get_bind()).get_table_names():
+    from migration_support import has_table
+
+    if has_table(TABLE):
         return
     op.create_table(
         TABLE,
@@ -97,7 +99,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    if TABLE not in sa.inspect(op.get_bind()).get_table_names():
+    from migration_support import has_table
+
+    if not has_table(TABLE):
         return
     op.drop_index("ix_user_instruction_traces_hash_created", table_name=TABLE)
     op.drop_index("ix_user_instruction_traces_user_created", table_name=TABLE)

@@ -17,15 +17,12 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 
 from alembic import op
+from migration_support import has_table as _has_table
 
 revision: str = '52310c24d4c8'
 down_revision: str | None = 'dd8212a8f22a'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
-
-
-def _has_table(name: str) -> bool:
-    return name in sa.inspect(op.get_bind()).get_table_names()
 
 
 def upgrade() -> None:

@@ -97,6 +97,7 @@ class LevelAffectsModelCallTests(unittest.IsolatedAsyncioTestCase):
             CheckpointRecord,
             Message,
             Session as SessionRow,
+            SessionInput,
             Turn,
             UsageLog,
         )
@@ -115,7 +116,16 @@ class LevelAffectsModelCallTests(unittest.IsolatedAsyncioTestCase):
         self.factory = async_sessionmaker(self.db_engine, expire_on_commit=False)
         tables = [
             model.__table__
-            for model in (Agent, SessionRow, Turn, Message, UsageLog, CheckpointRecord, CostRecord)
+            for model in (
+                Agent,
+                SessionRow,
+                SessionInput,
+                Turn,
+                Message,
+                UsageLog,
+                CheckpointRecord,
+                CostRecord,
+            )
         ]
         async with self.db_engine.begin() as connection:
             await connection.run_sync(lambda conn: Base.metadata.create_all(conn, tables=tables))
@@ -339,9 +349,9 @@ class ReasoningEndpointTests(unittest.IsolatedAsyncioTestCase):
         response = await self.client.get("/api/v1/reasoning/permission-tiers")
         self.assertEqual(response.status_code, 200)
         body = response.json()
-        self.assertEqual(body["current"], {"mode": "default", "tier": "partial"})
+        self.assertEqual(body["current"], {"mode": "default", "tier": "full_write"})
         tier_ids = [tier["id"] for tier in body["tiers"]]
-        self.assertEqual(tier_ids, ["read_only", "partial", "full"])
+        self.assertEqual(tier_ids, ["read_only", "partial_write", "full_write"])
         states = {state["tool"]: state["decision"] for state in body["tool_states"]}
         # In default mode reads are automatic, mutations require confirmation.
         self.assertEqual(states["read_file"], "allow")

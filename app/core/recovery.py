@@ -62,21 +62,7 @@ class RecoveryManager:
 
     async def list_recoverable_sessions(self) -> list[dict[str, Any]]:
         """List all sessions that have recoverable checkpoints."""
-        from sqlalchemy import func, select
-
-        from app.storage import async_session
-        from app.storage.database import CheckpointRecord
-
-        async with async_session() as session:
-            result = await session.execute(
-                select(CheckpointRecord.session_id, func.count(CheckpointRecord.id))
-                .group_by(CheckpointRecord.session_id)
-            )
-            rows = result.all()
-            return [
-                {"session_id": row[0], "checkpoint_count": row[1]}
-                for row in rows
-            ]
+        return await self._store.list_recoverable_sessions()
 
     async def auto_recover(self) -> list[dict[str, Any]]:
         """Discover resumable state; this does not run a model or replay tools."""

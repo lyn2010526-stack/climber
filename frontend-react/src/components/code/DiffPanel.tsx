@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useId, type ReactNode } from 'react';
 import { Plus, Minus, FileText, ChevronDown, ChevronRight, Copy, FileDiff } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useI18n } from '../../i18n';
 import { StatusIcon } from '../ui/StatusIcon';
 
 /**
@@ -222,6 +223,7 @@ interface DiffFileViewProps {
 }
 
 function DiffFileView({ file, defaultExpanded = true, showLineNumbers = true }: DiffFileViewProps) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
@@ -280,12 +282,12 @@ function DiffFileView({ file, defaultExpanded = true, showLineNumbers = true }: 
         </span>
 
         <span className="flex shrink-0 items-center gap-[var(--space-2)] font-mono text-[length:var(--text-2xs)] tabular-nums">
-          <span className="text-[var(--color-text-muted)]">{totalLines} 行</span>
+          <span className="text-[var(--color-text-muted)]">{t('diff.total_lines', { lines: totalLines, defaultValue: '{{lines}} 行' })}</span>
           {file.additions > 0 && <span className="text-[var(--color-diff-added)]">+{file.additions}</span>}
           {file.deletions > 0 && <span className="text-[var(--color-diff-removed)]">-{file.deletions}</span>}
         </span>
       </button>
-      <button type="button" onClick={handleCopy} aria-label={copied ? '已复制' : `复制 ${file.path} 的差异`} title={copied ? '已复制' : '复制差异'}
+      <button type="button" onClick={handleCopy} aria-label={copied ? t('diff.copied', { defaultValue: '已复制' }) : t('diff.copy_aria', { path: file.path, defaultValue: `复制 ${file.path} 的差异` })} title={copied ? t('diff.copied', { defaultValue: '已复制' }) : t('diff.copy_title', { defaultValue: '复制差异' })}
         className="flex size-[var(--control-height-sm)] shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-surface-2)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
         {copied ? <StatusIcon tone="success" size="sm" /> : <Copy size={14} aria-hidden="true" />}
       </button>
@@ -293,13 +295,13 @@ function DiffFileView({ file, defaultExpanded = true, showLineNumbers = true }: 
       {copyError && (
         <p role="alert" className="flex items-center gap-[var(--space-2)] border-b border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] px-[var(--space-3)] py-[var(--space-2)] text-[length:var(--text-xs)] text-[var(--color-error)]">
           <StatusIcon tone="error" size="xs" />
-          复制失败，请检查剪贴板权限后重试。
+          {t('diff.copy_failed', { defaultValue: '复制失败，请检查剪贴板权限后重试。' })}
         </p>
       )}
       {expanded && (
         <div id={contentId} className="overflow-x-auto">
           <div className="w-max min-w-full">
-            {file.hunks.length === 0 && <p className="px-[var(--space-3)] py-[var(--space-4)] text-[length:var(--text-xs)] text-[var(--color-text-muted)]">此文件没有可显示的文本差异。</p>}
+            {file.hunks.length === 0 && <p className="px-[var(--space-3)] py-[var(--space-4)] text-[length:var(--text-xs)] text-[var(--color-text-muted)]">{t('diff.no_text_diff', { defaultValue: '此文件没有可显示的文本差异。' })}</p>}
             {file.hunks.map((hunk, hi) => (
               <div key={hi}>
                 <DiffLine
@@ -339,9 +341,11 @@ export function DiffPanel({
   diffText,
   files: propFiles,
   className,
-  title = '文件变更',
+  title,
   showLineNumbers = true,
 }: DiffPanelProps) {
+  const { t } = useI18n();
+  const resolvedTitle = title ?? t('diff.title', { defaultValue: '文件变更' });
   const files = useMemo(() => {
     if (propFiles) return propFiles;
     if (diffText) return parseDiff(diffText);
@@ -349,10 +353,10 @@ export function DiffPanel({
   }, [diffText, propFiles]);
 
   if (files.length === 0) return (
-    <section className={cn('rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] p-[var(--space-4)]', className)} aria-label={title}>
-      <div className="flex items-center gap-[var(--space-2)] text-[length:var(--text-xs)] font-medium text-[var(--color-text-primary)]"><FileDiff size={15} aria-hidden="true" />{title}</div>
-      <p role="status" className="mt-[var(--space-3)] text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">{diffText?.trim() ? '无法显示此差异格式' : '暂无文件变更'}</p>
-      <p className="mt-[var(--space-1)] text-[length:var(--text-xs)] text-[var(--color-text-muted)]">{diffText?.trim() ? '请提供包含文件头的 unified diff。' : '文件修改后，差异将在此显示。'}</p>
+    <section className={cn('rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] p-[var(--space-4)]', className)} aria-label={resolvedTitle}>
+      <div className="flex items-center gap-[var(--space-2)] text-[length:var(--text-xs)] font-medium text-[var(--color-text-primary)]"><FileDiff size={15} aria-hidden="true" />{resolvedTitle}</div>
+      <p role="status" className="mt-[var(--space-3)] text-[length:var(--text-sm)] text-[var(--color-text-secondary)]">{diffText?.trim() ? t('diff.format_unparseable', { defaultValue: '无法显示此差异格式' }) : t('diff.no_changes', { defaultValue: '暂无文件变更' })}</p>
+      <p className="mt-[var(--space-1)] text-[length:var(--text-xs)] text-[var(--color-text-muted)]">{diffText?.trim() ? t('diff.format_hint', { defaultValue: '请提供包含文件头的 unified diff。' }) : t('diff.no_changes_hint', { defaultValue: '文件修改后，差异将在此显示。' })}</p>
     </section>
   );
 
@@ -365,9 +369,9 @@ export function DiffPanel({
       <div className="mb-[var(--space-2)] flex items-center justify-between px-[var(--space-1)]">
         <div className="flex items-center gap-[var(--space-2)]">
           <FileText size={13} className="text-[var(--color-text-muted)]" aria-hidden="true" />
-          <span className="text-[length:var(--text-2xs)] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{title}</span>
+          <span className="text-[length:var(--text-2xs)] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">{resolvedTitle}</span>
           <span className="font-mono text-[length:var(--text-2xs)] tabular-nums text-[var(--color-text-disabled)]">
-            {files.length} 个文件
+            {t('diff.file_count', { files: files.length, defaultValue: '{{files}} 个文件' })}
           </span>
         </div>
         <div className="flex items-center gap-[var(--space-1-5)] font-mono text-[length:var(--text-2xs)] tabular-nums">

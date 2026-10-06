@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
@@ -22,7 +23,7 @@ from app.storage.repository_reasoning import (
     ReasoningTraceRepository,
 )
 
-DEFAULT_USER = "default-user"
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(tags=["reasoning"], redirect_slashes=False)
 
@@ -73,9 +74,11 @@ async def reason_with_slash(
 
         return result
     except NotImplementedError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        logger.warning("reasoning_strategy_not_supported", error=str(e))
+        raise HTTPException(status_code=400, detail="Reasoning strategy is not supported") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Reasoning failed: {e!s}") from e
+        logger.exception("reasoning_failed", error=str(e))
+        raise HTTPException(status_code=500, detail="Reasoning failed") from e
 
 
 @router.post("")
@@ -150,7 +153,8 @@ async def reason_stream(
                 "trace_id": result.trace.trace_id if result.trace else None,
             })}
         except Exception as e:
-            yield {"event": "reasoning_error", "data": json.dumps({"error": str(e)})}
+            logger.warning("reasoning_stream_failed", error=str(e))
+            yield {"event": "reasoning_error", "data": json.dumps({"error": "Reasoning failed"})}
 
     return EventSourceResponse(event_generator())
 
@@ -173,6 +177,7 @@ async def submit_feedback(
     feedback: dict[str, Any],
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = RateLimit,
+    _scope_check: None = Depends(_require_scopes("write")),
 ) -> dict[str, str]:
     user_id = current_user_id(request)
     trace_repo = ReasoningTraceRepository(db)
@@ -226,10 +231,11 @@ async def list_reasoning_history(
     request: Request,
     db: AsyncSession = Depends(get_db),
     limit: int = 50,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     user_id = current_user_id(request)
     trace_repo = ReasoningTraceRepository(db)
-    items = await trace_repo.list_by_user(user_id, limit=limit)
+    items = await trace_repo.list_by_user(user_id, limit=limit, offset=offset)
     return [
         {
             "trace_id": t.trace_id,

@@ -146,13 +146,55 @@ describe('useAppLock state machine', () => {
     await act(async () => {
       await result.current.setupPin('135790');
     });
-    act(() => {
-      result.current.disableLock();
+    window.localStorage.setItem(PRIVACY_STORAGE_KEYS.credential, FAKE_CREDENTIAL_BASE64);
+    window.localStorage.setItem(PRIVACY_STORAGE_KEYS.autoLockMs, '1000');
+    window.localStorage.setItem(PRIVACY_STORAGE_KEYS.skipped, '1');
+    await act(async () => {
+      expect(await result.current.disableLock('135790')).toBe(true);
     });
     expect(result.current.status).toBe('setup');
     expect(result.current.hasPin).toBe(false);
     expect(window.localStorage.getItem(PRIVACY_STORAGE_KEYS.pin)).toBeNull();
     expect(window.sessionStorage.getItem(PRIVACY_STORAGE_KEYS.session)).toBeNull();
+    expect(window.localStorage.getItem(PRIVACY_STORAGE_KEYS.credential)).toBeNull();
+    expect(window.localStorage.getItem(PRIVACY_STORAGE_KEYS.autoLockMs)).toBeNull();
+    expect(window.localStorage.getItem(PRIVACY_STORAGE_KEYS.skipped)).toBeNull();
+  });
+
+  it('requires the current PIN to disable and rejects replacing or skipping an existing PIN', async () => {
+    const { result } = renderHook(() => useAppLock());
+    await act(async () => { await result.current.setupPin('135790'); });
+    const stored = window.localStorage.getItem(PRIVACY_STORAGE_KEYS.pin);
+    act(() => { result.current.lock(); result.current.skipSetup(); });
+    await act(async () => {
+      expect(await result.current.disableLock('000000')).toBe(false);
+      expect(await result.current.disableLock('')).toBe(false);
+      expect(await result.current.setupPin('246813')).toBe(false);
+    });
+    expect(result.current.status).toBe('locked');
+    expect(window.localStorage.getItem(PRIVACY_STORAGE_KEYS.pin)).toBe(stored);
+  });
+
+  it('synchronizes setup, lock, unlock and verified removal across mounted consumers', async () => {
+    const gate = renderHook(() => useAppLock({ autoLockMs: 0 }));
+    const settings = renderHook(() => useAppLock({ autoLockMs: 0 }));
+    await act(async () => { await settings.result.current.setupPin('135790'); });
+    expect(gate.result.current.hasPin).toBe(true);
+    act(() => { settings.result.current.lock(); });
+    expect(gate.result.current.status).toBe('locked');
+    await act(async () => { await gate.result.current.unlockWithPin('135790'); });
+    expect(settings.result.current.status).toBe('unlocked');
+    await act(async () => { await settings.result.current.disableLock('135790'); });
+    expect(gate.result.current.hasPin).toBe(false);
+    expect(gate.result.current.status).toBe('setup');
+  });
+
+  it('reports failed persistence without claiming PIN protection', async () => {
+    const { result } = renderHook(() => useAppLock());
+    const storage = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Storage unavailable'); });
+    await act(async () => { expect(await result.current.setupPin('135790')).toBe(false); });
+    expect(result.current.hasPin).toBe(false);
+    storage.mockRestore();
   });
 });
 

@@ -37,6 +37,10 @@ class InstructionTraceRead(PublicResponse):
     token_count: int
     compressed_into_id: str | None
     is_archived: bool
+    turn_id: str | None = None
+    status: str = "received"
+    outcome: str | None = None
+    retrieval_count: int = 0
     created_at: datetime
     updated_at: datetime
 

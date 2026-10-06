@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api';
 import { ClusterPage } from '../ClusterPage';
+import i18n from '../../i18n';
 
 vi.mock('../../api', () => ({ api: {
   listGroups: vi.fn(), getGroup: vi.fn(), addGroupMember: vi.fn(), removeGroupMember: vi.fn(),
@@ -20,7 +21,8 @@ async function openMembers(index = 0) {
   await screen.findByRole('complementary', { name: 'Collaboration sidebar' });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('en');
   vi.resetAllMocks();
   vi.mocked(api.listGroups).mockResolvedValue(groups);
 });
@@ -31,6 +33,16 @@ function sidebar() {
 }
 
 describe('ClusterPage persisted members', () => {
+  it.each([
+    [0, '0 members'],
+    [undefined, 'Member count not reported'],
+    [-1, 'Member count not reported'],
+  ])('distinguishes the reported member count %s from missing data', async (count, label) => {
+    vi.mocked(api.listGroups).mockResolvedValue([{ ...groups[0], member_count: count }] as never);
+    render(<ClusterPage />);
+    expect(await screen.findByText(`${label} · Active`)).toBeInTheDocument();
+  });
+
   it('loads real group detail and shows loading until it resolves', async () => {
     let resolve!: (value: unknown) => void;
     vi.mocked(api.getGroup).mockReturnValue(new Promise(done => { resolve = done; }));
@@ -63,7 +75,7 @@ describe('ClusterPage persisted members', () => {
   it.each([{}, { members: null }, { members: [{}] }])('rejects malformed member responses %j', async response => {
     vi.mocked(api.getGroup).mockResolvedValue(response);
     await openMembers();
-    expect(await screen.findByRole('alert')).toHaveTextContent('响应格式异常');
+    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('api_errors.cluster_members_invalid'));
     expect(within(sidebar()).queryByText('No members')).not.toBeInTheDocument();
   });
 

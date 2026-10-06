@@ -1,71 +1,86 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ClimberMark } from '../brand/ClimberMark';
+import { hasSeenBootSession, markBootSessionSeen } from '../motion/bootSession';
+import { announceBootPhase } from '../motion/bootHandoff';
+import { BOOT_SPLASH_WINDOW } from '../motion/bootTiming';
+import { useI18n } from '../../i18n';
 
 export interface BootSplashProps {
-  /** Fired once the splash has finished its fade-out. */
   onDone?: () => void;
 }
 
-/** The mark and the name hold the screen for at least this long. */
-const DISPLAY_MS = 900;
-/** The fade that hands the screen back. */
-const EXIT_MS = 320;
-/** Reduced motion: no held window, only a quick cross-fade. */
-const REDUCED_DISPLAY_MS = 0;
-const REDUCED_EXIT_MS = 120;
-
-/**
- * Boot animation: the ClimberMark scales in, the brand name fades up behind
- * it, and an indeterminate accent bar sweeps at the bottom. The overlay covers
- * the screen above every dialog surface but never blocks the app content from
- * mounting underneath it, so the shell can render while the splash holds.
- *
- * Timing is driven from here instead of the stylesheet, because the global
- * reduced-motion rule collapses every CSS animation duration to 0.01ms — the
- * splash measures the media query itself so the display window still holds for
- * reduced-motion users, with only the fade shortened.
- *
- * Render it over the shell and pass `onDone`; unmount (or hide) the splash
- * when it fires.
- */
 export function BootSplash({ onDone }: BootSplashProps) {
+  const { t } = useI18n();
+  const [seenBefore] = useState(hasSeenBootSession);
   const [leaving, setLeaving] = useState(false);
   const doneRef = useRef(false);
-  // A ref keeps the timers stable even when the caller passes a fresh closure
-  // each render: restarting the clock on every parent render would stretch the
-  // display window unpredictably.
   const onDoneRef = useRef(onDone);
   useEffect(() => {
     onDoneRef.current = onDone;
   });
 
+  // Claim the screen before any passive effect below it can run. The app is
+  // already mounted underneath the curtain, so a layout effect is the only
+  // point where the surfaces waiting on the hand-off are guaranteed to hear
+  // `holding` before they decide to start their own entrance.
+  useLayoutEffect(() => {
+    announceBootPhase('holding');
+    return () => announceBootPhase('settled');
+  }, []);
+
   useEffect(() => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const display = reduced ? REDUCED_DISPLAY_MS : DISPLAY_MS;
-    const exit = reduced ? REDUCED_EXIT_MS : EXIT_MS;
-    const leaveTimer = window.setTimeout(() => setLeaving(true), display);
+    const timing = reduced
+      ? BOOT_SPLASH_WINDOW.reduced
+      : seenBefore
+        ? BOOT_SPLASH_WINDOW.quick
+        : BOOT_SPLASH_WINDOW.first;
+    const leaveTimer = window.setTimeout(() => {
+      setLeaving(true);
+      // The curtain starts to lift on this frame, which is when the app below
+      // should spend its entrance rather than after the lift has finished.
+      announceBootPhase('revealing');
+    }, timing.enter);
     const doneTimer = window.setTimeout(() => {
       if (doneRef.current) return;
       doneRef.current = true;
+      markBootSessionSeen();
       onDoneRef.current?.();
-    }, display + exit);
+    }, timing.enter + timing.exit);
     return () => {
       window.clearTimeout(leaveTimer);
       window.clearTimeout(doneTimer);
     };
-  }, []);
+  }, [seenBefore]);
+
+  const className = [
+    'boot-splash',
+    seenBefore ? 'boot-splash-quick' : 'boot-splash-first',
+    leaving ? 'boot-splash-exit' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div
       role="status"
-      aria-label="Loading Climber"
-      className={leaving ? 'boot-splash boot-splash-exit' : 'boot-splash'}
+      aria-label={t('boot.loading', { defaultValue: '正在启动 Climber' })}
+      className={className}
+      data-boot-phase={leaving ? 'revealing' : 'holding'}
     >
+      <span className="boot-splash-texture" aria-hidden="true" />
       <span className="boot-splash-mark" aria-hidden="true">
-        <ClimberMark size={56} color="var(--color-accent-foreground)" />
+        <ClimberMark size={seenBefore ? 40 : 64} color="var(--color-accent-foreground)" />
       </span>
-      <span className="boot-splash-name">Climber</span>
-      <span className="boot-splash-bar" aria-hidden="true" />
+      {seenBefore ? null : (
+        <>
+          <span className="boot-splash-name">Climber</span>
+          <span className="boot-splash-bar" aria-hidden="true" />
+          <span className="boot-splash-tagline">
+            {t('boot.tagline', { defaultValue: '正在准备工作区' })}
+          </span>
+        </>
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { FactoryModePage } from '../FactoryModePage';
+import i18n from '../../i18n';
 
 vi.mock('../../api', () => ({
   api: {
@@ -30,7 +31,8 @@ const arcbenchSample = {
   updated_at: '2026-09-18 10:05:00',
 };
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('en');
   vi.clearAllMocks();
   vi.mocked(api.listAgents).mockResolvedValue([]);
   vi.mocked(api.listApiKeys).mockResolvedValue([]);
@@ -132,7 +134,7 @@ describe('FactoryModePage upgraded console', () => {
     expect(screen.getByText('web_search')).toBeDefined();
     expect(screen.getByText('run_command')).toBeDefined();
     expect(screen.getByText('0/2 steps done')).toBeDefined();
-    expect(screen.getByText('Execute')).toBeDefined();
+    expect(screen.getByText('Stop')).toBeDefined();
   });
 
   it('renders progress lines and the auto-plan fallback banner', () => {

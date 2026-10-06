@@ -27,6 +27,30 @@ export function ThinkingLevelSelect({ sessionId, className }: ThinkingLevelSelec
   const [level, setLevel] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  // Catalog from GET /reasoning/levels; the built-in trio stays as fallback so
+  // a failed catalog read never leaves the composer without a picker.
+  const [levels, setLevels] = useState<string[]>([...FALLBACK_LEVELS]);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Guard for test doubles that mock the api module without the catalog method.
+    if (typeof api.getThinkingLevels !== 'function') return undefined;
+    api
+      .getThinkingLevels()
+      .then((data) => {
+        if (cancelled) return;
+        const ids = Array.isArray(data?.levels)
+          ? data.levels.map((entry) => entry?.id).filter((id): id is string => typeof id === 'string' && !!id)
+          : [];
+        if (ids.length > 0) setLevels(ids);
+      })
+      .catch(() => {
+        // Catalog read failed: keep the fallback levels.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     setLevel(null);
@@ -75,7 +99,7 @@ export function ThinkingLevelSelect({ sessionId, className }: ThinkingLevelSelec
         className="flex items-center gap-0.5 rounded-full border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] p-0.5"
       >
         <Brain size={12} aria-hidden="true" className="ms-1.5 shrink-0 text-[var(--color-text-disabled)]" />
-        {FALLBACK_LEVELS.map((id) => {
+        {levels.map((id) => {
           const active = level === id;
           return (
             <button
@@ -83,26 +107,16 @@ export function ThinkingLevelSelect({ sessionId, className }: ThinkingLevelSelec
               type="button"
               aria-pressed={active}
               disabled={!sessionId || pending}
-              title={
-                id === 'low'
-                  ? t('chat.thinking_level_low_hint', { defaultValue: '低档：快速响应，适合简单问题' })
-                  : id === 'high'
-                    ? t('chat.thinking_level_high_hint', { defaultValue: '高档：深度推理，适合复杂问题' })
-                    : t('chat.thinking_level_medium_hint', { defaultValue: '中档：速度与深度平衡（默认）' })
-              }
+              title={t(`chat.thinking_level_${id}_hint`, { defaultValue: id })}
               onClick={() => select(id)}
               className={cn(
-                'h-6 rounded-full px-2.5 text-[length:var(--text-2xs)] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] motion-reduce:transition-none',
+                'h-6 rounded-full px-2.5 text-[11px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] motion-reduce:transition-none',
                 active
-                  ? 'bg-[var(--color-accent)] text-[var(--color-accent-foreground)]'
+                  ? 'bg-[var(--color-accent)] text-[var(--color-accent-text)]'
                   : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-3)] hover:text-[var(--color-text-secondary)]',
               )}
             >
-              {id === 'low'
-                ? t('chat.thinking_level_low', { defaultValue: '低' })
-                : id === 'high'
-                  ? t('chat.thinking_level_high', { defaultValue: '高' })
-                  : t('chat.thinking_level_medium', { defaultValue: '中' })}
+              {t(`chat.thinking_level_${id}`, { defaultValue: id })}
             </button>
           );
         })}

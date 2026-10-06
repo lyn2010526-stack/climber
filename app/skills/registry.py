@@ -8,6 +8,7 @@ moved to dedicated modules.
 from __future__ import annotations
 
 import asyncio
+import inspect
 from collections.abc import Callable
 from enum import StrEnum
 from typing import Any
@@ -102,9 +103,30 @@ class SkillRegistry:
         handler = self._handlers.get(skill_id)
         if not handler:
             raise ValueError(f"No handler for skill: {skill_id}")
+        self._validate_params(skill_id, handler, params)
         if asyncio.iscoroutinefunction(handler):
             return await handler(**params)
         return handler(**params)
+
+    @staticmethod
+    def _validate_params(skill_id: str, handler: Callable, params: dict[str, Any]) -> None:
+        """Reject unknown keyword arguments before invoking a fixed handler.
+
+        Type checking is deliberately left to the handler; only the
+        parameter-name contract is validated so a typo raises a clear
+        ``ValueError`` instead of leaking ``TypeError`` to callers.
+        """
+        try:
+            signature = inspect.signature(handler)
+        except (TypeError, ValueError):
+            return
+        if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values()):
+            return
+        unknown = set(params) - set(signature.parameters)
+        if unknown:
+            raise ValueError(
+                f"Skill '{skill_id}' does not accept parameter(s): {sorted(unknown)}"
+            )
 
     async def execute(self, skill_id: str, **kwargs: Any) -> Any:
         """Execute a skill by ID with given keyword arguments."""

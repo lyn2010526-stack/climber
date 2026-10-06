@@ -21,16 +21,22 @@ layer so the engine stays importable without a database.
 
 from __future__ import annotations
 
+import inspect
+import logging
 import random
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
+
+from app.core.metacognition.safety_gate import gated_fitness, screen
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 ScoreMap = dict[str, float]
-Evaluator = Callable[["PromptGenome"], ScoreMap]
+Evaluator = Callable[["PromptGenome"], ScoreMap | Awaitable[ScoreMap]]
+
+logger = logging.getLogger(__name__)
 
 
 class LLMOperator(Protocol):
@@ -60,23 +66,67 @@ _PARAPHRASE_PREFIXES: tuple[str, ...] = (
 )
 
 
+def _shortcut_penalty(prompt_text: str) -> float:
+    """Penalize surface completion signals that omit verification or substance."""
+    normalized = prompt_text.lower()
+    if not normalized.strip():
+        return 1.0
+    has_action = any(token in normalized for token in ("do ", "create ", "run ", "write ", "analyze "))
+    has_check = any(token in normalized for token in ("verify", "test", "check", "validate", "result"))
+    if has_action and not has_check and len(normalized.split()) <= 4:
+        return 0.25
+    return 0.0
+
+
 @dataclass(frozen=True, slots=True)
 class FitnessWeights:
     """Multi-objective weights; safety is subtracted, never averaged in."""
 
+    environment_prediction: float = 1.0
     task_success: float = 1.0
     metaphor_comprehension: float = 1.0
     meta_correction: float = 1.0
     safety_penalty: float = 1.0
+    shortcut_penalty: float = 1.0
 
     def composite(self, scores: ScoreMap) -> float:
         base = (
-            self.task_success * scores.get("task_success", 0.0)
+            self.environment_prediction * scores.get(
+                "environment_prediction", scores.get("task_success", 0.0)
+            )
             + self.metaphor_comprehension * scores.get("metaphor_comprehension", 0.0)
             + self.meta_correction * scores.get("meta_correction", 0.0)
         )
         penalty = self.safety_penalty * scores.get("safety_violation", 0.0)
-        return base - penalty
+        return base - penalty - self.shortcut_penalty * scores.get("shortcut_penalty", 0.0)
+
+
+@dataclass(frozen=True, slots=True)
+class FitnessBreakdown:
+    """Auditable objective accounting for one evaluated genome."""
+
+    environment_prediction: float
+    metaphor_comprehension: float
+    meta_correction: float
+    safety_penalty: float
+    shortcut_penalty: float
+    raw_composite: float
+    composite: float
+    safety_allowed: bool
+    safety_reasons: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "environment_prediction": self.environment_prediction,
+            "metaphor_comprehension": self.metaphor_comprehension,
+            "meta_correction": self.meta_correction,
+            "safety_penalty": self.safety_penalty,
+            "shortcut_penalty": self.shortcut_penalty,
+            "raw_composite": self.raw_composite,
+            "composite": self.composite,
+            "safety_allowed": self.safety_allowed,
+            "safety_reasons": self.safety_reasons,
+        }
 
 
 @dataclass(slots=True)
@@ -89,6 +139,7 @@ class PromptGenome:
     scores: ScoreMap = field(default_factory=dict)
     generation: int = 0
     parent_ids: tuple[str, ...] = ()
+    fitness_breakdown: dict[str, object] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -98,6 +149,7 @@ class PromptGenome:
             "scores": dict(self.scores),
             "generation": self.generation,
             "parent_ids": list(self.parent_ids),
+            "fitness_breakdown": dict(self.fitness_breakdown),
         }
 
     @classmethod
@@ -110,6 +162,7 @@ class PromptGenome:
             scores=dict(payload.get("scores") or {}),
             generation=int(payload.get("generation") or 0),
             parent_ids=tuple(str(item) for item in parents),
+            fitness_breakdown=dict(payload.get("fitness_breakdown") or {}),
         )
 
 
@@ -157,6 +210,9 @@ class PromptEvolutionEngine:
         self._score_cache: dict[str, ScoreMap] = {}
 
     def composite(self, genome: PromptGenome) -> float:
+        audited = genome.fitness_breakdown.get("composite")
+        if audited is not None:
+            return float(audited)
         return self.weights.composite(genome.scores)
 
     def mutate(self, genome: PromptGenome) -> PromptGenome:
@@ -169,14 +225,51 @@ class PromptEvolutionEngine:
         if cached is None:
             cached = dict(evaluator(genome))
             self._score_cache[genome.prompt_text] = cached
+        self._audit_fitness(genome, cached)
         return dict(cached)
+
+    async def _evaluate_async(self, genome: PromptGenome, evaluator: Evaluator) -> ScoreMap:
+        """Evaluate through an async boundary while preserving the sync cache."""
+        cached = self._score_cache.get(genome.prompt_text)
+        if cached is None:
+            result = evaluator(genome)
+            if inspect.isawaitable(result):
+                result = await result
+            cached = dict(result)
+            self._score_cache[genome.prompt_text] = cached
+        self._audit_fitness(genome, cached)
+        return dict(cached)
+
+    def _audit_fitness(self, genome: PromptGenome, scores: ScoreMap) -> None:
+        """Apply both safety gates and shortcut pressure without changing evaluator data."""
+        verdict = screen(genome.prompt_text)
+        shortcut = float(scores.get("shortcut_penalty", _shortcut_penalty(genome.prompt_text)))
+        normalized = dict(scores)
+        normalized["shortcut_penalty"] = shortcut
+        normalized["safety_violation"] = max(
+            float(scores.get("safety_violation", 0.0)), verdict.penalty
+        )
+        raw = self.weights.composite(normalized)
+        effective = gated_fitness(raw, verdict)
+        genome.fitness_breakdown = FitnessBreakdown(
+            environment_prediction=float(scores.get("environment_prediction", scores.get("task_success", 0.0))),
+            metaphor_comprehension=float(scores.get("metaphor_comprehension", 0.0)),
+            meta_correction=float(scores.get("meta_correction", 0.0)),
+            safety_penalty=max(float(scores.get("safety_violation", 0.0)), verdict.penalty),
+            shortcut_penalty=shortcut,
+            raw_composite=raw,
+            composite=effective,
+            safety_allowed=verdict.allowed,
+            safety_reasons=verdict.reasons,
+        ).to_dict()
 
     @staticmethod
     def _blend_params(first: PromptGenome, second: PromptGenome) -> dict[str, float]:
-        params = {
-            key: (first.model_params.get(key, 0.0) + second.model_params.get(key, 0.0)) / 2.0
-            for key in set(first.model_params) | set(second.model_params)
-        }
+        params = {}
+        for key in set(first.model_params) | set(second.model_params):
+            left = first.model_params.get(key)
+            right = second.model_params.get(key)
+            params[key] = (left if right is None else right if left is None else (left + right) / 2.0)
         if "temperature" in params:
             params["temperature"] = min(1.5, max(0.0, params["temperature"]))
         return params
@@ -206,15 +299,21 @@ class PromptEvolutionEngine:
         )
 
     def _mutate(self, genome: PromptGenome) -> PromptGenome:
-        mode = self._rng.choice(("insert_clarity", "trim_blank", "nudge_temperature"))
+        mode = self._rng.choice(("insert_rule", "trim_blank", "nudge_parameter", "mutate_topology"))
         lines = genome.prompt_text.splitlines()
         params = dict(genome.model_params)
-        if mode == "insert_clarity":
+        if mode == "insert_rule":
             phrase = self._rng.choice(_CLARITY_PHRASES)
             lines = [*lines, phrase]
         elif mode == "trim_blank":
             lines = [line for line in lines if line.strip()]
-        if "temperature" in params or mode == "nudge_temperature":
+        elif mode == "mutate_topology":
+            topology = [key for key in params if key.startswith("topology.")]
+            if topology and self._rng.random() < 0.5:
+                params.pop(self._rng.choice(topology))
+            else:
+                params[f"topology.node_{self._rng.randint(0, 9999)}"] = 1.0
+        if "temperature" in params or mode == "nudge_parameter":
             current = params.get("temperature", 0.7)
             params["temperature"] = min(1.5, max(0.0, current + self._rng.uniform(-0.1, 0.1)))
         return PromptGenome(
@@ -243,6 +342,8 @@ class PromptEvolutionEngine:
         for genome in population:
             if not genome.scores:
                 genome.scores = self._evaluate(genome, evaluator)
+            else:
+                self._audit_fitness(genome, genome.scores)
             scored_population.append(genome)
         ranked = self._scored(scored_population)
         next_generation: list[PromptGenome] = [genome for _, genome in ranked[: self.config.elite_count]]
@@ -295,6 +396,64 @@ class PromptEvolutionEngine:
         remaining = max(self.config.max_generations - len(history), 0)
         for _ in range(remaining):
             population = self.evolve(population, evaluator)
+            generation_best = max(self.composite(genome) for genome in population)
+            plateau = generation_best - best_seen < self.config.min_improvement
+            best_seen = max(best_seen, generation_best)
+            history.append(best_seen)
+            if plateau:
+                break
+        return population, history
+
+    async def evolve_async(
+        self, population: Sequence[PromptGenome], evaluator: Evaluator
+    ) -> list[PromptGenome]:
+        """Run one generation with a real async evaluator and shared cache."""
+        scored_population = []
+        for genome in population:
+            if not genome.scores:
+                genome.scores = await self._evaluate_async(genome, evaluator)
+            else:
+                self._audit_fitness(genome, genome.scores)
+            scored_population.append(genome)
+        ranked = self._scored(scored_population)
+        next_generation: list[PromptGenome] = [genome for _, genome in ranked[: self.config.elite_count]]
+        while len(next_generation) < self.config.population_size:
+            first = self._tournament(ranked)
+            second = self._tournament(ranked) if self._rng.random() < self.config.crossover_rate else None
+            if self.config.llm_operator is not None:
+                child = self._template_offspring(first, second)
+            elif second is not None:
+                child = self._crossover(first, second)
+            else:
+                child = PromptGenome(
+                    id=f"c_{first.id}_{self._rng.randint(0, 9999)}",
+                    prompt_text=first.prompt_text,
+                    model_params=dict(first.model_params),
+                    generation=first.generation + 1,
+                    parent_ids=(first.id,),
+                )
+            if self.config.llm_operator is None and self._rng.random() < self.config.mutation_rate:
+                child = self._mutate(child)
+            child.scores = await self._evaluate_async(child, evaluator)
+            if self.config.replace_if_better:
+                rival = first if second is None else max((first, second), key=self.composite)
+                child = self._replace_if_better(child, rival)
+            next_generation.append(child)
+        return next_generation
+
+    async def run_evolution_async(
+        self,
+        initial_population: Sequence[PromptGenome],
+        evaluator: Evaluator,
+        history: Sequence[float] | None = None,
+    ) -> tuple[list[PromptGenome], list[float]]:
+        """Resume and run generations whose evaluator may perform I/O."""
+        population = list(initial_population)
+        history = list(history) if history is not None else []
+        best_seen = max(history, default=float("-inf"))
+        remaining = max(self.config.max_generations - len(history), 0)
+        for _ in range(remaining):
+            population = await self.evolve_async(population, evaluator)
             generation_best = max(self.composite(genome) for genome in population)
             plateau = generation_best - best_seen < self.config.min_improvement
             best_seen = max(best_seen, generation_best)
@@ -408,16 +567,38 @@ async def load_population(
         return await list_population(db, user_id)
 
 
-async def run_evolution_tick(user_id: str) -> None:
-    """Expose the module-level entry point used by the dual-loop coordinator.
+async def run_evolution_tick(
+    user_id: str,
+    evaluator: Evaluator | None = None,
+    *,
+    config: EvolutionConfig | None = None,
+    history: Sequence[float] | None = None,
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
+) -> dict[str, object]:
+    """Advance and persist one user's population through an injected evaluator.
 
-    A tick only advances populations that already have a persisted evaluator
-    result. The evaluator itself belongs to the caller that records scores, so
-    this safe entry point avoids inventing model or task-specific scoring.
+    The evaluator is required for a live tick. Returning a status payload makes
+    skipped and failed ticks observable to callers while preserving the
+    dual-loop coordinator's best-effort behavior.
     """
+    if evaluator is None:
+        return {"status": "skipped", "reason": "evaluator_required", "user_id": user_id}
     try:
-        population = await load_population(user_id)
-    except Exception:
-        return
-    if len(population) < 2:
-        return
+        population = await load_population(user_id, session_factory=session_factory)
+        if len(population) < 2:
+            return {"status": "skipped", "reason": "population_too_small", "user_id": user_id}
+        engine = PromptEvolutionEngine(config)
+        final_population, final_history = await engine.run_evolution_async(
+            population, evaluator, history=history
+        )
+        await save_population(user_id, final_population, session_factory=session_factory)
+        return {
+            "status": "completed",
+            "user_id": user_id,
+            "population_size": len(final_population),
+            "history": final_history,
+            "fitness_breakdowns": [dict(genome.fitness_breakdown) for genome in final_population],
+        }
+    except Exception as exc:
+        logger.exception("prompt_evolution_tick_failed", extra={"user_id": user_id})
+        return {"status": "failed", "user_id": user_id, "error_type": type(exc).__name__, "error": str(exc)}

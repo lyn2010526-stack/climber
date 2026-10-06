@@ -19,8 +19,8 @@ describe('extractCommandHead', () => {
     expect(extractCommandHead('/HELP')).toBe('help');
   });
 
-  it('returns null for a bare slash', () => {
-    expect(extractCommandHead('/')).toBeNull();
+  it('returns an empty query for a bare slash to show the catalog', () => {
+    expect(extractCommandHead('/')).toBe('');
   });
 });
 

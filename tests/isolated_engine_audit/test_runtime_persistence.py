@@ -26,6 +26,7 @@ from app.middleware.metrics import (ACTIVE_SESSIONS, AGENT_RUN_TOTAL, TOKEN_USAG
                                     TOOL_CALL_LATENCY, TOOL_CALL_TOTAL)
 from app.storage import Base
 from app.storage.database import Agent, CheckpointRecord, Message, Session, Turn, UsageLog
+from app.storage.database import SessionInput
 from app.storage.models_cost import CostRecord
 
 
@@ -61,21 +62,26 @@ class ScriptedModel:
 
 class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        self.engines = []
         self.tmp = tempfile.TemporaryDirectory(prefix="engine-audit-")
+        self.addCleanup(self.tmp.cleanup)
         self.db_engine = create_async_engine("sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "isolated.db"))
+        self.addAsyncCleanup(self.db_engine.dispose)
 
         @event.listens_for(self.db_engine.sync_engine, "connect")
         def foreign_keys(connection, record):
             connection.execute("PRAGMA foreign_keys=ON")
 
         self.factory = async_sessionmaker(self.db_engine, expire_on_commit=False)
-        tables = [model.__table__ for model in (Agent, Session, Turn, Message, UsageLog, CheckpointRecord, CostRecord)]
+        tables = [model.__table__ for model in (Agent, Session, Turn, Message, UsageLog, CheckpointRecord, CostRecord, SessionInput)]
         async with self.db_engine.begin() as connection:
             await connection.run_sync(lambda conn: Base.metadata.create_all(conn, tables=tables))
         self.patches = [
             patch("app.storage.async_session", self.factory),
             patch("app.storage.engine", self.db_engine),
             patch("app.core.checkpoint.async_session", self.factory),
+            patch("app.core.ui_rules.refresh_rule_context", new_callable=AsyncMock),
+            patch("app.core.prompt_optimizer.maybe_optimize_instruction", new_callable=AsyncMock),
             patch.object(AgentEngine, "_init_sandbox", lambda engine: setattr(engine, "sandbox", None)),
             patch.object(AgentEngine, "_init_reasoning"),
             patch.object(AgentEngine, "_init_permissions"),
@@ -87,22 +93,31 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
             patch.object(AgentEngine, "_inject_core_memory", new_callable=AsyncMock),
             patch.object(AgentEngine, "_store_episodic_memory", new_callable=AsyncMock),
             patch.object(AgentEngine, "_trigger_memory_reflection"),
+            patch.object(AgentEngine, "_record_profile_outcome"),
+            patch.object(AgentEngine, "_tick_evolution"),
+            patch.object(AgentEngine, "_archive_instruction", new_callable=AsyncMock),
+            patch.object(AgentEngine, "_inject_profile_context", new_callable=AsyncMock),
             patch("app.core.agent_engine.build_tools", return_value=[]),
         ]
         for item in self.patches:
             item.start()
+            self.addCleanup(item.stop)
+        self.addAsyncCleanup(self.cleanup_engines)
         self.active = ACTIVE_SESSIONS._value.get()
 
+    async def cleanup_engines(self):
+        for engine in self.engines:
+            await engine.resource_tracker.cleanup()
+            while engine._background_tasks:
+                await asyncio.gather(*list(engine._background_tasks), return_exceptions=True)
+
     async def asyncTearDown(self):
-        for item in reversed(self.patches):
-            item.stop()
-        await self.db_engine.dispose()
-        self.tmp.cleanup()
         self.assertEqual(ACTIVE_SESSIONS._value.get(), self.active)
 
     def engine(self, model):
         engine = AgentEngine(model_registry=SimpleNamespace(get_or_create=lambda **kwargs: model),
-                             tool_registry=Mock(), run_store=RunStorage(self.factory))
+                              tool_registry=Mock(), run_store=RunStorage(self.factory))
+        self.engines.append(engine)
         engine.permission_overlay = None
         engine.agent_mode = None
         return engine
@@ -248,6 +263,7 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
         engine = self.engine(ScriptedModel([reply("test-key-marker")]))
         session = self.session(api_key="test-key-marker")
         await engine.run_agent(session, "hi")
+        await self.cleanup_engines()
         await self.db_engine.dispose()
         fresh = self.session(api_key="fresh-key")
         self.assertTrue(await self.engine(ScriptedModel([])).recover_session(fresh))

@@ -6,7 +6,7 @@ import { ChatInterface } from './ChatInterface';
 
 vi.mock('../../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api')>()),
-  api: { submitFeedback: vi.fn(), resolvePermission: vi.fn() },
+  api: { submitFeedback: vi.fn(), resolvePermission: vi.fn(), listChatCommands: vi.fn().mockResolvedValue([]) },
 }));
 
 const messages = [{
@@ -34,6 +34,7 @@ describe('ChatInterface approval lifecycle', () => {
     vi.resetAllMocks();
     await i18n.changeLanguage('zh-CN');
     vi.mocked(api.resolvePermission).mockResolvedValue({} as never);
+    vi.mocked(api.listChatCommands).mockResolvedValue([]);
   });
 
   it('drops the card once the decision is recorded', async () => {

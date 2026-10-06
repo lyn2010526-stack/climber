@@ -110,6 +110,8 @@ export interface ModalProps {
   footer?: React.ReactNode;
   showClose?: boolean;
   depth?: ModalDepth;
+  /** Forwarded to the panel root so wrappers can target a specific dialog. */
+  'data-testid'?: string;
 }
 
 /** Shared with the other dialog surfaces so the trap cannot drift per modal. */
@@ -129,6 +131,7 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(({
   footer,
   showClose = true,
   depth = 'default',
+  'data-testid': testId,
 }, ref) => {
   const { t } = useTranslation();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -203,6 +206,7 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(({
         aria-labelledby={title ? titleId : undefined}
         aria-describedby={description ? descId : undefined}
         data-depth={depth}
+        data-testid={testId}
         tabIndex={-1}
         className={cn(
           'relative w-full border',

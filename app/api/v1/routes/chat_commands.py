@@ -24,12 +24,13 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from app.api.v1.chat import _ChatModelRegistry, _chat_inflight, get_engine
+from app.api.v1.chat import _chat_inflight, _ChatModelRegistry, get_engine
 from app.api.v1.sessions import _clean_model_settings, resolve_model_credential
 from app.core import AgentEvent, AgentEventType
 from app.core.agent_engine import AgentEngine
 from app.core.api_key_crypto import decrypt_api_key
 from app.core.auth import get_current_user
+from app.core.auth_manager import require_scopes
 from app.core.slash import (
     SlashCommandService,
     command_catalog,
@@ -178,7 +179,11 @@ async def parse_command(request: ParseRequest, user_id: str = Depends(get_curren
 
 
 @router.post("/sessions/{session_id}/cancel")
-async def cancel_session_turn(session_id: str, user_id: str = Depends(get_current_user)) -> dict[str, Any]:
+async def cancel_session_turn(
+    session_id: str,
+    user_id: str = Depends(get_current_user),
+    _auth: dict = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     """Interrupt the in-flight turn of this session (cooperative engine stop)."""
     engine = get_engine()
     session = engine._sessions.get(session_id)
@@ -203,6 +208,7 @@ async def slash_command(
     session_id: str,
     request: SlashRequest,
     user_id: str = Depends(get_current_user),
+    _auth: dict = Depends(require_scopes("write")),
 ):
     """Execute one slash command; unmatched input streams through the engine.
 

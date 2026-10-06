@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 import uuid
 from collections import defaultdict
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -53,17 +55,30 @@ class EventBus:
     EVENT_STARTED = "started"
     EVENT_COMPLETED = "completed"
     EVENT_FAILED = "failed"
+    EVENT_CANCELLED = "cancelled"
     EVENT_PAUSED = "paused"
     EVENT_RESUMED = "resumed"
     EVENT_NEEDS_APPROVAL = "needs_approval"
     EVENT_SUBTASK_COMPLETED = "subtask_completed"
     EVENT_TOOL_CALL = "tool_call"
 
-    def __init__(self, db_path: str = ":memory:"):
-        self._db_path = db_path
-        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+    def __init__(self, db_path: str | None = None):
+        """Create the bus, persisting events to ``db_path`` when provided.
+
+        ``db_path=None`` keeps events in an in-memory SQLite database. A file
+        path makes the audit trail survive process restarts, which is what the
+        task-recovery flow relies on after a crash.
+        """
+        self._db_path = db_path if db_path is not None else ":memory:"
+        if self._db_path != ":memory:":
+            Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
+        self._conn = sqlite3.connect(self._db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        # The sqlite3 connection is shared by async publishers; a lock keeps
+        # concurrent writes from interleaving inside a transaction.
+        self._lock = threading.Lock()
         self._subscribers: dict[str, list[TaskEventHandler]] = defaultdict(list)
+        self._closed = False
         self._create_tables()
 
     def _create_tables(self) -> None:
@@ -103,20 +118,21 @@ class EventBus:
                 logger.warning("event_bus.handler_execution_failed", error=str(e))
 
     def _persist_event(self, event: TaskEvent) -> None:
-        self._conn.execute(
-            """
-            INSERT INTO task_events (event_id, event_type, task_id, timestamp, data_json)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                event.event_id,
-                event.event_type,
-                event.task_id,
-                event.timestamp,
-                json.dumps(event.data),
-            ),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO task_events (event_id, event_type, task_id, timestamp, data_json)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    event.event_id,
+                    event.event_type,
+                    event.task_id,
+                    event.timestamp,
+                    json.dumps(event.data),
+                ),
+            )
+            self._conn.commit()
 
     def get_history(
         self,
@@ -149,8 +165,65 @@ class EventBus:
         return events
 
     def clear_history(self) -> None:
-        self._conn.execute("DELETE FROM task_events")
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute("DELETE FROM task_events")
+            self._conn.commit()
+
+    def get_pending_task_ids(self) -> list[str]:
+        """Task ids that were started but never reached a terminal state.
+
+        Recovery hook: after a crash, tasks that published ``created`` or
+        ``started`` but never ``completed``/``failed``/``cancelled`` are the
+        ones that need resumption or manual review.
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                """
+                SELECT DISTINCT task_id FROM task_events
+                WHERE event_type IN (?, ?)
+                AND task_id NOT IN (
+                    SELECT task_id FROM task_events
+                    WHERE event_type IN (?, ?, ?)
+                )
+                ORDER BY timestamp
+                """,
+                (
+                    self.EVENT_CREATED,
+                    self.EVENT_STARTED,
+                    self.EVENT_COMPLETED,
+                    self.EVENT_FAILED,
+                    self.EVENT_CANCELLED,
+                ),
+            ).fetchall()
+        return [row["task_id"] for row in rows]
 
     def close(self) -> None:
-        self._conn.close()
+        if self._closed:
+            return
+        with self._lock:
+            self._conn.close()
+            self._closed = True
+
+
+_default_event_bus_path = Path("data") / "task_events.db"
+
+_event_bus: EventBus | None = None
+
+
+def get_task_event_bus(db_path: str | None = None) -> EventBus:
+    """Return the process-wide persistent event bus.
+
+    Uses a file-backed SQLite database so the audit trail survives restarts,
+    enabling task recovery after a crash. Pass ``db_path=":memory:"`` for a
+    throwaway instance (tests).
+    """
+    global _event_bus, _default_event_bus_path
+    if _event_bus is None:
+        _event_bus = EventBus(db_path=db_path if db_path is not None else str(_default_event_bus_path))
+    return _event_bus
+
+
+def reset_task_event_bus() -> None:
+    """Drop the process-wide singleton (used by tests)."""
+    global _event_bus
+    _event_bus = None

@@ -15,6 +15,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -57,6 +58,9 @@ class AgentGroupMember(Base):
     """Member (agent) belonging to a group."""
 
     __tablename__ = "agent_group_members"
+    __table_args__ = (
+        UniqueConstraint("group_id", "agent_id", name="uq_agent_group_member"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     group_id: Mapped[str] = mapped_column(String(36), ForeignKey("agent_groups.id"), nullable=False)

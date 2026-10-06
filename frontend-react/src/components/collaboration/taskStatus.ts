@@ -14,10 +14,13 @@ export const NOT_REPORTED_KEY = 'collaboration.not_reported';
 /** Task lifecycle states, mapped to the key that renders them. */
 export const TASK_STATUS_LABEL_KEYS: Record<string, string> = {
   pending: 'collaboration.task_status.pending',
+  paused: 'collaboration.task_status.paused',
   running: 'collaboration.task_status.running',
   completed: 'collaboration.task_status.completed',
   failed: 'collaboration.task_status.failed',
   cancelled: 'collaboration.task_status.cancelled',
+  claimed: 'collaboration.task_status.claimed',
+  ready: 'collaboration.task_status.ready',
 };
 
 /** Group lifecycle states, mapped to the key that renders them. */
@@ -32,16 +35,30 @@ export const GROUP_STATUS_LABEL_KEYS: Record<string, string> = {
  */
 export const TASK_STATUS_COLORS: Record<string, string> = {
   pending: 'text-[var(--color-text-muted)]',
+  paused: 'text-[var(--color-text-muted)]',
   running: 'text-[var(--color-accent-foreground)]',
   completed: 'text-[var(--color-success)]',
   failed: 'text-[var(--color-error)]',
   cancelled: 'text-[var(--color-text-muted)]',
+  claimed: 'text-[var(--color-accent)]',
+  ready: 'text-[var(--color-accent-foreground)]',
 };
 
 const TASK_TERMINAL_STATUSES = ['completed', 'failed', 'cancelled'];
 
 export function isTerminalTaskStatus(status: string | undefined | null): boolean {
   return !!status && TASK_TERMINAL_STATUSES.includes(status);
+}
+
+const SUBTASK_ACTIVE_STATUSES = ['pending', 'claimed'];
+const SUBTASK_TERMINAL_STATUSES = ['completed', 'failed'];
+
+export function isActiveSubtaskStatus(status: string | undefined | null): boolean {
+  return !!status && SUBTASK_ACTIVE_STATUSES.includes(status);
+}
+
+export function isTerminalSubtaskStatus(status: string | undefined | null): boolean {
+  return !!status && SUBTASK_TERMINAL_STATUSES.includes(status);
 }
 
 /**

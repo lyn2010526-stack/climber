@@ -4,7 +4,7 @@ import i18n from '../../i18n';
 import { ChatInterface } from './ChatInterface';
 import { getReadingWidthClass, hasParallelToolContent, MAXIMIZE_SPACE_KEY } from './readingWidth';
 
-vi.mock('../../api', () => ({ api: { submitFeedback: vi.fn() } }));
+vi.mock('../../api', () => ({ api: { submitFeedback: vi.fn(), listChatCommands: vi.fn().mockResolvedValue([]) } }));
 
 const single = [
   { id: 'u1', role: 'user' as const, content: 'Review this repository' },

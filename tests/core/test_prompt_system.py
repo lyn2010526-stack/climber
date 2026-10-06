@@ -10,12 +10,12 @@ from app.core.prompts import (
 
 def test_active_version_is_selected_and_versions_include_history():
     prompt = resolve_active_prompt("core.system")
-    assert prompt.version == "1.2.0"
+    assert prompt.version == "1.3.0"
     versions = list_versions("core.system")
-    assert {item["version"] for item in versions} == {"1.2.0", "1.1.0", "1.0.0", "0.9.0"}
+    assert {item["version"] for item in versions} == {"1.3.0", "1.2.0", "1.1.0", "1.0.0", "0.9.0"}
     assert any(item["status"] == "deprecated" for item in versions)
     active = [item for item in versions if item["status"] == "active"]
-    assert [item["version"] for item in active] == ["1.2.0"]
+    assert [item["version"] for item in active] == ["1.3.0"]
 
 
 def test_deprecated_version_can_be_resolved_for_rollback():
@@ -41,6 +41,9 @@ def test_injection_contains_every_mandatory_core_section_and_hides_chain_of_thou
         "AUTHORIZATION_AND_RISK",
         "ENGINEERING_DISCIPLINE",
         "RESEARCH_AND_KNOWLEDGE",
+        "ENVIRONMENT_CONTEXT",
+        "DELEGATION_PACKET",
+        "EVIDENCE_HANDOFF",
     ):
         assert f"[{section}]" in prompt
     assert "chain-of-thought" in prompt
@@ -60,6 +63,9 @@ def test_core_contract_declares_all_sections_and_no_hidden_reasoning_request():
         "AUTHORIZATION_AND_RISK",
         "ENGINEERING_DISCIPLINE",
         "RESEARCH_AND_KNOWLEDGE",
+        "ENVIRONMENT_CONTEXT",
+        "DELEGATION_PACKET",
+        "EVIDENCE_HANDOFF",
     )
     assert "reveal hidden chain-of-thought" in prompt.body
     assert "private scratch work" in prompt.body
@@ -78,3 +84,10 @@ def test_model_adaptation_is_selected_without_external_dependencies():
     assert "MODEL_ADAPTATION" in bundle["system_prompt"]
     assert "JSON-compatible tool arguments" in bundle["system_prompt"]
     assert "validation_summary" in bundle["metadata"]["visible_event_fields"]
+
+
+def test_v1_3_prompt_contains_context_delegation_and_evidence_contracts():
+    prompt = resolve_active_prompt("core.system")
+    assert "allowed paths" in prompt.body
+    assert "raw errors" in prompt.body
+    assert "source, kind, confidence, and timestamp" in prompt.body

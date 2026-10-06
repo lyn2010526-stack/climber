@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import i18n from '../../../i18n/config';
 import { MarkdownRenderer } from '../MarkdownRenderer';
+
+beforeEach(async () => {
+  await i18n.changeLanguage('zh-CN');
+});
 
 describe('MarkdownRenderer state and safety contract', () => {
   it('renders tables inside a horizontally scrollable region', () => {

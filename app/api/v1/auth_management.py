@@ -19,6 +19,7 @@ from app.core.auth_manager import (
     get_current_user,
     require_scopes,
 )
+from app.core.observability.audit_store import audit_log
 from app.models.users import ApiKey, User, UserRole, UserStatus
 from app.storage import async_session
 
@@ -94,7 +95,10 @@ async def login(payload: LoginRequest) -> LoginResponse:
 
     result = await authenticate_user(payload.username, payload.password)
     if not result:
+        await audit_log.log_login(user_id=None, username=payload.username, success=False, reason="invalid credentials")
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    await audit_log.log_login(user_id=result["user_id"], username=payload.username, success=True)
 
     access_token = auth_manager.create_access_token(result["user_id"], result["scopes"])
     refresh_token_value = auth_manager.create_refresh_token(result["user_id"], result["scopes"])
@@ -181,6 +185,7 @@ async def get_me(current_user: str = Depends(get_current_user)) -> dict:
 async def change_password(
     payload: ChangePasswordRequest,
     current_user: str = Depends(get_current_user),
+    _auth: dict = Depends(require_scopes("write")),
 ) -> dict:
     """Change current user password."""
     async with async_session() as session:

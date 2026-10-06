@@ -2,10 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   PERMISSION_MODES,
   PERMISSION_MODE_INFO,
-  autonomyLevelForMode,
   isPermissionMode,
-  modeForAutonomyLevel,
-  modeForAutonomyMove,
   normalizePermissionMode,
 } from '../permissionMode';
 
@@ -46,34 +43,5 @@ describe('permission modes mirror the backend vocabulary', () => {
       expect(info.label.length).toBeGreaterThan(0);
       expect(isPermissionMode(mode)).toBe(true);
     }
-  });
-});
-
-describe('the autonomy slider is a view of the backend mode', () => {
-  it('maps every stop onto a storable mode and back', () => {
-    for (const mode of PERMISSION_MODES) {
-      const level = autonomyLevelForMode(mode);
-      expect(level).not.toBeNull();
-      // `plan` and `strict` share level 1, so the round trip only has to hold
-      // for the modes the slider itself can select.
-      if (mode !== 'plan') expect(modeForAutonomyLevel(level!)).toBe(mode);
-    }
-  });
-
-  it('leaves the position unreported when no mode is known', () => {
-    expect(autonomyLevelForMode(null)).toBeNull();
-  });
-
-  it('keeps the exact mode when the user re-selects the current stop', () => {
-    // Level 1 is shared by `strict` and `plan`; clicking it while on `plan`
-    // must not silently rewrite the stored mode to `strict`.
-    expect(modeForAutonomyMove(1, 'plan')).toBe('plan');
-    expect(modeForAutonomyMove(1, 'strict')).toBe('strict');
-    expect(modeForAutonomyMove(4, 'plan')).toBe('auto');
-  });
-
-  it('holds the current mode when the level is out of range', () => {
-    expect(modeForAutonomyMove(99, 'default')).toBe('default');
-    expect(modeForAutonomyMove(99, null)).toBeNull();
   });
 });

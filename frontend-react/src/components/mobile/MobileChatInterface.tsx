@@ -2,6 +2,7 @@ import { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { ArrowDown, Loader2, RefreshCw, Send, Square } from 'lucide-react';
 import { useI18n } from '../../i18n';
 import type { Message } from '../../useChat';
+import type { ChatAttachmentPayload } from '../../useChat';
 import { ChatComposerTools } from '../chat/ChatComposerTools';
 import { ImageAttachmentBar } from '../multimodal/ImageAttachmentBar';
 import type { ImageAttachment } from '../multimodal/attachments';
@@ -10,7 +11,7 @@ import { MobileMessageBubble } from './MobileMessageBubble';
 
 interface MobileChatInterfaceProps {
   messages: Message[];
-  onSend: (message: string, attachments?: string[]) => Promise<void>;
+  onSend: (message: string, attachments?: string[], files?: ChatAttachmentPayload[]) => Promise<void>;
   onStop?: () => void;
   isLoading?: boolean;
   isRefreshing?: boolean;
@@ -43,7 +44,7 @@ export function MobileChatInterface({
   disabled, error, sessionId, emptyStateTitle,
 }: MobileChatInterfaceProps) {
   const { t } = useI18n();
-  const emptyTitle = emptyStateTitle ?? t('mobile_chat.new_conversation', { defaultValue: '新对话' });
+  const emptyTitle = emptyStateTitle ?? t('mobile_chat.new_conversation');
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -130,7 +131,9 @@ export function MobileChatInterface({
     event.preventDefault();
     if (!input.trim() || isLoading || disabled || sendingRef.current || composingRef.current) return;
     const message = input.trim();
-    const images = attachments.filter(a => a.status === 'ready' && a.url).map(a => a.url);
+    const ready = attachments.filter(a => a.status === 'ready' && a.url);
+    const images = ready.filter(a => (a.kind ?? 'image') === 'image').map(a => a.url);
+    const files = ready.map((a): ChatAttachmentPayload => ({ kind: a.kind ?? 'image', data: a.url, name: a.name, mime_type: a.mimeType ?? 'image/png', size: a.size }));
     sendingRef.current = true;
     setSendError(null);
     setInput('');
@@ -138,8 +141,8 @@ export function MobileChatInterface({
     scrollToLatest();
     inputRef.current?.focus({ preventScroll: true });
     try {
-      if (images.length) {
-        await onSend(message, images);
+      if (files.length) {
+        await onSend(message, images, files);
       } else {
         await onSend(message);
       }

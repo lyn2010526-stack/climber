@@ -123,6 +123,7 @@ export default function PluginPage() {
         <PageHeader
           title={t('navigation.plugin_management')}
           icon={<Package size={20} aria-hidden="true" />}
+          className="border-b border-[var(--color-border-subtle)] pb-[var(--space-4)] [&_h1]:text-[length:var(--text-base)] [&_h1]:md:text-[length:var(--text-base)] [&_p]:text-[var(--color-text-muted)]"
           actions={
             <>
               <Button variant="outline" size="sm" icon={<RefreshCw size={14} />} disabled={loading} onClick={loadPlugins}>
@@ -295,7 +296,7 @@ export default function PluginPage() {
           {error && <p role="alert" className="mb-3 text-sm text-[var(--color-error)]">{error}</p>}
           <div className="space-y-3">
             <div>
-              <label htmlFor="manage-plugin-source" className="mb-1.5 block text-xs font-medium text-[var(--color-text-secondary)]">{t('plugins.import_source_label')}</label>
+              <label htmlFor="manage-plugin-source" className="mb-1.5 block text-[length:var(--text-sm)] font-medium text-[var(--color-text-secondary)]">{t('plugins.import_source_label')}</label>
               <Input
                 id="manage-plugin-source"
                 placeholder={t('plugins.import_source_placeholder')}
@@ -304,7 +305,7 @@ export default function PluginPage() {
               />
             </div>
             <div>
-              <label htmlFor="manage-plugin-name" className="mb-1.5 block text-xs font-medium text-[var(--color-text-secondary)]">{t('plugins.import_name_label')}</label>
+              <label htmlFor="manage-plugin-name" className="mb-1.5 block text-[length:var(--text-sm)] font-medium text-[var(--color-text-secondary)]">{t('plugins.import_name_label')}</label>
               <Input
                 id="manage-plugin-name"
                 placeholder={t('plugins.import_name_label')}

@@ -18,6 +18,7 @@ from fastapi import HTTPException
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+APPROVED = '{"passed":true,"issues":[]}'
 # Isolate storage initialization as well as every session used by this suite.
 with patch.dict(os.environ, {
     "APP_TESTING": "true",
@@ -65,7 +66,7 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
         self.enterContext(patch.object(hierarchical, "resolve_api_key", return_value="test-only"))
         self.enterContext(patch.object(hierarchical, "resolve_base_url", return_value=None))
         self.calls = []
-        self.responses = ["Assign work to worker-agent", "worker result", "approved"]
+        self.responses = ["Assign work to worker-agent", "worker result", APPROVED]
 
         async def scripted_agent(*args, **kwargs):
             self.calls.append({"agent_id": args[0], "model_id": args[2], "prompt": args[5]})
@@ -189,10 +190,10 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
         await self.engine.run_task("task")
         task = await self.persisted_task()
         self.assertEqual(task.status, "completed")
-        self.assertEqual(task.final_output, "approved")
+        self.assertEqual(task.final_output, "worker result")
         self.assertIsNotNone(task.completed_at)
         self.assertEqual([call["agent_id"] for call in self.calls],
-                         ["manager-agent", "worker-agent", "manager-agent"])
+                          ["manager-agent", "worker-agent", "target-agent"])
         self.assertIn("- worker-agent (worker)", self.calls[0]["prompt"])
         self.assertEqual(len(self.events("task_completed")), 1)
         self.assertEqual(self.events("task_failed"), [])
@@ -267,7 +268,7 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
 
     async def test_exhausted_worker_and_fallback_persist_failed_before_validation(self):
         self.responses = ["plan", RuntimeError("primary failed"),
-                          RuntimeError("fallback failed"), "approved"]
+                          RuntimeError("fallback failed"), APPROVED]
         with patch.object(agent_runner, "MAX_RETRIES", 0), patch.object(
             agent_runner, "_get_fallback_model", return_value=("openai", "test-fallback")
         ):
@@ -275,7 +276,7 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
         await self.assert_failed("worker failed after retry")
         self.assertEqual([call["agent_id"] for call in self.calls],
                          ["manager-agent", "worker-agent", "worker-agent"])
-        self.assertEqual(self.responses, ["approved"])
+        self.assertEqual(self.responses, [APPROVED])
 
     async def test_retry_exhaustion_preserves_last_exception_cause(self):
         for fallback in (None, ("openai", "test-fallback")):
@@ -301,7 +302,7 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
                 if in_fallback:
                     self.responses.append(RuntimeError("primary failed"))
                 cancelled = asyncio.CancelledError()
-                self.responses.extend([cancelled, "approved"])
+                self.responses.extend([cancelled, APPROVED])
                 self.calls.clear()
                 self.broadcast.reset_mock()
                 with patch.object(agent_runner, "MAX_RETRIES", 0), patch.object(
@@ -312,7 +313,7 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual((await self.persisted_task()).status, "stopped")
                 self.assertEqual(len(self.calls), 3 if in_fallback else 2)
                 self.assertEqual(fallback.call_count, int(in_fallback))
-                self.assertEqual(self.responses, ["approved"])
+                self.assertEqual(self.responses, [APPROVED])
                 self.assertEqual(self.events("task_failed"), [])
                 self.assertEqual(self.events("task_completed"), [])
                 self.assertEqual(self.engine._running_tasks, {})
@@ -345,7 +346,7 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
             AgentEvent(AgentEventType.TOOL_CALL, {"name": "test_tool"}),
             AgentEvent(AgentEventType.TOOL_RESULT, {"result": "ok"}),
             AgentEvent(AgentEventType.DONE, {"status": "completed", "tokens_used": 11}),
-        ], "approved"]
+        ], APPROVED]
         with patch.object(agent_runner, "MAX_RETRIES", 0), patch.object(
             agent_runner, "_get_fallback_model", return_value=("openai", "test-fallback")
         ):
@@ -371,13 +372,13 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
         self.responses = ["plan", [
             AgentEvent(AgentEventType.TEXT, {"content": "partial output"}),
             AgentEvent(AgentEventType.ERROR, {"error": "worker event failed"}),
-        ], RuntimeError("fallback failed"), "approved"]
+        ], RuntimeError("fallback failed"), APPROVED]
         with patch.object(agent_runner, "MAX_RETRIES", 0), patch.object(
             agent_runner, "_get_fallback_model", return_value=("openai", "test-fallback")
         ):
             await self.engine.run_task("task")
         await self.assert_failed("worker failed after retry")
-        self.assertEqual(self.responses, ["approved"])
+        self.assertEqual(self.responses, [APPROVED])
 
 
 if __name__ == "__main__":

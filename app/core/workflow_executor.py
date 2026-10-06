@@ -61,6 +61,7 @@ def build_workflow_from_graph(
             config = {
                 "label": data.get("label", "LLM"),
                 "model_id": data.get("model", "gpt-4"),
+                "prompt": data.get("prompt", ""),
                 "system_prompt": data.get("system_prompt", ""),
                 "temperature": float(data.get("temperature", 0.7) or 0.7),
                 "max_tokens": int(data.get("max_tokens", 2000) or 2000),

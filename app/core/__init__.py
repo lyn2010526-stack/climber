@@ -59,6 +59,10 @@ class AgentEventType(StrEnum):
     TOOL_CALL = "tool_call"
     TOOL_RESULT = "tool_result"
     DONE = "done"
+    TURN_STARTED = "turn_started"
+    TURN_DONE = "turn_done"
+    INPUT_STATUS = "input_status"
+    RUNTIME_REPORT = "runtime_report"
     ERROR = "error"
     CHECKPOINT = "checkpoint"
     CONTEXT_COMPRESSION = "context_compression"
@@ -66,6 +70,7 @@ class AgentEventType(StrEnum):
     SUB_AGENT_START = "sub_agent_start"
     SUB_AGENT_END = "sub_agent_end"
     PROGRESS = "progress"
+    LOOP_STATUS = "loop_status"
     PIPELINE_COMPLETE = "pipeline_complete"
 
 
@@ -82,6 +87,7 @@ class ChatResult:
     finish_reason: str | None = None
     tokens_used: int = 0
     accumulated_content: str = ""
+    usage: dict[str, Any] | None = None
 
 
 @dataclass

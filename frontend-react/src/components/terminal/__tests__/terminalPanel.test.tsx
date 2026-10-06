@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { ITerminalOptions, Terminal } from '@xterm/xterm';
+import i18n from '../../../i18n/config';
 import { TerminalPanel, TERMINAL_THEME_TOKENS } from '../TerminalPanel';
 
 const { created } = vi.hoisted(() => ({ created: [] as unknown[] }));
@@ -27,6 +28,10 @@ afterEach(() => {
   created.length = 0;
   vi.restoreAllMocks();
   document.documentElement.removeAttribute('data-theme');
+});
+
+beforeEach(async () => {
+  await i18n.changeLanguage('zh-CN');
 });
 
 const css = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf-8');

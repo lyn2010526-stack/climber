@@ -39,6 +39,26 @@ from app.workflow.safe_code import (
 logger = structlog.get_logger()
 
 
+def _config_float(value: Any) -> float | None:
+    """Coerce a workflow node config value to float; None when absent/invalid."""
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _config_int(value: Any) -> int | None:
+    """Coerce a workflow node config value to int; None when absent/invalid."""
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 class WorkflowEngine:
     """Executes workflow DAGs with full conditional branching and iteration."""
 
@@ -205,18 +225,33 @@ class WorkflowEngine:
     ) -> None:
         """Mark nodes on a non-matching branch as skipped.
 
-        When a condition node evaluates to false, all nodes that are
-        exclusively reachable through the false branch should be skipped.
+        When a condition node evaluates to false, every node that is
+        exclusively reachable through the false branch must be skipped —
+        including the transitive closure of the branch, not only the direct
+        successor. A node stays live when it is also reachable from the
+        condition node through any other (non-skipped) path.
         """
-        # Find all successors of the branch node
-        branch_successors = workflow.get_successors(branch_node_id)
-        for edge in branch_successors:
-            succ_id = edge.target
-            if succ_id == condition_node_id:
+        # Breadth-first walk of the branch, stopping at nodes that are
+        # still reachable from the condition node via another route.
+        queue = [branch_node_id]
+        seen: set[str] = set()
+        while queue:
+            current = queue.pop(0)
+            if current in seen:
                 continue
-            # Only skip if not reachable from condition node via other paths
-            if not self._is_reachable_from(condition_node_id, succ_id, workflow, exclude_node=branch_node_id):
-                skipped_nodes.add(succ_id)
+            seen.add(current)
+            if current == condition_node_id:
+                continue
+            if current != branch_node_id and self._is_reachable_from(
+                condition_node_id, current, workflow, exclude_node=branch_node_id
+            ):
+                # Reachable via the condition node by another path; keep it.
+                continue
+            if current != branch_node_id:
+                skipped_nodes.add(current)
+            for edge in workflow.get_successors(current):
+                if edge.target not in seen:
+                    queue.append(edge.target)
 
     def _is_reachable_from(
         self,
@@ -259,6 +294,12 @@ class WorkflowEngine:
         api_key = os.environ.get(api_key_env, "") if api_key_env else node.config.get("api_key", "")
         prompt_template = node.config.get("prompt", "")
         system_prompt = node.config.get("system_prompt", "")
+        # Sampling parameters stored on the node config (see
+        # app/core/workflow_executor.py build_workflow_from_graph) must reach
+        # the adapter call; route them through the session so every engine
+        # LLM-call path forwards them as request parameters.
+        temperature = _config_float(node.config.get("temperature"))
+        max_tokens = _config_int(node.config.get("max_tokens"))
 
         prompt = self._render_template(prompt_template, inputs)
 
@@ -269,12 +310,24 @@ class WorkflowEngine:
             model_id=model_id,
             api_key=api_key,
             system_prompt=system_prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
 
         full_response_parts: list[str] = []
+        error_message = ""
         async for event in self.agent_engine.run(session, prompt):
             if event.type.value == "text":
                 full_response_parts.append(event.data.get("content", ""))
+            elif event.type.value == "error":
+                error_message = str(
+                    event.data.get("error")
+                    or event.data.get("message")
+                    or event.data
+                )
+
+        if error_message:
+            raise RuntimeError(error_message)
 
         return {
             "response": "".join(full_response_parts),
@@ -466,7 +519,7 @@ class WorkflowEngine:
         results: list[Any] = []
 
         for i, item in enumerate(collection[:max_iterations]):
-            local_vars = {item_var: item, "index": i, **inputs}
+            local_vars = {**inputs, item_var: item, "index": i}
             try:
                 result = safe_eval(transform, local_vars)
                 results.append(result)
@@ -769,9 +822,19 @@ class WorkflowEngine:
             return {}
 
         outputs: dict[str, Any] = {}
+        seen_names: set[str] = set()
         for node in end_nodes:
-            if node.output is not None:
-                outputs[node.name] = node.output
+            if node.output is None:
+                continue
+            # Names are for humans and can repeat. Two end nodes with the same
+            # label must both survive in the result, so the second and later
+            # occurrences get a short id suffix instead of silently overwriting
+            # the earlier output (R10-06).
+            key = node.name
+            if key in seen_names:
+                key = f"{node.name} ({node.id[-6:]})"
+            seen_names.add(node.name)
+            outputs[key] = node.output
         return outputs
 
 

@@ -6,12 +6,13 @@ import time
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import or_, select
 
 from app.api.v1.common import ok_response, redact_sensitive_fields
 from app.core.api_key_crypto import decrypt_api_key
+from app.core.auth_manager import require_scopes
 from app.core.di import resolve as di_resolve
 from app.core.principal import CurrentPrincipal
 from app.schemas.api_v1.workflows import (
@@ -64,7 +65,9 @@ async def list_workflows(principal: CurrentPrincipal) -> list[dict[str, Any]]:
 @router.post("/workflows")
 @router.post("/workflows/", include_in_schema=False)
 async def create_workflow(
-    payload: WorkflowCreateRequest, principal: CurrentPrincipal
+    payload: WorkflowCreateRequest,
+    principal: CurrentPrincipal,
+    _auth: dict = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Create a new workflow."""
     data = payload.model_dump()
@@ -96,7 +99,10 @@ async def get_workflow(workflow_id: str, principal: CurrentPrincipal) -> dict[st
 
 @router.put("/workflows/{workflow_id}")
 async def update_workflow(
-    workflow_id: str, payload: WorkflowUpdateRequest, principal: CurrentPrincipal
+    workflow_id: str,
+    payload: WorkflowUpdateRequest,
+    principal: CurrentPrincipal,
+    _auth: dict = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Update a workflow's editable fields."""
     data = payload.model_dump(exclude_unset=True)
@@ -114,7 +120,9 @@ async def update_workflow(
 
 
 @router.delete("/workflows/{workflow_id}")
-async def delete_workflow(workflow_id: str, principal: CurrentPrincipal) -> dict[str, bool | str]:
+async def delete_workflow(
+    workflow_id: str, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
+) -> dict[str, bool | str]:
     """Delete a workflow and its run history."""
     user_id = principal.subject_id
     async with async_session() as db:
@@ -129,7 +137,10 @@ async def delete_workflow(workflow_id: str, principal: CurrentPrincipal) -> dict
 
 @router.post("/workflows/{workflow_id}/run")
 async def run_workflow(
-    workflow_id: str, payload: WorkflowRunRequest, principal: CurrentPrincipal
+    workflow_id: str,
+    payload: WorkflowRunRequest,
+    principal: CurrentPrincipal,
+    _auth: dict = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Execute a stored workflow, or an ad-hoc graph supplied in the body."""
     from app.storage.database import Agent
@@ -172,7 +183,7 @@ async def run_workflow(
             )
             if owned_agent_ids != referenced_agent_ids:
                 raise HTTPException(
-                    status_code=422,
+                    status_code=404,
                     detail="Workflow agent_id must reference an owned agent",
                 )
 
@@ -185,7 +196,7 @@ async def run_workflow(
 
         if agent is None:
             detail = "Agent not found" if payload.agent_id else "No agent configured; create an agent first"
-            raise HTTPException(status_code=422, detail=detail)
+            raise HTTPException(status_code=404 if payload.agent_id else 409, detail=detail)
 
     run = WorkflowRun(workflow_id=workflow_id if wf else None, inputs=data.get("inputs", {}))
 
@@ -194,6 +205,7 @@ async def run_workflow(
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("workflow_execution_failed", workflow_id=workflow_id, error=str(e))
         duration = (time.perf_counter() - started) * 1000
         result_payload = {
             "id": workflow_id,
@@ -201,7 +213,7 @@ async def run_workflow(
             "outputs": {},
             "node_results": {},
             "execution_time_ms": duration,
-            "error": str(e),
+            "error": "Workflow execution failed",
         }
 
     if wf is not None:
@@ -235,13 +247,37 @@ async def _execute_workflow(
     from app.core.workflow_executor import build_workflow_from_graph
     from app.workflow.engine import WorkflowEngine
 
+    try:
+        model_registry = di_resolve("ModelRegistry")
+    except KeyError:
+        from app.models.registry import ModelRegistry
+
+        model_registry = ModelRegistry()
+    try:
+        tool_registry = di_resolve("ToolRegistry")
+    except KeyError:
+        from app.tools import ToolRegistry
+
+        tool_registry = ToolRegistry()
+    agent_engine = AgentEngine(model_registry=model_registry, tool_registry=tool_registry)
+
+    if data.get("pregel"):
+        from app.core.engine.pregel.workflow import PregelWorkflowAdapter
+
+        adapter = PregelWorkflowAdapter(
+            agent_engine,
+            model_registry=model_registry,
+            tool_registry=tool_registry,
+        )
+        if agent is not None:
+            _apply_agent_settings(adapter.workflow_engine, agent)
+        result_payload = await adapter.run(nodes, edges, inputs=data.get("inputs", {}))
+        return result_payload
+
     workflow = build_workflow_from_graph(
         nodes, edges, name=(wf.name if wf else f"Workflow {data.get('workflow_id', '')}")
     )
 
-    model_registry = di_resolve("ModelRegistry")
-    tool_registry = di_resolve("ToolRegistry")
-    agent_engine = AgentEngine(model_registry=model_registry, tool_registry=tool_registry)
     engine = WorkflowEngine(engine=agent_engine, model_registry=model_registry)
 
     if agent is not None:

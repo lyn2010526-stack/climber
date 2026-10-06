@@ -305,7 +305,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   createSessionLocal: (session) =>
     set((state) => ({
       sessions: state.sessions.some((s) => s.id === session.id)
-        ? state.sessions.map((s) => (s.id === session.id ? { ...session, ...s } : s))
+        ? state.sessions.map((s) => (s.id === session.id ? { ...s, ...session } : s))
         : [session, ...state.sessions],
       activeSessionId: session.id,
     })),

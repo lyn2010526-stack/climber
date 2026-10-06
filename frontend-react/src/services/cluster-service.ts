@@ -1,4 +1,5 @@
 import { api } from '../api';
+import i18n from '../i18n/config';
 
 export interface ClusterMember {
   id: string;
@@ -16,7 +17,7 @@ export async function getClusterMembers(groupId: string): Promise<ClusterMember[
     || !('role' in member) || typeof member.role !== 'string'
     || ('status' in member && typeof member.status !== 'string')
   ))) {
-    throw new Error('群组成员响应格式异常，请重试。');
+    throw new Error(i18n.t('api_errors.cluster_members_invalid'));
   }
   return group.members;
 }

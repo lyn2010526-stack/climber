@@ -10,6 +10,7 @@ import {
   readAttachmentDataUrl,
   readingAttachment,
   screenImageFile,
+  screenAttachmentFile,
   type ImageAttachment,
 } from '../attachments';
 import { ImageAttachmentBar } from '../ImageAttachmentBar';
@@ -68,6 +69,15 @@ describe('attachment rules', () => {
     if (!result.ok) expect(result.rejection.reason).toBe('limit');
   });
 
+  it('accepts supported document attachments and rejects executable types', () => {
+    expect(screenAttachmentFile(new File(['pdf'], 'brief.pdf', { type: 'application/pdf' }), {
+      currentCount: 0, maxImages: 4, maxSizeBytes: 100,
+    }).ok).toBe(true);
+    expect(screenAttachmentFile(new File(['x'], 'run.exe', { type: 'application/octet-stream' }), {
+      currentCount: 0, maxImages: 4, maxSizeBytes: 100,
+    }).ok).toBe(false);
+  });
+
   it('formats sizes for display', () => {
     expect(formatBytes(512)).toBe('512 B');
     expect(formatBytes(2048)).toBe('2 KB');
@@ -121,12 +131,14 @@ describe('ImageAttachmentBar', () => {
     render(<ImageAttachmentBar attachments={[]} onChange={onChange} onError={onError} />);
 
     // Bypass the input accept filter so the MIME rule itself is exercised.
+    // Documents (.txt/.pdf/.md/.csv) are supported attachments; an executable
+    // never is.
     fireEvent.change(screen.getByTestId('image-attachment-input'), {
-      target: { files: [new File(['x'], 'notes.txt', { type: 'text/plain' })] },
+      target: { files: [new File(['x'], 'run.exe', { type: 'application/octet-stream' })] },
     });
 
     expect(onChange).not.toHaveBeenCalled();
-    expect(onError).toHaveBeenCalledWith('Only image files are supported.');
+    expect(onError).toHaveBeenCalledWith('Unsupported attachment type.');
     expect(screen.queryByTestId('image-preview-chip')).not.toBeInTheDocument();
   });
 

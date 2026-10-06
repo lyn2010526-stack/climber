@@ -86,6 +86,16 @@ ignore = [
 "alembic/**/*.py" = [
     "E402",    # module-level import not at top
 ]
+"agent-system/**/*.py" = [
+    "RUF001",  # ambiguous unicode in strings (CJK 全角标点是正常书写)
+    "RUF002",  # ambiguous unicode in docstrings (同上)
+    "RUF003",  # ambiguous unicode in comments (同上)
+]
+"agent_bootstrap.py" = [
+    "RUF001",  # 同 agent-system：中文文档全角标点
+    "RUF002",
+    "RUF003",
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

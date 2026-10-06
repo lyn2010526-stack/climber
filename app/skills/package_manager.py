@@ -18,6 +18,12 @@ class SkillPackageManager:
         return list(self._packages.values())
 
 
+_manager: SkillPackageManager | None = None
+
+
 def get_skill_manager() -> SkillPackageManager:
-    """Get the global skill package manager."""
-    return SkillPackageManager()
+    """Get the global skill package manager singleton."""
+    global _manager
+    if _manager is None:
+        _manager = SkillPackageManager()
+    return _manager

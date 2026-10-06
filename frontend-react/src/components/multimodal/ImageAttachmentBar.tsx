@@ -2,19 +2,20 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { ImagePlus, Loader2 } from 'lucide-react';
 
 import { cn } from '../../lib/utils';
+import { useI18n } from '../../i18n';
 import {
-  IMAGE_INPUT_ACCEPT,
+  ATTACHMENT_INPUT_ACCEPT,
   MAX_CHAT_IMAGES,
   MAX_IMAGE_SIZE_BYTES,
   readAttachmentDataUrl,
   readingAttachment,
-  screenImageFile,
+  screenAttachmentFile,
   type ImageAttachment,
 } from './attachments';
 import { ImagePreview } from './ImagePreview';
 
 /**
- * Attachment bar for chat image input: file picker, clipboard paste, thumbnail
+ * Attachment bar for chat input: image/file picker, clipboard paste, thumbnail
  * chips and per-item removal. Self-contained; a chat composer mounts it and
  * forwards `attachments` with its send call (`api.chatStream` attachments).
  */
@@ -34,7 +35,7 @@ export interface ImageAttachmentBarProps {
   maxImages?: number;
   maxSizeBytes?: number;
   disabled?: boolean;
-  /** Accept attribute for the file input; defaults to image/*. */
+  /** Accept attribute for the file input. */
   accept?: string;
   /** Listen for image pastes on the document; turn off when the composer handles paste itself. */
   pasteEnabled?: boolean;
@@ -48,10 +49,11 @@ export function ImageAttachmentBar({
   maxImages = MAX_CHAT_IMAGES,
   maxSizeBytes = MAX_IMAGE_SIZE_BYTES,
   disabled = false,
-  accept = IMAGE_INPUT_ACCEPT,
+  accept = ATTACHMENT_INPUT_ACCEPT,
   pasteEnabled = true,
   className,
 }: ImageAttachmentBarProps) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
   const [busy, setBusy] = useState(false);
@@ -65,7 +67,7 @@ export function ImageAttachmentBar({
       const accepted: Array<{ file: File; attachment: ImageAttachment }> = [];
       let count = attachments.length;
       for (const file of incoming) {
-        const screened = screenImageFile(file, {
+        const screened = screenAttachmentFile(file, {
           currentCount: count,
           maxImages,
           maxSizeBytes,
@@ -133,7 +135,7 @@ export function ImageAttachmentBar({
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={disabled || busy || attachments.length >= maxImages}
-        aria-label="Attach images"
+         aria-label="Attach files"
         aria-controls={inputId}
         className={cn(
           'flex h-7 items-center gap-1 rounded-full px-2 text-[length:var(--text-2xs)] text-[var(--color-text-muted)]',
@@ -146,7 +148,7 @@ export function ImageAttachmentBar({
         {busy
           ? <Loader2 aria-hidden className="size-3.5 animate-spin" />
           : <ImagePlus aria-hidden className="size-3.5" />}
-        <span>Images</span>
+         <span>{t('chat.attach')}</span>
       </button>
       {attachments.map((attachment) => (
         <ImagePreview

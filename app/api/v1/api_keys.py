@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.api.v1.common import current_user_id
+from app.core.auth_manager import require_scopes
 from app.core.api_key_crypto import encrypt_api_key
 from app.storage import async_session
 from app.storage.database import ApiKey as ApiKeyModel
@@ -32,7 +33,9 @@ class ApiKeyOut(BaseModel):
 
 @router.get("", response_model=list[ApiKeyOut])
 @router.get("/", response_model=list[ApiKeyOut])
-async def list_api_keys(request: Request) -> list[ApiKeyOut]:
+async def list_api_keys(
+    request: Request, _auth: dict = Depends(require_scopes("read"))
+) -> list[ApiKeyOut]:
     user_id = current_user_id(request)
     async with async_session() as session:
         result = await session.execute(
@@ -54,7 +57,9 @@ async def list_api_keys(request: Request) -> list[ApiKeyOut]:
 
 @router.post("", response_model=ApiKeyOut)
 @router.post("/", response_model=ApiKeyOut)
-async def add_api_key(payload: ApiKeyCreate, request: Request) -> ApiKeyOut:
+async def add_api_key(
+    payload: ApiKeyCreate, request: Request, _auth: dict = Depends(require_scopes("write"))
+) -> ApiKeyOut:
     provider = payload.provider.strip().lower()
     name = payload.name.strip()
     api_key = payload.api_key.strip()
@@ -86,7 +91,9 @@ async def add_api_key(payload: ApiKeyCreate, request: Request) -> ApiKeyOut:
 
 
 @router.delete("/{key_id}")
-async def delete_api_key(key_id: str, request: Request) -> dict:
+async def delete_api_key(
+    key_id: str, request: Request, _auth: dict = Depends(require_scopes("write"))
+) -> dict:
     user_id = current_user_id(request)
     async with async_session() as session:
         result = await session.execute(

@@ -73,6 +73,7 @@ class AnthropicAdapter(ModelAdapter):
             streaming=True,
             tools=True,
             vision=True,
+            file_attachments=False,
             embedding=False,
             max_tokens=200_000,
         )
@@ -203,6 +204,12 @@ class AnthropicAdapter(ModelAdapter):
         current_tool_name = None
         current_tool_input = ""
         tokens_used = 0
+        input_tokens = 0
+        output_tokens = 0
+        usage: dict[str, Any] | None = None
+
+        def _result(**kwargs: Any) -> ChatResult:
+            return ChatResult(usage=usage, **kwargs)
 
         try:
             client = self.get_client()
@@ -225,8 +232,9 @@ class AnthropicAdapter(ModelAdapter):
                         etype = event.get("type")
 
                         if etype == "message_start":
-                            usage = event.get("message", {}).get("usage", {})
-                            tokens_used = usage.get("input_tokens", 0)
+                            starter_usage = event.get("message", {}).get("usage", {})
+                            input_tokens = starter_usage.get("input_tokens", 0)
+                            tokens_used = input_tokens
 
                         elif etype == "content_block_start":
                             block = event.get("content_block", {})
@@ -271,7 +279,19 @@ class AnthropicAdapter(ModelAdapter):
                             current_tool_input = ""
 
                         elif etype == "message_delta":
-                            tokens_used += event.get("usage", {}).get("output_tokens", 0)
+                            output_tokens = event.get("usage", {}).get("output_tokens", 0)
+                            tokens_used = input_tokens + output_tokens
+                            usage = {
+                                "prompt_tokens": input_tokens,
+                                "completion_tokens": output_tokens,
+                                "total_tokens": tokens_used,
+                            }
+                            yield _result(
+                                content="",
+                                tool_calls=[],
+                                finish_reason=None,
+                                tokens_used=tokens_used,
+                            )
 
         except Exception as e:
             logger.error("Anthropic streaming error", error=str(e))
@@ -293,18 +313,22 @@ class AnthropicAdapter(ModelAdapter):
         tool_calls = []
         finish_reason = "stop"
         tokens_used = 0
+        final_usage: dict[str, Any] | None = None
 
         async for chunk in self.stream_chat(messages, tools, **kwargs):
             full_content += chunk.content
             if chunk.tool_calls:
-                tool_calls = chunk.tool_calls
+                tool_calls.extend(chunk.tool_calls)
             if chunk.finish_reason:
                 finish_reason = chunk.finish_reason
             tokens_used = max(tokens_used, chunk.tokens_used)
+            if chunk.usage is not None:
+                final_usage = chunk.usage
 
         return ChatResult(
             content=full_content,
             tool_calls=tool_calls,
             finish_reason=finish_reason,
             tokens_used=tokens_used,
+            usage=final_usage,
         )

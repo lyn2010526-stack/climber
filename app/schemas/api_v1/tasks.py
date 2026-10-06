@@ -1,4 +1,10 @@
-"""Task API schemas."""
+"""Task API schemas — mirroring the actual /tasks endpoints.
+
+The task worker is invoked through ``task_manager.submit(task_type, payload)``,
+so the submit request carries the handler type plus an opaque payload. Keeping
+this schema in sync with ``app.api/v1/routes/tasks.py`` avoids drift between
+the documented contract and the endpoint body.
+"""
 
 from __future__ import annotations
 
@@ -9,13 +15,6 @@ from pydantic import Field
 from app.schemas.api_v1.base import StrictRequest
 
 
-class TaskCreateRequest(StrictRequest):
-    group_id: str
-    description: str = Field(min_length=1)
-    worker_id: str | None = None
-    reviewer_ids: list[str] = Field(default_factory=list)
-    max_rounds: int = Field(default=5, ge=1)
-    context: list[str] = Field(default_factory=list)
-    guardrails: list[dict[str, Any]] = Field(default_factory=list)
-    human_review_required: bool = False
-    output_schema: dict[str, Any] = Field(default_factory=dict)
+class SubmitTaskRequest(StrictRequest):
+    task_type: str = Field(min_length=1)
+    payload: dict[str, Any] = Field(default_factory=dict)

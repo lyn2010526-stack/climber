@@ -18,6 +18,8 @@ from app.storage.repository_instruction_traces import (
     list_traces,
     list_unarchived,
     mark_archived,
+    retrieve_traces,
+    update_trace_outcome,
 )
 
 UNICODE_SAMPLE = (
@@ -225,6 +227,40 @@ async def test_token_count_is_estimated_when_absent() -> None:
         await db.commit()
         assert trace.token_count == estimate_token_count("count my tokens please")
         assert trace.token_count > 0
+
+
+async def test_retrieval_is_user_scoped_and_updates_access_metadata() -> None:
+    user_id = str(uuid.uuid4())
+    async with await _db() as db:
+        own, _ = await create_trace(db, {"raw_text": "private deployment plan", "user_id": user_id})
+        await create_trace(db, {"raw_text": "private deployment plan", "user_id": str(uuid.uuid4())})
+        await db.commit()
+
+        rows = await retrieve_traces(db, user_id=user_id, query="deployment")
+        await db.commit()
+        assert [row.id for row in rows] == [own.id]
+        await db.refresh(own)
+        assert own.retrieval_count == 1
+        assert own.last_retrieved_at is not None
+
+
+async def test_outcome_closes_trace_by_turn_without_changing_raw_text() -> None:
+    turn_id = str(uuid.uuid4())
+    async with await _db() as db:
+        trace, _ = await create_trace(
+            db,
+            {"raw_text": "原样保留\n第二行", "turn_id": turn_id, "status": "running"},
+        )
+        await db.commit()
+        assert await update_trace_outcome(
+            db, turn_id=turn_id, status="completed", outcome="success"
+        ) == 1
+        await db.commit()
+        await db.refresh(trace)
+        assert trace.raw_text == "原样保留\n第二行"
+        assert trace.status == "completed"
+        assert trace.outcome == "success"
+        assert trace.completed_at is not None
 
 
 async def test_compression_self_reference_is_rejected_by_db() -> None:

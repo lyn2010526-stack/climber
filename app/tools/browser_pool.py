@@ -21,6 +21,7 @@ logger = structlog.get_logger()
 DEFAULT_MAX_INSTANCES = 2
 DEFAULT_IDLE_TIMEOUT = 300.0  # 5 minutes
 DEFAULT_SWEEP_INTERVAL = 60.0
+SESSION_CLOSE_TIMEOUT = 10.0
 
 
 @dataclass
@@ -139,7 +140,15 @@ class BrowserPool:
             sessions = list(self._sessions.values())
             self._sessions.clear()
         for session in sessions:
-            await session.close()
+            try:
+                # A hung playwright teardown must not stall shutdown.
+                await asyncio.wait_for(session.close(), timeout=SESSION_CLOSE_TIMEOUT)
+            except Exception as exc:
+                logger.warning(
+                    "browser_session_close_timeout",
+                    session_id=session.session_id,
+                    error=str(exc),
+                )
         if sessions:
             logger.info("browser_pool_drained", count=len(sessions))
 

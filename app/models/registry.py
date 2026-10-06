@@ -123,13 +123,21 @@ class ModelRegistry:
             return self.register_model(resolved_model, resolved_provider, api_key, base_url)
 
     def _resolve_spec(self, spec: str) -> ModelAdapter:
-        """Resolve a single-string alias or ``provider:model`` spec into an adapter."""
+        """Resolve a single-string alias or ``provider:model`` spec into an adapter.
+
+        Raises ``ValueError`` for an unknown bare spec instead of silently
+        inventing an OpenAI model: an unrecognized name is almost always a
+        typo, and registering it under the wrong provider hides the mistake.
+        """
         if ":" in spec:
             provider, model_id = spec.split(":", 1)
         elif spec in MODEL_ALIASES:
             provider, model_id = MODEL_ALIASES[spec]
         else:
-            provider, model_id = "openai", spec
+            raise ValueError(
+                f"Unknown model spec: {spec!r}. "
+                f"Use a provider:model string or one of: {sorted(MODEL_ALIASES)}"
+            )
         try:
             return self.get_model(provider, model_id)
         except ValueError:
@@ -222,13 +230,25 @@ class ModelRegistry:
         return removed
 
     def list_models(self) -> list[dict[str, Any]]:
-        """List all registered models."""
+        """List all registered models, deduplicated by provider/model.
+
+        ``register_keys`` stores one adapter per rotated API key under
+        suffixed cache keys; those all map to the same logical model, so
+        only the first instance is reported.
+        """
         result = []
-        for _key, adapter in self._models.items():
+        seen: set[tuple[str, str]] = set()
+        for adapter in self._models.values():
+            provider = adapter.provider
+            model_id = adapter.model_id
+            key = (provider, model_id)
+            if key in seen:
+                continue
+            seen.add(key)
             caps = adapter.capabilities
             result.append({
-                "provider": adapter.provider,
-                "model_id": adapter.model_id,
+                "provider": provider,
+                "model_id": model_id,
                 "capabilities": caps.model_dump(),
             })
         return result

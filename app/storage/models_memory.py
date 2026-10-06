@@ -21,6 +21,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -167,6 +168,9 @@ class CoreMemoryBlock(Base):
     """
 
     __tablename__ = "core_memory_blocks"
+    __table_args__ = (
+        UniqueConstraint("user_id", "agent_id", "label", name="uq_core_memory_block_scope"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)

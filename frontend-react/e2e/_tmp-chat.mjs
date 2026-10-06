@@ -1,0 +1,11 @@
+import { chromium } from 'playwright';
+const BASE = 'https://5173-1822695f51232c6b.monkeycode-ai.online';
+const b = await chromium.launch({ executablePath: "/root/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome" });
+const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+await p.goto(`${BASE}/#chat`, { waitUntil: 'networkidle' }).catch(()=>{});
+await p.waitForTimeout(2500);
+console.log('url=', p.url());
+console.log('textarea count=', await p.locator('textarea').count());
+console.log('body preview=', (await p.locator('body').innerText()).slice(0, 300).replace(/\n/g, ' | '));
+await p.screenshot({ path: '/tmp/opencode/chat.png' });
+await b.close();

@@ -16,6 +16,7 @@ import { SlashCommandMenu } from '../chat/SlashCommandMenu';
 import { ChatComposerTools } from '../chat/ChatComposerTools';
 import { ImageAttachmentBar } from '../multimodal/ImageAttachmentBar';
 import type { ImageAttachment } from '../multimodal/attachments';
+import type { ChatAttachmentPayload } from '../../useChat';
 import { useChatVisuals } from '../../hooks/useChatVisuals';
 import {
   FALLBACK_COMMANDS,
@@ -68,7 +69,7 @@ interface Message {
 
 interface ChatInterfaceProps {
   messages: Message[];
-  onSend: (message: string, attachments?: string[]) => void;
+  onSend: (message: string, attachments?: string[], files?: ChatAttachmentPayload[]) => void;
   onStop?: () => void;
   isLoading?: boolean;
   /** Session id used by slash-command execution and server-side interrupts. */
@@ -122,6 +123,36 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [slashActiveIndex, setSlashActiveIndex] = useState(0);
   const [slashDismissed, setSlashDismissed] = useState(false);
   /**
+   * Debounced instruction understanding shown above the composer only when the
+   * deterministic pass flags a missing goal or an ambiguity. Mirrors the trace
+   * `task_spec`: a plain-language summary plus clarification questions.
+   */
+  const [clarity, setClarity] = useState<{ summary: string; questions: string[] } | null>(null);
+
+  useEffect(() => {
+    const text = input.trim();
+    if (text.length < 2 || text.startsWith('/') || isLoading) {
+      setClarity(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      api.understandInstruction(text)
+        .then(data => {
+          const progress = data?.progress;
+          if (progress !== 'needs_clarification') {
+            setClarity(null);
+            return;
+          }
+          const questions = Array.isArray(data?.clarification_questions)
+            ? data.clarification_questions
+            : [];
+          setClarity({ summary: data?.plain_language_summary ?? '', questions });
+        })
+        .catch(() => setClarity(null));
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [input, isLoading]);
+  /**
    * One reading column for the transcript and the composer, decided by
    * {@link getReadingWidthClass}: a turn carrying parallel tool output needs
    * more room than prose, and the composer follows the widest turn in view.
@@ -130,6 +161,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [editContent, setEditContent] = useState('');
   const [resolvedPermissionIds, setResolvedPermissionIds] = useState<Set<string>>(() => new Set());
   const [feedbacks, setFeedbacks] = useState<Record<string, 'up' | 'down'>>({});
+  /** A failed feedback submission is shown to the user, not just logged (R12-H57). */
+  const [feedbackError, setFeedbackError] = useState<{ messageId: string; message: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const editInputRef = useRef<HTMLTextAreaElement>(null);
@@ -142,6 +175,18 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [showScrollButton, setShowScrollButton] = useState(false);
   const lastMessage = messages.at(-1);
   const activeMessageId = isLoading && lastMessage?.role === 'assistant' ? lastMessage.id : undefined;
+  // Newest completed assistant turn. Announced through the polite live region
+  // below so a screen-reader user hears streaming replies arrive instead of
+  // only discovering them by re-reading the transcript (R12-H12).
+  const liveAnnouncement = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message?.role === 'assistant' && message.id !== activeMessageId) {
+        return message.content;
+      }
+    }
+    return '';
+  }, [messages, activeMessageId]);
   const isEmpty = messages.length === 0;
   const isHistoryLoading = isEmpty && !!isLoading;
   const showEmptyState = isEmpty && !isLoading && !error;
@@ -183,7 +228,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   )).filter(request => !resolvedPermissionIds.has(request.id));
 
   const handleApprovePermission = useCallback(async (id: string) => {
-    await api.resolvePermission(id, 'allow' as Parameters<typeof api.resolvePermission>[1]);
+    await api.resolvePermission(id, 'allow');
     setResolvedPermissionIds(prev => new Set(prev).add(id));
   }, []);
 
@@ -193,7 +238,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   }, []);
 
   const handleApproveAllPermissions = useCallback(async () => {
-    await Promise.all(permissionRequests.map(request => api.resolvePermission(request.id, 'allow' as Parameters<typeof api.resolvePermission>[1])));
+    await Promise.all(permissionRequests.map(request => api.resolvePermission(request.id, 'allow')));
     setResolvedPermissionIds(prev => new Set([...prev, ...permissionRequests.map(request => request.id)]));
   }, [permissionRequests]);
 
@@ -202,10 +247,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     try {
       await api.submitFeedback(messageId, type);
       setFeedbacks(prev => ({ ...prev, [messageId]: type }));
-    } catch (e) {
-      console.error('feedback failed', e);
+      setFeedbackError(null);
+    } catch {
+      setFeedbackError({ messageId, message: t('chat.feedback_failed') });
     }
-  }, [feedbacks]);
+  }, [feedbacks, t]);
 
   useEffect(() => {
     if (scrollRef.current && followOutput.current) {
@@ -244,14 +290,14 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   // path stays untouched; replies are appended after the transcript.
   const [commandTurns, setCommandTurns] = useState<Message[]>([]);
   const [commandRunning, setCommandRunning] = useState(false);
+  const commandAbortRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let active = true;
     // The backend catalog is authoritative; silently keep the fallback on error.
-    fetch('/api/v1/chat-commands', { headers: { Accept: 'application/json' } })
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        if (active && data?.commands?.length) setSlashCatalog(data.commands as SlashCommandInfo[]);
+    api.listChatCommands()
+      .then(commands => {
+        if (active && commands?.length) setSlashCatalog(commands as SlashCommandInfo[]);
       })
       .catch(() => undefined);
     return () => { active = false; };
@@ -281,23 +327,32 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     const upsert = (mutate: (msg: Message) => Message) => {
       setCommandTurns(prev => prev.map(msg => (msg.id === assistantId ? mutate(msg) : msg)));
     };
-    executeSlashCommand(sessionId ?? '', text, event => {
+    commandAbortRef.current?.();
+    commandAbortRef.current = executeSlashCommand(sessionId ?? '', text, event => {
       switch (event.type) {
         case 'text':
           upsert(msg => ({ ...msg, content: msg.content + event.delta }));
           break;
         case 'error':
           upsert(msg => ({ ...msg, content: msg.content + `\n[Error: ${event.message}]` }));
-          setCommandRunning(false);
+           setCommandRunning(false);
+           commandAbortRef.current = null;
           break;
         case 'done':
-          setCommandRunning(false);
+           setCommandRunning(false);
+           commandAbortRef.current = null;
           break;
         default:
           break;
       }
     });
   }, [appendCommandMessage, sessionId]);
+
+  const stopCommand = useCallback(() => {
+    commandAbortRef.current?.();
+    commandAbortRef.current = null;
+    setCommandRunning(false);
+  }, []);
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -310,9 +365,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       if (commandRunning) return;
       runSlashCommand(text);
     } else {
-      const images = attachments.filter(a => a.status === 'ready' && a.url).map(a => a.url);
-      if (images.length) {
-        onSend(text, images);
+      const ready = attachments.filter(a => a.status === 'ready' && a.url);
+      const images = ready.filter(a => (a.kind ?? 'image') === 'image').map(a => a.url);
+      const files = ready.map((a): ChatAttachmentPayload => ({ kind: a.kind ?? 'image', data: a.url, name: a.name, mime_type: a.mimeType ?? 'image/png', size: a.size }));
+      if (files.length) {
+        onSend(text, images, files);
       } else {
         onSend(text);
       }
@@ -321,6 +378,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setInput('');
     setSlashDismissed(false);
     setSlashActiveIndex(0);
+    setClarity(null);
     if (inputRef.current) inputRef.current.style.height = 'auto';
   }, [canSubmit, input, isExactCommand, onSend, runSlashCommand, commandRunning, attachments]);
 
@@ -548,6 +606,15 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               {messages.map((msg, idx) => (
                 <React.Fragment key={msg.id}>{renderMessage(msg, idx > 0 ? messages[idx - 1] : undefined)}</React.Fragment>
               ))}
+              {feedbackError && (
+                <div
+                  role="alert"
+                  className="mt-2 flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] px-3 py-2 text-xs text-[var(--color-error)]"
+                >
+                  <CircleAlert size={12} aria-hidden="true" className="shrink-0" />
+                  <span className="min-w-0 flex-1 break-words">{feedbackError.message}</span>
+                </div>
+              )}
             </div>
           )}
           {/* Slash-command turns render after the transcript: their replies are
@@ -619,6 +686,30 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             disabled={!!isLoading}
             className="mb-1.5"
           />
+          {clarity && clarity.questions.length > 0 && (
+            <div
+              role="status"
+              className="mb-1.5 flex items-start gap-2 rounded-[var(--radius-md)] border border-[var(--color-warning)]/40 bg-[var(--color-warning-subtle)] px-3 py-2 text-sm"
+            >
+              <CircleAlert size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
+              <div className="min-w-0 flex-1">
+                {clarity.summary && (
+                  <p className="text-xs text-[var(--color-text-secondary)]">{clarity.summary}</p>
+                )}
+                <p className="mt-0.5 text-xs font-medium text-[var(--color-text-primary)]">
+                  {t('chat.clarify_hint')}
+                </p>
+                <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs text-[var(--color-text-secondary)]">
+                  {clarity.questions.map((question, i) => (
+                    <li key={i}>{question}</li>
+                  ))}
+                </ul>
+              </div>
+              <Button size="xs" variant="ghost" onClick={() => setClarity(null)} className="shrink-0">
+                {t('common.dismiss', { defaultValue: '忽略' })}
+              </Button>
+            </div>
+          )}
           <div
             className="relative rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] transition-colors duration-150 focus-within:border-[var(--color-border-accent)] motion-reduce:transition-none"
           >
@@ -641,7 +732,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               aria-autocomplete="list"
               aria-expanded={slashMenuVisible}
               aria-controls="slash-command-menu"
-              role="combobox"
               className={cn('block min-h-[var(--space-6)] w-full resize-none bg-transparent px-3 py-2.5 text-[length:var(--text-sm)] leading-6 text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none', COMPOSER_MAX_HEIGHT)}
               rows={1}
             />
@@ -678,8 +768,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                       // engine unwinds at its next cooperative stop checkpoint.
                       if (sessionId) cancelSessionTurn(sessionId);
                       onStop?.();
+                      stopCommand();
                     }}
-                    disabled={!onStop}
+                    disabled={!onStop && !commandRunning}
                     className="shrink-0"
                   >
                     <Square size={14} aria-hidden="true" />
@@ -707,6 +798,10 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         onDeny={handleDenyPermission}
         onApproveAll={handleApproveAllPermissions}
       />
+
+      {/* Streaming replies arrive asynchronously; announce completed turns to
+          assistive tech instead of requiring a manual re-read (R12-H12). */}
+      <div aria-live="polite" className="sr-only" data-live-announcement>{liveAnnouncement}</div>
     </div>
   );
 };

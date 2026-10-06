@@ -9,6 +9,7 @@ import structlog
 
 from app.core import AgentEvent, AgentEventType, ChatResult, CheckpointData
 from app.core.compressor import ContextCompressor, estimate_tokens
+from app.core.engine.llm_calls import sampling_kwargs
 from app.core.parallel import ParallelToolExecutor
 from app.core.session import AgentSession
 from app.core.task_state_machine import TaskState
@@ -80,7 +81,7 @@ class ReActLoopExecutor:
                     if adapter.capabilities.streaming:
                         full_content = ""
                         accumulated_tool_calls = []
-                        async for chunk in adapter.stream_chat(messages=session.messages, tools=tools or None):
+                        async for chunk in adapter.stream_chat(messages=session.messages, tools=tools or None, **sampling_kwargs(session)):
                             if chunk.content:
                                 full_content += chunk.content
                                 yield AgentEvent(type=AgentEventType.TEXT, data={"content": chunk.content})
@@ -105,7 +106,7 @@ class ReActLoopExecutor:
                                     accumulated_tool_calls[idx]["function"]["arguments"] += new_args
                         result = ChatResult(content=full_content, tool_calls=accumulated_tool_calls, finish_reason="stop", tokens_used=0)
                     else:
-                        result = await adapter.chat(messages=session.messages, tools=tools or None)
+                        result = await adapter.chat(messages=session.messages, tools=tools or None, **sampling_kwargs(session))
                 except Exception as e:
                     if session._stop_requested:
                         yield AgentEvent(type=AgentEventType.ERROR, data={"error": str(e)})
@@ -127,7 +128,10 @@ class ReActLoopExecutor:
 
                 if result.content:
                     session.messages.append({"role": "assistant", "content": result.content})
-                    yield AgentEvent(type=AgentEventType.TEXT, data={"content": result.content})
+                    if not adapter.capabilities.streaming:
+                        # Streaming already emitted each delta; re-emitting the
+                        # assembled body here would duplicate the text.
+                        yield AgentEvent(type=AgentEventType.TEXT, data={"content": result.content})
 
                 if result.tool_calls:
                     session.messages.append({"role": "assistant", "content": "", "tool_calls": result.tool_calls})

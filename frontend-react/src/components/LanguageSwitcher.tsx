@@ -25,6 +25,7 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
   const { i18n, t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const currentLang = supportedLanguages.find(
     (lang) => lang.code === i18n.language
@@ -41,6 +42,21 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Escape closes the menu and returns focus to the trigger so keyboard users
+  // keep their place (R12-H15).
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setIsOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
+  }, [isOpen]);
+
   const handleLanguageChange = async (langCode: SupportedLanguageCode) => {
     await i18n.changeLanguage(langCode);
     localStorage.setItem('i18next_lng', langCode);
@@ -52,7 +68,9 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
   return (
     <div ref={dropdownRef} className={cn('relative inline-block', className)}>
       <button type="button"
+        ref={triggerRef}
         onClick={() => setIsOpen(!isOpen)}
+        onKeyDown={(event) => { if (event.key === 'Escape') setIsOpen(false); }}
         className={cn(
           'flex items-center rounded-lg bg-[var(--color-bg-surface-2)] hover:bg-[var(--color-bg-surface-3)] text-[var(--color-text-primary)] transition-colors',
           iconOnly
@@ -98,6 +116,9 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
 
       {isOpen && (
         <div 
+          role="menu"
+          aria-label={t('user_menu.language_settings')}
+          aria-orientation="vertical"
           className={cn(
             'absolute mt-2 rounded-lg shadow-lg bg-[var(--color-bg-surface-1)] border border-[var(--color-border-default)] z-50 overflow-hidden',
             compact ? 'w-36' : 'w-48',
@@ -117,6 +138,8 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
             {supportedLanguages.map((lang) => (
               <button type="button"
                 key={lang.code}
+                role="menuitemradio"
+                aria-checked={currentLang.code === lang.code}
                 onClick={() => handleLanguageChange(lang.code)}
                 className={cn(
                   'w-full text-left flex items-center justify-between transition-colors',

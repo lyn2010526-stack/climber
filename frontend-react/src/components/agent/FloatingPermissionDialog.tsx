@@ -158,43 +158,15 @@ export function isExpiredError(error: unknown): boolean {
   return /\bexpired\b|已过期|已失效/i.test(message);
 }
 
-const actionConfig = {
-  file_read: { icon: FileText, en: 'Read file', zh: '读取文件' },
-  file_write: { icon: FileText, en: 'Write file', zh: '修改文件' },
-  file_delete: { icon: FileText, en: 'Delete file', zh: '删除文件' },
-  command: { icon: Terminal, en: 'Run command', zh: '执行命令' },
-  network: { icon: Globe, en: 'Network access', zh: '网络访问' },
-  mcp_tool: { icon: Terminal, en: 'MCP tool', zh: 'MCP 工具' },
-};
-
-const targetLabels: Record<ApprovalTargetKind, { en: string; zh: string }> = {
-  command: { en: 'Command to run', zh: '将要执行的命令' },
-  path: { en: 'Path to access', zh: '将要访问的路径' },
-  url: { en: 'Address to open', zh: '将要访问的地址' },
-  tool: { en: 'Tool to call', zh: '将要调用的工具' },
-};
-
-/** Wording for the four decision states a card can report, plus the two that
- *  report a submission that did not land. */
-const STATE_COPY: Record<ApprovalState, { en: string; zh: string }> = {
-  pending: { en: 'Awaiting your decision', zh: '等待你的决定' },
-  approving: { en: 'Approving', zh: '正在允许' },
-  denying: { en: 'Denying', zh: '正在拒绝' },
-  approved: { en: 'Approved', zh: '已批准' },
-  denied: { en: 'Denied', zh: '已拒绝' },
-  expired: { en: 'No longer pending', zh: '已过期' },
-  error: { en: 'Not submitted', zh: '未提交成功' },
-  unreported: { en: 'Not reported', zh: '未上报' },
-};
-
-/** One-line summary of what each mode leaves to the backend. */
-const MODE_COPY: Record<PermissionMode, { en: string; zh: string }> = {
-  default: { en: 'reads pass, every change asks', zh: '读取自动放行，修改需审批' },
-  acceptEdits: { en: 'file edits pass, the rest asks', zh: '文件编辑自动放行，其余需审批' },
-  plan: { en: 'read-only, nothing is executed', zh: '只读规划，不执行任何操作' },
-  auto: { en: 'backend checks, only paths outside the workspace ask', zh: '后端分类器检查，仅工作区外路径需审批' },
-  bypass: { en: 'no permission check runs', zh: '后端跳过权限检查' },
-  strict: { en: 'nothing passes without an explicit allow', zh: '未显式放行即拒绝' },
+/** Icon for each action kind. Wording lives in the `permission_dialog` locale
+ *  namespace so the whole card reads in the current language. */
+const ACTION_ICONS = {
+  file_read: FileText,
+  file_write: FileText,
+  file_delete: FileText,
+  command: Terminal,
+  network: Globe,
+  mcp_tool: Terminal,
 };
 
 function firstPathIn(text: string): string | undefined {
@@ -233,11 +205,9 @@ export function extractApprovalTarget(request: PermissionRequest): ApprovalTarge
   return undefined;
 }
 
-function ApprovalChip({ state, chinese }: { state: ApprovalState; chinese: boolean }) {
+function ApprovalChip({ state }: { state: ApprovalState }) {
   const { t } = useI18n();
-  const label = t(`permission.state.${state}`, {
-    defaultValue: chinese ? STATE_COPY[state].zh : STATE_COPY[state].en,
-  });
+  const label = t(`permission_dialog.state.${state}`);
   return (
     <span className="flex min-w-0 items-center gap-[var(--space-1)] text-[length:var(--text-2xs)]">
       <StatusIcon tone={approvalTone(state)} size="xs" />
@@ -254,10 +224,9 @@ function ApprovalChip({ state, chinese }: { state: ApprovalState; chinese: boole
  * the host usually removes as soon as the decision lands.
  */
 function PermissionReceipt({ request, decision }: { request: PermissionRequest; decision: ApprovalDecision }) {
-  const { t, currentLanguage } = useI18n();
-  const chinese = currentLanguage.startsWith('zh');
+  const { t } = useI18n();
   const state: ApprovalState = decision === 'deny' ? 'denied' : 'approved';
-  const config = actionConfig[request.action];
+  const Icon = ACTION_ICONS[request.action];
   return (
     <div
       data-approval-decision={decision}
@@ -265,10 +234,10 @@ function PermissionReceipt({ request, decision }: { request: PermissionRequest; 
     >
       <StatusIcon tone={approvalTone(state)} size="xs" />
       <span className="shrink-0 text-[var(--color-text-muted)]">
-        {t(`permission.state.${state}`, { defaultValue: chinese ? STATE_COPY[state].zh : STATE_COPY[state].en })}
+        {t(`permission_dialog.state.${state}`)}
       </span>
       <span className="min-w-0 flex-1 truncate font-mono text-[var(--color-text-disabled)]">{request.description}</span>
-      <config.icon size={12} aria-hidden="true" className="shrink-0 text-[var(--color-text-disabled)]" />
+      <Icon size={12} aria-hidden="true" className="shrink-0 text-[var(--color-text-disabled)]" />
     </div>
   );
 }
@@ -284,8 +253,7 @@ function PermissionItem({ request, onApprove, onDeny, bulkPending, focusOnMount,
   draft: ApprovalDraft | undefined;
   onDraftChange: (id: string, draft: ApprovalDraft) => void;
 }) {
-  const { t, currentLanguage } = useI18n();
-  const chinese = currentLanguage.startsWith('zh');
+  const { t } = useI18n();
   const dangerous = request.severity === 'high' || request.action === 'file_delete';
   const [status, setStatus] = useState<ApprovalStatus>('idle');
   /** Which way the user decided, kept so the card can name its own state. */
@@ -293,8 +261,8 @@ function PermissionItem({ request, onApprove, onDeny, bulkPending, focusOnMount,
   const [error, setError] = useState<string>();
   const responding = useRef(false);
   const id = useId();
-  const config = actionConfig[request.action];
-  const label = t(`permission.action.${request.action}`, { defaultValue: chinese ? config.zh : config.en });
+  const Icon = ACTION_ICONS[request.action];
+  const label = t(`permission_dialog.action.${request.action}`);
   const locked = status === 'submitting' || status === 'submitted' || status === 'expired';
   const disabled = locked || bulkPending;
   const state = approvalState(status, decision);
@@ -359,14 +327,12 @@ function PermissionItem({ request, onApprove, onDeny, bulkPending, focusOnMount,
     <section ref={sectionRef} tabIndex={-1} aria-labelledby={`${id}-title`} aria-busy={disabled} data-approval-status={status} data-approval-state={state} className="space-y-[var(--space-2)] border-b border-[var(--color-border-subtle)] px-[var(--space-3)] py-[var(--space-3)] last:border-b-0 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
 
       <div className="flex flex-wrap items-center gap-[var(--space-2)] text-[length:var(--text-xs)]">
-        <config.icon size={14} aria-hidden="true" className="shrink-0 text-[var(--color-text-muted)]" />
+        <Icon size={14} aria-hidden="true" className="shrink-0 text-[var(--color-text-muted)]" />
         <span id={`${id}-title`} className="font-medium text-[var(--color-text-primary)]">{label}</span>
         <span className="ms-auto flex items-center gap-[var(--space-1)] text-[length:var(--text-2xs)]">
           <StatusIcon tone={dangerous ? 'warning' : 'queued'} size="xs" />
           <span className={dangerous ? 'text-[var(--color-error)]' : 'text-[var(--color-text-muted)]'}>
-            {t(`permission.risk.${dangerous ? 'high' : request.severity}`, {
-              defaultValue: dangerous ? (chinese ? '高风险' : 'High risk') : request.severity === 'medium' ? (chinese ? '中风险' : 'Medium risk') : (chinese ? '低风险' : 'Low risk'),
-            })}
+            {t(`permission_dialog.risk.${dangerous ? 'high' : request.severity}`)}
           </span>
         </span>
       </div>
@@ -376,7 +342,7 @@ function PermissionItem({ request, onApprove, onDeny, bulkPending, focusOnMount,
       {target && (
         <div>
           <span className="text-[length:var(--text-2xs)] font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
-            {t(`permission.target.${target.kind}`, { defaultValue: chinese ? targetLabels[target.kind].zh : targetLabels[target.kind].en })}
+            {t(`permission_dialog.target.${target.kind}`)}
           </span>
           <pre
             tabIndex={0}
@@ -395,7 +361,7 @@ function PermissionItem({ request, onApprove, onDeny, bulkPending, focusOnMount,
         <div>
           <button type="button" data-testid="permission-details-toggle" aria-expanded={detailsOpen} aria-controls={`${id}-details`} onClick={() => setDetailsOpen(value => !value)} className="flex items-center gap-[var(--space-1)] py-[var(--space-1)] text-[length:var(--text-xs)] text-[var(--color-text-secondary)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
             {detailsOpen ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronRight size={12} aria-hidden="true" />}
-            {t('permission.details', { defaultValue: chinese ? '操作详情' : 'Action details' })}
+            {t('permission_dialog.details')}
           </button>
           {detailsOpen && <pre id={`${id}-details`} tabIndex={0} className="mt-[var(--space-1)] max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-3)] p-[var(--space-2)] font-mono text-[length:var(--text-2xs)] text-[var(--color-text-secondary)]">{extraDetails}</pre>}
         </div>
@@ -404,34 +370,34 @@ function PermissionItem({ request, onApprove, onDeny, bulkPending, focusOnMount,
       {dangerous && (
         <label className="flex items-start gap-[var(--space-2)] text-[length:var(--text-xs)] text-[var(--color-text-secondary)]">
           <input type="checkbox" checked={confirmed} disabled={disabled} onChange={event => setConfirmed(event.target.checked)} className="mt-[var(--space-0-5)] accent-[var(--color-error)]" />
-          {t('permission.confirm_risk', { defaultValue: chinese ? '我已核对操作内容，确认允许此高风险操作。' : 'I have reviewed the action and approve this high-risk operation.' })}
+          {t('permission_dialog.confirm_risk')}
         </label>
       )}
 
       {status === 'expired' ? (
         <p role="alert" className="break-words text-[length:var(--text-xs)] text-[var(--color-text-muted)]">
-          {t('permission.expired', { defaultValue: chinese ? '此审批已过期' : 'This approval request has expired' })}
+          {t('permission_dialog.expired')}
           <span className="ms-1 text-[var(--color-text-secondary)]">
-            {t('permission.expired_hint', { defaultValue: chinese ? '会话已不再等待这次审批，重试无效，请让智能体重新发起。' : 'The session stopped waiting for this decision, so retrying cannot help. Ask the agent to request it again.' })}
+            {t('permission_dialog.expired_hint')}
           </span>
         </p>
       ) : error && (
         <p role="alert" className="break-words text-[length:var(--text-xs)] text-[var(--color-error)]">
           {error}
           <span className="ms-1 text-[var(--color-text-muted)]">
-            {t('permission.retry_hint', { defaultValue: chinese ? '可重试，操作内容已保留。' : 'You can retry; the action details are preserved.' })}
+            {t('permission_dialog.retry_hint')}
           </span>
         </p>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-[var(--space-2)]">
-        <ApprovalChip state={state} chinese={chinese} />
+        <ApprovalChip state={state} />
         <span className="flex flex-wrap gap-[var(--space-2)]">
           <Button type="button" variant="outline" size="sm" disabled={disabled} aria-keyshortcuts="Control+Shift+Backspace Meta+Shift+Backspace" onClick={() => respond(false)} icon={<X size={12} aria-hidden="true" />}>
-            {t('permission.deny', { defaultValue: chinese ? '拒绝' : 'Deny' })}
+            {t('permission_dialog.deny')}
           </Button>
           <Button type="button" variant={dangerous ? 'destructive' : 'secondary'} size="sm" disabled={disabled || (dangerous && !confirmed)} aria-keyshortcuts="Control+Enter Meta+Enter" onClick={() => respond(true)} icon={<Check size={12} aria-hidden="true" />}>
-            {t(dangerous ? 'permission.approve_risk' : 'permission.approve', { defaultValue: dangerous ? (chinese ? '确认允许' : 'Confirm approval') : (chinese ? '允许' : 'Approve') })}
+            {t(dangerous ? 'permission_dialog.approve_risk' : 'permission_dialog.approve')}
           </Button>
         </span>
       </div>
@@ -440,8 +406,7 @@ function PermissionItem({ request, onApprove, onDeny, bulkPending, focusOnMount,
 }
 
 export function FloatingPermissionDialog({ requests, onApprove, onDeny, onApproveAll }: FloatingPermissionDialogProps) {
-  const { t, currentLanguage } = useI18n();
-  const chinese = currentLanguage.startsWith('zh');
+  const { t } = useI18n();
   const titleId = useId();
   const [minimized, setMinimized] = useState(false);
   const [bulkPending, setBulkPending] = useState(false);
@@ -526,7 +491,7 @@ export function FloatingPermissionDialog({ requests, onApprove, onDeny, onApprov
     <aside aria-labelledby={titleId} data-approval-mode={permissionMode ?? 'unreported'} className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-lg overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] shadow-[var(--shadow-md)]">
       <div className="flex flex-wrap items-center gap-[var(--space-2)] border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] px-[var(--space-3)] py-[var(--space-2)]">
         <Shield size={14} aria-hidden="true" className="text-[var(--color-text-muted)]" />
-        <h2 id={titleId} className="text-[length:var(--text-xs)] font-semibold text-[var(--color-text-primary)]">{t('permission.title', { defaultValue: chinese ? '待审批操作' : 'Pending approvals' })} ({requests.length})</h2>
+        <h2 id={titleId} className="text-[length:var(--text-xs)] font-semibold text-[var(--color-text-primary)]">{t('permission_dialog.title')} ({requests.length})</h2>
         {/* The three modes that can produce a card, one tone and one container
             apart, so "why did this ask" is answerable without opening settings.
             An unreported mode is a dashed unknown chip, never the safe default. */}
@@ -543,11 +508,11 @@ export function FloatingPermissionDialog({ requests, onApprove, onDeny, onApprov
         >
           <StatusIcon tone={modeTone} size="xs" />
           <span>{permissionMode
-            ? t(`permission.mode.${permissionMode}`, { defaultValue: chinese ? MODE_COPY[permissionMode].zh : MODE_COPY[permissionMode].en })
-            : t('permission.mode.unreported', { defaultValue: chinese ? '审批模式未上报' : 'Approval mode not reported' })}</span>
+            ? t(`permission_dialog.mode.${permissionMode}`)
+            : t('permission_dialog.mode.unreported')}</span>
         </span>
         <span className="ms-auto hidden text-[length:var(--text-2xs)] text-[var(--color-text-muted)] sm:inline">
-          {t('permission.keyboard_hint', { defaultValue: chinese ? 'Ctrl/⌘+Enter 允许，Ctrl/⌘+Shift+⌫ 拒绝' : 'Ctrl/Cmd+Enter to approve, Ctrl/Cmd+Shift+Backspace to deny' })}
+          {t('permission_dialog.keyboard_hint')}
         </span>
         <Button type="button" variant="ghost" size="sm" aria-expanded={!minimized} aria-controls={`${titleId}-requests`} onClick={() => setMinimized(value => !value)}>
           {t(minimized ? 'tool_call.expand_all' : 'tool_call.collapse_all')}
@@ -571,7 +536,7 @@ export function FloatingPermissionDialog({ requests, onApprove, onDeny, onApprov
         {canApproveAll && (
           <div className="flex justify-end border-t border-[var(--color-border-subtle)] px-[var(--space-3)] py-[var(--space-2)]">
             <Button type="button" variant="outline" size="sm" disabled={bulkPending} onClick={() => void approveAll()}>
-              {t('permission.approve_all', { defaultValue: chinese ? '允许全部低风险操作' : 'Approve all low-risk actions' })}
+              {t('permission_dialog.approve_all')}
             </Button>
           </div>
         )}

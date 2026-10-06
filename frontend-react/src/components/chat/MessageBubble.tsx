@@ -93,7 +93,7 @@ export function MessageBubble({
           className={cn(
             'min-w-0 max-w-full break-words text-sm leading-relaxed text-[var(--color-text-primary)]',
             isUser &&
-              'rounded-2xl rounded-br-md bg-[var(--color-accent-subtle)] px-4 py-2.5 whitespace-pre-wrap',
+              'rounded-[var(--radius-lg)] rounded-br-[var(--radius-sm)] border border-[var(--color-border-subtle)] bg-[var(--color-accent-subtle)] px-4 py-2.5 whitespace-pre-wrap',
           )}
         >
           {body ?? (isUser ? message.content : <MarkdownRenderer content={message.content} />)}

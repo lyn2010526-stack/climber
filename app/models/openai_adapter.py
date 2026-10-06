@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import json
 import re
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -108,7 +109,7 @@ class OpenAIAdapter(ModelAdapter):
                 except json.JSONDecodeError:
                     args = {"text": args_text}
             results.append({
-                "id": "",
+                "id": f"call_{uuid.uuid4().hex[:24]}",
                 "type": "function",
                 "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)},
             })
@@ -143,6 +144,10 @@ class OpenAIAdapter(ModelAdapter):
         accumulated_tool_calls: list[dict] = []
         finish_reason = None
         tokens_used = 0
+        usage: dict[str, Any] | None = None
+
+        def _result(**kwargs: Any) -> ChatResult:
+            return ChatResult(usage=usage, **kwargs)
 
         client = self.get_client()
         response: httpx.Response | None = None
@@ -199,7 +204,7 @@ class OpenAIAdapter(ModelAdapter):
                         continue
 
                     if line == "data: [DONE]":
-                        yield ChatResult(
+                        yield _result(
                             finish_reason=finish_reason or ("tool_calls" if accumulated_tool_calls else "stop"),
                             tokens_used=tokens_used,
                             accumulated_content=accumulated_content,
@@ -235,12 +240,18 @@ class OpenAIAdapter(ModelAdapter):
                                 args = tc["function"]["arguments"]
                                 accumulated_tool_calls[i]["function"]["arguments"] += args if isinstance(args, str) else str(args)
                     if chunk.get("usage"):
-                        tokens_used = chunk["usage"].get("total_tokens", tokens_used)
+                        raw_usage = chunk["usage"]
+                        tokens_used = raw_usage.get("total_tokens", tokens_used)
+                        usage = {
+                            "prompt_tokens": raw_usage.get("prompt_tokens"),
+                            "completion_tokens": raw_usage.get("completion_tokens"),
+                            "total_tokens": raw_usage.get("total_tokens"),
+                        }
                     fr = chunk.get("choices", [{}])[0].get("finish_reason")
                     if fr:
                         finish_reason = fr
 
-                    yield ChatResult(
+                    yield _result(
                         content=delta_content,
                         tool_calls=new_calls if delta.get("tool_calls") else [],
                         finish_reason=finish_reason,
@@ -251,7 +262,11 @@ class OpenAIAdapter(ModelAdapter):
                     if self._is_stream_terminated(chunk):
                         return
 
-            # Process any remaining data in buffer (no trailing newline)
+            # Process any remaining data in buffer (no trailing newline).
+            # Mirror the main loop so usage/finish_reason/tool-call deltas that
+            # arrive on a final unterminated frame are not lost, and emit only
+            # the incremental tool-call deltas (not the accumulated snapshot)
+            # so downstream delta merging never double-counts arguments.
             if buffer.strip():
                 line = buffer.decode("utf-8", errors="replace").strip("\r")
                 if line.startswith("data:") and line[5:].strip():
@@ -261,9 +276,34 @@ class OpenAIAdapter(ModelAdapter):
                         delta_content = delta.get("content") or ""
                         if delta_content:
                             accumulated_content += delta_content
-                            yield ChatResult(
+                        new_calls: list[dict] = []
+                        if delta.get("tool_calls"):
+                            new_calls = self._parse_tool_calls_from_delta(delta["tool_calls"])
+                            for i, tc in enumerate(new_calls):
+                                while len(accumulated_tool_calls) <= i:
+                                    accumulated_tool_calls.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+                                if tc.get("id"):
+                                    accumulated_tool_calls[i]["id"] = tc["id"]
+                                if tc.get("function", {}).get("name"):
+                                    accumulated_tool_calls[i]["function"]["name"] = tc["function"]["name"]
+                                if tc.get("function", {}).get("arguments"):
+                                    args = tc["function"]["arguments"]
+                                    accumulated_tool_calls[i]["function"]["arguments"] += args if isinstance(args, str) else str(args)
+                        if chunk.get("usage"):
+                            raw_usage = chunk["usage"]
+                            tokens_used = raw_usage.get("total_tokens", tokens_used)
+                            usage = {
+                                "prompt_tokens": raw_usage.get("prompt_tokens"),
+                                "completion_tokens": raw_usage.get("completion_tokens"),
+                                "total_tokens": raw_usage.get("total_tokens"),
+                            }
+                        fr = chunk.get("choices", [{}])[0].get("finish_reason")
+                        if fr:
+                            finish_reason = fr
+                        if delta_content or new_calls or fr:
+                            yield _result(
                                 content=delta_content,
-                                tool_calls=list(accumulated_tool_calls),
+                                tool_calls=new_calls,
                                 finish_reason=finish_reason,
                                 tokens_used=tokens_used,
                                 accumulated_content=accumulated_content,
@@ -273,18 +313,21 @@ class OpenAIAdapter(ModelAdapter):
 
         except httpx.ReadTimeout:
             logger.warning("stream_read_timeout", model=self._model_id)
-            yield ChatResult(
+            # Tool-call deltas were already emitted incrementally; do not
+            # re-emit the accumulated snapshot or consumers will append the
+            # arguments a second time.
+            yield _result(
                 content="",
-                tool_calls=list(accumulated_tool_calls),
+                tool_calls=[],
                 finish_reason=finish_reason or "stop",
                 tokens_used=tokens_used,
                 accumulated_content=accumulated_content,
             )
         except TimeoutError:
             logger.warning("stream_total_timeout", model=self._model_id, timeout=total_timeout)
-            yield ChatResult(
+            yield _result(
                 content="",
-                tool_calls=list(accumulated_tool_calls),
+                tool_calls=[],
                 finish_reason=finish_reason or "stop",
                 tokens_used=tokens_used,
                 accumulated_content=accumulated_content,
@@ -388,12 +431,14 @@ class OpenAIAdapter(ModelAdapter):
         for c in chunks:
             self._accumulate_tool_call_deltas(all_tool_calls, c.tool_calls)
         total_tokens = max((c.tokens_used or 0 for c in chunks), default=0)
+        final_usage = next((c.usage for c in reversed(chunks) if c.usage is not None), None)
         return ChatResult(
             content=full_content or "",
             tool_calls=all_tool_calls,
             finish_reason=chunks[-1].finish_reason or "stop",
             tokens_used=total_tokens,
             accumulated_content=full_content or "",
+            usage=final_usage,
         )
 
     @staticmethod
@@ -427,9 +472,18 @@ class OpenAIAdapter(ModelAdapter):
             streaming=True,
             tools=True,
             vision=True,
+            file_attachments=True,
             embedding=False,
             max_tokens=128000,
         )
+
+    @property
+    def provider(self) -> str:
+        return "openai"
+
+    @property
+    def model_id(self) -> str:
+        return self._model_id
 
     @property
     def api_key(self) -> str:

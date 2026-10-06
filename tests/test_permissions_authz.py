@@ -31,6 +31,7 @@ from app.core.auth_manager import create_access_token
 from app.core.permission_rules import (
     PermissionConfig,
     PermissionMode,
+    PermissionTier,
     PermissionRule,
     RuleDecision,
 )
@@ -126,6 +127,7 @@ def test_get_config_returns_policy_for_admin(client: TestClient, auth_enabled: N
     assert response.status_code == 200
     body = response.json()
     assert body["mode"] == PermissionMode.STRICT.value
+    assert body["tier"] == PermissionTier.FULL_WRITE.value
     assert body["allowed_tools"] == ["read_file", "list_dir"]
     assert body["denied_tools"] == ["shell", "write_file"]
     assert body["rules"] == [

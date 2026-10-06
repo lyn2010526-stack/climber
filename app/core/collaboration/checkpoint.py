@@ -21,6 +21,7 @@ async def save_checkpoint(
     max_rounds: int,
     current_artifact: str,
     all_issues: list[dict[str, Any]],
+    status: str = "running",
 ) -> None:
     """Save execution checkpoint for resume capability.
 
@@ -31,13 +32,14 @@ async def save_checkpoint(
         max_rounds: The maximum number of rounds.
         current_artifact: The current output artifact.
         all_issues: List of issues identified so far.
+        status: Checkpoint status, defaults to running.
     """
     async with async_session() as db:
         task = await db.get(AgentGroupTask, task_id)
         checkpoint = AgentGroupTaskCheckpoint(
             group_id=group_id,
             task_id=task_id,
-            status="running",
+            status=status,
             current_round=current_round,
             max_rounds=max_rounds,
             current_artifact=current_artifact,
@@ -70,6 +72,27 @@ async def load_latest_checkpoint(task_id: str) -> AgentGroupTaskCheckpoint | Non
         return result
 
 
+async def update_checkpoint_status(task_id: str, status: str) -> None:
+    """Update the latest checkpoint status for a task.
+
+    Args:
+        task_id: The task ID.
+        status: The status to set on the latest checkpoint.
+    """
+    async with async_session() as db:
+        checkpoint = (
+            await db.execute(
+                select(AgentGroupTaskCheckpoint)
+                .where(AgentGroupTaskCheckpoint.task_id == task_id)
+                .order_by(AgentGroupTaskCheckpoint.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if checkpoint:
+            checkpoint.status = status
+            await db.commit()
+
+
 async def resume_from_checkpoint(task: Any, checkpoint: AgentGroupTaskCheckpoint) -> None:
     """Resume task execution from a checkpoint.
 
@@ -81,7 +104,6 @@ async def resume_from_checkpoint(task: Any, checkpoint: AgentGroupTaskCheckpoint
         t = await db.get(AgentGroupTask, task.id)
         if t:
             t.status = "running"
-            t.final_output = checkpoint.current_artifact
             t.current_round = checkpoint.current_round
             await db.commit()
 
@@ -90,6 +112,6 @@ async def resume_from_checkpoint(task: Any, checkpoint: AgentGroupTaskCheckpoint
         "data": {"task_id": task.id, "checkpoint_id": checkpoint.id, "round": checkpoint.current_round},
     })
     await group_ws_hub.broadcast(task.group_id, {
-        "type": "task_partial",
-        "data": {"task_id": task.id, "final_output": checkpoint.current_artifact, "rounds": checkpoint.current_round},
+        "type": "task_update",
+        "data": {"id": task.id, "status": "running", "current_round": checkpoint.current_round},
     })

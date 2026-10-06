@@ -26,7 +26,9 @@ SNAPSHOTS = "user_profile_snapshots"
 
 
 def _has_table(name: str) -> bool:
-    return name in sa.inspect(op.get_bind()).get_table_names()
+    from migration_support import has_table
+
+    return has_table(name)
 
 
 def upgrade() -> None:

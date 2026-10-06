@@ -18,7 +18,7 @@ const MOBILE_USABLE_PAGE_IDS: ReadonlySet<string> = new Set([
 ]);
 
 const CHAT_PAGE_ID = 'chat';
-const MOBILE_FALLBACK_PAGE_IDS = new Set(['agents', 'apikeys', 'settings']);
+const MOBILE_FALLBACK_PAGE_IDS = new Set(['agents', 'apikeys']);
 
 // The shell is clamped to the software keyboard. A zero height would hide the
 // composer entirely, so the clamp keeps a floor that still fits one row.
@@ -280,7 +280,7 @@ export function AdaptiveMobileLayout({ children, currentPage, onNavigate, header
               <div>
                 <p className="workspace-eyebrow">{t('sidebar.workspace')}</p>
                 <h2 id={sheetTitleId} className="text-base font-semibold">{t('sidebar.all_entries')}</h2>
-                <p id={`${sheetTitleId}-description`} className="sr-only">使用 Tab 浏览移动端页面，按 Escape 关闭菜单。</p>
+                <p id={`${sheetTitleId}-description`} className="sr-only">{t('mobile.sheet_help')}</p>
               </div>
               <button type="button" ref={sheetCloseRef} className="icon-button" onClick={() => setMoreOpen(false)} aria-label={t('common.close')}><X size={18} aria-hidden="true" focusable="false" /></button>
             </div>

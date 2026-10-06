@@ -14,8 +14,9 @@ from app.storage.models_reasoning import ReasoningFeedbackDB, ReasoningTraceDB
 class ReasoningTraceRepository:
     """CRUD operations for reasoning traces."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, feedback_repository: ReasoningFeedbackRepository | None = None):
         self._session = session
+        self._feedback = feedback_repository
 
     async def create(self, data: dict[str, Any]) -> ReasoningTraceDB:
         trace = ReasoningTraceDB(**data)
@@ -45,6 +46,11 @@ class ReasoningTraceRepository:
         return result.scalars().all()
 
     async def delete(self, trace_id: str) -> bool:
+        # reasoning_feedback.trace_id references reasoning_traces.trace_id, so
+        # feedback (and any other direct dependents) must go first.
+        await self._session.execute(
+            delete(ReasoningFeedbackDB).where(ReasoningFeedbackDB.trace_id == trace_id)
+        )
         result = await self._session.execute(
             delete(ReasoningTraceDB).where(ReasoningTraceDB.trace_id == trace_id)
         )

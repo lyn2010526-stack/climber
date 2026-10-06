@@ -7,8 +7,11 @@ import { PinSetup } from './PinSetup';
  * Renders the local privacy lock in front of the app.
  *
  * Behaviour:
- * - `setup` (no passcode stored, never skipped): PinSetup; skipping stores an
- *   opt-out so later launches go straight through.
+ * - `setup` (first launch, no passcode and no skip marker): PinSetup handles
+ *   enrollment. The children stay mounted underneath the full-screen overlay so
+ *   the session is not torn down, and the gate settles into `unlocked` whether
+ *   the user confirms a passcode or skips. Settings can re-arm the lock later;
+ *   skipping only clears this first-run prompt.
  * - `locked` (passcode exists, session not unlocked): LockScreen — the children
  *   stay unmounted so nothing behind the lock can be read from the DOM.
  * - `unlocked`: the children render, and the hook's auto-lock timer re-arms the
@@ -26,10 +29,6 @@ export interface AppLockGateProps {
 export function AppLockGate({ children, autoLockMs }: AppLockGateProps) {
   const lock = useAppLock({ autoLockMs });
 
-  if (lock.status === 'setup') {
-    return <PinSetup onConfirm={(pin) => lock.setupPin(pin)} onSkip={lock.skipSetup} />;
-  }
-
   if (lock.status === 'locked' && lock.pinHash) {
     return (
       <LockScreen
@@ -38,6 +37,15 @@ export function AppLockGate({ children, autoLockMs }: AppLockGateProps) {
         webAuthnAvailable={lock.canUseWebAuthn}
         onWebAuthnUnlock={lock.unlockWithWebAuthn}
       />
+    );
+  }
+
+  if (lock.status === 'setup') {
+    return (
+      <>
+        {children}
+        <PinSetup onConfirm={lock.setupPin} onSkip={lock.skipSetup} />
+      </>
     );
   }
 

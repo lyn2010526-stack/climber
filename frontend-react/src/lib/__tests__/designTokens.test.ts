@@ -133,7 +133,9 @@ describe('parity palette provenance', () => {
     expect(dark.get('--color-bg-page')?.value).toBe('#20222E');
     expect(dark.get('--color-accent')?.value).toBe('#5BC8D8');
     expect(dark.get('--color-diff-added')?.value).toBe('#7EC97E');
-    expect(light.get('--color-bg-page')?.value).toBe('#F4F5F7');
+    // Light is a single white canvas (Codex parity), so page and surface-1
+    // share #FFFFFF and depth comes from borders.
+    expect(light.get('--color-bg-page')?.value).toBe('#FFFFFF');
     expect(light.get('--color-text-primary')?.value).toBe('#2E3440');
     expect(tokenProvenance.length).toBe(darkTokenProvenance.length + lightTokenProvenance.length);
   });

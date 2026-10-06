@@ -5,12 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 
 from app.api.v1.common import ok_response, redact_sensitive_fields
 from app.core.api_key_crypto import decrypt_api_key
+from app.core.auth_manager import require_scopes
 from app.core.di import resolve as di_resolve
 from app.core.principal import CurrentPrincipal
 from app.schemas.api_v1.crews import CrewCreateRequest, CrewRunRequest
@@ -46,7 +47,9 @@ async def list_crews(principal: CurrentPrincipal) -> list[dict[str, Any]]:
 
 @router.post("/crews")
 @router.post("/crews/", include_in_schema=False)
-async def create_crew(payload: CrewCreateRequest, principal: CurrentPrincipal) -> dict[str, Any]:
+async def create_crew(
+    payload: CrewCreateRequest, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
+) -> dict[str, Any]:
     """Create a new crew."""
     data = payload.model_dump()
     user_id = principal.subject_id
@@ -87,7 +90,9 @@ async def create_crew(payload: CrewCreateRequest, principal: CurrentPrincipal) -
 
 
 @router.delete("/crews/{crew_id}")
-async def delete_crew(crew_id: str, principal: CurrentPrincipal) -> dict[str, bool | str]:
+async def delete_crew(
+    crew_id: str, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
+) -> dict[str, bool | str]:
     """Delete a crew and its run history."""
     user_id = principal.subject_id
     async with async_session() as db:
@@ -102,7 +107,10 @@ async def delete_crew(crew_id: str, principal: CurrentPrincipal) -> dict[str, bo
 
 @router.post("/crews/{crew_id}/run")
 async def run_crew(
-    crew_id: str, payload: CrewRunRequest, principal: CurrentPrincipal
+    crew_id: str,
+    payload: CrewRunRequest,
+    principal: CurrentPrincipal,
+    _auth: dict = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Run a crew's tasks sequentially through the agent engine."""
     from app.core.agent_engine import AgentEngine
@@ -200,8 +208,9 @@ async def _execute_crew_tasks(
             transcript = "".join(parts)
             task_results.append({"task": description, "output": transcript})
     except Exception as e:
+        logger.exception("crew_execution_failed", crew_id=getattr(agent_row, "id", None), error=str(e))
         status = "failed"
-        error = str(e)
+        error = "Crew execution failed"
 
     return task_results, transcript, status, error
 

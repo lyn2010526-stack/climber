@@ -8,13 +8,16 @@ from typing import Any
 
 import structlog
 
-from app.core.collaboration.agent_runner import run_agent_with_retry
+from app.core.collaboration import agent_runner
 from app.core.collaboration.callbacks import (
     invoke_step_callback,
     invoke_task_callback,
     wait_for_human_review,
 )
-from app.core.collaboration.checkpoint import save_checkpoint
+from app.core.collaboration.checkpoint import (
+    save_checkpoint,
+    update_checkpoint_status,
+)
 from app.core.collaboration.guardrails import run_guardrails
 from app.core.collaboration.memory import (
     build_context_from_dependencies,
@@ -28,6 +31,7 @@ from app.core.collaboration.prompts import (
     build_reviewer_prompt,
     build_sequential_prompt,
     build_worker_prompt,
+    parse_review_result,
 )
 from app.core.collaboration.resolver import resolve_api_key, resolve_base_url
 from app.core.group_ws_hub import group_ws_hub
@@ -43,13 +47,30 @@ async def run_sequential_process(
     reviewers: list[Any],
     group: Any,
     max_rounds: int,
+    checkpoint: Any = None,
+    principal: Any = None,
 ) -> None:
     """Execute sequential task with iterative refinement.
 
     Each round produces worker output, runs guardrails, and optionally
     collects reviewer feedback. Continues until no issues remain or max
     rounds reached.
+
+    Args:
+        task: The task entity to execute.
+        worker: The assigned worker member.
+        reviewers: List of reviewer members.
+        group: The group entity (used to resolve the execution principal).
+        max_rounds: Maximum refinement rounds.
+        checkpoint: Optional checkpoint to resume from.
+        principal: Explicit principal propagated to every agent call; resolved
+            from the group owner when omitted.
     """
+    principal = principal or agent_runner.principal_for_group(group)
+    if getattr(worker, "role", None) not in ("worker", "executor", "participant"):
+        worker = next((m for m in group.members if m.role in ("worker", "executor")), worker)
+    if not reviewers:
+        reviewers = [m for m in group.members if m.role == "reviewer"]
     context_data = await build_context_from_dependencies(task)
     memory_context = await inject_memory(task.group_id, task.id, task.description)
     full_context = merge_context(context_data, memory_context)
@@ -57,6 +78,10 @@ async def run_sequential_process(
     current_round = 0
     worker_output = ""
     all_issues: list[dict[str, Any]] = []
+    if checkpoint:
+        current_round = checkpoint.current_round or 0
+        worker_output = checkpoint.current_artifact or ""
+        all_issues = list(checkpoint.all_issues or [])
 
     try:
         while current_round < max_rounds:
@@ -67,10 +92,11 @@ async def run_sequential_process(
             await _update_round_status(task, current_round, max_rounds, worker)
 
             worker_output, worker_tokens = await _execute_worker_turn(
-                task, worker, full_context, worker_output, all_issues, current_round
+                task, worker, full_context, worker_output, all_issues, current_round, principal=principal,
             )
 
             if not worker_output:
+                await _mark_task_failed(task, "Worker failed after retry")
                 return
 
             await _broadcast_worker_done(task, worker, worker_output, worker_tokens)
@@ -91,14 +117,14 @@ async def run_sequential_process(
 
             all_issues = []
             reviewer_results = await _execute_reviewer_turn(
-                task, reviewers, worker_output, worker_tokens
+                task, reviewers, worker_output, worker_tokens, principal=principal
             )
             all_issues.extend(reviewer_results)
 
             if not all_issues and await _validate_and_finalize(task, worker_output):
                     await store_memory(task.group_id, task.id, worker.agent_id, worker_output, "task_result")
                     await invoke_task_callback(task, worker_output)
-                    await _checkpoint_and_broadcast(task, current_round, worker_output, [])
+                    await _checkpoint_and_broadcast(task, current_round, worker_output, [], status="completed")
                     await _broadcast_task_completed(task, worker_output, current_round)
                     return
 
@@ -173,8 +199,22 @@ async def _execute_worker_turn(
     worker_output: str,
     all_issues: list[dict[str, Any]],
     current_round: int,
+    principal: Any = None,
 ) -> tuple[str, int]:
-    """Execute a single worker turn with retry."""
+    """Execute a single worker turn with retry.
+
+    Args:
+        task: The task entity.
+        worker: The worker member.
+        full_context: Merged context string.
+        worker_output: Output from the previous round.
+        all_issues: Issues to address this round.
+        current_round: Current round number.
+        principal: Explicit principal for the agent call.
+
+    Returns:
+        A tuple of (output, tokens_used); ("", 0) when the worker fails.
+    """
     user_message = (
         build_sequential_prompt(task.description, full_context, worker_output, all_issues)
         if current_round > 1
@@ -182,7 +222,7 @@ async def _execute_worker_turn(
     )
 
     try:
-        output, tokens = await run_agent_with_retry(
+        output, tokens = await agent_runner.run_agent_with_retry(
             agent_id=worker.agent_id,
             provider=worker.model_provider or "openai",
             model_id=worker.model_id or "gpt-4o",
@@ -193,16 +233,14 @@ async def _execute_worker_turn(
             group_id=task.group_id,
             role="worker",
             base_url=resolve_base_url(worker.model_provider, None),
+            principal=principal,
+            task_name=task.description,
         )
         if not output:
             raise Exception("worker returned empty output after retry")
         return output, tokens
     except Exception as e:
         logger.error("worker_failed", task_id=task.id, round=current_round, error=str(e))
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "task_failed",
-            "data": {"task_id": task.id, "error": f"Worker failed after retry: {e}"},
-        })
         return "", 0
 
 
@@ -240,8 +278,20 @@ async def _execute_reviewer_turn(
     reviewers: list[Any],
     worker_output: str,
     worker_tokens: int,
+    principal: Any = None,
 ) -> list[dict[str, Any]]:
-    """Execute reviewer turns and collect issues."""
+    """Execute reviewer turns and collect issues.
+
+    Args:
+        task: The task entity.
+        reviewers: List of reviewer members.
+        worker_output: The worker output under review.
+        worker_tokens: Tokens used by the worker (for context only).
+        principal: Explicit principal for every reviewer call.
+
+    Returns:
+        A list of issue dictionaries collected from failing reviewers.
+    """
     from app.core.collaboration.constants import TASK_TIMEOUT
 
     all_issues: list[dict[str, Any]] = []
@@ -255,7 +305,7 @@ async def _execute_reviewer_turn(
         review_error = None
         try:
             async with asyncio.timeout(TASK_TIMEOUT):
-                review_output, review_tokens = await __import__("app.core.collaboration.agent_runner", fromlist=["run_agent_simple"]).run_agent_simple(
+                review_output, review_tokens = await agent_runner.run_agent_simple(
                     agent_id=reviewer.agent_id,
                     provider=reviewer.model_provider or "openai",
                     model_id=reviewer.model_id or "gpt-4o",
@@ -264,6 +314,10 @@ async def _execute_reviewer_turn(
                     system_prompt=build_reviewer_prompt(task.description),
                     user_message=build_review_prompt(task.description, worker_output),
                     tools=reviewer.tools or [],
+                    group_id=task.group_id,
+                    role="reviewer",
+                    principal=principal,
+                    task_name=task.description,
                 )
         except TimeoutError:
             review_error = f"timeout after {TASK_TIMEOUT}s"
@@ -271,15 +325,14 @@ async def _execute_reviewer_turn(
             review_error = str(e)
 
         if review_error:
+            all_issues.append({"description": "Reviewer execution failed", "severity": "high"})
             await group_ws_hub.broadcast(task.group_id, {
                 "type": "reviewer_error",
                 "data": {"member_id": reviewer.id, "member_name": reviewer.agent_id, "error": review_error},
             })
             continue
 
-        lower_output = review_output.lower()
-        passed = any(k in lower_output for k in ["通过", "pass", "approved", "looks good", "accept"])
-        issues = __import__("app.core.collaboration.guardrails", fromlist=["_parse_issues"])._parse_issues(review_output)
+        passed, issues = parse_review_result(review_output)
 
         await group_ws_hub.broadcast(task.group_id, {
             "type": "reviewer_done",
@@ -289,7 +342,7 @@ async def _execute_reviewer_turn(
                 "passed": passed,
                 "issues": issues,
                 "content": review_output,
-                "tokens_used": 0,
+                "tokens_used": review_tokens,
             },
         })
 
@@ -324,12 +377,26 @@ async def _validate_and_finalize(task: Any, worker_output: str) -> bool:
     return True
 
 
-async def _checkpoint_and_broadcast(task: Any, round_num: int, output: str, issues: list) -> None:
+async def _checkpoint_and_broadcast(
+    task: Any,
+    round_num: int,
+    output: str,
+    issues: list,
+    status: str = "running",
+) -> None:
     """Save checkpoint and broadcast."""
-    await save_checkpoint(task.id, task.group_id, round_num, task.max_rounds or 5, output, issues)
+    await save_checkpoint(
+        task.id,
+        task.group_id,
+        round_num,
+        task.max_rounds or 5,
+        output,
+        issues,
+        status=status,
+    )
     await group_ws_hub.broadcast(task.group_id, {
         "type": "task_checkpoint",
-        "data": {"task_id": task.id, "round": round_num},
+        "data": {"task_id": task.id, "round": round_num, "status": status},
     })
 
 
@@ -350,6 +417,7 @@ async def _mark_task_partial(task: Any, output: str, rounds: int) -> None:
             t.final_output = output
             t.completed_at = datetime.now(UTC)
             await db.commit()
+    await update_checkpoint_status(task.id, "partial")
     await group_ws_hub.broadcast(task.group_id, {
         "type": "task_partial",
         "data": {"task_id": task.id, "final_output": output, "rounds": rounds},
@@ -366,6 +434,7 @@ async def _mark_task_failed(task: Any, error: str) -> None:
                 await db.commit()
     except Exception:
         pass
+    await update_checkpoint_status(task.id, "failed")
     await group_ws_hub.broadcast(task.group_id, {
         "type": "task_failed",
         "data": {"task_id": task.id, "error": error},

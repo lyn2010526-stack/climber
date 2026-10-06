@@ -1,4 +1,13 @@
-"""Skill API endpoints."""
+"""Skill API endpoints.
+
+Dead-code cleanup (2026-10-05): the ``/skills`` GET/POST,
+``/skills/{id}/enable``, ``/skills/{id}/disable`` and ``/skills/{id}`` DELETE
+handlers were never mounted — ``app/api/v1/__init__.py`` only extracts the
+``/skills/autonomous`` prefix plus the ``/skills/{skill_id}`` PATCH route from
+this router — and the live versions exist in ``app/api/v1/routes/skills.py``.
+They were removed per ``docs/audits/dead-code-scan.md``.  Only the PATCH
+endpoint and ``/skills/autonomous/run`` below are actually served.
+"""
 
 from __future__ import annotations
 
@@ -7,14 +16,14 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
 from app.api.v1.common import current_user_id
-from app.api.v1.helpers import DEFAULT_USER
 from app.api.v1.helpers import payload as _payload
 from app.core.api_key_crypto import decrypt_api_key
+from app.core.auth_manager import require_scopes
 from app.core.task_worker import TaskStatus, task_manager
 from app.storage import async_session
 from app.storage.database import Agent, ApiKey
@@ -154,75 +163,10 @@ def _skill_dict(s: Skill) -> dict[str, Any]:
     }
 
 
-@router.get("/skills")
-@router.get("/skills/")
-async def list_skills() -> list[dict[str, Any]]:
-    async with async_session() as db:
-        rows = (await db.execute(select(Skill).order_by(Skill.created_at.desc()))).scalars().all()
-        return [_skill_dict(s) for s in rows]
-
-
-@router.post("/skills")
-@router.post("/skills/")
-async def create_skill(request: Request) -> dict[str, Any]:
-    data = await _payload(request)
-    if not data.get("name"):
-        raise HTTPException(status_code=422, detail="name is required")
-    async with async_session() as db:
-        skill = Skill(
-            user_id=DEFAULT_USER,
-            name=data["name"],
-            description=data.get("description", ""),
-            category=data.get("category", "general"),
-            prompt_template=data.get("prompt_template", ""),
-            tools=data.get("tools", []),
-        )
-        db.add(skill)
-        await db.commit()
-        await db.refresh(skill)
-        return _skill_dict(skill)
-
-
-async def _set_skill_enabled(skill_id: str, enabled: bool, user_id: str) -> dict:
-    async with async_session() as db:
-        skill = (
-            await db.execute(
-                select(Skill).where(Skill.id == skill_id, Skill.user_id == user_id)
-            )
-        ).scalar_one_or_none()
-        if skill is None:
-            raise HTTPException(status_code=404, detail="Skill not found")
-        skill.is_enabled = enabled
-        await db.commit()
-        return {"ok": True, "id": skill_id, "is_enabled": enabled}
-
-
-@router.post("/skills/{skill_id}/enable")
-async def enable_skill(skill_id: str, request: Request) -> dict:
-    return await _set_skill_enabled(skill_id, True, current_user_id(request))
-
-
-@router.post("/skills/{skill_id}/disable")
-async def disable_skill(skill_id: str, request: Request) -> dict:
-    return await _set_skill_enabled(skill_id, False, current_user_id(request))
-
-
-@router.delete("/skills/{skill_id}")
-async def delete_skill(skill_id: str, request: Request) -> dict:
-    user_id = current_user_id(request)
-    async with async_session() as db:
-        skill = (
-            await db.execute(select(Skill).where(Skill.id == skill_id, Skill.user_id == user_id))
-        ).scalar_one_or_none()
-        if skill is None:
-            raise HTTPException(status_code=404, detail="Skill not found")
-        await db.delete(skill)
-        await db.commit()
-        return {"ok": True, "deleted": skill_id}
-
-
 @router.patch("/skills/{skill_id}")
-async def update_skill(skill_id: str, request: Request) -> dict[str, Any]:
+async def update_skill(
+    skill_id: str, request: Request, _auth: dict = Depends(require_scopes("write"))
+) -> dict[str, Any]:
     data = await _payload(request)
     user_id = current_user_id(request)
     async with async_session() as db:
@@ -249,7 +193,9 @@ async def update_skill(skill_id: str, request: Request) -> dict[str, Any]:
 
 
 @router.post("/skills/autonomous/run")
-async def run_autonomous_skill(request: Request) -> StreamingResponse:
+async def run_autonomous_skill(
+    request: Request, _auth: dict = Depends(require_scopes("write"))
+) -> StreamingResponse:
     data = await _payload(request)
     goal = str(data.get("goal", "")).strip()
     if not goal:

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -90,23 +91,32 @@ class MemFS:
         return self._git_available
 
     def _check_git(self) -> bool:
-        """Check if git is available and the base_path is a git repo."""
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", "--git-dir"],
-                cwd=str(self._base_path),
-                capture_output=True,
-                timeout=5,
-            )
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return False
+        """Check whether the git binary is usable on this system.
+
+        Versioning is enabled whenever git is installed; the repository
+        itself is (re)initialized by :meth:`_init_git`.
+        """
+        return shutil.which("git") is not None
 
     def _init_git(self) -> None:
-        """Initialize git repo if not already initialized."""
-        git_dir = self._base_path / ".git"
-        if not git_dir.exists():
-            try:
+        """Initialize git repo if not already initialized.
+
+        A fresh base path is initialized here (the git binary being present
+        is sufficient), and a retry after a partial failure re-runs the
+        bootstrap rather than leaving the store without versioning. A base
+        path that is already a git repository is never touched.
+        """
+        try:
+            is_repo = (
+                subprocess.run(
+                    ["git", "rev-parse", "--git-dir"],
+                    cwd=str(self._base_path),
+                    capture_output=True,
+                    timeout=5,
+                ).returncode
+                == 0
+            )
+            if not is_repo:
                 subprocess.run(
                     ["git", "init"],
                     cwd=str(self._base_path),
@@ -114,23 +124,25 @@ class MemFS:
                     timeout=10,
                 )
                 gitignore = self._base_path / ".gitignore"
-                gitignore.write_text("__pycache__/\n*.pyc\n")
+                if not gitignore.exists():
+                    gitignore.write_text("__pycache__/\n*.pyc\n")
                 subprocess.run(
                     ["git", "add", ".gitignore"],
                     cwd=str(self._base_path),
                     capture_output=True,
                     timeout=5,
                 )
-                subprocess.run(
+                commit = subprocess.run(
                     ["git", "commit", "-m", "chore: initialize memfs", "--allow-empty"],
                     cwd=str(self._base_path),
                     capture_output=True,
                     timeout=5,
                 )
-                logger.info("memfs_git_initialized", path=str(self._base_path))
-            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-                logger.warning("memfs_git_init_failed", error=str(e))
-                self._git_available = False
+                if commit.returncode == 0:
+                    logger.info("memfs_git_initialized", path=str(self._base_path))
+        except Exception as e:
+            logger.warning("memfs_git_init_failed", error=str(e))
+            self._git_available = False
 
     async def read(self, path: str) -> str:
         """Read a memory file and return its content (without frontmatter).
@@ -499,7 +511,11 @@ class MemFS:
         return resolved
 
     def _git_commit_file(self, path: str, action: str) -> None:
-        """Commit a file change to git."""
+        """Commit a file change to git.
+
+        Git failures (missing config, transient lock issues, hook errors)
+        are logged and swallowed so they never masquerade as write failures.
+        """
         try:
             subprocess.run(
                 ["git", "add", path],
@@ -517,8 +533,8 @@ class MemFS:
                 capture_output=True,
                 timeout=5,
             )
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
+        except Exception as e:
+            logger.warning("memfs_git_commit_failed", action=action, path=path, error=str(e))
 
     def _git_remove_file(self, path: str) -> None:
         """Remove a file from git tracking."""
@@ -539,5 +555,5 @@ class MemFS:
                 capture_output=True,
                 timeout=5,
             )
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
+        except Exception as e:
+            logger.warning("memfs_git_remove_failed", path=path, error=str(e))

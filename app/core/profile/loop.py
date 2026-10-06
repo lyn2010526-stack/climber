@@ -82,6 +82,19 @@ class ProfileSummary:
         """Blend an incoming summary into the current summary."""
         return blend(current, incoming, alpha=alpha)
 
+    def retrieval_context(self) -> dict[str, object]:
+        """Expose bounded, non-sensitive signals for downstream consumers."""
+        return {
+            "task_preferences": dict(self.task_preferences),
+            "tool_preferences": dict(self.tool_preferences),
+            "reasoning_preferences": dict(self.reasoning_preferences),
+            "confidence": self.confidence,
+            "persona_cluster": self.persona_cluster,
+            "persona_cluster_confidence": self.persona_cluster_confidence,
+            "enabled": self.enabled,
+            "provenance": self.provenance,
+        }
+
 
 def blend(
     current: ProfileSummary | None,
@@ -358,6 +371,9 @@ class ProfileLoopService:
             "current_instruction": current_instruction,
             "profile_role": "auxiliary_context",
             "profile_may_not_override_current_instruction": True,
+            "task_preferences": summary.task_preferences,
+            "tool_preferences": summary.tool_preferences,
+            "reasoning_preferences": summary.reasoning_preferences,
             "suggestions": {
                 "task_type": _top(summary.task_preferences),
                 "tool": _top(summary.tool_preferences),
@@ -366,6 +382,21 @@ class ProfileLoopService:
             "confidence": summary.confidence,
             "provenance": summary.provenance,
             "enabled": summary.enabled,
+        }
+
+    def regression_evaluation(
+        self, expected_task_type: str | None, *, as_of: datetime | None = None
+    ) -> dict[str, object]:
+        """Return a small deterministic regression signal for profile consumers."""
+        summary = self.summary(as_of=as_of)
+        predicted = _top(summary.task_preferences)
+        matched = bool(expected_task_type and predicted == expected_task_type)
+        return {
+            "expected_task_type": expected_task_type,
+            "predicted_task_type": predicted,
+            "matched": matched,
+            "confidence": summary.confidence,
+            "has_signal": predicted is not None,
         }
 
     def _validate_event(self, event: ProfileEvent) -> None:

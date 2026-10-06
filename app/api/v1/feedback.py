@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.common import current_user_id
+from app.core.auth_manager import require_scopes
 from app.storage import async_session
 from app.storage.database import Message, Session
 from app.storage.models_feedback import Feedback
 from app.storage.models_reasoning import ReasoningFeedbackDB, ReasoningTraceDB
-
-DEFAULT_USER_ID = "default-user"
 
 router = APIRouter()
 
@@ -109,7 +108,8 @@ async def feedback_stats(request: Request) -> dict:
         ).scalars().all()
         total = len(rows)
         up = sum(1 for r in rows if r.rating == "up")
-        down = total - up
+        down = sum(1 for r in rows if r.rating == "down")
+        rated = up + down
         reasons: dict[str, int] = {}
         for r in rows:
             if r.reason:
@@ -118,7 +118,7 @@ async def feedback_stats(request: Request) -> dict:
             "total": total,
             "up_count": up,
             "down_count": down,
-            "approval_rate": up / total if total else 0,
+            "approval_rate": up / rated if rated else 0,
             "reason_distribution": reasons,
         }
 
@@ -139,7 +139,12 @@ class ReasoningFeedbackResponse(BaseModel):
 
 @router.post("/reason/{trace_id}/feedback")
 @router.post("reason/{trace_id}/feedback")
-async def submit_reasoning_feedback(trace_id: str, request: Request, payload: ReasoningFeedbackRequest) -> dict:
+async def submit_reasoning_feedback(
+    trace_id: str,
+    request: Request,
+    payload: ReasoningFeedbackRequest,
+    _auth: dict = Depends(require_scopes("write")),
+) -> dict:
     user_id = current_user_id(request)
     thumbs = payload.thumbs
     if isinstance(payload.rating, int):

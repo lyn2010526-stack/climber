@@ -5,7 +5,7 @@ import { ChatInterface } from './ChatInterface';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { ChatEmptyState } from './ChatEmptyState';
 
-vi.mock('../../api', () => ({ api: { submitFeedback: vi.fn() } }));
+vi.mock('../../api', () => ({ api: { submitFeedback: vi.fn(), listChatCommands: vi.fn().mockResolvedValue([]) } }));
 
 describe('Task 03 chat stage', () => {
   beforeEach(async () => { await i18n.changeLanguage('zh-CN'); });

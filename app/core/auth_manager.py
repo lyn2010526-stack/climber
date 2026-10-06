@@ -148,7 +148,7 @@ async def get_current_user(request: Request) -> str:
     try:
         return get_context_principal().subject_id
     except RuntimeError as exc:
-        raise HTTPException(401, str(exc)) from exc
+        raise HTTPException(401, "Authenticated principal is missing") from exc
 
 
 def _principal_dict() -> dict[str, Any]:
@@ -157,7 +157,7 @@ def _principal_dict() -> dict[str, Any]:
     try:
         principal = get_context_principal()
     except RuntimeError as exc:
-        raise HTTPException(401, str(exc)) from exc
+        raise HTTPException(401, "Authenticated principal is missing") from exc
     return {
         "id": principal.subject_id,
         "user_id": principal.subject_id,

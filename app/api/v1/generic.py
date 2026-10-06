@@ -40,7 +40,6 @@ router.include_router(reasoning_router)
 # Chat slash commands: parse/execute/interrupt/retry for the session chat.
 router.include_router(chat_commands_router)
 
-# Expose WebSocket routes directly (not via include_router) so they appear as
-# concrete APIWebSocketRoute entries on this router for runtime inspection.
-for _ws_route in websocket_router.routes:
-    router.routes.append(_ws_route)
+# Include WebSocket routes through the router so they are registered once via
+# the normal API router include path, without a separate manual registration.
+router.include_router(websocket_router)

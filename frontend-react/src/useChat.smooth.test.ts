@@ -14,8 +14,17 @@ const abort = vi.fn();
 let frames: FrameRequestCallback[];
 const frameIds = new Map<number, FrameRequestCallback>();
 
+/**
+ * 可控墙钟：useChat 现在按 FLUSH_MIN_INTERVAL_MS 对「落地」做时间门控（任务48
+ * 要求渲染与分片到达解耦）。测试同步驱动帧、真实 performance.now() 几乎不前进，
+ * 会卡在门控上。这里 stub performance.now，并在每帧前进足够大的步长，让门控
+ * 对每一帧放行，于是「每帧释放一部分、后续帧追赶到全量」的缓动断言保持成立。
+ */
+let now = 0;
+
 function runFrame(): void {
   const next = frames.shift();
+  now += 1000;
   if (next) act(() => { next(0); });
 }
 
@@ -54,9 +63,12 @@ beforeEach(() => {
       frameIds.delete(id);
     }
   });
+  now = 0;
+  vi.spyOn(performance, 'now').mockImplementation(() => now);
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -119,6 +131,17 @@ describe('useChat smooth streaming', () => {
 });
 
 describe('useChat stop and failure', () => {
+  it('preserves failed tool results across later calls and done', async () => {
+    const { result } = await startTurn();
+    act(() => {
+      emit!({ type: 'tool_call', toolCall: { id: 'one', name: 'read', arguments: {}, requiresApproval: true } });
+      emit!({ type: 'tool_result', toolCallId: 'one', result: '', error: 'broken' });
+      emit!({ type: 'tool_call', toolCall: { id: 'two', name: 'read', arguments: {} } });
+      emit!({ type: 'done' });
+    });
+    expect(result.current.messages[1].toolCalls?.[0]).toMatchObject({ status: 'error', error: 'broken', requiresApproval: false });
+    expect(result.current.messages[1].toolCalls?.[1].status).toBe('running');
+  });
   it('aborts, flushes the buffer and marks the turn interrupted on stop', async () => {
     const { result } = await startTurn();
     act(() => { emit!({ type: 'text', delta: '写到一半' }); });

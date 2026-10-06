@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Send } from 'lucide-react';
-import { api } from '../../api';
+import { api, type GroupWebSocketFrame } from '../../api';
 import { useI18n } from '../../i18n';
 import { formatTime } from '../../i18n/utils';
 import { Button } from '../ui/Button';
@@ -19,14 +19,7 @@ interface GroupRoomProps {
 }
 
 /** Backend WS frames: the hub acks each frame and broadcasts message/task events. */
-type Frame =
-  | { type: 'ack'; data: { ok: boolean; id?: string; error?: string } }
-  | { type: 'message'; data: { id?: string } }
-  | { type: 'member_update'; data?: { id?: string; member_id?: string; status?: string } }
-  | { type: 'task_update'; data?: { id?: string; task_id?: string } }
-  | { type: 'error'; error?: string }
-  | { type: 'pong' }
-  | { type: string; data?: unknown };
+type Frame = GroupWebSocketFrame;
 
 export function GroupRoom({ groupId, onMemberUpdate, onTaskUpdate }: GroupRoomProps) {
   const { t } = useI18n();
@@ -39,7 +32,6 @@ export function GroupRoom({ groupId, onMemberUpdate, onTaskUpdate }: GroupRoomPr
   const [historyError, setHistoryError] = useState('');
   const wsRef = useRef<WebSocket | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
-  const disposedRef = useRef(false);
 
   const sortMessages = (list: GroupMessage[]) =>
     [...list].sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -55,7 +47,7 @@ export function GroupRoom({ groupId, onMemberUpdate, onTaskUpdate }: GroupRoomPr
   }, [t]);
 
   useEffect(() => {
-    disposedRef.current = false;
+    let disposed = false;
     setMessages([]);
     setLoading(true);
     setError('');
@@ -63,29 +55,36 @@ export function GroupRoom({ groupId, onMemberUpdate, onTaskUpdate }: GroupRoomPr
 
     void loadHistory(groupId)
       .then(list => {
-        if (!disposedRef.current) setMessages(list);
+        if (!disposed) setMessages(list);
       })
       .catch(reason => {
-        if (!disposedRef.current) {
+        if (!disposed) {
           setHistoryError(reason instanceof Error ? reason.message : '加载消息失败');
         }
       })
       .finally(() => {
-        if (!disposedRef.current) setLoading(false);
+        if (!disposed) setLoading(false);
       });
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/v1/ws/groups/${groupId}`);
+    const ws = api.openGroupWebSocket(groupId);
     wsRef.current = ws;
-    ws.onopen = () => { if (!disposedRef.current) setConnected(true); };
+    ws.onopen = () => {
+      if (disposed) return;
+      setConnected(true);
+      void loadHistory(groupId)
+        .then(list => { if (!disposed) setMessages(list); })
+        .catch(reason => {
+          if (!disposed) setHistoryError(reason instanceof Error ? reason.message : t('common.error'));
+        });
+    };
     ws.onclose = () => {
-      if (!disposedRef.current) {
+      if (!disposed) {
         setConnected(false);
         setSending(false);
       }
     };
     ws.onmessage = event => {
-      if (disposedRef.current) return;
+      if (disposed) return;
       let frame: Frame;
       try {
         frame = JSON.parse(event.data) as Frame;
@@ -123,14 +122,14 @@ export function GroupRoom({ groupId, onMemberUpdate, onTaskUpdate }: GroupRoomPr
       // is the only source of its sender and body, so re-read it instead of
       // rendering an empty placeholder.
       void loadHistory(groupId)
-        .then(list => { if (!disposedRef.current) setMessages(list); })
+        .then(list => { if (!disposed) setMessages(list); })
          .catch(reason => {
-           if (!disposedRef.current) setHistoryError(reason instanceof Error ? reason.message : t('common.error'));
+           if (!disposed) setHistoryError(reason instanceof Error ? reason.message : t('common.error'));
          });
     };
 
     return () => {
-      disposedRef.current = true;
+      disposed = true;
       ws.close();
       wsRef.current = null;
     };
@@ -168,7 +167,7 @@ export function GroupRoom({ groupId, onMemberUpdate, onTaskUpdate }: GroupRoomPr
        <div className="flex items-center justify-between border-b border-[var(--color-border-subtle)] pb-3">
          <h2 className="text-sm font-semibold">{t('common.message')}</h2>
          <span role="status" className="text-xs text-[var(--color-text-muted)]">
-           {connected ? t('common.status') : t('common.error')}
+           {connected ? t('chat.connected') : t('chat.disconnected')}
          </span>
        </div>
        {(error || historyError) && (

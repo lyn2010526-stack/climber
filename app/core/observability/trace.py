@@ -121,6 +121,26 @@ class TraceCollector:
         span.events.append(event)
         self._persist_span(span)
 
+    def record_tool_observation(
+        self,
+        span: TraceSpan,
+        tool_name: str,
+        arguments: dict[str, Any],
+        result: str = "",
+        error: str = "",
+        success: bool = True,
+        prediction_error: float | None = None,
+    ) -> None:
+        """Persist a factual tool observation for downstream learning."""
+        self.add_event(span, "tool_observation", {
+            "tool_name": tool_name,
+            "arguments": arguments,
+            "result": result,
+            "error": error,
+            "success": success,
+            "prediction_error": prediction_error,
+        })
+
     def get_trace(self, trace_id: str) -> list[TraceSpan]:
         """Retrieve all spans for a given trace, ordered by start time."""
         rows = self._conn.execute(

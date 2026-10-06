@@ -8,9 +8,9 @@ the verbatim instruction remains the source of truth.
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass, field
-from typing import Any, Iterable
-
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass
+from typing import Any
 
 _CONSTRAINT_PATTERNS = (
     r"(?:只能|仅能|必须|需要|要求|不要|不得|禁止|优先|至少|最多|限定|只许)[^，。；;\n]*",
@@ -82,6 +82,7 @@ class InstructionUnderstanding:
     progress: str = "understood"
     candidates: tuple[InstructionCandidate, ...] = ()
     context: str | None = None
+    profile_evidence: tuple[str, ...] = ()
 
     @property
     def goal_missing(self) -> bool:
@@ -101,6 +102,7 @@ class InstructionUnderstanding:
             "progress": self.progress,
             "candidates": [candidate.to_dict() for candidate in self.candidates],
             "context": self.context,
+            "profile_evidence": list(self.profile_evidence),
         }
 
     def to_trace_payload(self, *, session_id: str | None = None, user_id: str | None = None) -> dict[str, Any]:
@@ -123,11 +125,13 @@ class InstructionUnderstandingService:
         raw_text: str,
         context: str | None = None,
         supplemental_candidates: Iterable[InstructionCandidate] | None = None,
+        profile_context: dict[str, Any] | None = None,
     ) -> InstructionUnderstanding:
         candidates = list(self._target_candidates(raw_text))
         deterministic_candidates = list(candidates)
         if supplemental_candidates:
             candidates.extend(supplemental_candidates)
+        profile_evidence = _profile_evidence(profile_context)
 
         goal = deterministic_candidates[0].text if deterministic_candidates else (
             candidates[0].text if candidates else None
@@ -153,6 +157,7 @@ class InstructionUnderstandingService:
             progress=progress,
             candidates=tuple(candidates),
             context=context,
+            profile_evidence=profile_evidence,
         )
 
     def _target_candidates(self, raw_text: str) -> list[InstructionCandidate]:
@@ -222,6 +227,24 @@ def understand_instruction(
     raw_text: str,
     context: str | None = None,
     supplemental_candidates: Iterable[InstructionCandidate] | None = None,
+    profile_context: dict[str, Any] | None = None,
 ) -> InstructionUnderstanding:
     """Convenience entry point for callers that do not need a service instance."""
-    return InstructionUnderstandingService().understand(raw_text, context, supplemental_candidates)
+    return InstructionUnderstandingService().understand(
+        raw_text, context, supplemental_candidates, profile_context
+    )
+
+
+def _profile_evidence(profile_context: dict[str, Any] | None) -> tuple[str, ...]:
+    """Keep profile hints advisory and exclude raw/private profile contents."""
+    if not profile_context or profile_context.get("enabled") is False:
+        return ()
+    suggestions = profile_context.get("suggestions")
+    if not isinstance(suggestions, dict):
+        return ()
+    evidence = []
+    for key in ("task_type", "tool", "reasoning_level"):
+        value = suggestions.get(key)
+        if isinstance(value, str) and value.strip():
+            evidence.append(f"profile_{key}:{value}")
+    return tuple(evidence)

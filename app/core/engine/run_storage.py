@@ -14,6 +14,20 @@ def _now():
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def _session_context_value(session, key: str) -> str | None:
+    """Read an attribution value from the session context.
+
+    Group tasks stamp ``group_id``/``task_id`` into the session context at
+    creation; record_response persists them on CostRecord rows so group
+    costs can be aggregated (R12-H54).
+    """
+    context = getattr(session, "context", None)
+    if not isinstance(context, dict):
+        return None
+    value = context.get(key)
+    return str(value) if value else None
+
+
 class RunStorage:
     def __init__(self, session_factory=None):
         if session_factory is None:
@@ -52,6 +66,24 @@ class RunStorage:
             session._run_cost_status = (turn.metadata_ or {}).get("cost_status", "unknown")
             session._run_usage_status = (turn.metadata_ or {}).get("usage_status", "unknown")
             await db.commit()
+        await self._audit_run_action(session, "run_started")
+
+    async def _audit_run_action(self, session, action: str, status: str | None = None) -> None:
+        try:
+            from app.core.observability.audit_store import DurableAuditStore
+
+            await DurableAuditStore(self.session_factory).log_agent_action(
+                session_id=getattr(session, "session_id", None),
+                user_id=getattr(session, "user_id", None),
+                action=action,
+                details={
+                    "turn_id": getattr(session, "current_turn_id", None),
+                    "agent_id": getattr(session, "agent_id", None),
+                    "status": status or getattr(session, "status", None).value,
+                },
+            )
+        except Exception:
+            return
 
     async def record_response(self, session, response, iteration, *, complete=True):
         from app.middleware.metrics import TOKEN_USAGE
@@ -95,7 +127,9 @@ class RunStorage:
                 await db.execute(CostRecord.__table__.insert().values(
                     id=call_id, user_id=session.user_id, session_id=session.session_id,
                     provider=session.provider, model_id=session.model_id, **usage,
-                    input_cost=costs[0], output_cost=costs[1], total_cost=costs[2]))
+                    input_cost=costs[0], output_cost=costs[1], total_cost=costs[2],
+                    group_id=_session_context_value(session, "group_id"),
+                    task_id=_session_context_value(session, "task_id")))
             calls.append(entry)
             metadata["model_calls"] = calls
             metadata["cost_status"] = "known" if all(c["cost_status"] == "known" for c in calls) else "unknown"
@@ -133,6 +167,16 @@ class RunStorage:
             metadata.setdefault("usage_status", "unknown")
             turn.metadata_ = metadata
             await db.commit()
+            if getattr(session, "_instruction_trace_id", None):
+                from app.storage.repository_instruction_traces import update_trace_outcome
+                await update_trace_outcome(
+                    db,
+                    turn_id=session.current_turn_id,
+                    status=status,
+                    outcome=metadata["outcome"],
+                )
+                await db.commit()
+        await self._audit_run_action(session, "run_finished", status=status)
 
 
 @asynccontextmanager
@@ -150,7 +194,7 @@ async def track_run(session, store):
         session._restore_status("cancelled" if not isinstance(exc, Exception) else "failed")
         raise
     finally:
-        if session.status.value in {"pending", "running", "paused"}:
+        if session.status.value in {"pending", "running"}:
             session._restore_status("cancelled")
         try:
             await store.finish(session)

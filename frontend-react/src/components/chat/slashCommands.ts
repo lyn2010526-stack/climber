@@ -4,10 +4,11 @@
  * Mirrors the backend registry in `app/core/slash/` (same names, same
  * argument rules). The frontend resolves commands locally for autocomplete
  * and for the "which command is this" check; execution always goes through
- * `POST /api/v1/sessions/{id}/slash`, which streams the reply as SSE.
+ * `api.runSlashCommand` (POST /api/v1/sessions/{id}/slash), which streams the
+ * reply as SSE.
  */
-import { API_BASE_URL, getAuthHeaders } from '../../lib/api-client';
-import { normalizeChatEvent, type ChatStreamEvent } from '../../types/chatEvents';
+import type { ChatStreamEvent } from '../../types/chatEvents';
+import { api } from '../../api';
 
 export interface SlashArgInfo {
   name: string;
@@ -77,7 +78,7 @@ export function extractCommandHead(input: string): string | null {
   const text = input.trimStart();
   if (!text.startsWith('/')) return null;
   const stripped = text.slice(1);
-  if (!stripped) return null;
+  if (!stripped) return '';
   const head = stripped.split(/\s+/)[0];
   return head ? head.toLowerCase() : null;
 }
@@ -138,83 +139,10 @@ export function executeSlashCommand(
   onEvent: (event: ChatStreamEvent) => void,
   options: { signal?: AbortSignal } = {},
 ): () => void {
-  const abortController = new AbortController();
-  // Chain the caller's signal so composer-level stops also cancel this fetch.
-  if (options.signal) {
-    if (options.signal.aborted) abortController.abort();
-    else options.signal.addEventListener('abort', () => abortController.abort(), { once: true });
-  }
-
-  fetch(`${API_BASE_URL}/sessions/${sessionId}/slash`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-    body: JSON.stringify({ message }),
-    signal: abortController.signal,
-  })
-    .then(async response => {
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: response.statusText }));
-        throw new Error(error.detail || `HTTP ${response.status}`);
-      }
-      if (!response.body) {
-        onEvent({ type: 'error', message: 'The server returned an empty response body.' });
-        return;
-      }
-      await readSlashStream(response.body, onEvent);
-    })
-    .catch(err => {
-      if (err.name === 'AbortError') return;
-      onEvent({ type: 'error', message: err?.message || 'Request failed' });
-    });
-
-  return () => abortController.abort();
-}
-
-/** Minimal SSE reader for the slash endpoint (same frame format as chat). */
-async function readSlashStream(
-  body: ReadableStream<Uint8Array>,
-  onEvent: (event: ChatStreamEvent) => void,
-): Promise<void> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const blocks = buffer.split('\n\n');
-      buffer = blocks.pop() || '';
-      for (const block of blocks) emitFrame(block, onEvent);
-    }
-    if (buffer.trim()) emitFrame(buffer, onEvent);
-  } finally {
-    reader.releaseLock();
-  }
-}
-
-function emitFrame(block: string, onEvent: (event: ChatStreamEvent) => void): void {
-  let eventName = '';
-  let dataStr = '';
-  for (const line of block.split('\n')) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('event:')) eventName = trimmed.slice(6).trim();
-    else if (trimmed.startsWith('data:')) dataStr += trimmed.slice(5).trim();
-  }
-  if (!dataStr || dataStr === '[DONE]') return;
-  let data: unknown = dataStr;
-  try {
-    data = JSON.parse(dataStr);
-  } catch {
-    // keep raw string
-  }
-  onEvent(normalizeChatEvent({ event: eventName, data }));
+  return api.runSlashCommand(sessionId, message, onEvent, options);
 }
 
 /** Interrupt the running turn before dropping the SSE connection. */
 export function cancelSessionTurn(sessionId: string): void {
-  fetch(`${API_BASE_URL}/sessions/${sessionId}/cancel`, {
-    method: 'POST',
-    headers: { ...getAuthHeaders() },
-  }).catch(() => undefined); // fire-and-forget; local abort still applies
+  api.cancelSessionTurn(sessionId);
 }

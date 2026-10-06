@@ -383,6 +383,24 @@ class CodeSandbox:
         except SyntaxError as e:
             return VerificationResult(allowed=False, reason=f"Syntax error: {e}")
 
+    def preflight_script(self, code: str) -> VerificationResult:
+        """Run the mandatory static script pre-test before execution."""
+        if not isinstance(code, str) or not code.strip():
+            return VerificationResult(allowed=False, reason="Script preflight failed: empty script")
+        return self.verify(code)
+
+
+def intercept_hazards(command: str, code: str | None = None) -> tuple[bool, str]:
+    """Apply command and optional script checks before a tool can execute."""
+    valid, reason = validate_command_allowlist(command)
+    if not valid:
+        return False, reason
+    if code is not None:
+        result = CodeSandbox().preflight_script(code)
+        if not result.allowed:
+            return False, result.reason
+    return True, "OK"
+
 
 # ─── Permission Approval System ────────────────────────────────────────────
 

@@ -24,7 +24,7 @@ DECLARED_IDS = builtin_skill_ids()
 
 def test_definitions_declare_unique_skill_ids() -> None:
     assert DECLARED_IDS
-    assert len(DECLARED_IDS) == 22
+    assert len(DECLARED_IDS) == 29
     assert len(DECLARED_IDS) == len(set(DECLARED_IDS))
     assert set(BUILTIN_HANDLER_MAP) == set(DECLARED_IDS)
 
@@ -37,6 +37,14 @@ def test_discipline_skills_are_declared_with_expected_tags() -> None:
     assert by_id["verification_discipline"].name
     assert by_id["search_discipline"].system_prompt
     assert by_id["ui_design_discipline"].system_prompt
+
+
+def test_research_derived_skills_declare_bounded_contracts() -> None:
+    by_id = {info.id: info for info in BUILTIN_SKILLS}
+    assert {"delegation", "verification"} <= set(by_id["delegation_packet"].tags)
+    assert {"memory", "retrieval"} <= set(by_id["typed_memory_recall"].tags)
+    assert "acceptance criteria" in by_id["delegation_packet"].system_prompt
+    assert "LOG" in by_id["typed_memory_recall"].system_prompt
 
 
 def test_registration_covers_every_declared_skill() -> None:

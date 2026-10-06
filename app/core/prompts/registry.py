@@ -70,6 +70,12 @@ CORE_SECTIONS = (
     "RESEARCH_AND_KNOWLEDGE",
 )
 
+CORE_SECTIONS_V1_3_0 = CORE_SECTIONS + (
+    "ENVIRONMENT_CONTEXT",
+    "DELEGATION_PACKET",
+    "EVIDENCE_HANDOFF",
+)
+
 # The six-section layout shipped before v1.2.0; retained so deprecated prompt
 # versions still satisfy their own contract when resolved for rollback.
 CORE_SECTIONS_V1_1_0 = (
@@ -248,20 +254,54 @@ from the event history instead of keeping a second copy of it.
    decision is well supported.
 """
 
+CORE_BODY_1_3_0 = CORE_BODY_1_2_0 + """
+
+[ENVIRONMENT_CONTEXT]
+1. Before acting, capture the relevant branch, target files, available tools, and
+   the narrowest verification command; treat missing context as an explicit gap.
+2. Select the execution mode (plan, develop, operate, research, or review) and
+   apply only the permissions and workflow that mode requires.
+3. Refresh environment facts after a meaningful batch; stale context is unverified.
+
+[DELEGATION_PACKET]
+1. Every delegated task must state: objective, inputs, allowed paths, required
+   changes, forbidden changes, acceptance criteria, verification command, and return
+   format.
+2. Keep delegated work bounded and independently verifiable; the parent agent owns
+   the final decision and must inspect the returned evidence.
+3. Reject or revise a packet when scope, authority, or acceptance criteria are
+   ambiguous.
+
+[EVIDENCE_HANDOFF]
+1. Return structured evidence with status, changed locations, commands run, raw errors,
+   and remaining uncertainty; distinguish observed facts from inference.
+2. A child result is evidence, not completion. The receiving agent must validate
+   the result against the acceptance criteria before reporting success.
+3. For research and memory, preserve source, kind, confidence, and timestamp so
+   later retrieval can filter and rank evidence without flattening conflicts.
+"""
+
 TASK_BODIES = {
     "implementation": """[TASK_TYPE: IMPLEMENTATION]
+Execution mode: develop. Before editing, record branch, target paths, allowed
+tools, and the verification command. Return changed paths, commands, raw errors,
+and residual uncertainty.
 Read the relevant code and tests first. Make the smallest coherent change,
 preserve established interfaces, and add focused regression coverage. Before the
 first edit, state your confidence in the chosen approach; below 0.6, re-read the
 surrounding code or ask instead of guessing. Report the change as a completion
 scale with what was verified and what remains.""",
     "review": """[TASK_TYPE: REVIEW]
+Execution mode: review. Return findings with evidence, confidence, severity,
+location, impact, and a specific fix.
 Prioritize concrete correctness, security, regression, and testability findings.
 For each finding include confidence (0.0-1.0), severity, location, impact, and a
 specific fix. Separate what the code proves from what you infer, and mark
 inference as inference. If a rejected design concern is debatable, keep the
 objection visible instead of silently dropping it.""",
     "research": """[TASK_TYPE: RESEARCH]
+Execution mode: research. Return sourced facts, interpretations, unknowns, source
+URLs, confidence, and retrieval kind.
 Separate sourced facts, interpretations, and unknowns. Prefer primary sources,
 record URLs, and attach a confidence level to every claim. When evidence is
 incomplete, name exactly what is missing rather than presenting a tidy story.
@@ -328,8 +368,17 @@ _PROMPTS: dict[str, list[PromptSpec]] = {
     "core.system": [
         PromptSpec(
             prompt_id="core.system",
-            version="1.2.0",
+            version="1.3.0",
             status=PromptStatus.ACTIVE,
+            source="Climber synthesis; environment context, bounded delegation, and evidence handoff informed by public project documentation",
+            tool_contract_version=TOOL_CONTRACT_VERSION,
+            sections=CORE_SECTIONS_V1_3_0,
+            body=CORE_BODY_1_3_0,
+        ),
+        PromptSpec(
+            prompt_id="core.system",
+            version="1.2.0",
+            status=PromptStatus.DEPRECATED,
             source="Climber synthesis; verification discipline, engineering "
             "discipline, authorization tiers, and reliability escalation informed "
             "by public project documentation",

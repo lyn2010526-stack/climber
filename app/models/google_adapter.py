@@ -50,6 +50,7 @@ class GoogleGeminiAdapter(ModelAdapter):
             streaming=True,
             tools=True,
             vision=True,
+            file_attachments=False,
             embedding=False,
             max_tokens=8192,
         )
@@ -187,5 +188,27 @@ class GoogleGeminiAdapter(ModelAdapter):
         return ChatResult(
             content="".join(text_parts),
             tool_calls=tool_calls,
-            finish_reason=candidate.get("finishReason", "STOP").lower(),
+            finish_reason=_canonical_finish_reason(candidate.get("finishReason")),
         )
+
+
+def _canonical_finish_reason(raw: str | None) -> str:
+    """Map Gemini ``finishReason`` to OpenAI-style canonical names.
+
+    A naive ``.lower()`` turns ``MAX_TOKENS`` into ``max_tokens``, which
+    consumers do not recognize; ``length`` is the canonical truncation
+    signal. Safety-related reasons all collapse to ``content_filter``.
+    """
+    if not raw:
+        return "stop"
+    mapping = {
+        "STOP": "stop",
+        "MAX_TOKENS": "length",
+        "SAFETY": "content_filter",
+        "RECITATION": "content_filter",
+        "PROHIBITED": "content_filter",
+        "SPII": "content_filter",
+        "IMAGE_SAFETY": "content_filter",
+        "OTHER": "stop",
+    }
+    return mapping.get(raw.upper(), raw.lower())

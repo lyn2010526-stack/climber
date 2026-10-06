@@ -55,6 +55,7 @@ class InstructionTrace(Base):
     # Ownership. Both stay nullable: a local single-user install has no user row
     # and an instruction can be issued before a session exists.
     session_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    turn_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
 
     raw_text: Mapped[str] = mapped_column(Text, nullable=False)
@@ -64,6 +65,8 @@ class InstructionTrace(Base):
     intent_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     task_spec: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     goal_preserved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="received", nullable=False, index=True)
+    outcome: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     source: Mapped[str] = mapped_column(
         String(20),
@@ -82,6 +85,10 @@ class InstructionTrace(Base):
         index=True,
     )
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    retrieval_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_retrieved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    decayed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -96,6 +103,11 @@ class InstructionTrace(Base):
             name="ck_user_instruction_traces_source",
         ),
         CheckConstraint("token_count >= 0", name="ck_user_instruction_traces_token_count"),
+        CheckConstraint("retrieval_count >= 0", name="ck_user_instruction_traces_retrieval_count"),
+        CheckConstraint(
+            "status IN ('received', 'running', 'completed', 'failed', 'cancelled', 'archived')",
+            name="ck_user_instruction_traces_status",
+        ),
         CheckConstraint(
             "compressed_into_id IS NULL OR compressed_into_id <> id",
             name="ck_user_instruction_traces_compression_self",
@@ -103,4 +115,5 @@ class InstructionTrace(Base):
         Index("ix_user_instruction_traces_session_created", "session_id", "created_at"),
         Index("ix_user_instruction_traces_user_created", "user_id", "created_at"),
         Index("ix_user_instruction_traces_hash_created", "text_hash", "created_at"),
+        Index("ix_user_instruction_traces_turn", "turn_id"),
     )

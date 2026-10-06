@@ -5,11 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 
 from app.api.v1.common import ok_response
 from app.core.api_key_crypto import encrypt_api_key
+from app.core.auth_manager import require_scopes
 from app.core.di import resolve as di_resolve
 from app.core.principal import CurrentPrincipal
 from app.schemas.api_v1.agents import AgentCreateRequest, AgentResponse
@@ -41,7 +42,11 @@ async def list_agents(principal: CurrentPrincipal) -> list[dict[str, Any]]:
 
 @router.post("/agents", response_model=AgentResponse)
 @router.post("/agents/", response_model=AgentResponse, include_in_schema=False)
-async def create_agent(payload: AgentCreateRequest, principal: CurrentPrincipal) -> dict[str, Any]:
+async def create_agent(
+    payload: AgentCreateRequest,
+    principal: CurrentPrincipal,
+    _scope_check: None = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     """Create a new agent with the provided configuration."""
     data = payload.model_dump()
     user_id = principal.subject_id
@@ -57,6 +62,10 @@ async def create_agent(payload: AgentCreateRequest, principal: CurrentPrincipal)
         for field in ("description", "system_prompt", "tool_ids", "skill_ids"):
             if hasattr(agent, field) and data.get(field) is not None:
                 setattr(agent, field, data[field])
+        if data.get("temperature") is not None:
+            agent.temperature = data["temperature"]
+        if data.get("max_tokens") is not None:
+            agent.max_tokens = data["max_tokens"]
         if not getattr(agent, "tool_ids", None):
             try:
                 tool_registry = di_resolve("ToolRegistry")
@@ -69,9 +78,15 @@ async def create_agent(payload: AgentCreateRequest, principal: CurrentPrincipal)
         return {
             "id": agent.id,
             "name": agent.name,
+            "description": getattr(agent, "description", "") or "",
             "provider": agent.provider,
             "model_id": agent.model_id,
+            "system_prompt": getattr(agent, "system_prompt", "") or "",
             "base_url": agent.base_url,
+            "tool_ids": getattr(agent, "tool_ids", []) or [],
+            "skill_ids": getattr(agent, "skill_ids", []) or [],
+            "temperature": float(agent.temperature or 0.7),
+            "max_tokens": agent.max_tokens,
         }
 
 
@@ -90,7 +105,11 @@ async def get_agent(agent_id: str, principal: CurrentPrincipal) -> dict[str, Any
 
 
 @router.delete("/agents/{agent_id}")
-async def delete_agent(agent_id: str, principal: CurrentPrincipal) -> dict[str, bool | str]:
+async def delete_agent(
+    agent_id: str,
+    principal: CurrentPrincipal,
+    _scope_check: None = Depends(require_scopes("write")),
+) -> dict[str, bool | str]:
     """Delete an agent by ID."""
     user_id = principal.subject_id
     async with async_session() as db:
@@ -124,6 +143,8 @@ def _agent_dict(a: Agent) -> dict[str, Any]:
         "base_url": a.base_url,
         "tool_ids": getattr(a, "tool_ids", []) or [],
         "skill_ids": getattr(a, "skill_ids", []) or [],
+        "temperature": float(getattr(a, "temperature", 0.7) or 0.7),
+        "max_tokens": getattr(a, "max_tokens", None),
         "created_at": a.created_at.isoformat() if a.created_at else None,
         "updated_at": a.updated_at.isoformat() if a.updated_at else None,
         "is_active": bool(a.is_active),

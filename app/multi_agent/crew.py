@@ -51,7 +51,24 @@ class Crew:
                 continue
 
             task.status = TaskStatus.RUNNING
-            result = await self._execute_task(task, agent, context, user_id)
+            try:
+                result = await self._execute_task(task, agent, context, user_id)
+            except Exception as exc:
+                # Per-task isolation: one failing agent must not abort the crew
+                # (R13-57) and the task must be recorded as FAILED, not
+                # COMPLETED, when the engine run reported an error (R13-51).
+                task.status = TaskStatus.FAILED
+                task.error = str(exc)
+                self._results.append({
+                    "task_id": task.id,
+                    "agent": agent.name,
+                    "description": task.description,
+                    "result": "",
+                    "error": str(exc),
+                })
+                logger.warning("Crew task failed", crew_id=self.crew_id, task_id=task.id, agent=agent.name, error=str(exc))
+                continue
+
             task.result = result
             task.status = TaskStatus.COMPLETED
 
@@ -103,6 +120,15 @@ class Crew:
         async for event in self.engine.run(session, task_message):
             if event.type == AgentEventType.TEXT:
                 full_response_parts.append(event.data.get("content", ""))
+            elif event.type == AgentEventType.ERROR:
+                raise RuntimeError(
+                    str(
+                        event.data.get("error")
+                        or event.data.get("message")
+                        or event.data
+                    )
+                    or f"Agent '{agent.name}' reported an error"
+                )
 
         return "".join(full_response_parts)
 

@@ -1,0 +1,17 @@
+import { chromium } from 'playwright';
+const BASE = 'https://5173-1822695f51232c6b.monkeycode-ai.online';
+const b = await chromium.launch({ executablePath: "/root/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome" });
+const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+p.on('response', r => { if (r.url().includes('understand')) console.log('RESP', r.status(), r.url().split('/').pop()); });
+p.on('requestfailed', r => { if (r.url().includes('understand')) console.log('FAILED', r.failure()?.errorText, r.url()); });
+await p.goto(`${BASE}/#chat`, { waitUntil: 'domcontentloaded' }).catch(()=>{});
+await p.waitForSelector('textarea', { timeout: 15000 });
+const ta = p.locator('textarea').first();
+await ta.fill('请重构这个模块。');
+await p.waitForTimeout(2500);
+const body = await p.locator('body').innerText();
+const hit = body.includes('clarify before sending') || body.includes('ambiguous');
+console.log('bubble-hit =', hit);
+if (/clarify before sending/i.test(body)) console.log('bubble-text:', body.slice(body.search(/clarify before sending/i), body.search(/clarify before sending/i)+130).replace(/\n/g,' | '));
+console.log('chat.clarify_hint in body:', body.includes('clarify before sending'));
+await b.close();

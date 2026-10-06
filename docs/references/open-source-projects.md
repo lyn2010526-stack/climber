@@ -86,6 +86,18 @@
 - **agi-core 长期迭代研读**：二组（世界模型因果）+ 五组（遗传进化沙箱），做算法创新点。
 - 只借鉴架构、模块、交互范式，双闭环算法融合是 Climber 独有创新，不直接复制源码。
 
+## 六、2026-10-01 研究报告索引
+
+| 报告 | 覆盖范围 | 状态 | 证据与未完成项 |
+| --- | --- | --- | --- |
+| `deep-dives/opensource-core-agents-01-12.md` | #1-12 核心 Agent、调度与工具 | ✅ 已完成 | 12 个项目均有官方 README/元数据证据；部分落地项仍需补测试或执行器 |
+| `deep-dives/opensource-world-models-13-20.md` | #13-20 世界模型、因果、元认知、不确定性 | ✅ 研究完成 / 🧪 落地进行中 | #13/#14/#15/#19/#20 无可信源码；完整闭环未完成 |
+| `deep-dives/opensource-frontend-reference-21-32.md` | #21-32 Agent 前端 UI | ✅ 研究完成 / 📋 落地待办 | 10 个原仓库已核验，MonkeyCode/Zcode 原始地址不可用；交互借鉴项尚未全部接入 |
+| `deep-dives/opensource-memory-profile-33-40.md` | #33-40 记忆、画像、检索 | ✅ 研究完成 / 🔧 落地进行中 | Chroma/画像基础已落地；混合排序、过滤、关系召回和 query transform 未完成 |
+| `deep-dives/agent-constitution-and-top20.md` | 4 个 Agent 宪法仓库与 20 个产品提示词 | ✅ 已完成 / ~ 集成进行中 | 原始 URL 404、候选仓库、可达性和推断均已分级；外部宪法、任务 packet、角色 profile 尚未落地 |
+
+研究报告总数：5 份新增报告。报告只记录结构、契约、映射和证据等级，不把不可达仓库的描述当作源码事实。
+
 ## 已落地模块 ↔ 参考项目对照（自下而上核对）
 
 | Climber 模块 | 对标项目 | 关键机制 |

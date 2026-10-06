@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -97,7 +98,7 @@ class OllamaAdapter(ModelAdapter):
                 tool_calls=[],
                 finish_reason="offline",
             )
-            await ollama_offline_queue.enqueue(payload)
+            await ollama_offline_queue.enqueue(payload, base_url=self._base_url)
             return
 
         try:
@@ -105,6 +106,7 @@ class OllamaAdapter(ModelAdapter):
                 "POST", f"{self._base_url}/api/chat", json=payload
             ) as response:
                 response.raise_for_status()
+                pending_tool_calls: list[dict[str, Any]] = []
                 async for line in response.aiter_lines():
                     if not line.strip():
                         continue
@@ -112,13 +114,32 @@ class OllamaAdapter(ModelAdapter):
                         chunk = json.loads(line)
                     except json.JSONDecodeError:
                         continue
+                    message = chunk.get("message", {}) or {}
+                    if message.get("tool_calls"):
+                        for tc in message["tool_calls"]:
+                            func = tc.get("function", {})
+                            args = func.get("arguments", {})
+                            pending_tool_calls.append({
+                                "id": tc.get("id") or f"call_{uuid.uuid4().hex[:24]}",
+                                "type": "function",
+                                "function": {
+                                    "name": func.get("name", ""),
+                                    "arguments": args if isinstance(args, dict) else {},
+                                },
+                            })
                     if chunk.get("done"):
+                        done_reason = chunk.get("done_reason")
                         yield ChatResult(
-                            finish_reason="stop",
+                            tool_calls=pending_tool_calls,
+                            finish_reason=(
+                                "length" if done_reason == "length"
+                                else "tool_calls" if pending_tool_calls
+                                else "stop"
+                            ),
                             tokens_used=chunk.get("eval_count", 0),
                         )
                         break
-                    content = chunk.get("message", {}).get("content")
+                    content = message.get("content")
                     if content:
                         yield ChatResult(content=content)
         except Exception as e:
@@ -150,7 +171,7 @@ class OllamaAdapter(ModelAdapter):
             payload["tools"] = tools
 
         if not await self._is_ollama_reachable():
-            await ollama_offline_queue.enqueue(payload)
+            await ollama_offline_queue.enqueue(payload, base_url=self._base_url)
             return ChatResult(
                 content="Ollama offline. Request queued for retry when connection is restored.",
                 tool_calls=[],
@@ -167,7 +188,7 @@ class OllamaAdapter(ModelAdapter):
                 func = tc.get("function", {})
                 args = func.get("arguments", {})
                 tool_calls.append({
-                    "id": func.get("name", ""),
+                    "id": tc.get("id") or f"call_{uuid.uuid4().hex[:24]}",
                     "type": "function",
                     "function": {
                         "name": func.get("name", ""),

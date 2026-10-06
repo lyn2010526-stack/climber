@@ -7,7 +7,7 @@ import { ThinkingIndicator } from './ThinkingIndicator';
 import { ThinkingDetails } from '../chat/ThinkingDetails';
 import { MessageActions, MessageContent, ToolCallCard } from '../chat/MessageContent';
 
-vi.mock('../../api', () => ({ api: { submitFeedback: vi.fn(), resolvePermission: vi.fn() } }));
+vi.mock('../../api', () => ({ api: { submitFeedback: vi.fn(), resolvePermission: vi.fn(), listChatCommands: vi.fn().mockResolvedValue([]) } }));
 
 const messages = [
   { id: 'u1', role: 'user' as const, content: 'Review this repository' },

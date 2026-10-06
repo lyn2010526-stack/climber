@@ -17,6 +17,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
     inspect,
     text,
@@ -44,9 +45,9 @@ class Agent(Base):
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     model_id: Mapped[str] = mapped_column(String(100), nullable=False)
     api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
-    base_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    base_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     temperature: Mapped[float] = mapped_column(Float, default=0.7)
-    max_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
+    max_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Role-based agent identity (参考 CrewAI)
     agent_role: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -74,10 +75,10 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    agent_id: Mapped[str] = mapped_column(String(36), ForeignKey("agents.id"), nullable=True)
+    agent_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("agents.id"), nullable=True)
     user_id: Mapped[str] = mapped_column(String(36), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending")
-    title: Mapped[str] = mapped_column(String(255), nullable=True)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Per-session model override (provider/model_id/base_url), takes priority over the agent's model
     model_settings: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
@@ -93,8 +94,29 @@ class Session(Base):
 
     # Relationships
     agent: Mapped[Agent] = relationship(back_populates="sessions")
-    messages: Mapped[list[Message]] = relationship(back_populates="session", cascade="all, delete-orphan", order_by="Message.created_at")
+    messages: Mapped[list[Message]] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="Message.created_at, Message.id",
+    )
     turns: Mapped[list[Turn]] = relationship(back_populates="session", cascade="all, delete-orphan")
+
+
+class SessionInput(Base):
+    __tablename__ = "session_inputs"
+    __table_args__ = (
+        UniqueConstraint("session_id", "client_request_id", name="uq_session_input_request"),
+        UniqueConstraint("session_id", "sequence", name="uq_session_input_sequence"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    session_id: Mapped[str] = mapped_column(String(36), ForeignKey("sessions.id"), index=True)
+    client_request_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="queued")
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class Turn(Base):
@@ -123,10 +145,10 @@ class Message(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     session_id: Mapped[str] = mapped_column(String(36), ForeignKey("sessions.id"), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=True)
-    tool_call_id: Mapped[str] = mapped_column(String(100), nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tool_call_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     tool_calls: Mapped[list[dict]] = mapped_column(JSON, default=list)
-    tool_name: Mapped[str] = mapped_column(String(100), nullable=True)
+    tool_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     tokens: Mapped[int] = mapped_column(Integer, default=0)
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
@@ -181,7 +203,7 @@ class ApiKey(Base):
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     name: Mapped[str] = mapped_column(String(100))  # human label
     api_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
-    base_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    base_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
@@ -192,7 +214,7 @@ class UsageLog(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str] = mapped_column(String(36), nullable=False)
-    session_id: Mapped[str] = mapped_column(String(36), ForeignKey("sessions.id"), nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("sessions.id"), nullable=True)
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     model_id: Mapped[str] = mapped_column(String(100), nullable=False)
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
@@ -219,6 +241,31 @@ class CheckpointRecord(Base):
     pending_writes: Mapped[str] = mapped_column(Text, default="[]")
     parent_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class RunProgressRecord(Base):
+    """Durable snapshot of an in-flight agent run for crash recovery.
+
+    One row per session holds the latest Pi outer-loop progress: current
+    subtask, completed subtasks, and the follow-up/steering queue mirrors.
+    A stale ``in_progress`` row means the process died mid-run and the session
+    should be marked interrupted on startup.
+    """
+
+    __tablename__ = "run_progress_snapshots"
+
+    session_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    turn_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="in_progress", index=True)
+    outer_round: Mapped[int] = mapped_column(Integer, default=0)
+    current_subtask: Mapped[str] = mapped_column(Text, default="")
+    completed_subtasks_json: Mapped[str] = mapped_column(Text, default="[]")
+    followup_queue_json: Mapped[str] = mapped_column(Text, default="[]")
+    steering_queue_json: Mapped[str] = mapped_column(Text, default="[]")
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
 async def ensure_checkpoint_schema(database_engine: Any | None = None) -> None:

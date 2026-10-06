@@ -16,8 +16,14 @@ import { SkeletonList } from '../components/ui/Skeleton';
 
 const taskOutput = (task: TaskDetail | null): string => {
   if (!task?.result) return '';
-  const output = (task.result as Record<string, unknown>).output;
-  return typeof output === 'string' ? output : JSON.stringify(output ?? '', null, 2);
+  const result = task.result as Record<string, unknown>;
+  const output = result.output;
+  if (typeof output === 'string') return output;
+  // A structured task (e.g. data_processing) returns `processed`/`results`
+  // with no `output` field. Falling back to the whole result keeps the object
+  // in display, copy and download instead of serializing an empty string.
+  if (output !== undefined) return JSON.stringify(output, null, 2);
+  return JSON.stringify(result, null, 2);
 };
 
 export function TaskHistoryPage() {
@@ -42,7 +48,7 @@ export function TaskHistoryPage() {
     setLoading(true);
     setError(false);
     try {
-      const data = await api.listTasks();
+      const data = await api.listTasks({ limit: 500 });
       setTasks(data);
     } catch {
       setError(true);
@@ -166,12 +172,12 @@ export function TaskHistoryPage() {
   return (
     <div className="h-full min-h-0 min-w-0 flex flex-col text-[var(--color-text-primary)]">
       <div className="px-4 py-3 border-b border-[var(--color-border-subtle)] flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold">{t('navigation.task_history')} <span className="ml-2 font-normal text-[var(--color-text-muted)] tabular-nums">{filteredTasks.length} / {tasks.length}</span></h2>
+        <h1 className="text-[length:var(--text-base)] font-semibold text-[var(--color-text-primary)]">{t('navigation.task_history')} <span className="ml-2 font-normal text-[var(--color-text-muted)] tabular-nums">{filteredTasks.length} / {tasks.length}</span></h1>
         <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={loadTasks}>{t('common.refresh')}</Button>
       </div>
       <div className="flex flex-wrap gap-2 px-4 py-2 border-b border-[var(--color-border-subtle)]">
-        <input aria-label={t('common.search')} placeholder={t('common.search')} value={query} onChange={event => setQuery(event.target.value)} className="min-w-0 flex-1 rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-3 py-2 text-xs" />
-        <select aria-label={t('common.status')} value={status} onChange={event => setStatus(event.target.value)} className="rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-3 py-2 text-xs">
+        <input aria-label={t('common.search')} placeholder={t('common.search')} value={query} onChange={event => setQuery(event.target.value)} className="min-w-0 flex-1 rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-3 py-2 text-[length:var(--text-xs)] text-[var(--color-text-primary)]" />
+        <select aria-label={t('common.status')} value={status} onChange={event => setStatus(event.target.value)} className="rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-3 py-2 text-[length:var(--text-xs)] text-[var(--color-text-primary)]">
           <option value="">{t('common.all')}</option>
           {Array.from(new Set([...Object.keys(TASK_STATUS_LABEL_KEYS), ...tasks.map(task => task.status)])).map(value => <option key={value} value={value}>{taskStatusLabel(value, t)}</option>)}
         </select>
@@ -184,10 +190,10 @@ export function TaskHistoryPage() {
           </tr></thead>
           <tbody className="divide-y divide-[var(--color-border-subtle)]">
             {filteredTasks.map(task => <tr key={task.task_id} className="hover:bg-[var(--color-bg-surface-2)]">
-              <td className="px-4 py-3 max-w-xs"><p className="truncate" title={task.objective}>{task.objective}</p><p className="mt-1 font-mono text-[var(--color-text-muted)] truncate" title={task.task_id}>{task.task_id}</p></td>
-              <td className={`px-4 py-3 whitespace-nowrap ${taskStatusColor(task.status)}`}>{taskStatusLabel(task.status, t)}</td>
-              <td className="px-4 py-3 whitespace-nowrap tabular-nums text-[var(--color-text-secondary)]">{formatTime(task.created_at)}</td>
-              <td className="px-4 py-2"><button type="button" disabled={opening !== null} onClick={() => openTask(task.task_id)} aria-label={`${t('common.open')}: ${task.objective}`} className="inline-flex items-center gap-1 rounded-md px-2 py-2 hover:bg-[var(--color-bg-surface-3)] disabled:opacity-50">{opening === task.task_id ? t('common.loading') : t('common.open')}<ChevronRight size={14} /></button></td>
+              <td className="px-4 py-2.5 max-w-xs"><p className="truncate" title={task.objective}>{task.objective}</p><p className="mt-1 font-mono text-[length:var(--text-2xs)] text-[var(--color-text-muted)] truncate" title={task.task_id}>{task.task_id}</p></td>
+              <td className={`px-4 py-2.5 whitespace-nowrap ${taskStatusColor(task.status)}`}>{taskStatusLabel(task.status, t)}</td>
+              <td className="px-4 py-2.5 whitespace-nowrap tabular-nums text-[var(--color-text-secondary)]">{formatTime(task.created_at)}</td>
+              <td className="px-4 py-2"><button type="button" disabled={opening !== null} onClick={() => openTask(task.task_id)} aria-label={`${t('common.open')}: ${task.objective}`} className="inline-flex items-center gap-1 rounded-[var(--radius-md)] px-2 py-1.5 transition-colors hover:bg-[var(--color-bg-surface-3)] disabled:opacity-50 motion-reduce:transition-none">{opening === task.task_id ? t('common.loading') : t('common.open')}<ChevronRight size={14} /></button></td>
             </tr>)}
           </tbody>
         </table>

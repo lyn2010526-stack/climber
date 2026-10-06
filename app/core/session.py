@@ -13,6 +13,7 @@ from app.core import (
     ContextConfig,
     SessionStatus,
 )
+from app.core.exceptions import InvalidStateTransitionError
 from app.core.resilience import (
     CircuitBreaker,
     CircuitBreakerConfig,
@@ -52,6 +53,10 @@ class SessionConfig:
     enable_checkpoint_recovery: bool = False
     enable_graceful_shutdown: bool = False
     shutdown_drain_seconds: float = 0.0
+    # Per-session LLM sampling overrides (e.g. set by workflow LLM nodes);
+    # None means "provider default" and is never forwarded to the adapter.
+    temperature: float | None = None
+    max_tokens: int | None = None
 
 
 class AgentSession:
@@ -73,6 +78,8 @@ class AgentSession:
         context_config: Any = _SENTINEL,
         mode: Any = _SENTINEL,
         max_iterations: Any = _SENTINEL,
+        temperature: Any = _SENTINEL,
+        max_tokens: Any = _SENTINEL,
         session_config: SessionConfig | None = None,
         context: dict[str, Any] | None = None,
     ) -> None:
@@ -81,7 +88,7 @@ class AgentSession:
         Supports either a single SessionConfig positional argument or explicit
         keyword arguments (optionally combined with a session_config override).
         """
-        base = config if config is not None else (session_config if session_config is not None else SessionConfig())
+        base = copy.deepcopy(config if config is not None else (session_config if session_config is not None else SessionConfig()))
         overrides = {
             "session_id": session_id,
             "agent_id": agent_id,
@@ -95,6 +102,8 @@ class AgentSession:
             "context_config": context_config,
             "mode": mode,
             "max_iterations": max_iterations,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
         }
         for name, value in overrides.items():
             if value is not _SENTINEL:
@@ -113,6 +122,8 @@ class AgentSession:
         self.context_config = base.context_config or ContextConfig()
         self.max_iterations = base.max_iterations
         self.mode = base.mode
+        self.temperature = base.temperature
+        self.max_tokens = base.max_tokens
         self.context: dict[str, Any] = context or {}
         self.messages: list[dict[str, Any]] = []
         self._stop_requested = False
@@ -238,7 +249,12 @@ class AgentSession:
         self.current_turn_id = checkpoint.metadata.get("thread_id") or None
         self._resume_interrupted = interrupted
         self._stop_requested = False
-        status = checkpoint.status if interrupted else TaskState.COMPLETED.value
+        if interrupted:
+            status = checkpoint.status
+        elif checkpoint.status == TaskState.COMPLETED.value:
+            status = TaskState.COMPLETED.value
+        else:
+            status = checkpoint.status
         self._restore_status(status)
 
     def _restore_status(self, status: Any) -> None:
@@ -291,12 +307,25 @@ class AgentSession:
     def stop(self) -> None:
         """Request the session to stop processing."""
         self._stop_requested = True
-        import asyncio
         try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(self.state_machine.transition(TaskState.CANCELLED, trigger="user_stop"))
+            asyncio.get_running_loop()
         except RuntimeError:
-            pass
+            return
+        if self.state_machine.can_transition_to(TaskState.CANCELLED):
+            self._fire_and_forget(self._transition_to_stopped())
+
+    async def _transition_to_stopped(self) -> None:
+        # Execution may have completed after the synchronous stop request, so
+        # the CANCELLED transition can become illegal between the check above
+        # and this background task running. A terminal state already won the
+        # race; swallow the state-machine rejection instead of leaking an
+        # unretrieved InvalidStateTransitionError from the fire-and-forget task.
+        if not self.state_machine.can_transition_to(TaskState.CANCELLED):
+            return
+        try:
+            await self.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
+        except InvalidStateTransitionError:
+            return
 
     async def pause(self) -> None:
         """Pause the session, recording the pause timestamp."""
@@ -334,15 +363,22 @@ class AgentSession:
         import asyncio
         task = asyncio.create_task(coro)
         self._pending_tasks.add(task)
-        task.add_done_callback(self._pending_tasks.discard)
+
+        def on_done(completed: asyncio.Task) -> None:
+            self._pending_tasks.discard(completed)
+            if not completed.cancelled():
+                completed.exception()
+
+        task.add_done_callback(on_done)
         return task
 
     async def _await_pending_tasks(self) -> None:
         """Await all pending fire-and-forget tasks and clear the set."""
         import asyncio
-        if self._pending_tasks:
-            await asyncio.gather(*self._pending_tasks, return_exceptions=True)
-            self._pending_tasks.clear()
+        while self._pending_tasks:
+            tasks = tuple(self._pending_tasks)
+            await asyncio.gather(*tasks, return_exceptions=True)
+            self._pending_tasks.difference_update(tasks)
 
     def start_session_timer(self) -> None:
         """Start the overall session deadline timer."""
@@ -385,6 +421,7 @@ class AgentSession:
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Exit the session context, requesting stop and closing metrics."""
         self._stop_requested = True
+        await self._await_pending_tasks()
         if self.metrics.end_time is None:
             self.metrics.end_time = time.monotonic()
 

@@ -38,6 +38,7 @@ class SupervisedTask:
     last_error: str | None = None
     last_started: float = field(default_factory=time.time)
     backoff: float = INITIAL_BACKOFF
+    next_restart_at: float = 0.0
     stopped: bool = False
     crashed: bool = False
 
@@ -125,8 +126,14 @@ class Watchdog:
                 logger.error("watchdog_monitor_error", error=str(exc), exc_info=True)
 
     async def _check_once(self) -> None:
+        now = time.time()
         for supervised in self._tasks.values():
-            if supervised.stopped or supervised.alive:
+            if supervised.stopped:
+                continue
+            if supervised.alive:
+                # Running healthily: reset the backoff so a crash streak that
+                # recovered does not keep throttling restarts forever.
+                supervised.backoff = INITIAL_BACKOFF
                 continue
 
             # Task is dead. Only resurrect it if it died from an exception;
@@ -135,9 +142,12 @@ class Watchdog:
                 supervised.stopped = True
                 continue
 
-            await asyncio.sleep(supervised.backoff)
+            if now < supervised.next_restart_at:
+                continue
+
             supervised.restarts += 1
             supervised.backoff = min(supervised.backoff * BACKOFF_FACTOR, MAX_BACKOFF)
+            supervised.next_restart_at = time.time() + supervised.backoff
             logger.warning(
                 "supervised_task_restarting",
                 name=supervised.name,
@@ -170,9 +180,13 @@ class Watchdog:
     def health(self) -> dict[str, Any]:
         tasks = [t.snapshot() for t in self._tasks.values()]
         expected = [t for t in tasks if not t["stopped"]]
+        # With no expected tasks there is nothing to supervise; that is only
+        # healthy when the watchdog has no registered tasks at all. If every
+        # registered task is stopped, the watchdog is degraded.
+        healthy = all(t["alive"] for t in expected) if expected else len(tasks) == 0
         return {
             "running": self._running,
-            "healthy": all(t["alive"] for t in expected),
+            "healthy": healthy,
             "total_tasks": len(tasks),
             "alive_tasks": sum(1 for t in tasks if t["alive"]),
             "total_restarts": sum(t["restarts"] for t in tasks),

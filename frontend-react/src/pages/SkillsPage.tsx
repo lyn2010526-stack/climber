@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Package, RefreshCw, AlertCircle, Power, Wrench, CheckCircle2, CircleSlash, FileText, CircleHelp } from 'lucide-react';
+import { Search, Package, RefreshCw, AlertCircle, Power, Wrench, CheckCircle2, CircleSlash, FileText, CircleHelp, SlidersHorizontal } from 'lucide-react';
 import { api } from '../api';
 import { useTranslation } from '../i18n';
 import { includesQuery } from '../lib/search';
@@ -9,6 +9,7 @@ import { Input } from '../components/ui/Input';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Card } from '../components/ui/Card';
 import { SkeletonList } from '../components/ui/Skeleton';
+import { SkillDetailModal } from '../components/skills/SkillDetailModal';
 
 interface Skill {
   id: number;
@@ -49,6 +50,7 @@ export function SkillsPage() {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [toggling, setToggling] = useState<string | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
+  const [detailSkill, setDetailSkill] = useState<Skill | null>(null);
 
   const fetchSkills = useCallback(async () => {
     setLoading(true);
@@ -77,7 +79,7 @@ export function SkillsPage() {
     setToggling(`skill-${skill.id}`);
     setToggleError(null);
     try {
-      await api.updateSkill(String(skill.id), { enabled: !skill.is_enabled });
+      await api.toggleSkill(String(skill.id), !skill.is_enabled);
       setSkills(prev => prev.map(s => s.id === skill.id ? { ...s, is_enabled: !s.is_enabled } : s));
     } catch (e) {
       setToggleError(e instanceof Error ? e.message : t('common.error'));
@@ -95,6 +97,7 @@ export function SkillsPage() {
         <PageHeader
           title={t('navigation.skills')}
           icon={<Package size={20} aria-hidden="true" />}
+          className="border-b border-[var(--color-border-subtle)] pb-[var(--space-4)] [&_h1]:text-[length:var(--text-base)] [&_h1]:md:text-[length:var(--text-base)] [&_p]:text-[var(--color-text-muted)]"
           actions={
             <Button variant="outline" size="sm" icon={<RefreshCw size={14} />} disabled={loading || toggling !== null} onClick={fetchSkills}>
               {t('common.refresh')}
@@ -210,6 +213,15 @@ export function SkillsPage() {
                   </div>
                   <SkillStatus enabled={skill.is_enabled} />
                   <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDetailSkill(skill)}
+                    aria-label={`${t('skills.manage', { defaultValue: 'Manage' })}: ${skill.name}`}
+                    icon={<SlidersHorizontal size={13} aria-hidden="true" />}
+                  >
+                    {t('skills.manage', { defaultValue: 'Manage' })}
+                  </Button>
+                  <Button
                     variant="outline"
                     size="sm"
                     onClick={() => toggleSkill(skill)}
@@ -228,6 +240,7 @@ export function SkillsPage() {
         )}
         </div>
       </div>
+      <SkillDetailModal skill={detailSkill} onClose={() => setDetailSkill(null)} />
     </div>
   );
 }

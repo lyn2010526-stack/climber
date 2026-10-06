@@ -31,6 +31,7 @@ from app.core.engine.dual_loop import (
 from app.core.engine.run_storage import RunStorage
 from app.core.profile import ProfileEvent, ProfileLoopService, ProfileSummary
 from app.core.profile.persistence import ProfileStore
+from app.core.profile.settings import NOTICE_VERSION
 from app.core.prompts.evolution import (
     EvolutionConfig,
     PromptEvolutionEngine,
@@ -57,6 +58,10 @@ HAS_PROMPT_HINTS = "prompt_hints" in ProfileSummary.__dataclass_fields__
 
 def _user_id() -> str:
     return str(uuid.uuid4())
+
+
+async def _enable_learning(user: str) -> None:
+    await ProfileStore().update_settings(user, enabled=True, consent_version=NOTICE_VERSION)
 
 
 def _profile_event(**kwargs: object) -> ProfileEvent:
@@ -92,6 +97,7 @@ def test_profile_summary_rates_follow_mixed_outcomes() -> None:
 
 async def test_profile_store_round_trip_through_database() -> None:
     user = _user_id()
+    await _enable_learning(user)
     store = ProfileStore()
     await store.record_event(
         user, instruction="fix the login bug", task_type="debugging", outcome="success"
@@ -136,6 +142,7 @@ async def test_profile_store_round_trip_through_database() -> None:
 
 async def test_profile_store_suggestions_are_non_empty_after_samples() -> None:
     user = _user_id()
+    await _enable_learning(user)
     store = ProfileStore()
     await store.record_event(
         user,
@@ -156,6 +163,7 @@ async def test_profile_store_suggestions_are_non_empty_after_samples() -> None:
 )
 async def test_profile_summary_exposes_prompt_hints() -> None:
     user = _user_id()
+    await _enable_learning(user)
     store = ProfileStore()
     await store.record_event(
         user, instruction="fix the login bug", task_type="debugging", outcome="success"
@@ -170,6 +178,7 @@ async def test_profile_summary_exposes_prompt_hints() -> None:
 )
 async def test_profile_store_record_run_mixed_outcomes() -> None:
     user = _user_id()
+    await _enable_learning(user)
     store = ProfileStore()
     await store.record_run(user, instruction="fix the login bug", outcome="success")
     await store.record_run(user, instruction="retry deploy", outcome="failure", retried=True)
@@ -319,6 +328,7 @@ async def test_load_returns_latest_generation_and_best_genome(tmp_path) -> None:
 
 async def test_profile_context_gated_by_confidence() -> None:
     user = _user_id()
+    await _enable_learning(user)
     coordinator = DualLoopCoordinator()
     assert await coordinator.profile_context(user, "fix the login bug") == ""
 
@@ -350,6 +360,7 @@ async def test_evolution_tick_threshold_and_repeat_safety() -> None:
 
 async def test_record_runs_then_evolution_tick_is_repeatable() -> None:
     user = _user_id()
+    await _enable_learning(user)
     coordinator = DualLoopCoordinator()
     for index in range(EVOLUTION_TICK_INTERVAL):
         outcome = "success" if index % 2 else "failure"
@@ -365,6 +376,7 @@ async def test_record_runs_then_evolution_tick_is_repeatable() -> None:
 
 async def test_record_run_outcome_maps_invalid_outcome_and_empty_instruction() -> None:
     user = _user_id()
+    await _enable_learning(user)
     coordinator = DualLoopCoordinator()
     await coordinator.record_run_outcome(user, "do things", outcome="nonsense")
     await coordinator.record_run_outcome(user, "   ", outcome="success")
@@ -446,6 +458,7 @@ async def test_engine_inject_profile_context_inserts_and_replaces_marker() -> No
     fake.next_context = "User behavior profile (advisory only)"
 
     session = _hook_session()
+    session.session_id = "session-archive"
     await engine._inject_profile_context(session, "fix the login bug")
     assert fake.context_calls == [("hook-user", "fix the login bug")]
     assert session.messages[0]["content"].startswith("<!-- PROFILE_CONTEXT -->")
@@ -484,6 +497,40 @@ async def test_engine_tick_evolution_forwards_user() -> None:
     engine._tick_evolution(_hook_session())
     await _drain(engine)
     assert fake.tick_calls == ["hook-user"]
+
+
+async def test_engine_archives_instruction_with_plain_language_parse(monkeypatch) -> None:
+    engine = _hook_engine()
+    session = _hook_session()
+    session.session_id = "session-archive"
+    session.current_turn_id = "turn-archive"
+    captured = {}
+
+    class FakeDB:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def commit(self):
+            return None
+
+    class FakeTrace:
+        id = "trace-archive"
+
+    async def fake_create(db, payload, **kwargs):
+        captured.update(payload)
+        return FakeTrace(), False
+
+    monkeypatch.setattr("app.storage.async_session", lambda: FakeDB())
+    monkeypatch.setattr("app.storage.repository_instruction_traces.create_trace", fake_create)
+    await engine._archive_instruction(session, "实现搜索，必须保留原文")
+    assert captured["raw_text"] == "实现搜索，必须保留原文"
+    assert captured["session_id"] == session.session_id
+    assert captured["turn_id"] == "turn-archive"
+    assert captured["task_spec"]["main_goal"] == "实现搜索，必须保留原文"
+    assert session._instruction_trace_id == "trace-archive"
 
 
 # --- Degradation paths ----------------------------------------------------------

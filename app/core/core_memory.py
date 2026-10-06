@@ -11,11 +11,20 @@ import xml.etree.ElementTree as ET
 
 import structlog
 from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 
 from app.storage import async_session
 from app.storage.models_memory import CoreMemoryBlock
 
 logger = structlog.get_logger()
+
+_MIN_BLOCK_LIMIT = 64
+_MAX_BLOCK_LIMIT = 4096
+
+
+def _clamp_block_limit(limit: int) -> int:
+    """Clamp a configured core-memory block limit into a safe range."""
+    return max(min(int(limit), _MAX_BLOCK_LIMIT), _MIN_BLOCK_LIMIT)
 
 
 class CoreMemoryService:
@@ -53,6 +62,7 @@ class CoreMemoryService:
         description: str = "",
         read_only: bool = False,
     ) -> CoreMemoryBlock:
+        limit = _clamp_block_limit(limit)
         async with async_session() as db:
             query = select(CoreMemoryBlock).where(
                 CoreMemoryBlock.user_id == user_id,
@@ -80,7 +90,22 @@ class CoreMemoryService:
                 block.limit = limit
                 block.description = description
                 block.read_only = read_only
-            await db.commit()
+            try:
+                await db.commit()
+            except IntegrityError:
+                # A concurrent create won the (user_id, agent_id, label) race.
+                # Reload the winner and apply the update instead of surfacing
+                # a 500.
+                await db.rollback()
+                result = await db.execute(query)
+                block = result.scalar_one_or_none()
+                if block is None:
+                    raise
+                block.value = value[:limit]
+                block.limit = limit
+                block.description = description
+                block.read_only = read_only
+                await db.commit()
             await db.refresh(block)
             return block
 

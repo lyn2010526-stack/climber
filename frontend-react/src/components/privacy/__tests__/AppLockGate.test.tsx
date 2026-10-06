@@ -33,24 +33,41 @@ async function enterDigits(user: ReturnType<typeof userEvent.setup>, digits: str
 }
 
 describe('AppLockGate', () => {
-  it('renders PinSetup first and unlocks after a consistent passcode', async () => {
+  it('mounts first-run enrollment over the app and settles unlocked once the passcode is confirmed', async () => {
     const user = userEvent.setup();
     render(
       <AppLockGate>
         <div data-testid="app-content">secret</div>
       </AppLockGate>,
     );
+    // The app stays mounted underneath the full-screen enrollment overlay.
+    expect(screen.getByTestId('app-content')).toBeInTheDocument();
     expect(screen.getByText('请输入六位数字密码')).toBeInTheDocument();
-    expect(screen.queryByTestId('app-content')).toBeNull();
+    await enterDigits(user, '135790');
+    await screen.findByText('请再次输入以确认');
     await enterDigits(user, '135790');
     await waitFor(() => {
-      expect(screen.getByText('请再次输入以确认')).toBeInTheDocument();
+      expect(screen.queryByText('请再次输入以确认')).toBeNull();
     });
-    await enterDigits(user, '135790');
+    expect(window.localStorage.getItem(PRIVACY_STORAGE_KEYS.pin)).not.toBeNull();
+    expect(window.sessionStorage.getItem(PRIVACY_STORAGE_KEYS.session)).toBe('1');
+    expect(screen.getByTestId('app-content')).toBeInTheDocument();
+  });
+
+  it('lets the first-run prompt be skipped without configuring a lock', async () => {
+    const user = userEvent.setup();
+    render(
+      <AppLockGate>
+        <div data-testid="app-content">secret</div>
+      </AppLockGate>,
+    );
+    await user.click(screen.getByRole('button', { name: '跳过' }));
     await waitFor(() => {
-      expect(screen.getByTestId('app-content')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '跳过' })).toBeNull();
     });
-    expect(window.localStorage.getItem(PRIVACY_STORAGE_KEYS.pin)).toMatch(/^v1\./);
+    expect(window.localStorage.getItem(PRIVACY_STORAGE_KEYS.pin)).toBeNull();
+    expect(window.localStorage.getItem(PRIVACY_STORAGE_KEYS.skipped)).toBe('1');
+    expect(screen.getByTestId('app-content')).toBeInTheDocument();
   });
 
   it('renders the lock screen while locked and keeps children unmounted', async () => {
@@ -68,6 +85,17 @@ describe('AppLockGate', () => {
       expect(screen.getByTestId('app-content')).toBeInTheDocument();
     });
     expect(window.sessionStorage.getItem(PRIVACY_STORAGE_KEYS.session)).toBe('1');
+  });
+
+  it('keeps existing PIN protection despite a legacy skip marker and a wrong PIN', async () => {
+    window.localStorage.setItem(PRIVACY_STORAGE_KEYS.pin, (await hashPin('135790')) ?? '');
+    window.localStorage.setItem(PRIVACY_STORAGE_KEYS.skipped, '1');
+    const user = userEvent.setup();
+    render(<AppLockGate><div data-testid="app-content">secret</div></AppLockGate>);
+    await enterDigits(user, '000000');
+    await waitFor(() => expect(screen.getByTestId('pin-error')).not.toBeEmptyDOMElement());
+    expect(screen.queryByTestId('app-content')).toBeNull();
+    expect(window.sessionStorage.getItem(PRIVACY_STORAGE_KEYS.session)).toBeNull();
   });
 
   it('shows the face button when a platform credential is registered and unlocks with it', async () => {

@@ -2,16 +2,19 @@ import { useCallback } from 'react';
 import { MobileChatInterface } from '../components/mobile/MobileChatInterface';
 import { useChat } from '../useChat';
 import { useDefaultSession } from '../hooks/useDefaultSession';
+import { useI18n } from '../i18n';
 import { cacheManager } from '../components/mobile/LazyImage';
+import type { ChatAttachmentPayload } from '../useChat';
 
 export function MobileChatPage() {
+  const { t } = useI18n();
   const { sessionId, creationError } = useDefaultSession();
   const { messages, isStreaming, error, sendMessage, stopStreaming, refresh } = useChat(sessionId);
 
-  const handleSend = useCallback(async (message: string, attachments?: string[]) => {
-    if (!sessionId) throw new Error(creationError || '会话尚未就绪，请稍后重试');
+  const handleSend = useCallback(async (message: string, attachments?: string[], files?: ChatAttachmentPayload[]) => {
+    if (!sessionId) throw new Error(creationError || t('mobile_chat.session_not_ready'));
     if (attachments?.length) {
-      await sendMessage(message, attachments);
+      await sendMessage(message, attachments, files);
     } else {
       await sendMessage(message);
     }
@@ -20,7 +23,7 @@ export function MobileChatPage() {
       timestamp: Date.now(),
       sessionId,
     }).catch(() => undefined);
-  }, [sessionId, creationError, sendMessage]);
+  }, [sessionId, creationError, t, sendMessage]);
 
   const handleStop = useCallback(() => {
     stopStreaming();

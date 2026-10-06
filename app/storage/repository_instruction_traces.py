@@ -110,13 +110,16 @@ async def create_trace(
 
     trace = InstructionTrace(
         session_id=session_id,
+        turn_id=payload.get("turn_id"),
         user_id=user_id,
         raw_text=raw_text,
         text_hash=text_hash,
         intent_summary=payload.get("intent_summary"),
         task_spec=payload.get("task_spec"),
+        goal_preserved=bool(payload.get("goal_preserved", False)),
         source=str(payload.get("source") or InstructionSource.CHAT.value),
         token_count=(token_count if token_count is not None else estimate_token_count(raw_text)),
+        status=str(payload.get("status") or "received"),
     )
     db.add(trace)
     await db.flush()
@@ -245,6 +248,64 @@ async def list_unarchived(
         stmt.order_by(InstructionTrace.created_at.asc(), InstructionTrace.id.asc()).limit(limit)
     )
     return result.scalars().all()
+
+
+async def update_trace_outcome(
+    db: AsyncSession,
+    *,
+    turn_id: str,
+    status: str,
+    outcome: str | None = None,
+) -> int:
+    """Close all traces belonging to one durable task turn."""
+    now = datetime.now(UTC).replace(tzinfo=None)
+    values: dict[str, object] = {"status": status, "completed_at": now, "updated_at": now}
+    if outcome is not None:
+        values["outcome"] = outcome
+    result = await db.execute(
+        update(InstructionTrace).where(InstructionTrace.turn_id == turn_id).values(**values)
+    )
+    return int(result.rowcount or 0)
+
+
+async def retrieve_traces(
+    db: AsyncSession,
+    *,
+    user_id: str,
+    query: str = "",
+    session_id: str | None = None,
+    limit: int = 20,
+    half_life_days: float = 30.0,
+) -> Sequence[InstructionTrace]:
+    """Retrieve traces with bounded keyword matching and time decay."""
+    if limit < 1:
+        return []
+    if half_life_days <= 0:
+        raise ValueError("half_life_days must be positive")
+    stmt = select(InstructionTrace).where(InstructionTrace.user_id == user_id)
+    if session_id is not None:
+        stmt = stmt.where(InstructionTrace.session_id == session_id)
+    rows = list((await db.execute(stmt)).scalars().all())
+    terms = {word.lower() for word in query.split() if len(word) > 2}
+    now = datetime.now(UTC).replace(tzinfo=None)
+
+    def score(row: InstructionTrace) -> float:
+        age_days = max(0.0, (now - (row.created_at or now)).total_seconds() / 86400)
+        recency = 0.5 ** (age_days / half_life_days)
+        text = f"{row.raw_text} {row.intent_summary or ''}".lower()
+        matches = sum(term in text for term in terms)
+        return recency * (1.0 + matches / max(1, len(terms)))
+
+    rows.sort(key=score, reverse=True)
+    selected = rows[:limit]
+    if selected:
+        await db.execute(
+            update(InstructionTrace)
+            .where(InstructionTrace.id.in_([row.id for row in selected]))
+            .values(retrieval_count=InstructionTrace.retrieval_count + 1, last_retrieved_at=now)
+        )
+        await db.flush()
+    return selected
 
 
 async def mark_archived(

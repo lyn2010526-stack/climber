@@ -14,6 +14,7 @@ from app.api.v1 import feedback as feedback_router
 from app.api.v1 import generic as generic_router
 from app.api.v1 import instruction_traces as instruction_traces_router
 from app.api.v1 import mcp as mcp_router
+from app.api.v1 import memory_archive as memory_archive_router
 from app.api.v1 import model_discovery as model_discovery_router
 from app.api.v1 import notifications as notifications_router
 from app.api.v1 import permissions as permissions_router
@@ -23,6 +24,7 @@ from app.api.v1 import scheduler as scheduler_router
 from app.api.v1 import sessions as sessions_router
 from app.api.v1 import settings as settings_router
 from app.api.v1 import skills_router as skills_router_module
+from app.api.v1 import ui_rules as ui_rules_router
 from app.api.v1 import workflows as workflows_router
 from app.api.v1.routes.arcbench import router as arcbench_router
 from app.api.v1.routes.research import router as research_router
@@ -30,6 +32,7 @@ from app.core.reasoning import api as reasoning_router
 from app.core.security import api as security_router
 
 router = APIRouter()
+router.include_router(ui_rules_router.router)
 router.include_router(chat_router.router, prefix="/sessions", tags=["sessions"])
 router.include_router(sessions_router.router, prefix="/sessions", tags=["sessions"])
 router.include_router(auth_management_router.router)
@@ -47,6 +50,7 @@ router.include_router(
     tags=["instruction-traces"],
 )
 router.include_router(profile_router.router, prefix="/profile", tags=["profile"])
+router.include_router(memory_archive_router.router, tags=["memory-archive"])
 router.include_router(notifications_router.router, prefix="/notifications", tags=["notifications"])
 router.include_router(doctor_router.router, prefix="/doctor", tags=["doctor"])
 router.include_router(reasoning_router.router, prefix="/reason", tags=["reasoning"])

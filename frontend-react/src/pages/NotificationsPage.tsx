@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { Bell, Send, CheckCircle, AlertCircle, BellRing } from 'lucide-react';
 import { api } from '../api';
+import { useI18n } from '../i18n';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 
 export function NotificationsPage() {
-  const [title, setTitle] = useState('Climber 通知测试');
-  const [message, setMessage] = useState('这是一条测试通知');
+  const { t } = useI18n();
+  const [title, setTitle] = useState(t('notifications_page.default_title'));
+  const [message, setMessage] = useState(t('notifications_page.default_message'));
   const [result, setResult] = useState<{ ok: boolean; error?: string } | null>(null);
   const [sending, setSending] = useState(false);
 
@@ -20,7 +22,7 @@ export function NotificationsPage() {
       const data = await api.sendNotification(title, message);
       setResult(data);
     } catch (e) {
-      setResult({ ok: false, error: e instanceof Error ? e.message : '发送失败' });
+      setResult({ ok: false, error: e instanceof Error ? e.message : t('notifications_page.send_failed_fallback') });
     } finally {
       setSending(false);
     }
@@ -34,7 +36,7 @@ export function NotificationsPage() {
       const data = await api.testNotification();
       setResult(data);
     } catch (e) {
-      setResult({ ok: false, error: e instanceof Error ? e.message : '测试失败' });
+      setResult({ ok: false, error: e instanceof Error ? e.message : t('notifications_page.test_failed_fallback') });
     } finally {
       setSending(false);
     }
@@ -44,39 +46,40 @@ export function NotificationsPage() {
     <div className="h-full overflow-y-auto page-transition">
       <div className="p-4 md:p-6 max-w-3xl mx-auto">
         <PageHeader
-          title="通知中心"
+          title={t('notifications_page.title')}
           icon={<Bell size={20} />}
+          className="border-b border-[var(--color-border-subtle)] pb-[var(--space-4)] [&_h1]:text-[length:var(--text-base)] [&_h1]:md:text-[length:var(--text-base)] [&_p]:text-[var(--color-text-muted)]"
         />
 
         <div className="space-y-4">
           <Card variant="default">
             <CardContent className="p-4">
               <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">
-                发送自定义通知
+                {t('notifications_page.send_custom')}
               </h3>
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="notification-title" className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">
-                    标题
+                  <label htmlFor="notification-title" className="block text-[length:var(--text-sm)] font-medium text-[var(--color-text-secondary)] mb-1.5">
+                    {t('notifications_page.title_label')}
                   </label>
                   <Input
                     id="notification-title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="通知标题"
+                    placeholder={t('notifications_page.title_placeholder')}
                   />
                 </div>
                 <div>
-                  <label htmlFor="notification-message" className="block text-xs font-medium text-[var(--color-text-secondary)] mb-1.5">
-                    内容
+                  <label htmlFor="notification-message" className="block text-[length:var(--text-sm)] font-medium text-[var(--color-text-secondary)] mb-1.5">
+                    {t('notifications_page.message_label')}
                   </label>
                   <textarea
                     id="notification-message"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     rows={3}
-                    className="w-full rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] px-3 py-2.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)] transition-all duration-150 resize-none"
-                    placeholder="通知内容"
+                    className="w-full rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] px-3 py-2.5 text-[length:var(--text-sm)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20 focus:border-[var(--color-accent)] transition-all duration-150 resize-none motion-reduce:transition-none"
+                    placeholder={t('notifications_page.message_placeholder')}
                   />
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -87,7 +90,7 @@ export function NotificationsPage() {
                     disabled={!title.trim() || !message.trim()}
                     icon={<Send size={14} />}
                   >
-                    发送通知
+                    {t('notifications_page.send')}
                   </Button>
                   <Button
                     size="sm"
@@ -96,7 +99,7 @@ export function NotificationsPage() {
                     loading={sending}
                     icon={<BellRing size={14} />}
                   >
-                    系统测试
+                    {t('notifications_page.system_test')}
                   </Button>
                 </div>
               </div>
@@ -120,12 +123,12 @@ export function NotificationsPage() {
                 <AlertCircle size={18} className="text-[var(--color-error)] shrink-0" />
               )}
               <p className={`text-sm ${result.ok ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}>
-                {result.ok ? '通知已发送' : `发送失败: ${result.error || '未知错误'}`}
+                {result.ok ? t('notifications_page.sent') : t('notifications_page.send_failed', { error: result.error || t('notifications_page.unknown_error') })}
               </p>
             </Card>
           )}
 
-          <p className="text-xs text-[var(--color-text-muted)]">通知由后端主机发送，显示结果取决于该主机的桌面通知支持。</p>
+          <p className="text-xs text-[var(--color-text-muted)]">{t('notifications_page.footer_hint')}</p>
         </div>
       </div>
     </div>

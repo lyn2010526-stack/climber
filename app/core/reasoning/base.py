@@ -102,6 +102,8 @@ class Candidate(BaseModel):
     round_created: int = 0
     duration_ms: float = 0.0
     metadata: dict[str, Any] = Field(default_factory=dict)
+    token_usage: dict[str, Any] = Field(default_factory=dict)
+    estimated_cost: float = 0.0
 
 
 class EdgeCase(BaseModel):

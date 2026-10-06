@@ -3,25 +3,29 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import importlib.util
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 import structlog
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy.exc import IntegrityError
 
 from app.api.v1 import router as api_router
-from app.api.v1.routes.websocket import websocket_router
 from app.config import settings
 from app.core.di import ScopeContext
 from app.core.di import register as di_register
 from app.core.di import resolve as di_resolve
+from app.core.error_handlers import register_exception_handlers
 from app.core.interfaces import IExecutor, IModelAdapter, ISkillRegistry, IToolRegistry
-from app.core.logging_setup import configure_logging, get_recent_logs, write_crash_dump
+from app.core.logging_setup import configure_logging, get_recent_logs
 from app.core.memory_guardian import get_memory_guardian
 from app.core.observability.api import router as observability_router
 from app.core.watchdog import get_watchdog
@@ -61,7 +65,6 @@ def _register_core_services() -> None:
         WorkflowExecutorAdapter,
     )
     from app.core.sandbox import SandboxConfig, SandboxExecutor
-    from app.core.scheduler import TaskScheduler
     from app.core.skill_composition import SkillComposer
     from app.models.registry import ModelRegistry
     from app.multi_agent.crew import Crew
@@ -82,7 +85,6 @@ def _register_core_services() -> None:
     sandbox = SandboxExecutor(SandboxConfig())
     agent_engine = AgentEngine(model_registry=model_registry, tool_registry=tool_registry_instance)
     auto_loop_engine = AutoLoopEngine()
-    task_scheduler = TaskScheduler()
 
     di_register(IModelAdapter, model_registry)
     di_register(IToolRegistry, tool_registry_instance)
@@ -94,7 +96,6 @@ def _register_core_services() -> None:
     di_register("SandboxExecutor", sandbox)
     di_register("AgentEngine", agent_engine)
     di_register("AutoLoopEngine", auto_loop_engine)
-    di_register("TaskScheduler", task_scheduler)
 
     workflow_engine = WorkflowEngine(engine=agent_engine, model_registry=model_registry)
     skill_composer = SkillComposer(skill_registry=skill_registry)
@@ -121,6 +122,23 @@ def _local_ip() -> str:
             return "127.0.0.1"
 
 
+SHUTDOWN_STEP_TIMEOUT = 10.0
+
+
+async def _run_cleanup_step(name: str, coro) -> None:
+    """Run one teardown step with a hard timeout and failure isolation.
+
+    A hanging or raising teardown coroutine must never block or abort the
+    remaining teardown steps, so each step is individually timed and guarded.
+    """
+    try:
+        await asyncio.wait_for(coro, timeout=SHUTDOWN_STEP_TIMEOUT)
+    except TimeoutError:
+        logger.warning("lifecycle_teardown_timeout", step=name)
+    except Exception as exc:
+        logger.warning("lifecycle_teardown_failed", step=name, error=str(exc))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log_dir = configure_logging(settings.app_log_level)
@@ -128,6 +146,12 @@ async def lifespan(app: FastAPI):
 
     with ScopeContext("app_lifespan"):
         _register_core_services()
+
+        cleanups: list[tuple[str, Callable[[], Any]]] = []
+
+        def defer(name: str, coro_factory: Callable[[], Any]) -> None:
+            """Register a teardown step to run in reverse order."""
+            cleanups.append((name, coro_factory))
 
         try:
             await init_db()
@@ -144,101 +168,149 @@ async def lifespan(app: FastAPI):
                     admin_password_set=True,
                     bootstrap_password_generated=admin_creds.get("bootstrap_generated", False),
                 )
-        except Exception as e:
-            logger.warning("Database initialization failed", error=str(e))
 
-        redis = await get_redis()
-        if redis:
-            logger.info("Redis cache connected")
-        else:
-            logger.info("Redis unavailable, using in-process cache")
+            redis = await get_redis()
+            if redis:
+                logger.info("Redis cache connected")
+            else:
+                logger.info("Redis unavailable, using in-process cache")
+            defer("redis", close_redis)
 
-        register_builtins()
+            register_builtins()
 
-        auto_loop_engine = di_resolve("AutoLoopEngine")
-        _wire_auto_loop_runner(auto_loop_engine)
-        recovered = await auto_loop_engine.recover_interrupted_sessions()
-        if recovered:
-            logger.info("Recovered interrupted sessions", count=recovered)
+            auto_loop_engine = di_resolve("AutoLoopEngine")
+            _wire_auto_loop_runner(auto_loop_engine)
+            recovered = await auto_loop_engine.recover_interrupted_sessions()
+            if recovered:
+                logger.info("Recovered interrupted sessions", count=recovered)
+            # R12-H42: teardown must cancel and await the auto-loop monitor and
+            # every running task so CANCELLED status is persisted on shutdown.
+            defer("auto_loop", auto_loop_engine.stop)
 
-        task_scheduler = di_resolve("TaskScheduler")
-        watchdog = get_watchdog()
-        watchdog.register("scheduler", lambda: _run_scheduler(task_scheduler))
-        watchdog.register("auto_loop", auto_loop_engine.run_forever)
-        await watchdog.start()
-        logger.info("Task scheduler started under watchdog")
+            watchdog = get_watchdog()
+            watchdog.register("auto_loop", auto_loop_engine.run_forever)
+            await watchdog.start()
+            defer("watchdog", watchdog.stop)
+            logger.info("Watchdog started")
 
-        guardian = get_memory_guardian()
+            guardian = get_memory_guardian()
 
-        async def _relieve_memory() -> None:
-            from app.tools.browser_pool import get_browser_pool
-            reclaimed = await get_browser_pool().reclaim_idle()
-            logger.info("memory_relief_applied", browser_sessions_reclaimed=reclaimed)
+            async def _relieve_memory() -> None:
+                from app.tools.browser_pool import get_browser_pool
+                reclaimed = await get_browser_pool().reclaim_idle()
+                logger.info("memory_relief_applied", browser_sessions_reclaimed=reclaimed)
 
-        guardian.register_relief(_relieve_memory)
+            guardian.register_relief(_relieve_memory)
 
-        async def _evict_caches() -> None:
+            async def _evict_caches() -> None:
+                try:
+                    from app.skills.memory_manager import persistent_memory
+
+                    cleared = persistent_memory.clear()
+                    logger.info("memory_relief_caches_evicted", cache="persistent_memory", entries=cleared)
+                except Exception as exc:
+                    logger.warning("memory_relief_cache_evict_failed", cache="persistent_memory", error=str(exc))
+                try:
+                    di_resolve("AgentEngine").tool_prioritizer.clear_caches()
+                    logger.info("memory_relief_caches_evicted", cache="tool_prioritizer")
+                except Exception as exc:
+                    logger.warning("memory_relief_cache_evict_failed", cache="tool_prioritizer", error=str(exc))
+
+            guardian.register_relief(_evict_caches)
+            await guardian.start()
+            defer("memory_guardian", guardian.stop)
+
             try:
-                from app.skills.memory_manager import persistent_memory
+                from app.tools.browser_pool import get_browser_pool
 
-                cleared = persistent_memory.clear()
-                logger.info("memory_relief_caches_evicted", cache="persistent_memory", entries=cleared)
+                pool = get_browser_pool()
+                defer("browser_pool", pool.close_all)
             except Exception as exc:
-                logger.warning("memory_relief_cache_evict_failed", cache="persistent_memory", error=str(exc))
+                logger.warning("browser_pool_teardown_setup_failed", error=str(exc))
+
             try:
-                di_resolve("AgentEngine").tool_prioritizer.clear_caches()
-                logger.info("memory_relief_caches_evicted", cache="tool_prioritizer")
-            except Exception as exc:
-                logger.warning("memory_relief_cache_evict_failed", cache="tool_prioritizer", error=str(exc))
+                from app.services.telegram_bot import configure_bot, start_telegram_bot
+                model_registry = di_resolve("ModelRegistry")
+                tool_registry = di_resolve("ToolRegistry")
+                configure_bot(model_registry, tool_registry)
+                telegram_started = await start_telegram_bot()
+                if telegram_started:
+                    logger.info("Telegram remote control enabled")
+                    from app.services.telegram_bot import stop_telegram_bot
+                    defer("telegram_bot", stop_telegram_bot)
+            except Exception as e:
+                logger.warning("Telegram bot startup skipped", error=str(e))
 
-        guardian.register_relief(_evict_caches)
-        await guardian.start()
+            from app.services.notifications import notification_service
+            app.state.notification_service = notification_service
+
+            from app.core.execution.event_bus import get_task_event_bus
+
+            event_bus = get_task_event_bus()
+            di_register("EventBus", event_bus)
+            app.state.event_bus = event_bus
+            defer("event_bus", event_bus.close)
+
+            # R12-H43: teardown must drain tracked background work (task worker
+            # runs plus engine fire-and-forget spawns) before closing the DB.
+            # Registered last-to-run-first so drain precedes engine dispose.
+            defer("db_engine", _dispose_db_engine)
+            defer("background_tasks", _drain_background_tasks)
+
+            APP_INFO.info({"version": _APP_VERSION, "debug": str(settings.app_debug)})
+
+            if settings.enable_lan_access:
+                logger.info("LAN access enabled", url=f"http://{_local_ip()}:{settings.port}")
+        except Exception:
+            logger.error("startup failed, rolling back started services in reverse order", exc_info=True)
+            for name, coro_factory in reversed(cleanups):
+                await _run_cleanup_step(name, coro_factory())
+            raise
 
         try:
-            from app.services.telegram_bot import configure_bot, start_telegram_bot
-            model_registry = di_resolve("ModelRegistry")
-            tool_registry = di_resolve("ToolRegistry")
-            configure_bot(model_registry, tool_registry)
-            telegram_started = await start_telegram_bot()
-            if telegram_started:
-                logger.info("Telegram remote control enabled")
-        except Exception as e:
-            logger.warning("Telegram bot startup skipped", error=str(e))
-
-        from app.services.notifications import notification_service
-        app.state.notification_service = notification_service
-
-        APP_INFO.info({"version": _APP_VERSION, "debug": str(settings.app_debug)})
-
-        if settings.enable_lan_access:
-            logger.info("LAN access enabled", url=f"http://{_local_ip()}:{settings.port}")
-
-        yield
-
-        await watchdog.stop()
-        await guardian.stop()
-        try:
-            from app.tools.browser_pool import get_browser_pool
-            await get_browser_pool().close_all()
-        except Exception as e:
-            logger.warning("Browser pool teardown failed", error=str(e))
-        try:
-            from app.services.telegram_bot import stop_telegram_bot
-            await stop_telegram_bot()
-        except Exception as exc:
-            logger.warning("main.telegram_bot_stop_failed", error=str(exc))
-        await close_redis()
-        from app.models.anthropic_adapter import AnthropicAdapter
-        from app.models.openai_adapter import OpenAIAdapter
-        await OpenAIAdapter.close_client()
-        await AnthropicAdapter.close_client()
-        logger.info("Agent Engine shutting down")
+            yield
+        finally:
+            for name, coro_factory in reversed(cleanups):
+                await _run_cleanup_step(name, coro_factory())
+            from app.models.anthropic_adapter import AnthropicAdapter
+            from app.models.openai_adapter import OpenAIAdapter
+            await _run_cleanup_step("openai_adapter_client", OpenAIAdapter.close_client())
+            await _run_cleanup_step("anthropic_adapter_client", AnthropicAdapter.close_client())
+            logger.info("Agent Engine shutting down")
 
 
-async def _run_scheduler(scheduler):
-    while True:
-        await scheduler.run_pending()
-        await asyncio.sleep(30)
+async def _drain_background_tasks() -> None:
+    """Wait for tracked background work to settle before closing resources.
+
+    Covers the task worker's active runs and the agent engine's fire-and-forget
+    spawns (notifications, memory reflection, evolution ticks). A bounded timeout
+    keeps shutdown fast even when a handler hangs.
+    """
+    pending: list[asyncio.Task] = []
+    with contextlib.suppress(Exception):
+        from app.core.task_worker import task_manager
+
+        pending.extend(task_manager._active_tasks.values())  # noqa: SLF001
+    with contextlib.suppress(Exception):
+        agent_engine = di_resolve("AgentEngine")
+        pending.extend(agent_engine._background_tasks)  # noqa: SLF001
+    if not pending:
+        return
+    logger.info("main.draining_background_tasks", count=len(pending))
+    done, _ = await asyncio.wait(pending, timeout=SHUTDOWN_STEP_TIMEOUT)
+    for task in done:
+        if not task.cancelled() and task.exception() is not None:
+            logger.warning("main.background_task_failed", error=str(task.exception()))
+
+
+async def _dispose_db_engine() -> None:
+    """Release the SQLAlchemy engine's connection pool."""
+    try:
+        from app.storage import engine as _db_engine
+
+        await _db_engine.dispose()
+    except Exception as exc:
+        logger.warning("main.db_engine_dispose_failed", error=str(exc))
 
 
 def _wire_auto_loop_runner(auto_loop_engine) -> None:
@@ -294,13 +366,8 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v1")
 
 app.include_router(observability_router)
-for websocket_route in websocket_router.routes:
-    app.add_api_websocket_route(
-        f"/api/v1{websocket_route.path}",
-        websocket_route.endpoint,
-        name=websocket_route.name,
-        dependencies=websocket_route.dependencies,
-    )
+
+register_exception_handlers(app)
 
 
 def create_app() -> FastAPI:
@@ -310,27 +377,6 @@ def create_app() -> FastAPI:
     tests and tooling can obtain the configured app through a stable API.
     """
     return app
-
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    dump = write_crash_dump(exc, {"path": request.url.path, "method": request.method})
-    logger.error("Unhandled exception", error=str(exc), error_type=type(exc).__name__, path=request.url.path, crash_dump=str(dump) if dump else None, exc_info=True)
-    return JSONResponse(status_code=500, content={"detail": "Internal server error", "type": "internal_error"})
-
-
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "type": "http_error"})
-
-
-@app.exception_handler(IntegrityError)
-async def integrity_error_handler(request: Request, exc: IntegrityError):
-    logger.warning("Database integrity constraint rejected request", path=request.url.path)
-    return JSONResponse(
-        status_code=409,
-        content={"detail": "Request conflicts with existing or related data", "type": "integrity_error"},
-    )
 
 
 @app.get("/health")
@@ -372,9 +418,12 @@ async def health() -> dict:
 
     degraded = (
         not checks.get("database", {}).get("connected", False)
+        or not checks.get("database", {}).get("schema_ready", True)
         or not checks.get("watchdog", {}).get("healthy", True)
     )
     checks["status"] = "degraded" if degraded else "ok"
+    if degraded:
+        return JSONResponse(status_code=503, content=checks)
     return checks
 
 

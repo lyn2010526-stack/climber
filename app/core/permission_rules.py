@@ -14,6 +14,7 @@ list_dir / list_directory 等跨命名空间的别名指向同一能力，规则
 from __future__ import annotations
 
 import fnmatch
+import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -35,6 +36,14 @@ class PermissionMode(StrEnum):
     AUTO = "auto"                # 全自动（有分类器安全检查）
     BYPASS = "bypass"            # 跳过所有权限检查
     STRICT = "strict"            # 严格模式：未显式允许即拒绝
+
+
+class PermissionTier(StrEnum):
+    """User-facing capability ceiling for the three security levels."""
+
+    READ_ONLY = "read_only"
+    PARTIAL_WRITE = "partial_write"
+    FULL_WRITE = "full_write"
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +102,7 @@ _EDIT_MODE_TOOLS: frozenset[str] = frozenset(
 # 计划模式自动放行的只读工具
 _PLAN_READ_TOOLS: frozenset[str] = frozenset({"read_file", "list_directory", "search"})
 # 默认模式自动放行的只读工具
-_DEFAULT_READ_TOOLS: frozenset[str] = _PLAN_READ_TOOLS | {"glob"}
+_DEFAULT_READ_TOOLS: frozenset[str] = _FILE_READ_TOOLS
 
 _GLOB_CHARS: frozenset[str] = frozenset("*?[")
 
@@ -136,8 +145,8 @@ class PermissionRule:
             return False
 
         # 如果有参数模式，检查参数匹配
-        if self.pattern and arguments:
-            return self._match_pattern(target, arguments)
+        if self.pattern:
+            return self._match_pattern(target, arguments or {})
 
         return True
 
@@ -170,45 +179,52 @@ class PermissionConfig:
     rules: list[PermissionRule] = field(default_factory=list)
     allowed_tools: list[str] = field(default_factory=list)  # Crush 风格的工具白名单
     denied_tools: list[str] = field(default_factory=list)   # Crush 风格的工具黑名单
+    tier: PermissionTier = PermissionTier.FULL_WRITE
 
     def evaluate(self, tool_name: str, arguments: dict[str, Any] | None = None) -> RuleDecision:
         """评估工具调用的权限决策
 
-        评估顺序: 模式快捷判断 -> denied_tools 黑名单 -> deny 规则 -> ask 规则
-        -> allowed_tools 白名单 -> allow 规则 -> 模式兜底。
+        评估顺序: tier 上限 -> denied_tools 黑名单 -> deny 规则 -> ask 规则
+        -> 模式快捷判断 -> allowed_tools 白名单 -> allow 规则 -> 模式兜底。
         DENY 优先于白名单，STRICT 模式下未显式允许即拒绝。
         """
         tool = normalize_tool_name(tool_name)
 
-        # 模式级别快速判断
-        if self.mode == PermissionMode.BYPASS:
-            return RuleDecision.ALLOW
-        if self.mode == PermissionMode.AUTO:
-            # auto 模式下除了高危操作外都允许
-            if self._is_high_risk(tool, arguments):
-                return RuleDecision.ASK
-            return RuleDecision.ALLOW
-        if self.mode == PermissionMode.ACCEPT_EDITS and tool in _EDIT_MODE_TOOLS:
-            return RuleDecision.ALLOW
-        if self.mode == PermissionMode.PLAN:
-            # 计划模式只允许读取
-            if tool in _PLAN_READ_TOOLS:
-                return RuleDecision.ALLOW
+        # The tier is a ceiling. Existing deny/ask rules remain authoritative,
+        # while the default read-only tier cannot silently gain write access.
+        tier_decision = self._tier_decision(tool, arguments)
+        if tier_decision == RuleDecision.DENY:
+            return RuleDecision.DENY
+        if self.mode == PermissionMode.PLAN and tool not in _FILE_READ_TOOLS:
             return RuleDecision.DENY
 
-        # 检查 Crush 风格的黑名单
         if self._matches_tool_list(self.denied_tools, tool):
             return RuleDecision.DENY
 
-        # 收集匹配规则并按决策优先级排序: deny 优先
         priority = {RuleDecision.DENY: 0, RuleDecision.ASK: 1, RuleDecision.ALLOW: 2}
         matched_rules = [rule for rule in self.rules if rule.matches(tool, arguments)]
         matched_rules.sort(key=lambda r: priority.get(r.decision, 1))
         top_decision = matched_rules[0].decision if matched_rules else None
-
-        # deny / ask 规则先于白名单生效
         if top_decision in (RuleDecision.DENY, RuleDecision.ASK):
             return top_decision
+        if tier_decision == RuleDecision.ASK:
+            return RuleDecision.ASK
+
+        # 模式级别快速判断
+        if self.mode == PermissionMode.BYPASS:
+            return tier_decision or RuleDecision.ALLOW
+        if self.mode == PermissionMode.AUTO:
+            # auto 模式下除了高危操作外都允许
+            if self._is_high_risk(tool, arguments):
+                return RuleDecision.ASK
+            return tier_decision or RuleDecision.ALLOW
+        if self.mode == PermissionMode.ACCEPT_EDITS and tool in _EDIT_MODE_TOOLS:
+            return tier_decision or RuleDecision.ALLOW
+        if self.mode == PermissionMode.PLAN:
+            # 计划模式只允许读取
+            if tool in _FILE_READ_TOOLS:
+                return RuleDecision.ALLOW
+            return RuleDecision.DENY
 
         whitelisted = self._matches_tool_list(self.allowed_tools, tool)
         allow_matched = top_decision == RuleDecision.ALLOW
@@ -231,7 +247,30 @@ class PermissionConfig:
             # 默认模式: 读取允许，其他需要确认
             return RuleDecision.ALLOW
 
-        return RuleDecision.ASK
+        return tier_decision or RuleDecision.ASK
+
+    def _tier_decision(
+        self, tool_name: str, arguments: dict[str, Any] | None,
+    ) -> RuleDecision | None:
+        """Return the tier ceiling without overriding explicit deny rules."""
+        tool = normalize_tool_name(tool_name)
+        if tool in _FILE_READ_TOOLS:
+            return None
+        if self.tier == PermissionTier.READ_ONLY:
+            return RuleDecision.DENY
+        if self.tier == PermissionTier.PARTIAL_WRITE:
+            if tool not in _FILE_WRITE_TOOLS:
+                return RuleDecision.DENY
+            if tool in _FILE_WRITE_TOOLS:
+                path = (arguments or {}).get("path", (arguments or {}).get("file_path", ""))
+                if not isinstance(path, str) or not path:
+                    return RuleDecision.ASK
+                path = os.path.abspath(path)
+                if any(path == root or path.startswith(root + "/")
+                       for root in ("/etc", "/root", "/proc", "/sys", "/dev")):
+                    return RuleDecision.DENY
+                return None
+        return None
 
     def _matches_tool_list(self, names: list[str], tool: str) -> bool:
         """工具名是否命中给定名单 — 名单项与工具名都规范化，支持 glob"""
@@ -326,6 +365,7 @@ class PermissionConfig:
             ],
             "allowed_tools": list(self.allowed_tools),
             "denied_tools": list(self.denied_tools),
+            "tier": self.tier.value,
         }
 
     @classmethod
@@ -335,6 +375,10 @@ class PermissionConfig:
             mode = PermissionMode(data.get("mode", PermissionMode.DEFAULT.value))
         except ValueError:
             mode = PermissionMode.DEFAULT
+        try:
+            tier = PermissionTier(data.get("tier", PermissionTier.FULL_WRITE.value))
+        except ValueError:
+            tier = PermissionTier.READ_ONLY
         rules: list[PermissionRule] = []
         for r in data.get("rules") or []:
             try:
@@ -354,6 +398,7 @@ class PermissionConfig:
             rules=rules,
             allowed_tools=list(data.get("allowed_tools") or []),
             denied_tools=list(data.get("denied_tools") or []),
+            tier=tier,
         )
 
 
@@ -361,6 +406,7 @@ def get_default_config() -> PermissionConfig:
     """获取默认权限配置"""
     return PermissionConfig(
         mode=PermissionMode.DEFAULT,
+        tier=PermissionTier.FULL_WRITE,
         rules=[
             # 读取操作默认允许
             PermissionRule(RuleDecision.ALLOW, "read_file"),

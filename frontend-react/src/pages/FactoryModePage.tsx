@@ -33,9 +33,9 @@ type RunPhase = 'idle' | 'planning' | 'running' | 'synthesizing' | 'done' | 'fai
 interface FactoryAgent {
   id: string;
   name: string;
-  provider: string;
-  model_id: string;
-  is_active: boolean;
+  provider?: string | null;
+  model_id?: string | null;
+  is_active?: boolean;
 }
 
 const SKILLS = [
@@ -445,7 +445,7 @@ export function FactoryModePage() {
                     )}
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                    <div className="rounded-xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] px-3 py-2">
+                    <div className="rounded-[var(--radius-lg)] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] px-3 py-2">
                       <p className="text-[var(--color-text-muted)] mb-1">{t('factory_mode.delivery.acceptance')}</p>
                       {arcbench.acceptance?.ran ? (
                         <p className="text-[var(--color-text-primary)] tabular-nums">
@@ -456,19 +456,19 @@ export function FactoryModePage() {
                         </p>
                       ) : <p className="text-[var(--color-text-muted)]">{t('factory_mode.delivery.not_run')}</p>}
                     </div>
-                    <div className="rounded-xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] px-3 py-2">
+                    <div className="rounded-[var(--radius-lg)] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] px-3 py-2">
                       <p className="text-[var(--color-text-muted)] mb-1">{t('factory_mode.delivery.pack_artifact')}</p>
                       <p className={arcbench.pack_exists ? 'text-[var(--color-success)] truncate' : 'text-[var(--color-text-muted)]'}>
                         {arcbench.pack_artifact ? arcbench.pack_artifact.split('/').pop() : t('factory_mode.delivery.none')}
                       </p>
                     </div>
-                    <div className="rounded-xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] px-3 py-2">
+                    <div className="rounded-[var(--radius-lg)] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] px-3 py-2">
                       <p className="text-[var(--color-text-muted)] mb-1">{t('factory_mode.delivery.trace_dir')}</p>
                       <p className={arcbench.trace_exists ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)]'}>
                         {arcbench.trace_exists ? t('factory_mode.delivery.present') : t('factory_mode.delivery.missing')}
                       </p>
                     </div>
-                    <div className="rounded-xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] px-3 py-2">
+                    <div className="rounded-[var(--radius-lg)] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] px-3 py-2">
                       <p className="text-[var(--color-text-muted)] mb-1">{t('factory_mode.delivery.output_dir')}</p>
                       <p className="text-[var(--color-text-primary)] truncate">{arcbench.output_dir || '—'}</p>
                     </div>
@@ -482,8 +482,8 @@ export function FactoryModePage() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="p-4 md:p-6 max-w-5xl mx-auto">
-        <PageHeader title={t('factory_mode.title')} icon={<ListChecks size={20} />} />
-        <Card variant="default" padding="none" className="mb-4 rounded-lg shadow-none">
+        <PageHeader title={t('factory_mode.title')} icon={<ListChecks size={20} />} className="border-b border-[var(--color-border-subtle)] pb-[var(--space-4)] [&_h1]:text-[length:var(--text-base)] [&_h1]:md:text-[length:var(--text-base)]" />
+        <Card variant="default" padding="none" className="mb-4 shadow-none">
           <CardContent className="p-4">
             <h2 className="mb-3 text-sm font-semibold text-[var(--color-text-primary)]">{t('factory_mode.task_and_control')}</h2>
             <label htmlFor="factory-goal" className="block text-sm font-medium text-[var(--color-text-secondary)] mb-2">{t('factory_mode.goal_label')}</label>
@@ -494,12 +494,12 @@ export function FactoryModePage() {
               disabled={isRunning}
               placeholder={t('factory_mode.goal_placeholder')}
               rows={3}
-              className="w-full bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus-visible:outline-[var(--color-accent)] resize-y disabled:opacity-60"
+              className="w-full bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-[var(--radius-md)] px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus-visible:outline-[var(--color-accent)] resize-y disabled:opacity-60"
             />
             <div className="mt-4 space-y-3 text-sm text-[var(--color-text-secondary)]">
               <label htmlFor="factory-config" className="block font-medium">{t('factory_mode.config_source_label')}</label>
               <select id="factory-config" value={configChoice} onChange={e => setConfigChoice(e.target.value)} disabled={isRunning}
-                className="w-full rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-3">
+                className="w-full rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-3">
                 <option value="auto">{t('factory_mode.config_source_auto')}</option>
                 {agents.map(agent => <option key={agent.id} value={agent.id}>{agent.name} · {agent.provider} / {agent.model_id}</option>)}
                 <option value="provider">{t('factory_mode.config_source_provider')}</option>
@@ -508,7 +508,7 @@ export function FactoryModePage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label>{t('factory_mode.provider_label')}
                     <select aria-label={t('factory_mode.provider_label')} value={provider} onChange={e => { setProvider(e.target.value); setModel(''); }} disabled={isRunning}
-                      className="mt-1 w-full rounded-xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-3">
+                      className="mt-1 w-full rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-3">
                       <option value="">{t('factory_mode.provider_placeholder')}</option>
                       {providers.map(value => <option key={value} value={value}>{value}</option>)}
                     </select>
@@ -542,7 +542,7 @@ export function FactoryModePage() {
                     onClick={() => toggleSkill(s.id)}
                      disabled={isRunning}
                      aria-pressed={selectedSkills.includes(s.id)}
-                     className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium border focus-visible:outline-[var(--color-accent)] ${
+                     className={`inline-flex items-center gap-2 px-3 py-2 rounded-[var(--radius-md)] text-xs font-medium border focus-visible:outline-[var(--color-accent)] ${
                       selectedSkills.includes(s.id)
                         ? 'bg-[var(--color-accent-subtle)] border-[var(--color-border-accent)] text-[var(--color-text-primary)]'
                         : 'bg-[var(--color-bg-surface-2)] border-[var(--color-border-subtle)] text-[var(--color-text-muted)] hover:border-[var(--color-border-accent)]'
@@ -561,7 +561,7 @@ export function FactoryModePage() {
                 value={selectedPrompt}
                 onChange={(e) => setSelectedPrompt(e.target.value)}
                 disabled={isRunning}
-                className="px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-xl text-sm text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-all duration-200 disabled:opacity-50"
+                className="px-4 py-2.5 bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] rounded-[var(--radius-md)] text-sm text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-accent)]/50 transition-colors motion-reduce:transition-none disabled:opacity-50"
               >
                 {PROMPTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
@@ -613,13 +613,13 @@ export function FactoryModePage() {
         )}
 
         {errorMessage && (
-          <div role="alert" className="mb-6 rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] px-4 py-3 text-sm text-[var(--color-error)]">
+          <div role="alert" className="mb-6 rounded-[var(--radius-lg)] border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] px-4 py-3 text-sm text-[var(--color-error)]">
             {errorMessage}
           </div>
         )}
 
         {plan.length > 0 && (
-          <Card variant="default" padding="none" className="mb-4 rounded-lg shadow-none">
+          <Card variant="default" padding="none" className="mb-4 shadow-none">
             <CardContent className="p-4">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <h3 className="font-semibold text-sm text-[var(--color-text-primary)] flex items-center gap-2">
@@ -658,7 +658,7 @@ export function FactoryModePage() {
               </div>
 
               {fellBackToAutoPlan && (
-                <div className="mb-4 rounded-xl border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] px-4 py-2.5 text-xs text-[var(--color-warning)]">
+                <div className="mb-4 rounded-[var(--radius-lg)] border border-[var(--color-warning)]/30 bg-[var(--color-warning-subtle)] px-4 py-2.5 text-xs text-[var(--color-warning)]">
                   {t('factory_mode.fallback_to_auto_plan')}
                 </div>
               )}
@@ -666,7 +666,7 @@ export function FactoryModePage() {
               <div className="space-y-3">
                 {plan.map(step => (
                   <div key={step.step} className="flex items-center gap-3">
-                    <span className="w-6 h-6 rounded-full bg-[var(--color-accent-subtle)] text-[var(--color-accent-foreground)] flex items-center justify-center text-xs font-bold shrink-0 border border-[var(--color-border-accent)]">
+                    <span className="w-6 h-6 rounded-[var(--radius-pill)] bg-[var(--color-accent-subtle)] text-[var(--color-accent-foreground)] flex items-center justify-center text-xs font-bold shrink-0 border border-[var(--color-border-accent)]">
                       {step.step}
                     </span>
                     <span className={`text-sm flex-1 ${step.status === 'done' ? 'text-[var(--color-text-muted)] line-through' : 'text-[var(--color-text-primary)]'}`}>
@@ -686,12 +686,12 @@ export function FactoryModePage() {
         )}
 
         {progressLines.length > 0 && (
-          <Card variant="default" padding="none" className="mb-4 rounded-lg shadow-none">
+          <Card variant="default" padding="none" className="mb-4 shadow-none">
             <CardContent className="p-4">
               <h3 className="font-semibold text-sm text-[var(--color-text-primary)] mb-3 flex items-center gap-2">
                 <ListChecks size={14} className="text-[var(--color-text-muted)]" /> {t('factory_mode.live_progress')}
               </h3>
-              <div className="max-h-48 overflow-y-auto space-y-1.5 rounded-xl bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] p-3">
+              <div className="max-h-48 overflow-y-auto space-y-1.5 rounded-[var(--radius-lg)] bg-[var(--color-bg-surface-2)] border border-[var(--color-border-subtle)] p-3">
                 {progressLines.slice(-30).map((line, index) => (
                   <p key={`${index}-${line}`} className="text-xs text-[var(--color-text-secondary)] font-mono leading-relaxed">
                     {line}
@@ -703,12 +703,12 @@ export function FactoryModePage() {
         )}
 
         {tasks.length > 0 && (
-          <Card variant="default" padding="none" className="mb-4 rounded-lg shadow-none">
+          <Card variant="default" padding="none" className="mb-4 shadow-none">
             <CardContent className="p-4">
               <h3 className="font-semibold text-sm text-[var(--color-text-primary)] mb-4">{t('factory_mode.subtasks')}</h3>
               <div className="divide-y divide-[var(--color-border-subtle)]">
                 {tasks.map(task => (
-                  <div key={task.id} className="flex items-start gap-3 py-3">
+                  <div key={task.id} className="flex items-start gap-3 py-2.5">
                     <div className="shrink-0 mt-0.5">{getStatusIcon(task.status)}</div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-[var(--color-text-primary)]">{task.description}</p>
@@ -733,12 +733,12 @@ export function FactoryModePage() {
         )}
 
         {recentRunsError ? (
-          <div role="alert" className="mb-4 rounded-xl border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] px-4 py-3 text-xs text-[var(--color-error)]">
+          <div role="alert" className="mb-4 rounded-[var(--radius-lg)] border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] px-4 py-3 text-xs text-[var(--color-error)]">
             {t('factory_mode.recent_runs_not_reported', { detail: recentRunsError })}
             <button type="button" className="ml-2 underline" onClick={loadRecentRuns}>{t('common.retry')}</button>
           </div>
         ) : recentRuns.length > 0 && (
-          <Card variant="default" padding="none" className="mb-4 rounded-lg shadow-none">
+          <Card variant="default" padding="none" className="mb-4 shadow-none">
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-sm text-[var(--color-text-primary)]">{t('factory_mode.recent_runs')}</h3>
@@ -746,7 +746,7 @@ export function FactoryModePage() {
               </div>
               <div className="space-y-2">
                 {recentRuns.map(run => (
-                  <div key={run.task_id} className="flex items-center gap-3 py-3 border-b border-[var(--color-border-subtle)] last:border-0">
+                  <div key={run.task_id} className="flex items-center gap-3 py-2.5 border-b border-[var(--color-border-subtle)] last:border-0">
                     {getStatusIcon(run.status)}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-[var(--color-text-primary)] truncate">{run.objective || run.task_id}</p>
@@ -765,7 +765,7 @@ export function FactoryModePage() {
         )}
 
         {finalReport && (
-          <Card variant="default" padding="none" className="rounded-lg shadow-none">
+          <Card variant="default" padding="none" className="shadow-none">
             <CardContent className="p-4">
               <h3 className="font-semibold text-sm text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
                 <CheckCircle size={16} className="text-[var(--color-success)]" /> {t('factory_mode.final_report')}

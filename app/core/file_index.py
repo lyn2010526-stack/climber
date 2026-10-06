@@ -63,6 +63,10 @@ class FileIndexService:
             metadata=metadata or {},
         )
 
+    def remove(self, path: str) -> None:
+        """Drop an index entry so the next upload with the same path re-indexes."""
+        self._index.pop(path, None)
+
     def get_changed_files(self, files: list[dict[str, Any]]) -> list[dict[str, Any]]:
         changed = []
         for f in files:

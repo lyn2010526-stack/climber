@@ -39,8 +39,10 @@ export function ChatComposerTools({
   const { t } = useI18n();
 
   const toggleClass = cn(
-    'flex items-center gap-1 rounded-full px-2 transition-colors duration-150 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-secondary)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none',
-    compact ? 'h-11 text-sm' : 'h-7 text-[length:var(--text-2xs)]',
+    'flex items-center gap-1 rounded-[var(--radius-pill)] border border-[var(--color-border-subtle)] px-2 font-medium transition-colors duration-150',
+    'text-[11px] leading-[17px] text-[var(--color-text-muted)] hover:border-[var(--color-border-default)] hover:text-[var(--color-text-secondary)]',
+    'focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none',
+    compact ? 'h-11 text-sm' : 'h-7',
   );
 
   return (

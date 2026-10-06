@@ -101,6 +101,11 @@ async def test_run_group_tasks_executes_acyclic_dependencies_in_order() -> None:
 
     async def fake_run(task, group, context_data):
         calls.append(task.id)
+        async with async_session() as db:
+            row = await db.get(AgentGroupTask, task.id)
+            assert row is not None
+            row.status = "completed"
+            await db.commit()
 
     engine._run_single_task_in_dag = fake_run
 
@@ -108,6 +113,11 @@ async def test_run_group_tasks_executes_acyclic_dependencies_in_order() -> None:
         result = await engine.run_group_tasks(group_id)
         assert result["status"] == "completed"
         assert calls == ["dl-t1", "dl-t2", "dl-t3"]
+        async with async_session() as db:
+            for tid in calls:
+                row = await db.get(AgentGroupTask, tid)
+                assert row is not None
+                assert row.status == "completed"
     finally:
         async with async_session() as db:
             for tid in ("dl-t1", "dl-t2", "dl-t3"):
@@ -187,6 +197,11 @@ async def test_run_group_tasks_skips_only_blocked_tasks() -> None:
 
     async def fake_run(task, group, context_data):
         ran.append(task.id)
+        async with async_session() as db:
+            row = await db.get(AgentGroupTask, task.id)
+            assert row is not None
+            row.status = "completed"
+            await db.commit()
 
     engine._run_single_task_in_dag = fake_run
 
@@ -194,6 +209,10 @@ async def test_run_group_tasks_skips_only_blocked_tasks() -> None:
         result = await engine.run_group_tasks(group_id)
         assert result["status"] == "completed"
         assert ran == ["dl-p3"]
+        async with async_session() as db:
+            row = await db.get(AgentGroupTask, "dl-p3")
+            assert row is not None
+            assert row.status == "completed"
     finally:
         async with async_session() as db:
             for tid in ("dl-p1", "dl-p2", "dl-p3"):

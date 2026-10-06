@@ -206,3 +206,7 @@ class AutoLoopTask(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    interruption_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    checkpoint: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    progress_evaluation: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)

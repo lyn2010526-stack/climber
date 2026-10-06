@@ -15,12 +15,15 @@ export interface ImageAttachment {
   status: 'reading' | 'ready' | 'error';
   /** Set when status is 'error'. */
   error?: 'type' | 'size' | 'limit' | 'read';
+  kind?: 'image' | 'file';
+  mimeType?: string;
 }
 
 /** Mirrors the backend contract in app/models/vision.py. */
 export const MAX_CHAT_IMAGES = 4;
 export const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 export const IMAGE_INPUT_ACCEPT = 'image/*';
+export const ATTACHMENT_INPUT_ACCEPT = 'image/*,.pdf,.txt,.md,.csv';
 
 let attachmentSeq = 0;
 
@@ -40,6 +43,13 @@ export function isImageFile(file: File, accept = IMAGE_INPUT_ACCEPT): boolean {
     return file.type.startsWith(accept.slice(0, -1));
   }
   return accept.split(',').some((candidate) => candidate.trim() === file.type);
+}
+
+export function isSupportedAttachment(file: File, accept = ATTACHMENT_INPUT_ACCEPT): boolean {
+  return accept.split(',').some((candidate) => {
+    const value = candidate.trim();
+    return value.endsWith('/*') ? file.type.startsWith(value.slice(0, -1)) : value.startsWith('.') ? file.name.toLowerCase().endsWith(value) : file.type === value;
+  });
 }
 
 /** Why a file was rejected; `message` is user-facing. */
@@ -80,6 +90,22 @@ export function screenImageFile(
   return { ok: true };
 }
 
+export function screenAttachmentFile(
+  file: File,
+  limits: { currentCount: number; maxImages: number; maxSizeBytes: number; accept?: string },
+): { ok: true } | { ok: false; rejection: FileScreenRejection } {
+  if (!isSupportedAttachment(file, limits.accept)) {
+    return { ok: false, rejection: { reason: 'type', message: 'Unsupported attachment type.' } };
+  }
+  if (file.size > limits.maxSizeBytes) {
+    return { ok: false, rejection: { reason: 'size', message: `"${file.name}" is larger than ${formatBytes(limits.maxSizeBytes)}.` } };
+  }
+  if (limits.currentCount >= limits.maxImages) {
+    return { ok: false, rejection: { reason: 'limit', message: `At most ${limits.maxImages} attachments per message.` } };
+  }
+  return { ok: true };
+}
+
 /** Create a placeholder attachment in the reading state (no url yet). */
 export function readingAttachment(file: File): ImageAttachment {
   return {
@@ -88,6 +114,8 @@ export function readingAttachment(file: File): ImageAttachment {
     name: file.name || 'pasted-image',
     size: file.size,
     status: 'reading',
+    kind: file.type.startsWith('image/') ? 'image' : 'file',
+    mimeType: file.type,
   };
 }
 

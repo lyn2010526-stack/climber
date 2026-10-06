@@ -12,7 +12,9 @@ describe('SidebarNavigation', () => {
     expect(screen.getAllByRole('heading').map(heading => heading.textContent)).toEqual(['工作', '资源', '管理运维']);
     expect(screen.getAllByRole('button')).toHaveLength(ALL_NAV_ITEMS_BASE.length);
     expect(within(screen.getByRole('region', { name: '资源' })).getByRole('button', { name: 'navigation.skills' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'API Access' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'apiKeys.authApiKeys.create_new' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'navigation.tasks' }).querySelector('svg')).toHaveAttribute('data-workbench-icon', 'task');
+    expect(screen.getByRole('button', { name: 'navigation.skills' }).querySelector('svg')).toHaveAttribute('data-workbench-icon', 'skill');
     for (const item of ALL_NAV_ITEMS_BASE) {
       fireEvent.click(screen.getByRole('button', { name: item.labelKey ?? item.label ?? item.id }));
       expect(onNavigate).toHaveBeenLastCalledWith(item.id);

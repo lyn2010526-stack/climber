@@ -1,0 +1,641 @@
+{
+  "linear_complete": {
+    "scenario": "linear_complete",
+    "objective": "查询数据库并按部门汇总生成报告",
+    "status": "completed",
+    "outer_rounds": 3,
+    "inner_turns": 3,
+    "tool_calls": 2,
+    "retries": 0,
+    "rollbacks": 0,
+    "audits": 4,
+    "audit_actions": [
+      "add",
+      "merge",
+      "add",
+      "merge"
+    ],
+    "snapshot_kinds": {
+      "incremental": 12
+    },
+    "executed": [],
+    "duration_ms": 13.0,
+    "events": 28,
+    "report": {
+      "session_id": "eval-session",
+      "objective": "查询数据库并按部门汇总生成报告",
+      "report": {
+        "task_id": "eval-session",
+        "objective": "查询数据库并按部门汇总生成报告",
+        "mode": "auto",
+        "status": "completed",
+        "outer_rounds": 3,
+        "inner_turns": 3,
+        "tokens_used": 0,
+        "tool_calls": 2,
+        "result_summary": "任务完成，输出最终总结。",
+        "completed_tasks": [
+          "第1轮",
+          "第2轮",
+          "第3轮: 完成"
+        ],
+        "risk_events": [],
+        "retries": 0,
+        "rollbacks": 0,
+        "snapshots_taken": 0,
+        "memory_added": 0,
+        "failures": [],
+        "started_at": "2026-10-04 20:46:44.902182+00:00",
+        "finished_at": "2026-10-04 20:46:44.905173+00:00"
+      },
+      "events": [
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "sysboot"
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 1
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 1
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 1
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "query_db",
+            "arguments": {
+              "sql": "SELECT * FROM orders"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "query_db",
+            "is_error": false,
+            "error": null
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 1
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 1,
+            "tool_errors": 0,
+            "no_progress": false
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 1
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_86b8d65f357a4586956b1193bfd6ef4b",
+            "round": 1
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 2
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 2
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 2
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "analyze",
+            "arguments": {
+              "field": "department"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "analyze",
+            "is_error": false,
+            "error": null
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 2
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 2,
+            "tool_errors": 0,
+            "no_progress": false
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 2
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_b111472c7e6c41719ab5f6651d0cc936",
+            "round": 2
+          }
+        },
+        {
+          "event": "memory_refined",
+          "data": {
+            "round": 2
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 3
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 3
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 3
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 3
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 3,
+            "tool_errors": 0,
+            "no_progress": false
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 3
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_51a823f0e3f041e4a505c1468f166297",
+            "round": 3
+          }
+        },
+        {
+          "event": "done",
+          "data": {
+            "status": "completed",
+            "rounds": 3,
+            "completed_tasks": [
+              "第1轮",
+              "第2轮",
+              "第3轮: 完成"
+            ],
+            "result_summary": "任务完成，输出最终总结。"
+          }
+        }
+      ],
+      "audits": [
+        {
+          "action": "add",
+          "memory_id": "mem_d9d0fbb823c444b2961c649e522d6762",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}]",
+          "score_before": null,
+          "score_after": 0.6,
+          "reason": "后台精炼事实抽取入库",
+          "timestamp": "2026-10-04 20:46:44.910874+00:00"
+        },
+        {
+          "action": "merge",
+          "memory_id": "mem_8042284c75614a329f2ffcbe8e064766",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}]",
+          "score_before": null,
+          "score_after": null,
+          "reason": "与 mem_d9d0fbb823c444b2961c649e522d6762 重复，合并",
+          "timestamp": "2026-10-04 20:46:44.911027+00:00"
+        },
+        {
+          "action": "add",
+          "memory_id": "mem_8782c93e45fb4685a496c2d5e8aaf39d",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}]",
+          "score_before": null,
+          "score_after": 0.6,
+          "reason": "后台精炼事实抽取入库",
+          "timestamp": "2026-10-04 20:46:44.911963+00:00"
+        },
+        {
+          "action": "merge",
+          "memory_id": "mem_d9d0fbb823c444b2961c649e522d6762",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}]",
+          "score_before": null,
+          "score_after": null,
+          "reason": "与 mem_8782c93e45fb4685a496c2d5e8aaf39d 重复，合并",
+          "timestamp": "2026-10-04 20:46:44.912032+00:00"
+        }
+      ],
+      "snapshots": [
+        {
+          "id": "snap_51a823f0e3f041e4a505c1468f166297",
+          "kind": "incremental",
+          "phase": "done",
+          "base_on": "snap_b111472c7e6c41719ab5f6651d0cc936",
+          "created_at": "2026-10-04T20:46:44.904667+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_b111472c7e6c41719ab5f6651d0cc936",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_86b8d65f357a4586956b1193bfd6ef4b",
+          "created_at": "2026-10-04T20:46:44.903974+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_86b8d65f357a4586956b1193bfd6ef4b",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_177386ac6cb34a1c9eac1019aa323c4c",
+          "created_at": "2026-10-04T20:46:44.902649+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_177386ac6cb34a1c9eac1019aa323c4c",
+          "kind": "incremental",
+          "phase": "done",
+          "base_on": "snap_467ff7b0c2094d44ab3dddb280890b26",
+          "created_at": "2026-10-04T20:46:44.035648+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_467ff7b0c2094d44ab3dddb280890b26",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_808c7bef521b41e8aa9ad539d98c9df0",
+          "created_at": "2026-10-04T20:46:44.034944+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_808c7bef521b41e8aa9ad539d98c9df0",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_7fe2a9875047428e82ebfe3678db0b14",
+          "created_at": "2026-10-04T20:46:44.033693+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_7fe2a9875047428e82ebfe3678db0b14",
+          "kind": "incremental",
+          "phase": "done",
+          "base_on": "snap_11e49b60a1864e48b5c8e25f8d669df9",
+          "created_at": "2026-10-04T20:45:44.933030+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_11e49b60a1864e48b5c8e25f8d669df9",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_2f895b923cbf4698a10098e868cd26b1",
+          "created_at": "2026-10-04T20:45:44.932428+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_2f895b923cbf4698a10098e868cd26b1",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_f61c48214ec34dee9fcd31ba4328d5fe",
+          "created_at": "2026-10-04T20:45:44.931461+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_f61c48214ec34dee9fcd31ba4328d5fe",
+          "kind": "incremental",
+          "phase": "done",
+          "base_on": "snap_469afddff7534123ae6bb2ddfb4359c3",
+          "created_at": "2026-10-04T20:45:12.376740+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_469afddff7534123ae6bb2ddfb4359c3",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_bac33f5a84954b5983686837c110b60a",
+          "created_at": "2026-10-04T20:45:12.376184+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_bac33f5a84954b5983686837c110b60a",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": null,
+          "created_at": "2026-10-04T20:45:12.375487+00:00",
+          "milestone_label": null
+        }
+      ]
+    },
+    "note": "线性任务：2 次工具调用后输出总结 → DONE",
+    "pass": true,
+    "fail_reasons": []
+  },
+  "hitl_yield": {
+    "scenario": "hitl_yield",
+    "objective": "把配置写入 x.py 后总结",
+    "status": "yielded",
+    "outer_rounds": 1,
+    "inner_turns": 1,
+    "tool_calls": 1,
+    "retries": 0,
+    "rollbacks": 0,
+    "audits": 2,
+    "audit_actions": [
+      "add",
+      "merge"
+    ],
+    "snapshot_kinds": {
+      "milestone": 4,
+      "incremental": 4
+    },
+    "executed": [],
+    "duration_ms": 3.6,
+    "events": 13,
+    "report": {
+      "session_id": "eval-session",
+      "objective": "把配置写入 x.py 后总结",
+      "report": {
+        "task_id": "eval-session",
+        "objective": "把配置写入 x.py 后总结",
+        "mode": "hitl",
+        "status": "yielded",
+        "outer_rounds": 1,
+        "inner_turns": 1,
+        "tokens_used": 0,
+        "tool_calls": 1,
+        "result_summary": "",
+        "completed_tasks": [
+          "第1轮: 触发人机接力暂停"
+        ],
+        "risk_events": [],
+        "retries": 0,
+        "rollbacks": 0,
+        "snapshots_taken": 0,
+        "memory_added": 0,
+        "failures": [],
+        "started_at": "2026-10-04 20:46:44.913571+00:00",
+        "finished_at": "2026-10-04 20:46:44.915005+00:00"
+      },
+      "events": [
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "sysboot"
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 1
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 1
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 1
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "write_file",
+            "arguments": {
+              "path": "x.py"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "write_file",
+            "is_error": false,
+            "error": null
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 1
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 1,
+            "tool_errors": 0,
+            "no_progress": false
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 1
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_73e7ab4192d444d097576534a1e26fae",
+            "round": 1
+          }
+        },
+        {
+          "event": "milestone_saved",
+          "data": {
+            "id": "snap_77cde3722abe4bfc94a30db71480eac7",
+            "reason": "高风险工具类 write; 高风险工具 write_file"
+          }
+        },
+        {
+          "event": "yield_pending",
+          "data": {
+            "reason": "高风险工具类 write; 高风险工具 write_file"
+          }
+        },
+        {
+          "event": "done",
+          "data": {
+            "status": "yielded",
+            "rounds": 1,
+            "completed_tasks": [
+              "第1轮: 触发人机接力暂停"
+            ],
+            "result_summary": ""
+          }
+        }
+      ],
+      "audits": [
+        {
+          "action": "add",
+          "memory_id": "mem_c4b98734a69540658ee05a1e7809d1ca",
+          "kind": "fact",
+          "text_preview": "报告 关联/设置 写入 report.md",
+          "score_before": null,
+          "score_after": 0.55,
+          "reason": "后台精炼事实抽取入库",
+          "timestamp": "2026-10-04 20:46:44.915791+00:00"
+        },
+        {
+          "action": "merge",
+          "memory_id": "mem_e2fab23515bf40d7a288ca9564a21253",
+          "kind": "fact",
+          "text_preview": "报告 关联/设置 写入 report.md",
+          "score_before": null,
+          "score_after": null,
+          "reason": "与 mem_c4b98734a69540658ee05a1e7809d1ca 重复，合并",
+          "timestamp": "2026-10-04 20:46:44.915913+00:00"
+        }
+      ],
+      "snapshots": [
+        {
+          "id": "snap_77cde3722abe4bfc94a30db71480eac7",
+          "kind": "milestone",
+          "phase": "yield",
+          "base_on": null,
+          "created_at": "2026-10-04T20:46:44.914524+00:00",
+          "milestone_label": "yield_pause"
+        },
+        {
+          "id": "snap_73e7ab4192d444d097576534a1e26fae",
+          "kind": "incremental",
+          "phase": "yield",
+          "base_on": "snap_15fd111288d34020afdf0cb7a54fd992",
+          "created_at": "2026-10-04T20:46:44.913960+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_15fd111288d34020afdf0cb7a54fd992",
+          "kind": "milestone",
+          "phase": "yield",
+          "base_on": null,
+          "created_at": "2026-10-04T20:46:44.345434+00:00",
+          "milestone_label": "yield_pause"
+        },
+        {
+          "id": "snap_7e677c6bc3024787a2998ea5897bbfcf",
+          "kind": "incremental",
+          "phase": "yield",
+          "base_on": "snap_7e7b474d36a24656af3e397839876bf1",
+          "created_at": "2026-10-04T20:46:44.244487+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_7e7b474d36a24656af3e397839876bf1",
+          "kind": "milestone",
+          "phase": "yield",
+          "base_on": null,
+          "created_at": "2026-10-04T20:45:44.938210+00:00",
+          "milestone_label": "yield_pause"
+        },
+        {
+          "id": "snap_d223c756bbe148faa49a612b67f8b9b0",
+          "kind": "incremental",
+          "phase": "yield",
+          "base_on": "snap_57ecd165ab684428a0aab5e63d92a484",
+          "created_at": "2026-10-04T20:45:44.937599+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_57ecd165ab684428a0aab5e63d92a484",
+          "kind": "milestone",
+          "phase": "yield",
+          "base_on": null,
+          "created_at": "2026-10-04T20:45:12.485437+00:00",
+          "milestone_label": "yield_pause"
+        },
+        {
+          "id": "snap_bbc5609aee9e49248d9a0aa477a31615",
+          "kind": "incremental",
+          "phase": "yield",
+          "base_on": null,
+          "created_at": "2026-10-04T20:45:12.484878+00:00",
+          "milestone_label": null
+        }
+      ]
+    },
+    "note": "HITL 模式：写工具触发人机接力暂停（YIELD）+ 里程碑快照",
+    "pass": true,
+    "fail_reasons": []
+  }
+}

@@ -56,10 +56,14 @@ export interface ParticipantListProps {
   roleLabel: (role: string) => string;
   /** A failed or malformed response must never be presented as an empty roster. */
   error?: string;
+  /** When set with `roles`, each row offers an inline role picker. */
+  roles?: string[];
+  onRoleChange?: (memberId: string, role: string) => void;
+  roleChangeDisabled?: boolean;
 }
 
 /** Read-only membership list for the collaboration sidebar. */
-export function ParticipantList({ members, onRemove, removing, roleLabel, error }: ParticipantListProps) {
+export function ParticipantList({ members, onRemove, removing, roleLabel, error, roles, onRoleChange, roleChangeDisabled }: ParticipantListProps) {
   const { t } = useTranslation();
   if (error) return null;
   if (members.length === 0) {
@@ -73,9 +77,22 @@ export function ParticipantList({ members, onRemove, removing, roleLabel, error 
           <li key={member.id} className="flex items-center gap-2 py-2">
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs" title={identity}>{identity}</p>
-              <p className="mt-0.5 truncate text-[10px] text-[var(--color-text-muted)]">
-                {roleLabel(member.role)}
-              </p>
+              {roles && onRoleChange ? (
+                <select
+                  aria-label={t('collaboration.members.change_role', { defaultValue: 'Change role' })}
+                  value={member.role}
+                  disabled={roleChangeDisabled}
+                  onChange={event => onRoleChange(member.id, event.target.value)}
+                  className="mt-0.5 h-6 max-w-full rounded border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-1 text-[10px] text-[var(--color-text-muted)]"
+                >
+                  {!roles.includes(member.role) && <option value={member.role}>{roleLabel(member.role)}</option>}
+                  {roles.map(value => <option key={value} value={value}>{roleLabel(value)}</option>)}
+                </select>
+              ) : (
+                <p className="mt-0.5 truncate text-[10px] text-[var(--color-text-muted)]">
+                  {roleLabel(member.role)}
+                </p>
+              )}
               <p className="mt-0.5 truncate text-[10px] text-[var(--color-text-muted)]">
                 {member.status || t('collaboration.not_reported')}
               </p>

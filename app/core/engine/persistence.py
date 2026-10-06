@@ -17,6 +17,7 @@ async def persist_message(
     tool_call_id: str | None = None,
     tokens: int = 0,
     images: list[str] | None = None,
+    attachments: list[dict[str, Any]] | None = None,
 ) -> str | None:
     """Persist a message to the database (fire-and-forget safe).
 
@@ -41,6 +42,8 @@ async def persist_message(
         metadata: dict[str, Any] = {}
         if images:
             metadata["images"] = list(images)
+        if attachments:
+            metadata["attachments"] = list(attachments)
 
         async with async_session() as db:
             msg = Message(

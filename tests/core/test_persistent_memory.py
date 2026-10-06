@@ -31,6 +31,7 @@ class FakeVector:
         self.access_updates: list[tuple[str, str]] = []
         self.empty = False
         self.records: dict[str, dict[str, dict[str, Any]]] = {}
+        self.profile_contexts: list[dict[str, Any] | None] = []
 
     async def add(
         self,
@@ -52,7 +53,9 @@ class FakeVector:
         query: str,
         top_k: int = 5,
         where: dict[str, Any] | None = None,
+        profile_context: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
+        self.profile_contexts.append(profile_context)
         self.search_calls.append(
             {"collection": collection, "query": query, "top_k": top_k, "where": where}
         )
@@ -131,6 +134,26 @@ def test_retrieve_keyword_fallback_when_vector_empty(monkeypatch: Any) -> None:
     )
     assert any(c["collection"] == "episodic" for c in fake.search_calls)
     assert [m.id for m in results][:1] == [memory.id]
+
+
+def test_retrieve_passes_optional_profile_context_to_vector_search(monkeypatch: Any) -> None:
+    fake = FakeVector()
+    monkeypatch.setattr("app.core.persistent_memory.vector_memory", fake)
+    user = "user-profile-ranked"
+    _run(
+        persistent_memory.create_episodic_memory(
+            user_id=user,
+            content="profile ranked memory",
+            importance=0.5,
+        )
+    )
+    context = {
+        "enabled": True,
+        "confidence": 0.8,
+        "task_preferences": {"coding": 1.0},
+    }
+    _run(persistent_memory.retrieve_memories(user, query="profile", profile_context=context))
+    assert fake.profile_contexts[-1] == context
 
 
 def test_create_archival_passage_vector_id_aligned(monkeypatch: Any) -> None:

@@ -86,3 +86,12 @@
 - openai/plugins: https://github.com/openai/plugins
 - BerriAI/litellm: https://github.com/BerriAI/litellm （多模型网关）
 - langchain-ai/langchain-tools: https://github.com/langchain-ai/langchain-tools
+
+## 五、2026-10-01 提示词研究补充索引
+
+| 研究报告 | 覆盖内容 | 状态 | 关联落地 |
+| --- | --- | --- | --- |
+| `docs/references/deep-dives/agent-constitution-and-top20.md` | Spec Kit、AgentMaxxing、Agency Agents、CodeWhale 与 Top 20 产品提示词结构 | ✅ 已完成 | `core.system v1.2.0` 已提交；外部宪法、任务 packet、角色 profile 待落地 |
+| `docs/references/deep-dives/mattpocock-skills.md` | 编码诊断、TDD、双轴评审、范围控制和提示词写作纪律 | ✅ 已完成 | 已融合到 `core.system v1.2.0` 与三个 discipline skills |
+
+提示词提交记录：`720633b3 feat(prompts): core.system v1.2.0 and three discipline skills`。提示词进化提交记录：`de77ce09 feat(evolution): score cache, replace-if-better, paraphrase seeds, resume`。未完成项包括 UI/search discipline skill、外部宪法文件、任务 packet、角色 profile 和评估闭环。

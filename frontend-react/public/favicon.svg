@@ -1,27 +1,7 @@
-<!--
-  Climber favicon.
-
-  Same geometry as src/components/brand/ClimberMark.tsx (one polyline plus one
-  circle on a 0 0 24 24 grid, round caps and joins) with two deliberate
-  differences:
-
-  1. Stroke weight 2.1 instead of 1.75. A favicon is rasterised at 16px in a
-     browser tab, where 1.75 grid units land on 1.17 device pixels and the
-     ridge breaks up. 2.1 lands on 1.4.
-  2. A dark tile with a light mark. The tile is what makes the icon hold up
-     against both a light tab and a dark tab without a media query, and it is
-     also why this file can carry literal colours: it is a static asset outside
-     the src/ tree that the style gate scans, and currentColor here would
-     resolve against no cascade and render the mark black-on-black on a dark
-     tab.
-
-  Colours are the benchmarked Climber dark tokens: tile = Codex background
-  (#20222E), mark = Codex accent / --color-accent (#5BC8D8), 8.5:1 against the
-  tile. Regenerate with the shared geometry after any brand change.
--->
+<!-- Shared ClimberMark geometry, with a heavier stroke for browser tabs. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-  <rect width="24" height="24" rx="5.25" fill="#20222E"/>
-  <g stroke="#5BC8D8" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+  <rect width="24" height="24" rx="5.25" fill="#000000"/>
+  <g stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
     <polyline points="4.6 19.9 9.9 13.9 7.2 10.2 11.7 7.1"/>
     <circle cx="17.2" cy="5.9" r="2.2"/>
   </g>

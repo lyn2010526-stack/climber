@@ -42,7 +42,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
   useEffect(() => {
     if (!visible) return;
     const node = document.getElementById(`${listId}-item-${activeIndex}`);
-    node?.scrollIntoView({ block: 'nearest' });
+    node?.scrollIntoView?.({ block: 'nearest' });
   }, [activeIndex, visible]);
 
   if (!visible || items.length === 0) return null;
@@ -86,14 +86,14 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
               />
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="font-mono text-sm text-[var(--color-text-primary)]">
+                  <span className="font-mono text-[13px] font-semibold text-[var(--color-text-primary)]">
                     /{item.name}
                   </span>
                   <span className="truncate font-mono text-xs text-[var(--color-text-muted)]">
                     {item.usage}
                   </span>
                 </span>
-                <span className="mt-0.5 block text-xs text-[var(--color-text-secondary)]">
+                <span className="mt-0.5 block text-[13px] leading-normal text-[var(--color-text-secondary)]">
                   {item.localizedSummary}
                 </span>
               </span>

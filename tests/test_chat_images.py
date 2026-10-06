@@ -40,6 +40,7 @@ from app.models.vision import (
     is_image_reference,
     split_data_url,
     validate_images,
+    validate_attachments,
 )
 from app.storage import Base
 from app.storage.database import Agent, ApiKey, CheckpointRecord, Message, Session, Turn, UsageLog
@@ -85,6 +86,19 @@ class VisionHelperTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(split_data_url(PNG_DATA_URL), ("image/png", "iVBORw0KGgoAAAANSUhEUg=="))
         self.assertIsNone(split_data_url(WEB_URL))
         self.assertIsNone(split_data_url("data:image/png;base64,%%%"))
+
+    async def test_validate_file_attachment_requires_matching_size_and_type(self):
+        import base64
+        data = base64.b64encode(b"hello").decode()
+        self.assertEqual(validate_attachments([{
+            "kind": "file", "data": f"data:text/plain;base64,{data}",
+            "name": "notes.txt", "mime_type": "text/plain", "size": 5,
+        }])[0].name, "notes.txt")
+        with self.assertRaises(ValueError):
+            validate_attachments([{
+                "kind": "file", "data": f"data:text/plain;base64,{data}",
+                "name": "notes.txt", "mime_type": "text/plain", "size": 4,
+            }])
 
     async def test_degrade_flattens_parts_and_keeps_plain_messages(self):
         messages = [

@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import and_, desc, func, select
+from sqlalchemy import and_, desc, func, or_, select
 
 from app.core.vector_memory import vector_memory
 from app.storage import async_session
@@ -87,6 +87,7 @@ class PersistentMemoryService:
         limit: int = 10,
         min_importance: float = 0.0,
         session_id: str | None = None,
+        profile_context: dict[str, Any] | None = None,
     ) -> list[EpisodicMemory]:
         """Retrieve relevant memories for a user.
 
@@ -100,6 +101,7 @@ class PersistentMemoryService:
                         query=query,
                         top_k=limit * 3,
                         where={"user_id": user_id},
+                        profile_context=profile_context,
                     )
                 except Exception:
                     vector_results = []
@@ -124,16 +126,20 @@ class PersistentMemoryService:
                             mem.access_count += 1
                             mem.last_accessed_at = datetime.now(UTC)
                             ordered.append(mem)
-                    for mem in ordered[:limit]:
-                        log = MemoryRetrievalLog(
-                            memory_id=mem.id,
-                            user_id=user_id,
-                            session_id=session_id,
-                            retrieval_query=query[:500],
-                        )
-                        db.add(log)
-                    await db.commit()
-                    return ordered[:limit]
+                    # Only return early when DB filtering kept at least one
+                    # candidate; otherwise fall through to keyword search so a
+                    # fully-filtered vector hit list cannot hide relevant text.
+                    if ordered:
+                        for mem in ordered[:limit]:
+                            log = MemoryRetrievalLog(
+                                memory_id=mem.id,
+                                user_id=user_id,
+                                session_id=session_id,
+                                retrieval_query=query[:500],
+                            )
+                            db.add(log)
+                        await db.commit()
+                        return ordered[:limit]
 
             # Fallback: keyword search
             result = await db.execute(
@@ -153,6 +159,33 @@ class PersistentMemoryService:
 
             if query:
                 query_lower = query.lower()
+                keywords = [w for w in query_lower.split() if len(w) > 3]
+                if keywords:
+                    # Pull keyword-matched candidates that fall outside the
+                    # importance/recency window so a topical match is not lost
+                    # to the pre-scoring truncation above.
+                    keyword_result = await db.execute(
+                        select(EpisodicMemory)
+                        .where(
+                            and_(
+                                EpisodicMemory.user_id == user_id,
+                                EpisodicMemory.importance >= min_importance,
+                                or_(
+                                    *(
+                                        EpisodicMemory.content.ilike(f"%{kw}%")
+                                        for kw in keywords
+                                    )
+                                ),
+                            )
+                        )
+                        .limit(limit * 3)
+                    )
+                    memories = list(
+                        {
+                            m.id: m
+                            for m in [*memories, *keyword_result.scalars().all()]
+                        }.values()
+                    )
                 scored = []
                 for mem in memories:
                     score = mem.importance * mem.recency_score
@@ -192,8 +225,7 @@ class PersistentMemoryService:
             return ""
 
         lines = ["## Relevant Memories:"]
-        for mem in memories:
-            lines.append(f"- [{mem.memory_type}] {mem.content}")
+        lines.extend(f"- [{mem.memory_type}] {mem.content}" for mem in memories)
         return "\n".join(lines)
 
     async def decay_recency_scores(self, decay_factor: float = 0.95) -> int:
@@ -386,8 +418,7 @@ class PersistentMemoryService:
             return ""
 
         lines = [f"## Knowledge about \"{entity}\":"]
-        for r in relations:
-            lines.append(f"- {r.subject} -[{r.predicate}]-> {r.object_}")
+        lines.extend(f"- {r.subject} -[{r.predicate}]-> {r.object_}" for r in relations)
         return "\n".join(lines)
 
     # ─── User Profile ────────────────────────────────────────────────────
@@ -472,29 +503,25 @@ class PersistentMemoryService:
         # Inviolable rules (highest priority)
         if profile.inviolable:
             lines.append("[INVIOLABLE RULES — MUST FOLLOW]")
-            for rule in profile.inviolable:
-                lines.append(f"- {rule}")
+            lines.extend(f"- {rule}" for rule in profile.inviolable)
             lines.append("")
 
         # User values
         if profile.values:
             lines.append("## User Values")
-            for v in profile.values:
-                lines.append(f"- {v}")
+            lines.extend(f"- {v}" for v in profile.values)
             lines.append("")
 
         # User principles
         if profile.principles:
             lines.append("## User Principles")
-            for p in profile.principles:
-                lines.append(f"- {p}")
+            lines.extend(f"- {p}" for p in profile.principles)
             lines.append("")
 
         facts = profile.facts[-10:]  # Last 10 facts
         if facts:
             lines.append("## User Information:")
-            for f in facts:
-                lines.append(f"- [{f.get('category', 'general')}] {f.get('content', '')}")
+            lines.extend(f"- [{f.get('category', 'general')}] {f.get('content', '')}" for f in facts)
 
         if profile.preferred_model:
             lines.append(f"- Preferred model: {profile.preferred_model}")

@@ -25,6 +25,7 @@ class StepFunAdapter(OpenAIAdapter):
             streaming=False,
             tools=True,
             vision=False,
+            file_attachments=False,
             embedding=False,
             max_tokens=128_000,
         )

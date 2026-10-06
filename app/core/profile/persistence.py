@@ -10,26 +10,31 @@ restarts and never depend on process-local state.
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Any
+from datetime import UTC, datetime
+from typing import Any
+
+from sqlalchemy import select
 
 from app.core.profile import (
     PrivacyBoundaryError,
     ProfileEvent,
     ProfileLoopService,
     ProfileSummary,
-    blend,
+)
+from app.core.profile.settings import (
+    NOTICE_VERSION,
+    ProfileLearningSettings,
+    learning_enabled,
+    load_settings,
+    settings_payload,
 )
 from app.storage import async_session
+from app.storage.models_user_profile import UserProfileEvent
 from app.storage.repository_user_profile import (
     DEFAULT_SOURCE,
     append_event,
-    get_snapshot,
-    list_events,
     upsert_snapshot,
 )
-
-if TYPE_CHECKING:
-    from app.storage.models_user_profile import UserProfileEvent
 
 REPLAY_EVENT_LIMIT = 10_000
 
@@ -56,6 +61,35 @@ class ProfileStore:
             "persona_clusters": persona_clusters,
         }
 
+    async def get_settings(self, user_id: str) -> dict[str, Any]:
+        async with async_session() as db:
+            return settings_payload(await load_settings(db, user_id))
+
+    async def update_settings(
+        self, user_id: str, *, enabled: bool, consent_version: str | None = None,
+        show_raw_profile: bool | None = None,
+    ) -> dict[str, Any]:
+        if type(enabled) is not bool or (show_raw_profile is not None and type(show_raw_profile) is not bool):
+            raise ValueError("settings must be boolean")
+        async with async_session() as db:
+            row = await load_settings(db, user_id, lock=True)
+            if (
+                enabled and not (row and row.consent_version == NOTICE_VERSION and row.consented_at)
+                and consent_version != NOTICE_VERSION
+            ):
+                raise ValueError("explicit consent to the current notice is required")
+            if row is None:
+                row = ProfileLearningSettings(user_id=user_id, show_raw_profile=False)
+                db.add(row)
+            if enabled and consent_version == NOTICE_VERSION:
+                row.consent_version = NOTICE_VERSION
+                row.consented_at = datetime.now(UTC)
+            row.enabled = enabled
+            if show_raw_profile is not None:
+                row.show_raw_profile = show_raw_profile
+            await db.commit()
+            return settings_payload(row)
+
     async def record_event(self, user_id: str, **event_fields: Any) -> UserProfileEvent:
         """Validate one event through the profile loop, then persist it.
 
@@ -63,6 +97,8 @@ class ProfileStore:
         :class:`~app.core.profile.ProfileEvent`. ``None`` values are dropped so
         the dataclass defaults apply, and a source outside the Agent-internal
         boundary raises ``ValueError`` before any write happens.
+        Disabled learning also raises ``ValueError`` before opening a database
+        session, preserving existing events without accepting new signals.
         """
         source = event_fields.get("source") or DEFAULT_SOURCE
         if source not in ProfileLoopService.ALLOWED_SOURCES:
@@ -75,11 +111,14 @@ class ProfileStore:
 
         service = ProfileLoopService(**self._service_kwargs)
         try:
-            service.record(event)
+            if not service.record(event):
+                raise ValueError("profile learning is disabled")
         except PrivacyBoundaryError as exc:
             raise ValueError(str(exc)) from exc
 
         async with async_session() as db:
+            if not learning_enabled(await load_settings(db, user_id, lock=True)):
+                raise ValueError("profile learning is disabled")
             row = await append_event(
                 db,
                 user_id=user_id,
@@ -118,15 +157,13 @@ class ProfileStore:
         """Rebuild the summary from the stored event log and refresh the snapshot."""
         service = await self._load_service(user_id)
         result = service.summary()
+        if not result.enabled:
+            return result
         async with async_session() as db:
-            previous = await get_snapshot(db, user_id)
-            if previous is not None:
-                payload = dict(previous.payload)
-                payload.setdefault("prompt_hints", ())
-                payload["provenance"] = tuple(payload.get("provenance", ()))
-                payload["prompt_hints"] = tuple(payload["prompt_hints"])
-                previous_summary = ProfileSummary(**payload)
-                result = blend(previous_summary, result)
+            # A pause committed during replay also takes effect before return.
+            if not learning_enabled(await load_settings(db, user_id, lock=True)):
+                return ProfileLoopService(enabled=False).summary()
+            # The snapshot caches this replay; blending it back double-counts events.
             await upsert_snapshot(
                 db,
                 user_id=user_id,
@@ -139,14 +176,27 @@ class ProfileStore:
     async def suggestions(self, user_id: str, current_instruction: str) -> dict[str, object]:
         """Return profile hints that keep the current instruction authoritative."""
         service = await self._load_service(user_id)
+        if service.enabled:
+            async with async_session() as db:
+                # Recheck consent after replay, matching the summary read path.
+                if not learning_enabled(await load_settings(db, user_id, lock=True)):
+                    service = ProfileLoopService(enabled=False)
         return service.auxiliary_context(current_instruction)
 
     async def _load_service(self, user_id: str) -> ProfileLoopService:
         """Replay one user's stored events into a fresh in-memory service."""
         async with async_session() as db:
-            rows = await list_events(db, user_id, limit=REPLAY_EVENT_LIMIT)
+            if not self._service_kwargs["enabled"] or not learning_enabled(await load_settings(db, user_id)):
+                return ProfileLoopService(**{**self._service_kwargs, "enabled": False})
+            # Select the recent window first, then replay it oldest-first.
+            rows = (await db.execute(
+                select(UserProfileEvent)
+                .where(UserProfileEvent.user_id == user_id)
+                .order_by(UserProfileEvent.occurred_at.desc(), UserProfileEvent.id.desc())
+                .limit(REPLAY_EVENT_LIMIT)
+            )).scalars().all()
         service = ProfileLoopService(**self._service_kwargs)
-        for row in rows:
+        for row in reversed(rows):
             service.record(self._to_event(row))
         return service
 

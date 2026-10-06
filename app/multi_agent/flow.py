@@ -17,7 +17,7 @@ from enum import StrEnum
 from typing import Any
 
 import structlog
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.agent_engine import AgentEngine
 from app.models.registry import ModelRegistry
@@ -34,7 +34,15 @@ class FlowStatus(StrEnum):
 
 
 class FlowState(BaseModel):
-    """Type-safe state shared across flow methods."""
+    """Type-safe state shared across flow methods.
+
+    ``extra="allow"`` lets a Flow declare custom shared state keys; the
+    FlowExecutor injects arbitrary ``initial_state`` keys via ``setattr``
+    (R13-56), and flow methods commonly read non-schema attributes such as
+    ``state.input_value``.
+    """
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
     flow_id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
     results: dict[str, Any] = Field(default_factory=dict)
     errors: dict[str, str] = Field(default_factory=dict)
@@ -265,7 +273,7 @@ class FlowExecutor:
         for entry in methods.get("router", []):
             name, method = entry
             listens = getattr(method, '_flow_router_for', [])
-            if name in completed or name in running:
+            if name in completed or name in failed or name in running:
                 continue
             if all(m in completed for m in listens):
                 triggered.append((name, method))
@@ -274,7 +282,7 @@ class FlowExecutor:
         for entry in methods.get("listen", []):
             name, method, trigger = entry
             listens = getattr(method, '_flow_listens', [])
-            if name in completed or name in running:
+            if name in completed or name in failed or name in running:
                 continue
 
             if trigger == "any":
@@ -288,7 +296,7 @@ class FlowExecutor:
         for entry in methods.get("listen_route", []):
             name, method, route_label = entry
             listens = getattr(method, '_flow_listens', [])
-            if name in completed or name in running:
+            if name in completed or name in failed or name in running:
                 continue
 
             router_method_name = listens[0] if listens else None

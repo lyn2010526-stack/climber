@@ -2,18 +2,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SettingsPage } from '../SettingsPage';
 
-const t = (key: string) => ({
+const t = (key: string, params?: Record<string, string>) => ({
   'apiKeys.add_key': 'Add Key',
   'apiKeys.name_placeholder': 'Key name',
   'apiKeys.save_key': 'Save Key',
   'apiKeys.authApiKeys.create_key': 'Create Key',
   'apiKeys.authApiKeys.create': 'Create',
   'apiKeys.authApiKeys.revoke_key': 'Revoke key',
+  'apiKeys.authApiKeys.new_token_aria': '新建令牌',
+  'apiKeys.authApiKeys.show_token': '显示令牌',
+  'apiKeys.authApiKeys.hide_token': '隐藏令牌',
+  'apiKeys.delete_key_aria': '删除模型凭据 {{name}}',
   // The section switcher reads its labels from the locale bundle, so the mock
   // has to answer with the same text the real zh-CN bundle does.
   'settings.model_credentials': '模型凭据',
   'settings.platform_tokens': '平台访问令牌',
-} as Record<string, string>)[key] ?? key;
+  'apiKeys.title': '模型凭据',
+  'apiKeys.authApiKeys.page_title': '平台访问令牌',
+} as Record<string, string>)[key]?.replace('{{name}}', params?.name ?? '') ?? key;
 vi.mock('../../i18n', () => ({
   useI18n: () => ({ t }),
   useTranslation: () => ({ t }),

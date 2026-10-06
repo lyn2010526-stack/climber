@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Search, Download, Trash2, Power, PowerOff, Package, Brain, Server, FileText,
-  ChevronRight, Plus, RefreshCw, AlertCircle,
+  ChevronRight, Plus, RefreshCw, AlertCircle, Store, CheckCircle2,
 } from 'lucide-react';
 import { api } from '../api';
 import { useTranslation } from '../i18n';
 import { includesQuery } from '../lib/search';
 import {
+  isInstalledStatus,
   normalizePluginStatus,
   pluginViewDescriptor,
   type PluginViewStatus,
@@ -45,9 +46,20 @@ const TYPE_CONFIG: Record<Plugin['type'], { icon: typeof Brain; label: string }>
 const CATEGORY_ALL = 'all';
 const CATEGORY_INSTALLED = 'installed';
 
+/** Mirrors one entry of `settings.plugin_marketplace` returned by GET /plugins/marketplace. */
+interface MarketplacePlugin {
+  plugin_key: string;
+  name: string;
+  description?: string;
+  category?: string;
+  version?: string;
+  author?: string;
+  is_installed?: boolean;
+}
+
 const inputClass = 'h-[var(--control-height-md)] w-full rounded-[var(--radius-md)] border border-[var(--color-border-default)] bg-[var(--color-bg-surface-2)] px-3 text-sm text-[var(--color-text-primary)] transition-all duration-200 placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/20';
 
-const labelClass = 'mb-1.5 block text-xs font-medium text-[var(--color-text-secondary)]';
+const labelClass = 'mb-1.5 block text-[length:var(--text-sm)] font-medium text-[var(--color-text-secondary)]';
 
 function PluginStatus({ status }: { status: PluginViewStatus }) {
   const { t } = useTranslation();
@@ -82,6 +94,28 @@ export function PluginsPage() {
   const [importType, setImportType] = useState('mcp');
   const [expandedPlugin, setExpandedPlugin] = useState<string | null>(null);
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
+  const [activeTab, setActiveTab] = useState<'installed' | 'marketplace'>('installed');
+  const [marketplace, setMarketplace] = useState<MarketplacePlugin[]>([]);
+  const [marketplaceCategories, setMarketplaceCategories] = useState<string[]>([]);
+  const [marketplaceLoaded, setMarketplaceLoaded] = useState(false);
+  const [marketplaceLoading, setMarketplaceLoading] = useState(false);
+  const [marketplaceError, setMarketplaceError] = useState<string | null>(null);
+  const [marketplaceCategory, setMarketplaceCategory] = useState(CATEGORY_ALL);
+
+  const fetchMarketplace = useCallback(async () => {
+    setMarketplaceLoading(true);
+    setMarketplaceError(null);
+    try {
+      const [items, cats] = await Promise.all([api.getMarketplace(), api.getPluginCategories()]);
+      setMarketplace(Array.isArray(items) ? items : []);
+      setMarketplaceCategories(Array.isArray(cats) ? cats : []);
+      setMarketplaceLoaded(true);
+    } catch (e) {
+      setMarketplaceError(e instanceof Error ? e.message : t('common.error'));
+    } finally {
+      setMarketplaceLoading(false);
+    }
+  }, [t]);
 
   const fetchPlugins = useCallback(async () => {
     setError(null);
@@ -96,6 +130,34 @@ export function PluginsPage() {
   }, [t]);
 
   useEffect(() => { fetchPlugins(); }, [fetchPlugins]);
+
+  useEffect(() => {
+    if (activeTab === 'marketplace' && !marketplaceLoaded && !marketplaceLoading) {
+      void fetchMarketplace();
+    }
+  }, [activeTab, marketplaceLoaded, marketplaceLoading, fetchMarketplace]);
+
+  const handleMarketplaceInstall = async (item: MarketplacePlugin) => {
+    if (actionLoading) return;
+    setMarketplaceError(null);
+    setActionLoading(item.plugin_key);
+    try {
+      // The install endpoint refreshes the record when the plugin already exists,
+      // so the same call covers both install and update from the marketplace.
+      await api.installPlugin(item.plugin_key);
+      await Promise.all([fetchMarketplace(), fetchPlugins()]);
+    } catch (e) {
+      setMarketplaceError(e instanceof Error ? e.message : t('common.error'));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const filteredMarketplace = marketplace.filter(item => {
+    const matchSearch = includesQuery([item.name, item.description ?? ''], searchQuery);
+    const matchCat = marketplaceCategory === CATEGORY_ALL || item.category === marketplaceCategory;
+    return matchSearch && matchCat;
+  });
 
   const handleInstall = async (id: string) => {
     if (actionLoading) return;
@@ -167,7 +229,7 @@ export function PluginsPage() {
     const matchSearch = includesQuery([plugin.name, plugin.description, ...(plugin.tags ?? [])], searchQuery);
     const matchType = !selectedType || plugin.type === selectedType;
     const matchCat = selectedCategory === CATEGORY_ALL ||
-      (selectedCategory === CATEGORY_INSTALLED && plugin.status === 'enabled') ||
+      (selectedCategory === CATEGORY_INSTALLED && isInstalledStatus(plugin.status)) ||
       plugin.category === selectedCategory;
     return matchSearch && matchType && matchCat;
   });
@@ -177,7 +239,7 @@ export function PluginsPage() {
     cat === CATEGORY_ALL
       ? plugins.length
       : cat === CATEGORY_INSTALLED
-        ? plugins.filter(p => p.status === 'enabled').length
+        ? plugins.filter(p => isInstalledStatus(p.status)).length
         : plugins.filter(p => p.category === cat).length;
 
   return (
@@ -186,6 +248,7 @@ export function PluginsPage() {
         <PageHeader
           title={t('navigation.plugins')}
           icon={<Package size={20} aria-hidden="true" />}
+          className="border-b border-[var(--color-border-subtle)] pb-[var(--space-4)] [&_h1]:text-[length:var(--text-base)] [&_h1]:md:text-[length:var(--text-base)] [&_p]:text-[var(--color-text-muted)]"
           actions={
             <>
               <Button variant="outline" size="sm" icon={<RefreshCw size={14} />} disabled={loading} onClick={fetchPlugins}>
@@ -198,7 +261,144 @@ export function PluginsPage() {
           }
         />
 
-        {error && (
+        <div className="mt-4 mb-3 flex items-center gap-1 border-b border-[var(--color-border-subtle)] pb-3" role="group" aria-label={pluginText('plugins.view_tabs_aria', 'Plugin views')}>
+          <button
+            type="button"
+            aria-pressed={activeTab === 'installed'}
+            className={activeTab === 'installed' ? 'view-tab is-active' : 'view-tab'}
+            onClick={() => setActiveTab('installed')}
+          >
+            <Package size={14} aria-hidden="true" />{pluginText('plugins.installed_tab', 'Installed')}
+          </button>
+          <button
+            type="button"
+            aria-pressed={activeTab === 'marketplace'}
+            className={activeTab === 'marketplace' ? 'view-tab is-active' : 'view-tab'}
+            onClick={() => setActiveTab('marketplace')}
+          >
+            <Store size={14} aria-hidden="true" />{pluginText('plugins.marketplace_tab', 'Marketplace')}
+          </button>
+        </div>
+
+        {activeTab === 'marketplace' && (
+          <div aria-label={pluginText('plugins.marketplace_tab', 'Marketplace')}>
+            {marketplaceError && (
+              <div role="alert" className="mb-3 flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] p-3">
+                <AlertCircle size={16} aria-hidden="true" className="shrink-0 text-[var(--color-error)]" />
+                <p className="flex-1 break-words text-sm text-[var(--color-error)]">{marketplaceError}</p>
+                <Button variant="ghost" size="sm" icon={<RefreshCw size={14} />} onClick={fetchMarketplace}>
+                  {t('common.retry')}
+                </Button>
+              </div>
+            )}
+
+            <div className="mb-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="w-full max-w-xs">
+                  <Input
+                    size="sm"
+                    placeholder={pluginText('plugins.marketplace_search_placeholder', 'Search marketplace')}
+                    aria-label={t('common.search')}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    icon={<Search size={14} aria-hidden="true" />}
+                  />
+                </div>
+                <Button variant="outline" size="sm" icon={<RefreshCw size={14} />} disabled={marketplaceLoading} onClick={fetchMarketplace}>
+                  {t('common.refresh')}
+                </Button>
+                <span className="shrink-0 text-xs tabular-nums text-[var(--color-text-muted)]" aria-live="polite">
+                  {filteredMarketplace.length} / {marketplace.length}
+                </span>
+              </div>
+              {marketplaceCategories.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1" role="group" aria-label={t('common.filter')}>
+                  {[CATEGORY_ALL, ...marketplaceCategories].map(cat => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setMarketplaceCategory(cat)}
+                      aria-pressed={marketplaceCategory === cat}
+                      className={`rounded-[var(--radius-md)] border px-2.5 py-1 text-xs font-medium capitalize transition-colors ${
+                        marketplaceCategory === cat
+                          ? 'border-[var(--color-border-strong)] bg-[var(--color-bg-surface-3)] text-[var(--color-text-primary)]'
+                          : 'border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                      }`}
+                    >
+                      {cat === CATEGORY_ALL ? t('common.all') : cat}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {marketplaceLoading && (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label={t('common.loading')}>
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] p-4">
+                    <div className="h-4 w-2/3 rounded skeleton-shimmer" style={{ animationDelay: `${i * 100}ms` }} />
+                    <div className="mt-2 h-3.5 w-full rounded skeleton-shimmer" style={{ animationDelay: `${i * 100}ms` }} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!marketplaceLoading && filteredMarketplace.length > 0 && (
+              <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label={pluginText('plugins.marketplace_tab', 'Marketplace')}>
+                {filteredMarketplace.map(item => (
+                  <li
+                    key={item.plugin_key}
+                    className="flex flex-col gap-2 rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] p-4"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="truncate text-sm font-medium text-[var(--color-text-primary)]">{item.name}</span>
+                      {item.version && <span className="shrink-0 text-xs text-[var(--color-text-muted)]">v{item.version}</span>}
+                      {item.is_installed && (
+                        <span className="inline-flex shrink-0 items-center gap-1 text-xs text-[var(--color-success)]">
+                          <CheckCircle2 size={12} aria-hidden="true" />
+                          {pluginText('plugins.status.installed', 'Installed')}
+                        </span>
+                      )}
+                    </div>
+                    {item.description && (
+                      <p className="line-clamp-2 text-xs text-[var(--color-text-muted)]">{item.description}</p>
+                    )}
+                    <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+                      <span className="truncate text-xs capitalize text-[var(--color-text-muted)]">
+                        {[item.category, item.author].filter(Boolean).join(' · ')}
+                      </span>
+                      <Button
+                        variant={item.is_installed ? 'outline' : 'secondary'}
+                        size="sm"
+                        icon={<Download size={13} aria-hidden="true" />}
+                        onClick={() => { void handleMarketplaceInstall(item); }}
+                        disabled={actionLoading !== null}
+                        loading={actionLoading === item.plugin_key}
+                      >
+                        {item.is_installed
+                          ? pluginText('plugins.update', 'Update')
+                          : pluginText('plugins.install', 'Install')}
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {!marketplaceLoading && !marketplaceError && filteredMarketplace.length === 0 && (
+              <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]">
+                <EmptyState
+                  className="w-full"
+                  icon={<Store size={20} aria-hidden="true" />}
+                  title={pluginText('plugins.marketplace_empty_title', 'No marketplace plugins')}
+                  description={pluginText('plugins.marketplace_empty_description', 'The marketplace catalog is empty or nothing matches the current filters.')}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'installed' && error && (
           <div role="alert" className="mb-3 flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-error)]/30 bg-[var(--color-error-subtle)] p-3">
             <AlertCircle size={16} aria-hidden="true" className="shrink-0 text-[var(--color-error)]" />
             <p className="flex-1 break-words text-sm text-[var(--color-error)]">{error}</p>
@@ -208,7 +408,7 @@ export function PluginsPage() {
           </div>
         )}
 
-        {!loading && plugins.length > 0 && (
+        {activeTab === 'installed' && !loading && plugins.length > 0 && (
           <div className="mb-3 space-y-2">
             <div className="flex flex-wrap items-center gap-3">
               <div className="w-full max-w-xs">
@@ -288,7 +488,7 @@ export function PluginsPage() {
           </div>
         )}
 
-        {loading && (
+        {activeTab === 'installed' && loading && (
           <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]" aria-busy="true" aria-label={t('common.loading')}>
             {[1, 2, 3].map(i => (
               <div key={i} className="flex items-center gap-3 border-b border-[var(--color-border-subtle)] px-3 py-2.5 last:border-b-0 md:px-4">
@@ -300,13 +500,13 @@ export function PluginsPage() {
           </div>
         )}
 
-        {!loading && filtered.length > 0 && (
+        {activeTab === 'installed' && !loading && filtered.length > 0 && (
           <ul className="divide-y divide-[var(--color-border-subtle)] overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]" aria-label={t('navigation.plugins')}>
             {filtered.map(plugin => {
               const typeConf = TYPE_CONFIG[plugin.type] ?? TYPE_CONFIG.skill;
               const TypeIcon = typeConf.icon;
               const isEnabled = plugin.status === 'enabled';
-              const isInstalled = isEnabled || plugin.status === 'installed' || plugin.status === 'disabled' || plugin.status === 'error';
+              const isInstalled = isInstalledStatus(plugin.status);
               const isExpanded = expandedPlugin === plugin.id;
               const configFields = Object.keys(plugin.config || {});
               return (
@@ -402,7 +602,7 @@ export function PluginsPage() {
                          size="sm"
                          disabled={actionLoading !== null}
                          loading={actionLoading === plugin.id}
-                         onClick={() => plugin.status === 'enabled' ? handleToggle(plugin) : plugin.status === 'installed' || plugin.status === 'disabled' || plugin.status === 'error' ? handleToggle(plugin) : handleInstall(plugin.id)}
+                          onClick={() => isInstalledStatus(plugin.status) ? handleToggle(plugin) : handleInstall(plugin.id)}
                        >
                          {t('common.retry')}
                        </Button>
@@ -414,7 +614,7 @@ export function PluginsPage() {
           </ul>
         )}
 
-        {!loading && !error && filtered.length === 0 && (
+        {activeTab === 'installed' && !loading && !error && filtered.length === 0 && (
           <div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)]">
             <EmptyState
               className="w-full"

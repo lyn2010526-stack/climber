@@ -149,7 +149,13 @@ class AuthMiddleware(BaseHTTPMiddleware):
         try:
             principal = principal_from_auth(auth_result)
         except ValueError as exc:
-            return JSONResponse(status_code=401, content={"detail": str(exc)})
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "detail": "Authenticated user identity is missing",
+                    "type": "invalid_principal",
+                },
+            )
         request.state.auth = auth_result
         request.state.principal = principal
         token = set_current_principal(principal)

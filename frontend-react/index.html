@@ -5,61 +5,48 @@
     <!-- Favicon is referenced, not inlined: public/favicon.svg is the one
          drawing, and a data-URI copy here is a second one that drifts. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/icon-180x180.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0" />
     <!-- One theme-color: the app is dark in both themes, so the browser UI always
          matches the page. Kept in step with --color-bg-page in src/index.css. -->
     <meta name="theme-color" content="#20222E" />
     <meta name="description" content="Local-first AI Agent Workbench" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Climber" />
-    <!-- iOS viewport meta for notch support -->
-    <meta name="format-detection" content="telephone=no" />
-    <meta name="msapplication-tap-highlight" content="no" />
-    
-    <!-- Android status bar color, follows the page background -->
-    <meta name="background-color" content="#20222E" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    
-    <link rel="manifest" href="/manifest.json" />
     <title>Climber - AI Agent Platform</title>
-    
-    <!-- iOS Safari PWA settings -->
-    <link rel="apple-touch-startup-image" href="/splash-750x1294.png" media="screen and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)" />
-    <link rel="apple-touch-startup-image" href="/splash-1125x2436.png" media="screen and (device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 2)" />
-    <link rel="apple-touch-startup-image" href="/splash-1284x2778.png" media="screen and (device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3)" />
-    <link rel="apple-touch-startup-image" href="/splash-768x1024.png" media="screen and (device-width: 1024px) and (device-height: 768px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // Service Worker registration for PWA offline support
+      // Service Worker registration for PWA offline support. When the worker has
+      // to answer a request from cache because the network failed, it posts a
+      // STALE_RESPONSE message; show a persistent offline hint so a list that
+      // echoes the stale cache is not mistaken for fresh data (R12-H63).
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').catch(() => {});
         });
-      }
-      
-      // iOS viewport height fix
-      const setIOSViewport = () => {
-        const vh = window.innerHeight * 0.01;
-        document.documentElement.style.setProperty('--vh', `${vh}px`);
-      };
-      
-      setIOSViewport();
-      window.addEventListener('resize', setIOSViewport);
-      
-      // Safe area detection
-      function getSafeAreaInsets() {
-        if (window.screen?.orientation?.type) {
-          return {
-            top: window.screen.orientation.type.includes('portrait') ? 44 : 20,
-            bottom: window.screen.orientation.type.includes('portrait') ? 34 : 20
-          };
-        }
-        return { top: 44, bottom: 34 };
+        navigator.serviceWorker.addEventListener('message', (event) => {
+          if (!event.data || event.data.type !== 'STALE_RESPONSE') return;
+          if (document.getElementById('offline-stale-banner')) return;
+          const banner = document.createElement('div');
+          banner.id = 'offline-stale-banner';
+          banner.setAttribute('role', 'status');
+          banner.textContent = 'Network unreachable — showing cached data';
+          Object.assign(banner.style, {
+            position: 'fixed',
+            left: '50%',
+            bottom: '12px',
+            transform: 'translateX(-50%)',
+            zIndex: '9999',
+            padding: '6px 14px',
+            borderRadius: '8px',
+            background: '#20222E',
+            border: '1px solid #3A3F55',
+            color: '#F2F4FF',
+            fontSize: '12px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+          });
+          document.body.appendChild(banner);
+        });
       }
     </script>
   </body>

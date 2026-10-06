@@ -7,7 +7,9 @@ import re
 from typing import TYPE_CHECKING, Any
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.core.auth_manager import require_scopes
 from sqlalchemy import select
 
 from app.core.principal import CurrentPrincipal, Principal
@@ -120,7 +122,9 @@ async def list_skills(principal: CurrentPrincipal) -> list[dict[str, Any]]:
 
 @router.post("/skills")
 @router.post("/skills/", include_in_schema=False)
-async def create_skill(payload: SkillCreateRequest, principal: CurrentPrincipal) -> dict[str, Any]:
+async def create_skill(
+    payload: SkillCreateRequest, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
+) -> dict[str, Any]:
     """Create a new skill."""
     data = payload.model_dump()
     data["tools"] = await _validated_tools(data.get("tools") or [])
@@ -142,7 +146,10 @@ async def create_skill(payload: SkillCreateRequest, principal: CurrentPrincipal)
 
 @router.post("/skills/{skill_id}/enable")
 async def enable_skill(
-    skill_id: str, principal: CurrentPrincipal, payload: EmptyRequest | None = None
+    skill_id: str,
+    principal: CurrentPrincipal,
+    payload: EmptyRequest | None = None,
+    _auth: dict = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Enable a skill by ID."""
     del payload
@@ -151,7 +158,10 @@ async def enable_skill(
 
 @router.post("/skills/{skill_id}/disable")
 async def disable_skill(
-    skill_id: str, principal: CurrentPrincipal, payload: EmptyRequest | None = None
+    skill_id: str,
+    principal: CurrentPrincipal,
+    payload: EmptyRequest | None = None,
+    _auth: dict = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Disable a skill by ID."""
     del payload
@@ -159,7 +169,9 @@ async def disable_skill(
 
 
 @router.delete("/skills/{skill_id}")
-async def delete_skill(skill_id: str, principal: CurrentPrincipal) -> dict[str, bool | str]:
+async def delete_skill(
+    skill_id: str, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
+) -> dict[str, bool | str]:
     """Delete a skill by ID."""
     user_id = principal.subject_id
     async with async_session() as db:
@@ -242,6 +254,7 @@ async def create_skill_version(
     skill_id: str,
     principal: CurrentPrincipal,
     payload: SkillVersionCreateRequest | None = None,
+    _auth: dict = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Store the skill's current content as a new version and make it active."""
     data = payload.model_dump() if payload is not None else {}
@@ -300,7 +313,7 @@ async def list_skill_versions(skill_id: str, principal: CurrentPrincipal) -> dic
 
 @router.post("/skills/{skill_id}/versions/{version_id}/activate")
 async def activate_skill_version(
-    skill_id: str, version_id: str, principal: CurrentPrincipal
+    skill_id: str, version_id: str, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
 ) -> dict[str, Any]:
     """Activate a stored version and deprecate the previously active one."""
     user_id = principal.subject_id
@@ -329,7 +342,10 @@ async def activate_skill_version(
 
 @router.post("/skills/{skill_id}/test-cases")
 async def create_test_case(
-    skill_id: str, payload: SkillTestCaseCreateRequest, principal: CurrentPrincipal
+    skill_id: str,
+    principal: CurrentPrincipal,
+    payload: SkillTestCaseCreateRequest | None = None,
+    _auth: dict = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Add a test case for a skill."""
     data = payload.model_dump()
@@ -387,7 +403,9 @@ async def list_test_cases(skill_id: str, principal: CurrentPrincipal) -> dict[st
 
 
 @router.post("/skills/{skill_id}/test-cases/{case_id}/run")
-async def run_test_case(skill_id: str, case_id: str, principal: CurrentPrincipal) -> dict[str, Any]:
+async def run_test_case(
+    skill_id: str, case_id: str, principal: CurrentPrincipal, _auth: dict = Depends(require_scopes("write"))
+) -> dict[str, Any]:
     """Run one test case in static mode and persist a SkillTestResult.
 
     Static mode renders the skill's prompt template with the test case input,

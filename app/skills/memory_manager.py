@@ -48,6 +48,8 @@ class PersistentMemory:
         return entry
 
     def recall(self, query: str = "", limit: int = 10, memory_type: MemoryType | None = None) -> list[MemoryEntry]:
+        if limit <= 0:
+            return []
         results = list(self._cache)
         if memory_type:
             results = [e for e in results if e.memory_type == memory_type]

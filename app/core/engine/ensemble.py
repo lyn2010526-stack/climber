@@ -253,7 +253,7 @@ class MessageBus:
         """
         self._history.append(message)
         if len(self._history) > self._max_history:
-            self._history = self._history[-self._max_history // 2:]
+            self._history = self._history[-self._max_history:]
 
         notified = 0
 
@@ -267,19 +267,33 @@ class MessageBus:
                 subscribers.extend(subs)
 
         for callback in subscribers:
-            try:
-                await callback(message)
-                notified += 1
-            except Exception as e:
-                logger.warning("message_bus.delivery_failed", error=str(e), msg_id=message.msg_id)
+            attempts = 0
+            while attempts < 3:
+                try:
+                    await callback(message)
+                    notified += 1
+                    break
+                except Exception as e:
+                    attempts += 1
+                    if attempts >= 3:
+                        logger.warning("message_bus.delivery_failed", error=str(e), msg_id=message.msg_id, attempts=attempts)
+                    else:
+                        await asyncio.sleep(0.05 * attempts)
 
         return notified
 
     def subscribe(self, agent_id: str, callback: Callable[[AgentMessage], Awaitable[None]]) -> None:
-        """Subscribe an agent to receive messages."""
+        """Subscribe an agent to receive messages.
+
+        Subscribing the same callback twice for the same agent is a no-op:
+        a duplicate registration would otherwise deliver each matching message
+        to the callback once per entry (R12-H18 duplicate subscription /
+        duplicate delivery).
+        """
         if agent_id not in self._subscribers:
             self._subscribers[agent_id] = []
-        self._subscribers[agent_id].append(callback)
+        if callback not in self._subscribers[agent_id]:
+            self._subscribers[agent_id].append(callback)
 
     def unsubscribe(self, agent_id: str, callback: Callable[[AgentMessage], Awaitable[None]] | None = None) -> None:
         """Unsubscribe an agent. If callback is None, remove all subscriptions."""

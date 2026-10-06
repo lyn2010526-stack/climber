@@ -28,6 +28,11 @@ class CostRecord(Base):
     user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True, default="default-user")
     session_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("sessions.id"), nullable=True, index=True)
 
+    # Group attribution: the collaboration group and sub-task that produced
+    # this call, enabling per-group cost aggregation (R12-H54).
+    group_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    task_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+
     # Model info
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     model_id: Mapped[str] = mapped_column(String(100), nullable=False)
