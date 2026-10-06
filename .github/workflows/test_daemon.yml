@@ -13,7 +13,9 @@ jobs:
   test-daemon-check:
     name: Continuous Test Daemon Validation
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The daemon runs real suites: backend with coverage plus the frontend
+    # suite. Budget for that, not for the timeouts the script used to hit.
+    timeout-minutes: 25
 
     services:
       postgres:
@@ -74,6 +76,7 @@ jobs:
           APP_ENV: testing
         run: |
           echo "Running test daemon full suite..."
+          # Also writes coverage.xml and htmlcov/ for the steps below.
           python scripts/watch_tests.py --full
 
       - name: Run quick tests on changed files
@@ -109,14 +112,6 @@ jobs:
           else
             echo "No changed files detected"
           fi
-
-      - name: Generate coverage report
-        env:
-          DATABASE_URL: postgresql+asyncpg://climber:climber@localhost:5432/climber
-          REDIS_URL: redis://localhost:6379/0
-          APP_ENV: testing
-        run: |
-          python -m pytest tests/ --cov=app --cov-report=xml --cov-report=html --cov-report=term-missing -q -m "not integration and not slow"
 
       - name: Upload coverage to artifact
         uses: actions/upload-artifact@v4

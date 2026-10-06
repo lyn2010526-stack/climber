@@ -26,6 +26,15 @@ ALERT_STATE_FILE = LOGS_DIR / "test_daemon_alert_state.json"
 
 BACKEND_PATTERNS = ["*.py"]
 FRONTEND_PATTERNS = ["*.ts", "*.tsx", "*.js", "*.jsx", "*.css", "*.scss"]
+
+# Subprocess budgets. The full backend suite takes minutes, so the old flat
+# 120 s / 300 s caps could only ever report a bogus TIMEOUT for it.
+QUICK_TEST_TIMEOUT = 300
+FULL_TEST_TIMEOUT = 1800
+COVERAGE_TIMEOUT = 1800
+FRONTEND_TEST_TIMEOUT = 900
+E2E_TEST_TIMEOUT = 1800
+
 BACKEND_IGNORES = [
     "*.pyc",
     "__pycache__/*",
@@ -280,12 +289,13 @@ class TestRunner:
             ]
 
         try:
+            budget = QUICK_TEST_TIMEOUT if quick else FULL_TEST_TIMEOUT
             result = subprocess.run(
                 cmd,
                 cwd=str(PROJECT_ROOT),
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=budget,
             )
             duration = time.time() - start
             output = result.stdout + result.stderr
@@ -305,7 +315,7 @@ class TestRunner:
                 backend=True,
                 passed=False,
                 duration=time.time() - start,
-                output="TIMEOUT: Backend tests exceeded 120s",
+                output=f"TIMEOUT: Backend tests exceeded {budget}s",
                 test_count=0,
                 fail_count=1,
             )
@@ -340,7 +350,7 @@ class TestRunner:
                 cwd=str(PROJECT_ROOT / "frontend-react"),
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=FRONTEND_TEST_TIMEOUT,
             )
             duration = time.time() - start
             output = result.stdout + result.stderr
@@ -360,7 +370,7 @@ class TestRunner:
                 backend=False,
                 passed=False,
                 duration=time.time() - start,
-                output="TIMEOUT: Frontend tests exceeded 120s",
+                output=f"TIMEOUT: Frontend tests exceeded {FRONTEND_TEST_TIMEOUT}s",
                 test_count=0,
                 fail_count=1,
             )
@@ -383,6 +393,7 @@ class TestRunner:
             "pytest",
             "tests/",
             "--cov=app",
+            "--cov-report=xml",
             "--cov-report=html",
             "--cov-report=term-missing",
             "--tb=short",
@@ -397,7 +408,7 @@ class TestRunner:
                 cwd=str(PROJECT_ROOT),
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=COVERAGE_TIMEOUT,
             )
             duration = time.time() - start
             output = result.stdout + result.stderr
@@ -417,7 +428,7 @@ class TestRunner:
                 backend=True,
                 passed=False,
                 duration=time.time() - start,
-                output="TIMEOUT: Coverage run exceeded 300s",
+                output=f"TIMEOUT: Coverage run exceeded {COVERAGE_TIMEOUT}s",
                 test_count=0,
                 fail_count=1,
             )
@@ -449,7 +460,7 @@ class TestRunner:
                 cwd=str(PROJECT_ROOT),
                 capture_output=True,
                 text=True,
-                timeout=180,
+                timeout=E2E_TEST_TIMEOUT,
             )
             duration = time.time() - start
             output = result.stdout + result.stderr
@@ -469,7 +480,7 @@ class TestRunner:
                 backend=True,
                 passed=False,
                 duration=time.time() - start,
-                output="TIMEOUT: E2E tests exceeded 180s",
+                output=f"TIMEOUT: E2E tests exceeded {E2E_TEST_TIMEOUT}s",
                 test_count=0,
                 fail_count=1,
             )
@@ -659,9 +670,9 @@ class ChangeHandler(PatternMatchingEventHandler):
             for line in lines[-15:]:
                 print(f"    {line}")
 
-        self._save_result(result, trigger_file)
+        self.save_result(result, trigger_file)
 
-    def _save_result(self, result: TestResult, trigger_file: str) -> None:
+    def save_result(self, result: TestResult, trigger_file: str) -> None:
         """Persist result to JSON log."""
         results: list[dict[str, Any]] = []
         if TEST_RESULTS_FILE.exists():
@@ -889,15 +900,24 @@ def run_full_suite() -> None:
     print("  FULL TEST SUITE")
     print("=" * 60)
 
-    print("\n[1/3] Backend tests...")
-    be_result = runner.run_backend_tests(quick=False)
-    status = "PASS" if be_result.passed else "FAIL"
+    # The coverage run executes the same backend tests as a plain run, so a
+    # separate plain pass only doubled the wall time. One backend pass, then
+    # the frontend one.
+    print("\n[1/2] Backend tests with coverage...")
+    cov_result = runner.run_backend_coverage()
+    status = "PASS" if cov_result.passed else "FAIL"
     print(
-        f"  [{status}] {be_result.test_count} tests, "
-        f"{be_result.fail_count} failures ({be_result.duration:.2f}s)"
+        f"  [{status}] {cov_result.test_count} tests, "
+        f"{cov_result.fail_count} failures ({cov_result.duration:.2f}s)"
     )
 
-    print("\n[2/3] Frontend tests...")
+    cov = coverage_reporter.parse_coverage_from_output(cov_result.output)
+    if cov is not None:
+        coverage_reporter.record_coverage(cov)
+        print(f"  Coverage: {cov:.1f}%")
+        print(f"  Report:   {COVERAGE_DIR}/index.html")
+
+    print("\n[2/2] Frontend tests...")
     fe_result = runner.run_frontend_tests(quick=False)
     status = "PASS" if fe_result.passed else "FAIL"
     print(
@@ -905,23 +925,26 @@ def run_full_suite() -> None:
         f"{fe_result.fail_count} failures ({fe_result.duration:.2f}s)"
     )
 
-    print("\n[3/3] Coverage...")
-    cov_result = runner.run_backend_coverage()
-    status = "PASS" if cov_result.passed else "FAIL"
-    print(f"  [{status}] {cov_result.test_count} tests ({cov_result.duration:.2f}s)")
-
-    cov = coverage_reporter.parse_coverage_from_output(cov_result.output)
-    if cov is not None:
-        coverage_reporter.record_coverage(cov)
-        print(f"  Coverage: {cov:.1f}%")
-
     print("\n" + "=" * 60)
-    all_passed = be_result.passed and fe_result.passed and cov_result.passed
+    all_passed = cov_result.passed and fe_result.passed
     if all_passed:
         print("  ALL TESTS PASSED")
+        print("=" * 60)
     else:
         print("  SOME TESTS FAILED")
-    print("=" * 60)
+        print("=" * 60)
+        # A CI log that only says "1 failures" is useless; surface the tail of
+        # each failing run's output and persist the results like the watcher.
+        for label, result in (("backend", cov_result), ("frontend", fe_result)):
+            if result.passed:
+                continue
+            print(f"\n  {label} failure output (last 40 lines):")
+            for line in result.output.strip().split("\n")[-40:]:
+                print(f"    {line}")
+            runner.save_result(result, f"full-suite:{label}")
+        # Callers (CI included) script this mode, so a failing run must not
+        # report success.
+        raise SystemExit(1)
 
 
 def main() -> None:
