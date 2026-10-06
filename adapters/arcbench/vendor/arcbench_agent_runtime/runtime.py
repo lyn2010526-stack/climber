@@ -22,7 +22,7 @@ class AgentRuntime:
         project_dir: str | None = None,
         runner_events_path: str | None = None,
         traceability_dir: str | None = None,
-    ) -> "AgentRuntime":
+    ) -> AgentRuntime:
         paths = RuntimePaths.from_env(
             project_dir=project_dir,
             runner_events_path=runner_events_path,

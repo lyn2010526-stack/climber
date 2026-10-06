@@ -3,10 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useWorkspaceStore, type Session } from '../../../store/workspace';
 import { ControlBar } from '../ControlBar';
-
-vi.mock('../../../i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key }),
-}));
+import i18n from '../../../i18n/config';
 
 const makeSession = (overrides: Partial<Session> = {}): Session => ({
   id: 's1',
@@ -21,7 +18,8 @@ const makeSession = (overrides: Partial<Session> = {}): Session => ({
   ...overrides,
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('zh-CN');
   useWorkspaceStore.setState({
     sessions: [],
     sessionsLoaded: false,
@@ -42,17 +40,17 @@ describe('ControlBar', () => {
   it('keeps one inspector switch and leaves group navigation to the panel', () => {
     render(<ControlBar />);
     expect(screen.getByRole('toolbar')).toHaveAttribute('aria-orientation', 'horizontal');
-    expect(screen.getByRole('button', { name: 'right_panel.title' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '运行面板' })).toHaveAttribute('aria-pressed', 'true');
     // The four groups are reached inside the panel, so the bar repeats none of them.
     for (const id of ['overview', 'execution', 'changes', 'activity']) {
       expect(screen.queryByRole('button', { name: `right_panel.groups.${id}` })).not.toBeInTheDocument();
     }
-    expect(screen.queryByRole('button', { name: 'right_panel.sections.dag' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'DAG' })).not.toBeInTheDocument();
   });
 
   it('toggles the inspector with the single switch', () => {
     render(<ControlBar />);
-    const inspector = screen.getByRole('button', { name: 'right_panel.title' });
+    const inspector = screen.getByRole('button', { name: '运行面板' });
     fireEvent.click(inspector);
     expect(useWorkspaceStore.getState().rightPanelOpen).toBe(false);
     expect(inspector).toHaveAttribute('aria-pressed', 'false');
@@ -64,12 +62,12 @@ describe('ControlBar', () => {
 
   it('enables session actions only when a session is active', () => {
     render(<ControlBar />);
-    for (const name of ['agents.pause', 'chat.stop_generation', '保存快照']) {
+    for (const name of ['暂停', '停止生成', '复制记录']) {
       expect(screen.getByRole('button', { name })).toBeDisabled();
     }
     useWorkspaceStore.setState({ sessions: [makeSession()], activeSessionId: 's1' });
     render(<ControlBar />);
-    for (const name of ['chat.stop_generation', '保存快照']) {
+    for (const name of ['停止生成', '复制记录']) {
       expect(screen.getAllByRole('button', { name })[1]).toBeEnabled();
     }
   });
@@ -83,7 +81,7 @@ describe('ControlBar', () => {
   it('creates a snapshot from the bar as a session level action', () => {
     useWorkspaceStore.setState({ sessions: [makeSession()], activeSessionId: 's1' });
     render(<ControlBar />);
-    fireEvent.click(screen.getByRole('button', { name: '保存快照' }));
+    fireEvent.click(screen.getByRole('button', { name: '复制记录' }));
     expect(useWorkspaceStore.getState().snapshots).toHaveLength(1);
     expect(useWorkspaceStore.getState().snapshots[0]).toMatchObject({ sessionId: 's1' });
   });
@@ -93,9 +91,9 @@ describe('ControlBar', () => {
     useWorkspaceStore.setState({ sessions: [makeSession()], activeSessionId: 's1' });
     render(<ControlBar />);
     expect(screen.queryByRole('button', { name: '专家模式' })).not.toBeInTheDocument();
-    const more = screen.getByRole('button', { name: 'sidebar.more' });
+    const more = screen.getByRole('button', { name: '更多' });
     await user.click(more);
-    expect(screen.getByRole('dialog', { name: 'sidebar.more' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '更多' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '专家模式' }));
     expect(screen.getByRole('button', { name: '专家模式' })).toHaveAttribute('aria-pressed', 'true');
     await user.keyboard('{Escape}');
@@ -119,17 +117,17 @@ describe('ControlBar', () => {
     useWorkspaceStore.setState({ sessions: [makeSession({ status: 'running', tokenUsage: { used: 300, limit: 200 } })], activeSessionId: 's1' });
     render(<ControlBar />);
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
-    fireEvent.click(screen.getByRole('button', { name: 'agents.pause' }));
+    fireEvent.click(screen.getByRole('button', { name: '暂停' }));
     expect(useWorkspaceStore.getState().sessions[0].status).toBe('paused');
-    fireEvent.click(screen.getByRole('button', { name: 'agents.resume' }));
+    fireEvent.click(screen.getByRole('button', { name: '恢复' }));
     expect(useWorkspaceStore.getState().sessions[0].status).toBe('running');
-    fireEvent.click(screen.getByRole('button', { name: 'chat.stop_generation' }));
+    fireEvent.click(screen.getByRole('button', { name: '停止生成' }));
     expect(useWorkspaceStore.getState().sessions[0].status).toBe('completed');
   });
 
   it('groups the session actions under the sessions label', () => {
     render(<ControlBar />);
-    const group = screen.getByRole('group', { name: 'navigation.sessions' });
-    expect(group).toContainElement(screen.getByRole('button', { name: 'chat.stop_generation' }));
+    const group = screen.getByRole('group', { name: '会话' });
+    expect(group).toContainElement(screen.getByRole('button', { name: '停止生成' }));
   });
 });

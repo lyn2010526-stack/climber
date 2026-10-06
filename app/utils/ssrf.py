@@ -17,13 +17,15 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 # Well-known cloud metadata endpoints frequently abused via SSRF.
-_BLOCKED_HOSTS = frozenset({
-    "169.254.169.254",
-    "metadata.google.internal",
-    "metadata.azure.internal",
-    "metadata.aws.internal",
-    "100.100.100.200",
-})
+_BLOCKED_HOSTS = frozenset(
+    {
+        "169.254.169.254",
+        "metadata.google.internal",
+        "metadata.azure.internal",
+        "metadata.aws.internal",
+        "100.100.100.200",
+    }
+)
 
 _ALLOW_SCHEMES = frozenset({"http", "https"})
 

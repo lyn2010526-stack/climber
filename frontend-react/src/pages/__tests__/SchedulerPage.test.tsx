@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { SchedulerPage } from '../SchedulerPage';
 import { api } from '../../api';
+import i18n from '../../i18n';
 
 vi.mock('../../api', () => ({ api: {
   listSchedulerTasks: vi.fn(), createSchedulerTask: vi.fn(),
@@ -10,7 +11,8 @@ vi.mock('../../api', () => ({ api: {
 
 const task = { id: 'task-1', name: 'Daily check', description: 'Check workspace', cron: '0 9 * * *', enabled: true, last_run: null, next_run: null, run_count: 0 };
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('en');
   vi.resetAllMocks();
   vi.mocked(api.listSchedulerTasks).mockResolvedValue([task]);
   vi.mocked(api.updateSchedulerTask).mockResolvedValue({ ...task, enabled: false });
@@ -59,17 +61,17 @@ describe('Scheduler task controls', () => {
     vi.mocked(api.createSchedulerTask).mockRejectedValueOnce(new Error('failed'));
     render(<SchedulerPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Add task' }));
-    fireEvent.change(screen.getByLabelText('Task name'), { target: { value: '   ' } });
+    fireEvent.change(screen.getByLabelText(i18n.t('scheduler.field.name_label')), { target: { value: '   ' } });
     expect(screen.getByRole('button', { name: 'Create' })).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('Task name'), { target: { value: 'Backup' } });
+    fireEvent.change(screen.getByLabelText(i18n.t('scheduler.field.name_label')), { target: { value: 'Backup' } });
     fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Save files' } });
     fireEvent.change(screen.getByLabelText('Task type'), { target: { value: 'backup' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
     await screen.findByRole('alert');
-    expect(screen.getByLabelText('Task name')).toHaveValue('Backup');
+    expect(screen.getByLabelText(i18n.t('scheduler.field.name_label'))).toHaveValue('Backup');
     expect(api.createSchedulerTask).toHaveBeenCalledWith({ name: 'Backup', description: 'Save files', cron: '*/5 * * * *', task_type: 'backup' });
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
-    await waitFor(() => expect(screen.queryByLabelText('Task name')).toBeNull());
+    await waitFor(() => expect(screen.queryByLabelText(i18n.t('scheduler.field.name_label'))).toBeNull());
   });
 
   it('retains tasks on delete failure and removes them after acknowledgement', async () => {

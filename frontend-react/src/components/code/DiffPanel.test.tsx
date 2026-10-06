@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import i18n from '../../i18n/config';
 import { DiffPanel, parseDiff } from './DiffPanel';
 
 const DIFF = `diff --git a/src/app.ts b/src/app.ts
@@ -16,7 +17,8 @@ index 1111111..2222222 100644
 `;
 
 describe('DiffPanel', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await i18n.changeLanguage('zh-CN');
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
   });
 

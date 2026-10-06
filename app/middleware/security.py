@@ -6,11 +6,13 @@ import json
 import secrets
 from collections.abc import Awaitable, Callable
 from ipaddress import ip_address, ip_network
+from typing import Any, ClassVar
 
 import structlog
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.types import ASGIApp
 
 from app.core.principal import get_context_principal
 from app.storage.usage import usage_tracker
@@ -28,7 +30,7 @@ CSRF_SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add comprehensive security headers to all responses."""
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         try:
             response = await call_next(request)
         except Exception as exc:
@@ -48,7 +50,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains; preload"
+        )
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self'; "
@@ -82,14 +86,18 @@ class CsrfProtectionMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,
+        app: ASGIApp,
         excluded_paths: set[str] | None = None,
         enabled: bool = True,
     ):
         super().__init__(app)
         self.excluded_paths = excluded_paths or {
-            "/health", "/health/logs", "/metrics",
-            "/docs", "/openapi.json", "/favicon.ico",
+            "/health",
+            "/health/logs",
+            "/metrics",
+            "/docs",
+            "/openapi.json",
+            "/favicon.ico",
         }
         self.enabled = enabled
 
@@ -122,6 +130,7 @@ class CsrfProtectionMiddleware(BaseHTTPMiddleware):
 
         if not cookie_token or not header_token:
             from fastapi.responses import JSONResponse
+
             return JSONResponse(
                 status_code=403,
                 content={"detail": "CSRF token missing", "type": "csrf_error"},
@@ -129,6 +138,7 @@ class CsrfProtectionMiddleware(BaseHTTPMiddleware):
 
         if not secrets.compare_digest(cookie_token, header_token):
             from fastapi.responses import JSONResponse
+
             return JSONResponse(
                 status_code=403,
                 content={"detail": "CSRF token mismatch", "type": "csrf_error"},
@@ -137,7 +147,7 @@ class CsrfProtectionMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
-def _check_json_depth(obj, depth: int = 0) -> bool:
+def _check_json_depth(obj: Any, depth: int = 0) -> bool:
     """Return True if JSON depth exceeds MAX_JSON_DEPTH."""
     if depth > MAX_JSON_DEPTH:
         return False
@@ -151,30 +161,36 @@ def _check_json_depth(obj, depth: int = 0) -> bool:
 class RequestValidationMiddleware(BaseHTTPMiddleware):
     """Validate request size and JSON depth."""
 
-    SKIP_PATHS = {"/health", "/health/logs", "/metrics"}
+    SKIP_PATHS: ClassVar[set[str]] = {"/health", "/health/logs", "/metrics"}
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.url.path in self.SKIP_PATHS:
             return await call_next(request)
 
         content_length = request.headers.get("content-length")
         if content_length and int(content_length) > MAX_CONTENT_LENGTH:
             from fastapi.responses import JSONResponse
+
             return JSONResponse(
                 status_code=413,
                 content={"detail": "Request body too large", "max_bytes": MAX_CONTENT_LENGTH},
             )
 
-        if request.method in ("POST", "PUT", "PATCH") and request.headers.get("content-type", "").startswith("application/json"):
+        if request.method in ("POST", "PUT", "PATCH") and request.headers.get(
+            "content-type", ""
+        ).startswith("application/json"):
             try:
                 body = await request.body()
                 if body:
                     data = json.loads(body)
                     if not _check_json_depth(data):
                         from fastapi.responses import JSONResponse
+
                         return JSONResponse(
                             status_code=400,
-                            content={"detail": f"JSON nesting exceeds maximum depth of {MAX_JSON_DEPTH}"},
+                            content={
+                                "detail": f"JSON nesting exceeds maximum depth of {MAX_JSON_DEPTH}"
+                            },
                         )
             except json.JSONDecodeError:
                 pass
@@ -185,9 +201,9 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Global rate limiting middleware with IP-based tracking."""
 
-    SKIP_PATHS = {"/health", "/health/logs"}
+    SKIP_PATHS: ClassVar[set[str]] = {"/health", "/health/logs"}
 
-    def __init__(self, app, trusted_proxies: list[str] | None = None):
+    def __init__(self, app: ASGIApp, trusted_proxies: list[str] | None = None):
         super().__init__(app)
         self.trusted_proxies = tuple(
             ip_network(proxy, strict=False) for proxy in (trusted_proxies or [])
@@ -230,7 +246,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         except RuntimeError:
             return self._get_client_ip(request)
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.method == "OPTIONS" or request.url.path in self.SKIP_PATHS:
             return await call_next(request)
 
@@ -239,6 +255,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         allowed, reason = await usage_tracker.check_rate_limit(key)
         if not allowed:
             from fastapi.responses import JSONResponse
+
             return JSONResponse(
                 status_code=429,
                 content={"detail": reason, "type": "rate_limit_exceeded"},

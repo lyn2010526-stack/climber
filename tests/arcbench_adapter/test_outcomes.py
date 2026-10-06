@@ -26,14 +26,18 @@ class RehearsalTests(unittest.TestCase):
 
     def test_install_failure_is_fatal_even_with_stale_node_modules(self):
         (self.root / "frontend" / "node_modules").mkdir()
-        with patch.object(adapter, "_npm", return_value=(1, "registry unreachable")), \
-                patch.object(adapter.subprocess, "Popen") as popen:
+        with (
+            patch.object(adapter, "_npm", return_value=(1, "registry unreachable")),
+            patch.object(adapter.subprocess, "Popen") as popen,
+        ):
             self.assertIn("frontend npm install failed", adapter._rehearse_once(self.root, 3100))
             popen.assert_not_called()
 
     def test_backend_install_failure_is_fatal(self):
-        with patch.object(adapter, "_npm", side_effect=[(0, ""), (0, ""), (1, "install failed")]), \
-                patch.object(adapter.subprocess, "Popen") as popen:
+        with (
+            patch.object(adapter, "_npm", side_effect=[(0, ""), (0, ""), (1, "install failed")]),
+            patch.object(adapter.subprocess, "Popen") as popen,
+        ):
             self.assertIn("backend npm install failed", adapter._rehearse_once(self.root, 3100))
             popen.assert_not_called()
 
@@ -45,13 +49,24 @@ class RehearsalTests(unittest.TestCase):
         proc.returncode = None
         with ExitStack() as stack:
             stack.enter_context(patch.object(adapter, "_npm", return_value=(0, "")))
-            stack.enter_context(patch.object(adapter, "_free_web_port",
-                                             side_effect=lambda port: calls.append("bind")))
-            stack.enter_context(patch.object(adapter.subprocess, "Popen",
-                                             side_effect=lambda *a, **k: calls.append("spawn") or proc))
+            stack.enter_context(
+                patch.object(
+                    adapter, "_free_web_port", side_effect=lambda port: calls.append("bind")
+                )
+            )
+            stack.enter_context(
+                patch.object(
+                    adapter.subprocess,
+                    "Popen",
+                    side_effect=lambda *a, **k: calls.append("spawn") or proc,
+                )
+            )
             stack.enter_context(patch.object(adapter.socket, "create_connection"))
-            stack.enter_context(patch.object(adapter.os, "killpg",
-                                             side_effect=lambda pid, sig: calls.append("killpg")))
+            stack.enter_context(
+                patch.object(
+                    adapter.os, "killpg", side_effect=lambda pid, sig: calls.append("killpg")
+                )
+            )
             self.assertIsNone(adapter._rehearse_once(self.root, 3100))
             self.assertEqual(calls[0], "bind")
             self.assertEqual(calls[1], "spawn")
@@ -79,8 +94,15 @@ class OutcomeTests(unittest.TestCase):
                 stack.enter_context(patch.object(adapter, name))
             preview = stack.enter_context(patch.object(adapter, "finalize_preview"))
             result = adapter.run(
-                SimpleNamespace(), Path(directory), Path(directory), 3000, 3100,
-                100, 10, runtime, time.monotonic() + (-1 if expired else 100),
+                SimpleNamespace(),
+                Path(directory),
+                Path(directory),
+                3000,
+                3100,
+                100,
+                10,
+                runtime,
+                time.monotonic() + (-1 if expired else 100),
             )
         self.assertEqual(result, 0)
         runtime.events.mark_test_passed.assert_not_called()
@@ -89,7 +111,9 @@ class OutcomeTests(unittest.TestCase):
     def test_model_pass_is_unverified(self):
         runtime, preview = self.run_flow()
         runtime.events.mark_run_completed.assert_called_once()
-        self.assertIn("acceptance tests not run", runtime.events.mark_run_completed.call_args.args[0])
+        self.assertIn(
+            "acceptance tests not run", runtime.events.mark_run_completed.call_args.args[0]
+        )
         self.assertTrue(preview.call_args.kwargs["ready"])
 
     def test_rehearsal_failure_cannot_complete_or_enable_preview(self):
@@ -106,7 +130,9 @@ class OutcomeTests(unittest.TestCase):
 
     def test_expired_budget_records_skipped_nodes(self):
         runtime, _ = self.run_flow(expired=True)
-        runtime.events.mark_implementation_failed.assert_called_once_with("REQ-1", "time budget exhausted")
+        runtime.events.mark_implementation_failed.assert_called_once_with(
+            "REQ-1", "time budget exhausted"
+        )
         runtime.events.mark_run_completed.assert_not_called()
 
     def test_empty_requirement_tree_fails_before_driver_creation(self):

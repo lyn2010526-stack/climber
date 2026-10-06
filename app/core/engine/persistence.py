@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -11,10 +12,12 @@ async def persist_message(
     session_id: str,
     role: str,
     content: str | None = None,
-    tool_calls: list[dict] | None = None,
+    tool_calls: list[dict[str, Any]] | None = None,
     tool_name: str | None = None,
     tool_call_id: str | None = None,
     tokens: int = 0,
+    images: list[str] | None = None,
+    attachments: list[dict[str, Any]] | None = None,
 ) -> str | None:
     """Persist a message to the database (fire-and-forget safe).
 
@@ -26,6 +29,8 @@ async def persist_message(
         tool_name: The tool name if this is a tool result.
         tool_call_id: ID linking a tool result to its tool call.
         tokens: Token count for this message.
+        images: Optional image references carried by this message; stored in
+            the message metadata under ``images`` (no schema change needed).
 
     Returns:
         The persisted message id, or None when persistence failed.
@@ -33,6 +38,12 @@ async def persist_message(
     try:
         from app.storage import async_session
         from app.storage.database import Message
+
+        metadata: dict[str, Any] = {}
+        if images:
+            metadata["images"] = list(images)
+        if attachments:
+            metadata["attachments"] = list(attachments)
 
         async with async_session() as db:
             msg = Message(
@@ -43,6 +54,7 @@ async def persist_message(
                 tool_name=tool_name,
                 tool_call_id=tool_call_id,
                 tokens=tokens,
+                metadata_=metadata,
             )
             db.add(msg)
             await db.commit()

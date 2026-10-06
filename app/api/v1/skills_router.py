@@ -1,4 +1,13 @@
-"""Skill API endpoints."""
+"""Skill API endpoints.
+
+Dead-code cleanup (2026-10-05): the ``/skills`` GET/POST,
+``/skills/{id}/enable``, ``/skills/{id}/disable`` and ``/skills/{id}`` DELETE
+handlers were never mounted — ``app/api/v1/__init__.py`` only extracts the
+``/skills/autonomous`` prefix plus the ``/skills/{skill_id}`` PATCH route from
+this router — and the live versions exist in ``app/api/v1/routes/skills.py``.
+They were removed per ``docs/audits/dead-code-scan.md``.  Only the PATCH
+endpoint and ``/skills/autonomous/run`` below are actually served.
+"""
 
 from __future__ import annotations
 
@@ -7,14 +16,14 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
 from app.api.v1.common import current_user_id
-from app.api.v1.helpers import DEFAULT_USER
 from app.api.v1.helpers import payload as _payload
 from app.core.api_key_crypto import decrypt_api_key
+from app.core.auth_manager import require_scopes
 from app.core.task_worker import TaskStatus, task_manager
 from app.storage import async_session
 from app.storage.database import Agent, ApiKey
@@ -52,7 +61,9 @@ async def _factory_agent_payload(user_id: str, data: dict[str, Any]) -> dict[str
     if bool(requested_provider) != bool(requested_model):
         raise HTTPException(status_code=422, detail="provider and model must be selected together")
     if agent_id and requested_provider:
-        raise HTTPException(status_code=422, detail="Select either an agent or a provider/model pair")
+        raise HTTPException(
+            status_code=422, detail="Select either an agent or a provider/model pair"
+        )
 
     async with async_session() as db:
         agent_query = (
@@ -115,9 +126,7 @@ async def _factory_agent_payload(user_id: str, data: dict[str, Any]) -> dict[str
         agent_tools = list(agent.tool_ids or []) if agent else []
 
     requested_tools = [
-        tool
-        for skill in data.get("skills", [])
-        for tool in _FACTORY_TOOLS.get(str(skill), [])
+        tool for skill in data.get("skills", []) for tool in _FACTORY_TOOLS.get(str(skill), [])
     ]
     tools = list(dict.fromkeys(requested_tools or agent_tools))
     prompt_name = str(data.get("prompt_template", "senior-engineer"))
@@ -154,75 +163,10 @@ def _skill_dict(s: Skill) -> dict[str, Any]:
     }
 
 
-@router.get("/skills")
-@router.get("/skills/")
-async def list_skills() -> list[dict[str, Any]]:
-    async with async_session() as db:
-        rows = (await db.execute(select(Skill).order_by(Skill.created_at.desc()))).scalars().all()
-        return [_skill_dict(s) for s in rows]
-
-
-@router.post("/skills")
-@router.post("/skills/")
-async def create_skill(request: Request) -> dict[str, Any]:
-    data = await _payload(request)
-    if not data.get("name"):
-        raise HTTPException(status_code=422, detail="name is required")
-    async with async_session() as db:
-        skill = Skill(
-            user_id=DEFAULT_USER,
-            name=data["name"],
-            description=data.get("description", ""),
-            category=data.get("category", "general"),
-            prompt_template=data.get("prompt_template", ""),
-            tools=data.get("tools", []),
-        )
-        db.add(skill)
-        await db.commit()
-        await db.refresh(skill)
-        return _skill_dict(skill)
-
-
-async def _set_skill_enabled(skill_id: str, enabled: bool, user_id: str) -> dict:
-    async with async_session() as db:
-        skill = (
-            await db.execute(
-                select(Skill).where(Skill.id == skill_id, Skill.user_id == user_id)
-            )
-        ).scalar_one_or_none()
-        if skill is None:
-            raise HTTPException(status_code=404, detail="Skill not found")
-        skill.is_enabled = enabled
-        await db.commit()
-        return {"ok": True, "id": skill_id, "is_enabled": enabled}
-
-
-@router.post("/skills/{skill_id}/enable")
-async def enable_skill(skill_id: str, request: Request) -> dict:
-    return await _set_skill_enabled(skill_id, True, current_user_id(request))
-
-
-@router.post("/skills/{skill_id}/disable")
-async def disable_skill(skill_id: str, request: Request) -> dict:
-    return await _set_skill_enabled(skill_id, False, current_user_id(request))
-
-
-@router.delete("/skills/{skill_id}")
-async def delete_skill(skill_id: str, request: Request) -> dict:
-    user_id = current_user_id(request)
-    async with async_session() as db:
-        skill = (
-            await db.execute(select(Skill).where(Skill.id == skill_id, Skill.user_id == user_id))
-        ).scalar_one_or_none()
-        if skill is None:
-            raise HTTPException(status_code=404, detail="Skill not found")
-        await db.delete(skill)
-        await db.commit()
-        return {"ok": True, "deleted": skill_id}
-
-
 @router.patch("/skills/{skill_id}")
-async def update_skill(skill_id: str, request: Request) -> dict[str, Any]:
+async def update_skill(
+    skill_id: str, request: Request, _auth: dict[str, Any] = Depends(require_scopes("write"))
+) -> dict[str, Any]:
     data = await _payload(request)
     user_id = current_user_id(request)
     async with async_session() as db:
@@ -249,7 +193,9 @@ async def update_skill(skill_id: str, request: Request) -> dict[str, Any]:
 
 
 @router.post("/skills/autonomous/run")
-async def run_autonomous_skill(request: Request) -> StreamingResponse:
+async def run_autonomous_skill(
+    request: Request, _auth: dict[str, Any] = Depends(require_scopes("write"))
+) -> StreamingResponse:
     data = await _payload(request)
     goal = str(data.get("goal", "")).strip()
     if not goal:
@@ -257,19 +203,20 @@ async def run_autonomous_skill(request: Request) -> StreamingResponse:
 
     owner_id = current_user_id(request)
     task_payload = await _factory_agent_payload(owner_id, data)
-    task_id = await task_manager.submit(
-        "factory_run", task_payload, owner_id=owner_id
-    )
+    task_id = await task_manager.submit("factory_run", task_payload, owner_id=owner_id)
 
     async def stream() -> AsyncIterator[str]:
         queue = task_manager.subscribe(task_id)
         try:
-            yield _sse("factory_config", {
-                "task_id": task_id,
-                "agent_id": task_payload["agent_id"],
-                "provider": task_payload["provider"],
-                "model": task_payload["model"],
-            })
+            yield _sse(
+                "factory_config",
+                {
+                    "task_id": task_id,
+                    "agent_id": task_payload["agent_id"],
+                    "provider": task_payload["provider"],
+                    "model": task_payload["model"],
+                },
+            )
             while True:
                 if await request.is_disconnected():
                     await task_manager.cancel(task_id)
@@ -279,9 +226,7 @@ async def run_autonomous_skill(request: Request) -> StreamingResponse:
                     yield _sse(event["type"], event["data"])
                 except TimeoutError:
                     pass
-                status = await task_manager.get_status(
-                    task_id, owner_id=owner_id
-                )
+                status = await task_manager.get_status(task_id, owner_id=owner_id)
                 if status is None or status["status"] in {
                     TaskStatus.COMPLETED.value,
                     TaskStatus.FAILED.value,
@@ -291,16 +236,22 @@ async def run_autonomous_skill(request: Request) -> StreamingResponse:
                         event = queue.get_nowait()
                         yield _sse(event["type"], event["data"])
                     if status is None:
-                        yield _sse("factory_failed", {
-                            "task_id": task_id,
-                            "error": "Factory task status is unavailable",
-                        })
+                        yield _sse(
+                            "factory_failed",
+                            {
+                                "task_id": task_id,
+                                "error": "Factory task status is unavailable",
+                            },
+                        )
                     elif status["status"] in {TaskStatus.FAILED.value, TaskStatus.CANCELLED.value}:
-                        yield _sse("factory_failed", {
-                            "task_id": task_id,
-                            "status": status["status"],
-                            "error": status.get("error") or status["status"],
-                        })
+                        yield _sse(
+                            "factory_failed",
+                            {
+                                "task_id": task_id,
+                                "status": status["status"],
+                                "error": status.get("error") or status["status"],
+                            },
+                        )
                     else:
                         yield _sse("factory_completed", {"task_id": task_id})
                     break

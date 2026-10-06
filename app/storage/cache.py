@@ -2,26 +2,46 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
+import time
+from collections.abc import Awaitable, Callable
 from functools import wraps
-from typing import Any
+from typing import Any, ParamSpec, TypeVar, cast
 
 import structlog
 
 logger = structlog.get_logger()
 
+P = ParamSpec("P")
+R = TypeVar("R")
+
 _redis_client = None
+_redis_retry_after = 0.0
+_REDIS_FAILURE_COOLDOWN = 30.0
 
 
-async def get_redis():
+async def _close_client(client: Any) -> None:
+    closer = getattr(client, "aclose", None) or getattr(client, "close", None)
+    if closer is None:
+        return
+    with contextlib.suppress(Exception):
+        await closer()
+
+
+async def get_redis() -> Any:
     """Get or create Redis client singleton.
 
     Returns None when the optional `redis` package is not installed or no
     server is reachable — callers must treat `None` as "caching disabled".
     """
-    global _redis_client
+    global _redis_client, _redis_retry_after
     if _redis_client is None:
+        # Negative cache: avoid reconnecting/pinging a known-unreachable server
+        # on every request.
+        if time.monotonic() < _redis_retry_after:
+            return None
         try:
             import redis.asyncio as redis
         except ImportError:
@@ -29,28 +49,36 @@ async def get_redis():
             return None
 
         from app.config import settings
+
+        client = None
         try:
-            _redis_client = redis.from_url(settings.redis_url, decode_responses=True)
-            await _redis_client.ping()
+            client = redis.from_url(settings.redis_url, decode_responses=True)
+            await client.ping()
+            _redis_client = client
+            _redis_retry_after = 0.0
             logger.info("Redis connected")
         except Exception:
             logger.warning("Redis unavailable, caching disabled")
             _redis_client = None
+            _redis_retry_after = time.monotonic() + _REDIS_FAILURE_COOLDOWN
+            if client is not None:
+                await _close_client(client)
     return _redis_client
 
 
-async def close_redis():
+async def close_redis() -> None:
     """Close Redis connection."""
-    global _redis_client
+    global _redis_client, _redis_retry_after
     if _redis_client:
-        await _redis_client.close()
+        await _close_client(_redis_client)
         _redis_client = None
+    _redis_retry_after = 0.0
 
 
 class Cache:
     """Simple Redis cache wrapper."""
 
-    def __init__(self, redis_client=None, prefix: str = "ae"):
+    def __init__(self, redis_client: Any = None, prefix: str = "ae") -> None:
         self._redis = redis_client
         self._prefix = prefix
 
@@ -90,7 +118,7 @@ class Cache:
         if not self._redis:
             return 0
         try:
-            return await self._redis.incrby(self._key(key), amount)
+            return cast(int, await self._redis.incrby(self._key(key), amount))
         except Exception:
             return 0
 
@@ -98,23 +126,28 @@ class Cache:
         if not self._redis:
             return False
         try:
-            return await self._redis.expire(self._key(key), seconds)
+            return cast(bool, await self._redis.expire(self._key(key), seconds))
         except Exception:
             return False
 
 
-def cached(ttl: int = 300, key_prefix: str = "cache"):
+def cached(
+    ttl: int = 300, key_prefix: str = "cache"
+) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
     """Decorator for caching async function results."""
-    def decorator(func):
+
+    def decorator(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             cache = Cache(await get_redis())
             cache_key = f"{key_prefix}:{func.__name__}:{hashlib.md5(str(args).encode()).hexdigest()[:8]}:{hashlib.md5(str(sorted(kwargs.items())).encode()).hexdigest()[:8]}"
-            result = await cache.get(cache_key)
-            if result is not None:
-                return result
+            cached_value = await cache.get(cache_key)
+            if cached_value is not None:
+                return cast(R, cached_value)
             result = await func(*args, **kwargs)
             await cache.set(cache_key, result, ttl)
             return result
+
         return wrapper
+
     return decorator

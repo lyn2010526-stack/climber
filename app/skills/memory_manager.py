@@ -1,11 +1,15 @@
 """Memory manager for skills — provides persistent memory storage."""
+
 from __future__ import annotations
 
 import uuid
+from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
+
+_CACHE_MAX_ENTRIES = 2000
 
 
 class MemoryType(StrEnum):
@@ -29,10 +33,16 @@ class MemoryEntry:
 class PersistentMemory:
     """Simple persistent memory store."""
 
-    def __init__(self):
-        self._cache: list[MemoryEntry] = []
+    def __init__(self) -> None:
+        self._cache: deque[MemoryEntry] = deque(maxlen=_CACHE_MAX_ENTRIES)
 
-    def store(self, content: str, memory_type: MemoryType = MemoryType.FACT, source: str = "system", **kwargs) -> MemoryEntry:
+    def store(
+        self,
+        content: str,
+        memory_type: MemoryType = MemoryType.FACT,
+        source: str = "system",
+        **kwargs: Any,
+    ) -> MemoryEntry:
         entry = MemoryEntry(
             id=str(uuid.uuid4())[:12],
             content=content,
@@ -44,8 +54,12 @@ class PersistentMemory:
         self._cache.append(entry)
         return entry
 
-    def recall(self, query: str = "", limit: int = 10, memory_type: MemoryType | None = None) -> list[MemoryEntry]:
-        results = self._cache
+    def recall(
+        self, query: str = "", limit: int = 10, memory_type: MemoryType | None = None
+    ) -> list[MemoryEntry]:
+        if limit <= 0:
+            return []
+        results = list(self._cache)
         if memory_type:
             results = [e for e in results if e.memory_type == memory_type]
         if query:

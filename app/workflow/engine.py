@@ -15,7 +15,7 @@ import ast
 import asyncio
 import json
 import time
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -32,11 +32,33 @@ from app.workflow import (
 from app.workflow.code_sandbox import run_code_sandboxed
 from app.workflow.safe_code import (
     safe_eval,
-    safe_exec,
+    safe_exec,  # noqa: F401 - re-exported: public surface of this module
+)
+from app.workflow.safe_code import (
     validate_code_ast as _validate_code_ast,
 )
 
 logger = structlog.get_logger()
+
+
+def _config_float(value: Any) -> float | None:
+    """Coerce a workflow node config value to float; None when absent/invalid."""
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _config_int(value: Any) -> int | None:
+    """Coerce a workflow node config value to int; None when absent/invalid."""
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 class WorkflowEngine:
@@ -97,9 +119,7 @@ class WorkflowEngine:
             )
 
         # Set start node
-        start_node = next(
-            (n for n in workflow.nodes if n.type == NodeType.START), None
-        )
+        start_node = next((n for n in workflow.nodes if n.type == NodeType.START), None)
         if start_node:
             start_node.output = user_inputs
             start_node.status = NodeStatus.COMPLETED
@@ -170,15 +190,23 @@ class WorkflowEngine:
             elif node.type == NodeType.TOOL:
                 output = await self._execute_tool_node(node, resolved_inputs)
             elif node.type == NodeType.CONDITION:
-                output, skip_targets = self._execute_condition_node(
-                    node, resolved_inputs, workflow,
+                output, skip_targets = cast(
+                    tuple[dict[str, Any], list[str]],
+                    self._execute_condition_node(
+                        node,
+                        resolved_inputs,
+                        workflow,
+                    ),
                 )
                 # Mark downstream nodes for skipping
                 for target_id in skip_targets:
                     self._skip_downstream(target_id, node.id, workflow, skipped_nodes)
             elif node.type == NodeType.ITERATOR:
                 output = await self._execute_iterator_node(
-                    node, resolved_inputs, user_id, skipped_nodes,
+                    node,
+                    resolved_inputs,
+                    user_id,
+                    skipped_nodes,
                 )
             elif node.type == NodeType.CODE:
                 output = await self._execute_code_node(node, resolved_inputs)
@@ -205,18 +233,33 @@ class WorkflowEngine:
     ) -> None:
         """Mark nodes on a non-matching branch as skipped.
 
-        When a condition node evaluates to false, all nodes that are
-        exclusively reachable through the false branch should be skipped.
+        When a condition node evaluates to false, every node that is
+        exclusively reachable through the false branch must be skipped —
+        including the transitive closure of the branch, not only the direct
+        successor. A node stays live when it is also reachable from the
+        condition node through any other (non-skipped) path.
         """
-        # Find all successors of the branch node
-        branch_successors = workflow.get_successors(branch_node_id)
-        for edge in branch_successors:
-            succ_id = edge.target
-            if succ_id == condition_node_id:
+        # Breadth-first walk of the branch, stopping at nodes that are
+        # still reachable from the condition node via another route.
+        queue = [branch_node_id]
+        seen: set[str] = set()
+        while queue:
+            current = queue.pop(0)
+            if current in seen:
                 continue
-            # Only skip if not reachable from condition node via other paths
-            if not self._is_reachable_from(condition_node_id, succ_id, workflow, exclude_node=branch_node_id):
-                skipped_nodes.add(succ_id)
+            seen.add(current)
+            if current == condition_node_id:
+                continue
+            if current != branch_node_id and self._is_reachable_from(
+                condition_node_id, current, workflow, exclude_node=branch_node_id
+            ):
+                # Reachable via the condition node by another path; keep it.
+                continue
+            if current != branch_node_id:
+                skipped_nodes.add(current)
+            for edge in workflow.get_successors(current):
+                if edge.target not in seen:
+                    queue.append(edge.target)
 
     def _is_reachable_from(
         self,
@@ -259,6 +302,12 @@ class WorkflowEngine:
         api_key = os.environ.get(api_key_env, "") if api_key_env else node.config.get("api_key", "")
         prompt_template = node.config.get("prompt", "")
         system_prompt = node.config.get("system_prompt", "")
+        # Sampling parameters stored on the node config (see
+        # app/core/workflow_executor.py build_workflow_from_graph) must reach
+        # the adapter call; route them through the session so every engine
+        # LLM-call path forwards them as request parameters.
+        temperature = _config_float(node.config.get("temperature"))
+        max_tokens = _config_int(node.config.get("max_tokens"))
 
         prompt = self._render_template(prompt_template, inputs)
 
@@ -269,12 +318,22 @@ class WorkflowEngine:
             model_id=model_id,
             api_key=api_key,
             system_prompt=system_prompt,
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
 
         full_response_parts: list[str] = []
+        error_message = ""
         async for event in self.agent_engine.run(session, prompt):
             if event.type.value == "text":
                 full_response_parts.append(event.data.get("content", ""))
+            elif event.type.value == "error":
+                error_message = str(
+                    event.data.get("error") or event.data.get("message") or event.data
+                )
+
+        if error_message:
+            raise RuntimeError(error_message)
 
         return {
             "response": "".join(full_response_parts),
@@ -300,12 +359,14 @@ class WorkflowEngine:
                 resolved_tool_inputs[k] = v
 
         from app.core.parallel import ParallelToolExecutor
+
         registry = self._resolve_registry()
         sandbox = getattr(self.agent_engine, "sandbox", None)
         permission_overlay = getattr(self.agent_engine, "permission_overlay", None)
         capabilities = node.config.get("tool_capabilities")
 
         from app.core.engine.tool_capabilities import build_workflow_tool_validator
+
         validator = build_workflow_tool_validator(
             registry,
             sandbox=sandbox,
@@ -313,14 +374,18 @@ class WorkflowEngine:
             capabilities=capabilities,
         )
         executor = ParallelToolExecutor(registry, validator=validator)
-        tool_result = await executor.execute_all([{
-            "id": f"wf-{node.id}",
-            "function": {
-                "name": tool_name,
-                "arguments": resolved_tool_inputs,
-            },
-        }])
-        tool_result = tool_result[0]
+        tool_results = await executor.execute_all(
+            [
+                {
+                    "id": f"wf-{node.id}",
+                    "function": {
+                        "name": tool_name,
+                        "arguments": resolved_tool_inputs,
+                    },
+                }
+            ]
+        )
+        tool_result = tool_results[0]
 
         if not tool_result.success:
             raise RuntimeError(tool_result.error or f"Tool '{tool_name}' execution failed")
@@ -374,7 +439,9 @@ class WorkflowEngine:
 
         for edge in edges:
             edge_condition = edge.condition
-            if (edge_condition == "true" and not condition_result) or (edge_condition == "false" and condition_result):
+            if (edge_condition == "true" and not condition_result) or (
+                edge_condition == "false" and condition_result
+            ):
                 skip_targets.append(edge.target)
 
         return {
@@ -421,6 +488,7 @@ class WorkflowEngine:
                 return False
         elif operator == "regex":
             import re
+
             if len(expected) > 500:
                 return False
             # Reject catastrophic nested quantifiers like (a+)+ or (a*)*
@@ -466,7 +534,7 @@ class WorkflowEngine:
         results: list[Any] = []
 
         for i, item in enumerate(collection[:max_iterations]):
-            local_vars = {item_var: item, "index": i, **inputs}
+            local_vars = {**inputs, item_var: item, "index": i}
             try:
                 result = safe_eval(transform, local_vars)
                 results.append(result)
@@ -568,6 +636,7 @@ class WorkflowEngine:
         capabilities = node.config.get("tool_capabilities")
 
         from app.core.engine.tool_capabilities import build_workflow_tool_validator
+
         validator = build_workflow_tool_validator(
             registry,
             sandbox=sandbox,
@@ -588,21 +657,29 @@ class WorkflowEngine:
         ledger = None
         if ledger_dir:
             from app.simulation.ledger import ExperimentLedger
+
             ledger = ExperimentLedger(ledger_dir)
 
-        llm_call = None
         if node.config.get("llm_mode") or orchestrator_mode:
             provider = node.config.get("provider", "openai")
             model_id = node.config.get("model_id", "gpt-4")
             import os as _os
-            api_key_env = node.config.get("api_key_env", "")
-            api_key = _os.environ.get(api_key_env, "") if api_key_env else node.config.get("api_key", "")
 
-            async def _llm_call(prompt: str, system_prompt: str):
+            api_key_env = node.config.get("api_key_env", "")
+            api_key = (
+                _os.environ.get(api_key_env, "") if api_key_env else node.config.get("api_key", "")
+            )
+
+            async def _llm_call(prompt: str, system_prompt: str) -> str:
                 from app.core.engine.session_runner import run_llm_single
+
                 return await run_llm_single(
-                    self.agent_engine, provider, model_id, api_key,
-                    system_prompt, prompt,
+                    self.agent_engine,
+                    provider,
+                    model_id,
+                    api_key,
+                    system_prompt,
+                    prompt,
                 )
 
         if orchestrator_mode:
@@ -616,7 +693,8 @@ class WorkflowEngine:
                 options=OrchestratorOptions(
                     max_plan_rounds=plan_rounds,
                     harness_options=HarnessOptions(
-                        max_rounds=max_rounds, policy=policy,
+                        max_rounds=max_rounds,
+                        policy=policy,
                     ),
                     default_tool=tool_name,
                 ),
@@ -648,19 +726,22 @@ class WorkflowEngine:
         if node.config.get("llm_mode"):
             tool_def = registry.get_tool(tool_name) if registry else None
             from app.simulation.llm_planner import LLMExperimentPlanner
+
             llm_planner = LLMExperimentPlanner(
                 llm_call=_llm_call,
                 tool_name=tool_name,
                 tool_def=tool_def,
             )
 
-        result = await harness.run_requirement(goal, tool_name, schema, llm_planner=llm_planner)
+        harness_result = await harness.run_requirement(
+            goal, tool_name, schema, llm_planner=llm_planner
+        )
 
         return {
-            "accepted": result.accepted,
-            "rejected": result.rejected,
-            "reports": [r.model_dump() for r in result.reports],
-            "ledger_path": result.ledger_path,
+            "accepted": harness_result.accepted,
+            "rejected": harness_result.rejected,
+            "reports": [r.model_dump() for r in harness_result.reports],
+            "ledger_path": harness_result.ledger_path,
             "node_id": node.id,
             "node_name": node.name,
         }
@@ -690,7 +771,7 @@ class WorkflowEngine:
 
         # Apply explicit input references (override auto-merged)
         for key, ref in node.inputs.items():
-            # Format: "node_id.output_key" or "node_id"
+            # Format: "node_id.output_key" or "node_id"  # noqa: ERA001
             if "." in ref:
                 node_id, output_key = ref.split(".", 1)
             else:
@@ -769,10 +850,17 @@ class WorkflowEngine:
             return {}
 
         outputs: dict[str, Any] = {}
+        seen_names: set[str] = set()
         for node in end_nodes:
-            if node.output is not None:
-                outputs[node.name] = node.output
+            if node.output is None:
+                continue
+            # Names are for humans and can repeat. Two end nodes with the same
+            # label must both survive in the result, so the second and later
+            # occurrences get a short id suffix instead of silently overwriting
+            # the earlier output (R10-06).
+            key = node.name
+            if key in seen_names:
+                key = f"{node.name} ({node.id[-6:]})"
+            seen_names.add(node.name)
+            outputs[key] = node.output
         return outputs
-
-
-

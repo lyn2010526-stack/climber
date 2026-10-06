@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./styles/workbench.css";
 
 /* Bind Tailwind's `dark:` variant to the app's data-theme switch instead of
    prefers-color-scheme, otherwise utilities like `dark:bg-gray-800` stay dark
@@ -175,6 +176,26 @@
   --shadow-2xl: var(--shadow-xl);
   --shadow-elevated: var(--shadow-md);
 
+  /* iOS Polish Layer — additive rungs for the iOS-style polish pass. The names
+     are new on purpose: the radius and shadow ladders above are load-bearing
+     for other surfaces, so the iOS rungs land beside them instead of retuning
+     them. `--radius-ios-*` carries the iOS corner feel (10/14/20/28),
+     `--shadow-1/2/3` are soft diffuse lifts, `--ease-ios` is the sheet-and-
+     spring curve iOS uses for entrances, and `--font-ios` puts the system
+     stack ahead of the web stack so native platforms render in SF Pro. */
+  --radius-ios-sm: 10px;
+  --radius-ios-md: 14px;
+  --radius-ios-lg: 20px;
+  --radius-ios-xl: 28px;
+  --shadow-1: 0 1px 1px rgb(0 0 0 / 0.10), 0 2px 8px rgb(0 0 0 / 0.12);
+  --shadow-2: 0 4px 16px rgb(0 0 0 / 0.16);
+  --shadow-3: 0 12px 32px rgb(0 0 0 / 0.24);
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+  --font-ios: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Inter Variable', 'Inter', 'Segoe UI', sans-serif;
+
+  /* Boot Splash — the first frame of the app outranks every dialog surface. */
+  --z-boot: 700;
+
   /* Motion */
   --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
@@ -188,6 +209,14 @@
   /* Focus */
   --focus-ring: 0 0 0 2px var(--color-bg-page), 0 0 0 4px var(--color-accent-foreground);
   --focus-ring-offset: 2px;
+
+  /* Chrome — scrollbars and text selection are part of the brand surface, so
+     they resolve through the same token layer as every other colour instead of
+     hard-coding a white/black wash. Both themes declare their own density. */
+  --color-scrollbar-thumb: rgba(233, 235, 240, 0.14);
+  --color-scrollbar-thumb-hover: rgba(233, 235, 240, 0.26);
+  --color-selection-bg: rgba(91, 200, 216, 0.30);
+  --color-selection-text: var(--color-text-primary);
 
   /* Typography Scale */
   --text-2xs: 0.6875rem;
@@ -223,6 +252,8 @@
   --space-12: 3rem;
   --space-16: 4rem;
   --space-20: 5rem;
+  --space-24: 6rem;
+  --space-32: 8rem;
 
   /* Icon Sizes */
   --icon-xs: 0.75rem;
@@ -234,12 +265,50 @@
 
   /* Layout */
   --desktop-sidebar-width: 240px;
+  --anchored-task-height: 64px;
+  --anchored-result-height: 240px;
+  --nav-control-size: 28px;
+  --nav-control-radius: var(--radius-sm);
+  --privacy-panel-radius: var(--radius-lg);
   --sidebar-collapsed-width: 64px;
   --session-sidebar-width: 240px;
   --header-height: 52px;
   --max-width: 1440px;
   --content-max-width: 896px;
 }
+
+.anchored-nav-control {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--nav-control-size);
+  height: var(--nav-control-size);
+  margin-right: var(--space-1);
+  border-radius: var(--nav-control-radius);
+  color: var(--color-text-muted);
+}
+.anchored-nav-control:hover { background: var(--color-bg-surface-2); color: var(--color-text-primary); }
+.anchored-nav-control:active { background: var(--color-accent-subtle); }
+.anchored-nav-control:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.local-pin-settings {
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--privacy-panel-radius);
+  background: var(--color-bg-surface-1);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+}
+.local-pin-heading, .local-pin-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.local-pin-heading h3 { font-weight: var(--weight-semibold); }
+.local-pin-settings p { margin-top: var(--space-2); color: var(--color-text-muted); font-size: var(--text-xs); }
+.local-pin-state { margin-left: auto; font-size: var(--text-xs); color: var(--color-text-muted); }
+.local-pin-state[data-enabled="true"] { color: var(--color-success); }
+.local-pin-form { display: grid; gap: var(--space-2); margin-top: var(--space-3); min-width: 0; }
+.local-pin-actions { margin-top: var(--space-3); }
+.local-pin-settings [role="alert"] { color: var(--color-error); }
+.local-pin-settings [role="status"] { color: var(--color-success); }
 
 /* Legacy token aliases. Older ui/ components referenced unprefixed variables
    (--text-primary, --surface-bg, --accent, ...). They were never defined, so
@@ -267,6 +336,11 @@
   --size-md: 2.25rem;
   --color-danger: var(--color-error);
   --color-danger-subtle: var(--color-error-subtle);
+  /* Pages reached for `--color-primary` before the accent was named; the alias
+     keeps those call sites live and following the theme, exactly like the
+     `--color-danger` pair above. */
+  --color-primary: var(--color-accent);
+  --color-primary-subtle: var(--color-accent-subtle);
 }
 
 /* Light Mode
@@ -283,11 +357,13 @@
   --color-accent-foreground: #12545F;
   --color-accent-text: #FFFFFF;
   --color-accent-subtle: rgba(31, 122, 140, 0.08);
-  --color-bg-page: #F4F5F7;
+  /* Codex parity: the light shell is a single white canvas. Depth comes from
+     hairline borders, not from a grey page behind white panels. */
+  --color-bg-page: #FFFFFF;
   --color-bg-surface-1: #FFFFFF;
-  --color-bg-surface-2: #ECEFF4;
-  --color-bg-surface-3: #E2E6EE;
-  --color-bg-surface-4: #D5DBE6;
+  --color-bg-surface-2: #F6F7F9;
+  --color-bg-surface-3: #EEF0F4;
+  --color-bg-surface-4: #E4E8EF;
   --color-text-primary: #2E3440;
   --color-text-secondary: #3B4252;
   --color-text-muted: #4C566A;
@@ -333,6 +409,15 @@
   --shadow-md: 0 4px 12px -4px rgb(16 24 40 / 0.1);
   --shadow-lg: 0 8px 20px -6px rgb(16 24 40 / 0.12);
   --shadow-xl: 0 16px 32px -8px rgb(16 24 40 / 0.16);
+  /* The iOS shadow rungs are diffuse, so light mode presses each one down to
+     the barest visible lift on a white surface. */
+  --shadow-1: 0 1px 1px rgb(16 24 40 / 0.04), 0 2px 8px rgb(16 24 40 / 0.05);
+  --shadow-2: 0 4px 16px rgb(16 24 40 / 0.08);
+  --shadow-3: 0 12px 32px rgb(16 24 40 / 0.12);
+  --color-scrollbar-thumb: rgba(46, 52, 64, 0.16);
+  --color-scrollbar-thumb-hover: rgba(46, 52, 64, 0.30);
+  --color-selection-bg: rgba(31, 122, 140, 0.22);
+  --color-selection-text: var(--color-text-primary);
 }
 
 /* Smooth Theme Transitions */
@@ -512,15 +597,16 @@ a,
   opacity: 0.85;
 }
 
-/* Scrollbar Styling */
+/* Scrollbar Styling — the thumb rides the chrome tokens, so a theme switch
+   re-densifies it instead of leaving a stale white wash on a light canvas. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+  scrollbar-color: var(--color-scrollbar-thumb) transparent;
 }
 
 *::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 *::-webkit-scrollbar-track {
@@ -528,45 +614,31 @@ a,
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
+  background: var(--color-scrollbar-thumb);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: var(--radius-pill);
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--color-scrollbar-thumb-hover);
+  background-clip: padding-box;
 }
 
-[data-theme="light"] * {
-  scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
-[data-theme="light"] *::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12);
-}
-
-[data-theme="light"] *::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
-}
-
-/* Selection Styling */
+/* Selection Styling — tinted with the accent so a selection reads as part of
+   the app rather than the browser default. */
 ::selection {
-  background: rgba(100, 116, 139, 0.3);
-  color: #FFFFFF;
+  background: var(--color-selection-bg);
+  color: var(--color-selection-text);
 }
 
 ::-moz-selection {
-  background: rgba(100, 116, 139, 0.3);
-  color: #FFFFFF;
-}
-
-[data-theme="light"] ::selection {
-  background: rgba(71, 85, 105, 0.25);
-  color: #1F2937;
-}
-
-[data-theme="light"] ::-moz-selection {
-  background: rgba(71, 85, 105, 0.25);
-  color: #1F2937;
+  background: var(--color-selection-bg);
+  color: var(--color-selection-text);
 }
 
 /* Base Body */
@@ -978,17 +1050,74 @@ button:disabled,
   min-height: 0;
 }
 
+/* Full-screen transition mask: slides over the outgoing page, holds while the
+   content swaps underneath, then slides out. Only transform/opacity animate. */
+.page-mask {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay, 300);
+  background: var(--color-bg-page);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.page-mask[data-state='cover'] {
+  pointer-events: auto;
+}
+
+.page-mask::after {
+  content: '';
+  position: absolute;
+  background: var(--color-accent);
+}
+
+.page-mask[data-direction='forward']::after,
+.page-mask[data-direction='backward']::after {
+  top: 0;
+  bottom: 0;
+  width: 2px;
+}
+
+.page-mask[data-direction='forward']::after {
+  left: 0;
+}
+
+.page-mask[data-direction='backward']::after {
+  right: 0;
+}
+
+.page-mask[data-direction='up']::after,
+.page-mask[data-direction='down']::after {
+  left: 0;
+  right: 0;
+  height: 2px;
+}
+
+.page-mask[data-direction='up']::after {
+  bottom: 0;
+}
+
+.page-mask[data-direction='down']::after {
+  top: 0;
+}
+
 /* Mobile Layout */
 .mobile-main {
   padding-bottom: var(--mobile-nav-reserve);
 }
 
-/* Focus Ring */
+/* Focus Ring — one ring for the whole app. The outline and the token shadow
+   describe the same two-layer ring, so keyboard focus looks identical on any
+   surface; pointer focus stays outline-free to avoid a stuck ring. */
 :focus-visible {
   outline: 2px solid var(--color-accent-foreground);
   outline-offset: var(--focus-ring-offset);
   box-shadow: var(--focus-ring);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
 }
 
 /* Shared control baseline keeps surface, type and focus behavior consistent. */
@@ -1634,4 +1763,446 @@ select:-webkit-autofill:focus {
   color: var(--color-diff-hunk);
 }
 
+/* iOS Polish — motion utilities for the base control layer.
+   The class contracts ban press-scale, blur and glass-filter utilities inside
+   component sources, so those treatments live here and attach through plain
+   class names. Individual transform properties (`scale`, `translate`) keep the
+   keyframes from clobbering the utilities a caller may compose onto the same
+   element. */
+
+/* Press scale: a press reads as a small compression of the control, and a
+   disabled control stays still because a locked button never invites a press. */
+.press-scale:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .press-scale:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* iOS switch knob: the slide takes the sheet curve so the toggle reads as a
+   spring between its two positions. Only the timing function is set, so the
+   utility's property and duration keep owning the transition. */
+.switch-thumb {
+  transition-timing-function: var(--ease-spring);
+}
+
+/* Sheen sweep for placeholders. The highlight lives in the token layer (the
+   component sources stay free of image functions) and sweeps through the clip
+   the variant already asked for. */
+.skeleton-sheen::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.07) 50%, transparent 70%);
+  translate: -100% 0;
+  animation: skeleton-sheen-sweep 1.6s var(--ease-spring) infinite;
+}
+
+[data-theme="light"] .skeleton-sheen::after {
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
+}
+
+@keyframes skeleton-sheen-sweep {
+  to { translate: 100% 0; }
+}
+
+/* Shimmer text (codex `tui/src/shimmer.rs`): a highlight band sweeps across the
+   glyphs once every 2s. The gradient is wide so the `shimmer` keyframe's
+   background-position sweep moves the bright band through the clip; the base is
+   the muted text token and the band lifts toward the primary token. */
+.codex-shimmer-text {
+  background: linear-gradient(
+    100deg,
+    var(--color-text-muted) 40%,
+    var(--color-text-primary) 50%,
+    var(--color-text-muted) 60%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .codex-shimmer-text {
+    animation: none;
+    background: none;
+    color: var(--color-text-muted);
+  }
+}
+
+/* Sliding tab indicator: a hairline of accent under the active tab, moved by
+   the sheet curve. The component positions it from the active trigger's box,
+   and hides it while the current tab is disabled, so a locked tab never
+   carries the accent. */
+.tabs-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  transition: translate 280ms var(--ease-ios), width 280ms var(--ease-ios), opacity 150ms ease;
+}
+
+/* Modal panel entrance: the spring replaces the old scale-in so the dialog
+   reads as a sheet arriving from its content, and the scrim fades in behind it. */
+.modal-panel-in {
+  animation: modal-spring 320ms var(--ease-ios) both;
+}
+
+@keyframes modal-spring {
+  from { opacity: 0; scale: 0.98; translate: 0 12px; }
+  to { opacity: 1; scale: 1; translate: 0 0; }
+}
+
+.dropdown-panel-in {
+  animation: dropdown-spring 160ms var(--ease-ios) both;
+  transform-origin: top;
+}
+
+@keyframes dropdown-spring {
+  from { opacity: 0; scale: 0.98; translate: 0 -4px; }
+  to { opacity: 1; scale: 1; translate: 0 0; }
+}
+
+/* Boot splash — the first frame of the product, so it carries the whole
+   argument for how the rest of the app feels.
+
+   `src/components/motion/bootTiming.ts` is the source of truth for this table
+   and `bootTiming.test.ts` fails if the stylesheet drifts from it:
+
+     halo      0ms   640ms   cubic-bezier(0.22, 1, 0.36, 1)
+     mark     40ms   420ms   cubic-bezier(0.34, 1.56, 0.64, 1)   overshoot
+     name    150ms   340ms   cubic-bezier(0.16, 1, 0.3, 1)
+     rail    190ms   240ms   var(--ease-ios)
+     fill    210ms   380ms   cubic-bezier(0.22, 1, 0.36, 1)   lands at 590ms
+     tagline 300ms   260ms   var(--ease-ios)                  lands at 560ms
+     hold    640ms -> curtain 300ms cubic-bezier(0.83, 0, 0.17, 1)
+
+   Two decisions carry the expense. The progress fill completes 50ms before the
+   curtain lifts, so the reveal never cuts an element that is still moving. And
+   the light arrives before the brand does: the halo blooms from frame zero, so
+   the mark lands on an already-lit surface instead of switching one on. */
+.boot-splash {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-boot, 700);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  background: var(--color-bg-page);
+  animation: boot-fade-in 160ms var(--ease-ios) both;
+  will-change: transform;
+}
+
+/* Brand weave: a hairline diagonal at a fraction of the border token, masked so
+   it only reads near the mark and dissolves before the edges. It gives the flat
+   page colour a printed surface without spending a single extra colour. */
+.boot-splash-texture {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--color-border-subtle) 0 1px,
+    transparent 1px 7px
+  );
+  opacity: 0.55;
+  -webkit-mask-image: radial-gradient(115% 85% at 50% 46%, var(--color-text-primary) 0%, transparent 66%);
+  mask-image: radial-gradient(115% 85% at 50% 46%, var(--color-text-primary) 0%, transparent 66%);
+}
+
+/* Brand halo: a soft accent bloom behind the mark, opening on the same curve as
+   the fill so the light and the progress read as one arrival. */
+.boot-splash::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(560px, 78vw);
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -58%);
+  border-radius: var(--radius-pill);
+  background: radial-gradient(circle, var(--color-accent-subtle) 0%, transparent 62%);
+  pointer-events: none;
+}
+
+/* The light seam: a hairline of accent pinned to the bottom edge that travels
+   with the curtain as it lifts, with a soft bloom under it. */
+.boot-splash::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--color-accent);
+  box-shadow: 0 0 28px 2px var(--color-accent-subtle);
+  transform-origin: 50% 100%;
+}
+
+.boot-splash-mark {
+  position: relative;
+  display: inline-flex;
+  color: var(--color-accent-foreground);
+}
+
+.boot-splash-mark::after {
+  content: '';
+  position: absolute;
+  inset: -22%;
+  border-radius: var(--radius-pill);
+  background: radial-gradient(circle, var(--color-accent-subtle) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.boot-splash-name {
+  font-family: var(--font-ios);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.02em;
+  color: var(--color-text-primary);
+}
+
+.boot-splash-tagline {
+  font-family: var(--font-ios);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+
+.boot-splash-bar {
+  position: relative;
+  overflow: hidden;
+  width: 140px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-surface-3);
+}
+
+.boot-splash-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--color-accent);
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+}
+
+.boot-splash-first::before {
+  animation: boot-halo-bloom 640ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.boot-splash-first .boot-splash-mark {
+  animation: boot-mark-in 420ms 40ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.boot-splash-first .boot-splash-name {
+  animation: boot-name-in 340ms 150ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.boot-splash-first .boot-splash-bar {
+  animation: boot-bar-in 240ms 190ms var(--ease-ios) both;
+}
+
+.boot-splash-first .boot-splash-bar::after {
+  animation: boot-fill 380ms 210ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.boot-splash-first .boot-splash-tagline {
+  animation: boot-tagline-in 260ms 300ms var(--ease-ios) both;
+}
+
+.boot-splash-quick .boot-splash-mark {
+  animation: boot-quick-in 180ms var(--ease-ios) both;
+}
+
+/* Reveal: the curtain lifts on a symmetric quintic so it eases out of the
+   first frame and into the last, the seam travelling with it. */
+.boot-splash-first.boot-splash-exit {
+  animation: boot-reveal 300ms cubic-bezier(0.83, 0, 0.17, 1) both;
+}
+
+.boot-splash-quick.boot-splash-exit {
+  animation: boot-fade-out 160ms var(--ease-out) both;
+}
+
+/* The lift is lit from underneath: the seam swells and the halo flares once as
+   the curtain clears, so the reveal reads as light escaping rather than as a
+   panel being dragged off the screen. */
+.boot-splash-first.boot-splash-exit::after {
+  animation: boot-seam-flare 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.boot-splash-first.boot-splash-exit::before {
+  animation: boot-reveal-bloom 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.boot-splash.boot-splash-exit .boot-splash-mark,
+.boot-splash.boot-splash-exit .boot-splash-name,
+.boot-splash.boot-splash-exit .boot-splash-bar,
+.boot-splash.boot-splash-exit .boot-splash-tagline {
+  animation: boot-content-out 160ms var(--ease-ios) both;
+}
+
+.boot-splash.boot-splash-exit .boot-splash-texture {
+  animation: boot-fade-out 160ms var(--ease-out) both;
+}
+
+@keyframes boot-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes boot-halo-bloom {
+  from { opacity: 0; transform: translate(-50%, -58%) scale(0.86); }
+  to { opacity: 1; transform: translate(-50%, -58%) scale(1); }
+}
+
+@keyframes boot-mark-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.88); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes boot-name-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes boot-bar-in {
+  from { opacity: 0; transform: scaleX(0.4); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+
+@keyframes boot-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes boot-tagline-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes boot-quick-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes boot-reveal {
+  to { transform: translateY(-100%); }
+}
+
+@keyframes boot-seam-flare {
+  from { opacity: 0.72; transform: scaleY(1); }
+  to { opacity: 1; transform: scaleY(3.4); }
+}
+
+@keyframes boot-reveal-bloom {
+  from { opacity: 1; transform: translate(-50%, -58%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -58%) scale(1.18); }
+}
+
+@keyframes boot-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes boot-content-out {
+  to { opacity: 0; transform: translateY(-10px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-splash,
+  .boot-splash::before,
+  .boot-splash::after,
+  .boot-splash-texture,
+  .boot-splash-mark,
+  .boot-splash-name,
+  .boot-splash-bar,
+  .boot-splash-bar::after,
+  .boot-splash-tagline {
+    animation: none;
+  }
+
+  .boot-splash-bar::after {
+    transform: none;
+  }
+
+  /* The seam keeps its hairline instead of holding a flare mid-swelling. */
+  .boot-splash::after {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* First-entry workspace orchestration — the three rails settle in left to
+   right once per session, each a 460-520ms spring. Transform and opacity only,
+   and reduced motion pins every rail in place. */
+.anchored-enter-left {
+  animation: anchored-enter-left 460ms var(--ease-spring) both;
+}
+
+.anchored-enter-center {
+  animation: anchored-enter-center 520ms 100ms var(--ease-spring) both;
+}
+
+.anchored-enter-right {
+  animation: anchored-enter-right 460ms 200ms var(--ease-spring) both;
+}
+
+@keyframes anchored-enter-left {
+  from { opacity: 0; transform: translate3d(-18px, 0, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes anchored-enter-center {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes anchored-enter-right {
+  from { opacity: 0; transform: translate3d(18px, 0, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anchored-enter-left,
+  .anchored-enter-center,
+  .anchored-enter-right {
+    animation: none;
+  }
+}
+
 @import './styles/rtl.css';
+
+/* Native range thumbs are transparent so the styled track (ParamControls and
+   any future slider) is the only visible marker. Defined once globally rather
+   than per instance (R13-48). */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}

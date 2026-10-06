@@ -7,7 +7,8 @@ or context insufficiency.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -40,11 +41,110 @@ class AttributionResult:
     fix_action: str
 
 
+@dataclass
+class CausalEdge:
+    state_key: str
+    action: str
+    outcome: str
+    observations: int = 0
+    confidence: float = 0.0
+    uncertainty: float = 1.0
+    success_count: int = 0
+    failure_count: int = 0
+    last_observed_at: str = ""
+
+    def decay(self, factor: float = 0.98) -> None:
+        self.confidence = round(max(0.0, self.confidence * factor), 6)
+        self.uncertainty = round(
+            min(1.0, self.uncertainty + (1.0 - self.uncertainty) * (1.0 - factor)),
+            6,
+        )
+
+
+@dataclass
+class CausalGraph:
+    edges: list[CausalEdge] = field(default_factory=list)
+
+    def update(
+        self,
+        state: dict[str, Any],
+        action: str,
+        next_state: dict[str, Any],
+        outcome: str,
+        success: bool | None = None,
+        prediction_error: float | None = None,
+    ) -> CausalEdge:
+        state_key = repr(sorted(state.items()))
+        edge = next(
+            (item for item in self.edges if item.state_key == state_key and item.action == action),
+            None,
+        )
+        if edge is None:
+            edge = CausalEdge(state_key, action, outcome)
+            self.edges.append(edge)
+        edge.observations += 1
+        edge.outcome = outcome
+        edge.last_observed_at = datetime.now(UTC).isoformat()
+        if success is None:
+            success = not outcome.lower().startswith("error")
+        edge.success_count += int(success)
+        edge.failure_count += int(not success)
+        edge.confidence = min(1.0, edge.confidence + 0.25)
+        edge.uncertainty = max(
+            0.0,
+            prediction_error if prediction_error is not None else 1.0 - edge.confidence,
+        )
+        return edge
+
+    def query_effect(self, state: dict[str, Any], action: str) -> CausalEdge | None:
+        state_key = repr(sorted(state.items()))
+        return next(
+            (
+                edge
+                for edge in reversed(self.edges)
+                if edge.state_key == state_key and edge.action == action
+            ),
+            None,
+        )
+
+    def suggest_probes(self, state: dict[str, Any], limit: int = 3) -> list[dict[str, Any]]:
+        """Return observed actions whose effects remain uncertain."""
+        state_key = repr(sorted(state.items()))
+        candidates = [edge for edge in self.edges if edge.state_key == state_key]
+        candidates.sort(key=lambda edge: (edge.uncertainty, -edge.observations), reverse=True)
+        return [
+            {
+                "action": edge.action,
+                "reason": "uncertain_effect",
+                "uncertainty": round(edge.uncertainty, 4),
+                "observations": edge.observations,
+            }
+            for edge in candidates[: max(0, limit)]
+            if edge.uncertainty > 0.0
+        ]
+
+    def decay(self, factor: float = 0.98) -> None:
+        for edge in self.edges:
+            edge.decay(factor)
+
+
 class CausalAttribution:
     """Post-execution root cause analysis engine."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._execution_log: list[dict[str, Any]] = []
+        self.graph = CausalGraph()
+
+    def update_graph(
+        self,
+        state: dict[str, Any],
+        action: str,
+        next_state: dict[str, Any],
+        outcome: str,
+        success: bool | None = None,
+        prediction_error: float | None = None,
+    ) -> CausalEdge:
+        return self.graph.update(state, action, next_state, outcome, success, prediction_error)
 
     def log_event(
         self,
@@ -53,12 +153,14 @@ class CausalAttribution:
         outcome: str,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        self._execution_log.append({
-            "iteration": iteration,
-            "action": action,
-            "outcome": outcome,
-            "metadata": metadata or {},
-        })
+        self._execution_log.append(
+            {
+                "iteration": iteration,
+                "action": action,
+                "outcome": outcome,
+                "metadata": metadata or {},
+            }
+        )
 
     def analyze(
         self,
@@ -85,8 +187,7 @@ class CausalAttribution:
     ) -> AttributionResult:
         chain = self._build_chain()
         error_outcomes = [
-            e for e in chain
-            if e.outcome.startswith("Error") or "error" in e.outcome.lower()
+            e for e in chain if e.outcome.startswith("Error") or "error" in e.outcome.lower()
         ]
 
         # Check for repeated tool failures
@@ -109,8 +210,13 @@ class CausalAttribution:
         # Check for hallucination indicators
         outcome_lower = outcome.lower()
         hallucination_signs = [
-            "i believe", "i think", "probably", "likely",
-            "it seems", "appears to be", "might be",
+            "i believe",
+            "i think",
+            "probably",
+            "likely",
+            "it seems",
+            "appears to be",
+            "might be",
         ]
         if any(sign in outcome_lower for sign in hallucination_signs):
             return AttributionResult(
@@ -163,17 +269,19 @@ class CausalAttribution:
         chain = []
         for entry in self._execution_log:
             is_error = (
-                entry["outcome"].startswith("Error")
-                or "error" in entry["outcome"].lower()[:50]
+                entry["outcome"].startswith("Error") or "error" in entry["outcome"].lower()[:50]
             )
-            chain.append(CausalNode(
-                iteration=entry["iteration"],
-                action=entry["action"],
-                outcome=entry["outcome"][:200],
-                is_failure_point=is_error,
-                evidence=entry["metadata"].get("evidence", ""),
-            ))
+            chain.append(
+                CausalNode(
+                    iteration=entry["iteration"],
+                    action=entry["action"],
+                    outcome=entry["outcome"][:200],
+                    is_failure_point=is_error,
+                    evidence=entry["metadata"].get("evidence", ""),
+                )
+            )
         return chain
 
     def reset(self) -> None:
         self._execution_log.clear()
+        self.graph = CausalGraph()

@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
-from app.models.openai_adapter import ModelCapability, OpenAIAdapter
+from app.core import ChatResult
+from app.models import ModelCapability
+from app.models.openai_adapter import OpenAIAdapter
 
 
 class StepFunAdapter(OpenAIAdapter):
     """Adapter for StepFun API (OpenAI-compatible)."""
 
-    def __init__(self, model_id: str, api_key: str, base_url: str = "https://api.stepfun.com/v1", capabilities: ModelCapability | None = None):
+    def __init__(
+        self,
+        model_id: str,
+        api_key: str,
+        base_url: str = "https://api.stepfun.com/v1",
+        capabilities: ModelCapability | None = None,
+    ):
         super().__init__(model_id, api_key, base_url)
         self._capabilities = capabilities
 
@@ -25,6 +33,7 @@ class StepFunAdapter(OpenAIAdapter):
             streaming=False,
             tools=True,
             vision=False,
+            file_attachments=False,
             embedding=False,
             max_tokens=128_000,
         )
@@ -34,6 +43,6 @@ class StepFunAdapter(OpenAIAdapter):
         messages: list[dict[str, object]],
         tools: list[dict[str, object]] | None = None,
         **kwargs: object,
-    ) -> object:
+    ) -> ChatResult:
         """Non-streaming chat completion for StepFun."""
         return await self._chat_non_streaming(messages, tools, **kwargs)

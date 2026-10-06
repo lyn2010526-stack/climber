@@ -1,10 +1,14 @@
 """Standard-library Chat Completions client and explicitly scripted test model."""
 
+from __future__ import annotations
+
 import json
 import os
 import urllib.error
 import urllib.parse
 import urllib.request
+from http.client import HTTPMessage
+from typing import IO, Any, cast
 
 
 class ModelError(Exception):
@@ -12,7 +16,15 @@ class ModelError(Exception):
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: IO[bytes],
+        code: int,
+        msg: str,
+        headers: HTTPMessage,
+        newurl: str,
+    ) -> urllib.request.Request | None:
         raise ModelError("Model endpoint redirects are disabled")
 
 
@@ -30,7 +42,11 @@ class OpenAICompatibleModel:
             or parsed.fragment
         ):
             raise ValueError("Invalid USER_LLM_BASE_URL")
-        if parsed.scheme == "http" and not insecure_http and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+        if (
+            parsed.scheme == "http"
+            and not insecure_http
+            and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}
+        ):
             raise ValueError("Remote model endpoints require HTTPS")
         if not model or not api_key:
             raise ValueError("USER_LLM_MODEL and USER_LLM_API_KEY are required")
@@ -39,7 +55,7 @@ class OpenAICompatibleModel:
         self.api_key = api_key
 
     @classmethod
-    def from_environment(cls):
+    def from_environment(cls) -> OpenAICompatibleModel:
         return cls(
             os.environ.get("USER_LLM_BASE_URL", "https://api.openai.com/v1"),
             os.environ.get("USER_LLM_MODEL", ""),
@@ -47,7 +63,7 @@ class OpenAICompatibleModel:
         )
 
     @classmethod
-    def from_arc_env(cls):
+    def from_arc_env(cls) -> OpenAICompatibleModel:
         """Build from ARC-Bench platform injected vars, falling back to USER_LLM_*.
 
         The platform provides OPENAI_API_KEY / OPENAI_BASE_URL / MODEL. Platform
@@ -64,15 +80,29 @@ class OpenAICompatibleModel:
         api_key = pick("OPENAI_API_KEY", "USER_LLM_API_KEY")
         model = pick("MODEL", "USER_LLM_MODEL")
         base_url = pick("OPENAI_BASE_URL", "USER_LLM_BASE_URL", "https://api.openai.com/v1")
-        if not base_url.rstrip("/").endswith("/v1") and not base_url.rstrip("/").endswith("/chat/completions"):
+        if not base_url.rstrip("/").endswith("/v1") and not base_url.rstrip("/").endswith(
+            "/chat/completions"
+        ):
             base_url = base_url.rstrip("/") + "/v1"
         if base_url.rstrip("/").endswith("/chat/completions"):
             base_url = base_url.rstrip("/")[: -len("/chat/completions")]
         return cls(base_url, model, api_key, insecure_http=True)
 
-    def complete(self, messages, tools, max_tokens, timeout):
+    def complete(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        max_tokens: int,
+        timeout: float,
+    ) -> dict[str, Any]:
         payload = json.dumps(
-            {"model": self.model, "messages": messages, "tools": tools, "max_tokens": max_tokens, "stream": False}
+            {
+                "model": self.model,
+                "messages": messages,
+                "tools": tools,
+                "max_tokens": max_tokens,
+                "stream": False,
+            }
         ).encode()
         request = urllib.request.Request(
             self.url,
@@ -87,7 +117,7 @@ class OpenAICompatibleModel:
                 raw = response.read(2_000_001)
             if len(raw) > 2_000_000:
                 raise ModelError("Model response exceeds byte limit")
-            return json.loads(raw)
+            return cast(dict[str, Any], json.loads(raw))
         except urllib.error.HTTPError as exc:
             raise ModelError(f"Model HTTP error {exc.code}") from None
         except (urllib.error.URLError, TimeoutError, OSError, ValueError):
@@ -97,12 +127,18 @@ class OpenAICompatibleModel:
 class ScriptedFakeModel:
     label = "scripted-fake"
 
-    def __init__(self, responses: list):
+    def __init__(self, responses: list[dict[str, Any]]):
         if not isinstance(responses, list):
             raise ValueError("Fake model script must be a JSON array of response envelopes")
         self.responses = iter(responses)
 
-    def complete(self, messages, tools, max_tokens, timeout):
+    def complete(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        max_tokens: int,
+        timeout: float,
+    ) -> dict[str, Any]:
         try:
             return next(self.responses)
         except StopIteration:

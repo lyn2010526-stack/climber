@@ -9,18 +9,27 @@ import { SESSION_STATUSES, type Session, type SessionStatus } from '../../store/
  * and no `archived`, so this module groups by `created_at` and filters by
  * `title` and `status`. Adding a pin rail or an archive view would require
  * fields the API does not have.
+ *
+ * The sidebar files each session under one of three calendar buckets, then a
+ * fourth for a creation time the backend never reported. The second bucket has
+ * two spellings, selected by `SessionGroupingScheme`: the current sidebar cuts a
+ * one-day `yesterday` bucket, while the legacy sidebar folds that day into a
+ * rolling `recent` window. Both keep the same reading order.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * How far back the second bucket reaches. Combined with `today` this covers
+ * How far back the `recent` bucket reaches. Combined with `today` this covers
  * exactly seven calendar dates: today plus the six dates before it, so a
  * timestamp sitting exactly on the boundary belongs to `earlier`.
  */
 const RECENT_WINDOW_DAYS = 7;
 
-export type SessionGroupId = 'today' | 'recent' | 'earlier' | 'unreported';
+export type SessionGroupId = 'today' | 'recent' | 'yesterday' | 'earlier' | 'unreported';
+
+/** Which second bucket the caller wants: a single day, or a rolling window. */
+export type SessionGroupingScheme = 'yesterday' | 'recent';
 
 export interface SessionGroup {
   id: SessionGroupId;
@@ -42,11 +51,15 @@ function timelineCreatedAt(session: Session, timeline?: SessionTimelineMap): num
 }
 
 /** Declaration order, which is also the reading order of the sidebar. */
-const GROUP_ORDER: readonly SessionGroupId[] = ['today', 'recent', 'earlier', 'unreported'];
+const GROUP_ORDER_BY_SCHEME: Record<SessionGroupingScheme, readonly SessionGroupId[]> = {
+  yesterday: ['today', 'yesterday', 'earlier', 'unreported'],
+  recent: ['today', 'recent', 'earlier', 'unreported'],
+};
 
 const GROUP_LABELS: Record<SessionGroupId, string> = {
   today: '今天',
   recent: `最近 ${RECENT_WINDOW_DAYS} 天`,
+  yesterday: '昨天',
   earlier: '更早',
   unreported: '创建时间未上报',
 };
@@ -61,6 +74,7 @@ export function sessionGroupOf(
   session: Session,
   now: number,
   timeline?: SessionTimelineMap,
+  scheme: SessionGroupingScheme = 'yesterday',
 ): SessionGroupId {
   const createdAt = timelineCreatedAt(session, timeline);
   if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) return 'unreported';
@@ -68,8 +82,10 @@ export function sessionGroupOf(
   startOfToday.setHours(0, 0, 0, 0);
   const dayStart = startOfToday.getTime();
   if (createdAt >= dayStart) return 'today';
-  if (createdAt > dayStart - RECENT_WINDOW_DAYS * DAY_MS) return 'recent';
-  return 'earlier';
+  if (scheme === 'recent') {
+    return createdAt > dayStart - RECENT_WINDOW_DAYS * DAY_MS ? 'recent' : 'earlier';
+  }
+  return createdAt >= dayStart - DAY_MS ? 'yesterday' : 'earlier';
 }
 
 /**
@@ -84,15 +100,16 @@ export function groupSessions(
   sessions: readonly Session[],
   now: number,
   timeline?: SessionTimelineMap,
+  scheme: SessionGroupingScheme = 'yesterday',
 ): SessionGroup[] {
   const buckets = new Map<SessionGroupId, Session[]>();
   for (const session of sessions) {
-    const id = sessionGroupOf(session, now, timeline);
+    const id = sessionGroupOf(session, now, timeline, scheme);
     const bucket = buckets.get(id);
     if (bucket) bucket.push(session);
     else buckets.set(id, [session]);
   }
-  return GROUP_ORDER
+  return GROUP_ORDER_BY_SCHEME[scheme]
     .filter((id) => (buckets.get(id)?.length ?? 0) > 0)
     .map((id) => ({ id, label: GROUP_LABELS[id], sessions: buckets.get(id)! }));
 }
@@ -145,11 +162,33 @@ export function buildSessionView(
   filter: SessionFilter,
   now: number,
   timeline?: SessionTimelineMap,
+  scheme: SessionGroupingScheme = 'yesterday',
 ): SessionView {
-  const groups = groupSessions(applySessionFilter(sessions, filter), now, timeline);
+  const groups = groupSessions(applySessionFilter(sessions, filter), now, timeline, scheme);
   const groupOf = new Map<string, SessionGroupId>();
   for (const group of groups) {
     for (const session of group.sessions) groupOf.set(session.id, group.id);
   }
   return { groups, visible: groups.flatMap((group) => group.sessions), groupOf };
+}
+
+/**
+ * The time a session row carries on its right.
+ *
+ * The store reports a session's latest activity through its transcript: the
+ * last message timestamp the runtime recorded. A session with no messages yet
+ * has no such timestamp, so the row falls back to `created_at` — the session's
+ * own reported creation time — instead of inventing an update time the backend
+ * never sent. Returns `null` when neither is usable, so the row renders no time
+ * rather than a fabricated one.
+ */
+export function sessionLastActivityAt(session: Session): number | null {
+  const messages = session.messages;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const timestamp = messages[index]?.timestamp;
+    if (typeof timestamp === 'number' && Number.isFinite(timestamp)) return timestamp;
+  }
+  return typeof session.createdAt === 'number' && Number.isFinite(session.createdAt)
+    ? session.createdAt
+    : null;
 }

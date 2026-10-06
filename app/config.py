@@ -3,13 +3,70 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, Literal
 
+import structlog
 from dotenv import load_dotenv
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
+
+logger = structlog.get_logger()
+
+# Values that look like a secret but are published in this repository, in
+# .env.example, or in setup guides. Accepting one of these leaves the signing
+# key publicly known, so they are treated as "no key configured".
+_PLACEHOLDER_SECRETS = frozenset(
+    {
+        "change-me-in-production",
+        "change_me_in_production",
+        "changeme",
+        "change-me",
+        "changethis",
+        "change_this",
+        "your-secret-key",
+        "your_secret_key",
+        "your-secret-key-here",
+        "your_secret_key_here",
+        "secret",
+        "secret-key",
+        "secretkey",
+        "replace-me",
+        "replaceme",
+        "todo",
+        "xxx",
+        "placeholder",
+        "example",
+    }
+)
+MIN_SECRET_LENGTH = 16
+
+# Agent subtask concurrency. The default is the tuned single-node value; the
+# ceiling is the hard bound one node may ever run, whatever an operator sets.
+DEFAULT_MAX_CONCURRENT_SUBTASKS = 3
+MAX_CONCURRENT_SUBTASKS_CEILING = 18
+
+SECRET_GENERATION_HINT = (
+    'Generate a real secret, e.g. `python -c "import secrets; print(secrets.token_urlsafe(48))"`'
+)
+
+
+def is_placeholder_secret(value: str) -> bool:
+    """Return True when a configured secret is unusable as a signing key.
+
+    A truthy placeholder used to short-circuit the boot checks, so copying
+    `.env.example` straight to `.env` passed validation while leaving a
+    publicly known string in charge of signing tokens and of the Fernet key
+    that encrypts stored third-party provider credentials.
+    """
+    candidate = (value or "").strip().lower()
+    if not candidate:
+        return True
+    if candidate in _PLACEHOLDER_SECRETS:
+        return True
+    return len(candidate) < MIN_SECRET_LENGTH
 
 
 class Settings(BaseSettings):
@@ -34,6 +91,7 @@ class Settings(BaseSettings):
             "/openapi.json",
             "/favicon.ico",
             "/",
+            "/api/v1/integrations/domestic/qqbot/webhook",
         ]
     )
 
@@ -82,13 +140,32 @@ class Settings(BaseSettings):
     trusted_proxies: str = Field(default="127.0.0.1,::1")
 
     cors_origins: str = Field(default="http://localhost:5173,http://localhost:3000")
-    cors_origins_list: list[str] = Field(default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"])
+    cors_origins_list: list[str] = Field(
+        default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"]
+    )
 
     mcp_timeout: int = Field(default=30)
     tool_timeout: int = Field(default=60)
     max_tool_retries: int = Field(default=2)
 
+    # Parallel subtasks a single run may execute. Default 3, hard ceiling 18.
+    max_concurrent_subtasks: int = Field(default=DEFAULT_MAX_CONCURRENT_SUBTASKS)
+
     telegram_bot_token: str = Field(default="")
+
+    # Domestic adapters stay disabled until an operator supplies a provider-specific secret.
+    domestic_provider_mode: Literal["disabled", "local"] = Field(default="disabled")
+    domestic_integrations_enabled: bool = Field(default=False)
+    domestic_webhook_secret: str = Field(default="")
+    domestic_qr_ttl_seconds: int = Field(default=300, ge=1, le=900)
+    domestic_webhook_max_skew_seconds: int = Field(default=300, ge=1, le=3600)
+
+    # User-provided LLM for L0/L1 summarization and session memory extraction.
+    # Leave unset to degrade to deterministic rule-based generation; the
+    # summarizer never reads Agent environment credentials.
+    user_llm_api_key: str = Field(default="")
+    user_llm_base_url: str = Field(default="")
+    user_llm_model: str = Field(default="gpt-4o-mini")
 
     # API key rotation
     api_key_rotation_enabled: bool = Field(default=True)
@@ -96,32 +173,48 @@ class Settings(BaseSettings):
     key_cooldown_seconds: int = Field(default=60)
 
     # Plugin marketplace catalog
-    plugin_marketplace: list[dict] = Field(default_factory=lambda: [
-        {
-            "plugin_key": "web-scraper",
-            "name": "网页抓取器",
-            "description": "抓取并解析网页内容为结构化数据",
-            "category": "data",
-            "version": "1.0.0",
-            "author": "climber",
-        },
-        {
-            "plugin_key": "code-runner",
-            "name": "代码执行器",
-            "description": "在本地沙箱中执行 Python 代码片段",
-            "category": "dev",
-            "version": "1.0.0",
-            "author": "climber",
-        },
-        {
-            "plugin_key": "file-watcher",
-            "name": "文件监听器",
-            "description": "监听本地目录变化并触发工作流",
-            "category": "automation",
-            "version": "1.0.0",
-            "author": "climber",
-        },
-    ])
+    plugin_marketplace: list[dict[str, Any]] = Field(
+        default_factory=lambda: [
+            {
+                "plugin_key": "web-scraper",
+                "name": "网页抓取器",
+                "description": "抓取并解析网页内容为结构化数据",
+                "category": "data",
+                "version": "1.0.0",
+                "author": "climber",
+            },
+            {
+                "plugin_key": "code-runner",
+                "name": "代码执行器",
+                "description": "在本地沙箱中执行 Python 代码片段",
+                "category": "dev",
+                "version": "1.0.0",
+                "author": "climber",
+            },
+            {
+                "plugin_key": "file-watcher",
+                "name": "文件监听器",
+                "description": "监听本地目录变化并触发工作流",
+                "category": "automation",
+                "version": "1.0.0",
+                "author": "climber",
+            },
+        ]
+    )
+
+    @field_validator("max_concurrent_subtasks", mode="after")
+    @classmethod
+    def _clamp_max_concurrent_subtasks(cls, value: int) -> int:
+        """Clamp into [1, ceiling] instead of failing, logging what was applied."""
+        applied = min(max(value, 1), MAX_CONCURRENT_SUBTASKS_CEILING)
+        if applied != value:
+            logger.warning(
+                "max_concurrent_subtasks_clamped",
+                requested=value,
+                applied=applied,
+                ceiling=MAX_CONCURRENT_SUBTASKS_CEILING,
+            )
+        return applied
 
     @property
     def auth_public_endpoints_set(self) -> set[str]:
@@ -145,6 +238,10 @@ class Settings(BaseSettings):
         if is_deployed and not self.enable_auth:
             raise ValueError("ENABLE_AUTH must be true in production and staging environments")
         if self.app_secret_key:
+            if is_placeholder_secret(self.app_secret_key) and is_deployed:
+                raise ValueError(
+                    f"APP_SECRET_KEY is still a placeholder value. {SECRET_GENERATION_HINT}"
+                )
             return self
         if self.app_testing or environment in {"local", "development", "test", "testing"}:
             self.app_secret_key = "agent-engine-local-persistent-development-key"

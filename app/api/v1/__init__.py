@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from fastapi import APIRouter
 
 from app.api.v1 import api_keys as api_keys_router
@@ -12,36 +14,55 @@ from app.api.v1 import doctor as doctor_router
 from app.api.v1 import documents as documents_router
 from app.api.v1 import feedback as feedback_router
 from app.api.v1 import generic as generic_router
+from app.api.v1 import instruction_traces as instruction_traces_router
 from app.api.v1 import mcp as mcp_router
+from app.api.v1 import memory_archive as memory_archive_router
 from app.api.v1 import model_discovery as model_discovery_router
 from app.api.v1 import notifications as notifications_router
 from app.api.v1 import permissions as permissions_router
+from app.api.v1 import profile as profile_router
 from app.api.v1 import prompt_templates as prompt_templates_router
 from app.api.v1 import scheduler as scheduler_router
 from app.api.v1 import sessions as sessions_router
 from app.api.v1 import settings as settings_router
 from app.api.v1 import skills_router as skills_router_module
+from app.api.v1 import ui_rules as ui_rules_router
 from app.api.v1 import workflows as workflows_router
 from app.api.v1.routes.arcbench import router as arcbench_router
 from app.api.v1.routes.research import router as research_router
 from app.core.reasoning import api as reasoning_router
+from app.core.security import api as security_router
+
+if TYPE_CHECKING:
+    from app.core.agent_engine import AgentEngine
 
 router = APIRouter()
+router.include_router(ui_rules_router.router)
 router.include_router(chat_router.router, prefix="/sessions", tags=["sessions"])
 router.include_router(sessions_router.router, prefix="/sessions", tags=["sessions"])
 router.include_router(auth_management_router.router)
 router.include_router(settings_router.router, prefix="/settings", tags=["settings"])
 router.include_router(workflows_router.router, prefix="/workflows", tags=["workflows"])
-router.include_router(prompt_templates_router.router, prefix="/prompt-templates", tags=["prompt-templates"])
+router.include_router(
+    prompt_templates_router.router, prefix="/prompt-templates", tags=["prompt-templates"]
+)
 router.include_router(generic_router.router, tags=["generic"])
 router.include_router(api_keys_router.router, prefix="/api-keys", tags=["api-keys"])
 router.include_router(model_discovery_router.router)
 router.include_router(documents_router.router, prefix="/documents", tags=["documents"])
 router.include_router(feedback_router.router, prefix="/feedback", tags=["feedback"])
+router.include_router(
+    instruction_traces_router.router,
+    prefix="/instruction-traces",
+    tags=["instruction-traces"],
+)
+router.include_router(profile_router.router, prefix="/profile", tags=["profile"])
+router.include_router(memory_archive_router.router, tags=["memory-archive"])
 router.include_router(notifications_router.router, prefix="/notifications", tags=["notifications"])
 router.include_router(doctor_router.router, prefix="/doctor", tags=["doctor"])
 router.include_router(reasoning_router.router, prefix="/reason", tags=["reasoning"])
 router.include_router(permissions_router.router, prefix="/permissions", tags=["permissions"])
+router.include_router(security_router.router, prefix="/security", tags=["security"])
 router.include_router(arcbench_router, tags=["arcbench"])
 router.include_router(research_router, tags=["research"])
 
@@ -59,16 +80,19 @@ _include_extension_routes(mcp_router.router, ("/mcp/servers", "/mcp/categories")
 _include_extension_routes(skills_router_module.router, ("/skills/autonomous",))
 
 for route in skills_router_module.router.routes:
-    if getattr(route, "path", "") == "/skills/{skill_id}" and "PATCH" in getattr(route, "methods", set()):
+    if getattr(route, "path", "") == "/skills/{skill_id}" and "PATCH" in getattr(
+        route, "methods", set()
+    ):
         router.routes.append(route)
 
 
 @router.get("/health", tags=["system"])
-async def api_health() -> dict:
+async def api_health() -> dict[str, str]:
     """API-level health check."""
     return {"status": "ok"}
 
 
-def get_engine():
+def get_engine() -> AgentEngine:
     from app.api.v1.chat import get_engine as _get_engine
+
     return _get_engine()

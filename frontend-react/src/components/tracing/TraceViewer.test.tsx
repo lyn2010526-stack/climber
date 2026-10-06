@@ -3,6 +3,7 @@ import { render, screen, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TraceViewer from './TraceViewer';
 import { api } from '../../api';
+import i18n from '../../i18n';
 
 vi.mock('../../api', () => ({
   api: {
@@ -65,9 +66,14 @@ const STATS = {
   error_count: 1,
 };
 
-/** i18n keys this project does not translate fall back to the key itself. */
+/**
+ * Resolve a label the way the component under test does, through the same i18n
+ * instance. Reading the key back would only hold while a namespace is
+ * untranslated; a key that gains a translation would silently stop matching the
+ * text a reader actually sees.
+ */
 function key(name: string) {
-  return name;
+  return i18n.t(name);
 }
 
 describe('TraceViewer', () => {

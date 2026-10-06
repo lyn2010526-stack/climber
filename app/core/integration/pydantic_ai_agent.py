@@ -7,7 +7,7 @@ and structured responses with validation.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from typing import Any, TypeVar
 
 from pydantic import BaseModel, Field
@@ -19,6 +19,7 @@ T = TypeVar("T", bound=BaseModel)
 
 class AgentResponse(BaseModel):
     """Standard agent response format."""
+
     content: str = Field(description="Response content")
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
@@ -27,6 +28,7 @@ class AgentResponse(BaseModel):
 
 class ToolResult(BaseModel):
     """Result from a tool execution."""
+
     tool_name: str
     success: bool
     result: Any = None
@@ -64,6 +66,7 @@ class PydanticAIAgent:
         """Run the agent with a prompt."""
         try:
             from pydantic_ai import Agent
+
             if self._agent is None:
                 self._agent = Agent(
                     self._model,
@@ -81,10 +84,11 @@ class PydanticAIAgent:
                 metadata={"error": str(exc)},
             )
 
-    async def run_stream(self, prompt: str):
+    async def run_stream(self, prompt: str) -> AsyncIterator[Any]:
         """Run the agent with streaming output."""
         try:
             from pydantic_ai import Agent
+
             if self._agent is None:
                 self._agent = Agent(
                     self._model,

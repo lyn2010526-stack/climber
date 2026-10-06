@@ -122,6 +122,14 @@ INITIAL_ADMIN_PASSWORD=
 
 Local development defaults to disabled authentication. `production` and `staging` enable authentication automatically. Protected APIs support `X-API-Key` and `Authorization: Bearer <token>`. The current SPA does not promise a complete production login handoff out of the box.
 
+`APP_SECRET_KEY` must be at least 16 characters in `production` and `staging`, and cannot be a placeholder published in `.env.example` or the docs (such as `change-me-in-production`). The same key signs tokens and encrypts stored third-party model API keys, so a placeholder leaves those credentials publicly decryptable. Generate one with:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
+
+Leave it empty for local development, where a built-in dev key is used.
+
 Application data is stored locally or on infrastructure controlled by the operator by default. Enabling external LLMs, MCP Servers, Telegram, search, weather, translation or other integrations can send related requests and credentials to third-party services. Never commit real secrets to the repository, frontend code or logs.
 
 ## Headless CLI

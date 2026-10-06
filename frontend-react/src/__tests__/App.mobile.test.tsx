@@ -59,6 +59,9 @@ function setViewport(width: number) {
 beforeEach(async () => {
   localStorage.clear();
   localStorage.setItem('i18next_lng', 'en');
+  // The privacy lock gate reads this opt-out; shell tests target the chat
+  // surface, not the first-run PIN setup.
+  localStorage.setItem('climber.privacy.skipped', '1');
   await act(async () => { await i18n.changeLanguage('en'); });
   window.location.hash = '';
 });
@@ -72,8 +75,8 @@ vi.stubGlobal('matchMedia', (query: string) => {
   return mql;
 });
 
-vi.mock('../components/workspace/WorkspaceLayout', () => ({
-  WorkspaceLayout: () => <div data-testid="desktop-workspace">Desktop Workspace</div>,
+vi.mock('../components/workspace/AnchoredWorkspaceLayout', () => ({
+  AnchoredWorkspaceLayout: () => <div data-testid="desktop-workspace">Desktop Workspace</div>,
 }));
 
 vi.mock('../pages/MobileChatPage', () => ({
@@ -119,7 +122,10 @@ describe('Desktop-first shell contract', () => {
     const user = userEvent.setup();
     setViewport(390);
     renderApp();
-    expect(screen.getByText('Mobile Chat')).toBeInTheDocument();
+    // Below the breakpoint the conversation entry is the anchored workbench
+    // itself; there is no second mobile chat surface to mount.
+    expect(await screen.findByTestId('desktop-workspace')).toBeInTheDocument();
+    expect(screen.queryByText('Mobile Chat')).toBeNull();
     expect(document.querySelector('input[type="password"]')).toBeNull();
 
     await user.keyboard(`{${modifier}>}k{/${modifier}}`);
@@ -150,16 +156,19 @@ describe('Desktop-first shell contract', () => {
     setViewport(1280);
     renderApp();
     await screen.findByTestId('desktop-workspace');
-    await user.click(screen.getByRole('button', { name: i18n.t('sidebar.global_search') }));
+    // The chat surface uses the command palette as its global search entry.
+    await user.keyboard('{Control>}k{/Control}');
     const search = screen.getByRole('combobox');
     await user.type(search, 'a');
 
     setViewport(390);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
     expect(screen.getByRole('combobox')).toBe(search);
     expect(search).toHaveValue('a');
+    // Reopen on mobile so the query starts fresh, mirroring the palette being
+    // the commands-exclusive search entry.
+    await user.keyboard('{Escape}');
     await user.keyboard('{Control>}k{/Control}');
-    expect(screen.getAllByRole('dialog')).toHaveLength(1);
-    expect(screen.getByRole('combobox', { name: i18n.t('common.command_palette') })).toHaveFocus();
     await user.type(screen.getByRole('combobox'), 'Agents');
     setViewport(1280);
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
@@ -188,8 +197,9 @@ describe('Desktop-first shell contract', () => {
     await waitFor(() => {
       expect(screen.getByTestId('desktop-workspace')).toBeInTheDocument();
     });
-    const current = document.querySelector('aside [aria-current="page"]');
-    expect(current?.textContent).toContain('Chat');
+    // The chat surface renders the anchored three-column workspace; the old
+    // aside sidebar only exists on non-chat routes now.
+    expect(document.querySelector('aside')).toBeNull();
   });
 
   it('falls back to chat for unknown hashes', async () => {
@@ -211,31 +221,31 @@ describe('Desktop-first shell contract', () => {
     expect(document.querySelector('input[type="password"]')).toBeNull();
   });
 
-  it('renders the mobile shell at 767px', async () => {
+  it('mounts the anchored chat below the breakpoint, outside the mobile shell', async () => {
     setViewport(375);
     renderApp();
-    await waitFor(() => {
-      expect(screen.getByText('Mobile Chat')).toBeInTheDocument();
-    });
-    expect(screen.queryByTestId('desktop-workspace')).toBeNull();
+    expect(await screen.findByTestId('desktop-workspace')).toBeInTheDocument();
+    expect(screen.queryByText('Mobile Chat')).toBeNull();
   });
 
-  it('falls back to mobile chat for non-adapted pages on mobile', async () => {
+  it('lands a page the mobile shell cannot use on the anchored chat', async () => {
     window.location.hash = 'traces';
     setViewport(375);
     renderApp();
-    await waitFor(() => {
-      expect(screen.getByText('Mobile Chat')).toBeInTheDocument();
-    });
+    // The shell redirects an unusable page to the conversation entry, so the
+    // anchored workbench is what a reader reaches and the desktop page is not
+    // rendered.
+    expect(await screen.findByTestId('desktop-workspace')).toBeInTheDocument();
+    expect(window.location.hash).toBe('#chat');
     expect(screen.queryByText('Traces Page')).toBeNull();
-    expect(screen.queryByTestId('desktop-workspace')).toBeNull();
   });
 
   it('collapses the sidebar automatically on compact desktop (768px)', async () => {
     setViewport(768);
+    window.location.hash = 'agents';
     renderApp();
     await waitFor(() => {
-      expect(screen.getByTestId('desktop-workspace')).toBeInTheDocument();
+      expect(screen.getByText('Agents Page')).toBeInTheDocument();
     });
     const toggle = screen.getByRole('button', { name: 'Expand sidebar' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
@@ -243,6 +253,7 @@ describe('Desktop-first shell contract', () => {
 
   it('expands the sidebar by default on full desktop (1024px) with no stored choice', async () => {
     setViewport(1024);
+    window.location.hash = 'agents';
     renderApp();
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toHaveAttribute('aria-expanded', 'true');
@@ -251,9 +262,10 @@ describe('Desktop-first shell contract', () => {
 
   it('restores the explicit sidebar choice across breakpoints', async () => {
     setViewport(1024);
+    window.location.hash = 'agents';
     renderApp();
     await waitFor(() => {
-      expect(screen.getByTestId('desktop-workspace')).toBeInTheDocument();
+      expect(screen.getByText('Agents Page')).toBeInTheDocument();
     });
 
     const toggle = () => screen.getByRole('button', { name: /sidebar/i });
@@ -283,11 +295,8 @@ describe('Desktop-first shell contract', () => {
 
   it('keeps exactly one aria-current page marker on the active core nav item', async () => {
     setViewport(1280);
+    window.location.hash = 'agents';
     renderApp();
-    await waitFor(() => {
-      expect(screen.getByTestId('desktop-workspace')).toBeInTheDocument();
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Agents', expanded: undefined }));
     await waitFor(() => {
       expect(screen.getByText('Agents Page')).toBeInTheDocument();
     });

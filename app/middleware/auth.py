@@ -14,12 +14,14 @@ import json
 import secrets
 from collections.abc import Mapping
 from datetime import datetime, timedelta
+from typing import Any, cast
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.responses import Response
 
 from app.config import settings
 from app.core.principal import (
@@ -37,7 +39,7 @@ from app.storage import engine
 # aiosqlite URLs are converted to the built-in sqlite3 driver so sync
 # sessions can share the on-disk test database.
 if str(engine.url).startswith("sqlite+aiosqlite"):
-    _sync_url = "sqlite" + str(engine.url)[len("sqlite+aiosqlite"):]
+    _sync_url = "sqlite" + str(engine.url)[len("sqlite+aiosqlite") :]
 else:
     _sync_url = str(engine.url)
 _sync_engine = create_engine(
@@ -54,7 +56,7 @@ API_KEY_PREFIX = "ae_"
 async def authenticate_credentials(
     headers: Mapping[str, str],
     token: str | None = None,
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Authenticate API key or JWT credentials from HTTP or WebSocket input."""
     api_key = headers.get(API_KEY_HEADER)
     if api_key:
@@ -64,7 +66,7 @@ async def authenticate_credentials(
 
     auth_header = headers.get("Authorization", "")
     if auth_header.startswith(AUTH_BEARER_PREFIX):
-        token = auth_header[len(AUTH_BEARER_PREFIX):]
+        token = auth_header[len(AUTH_BEARER_PREFIX) :]
 
     if not token:
         return None
@@ -94,7 +96,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     separately via query params or protocol-specific mechanisms.
     """
 
-    def __init__(self, app, public_endpoints: set[str] | None = None):
+    def __init__(self, app: Any, public_endpoints: set[str] | None = None):
         super().__init__(app)
         self.public_endpoints: set[str] = public_endpoints or set(settings.auth_public_endpoints)
 
@@ -113,7 +115,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return True
         return any(path.endswith(suffix) for suffix in public_exact_suffixes)
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if not settings.enable_auth:
             request.state.auth = None
             token = set_current_principal(Principal(subject_id=LOCAL_SUBJECT_ID))
@@ -148,8 +150,14 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         try:
             principal = principal_from_auth(auth_result)
-        except ValueError as exc:
-            return JSONResponse(status_code=401, content={"detail": str(exc)})
+        except ValueError:
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "detail": "Authenticated user identity is missing",
+                    "type": "invalid_principal",
+                },
+            )
         request.state.auth = auth_result
         request.state.principal = principal
         token = set_current_principal(principal)
@@ -158,16 +166,16 @@ class AuthMiddleware(BaseHTTPMiddleware):
         finally:
             reset_current_principal(token)
 
-    async def _authenticate(self, request: Request) -> dict | None:
+    async def _authenticate(self, request: Request) -> dict[str, Any] | None:
         return await authenticate_credentials(request.headers)
 
-    async def _validate_api_key(self, raw_key: str) -> dict | None:
+    async def _validate_api_key(self, raw_key: str) -> dict[str, Any] | None:
         """Validate API key against database."""
         from app.core.auth_manager import validate_api_key
 
         return await validate_api_key(raw_key)
 
-    async def _validate_jwt(self, token: str) -> dict | None:
+    async def _validate_jwt(self, token: str) -> dict[str, Any] | None:
         """Validate JWT token and return user info."""
         from app.core.auth_manager import auth_manager
 
@@ -182,7 +190,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         }
 
 
-def create_jwt_token(subject: str, scopes: list[str] | None = None, expires_minutes: int | None = None) -> str:
+def create_jwt_token(
+    subject: str, scopes: list[str] | None = None, expires_minutes: int | None = None
+) -> str:
     """Create an access token through the shared auth_manager signing path."""
     del expires_minutes
     from app.core.auth_manager import auth_manager
@@ -190,7 +200,7 @@ def create_jwt_token(subject: str, scopes: list[str] | None = None, expires_minu
     return auth_manager.create_access_token(subject, scopes)
 
 
-def _verify_jwt_token(token: str) -> dict | None:
+def _verify_jwt_token(token: str) -> dict[str, Any] | None:
     """Verify a token using the shared auth_manager verification path."""
     from app.core.auth_manager import auth_manager
 
@@ -200,7 +210,7 @@ def _verify_jwt_token(token: str) -> dict | None:
         return None
 
 
-def get_user_store():
+def get_user_store() -> UserStore:
     """Return the shared database-backed UserStore.
 
     The store persists API keys in the ``auth_api_keys`` table so that keys
@@ -221,7 +231,13 @@ class UserStore:
     synchronous API surface while sharing production storage.
     """
 
-    def create_key(self, owner: str, scopes: list[str] | None = None, name: str = "", ttl_days: int | None = None):
+    def create_key(
+        self,
+        owner: str,
+        scopes: list[str] | None = None,
+        name: str = "",
+        ttl_days: int | None = None,
+    ) -> tuple[str, str]:
         """Create a new API key. Returns (raw_key, key_id)."""
         raw_key = API_KEY_PREFIX + secrets.token_urlsafe(32)
         key_id = "kid_" + secrets.token_hex(8)
@@ -248,7 +264,7 @@ class UserStore:
 
         return raw_key, key_id
 
-    def validate_key(self, raw_key: str):
+    def validate_key(self, raw_key: str) -> ApiKey | None:
         """Validate a raw API key. Returns an entry-like object or None."""
         if not raw_key:
             return None
@@ -271,13 +287,11 @@ class UserStore:
     def revoke_key(self, key_id: str) -> bool:
         """Revoke an API key by id. Returns True if revoked, False if missing."""
         with _sync_session() as session:
-            result = session.execute(
-                select(ApiKey).where(ApiKey.id == key_id)
-            )
+            result = session.execute(select(ApiKey).where(ApiKey.id == key_id))
             record = result.scalar_one_or_none()
             if record is None:
                 return False
-            record.is_active = False
+            record.is_active = cast(Any, False)
             session.commit()
             return True
 

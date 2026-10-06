@@ -103,9 +103,7 @@ class ReasoningTracer:
 
     def finish(self) -> ReasoningTrace:
         with self._lock:
-            self._trace.total_duration_ms = (
-                time.time() - self._trace.created_at
-            ) * 1000
+            self._trace.total_duration_ms = (time.time() - self._trace.created_at) * 1000
             trace = self._trace.model_copy()
 
         logger.info(
@@ -123,3 +121,32 @@ class ReasoningTracer:
     def snapshot(self) -> ReasoningTrace:
         with self._lock:
             return self._trace.model_copy(deep=True)
+
+    def calibrated_confidences(
+        self,
+        evidence_counts: dict[str, int],
+        contradiction_counts: dict[str, int] | None = None,
+    ) -> dict[str, dict[str, object]]:
+        """Post-processing hook: raw vs calibrated confidence per finished path.
+
+        Read-only additive hook. ``PathTrace`` fields are left untouched; the
+        calibrated values are computed on demand from ``final_confidence``.
+        """
+        from app.core.metacognition.judgment import calibrate, deflate_verdict
+
+        contradictions = contradiction_counts or {}
+        report: dict[str, dict[str, object]] = {}
+        with self._lock:
+            for path in self._trace.path_traces:
+                raw = path.final_confidence
+                calibrated = calibrate(
+                    raw,
+                    evidence_count=evidence_counts.get(path.candidate_id, 0),
+                    contradiction_count=contradictions.get(path.candidate_id, 0),
+                )
+                report[path.candidate_id] = {
+                    "raw": raw,
+                    "calibrated": calibrated,
+                    "verdict": deflate_verdict(raw, calibrated=calibrated),
+                }
+        return report

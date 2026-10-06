@@ -26,6 +26,7 @@ class Verdict(StrEnum):
 
 class ProbeResult(BaseModel):
     """Outcome of running convergence/plausibility probes on tool output."""
+
     ok: bool = False
     reason: str = ""
     metrics: dict[str, Any] = Field(default_factory=dict)
@@ -33,6 +34,7 @@ class ProbeResult(BaseModel):
 
 class ExperimentSpec(BaseModel):
     """One experiment: a tool call with a specific parameter set."""
+
     id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
     tool_name: str
     description: str = ""
@@ -42,6 +44,7 @@ class ExperimentSpec(BaseModel):
 
 class ExperimentAttempt(BaseModel):
     """A single dispatch of an experiment spec to the tool."""
+
     round: int
     spec_id: str
     tool_name: str
@@ -58,6 +61,7 @@ class ExperimentAttempt(BaseModel):
 
 class ExperimentReport(BaseModel):
     """Final report for one experiment after all rounds."""
+
     spec: ExperimentSpec
     attempts: list[ExperimentAttempt] = Field(default_factory=list)
     accepted_attempt: ExperimentAttempt | None = None

@@ -27,9 +27,7 @@ class FeedbackReason(StrEnum):
 
 class Feedback(Base):
     __tablename__ = "feedback"
-    __table_args__ = (
-        UniqueConstraint("message_id", "user_id", name="uq_feedback_message_user"),
-    )
+    __table_args__ = (UniqueConstraint("message_id", "user_id", name="uq_feedback_message_user"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     message_id: Mapped[str] = mapped_column(String(36), ForeignKey("messages.id"), nullable=False)

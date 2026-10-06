@@ -4,6 +4,7 @@ import { Search, ArrowUpDown, CornerDownLeft } from 'lucide-react';
 import { ALL_NAV_ITEMS_BASE } from '../../navigation/navConfig';
 import { rankCommands } from '../../lib/commandScore';
 import { useI18n } from '../../i18n';
+import './codex-suite.css';
 
 const MAX_DEFAULT_RESULTS = 8;
 
@@ -124,13 +125,13 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
 
         <div ref={listRef} id={listId} role="listbox" aria-label={t('common.command_palette')} className="min-h-0 flex-1 overflow-y-auto border-t border-[var(--color-border-subtle)] p-2">
           {ordered.length === 0 ? (
-            <div role="status" className="py-10 text-center text-sm text-[var(--color-text-muted)]">
+            <div role="status" className="py-10 text-center text-[13px] text-[var(--color-text-muted)]">
               {t('common.no_results')} "{query}"
             </div>
           ) : (
             groupOrder.map(group => (
               <div key={group} role="group" aria-label={group} className="mb-2 last:mb-0">
-                <div aria-hidden="true" className="px-3 py-2 text-[11px] font-medium text-[var(--color-text-muted)]">
+                <div aria-hidden="true" className="cx-group-label px-3 py-2">
                   {group}
                 </div>
                 <div className="space-y-0.5">
@@ -147,7 +148,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
                         tabIndex={-1}
                         onMouseDown={event => event.preventDefault()}
                         onClick={() => { onNavigate(item.id); onClose(); }}
-                        className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+                        className={`cx-row flex w-full items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 text-left text-[13px] ${
                           selected
                             ? 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-primary)]'
                             : 'text-[var(--color-text-secondary)]'
@@ -170,7 +171,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
 
         {/* Only the gestures that work are named here: these keys move and open
             rows, and Escape closes the dialog without a second label for it. */}
-        <div className="flex items-center gap-4 border-t border-[var(--color-border-subtle)] px-4 py-2 text-[10px] text-[var(--color-text-muted)]">
+        <div className="flex items-center gap-4 border-t border-[var(--color-border-subtle)] px-4 py-2 text-[11px] text-[var(--color-text-muted)]">
           <span className="flex items-center gap-1">
             <ArrowUpDown size={12} aria-hidden="true" /> {t('common.navigate')}
           </span>

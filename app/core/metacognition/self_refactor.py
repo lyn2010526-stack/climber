@@ -61,9 +61,7 @@ class SelfModuleRefactor:
         iterations: int,
     ) -> None:
         """Record a skill usage for performance tracking."""
-        perf = self._performance.setdefault(
-            skill_name, SkillPerformance(skill_name=skill_name)
-        )
+        perf = self._performance.setdefault(skill_name, SkillPerformance(skill_name=skill_name))
         perf.total_uses += 1
         if success:
             perf.successes += 1
@@ -82,45 +80,57 @@ class SelfModuleRefactor:
 
         for name, perf in self._performance.items():
             if perf.total_uses < 3:
-                actions.append(RefactorAction(
-                    action="keep",
-                    target=name,
-                    reason=f"Insufficient data ({perf.total_uses} uses)",
-                ))
+                actions.append(
+                    RefactorAction(
+                        action="keep",
+                        target=name,
+                        reason=f"Insufficient data ({perf.total_uses} uses)",
+                    )
+                )
                 continue
 
             if perf.success_rate < 0.3 and perf.total_uses >= 5:
-                actions.append(RefactorAction(
-                    action="deprecate",
-                    target=name,
-                    reason=f"Low success rate: {perf.success_rate:.0%} over {perf.total_uses} uses",
-                ))
+                actions.append(
+                    RefactorAction(
+                        action="deprecate",
+                        target=name,
+                        reason=f"Low success rate: {perf.success_rate:.0%} over {perf.total_uses} uses",
+                    )
+                )
             elif perf.efficiency_score > 0.7:
-                actions.append(RefactorAction(
-                    action="keep",
-                    target=name,
-                    reason=f"High efficiency: {perf.efficiency_score:.2f}",
-                ))
+                actions.append(
+                    RefactorAction(
+                        action="keep",
+                        target=name,
+                        reason=f"High efficiency: {perf.efficiency_score:.2f}",
+                    )
+                )
             elif perf.avg_tokens_used > 8000:
-                actions.append(RefactorAction(
-                    action="optimize",
-                    target=name,
-                    reason=f"High token cost: {perf.avg_tokens_used:.0f} avg",
-                    details={"suggestion": "Add early termination or context pruning"},
-                ))
+                actions.append(
+                    RefactorAction(
+                        action="optimize",
+                        target=name,
+                        reason=f"High token cost: {perf.avg_tokens_used:.0f} avg",
+                        details={"suggestion": "Add early termination or context pruning"},
+                    )
+                )
             elif perf.avg_iterations > 12:
-                actions.append(RefactorAction(
-                    action="split",
-                    target=name,
-                    reason=f"Too many iterations: {perf.avg_iterations:.0f} avg",
-                    details={"suggestion": "Split into smaller, focused sub-skills"},
-                ))
+                actions.append(
+                    RefactorAction(
+                        action="split",
+                        target=name,
+                        reason=f"Too many iterations: {perf.avg_iterations:.0f} avg",
+                        details={"suggestion": "Split into smaller, focused sub-skills"},
+                    )
+                )
             else:
-                actions.append(RefactorAction(
-                    action="keep",
-                    target=name,
-                    reason=f"Acceptable performance: score={perf.efficiency_score:.2f}",
-                ))
+                actions.append(
+                    RefactorAction(
+                        action="keep",
+                        target=name,
+                        reason=f"Acceptable performance: score={perf.efficiency_score:.2f}",
+                    )
+                )
 
         return actions
 

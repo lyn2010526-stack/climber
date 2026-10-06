@@ -19,7 +19,9 @@ Memory directory structure:
 from __future__ import annotations
 
 import asyncio
+import builtins
 import os
+import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -90,23 +92,32 @@ class MemFS:
         return self._git_available
 
     def _check_git(self) -> bool:
-        """Check if git is available and the base_path is a git repo."""
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", "--git-dir"],
-                cwd=str(self._base_path),
-                capture_output=True,
-                timeout=5,
-            )
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return False
+        """Check whether the git binary is usable on this system.
+
+        Versioning is enabled whenever git is installed; the repository
+        itself is (re)initialized by :meth:`_init_git`.
+        """
+        return shutil.which("git") is not None
 
     def _init_git(self) -> None:
-        """Initialize git repo if not already initialized."""
-        git_dir = self._base_path / ".git"
-        if not git_dir.exists():
-            try:
+        """Initialize git repo if not already initialized.
+
+        A fresh base path is initialized here (the git binary being present
+        is sufficient), and a retry after a partial failure re-runs the
+        bootstrap rather than leaving the store without versioning. A base
+        path that is already a git repository is never touched.
+        """
+        try:
+            is_repo = (
+                subprocess.run(
+                    ["git", "rev-parse", "--git-dir"],
+                    cwd=str(self._base_path),
+                    capture_output=True,
+                    timeout=5,
+                ).returncode
+                == 0
+            )
+            if not is_repo:
                 subprocess.run(
                     ["git", "init"],
                     cwd=str(self._base_path),
@@ -114,23 +125,25 @@ class MemFS:
                     timeout=10,
                 )
                 gitignore = self._base_path / ".gitignore"
-                gitignore.write_text("__pycache__/\n*.pyc\n")
+                if not gitignore.exists():
+                    gitignore.write_text("__pycache__/\n*.pyc\n")
                 subprocess.run(
                     ["git", "add", ".gitignore"],
                     cwd=str(self._base_path),
                     capture_output=True,
                     timeout=5,
                 )
-                subprocess.run(
+                commit = subprocess.run(
                     ["git", "commit", "-m", "chore: initialize memfs", "--allow-empty"],
                     cwd=str(self._base_path),
                     capture_output=True,
                     timeout=5,
                 )
-                logger.info("memfs_git_initialized", path=str(self._base_path))
-            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-                logger.warning("memfs_git_init_failed", error=str(e))
-                self._git_available = False
+                if commit.returncode == 0:
+                    logger.info("memfs_git_initialized", path=str(self._base_path))
+        except Exception as e:
+            logger.warning("memfs_git_init_failed", error=str(e))
+            self._git_available = False
 
     async def read(self, path: str) -> str:
         """Read a memory file and return its content (without frontmatter).
@@ -208,7 +221,11 @@ class MemFS:
             except Exception:
                 pass
 
-        block = MemoryBlock.new(path=path, content=content) if existing_block is None else existing_block
+        block = (
+            MemoryBlock.new(path=path, content=content)
+            if existing_block is None
+            else existing_block
+        )
 
         file_path.write_text(block.to_markdown(), encoding="utf-8")
 
@@ -252,7 +269,9 @@ class MemFS:
                 block.content = block.content.rstrip() + "\n" + content.strip() + "\n"
             except Exception:
                 existing = file_path.read_text(encoding="utf-8")
-                file_path.write_text(existing.rstrip() + "\n" + content.strip() + "\n", encoding="utf-8")
+                file_path.write_text(
+                    existing.rstrip() + "\n" + content.strip() + "\n", encoding="utf-8"
+                )
                 if self._auto_commit and self._git_available:
                     self._git_commit_file(path, "append")
                 return
@@ -276,7 +295,7 @@ class MemFS:
         async with self._lock:
             return await asyncio.to_thread(self._list_sync, prefix)
 
-    def _list_sync(self, prefix: str = "") -> list[str]:
+    def _list_sync(self, prefix: str = "") -> builtins.list[str]:
         results: list[str] = []
 
         search_dir = self._base_path
@@ -287,7 +306,7 @@ class MemFS:
             return []
 
         if search_dir.is_file():
-            rel = search_dir.relative_to(self._base_path)
+            rel: Path | str = search_dir.relative_to(self._base_path)
             return [str(rel)]
 
         for root, dirs, files in os.walk(str(search_dir)):
@@ -360,14 +379,14 @@ class MemFS:
             elif entry.is_file():
                 rel = str(entry.relative_to(self._base_path))
                 size = entry.stat().st_size
-                mtime = datetime.fromtimestamp(
-                    entry.stat().st_mtime, tz=UTC
-                ).isoformat()
-                tree["_files"].append({
-                    "path": rel,
-                    "size": size,
-                    "modified": mtime,
-                })
+                mtime = datetime.fromtimestamp(entry.stat().st_mtime, tz=UTC).isoformat()
+                tree["_files"].append(
+                    {
+                        "path": rel,
+                        "size": size,
+                        "modified": mtime,
+                    }
+                )
 
         return tree
 
@@ -379,7 +398,7 @@ class MemFS:
     def _exists_sync(self, path: str) -> bool:
         return self._resolve_path(path).exists()
 
-    async def get_history(self, path: str, limit: int = 10) -> list[dict[str, Any]]:
+    async def get_history(self, path: str, limit: int = 10) -> builtins.list[dict[str, Any]]:
         """Get git history for a memory file.
 
         Args:
@@ -395,12 +414,16 @@ class MemFS:
         async with self._lock:
             return await asyncio.to_thread(self._get_history_sync, path, limit)
 
-    def _get_history_sync(self, path: str, limit: int) -> list[dict[str, Any]]:
+    def _get_history_sync(self, path: str, limit: int) -> builtins.list[dict[str, Any]]:
         try:
             result = subprocess.run(
                 [
-                    "git", "log", f"--max-count={limit}",
-                    "--format=%H|%aI|%an|%s", "--", path,
+                    "git",
+                    "log",
+                    f"--max-count={limit}",
+                    "--format=%H|%aI|%an|%s",
+                    "--",
+                    path,
                 ],
                 cwd=str(self._base_path),
                 capture_output=True,
@@ -414,17 +437,19 @@ class MemFS:
             for line in result.stdout.strip().splitlines():
                 parts = line.split("|", 3)
                 if len(parts) == 4:
-                    history.append({
-                        "hash": parts[0][:12],
-                        "date": parts[1],
-                        "author": parts[2],
-                        "message": parts[3],
-                    })
+                    history.append(
+                        {
+                            "hash": parts[0][:12],
+                            "date": parts[1],
+                            "author": parts[2],
+                            "message": parts[3],
+                        }
+                    )
             return history
         except (subprocess.TimeoutExpired, FileNotFoundError):
             return []
 
-    async def search(self, query: str) -> list[dict[str, Any]]:
+    async def search(self, query: str) -> builtins.list[dict[str, Any]]:
         """Search memory files by content (grep-based).
 
         Args:
@@ -436,7 +461,7 @@ class MemFS:
         async with self._lock:
             return await asyncio.to_thread(self._search_sync, query)
 
-    def _search_sync(self, query: str) -> list[dict[str, Any]]:
+    def _search_sync(self, query: str) -> builtins.list[dict[str, Any]]:
         results: list[dict[str, Any]] = []
 
         for root, dirs, files in os.walk(str(self._base_path)):
@@ -458,15 +483,17 @@ class MemFS:
                         matches.append(f"L{i}: {line.strip()}")
 
                 if matches:
-                    results.append({
-                        "path": rel,
-                        "matches": matches[:10],
-                        "total_matches": len(matches),
-                    })
+                    results.append(
+                        {
+                            "path": rel,
+                            "matches": matches[:10],
+                            "total_matches": len(matches),
+                        }
+                    )
 
         return results
 
-    async def init_defaults(self) -> list[str]:
+    async def init_defaults(self) -> builtins.list[str]:
         """Initialize default system memory files if they don't exist.
 
         Returns:
@@ -499,7 +526,11 @@ class MemFS:
         return resolved
 
     def _git_commit_file(self, path: str, action: str) -> None:
-        """Commit a file change to git."""
+        """Commit a file change to git.
+
+        Git failures (missing config, transient lock issues, hook errors)
+        are logged and swallowed so they never masquerade as write failures.
+        """
         try:
             subprocess.run(
                 ["git", "add", path],
@@ -509,7 +540,9 @@ class MemFS:
             )
             subprocess.run(
                 [
-                    "git", "commit", "-m",
+                    "git",
+                    "commit",
+                    "-m",
                     f"memfs: {action} {path}",
                     "--quiet",
                 ],
@@ -517,8 +550,8 @@ class MemFS:
                 capture_output=True,
                 timeout=5,
             )
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
+        except Exception as e:
+            logger.warning("memfs_git_commit_failed", action=action, path=path, error=str(e))
 
     def _git_remove_file(self, path: str) -> None:
         """Remove a file from git tracking."""
@@ -531,7 +564,9 @@ class MemFS:
             )
             subprocess.run(
                 [
-                    "git", "commit", "-m",
+                    "git",
+                    "commit",
+                    "-m",
                     f"memfs: delete {path}",
                     "--quiet",
                 ],
@@ -539,5 +574,5 @@ class MemFS:
                 capture_output=True,
                 timeout=5,
             )
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
+        except Exception as e:
+            logger.warning("memfs_git_remove_failed", path=path, error=str(e))

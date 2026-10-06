@@ -40,7 +40,7 @@ def merge_stream_chunk(result: Any, chunk: Any) -> str:
     if snapshot:
         if not snapshot.startswith(result.content):
             raise ValueError("Streaming snapshot diverged from emitted content")
-        delta = snapshot[len(result.content):]
+        delta = snapshot[len(result.content) :]
         result.content = snapshot
     else:
         delta = getattr(chunk, "content", "") or ""
@@ -83,8 +83,13 @@ async def run_llm_single(
             base_url=base_url,
             system_prompt=system_prompt,
         )
-        result = await agent_engine.run_agent(session, prompt)
-        output = (result.get("output") or "") if isinstance(result, dict) else str(result or "")
+        try:
+            result = await agent_engine.run_agent(session, prompt)
+            output = (result.get("output") or "") if isinstance(result, dict) else str(result or "")
+        finally:
+            close = getattr(agent_engine, "close_session", None)
+            if callable(close):
+                close(session)
     except Exception:
         return ""
     return output[:max_chars]

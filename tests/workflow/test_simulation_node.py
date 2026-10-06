@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from app.core.engine.tool_capabilities import DEFAULT_ALLOWED_TOOLS, build_workflow_tool_validator
-from app.simulation.review import HarnessReviewer
+from app.core.engine.tool_capabilities import DEFAULT_ALLOWED_TOOLS
 from app.tools import ToolRegistry
 from app.workflow import NodeStatus, NodeType, Workflow, WorkflowEdge, WorkflowNode
 from app.workflow.engine import WorkflowEngine
@@ -46,7 +45,9 @@ def test_simulation_node_runs_and_accepts():
         registry = _registry_with_sim()
         engine = WorkflowEngine(_FakeEngine(), tool_registry=registry)
         sim_node = WorkflowNode(
-            id="sim", type=NodeType.SIMULATION, name="Simulate",
+            id="sim",
+            type=NodeType.SIMULATION,
+            name="Simulate",
             config={
                 "tool_name": "simulate",
                 "schema": {"sweep": {"rate": {"values": [1.0, 2.0]}}},
@@ -56,7 +57,9 @@ def test_simulation_node_runs_and_accepts():
         )
         end_node = WorkflowNode(id="end", type=NodeType.END, name="End")
         wf = Workflow(
-            id="w1", name="Test Sim", nodes=[sim_node, end_node],
+            id="w1",
+            name="Test Sim",
+            nodes=[sim_node, end_node],
             edges=[WorkflowEdge(source="sim", target="end")],
         )
         result = await engine.execute(wf, user_inputs={"goal": "tune rate"})
@@ -86,7 +89,9 @@ def test_simulation_node_default_denied_tool():
         registry.register("run_command", "shell", {}, shell_tool)
         engine = WorkflowEngine(_FakeEngine(), tool_registry=registry)
         sim_node = WorkflowNode(
-            id="sim", type=NodeType.SIMULATION, name="Simulate",
+            id="sim",
+            type=NodeType.SIMULATION,
+            name="Simulate",
             config={
                 "tool_name": "run_command",
                 "schema": {"sweep": {"cmd": {"values": ["ls"]}}},
@@ -95,13 +100,15 @@ def test_simulation_node_default_denied_tool():
         )
         end_node = WorkflowNode(id="end", type=NodeType.END, name="End")
         wf = Workflow(
-            id="w2", name="Test Denied", nodes=[sim_node, end_node],
+            id="w2",
+            name="Test Denied",
+            nodes=[sim_node, end_node],
             edges=[WorkflowEdge(source="sim", target="end")],
         )
         result = await engine.execute(wf, user_inputs={"goal": "x"})
         return result, sim_node, fired
 
-    result, node, fired = asyncio.run(go())
+    _result, node, fired = asyncio.run(go())
     assert node.status == NodeStatus.COMPLETED
     assert node.output["rejected"] == 1
     assert node.output["accepted"] == 0
@@ -118,7 +125,9 @@ def test_simulation_node_capability_allowlist():
         registry = _registry_with_sim()
         engine = WorkflowEngine(_FakeEngine(), tool_registry=registry)
         sim_node = WorkflowNode(
-            id="sim", type=NodeType.SIMULATION, name="Simulate",
+            id="sim",
+            type=NodeType.SIMULATION,
+            name="Simulate",
             config={
                 "tool_name": "simulate",
                 "schema": {"sweep": {"rate": {"values": [5.0]}}},
@@ -128,13 +137,15 @@ def test_simulation_node_capability_allowlist():
         )
         end_node = WorkflowNode(id="end", type=NodeType.END, name="End")
         wf = Workflow(
-            id="w3", name="Test Allow", nodes=[sim_node, end_node],
+            id="w3",
+            name="Test Allow",
+            nodes=[sim_node, end_node],
             edges=[WorkflowEdge(source="sim", target="end")],
         )
         result = await engine.execute(wf, user_inputs={"goal": "allow"})
         return result, sim_node
 
-    result, node = asyncio.run(go())
+    _result, node = asyncio.run(go())
     assert node.status == NodeStatus.COMPLETED
     assert node.output["reports"][0]["accepted_attempt"]["parameters"]["rate"] == 5.0
 
@@ -173,13 +184,16 @@ def test_simulation_node_llm_mode_plans_and_runs():
 
     async def go():
         registry = _registry_with_sim()
-        engine = WorkflowEngine(_LlmEngine(
-            '{"objective":"tune throughput",'
-            '"sweep":{"rate":{"values":[1.0,3.0]}},'
-            '"base":{}}'
-        ), tool_registry=registry)
+        engine = WorkflowEngine(
+            _LlmEngine(
+                '{"objective":"tune throughput","sweep":{"rate":{"values":[1.0,3.0]}},"base":{}}'
+            ),
+            tool_registry=registry,
+        )
         sim_node = WorkflowNode(
-            id="sim", type=NodeType.SIMULATION, name="Simulate",
+            id="sim",
+            type=NodeType.SIMULATION,
+            name="Simulate",
             config={
                 "tool_name": "simulate",
                 "llm_mode": True,
@@ -193,7 +207,9 @@ def test_simulation_node_llm_mode_plans_and_runs():
         )
         end_node = WorkflowNode(id="end", type=NodeType.END, name="End")
         wf = Workflow(
-            id="w4", name="Test LLM Sim", nodes=[sim_node, end_node],
+            id="w4",
+            name="Test LLM Sim",
+            nodes=[sim_node, end_node],
             edges=[WorkflowEdge(source="sim", target="end")],
         )
         result = await engine.execute(wf, user_inputs={})
@@ -203,10 +219,10 @@ def test_simulation_node_llm_mode_plans_and_runs():
     assert result.status == "completed"
     assert node.status == NodeStatus.COMPLETED
     assert node.output["accepted"] == 2
-    assert sorted(
-        r["accepted_attempt"]["parameters"]["rate"]
-        for r in node.output["reports"]
-    ) == [1.0, 3.0]
+    assert sorted(r["accepted_attempt"]["parameters"]["rate"] for r in node.output["reports"]) == [
+        1.0,
+        3.0,
+    ]
 
 
 class _OrchLlmEngine(_FakeEngine):
@@ -230,13 +246,16 @@ def test_simulation_node_orchestrator_mode():
 
     async def go():
         registry = _registry_with_sim()
-        engine = WorkflowEngine(_OrchLlmEngine(
-            '{"objective":"tune throughput",'
-            '"sweep":{"rate":{"values":[1.0,2.0]}},'
-            '"base":{}}'
-        ), tool_registry=registry)
+        engine = WorkflowEngine(
+            _OrchLlmEngine(
+                '{"objective":"tune throughput","sweep":{"rate":{"values":[1.0,2.0]}},"base":{}}'
+            ),
+            tool_registry=registry,
+        )
         sim_node = WorkflowNode(
-            id="sim", type=NodeType.SIMULATION, name="Simulate",
+            id="sim",
+            type=NodeType.SIMULATION,
+            name="Simulate",
             config={
                 "tool_name": "simulate",
                 "orchestrator_mode": True,
@@ -251,7 +270,9 @@ def test_simulation_node_orchestrator_mode():
         )
         end_node = WorkflowNode(id="end", type=NodeType.END, name="End")
         wf = Workflow(
-            id="w5", name="Test Orch Sim", nodes=[sim_node, end_node],
+            id="w5",
+            name="Test Orch Sim",
+            nodes=[sim_node, end_node],
             edges=[WorkflowEdge(source="sim", target="end")],
         )
         result = await engine.execute(wf, user_inputs={})
@@ -296,12 +317,13 @@ def test_simulation_experiment_template_wires_real_tool():
     whose tool_name defaults to the real simulate_experiment and stays in
     the default allowlist so Flow/API runs reach the harness."""
 
-    from app.core.engine.tool_capabilities import DEFAULT_ALLOWED_TOOLS
     from app.workflow import NodeType
     from app.workflow.templates import WorkflowTemplates
 
     workflow = WorkflowTemplates.simulation_experiment(
-        provider="openai", model_id="gpt-4o", api_key="",
+        provider="openai",
+        model_id="gpt-4o",
+        api_key="",
         tool_name="simulate_experiment",
         schema={"sweep": {"dt": {"values": [1e-4, 2e-4, 5e-4]}}},
         max_rounds=4,
@@ -310,7 +332,4 @@ def test_simulation_experiment_template_wires_real_tool():
     assert sim.config["tool_name"] == "simulate_experiment"
     assert sim.config["max_rounds"] == 4
     assert "simulate_experiment" in DEFAULT_ALLOWED_TOOLS
-    assert any(
-        t["id"] == "simulation_experiment"
-        for t in WorkflowTemplates.list_templates()
-    )
+    assert any(t["id"] == "simulation_experiment" for t in WorkflowTemplates.list_templates())

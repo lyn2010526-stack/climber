@@ -7,7 +7,7 @@ import { ThinkingIndicator } from './ThinkingIndicator';
 import { ThinkingDetails } from '../chat/ThinkingDetails';
 import { MessageActions, MessageContent, ToolCallCard } from '../chat/MessageContent';
 
-vi.mock('../../api', () => ({ api: { submitFeedback: vi.fn(), resolvePermission: vi.fn() } }));
+vi.mock('../../api', () => ({ api: { submitFeedback: vi.fn(), resolvePermission: vi.fn(), listChatCommands: vi.fn().mockResolvedValue([]) } }));
 
 const messages = [
   { id: 'u1', role: 'user' as const, content: 'Review this repository' },
@@ -153,19 +153,42 @@ describe('transcript hierarchy', () => {
     expect(assistantRow.textContent).toContain('The parser is lenient.');
   });
 
-  it('drops the per-row avatar and the assistant bubble', () => {
+  it('marks assistant turns with the product avatar and keeps the answer flat', () => {
     const { container } = render(<ChatInterface messages={messages} onSend={vi.fn()} />);
     const [userRow, assistantRow] = Array.from(container.querySelectorAll('[data-transcript] > div'));
-    // One child each: a row carries its own content, with no sibling avatar column.
-    expect(userRow!.children).toHaveLength(1);
-    expect(assistantRow!.children).toHaveLength(1);
+    // The assistant row carries the ClimberMark avatar column; the user row
+    // reads as a right-aligned bubble with no avatar of its own.
+    expect(assistantRow!.querySelector('[data-avatar]')).not.toBeNull();
+    expect(assistantRow!.querySelector('svg')).not.toBeNull();
+    expect(userRow!.querySelector('[data-avatar]')).toBeNull();
 
-    const userSurface = userRow!.firstElementChild!.firstElementChild!;
-    expect(userSurface).toHaveClass('bg-[var(--color-bg-surface-2)]');
+    const userSurface = userRow!.querySelector('[data-message-body]')!;
+    expect(userSurface).toHaveClass('bg-[var(--color-accent-subtle)]');
+    // A short question fits its content, capped so it never spans the column.
+    expect(userRow!.querySelector('[data-message-column]')).toHaveClass('max-w-[85%]');
 
-    const assistantSurface = assistantRow!.firstElementChild!.firstElementChild!;
-    expect(assistantSurface).toHaveClass('w-full');
-    expect(assistantSurface).not.toHaveClass('bg-[var(--color-bg-surface-2)]');
+    const assistantBody = assistantRow!.querySelector('[data-message-body]')!;
+    // The answer is the content: full column, no surface, no bubble rounding.
+    expect(assistantRow!.querySelector('[data-message-column]')).toHaveClass('flex-1');
+    expect(assistantBody).not.toHaveClass('bg-[var(--color-bg-surface-2)]');
+    expect(assistantBody).not.toHaveClass('rounded-2xl');
+  });
+
+  it('merges consecutive same-role turns into one visual group', () => {
+    const run = [
+      ...messages,
+      { id: 'a2', role: 'assistant' as const, content: 'Second paragraph of the same voice.' },
+    ];
+    const { container } = render(<ChatInterface messages={run} onSend={vi.fn()} />);
+    const rows = Array.from(container.querySelectorAll('[data-transcript] > div'));
+    expect(rows).toHaveLength(3);
+    // The merged follow-up hides the avatar but keeps its spacer width, and the
+    // row rhythm tightens so the two turns read as one group.
+    expect(rows[1]!.querySelector('[data-avatar]')).not.toBeNull();
+    expect(rows[2]!.querySelector('[data-avatar]')).toBeNull();
+    expect(rows[2]!.querySelector('[data-avatar-col]')).not.toBeNull();
+    expect(rows[2]!.className).toContain('pb-2');
+    expect(rows[1]!.className).toContain('pb-5');
   });
 
   it('marks only the trailing assistant turn while a run is in flight', () => {

@@ -92,7 +92,7 @@ class UsageTracker:
             )
             self._records.append(record)
             if len(self._records) > self._max_records:
-                self._records = self._records[-self._max_records:]
+                self._records = self._records[-self._max_records :]
             self._request_timestamps[user_id].append(time.time())
             # Cleanup old timestamps (keep last 24h)
             cutoff = time.time() - 86400
@@ -119,8 +119,7 @@ class UsageTracker:
             # Requests per minute
             one_minute_ago = now - 60
             recent_requests = [
-                t for t in self._request_timestamps.get(user_id, [])
-                if t > one_minute_ago
+                t for t in self._request_timestamps.get(user_id, []) if t > one_minute_ago
             ]
             if len(recent_requests) >= self.requests_per_minute:
                 return False, f"Rate limit: {self.requests_per_minute} requests/minute exceeded"
@@ -130,8 +129,7 @@ class UsageTracker:
             daily_tokens = sum(
                 r.tokens_used
                 for r in self._records
-                if r.user_id == user_id
-                and datetime.fromisoformat(r.created_at) > one_day_ago
+                if r.user_id == user_id and datetime.fromisoformat(r.created_at) > one_day_ago
             )
             if daily_tokens >= self.tokens_per_day:
                 return False, f"Daily token limit ({self.tokens_per_day}) exceeded"
@@ -141,8 +139,7 @@ class UsageTracker:
             hourly_tool_calls = sum(
                 r.tool_calls
                 for r in self._records
-                if r.user_id == user_id
-                and datetime.fromisoformat(r.created_at) > one_hour_ago
+                if r.user_id == user_id and datetime.fromisoformat(r.created_at) > one_hour_ago
             )
             if hourly_tool_calls >= self.tool_calls_per_hour:
                 return False, f"Hourly tool call limit ({self.tool_calls_per_hour}) exceeded"
@@ -159,19 +156,16 @@ class UsageTracker:
             user_records = [r for r in self._records if r.user_id == user_id]
 
             daily_records = [
-                r for r in user_records
-                if datetime.fromisoformat(r.created_at) > one_day_ago
+                r for r in user_records if datetime.fromisoformat(r.created_at) > one_day_ago
             ]
             hourly_records = [
-                r for r in user_records
-                if datetime.fromisoformat(r.created_at) > one_hour_ago
+                r for r in user_records if datetime.fromisoformat(r.created_at) > one_hour_ago
             ]
 
             return {
-                "requests_last_minute": len([
-                    t for t in self._request_timestamps.get(user_id, [])
-                    if t > time.time() - 60
-                ]),
+                "requests_last_minute": len(
+                    [t for t in self._request_timestamps.get(user_id, []) if t > time.time() - 60]
+                ),
                 "requests_limit": self.requests_per_minute,
                 "tokens_today": sum(r.tokens_used for r in daily_records),
                 "tokens_limit": self.tokens_per_day,
@@ -181,9 +175,7 @@ class UsageTracker:
                 "total_tokens": sum(r.tokens_used for r in user_records),
             }
 
-    def get_user_records(
-        self, user_id: str, limit: int = 50
-    ) -> list[dict[str, Any]]:
+    def get_user_records(self, user_id: str, limit: int = 50) -> list[dict[str, Any]]:
         """Get recent usage records for a user."""
         user_records = [r for r in self._records if r.user_id == user_id]
         return [r.to_dict() for r in reversed(user_records[-limit:])]
@@ -193,7 +185,8 @@ class UsageTracker:
         cutoff = datetime.now(UTC) - timedelta(hours=max_age_hours)
         original_len = len(self._records)
         self._records = [
-            r for r in self._records
+            r
+            for r in self._records
             if datetime.fromisoformat(r.created_at).replace(tzinfo=UTC) > cutoff
         ]
         removed = original_len - len(self._records)

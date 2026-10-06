@@ -20,8 +20,11 @@ import { useSidebarState } from './layout/useSidebarState';
 import { NAV_ITEM_IDS, MOBILE_ADAPTED_PAGE_IDS } from './navigation/navConfig';
 import type { Page } from './navigation/navConfig';
 import { SidebarNavigation } from './layout/SidebarNavigation';
+import { AppLockGate } from './components/privacy';
+import { AuthGate } from './components/auth/AuthGate';
+import { BootSplash } from './components/shell/BootSplash';
 
-const WorkspaceLayout = lazy(() => import('./components/workspace/WorkspaceLayout').then(m => ({ default: m.WorkspaceLayout })));
+const AnchoredWorkspaceLayout = lazy(() => import('./components/workspace/AnchoredWorkspaceLayout').then(m => ({ default: m.AnchoredWorkspaceLayout })));
 const AgentsPage = lazy(() => import('./pages/AgentsPage').then(m => ({ default: m.AgentsPage })));
 const WorkflowsPage = lazy(() => import('./pages/WorkflowsPage').then(m => ({ default: m.WorkflowsPage })));
 const ApiKeysPage = lazy(() => import('./pages/ApiKeysPage').then(m => ({ default: m.ApiKeysPage })));
@@ -34,7 +37,9 @@ const FactoryModePage = lazy(() => import('./pages/FactoryModePage').then(m => (
 const PluginsPage = lazy(() => import('./pages/PluginsPage').then(m => ({ default: m.PluginsPage })));
 const SchedulerPage = lazy(() => import('./pages/SchedulerPage').then(m => ({ default: m.SchedulerPage })));
 const ClusterPage = lazy(() => import('./pages/ClusterPage').then(m => ({ default: m.ClusterPage })));
+const CrewsPage = lazy(() => import('./pages/CrewsPage'));
 const TracesPage = lazy(() => import('./pages/TracesPage'));
+const AuditLogPage = lazy(() => import('./pages/AuditLogPage'));
 const EvalPage = lazy(() => import('./pages/EvalPage'));
 const CostPage = lazy(() => import('./pages/CostPage'));
 const PluginPage = lazy(() => import('./pages/PluginPage'));
@@ -45,9 +50,18 @@ const ReasoningPage = lazy(() => import('./pages/ReasoningPage').then(m => ({ de
 const ReasoningHistoryPage = lazy(() => import('./pages/ReasoningHistoryPage').then(m => ({ default: m.ReasoningHistoryPage })));
 const TerminalPage = lazy(() => import('./pages/TerminalPage'));
 const AuthApiKeysPage = lazy(() => import('./pages/AuthApiKeysPage'));
+const PromptTemplatesPage = lazy(() => import('./pages/PromptTemplatesPage').then(m => ({ default: m.PromptTemplatesPage })));
+const DocumentsPage = lazy(() => import('./pages/DocumentsPage').then(m => ({ default: m.DocumentsPage })));
+const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage').then(m => ({ default: m.IntegrationsPage })));
+const SecurityPage = lazy(() => import('./pages/SecurityPage').then(m => ({ default: m.SecurityPage })));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 
 const VALID_PAGES = new Set(NAV_ITEM_IDS);
+
+// Destinations the mobile shell hands to a desktop fallback card. The app
+// renders their real surface directly on mobile instead of letting the shell
+// replace it with the "open chat" placeholder.
+const MOBILE_SHELL_FALLBACK_IDS: ReadonlySet<Page> = new Set<Page>(['agents', 'apikeys']);
 
 function getPageFromHash(): Page {
   const hash = window.location.hash
@@ -75,6 +89,7 @@ export default function App() {
   const { open: sidebarOpen, toggle: toggleSidebar } = useSidebarState();
   const [activeOverlay, setActiveOverlay] = useState<'search' | 'commands' | null>(null);
   const isMobile = useIsMobile();
+  const [booted, setBooted] = useState(false);
 
   useEffect(() => {
     const onHashChange = () => setCurrentPage(getPageFromHash());
@@ -99,11 +114,15 @@ export default function App() {
   }, []);
 
   const renderPage = () => {
+    // Chat is the anchored workbench at every width: one layout owns the
+    // transcript, the composer and both drawers, and it picks its own column
+    // arrangement from the viewport. A separate mobile chat surface would be a
+    // second implementation of the same conversation.
+    if (currentPage === 'chat') return <AnchoredWorkspaceLayout />;
     if (isMobile) {
       if (!MOBILE_ADAPTED_PAGE_IDS.has(currentPage)) return <MobileChatPage />;
       switch (currentPage) {
         case 'dashboard': return <DashboardPage />;
-        case 'chat': return <MobileChatPage />;
         case 'factory': return <MobileFactoryPage />;
         case 'cluster': return <MobileClusterPage />;
         case 'tasks': return <MobileTasksPage />;
@@ -114,10 +133,9 @@ export default function App() {
     }
     switch (currentPage) {
       case 'dashboard': return <DashboardPage />;
-      case 'chat': return <WorkspaceLayout />;
       case 'agents': return <AgentsPage />;
       case 'workflows': return <WorkflowsPage />;
-      case 'crews': return <ClusterPage />;
+      case 'crews': return <CrewsPage />;
       case 'apikeys': return <ApiKeysPage />;
       case 'authapikeys': return <AuthApiKeysPage />;
       case 'skills': return <SkillsPage />;
@@ -128,9 +146,14 @@ export default function App() {
       case 'factory': return <FactoryModePage />;
       case 'plugins': return <PluginsPage />;
       case 'plugin-manage': return <PluginPage />;
+      case 'prompt-templates': return <PromptTemplatesPage />;
+      case 'documents': return <DocumentsPage />;
+      case 'integrations': return <IntegrationsPage />;
+      case 'security': return <SecurityPage />;
       case 'scheduler': return <SchedulerPage />;
       case 'cluster': return <ClusterPage />;
       case 'traces': return <TracesPage />;
+      case 'audit': return <AuditLogPage />;
       case 'eval': return <EvalPage />;
       case 'cost': return <CostPage />;
       case 'settings': return <SettingsPage />;
@@ -143,15 +166,39 @@ export default function App() {
   };
 
   return (
-    <div className="app-shell flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--color-bg-page)' }}>
-      {isMobile ? (
-        <AdaptiveMobileLayout currentPage={currentPage} onNavigate={(page) => navigate(page as Page)}>
-          <Suspense fallback={<PageFallback />}>
-            <PageTransition transitionKey={currentPage}>
+    <AppLockGate>
+      <AuthGate ready={booted}>
+        <div className="app-shell flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--color-bg-page)' }}>
+      {/* Chat bypasses the mobile shell on purpose: the anchored workbench
+          carries its own navigation and drawer affordances, so wrapping it in
+          the bottom-nav shell would put two navigations on one screen. */}
+      {currentPage === 'chat' ? (
+        <>
+          <main id="main-content" className="flex min-w-0 flex-1 overflow-hidden flex-col relative" style={{ backgroundColor: 'var(--color-bg-page)' }}>
+            <Suspense fallback={<PageFallback />}>
               {renderPage()}
-            </PageTransition>
-          </Suspense>
-        </AdaptiveMobileLayout>
+            </Suspense>
+          </main>
+          <IOsToaster position="top-center" theme="system" />
+        </>
+      ) : isMobile ? (
+        MOBILE_SHELL_FALLBACK_IDS.has(currentPage) ? (
+          <main id="main-content" className="flex min-w-0 flex-1 overflow-hidden flex-col relative" style={{ backgroundColor: 'var(--color-bg-page)' }}>
+            <Suspense fallback={<PageFallback />}>
+              <PageTransition transitionKey={currentPage}>
+                {renderPage()}
+              </PageTransition>
+            </Suspense>
+          </main>
+        ) : (
+          <AdaptiveMobileLayout currentPage={currentPage} onNavigate={(page) => navigate(page as Page)}>
+            <Suspense fallback={<PageFallback />}>
+              <PageTransition transitionKey={currentPage}>
+                {renderPage()}
+              </PageTransition>
+            </Suspense>
+          </AdaptiveMobileLayout>
+        )
       ) : (
         <>
           <aside
@@ -250,6 +297,9 @@ export default function App() {
         onNavigate={target => navigate(target.page)}
       />
       <CommandPalette isOpen={activeOverlay === 'commands'} onClose={() => setActiveOverlay(null)} onNavigate={(page) => navigate(page as Page)} />
-    </div>
+      </div>
+      </AuthGate>
+      {!booted && <BootSplash onDone={() => setBooted(true)} />}
+    </AppLockGate>
   );
 }

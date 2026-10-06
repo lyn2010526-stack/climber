@@ -2,7 +2,7 @@
 
 Features:
 - Depth limit (default 3) — prevents unbounded recursion
-- Concurrency limit (default 5) — caps parallel sub-agents
+- Concurrency limit (default: max_concurrent_subtasks) — caps parallel sub-agents
 - Orphan cleanup — detects and terminates stale runs
 - Per-member token/cost tracking
 - Cascade cancellation — parent cancellation propagates to children
@@ -13,14 +13,14 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
-logger = structlog.get_logger()
+from app.config import settings
 
 logger = structlog.get_logger()
 
@@ -38,6 +38,7 @@ class SubagentState(StrEnum):
 @dataclass
 class SubagentSpec:
     """Specification for a sub-agent task."""
+
     task_id: str = field(default_factory=lambda: str(uuid.uuid4())[:12])
     description: str = ""
     model: str = ""
@@ -55,6 +56,7 @@ class SubagentSpec:
 @dataclass
 class SubagentUsage:
     """Token and cost tracking for a single sub-agent."""
+
     tokens_in: int = 0
     tokens_out: int = 0
     cost_usd: float = 0.0
@@ -74,6 +76,7 @@ class SubagentUsage:
 @dataclass
 class SubagentRecord:
     """Full record of a sub-agent execution."""
+
     spec: SubagentSpec
     state: SubagentState = SubagentState.PENDING
     usage: SubagentUsage = field(default_factory=SubagentUsage)
@@ -112,24 +115,27 @@ class SubagentRecord:
 class SubagentManager:
     """Manages sub-agent lifecycle with depth limits, concurrency control, and cleanup.
 
-    Reference: OpenSquilla SubagentManager — depth_limit=3, concurrency_limit=5.
+    Reference: OpenSquilla SubagentManager — depth_limit=3, concurrency from
+    ``settings.max_concurrent_subtasks``.
     """
 
     def __init__(
         self,
         *,
         depth_limit: int = 3,
-        concurrency_limit: int = 5,
+        concurrency_limit: int | None = None,
         orphan_timeout: float = 300.0,
         enable_cascade_cancel: bool = True,
     ):
         self._depth_limit = depth_limit
-        self._concurrency_limit = concurrency_limit
+        self._concurrency_limit = (
+            settings.max_concurrent_subtasks if concurrency_limit is None else concurrency_limit
+        )
         self._orphan_timeout = orphan_timeout
         self._enable_cascade_cancel = enable_cascade_cancel
 
         self._records: dict[str, SubagentRecord] = {}
-        self._semaphore = asyncio.Semaphore(concurrency_limit)
+        self._semaphore = asyncio.Semaphore(self._concurrency_limit)
         self._running_count = 0
         self._cancel_events: dict[str, asyncio.Event] = {}
 
@@ -237,7 +243,9 @@ class SubagentManager:
             return await runner(spec)
 
         # Create a task that can be cancelled
-        task = asyncio.create_task(runner(spec))
+        task: asyncio.Task[tuple[str, SubagentUsage]] = asyncio.create_task(
+            cast("Coroutine[Any, Any, tuple[str, SubagentUsage]]", runner(spec))
+        )
         cancel_task = asyncio.create_task(cancel_event.wait())
 
         done, pending = await asyncio.wait(
@@ -250,7 +258,7 @@ class SubagentManager:
 
         if task in done:
             return task.result()
-        raise asyncio.CancelledError()
+        raise asyncio.CancelledError
 
     def cancel(self, task_id: str) -> bool:
         """Cancel a running sub-agent and optionally cascade to children."""
@@ -296,7 +304,9 @@ class SubagentManager:
             elapsed = now - (record.started_at or now)
             if elapsed > self._orphan_timeout:
                 record.state = SubagentState.ORPHANED
-                record.error = f"Orphaned (parent {spec.parent_id} inactive, timeout {elapsed:.0f}s)"
+                record.error = (
+                    f"Orphaned (parent {spec.parent_id} inactive, timeout {elapsed:.0f}s)"
+                )
                 record.completed_at = now
                 orphaned.append(spec.task_id)
                 logger.warning("subagent.orphaned", task_id=spec.task_id, parent_id=spec.parent_id)

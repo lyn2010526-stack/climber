@@ -21,6 +21,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -39,7 +40,9 @@ class EpisodicMemory(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    agent_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("agents.id"), nullable=True, index=True)
+    agent_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("agents.id"), nullable=True, index=True
+    )
 
     # Memory content
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -63,7 +66,9 @@ class EpisodicMemory(Base):
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
@@ -86,7 +91,9 @@ class KnowledgeGraph(Base):
 
     # Confidence and provenance
     confidence: Mapped[float] = mapped_column(Float, default=0.8)
-    source: Mapped[str] = mapped_column(String(50), default="conversation")  # conversation, user_stated, inferred
+    source: Mapped[str] = mapped_column(
+        String(50), default="conversation"
+    )  # conversation, user_stated, inferred
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Metadata
@@ -94,7 +101,9 @@ class KnowledgeGraph(Base):
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
 
 class UserProfile(Base):
@@ -115,7 +124,7 @@ class UserProfile(Base):
     timezone: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Freeform facts about the user (persistent across all sessions)
-    facts: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    facts: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     # Each fact: {"category": "work", "content": "Software engineer at Google", "confidence": 0.9}
 
     # Identity memory — inviolable rules, values, principles
@@ -124,8 +133,8 @@ class UserProfile(Base):
     principles: Mapped[list[str]] = mapped_column(JSON, default=list)
 
     # Behavioral patterns
-    common_topics: Mapped[list[dict]] = mapped_column(JSON, default=list)
-    # Each: {"topic": "Python", "frequency": 15, "last_mentioned": "2024-01-15"}
+    common_topics: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    # Each: {"topic": "Python", "frequency": 15, "last_mentioned": "2024-01-15"}  # noqa: ERA001
 
     # Interaction summary
     total_sessions: Mapped[int] = mapped_column(Integer, default=0)
@@ -134,7 +143,9 @@ class UserProfile(Base):
     last_interaction: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
 
 class MemoryRetrievalLog(Base):
@@ -162,30 +173,35 @@ class MemoryRetrievalLog(Base):
 
 
 class CoreMemoryBlock(Base):
-    """Core memory block — injected directly into system prompt.
-
-    """
+    """Core memory block — injected directly into system prompt."""
 
     __tablename__ = "core_memory_blocks"
+    __table_args__ = (
+        UniqueConstraint("user_id", "agent_id", "label", name="uq_core_memory_block_scope"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    agent_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("agents.id"), nullable=True, index=True)
+    agent_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("agents.id"), nullable=True, index=True
+    )
 
-    label: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., "persona", "user_profile"
+    label: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # e.g., "persona", "user_profile"
     value: Mapped[str] = mapped_column(Text, nullable=False)
     limit: Mapped[int] = mapped_column(Integer, default=4096)
     description: Mapped[str] = mapped_column(Text, default="")
     read_only: Mapped[bool] = mapped_column(Boolean, default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
 
 class ArchivalPassage(Base):
-    """Long-term archival memory with optional embedding for vector search.
-
-    """
+    """Long-term archival memory with optional embedding for vector search."""
 
     __tablename__ = "archival_passages"
 
@@ -206,9 +222,7 @@ class ArchivalPassage(Base):
 
 
 class AuditLog(Base):
-    """Persistent audit log for all agent operations.
-
-    """
+    """Persistent audit log for all agent operations."""
 
     __tablename__ = "audit_logs"
 
@@ -216,13 +230,11 @@ class AuditLog(Base):
     session_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
 
-    action: Mapped[str] = mapped_column(String(50), nullable=False)  # file:read, command:execute, api:call, permission:*
+    action: Mapped[str] = mapped_column(
+        String(50), nullable=False
+    )  # file:read, command:execute, api:call, permission:*
     severity: Mapped[str] = mapped_column(String(20), default="info")  # info / warning / critical
     details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     result: Mapped[str] = mapped_column(Text, default="")
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
-
-
-
-

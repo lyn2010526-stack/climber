@@ -23,29 +23,37 @@ def _report(suites, ok=None):
 
 class ReportTests(unittest.TestCase):
     def test_parses_nested_suites_and_titles(self):
-        raw = _report([
-            {
-                "file": "req-7.spec.ts",
-                "title": "req-7.spec.ts",
-                "suites": [{
-                    "title": "login flow",
-                    "specs": [{
-                        "title": "REQ-7 shows dashboard",
-                        "ok": True,
-                        "tests": [{"results": [{"status": "passed"}]}],
-                    }],
-                }],
-            },
-            {
-                "file": "req-9.spec.ts",
-                "title": "req-9.spec.ts",
-                "specs": [{
-                    "title": "REQ-9 checkout",
-                    "ok": False,
-                    "tests": [{"results": [{"status": "failed"}]}],
-                }],
-            },
-        ])
+        raw = _report(
+            [
+                {
+                    "file": "req-7.spec.ts",
+                    "title": "req-7.spec.ts",
+                    "suites": [
+                        {
+                            "title": "login flow",
+                            "specs": [
+                                {
+                                    "title": "REQ-7 shows dashboard",
+                                    "ok": True,
+                                    "tests": [{"results": [{"status": "passed"}]}],
+                                }
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "file": "req-9.spec.ts",
+                    "title": "req-9.spec.ts",
+                    "specs": [
+                        {
+                            "title": "REQ-9 checkout",
+                            "ok": False,
+                            "tests": [{"results": [{"status": "failed"}]}],
+                        }
+                    ],
+                },
+            ]
+        )
         parsed = acc.parse_playwright_report(raw)
         self.assertEqual(len(parsed), 2)
         self.assertEqual(parsed[0]["file"], "req-7.spec.ts")
@@ -54,14 +62,20 @@ class ReportTests(unittest.TestCase):
         self.assertFalse(parsed[1]["passed"])
 
     def test_derives_failures_from_status_when_ok_missing(self):
-        raw = _report([{
-            "file": "a.spec.ts",
-            "title": "a.spec.ts",
-            "specs": [{
-                "title": "REQ-1 works",
-                "tests": [{"results": [{"status": "passed"}, {"status": "timedOut"}]}],
-            }],
-        }])
+        raw = _report(
+            [
+                {
+                    "file": "a.spec.ts",
+                    "title": "a.spec.ts",
+                    "specs": [
+                        {
+                            "title": "REQ-1 works",
+                            "tests": [{"results": [{"status": "passed"}, {"status": "timedOut"}]}],
+                        }
+                    ],
+                }
+            ]
+        )
         parsed = acc.parse_playwright_report(raw)
         self.assertFalse(parsed[0]["passed"])
 
@@ -77,7 +91,11 @@ class ReportTests(unittest.TestCase):
         self.assertNotIn("REQ-3", mapped)
 
     def test_try_json_from_text_embedded(self):
-        text = "prefix noise " + json.dumps({"suites": [{"file": "x.spec.ts", "specs": []}]}) + " suffix"
+        text = (
+            "prefix noise "
+            + json.dumps({"suites": [{"file": "x.spec.ts", "specs": []}]})
+            + " suffix"
+        )
         payload = acc.try_json_from_text(text)
         self.assertIsNotNone(payload)
         self.assertEqual(payload["suites"][0]["file"], "x.spec.ts")
@@ -109,10 +127,15 @@ class InfraTests(unittest.TestCase):
             tests = root / "tests"
             tests.mkdir()
             summary = acc.run_acceptance(
-                root, tests,
-                web_port=3000, extra_ports=[], node_ids=["REQ-1"],
-                free_port=lambda port: None, log=lambda m: None,
-                tail=lambda t, n=999: t[-n:], deadline=None,
+                root,
+                tests,
+                web_port=3000,
+                extra_ports=[],
+                node_ids=["REQ-1"],
+                free_port=lambda port: None,
+                log=lambda m: None,
+                tail=lambda t, n=999: t[-n:],
+                deadline=None,
             )
         self.assertFalse(summary["available"])
         self.assertTrue(summary["ran"] is False)
@@ -133,13 +156,20 @@ class InfraTests(unittest.TestCase):
             root = Path(dir_name)
             tests = self._write_deliverable(root)
             proc = _Proc(alive=True)
-            with patch.object(acc.subprocess, "Popen", return_value=proc), \
-                    patch.object(acc, "wait_bound", return_value=False):
+            with (
+                patch.object(acc.subprocess, "Popen", return_value=proc),
+                patch.object(acc, "wait_bound", return_value=False),
+            ):
                 summary = acc.run_acceptance(
-                    root, tests,
-                    web_port=3000, extra_ports=[8080], node_ids=["REQ-1"],
-                    free_port=lambda port: None, log=lambda m: None,
-                    tail=lambda t, n=999: t[-n:], deadline=float("inf"),
+                    root,
+                    tests,
+                    web_port=3000,
+                    extra_ports=[8080],
+                    node_ids=["REQ-1"],
+                    free_port=lambda port: None,
+                    log=lambda m: None,
+                    tail=lambda t, n=999: t[-n:],
+                    deadline=float("inf"),
                 )
         self.assertTrue(summary["ran"])
         self.assertFalse(summary["passed"])
@@ -153,10 +183,19 @@ class InfraTests(unittest.TestCase):
             report_file = Path(tempfile.mkdtemp(prefix="rep-")) / "report.json"
 
             def fake_run(argv, **kwargs):
-                report_file.write_text(json.dumps(_report([{
-                    "file": "REQ-1.spec.ts", "title": "REQ-1.spec.ts",
-                    "specs": [{"title": "REQ-1 works", "ok": True}],
-                }])))
+                report_file.write_text(
+                    json.dumps(
+                        _report(
+                            [
+                                {
+                                    "file": "REQ-1.spec.ts",
+                                    "title": "REQ-1.spec.ts",
+                                    "specs": [{"title": "REQ-1 works", "ok": True}],
+                                }
+                            ]
+                        )
+                    )
+                )
                 # the output path env var carries the real location
                 kwargs["env"]["PLAYWRIGHT_JSON_OUTPUT_NAME"]
                 Path(kwargs["env"]["PLAYWRIGHT_JSON_OUTPUT_NAME"]).write_text(
@@ -164,16 +203,23 @@ class InfraTests(unittest.TestCase):
                 )
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-            with patch.object(acc, "wait_bound", return_value=True), \
-                    patch.object(acc.subprocess, "Popen", return_value=_Proc()), \
-                    patch.object(acc.subprocess, "run", side_effect=fake_run), \
-                    patch.object(acc, "playwright_argv", return_value=["playwright"]), \
-                    patch.object(acc, "prepare_test_harness", return_value=None):
+            with (
+                patch.object(acc, "wait_bound", return_value=True),
+                patch.object(acc.subprocess, "Popen", return_value=_Proc()),
+                patch.object(acc.subprocess, "run", side_effect=fake_run),
+                patch.object(acc, "playwright_argv", return_value=["playwright"]),
+                patch.object(acc, "prepare_test_harness", return_value=None),
+            ):
                 summary = acc.run_acceptance(
-                    root, tests,
-                    web_port=3000, extra_ports=[], node_ids=["REQ-1"],
-                    free_port=lambda port: None, log=lambda m: None,
-                    tail=lambda t, n=999: t[-n:], deadline=float("inf"),
+                    root,
+                    tests,
+                    web_port=3000,
+                    extra_ports=[],
+                    node_ids=["REQ-1"],
+                    free_port=lambda port: None,
+                    log=lambda m: None,
+                    tail=lambda t, n=999: t[-n:],
+                    deadline=float("inf"),
                 )
         self.assertTrue(summary["passed"])
         self.assertEqual(summary["passed_nodes"], ["REQ-1"])
@@ -185,26 +231,35 @@ class InfraTests(unittest.TestCase):
             tests = self._write_deliverable(root)
 
             def fake_run(argv, **kwargs):
-                payload = _report([{
-                    "file": "REQ-1.spec.ts", "title": "REQ-1.spec.ts",
-                    "specs": [{"title": "REQ-1 works", "ok": True}],
-                }])
-                Path(kwargs["env"]["PLAYWRIGHT_JSON_OUTPUT_NAME"]).write_text(
-                    json.dumps(payload)
+                payload = _report(
+                    [
+                        {
+                            "file": "REQ-1.spec.ts",
+                            "title": "REQ-1.spec.ts",
+                            "specs": [{"title": "REQ-1 works", "ok": True}],
+                        }
+                    ]
                 )
+                Path(kwargs["env"]["PLAYWRIGHT_JSON_OUTPUT_NAME"]).write_text(json.dumps(payload))
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-            with patch.object(acc, "wait_bound", return_value=True), \
-                    patch.object(acc.subprocess, "Popen", return_value=_Proc()), \
-                    patch.object(acc.subprocess, "run", side_effect=fake_run), \
-                    patch.object(acc, "playwright_argv", return_value=["playwright"]), \
-                    patch.object(acc, "prepare_test_harness", return_value=None):
+            with (
+                patch.object(acc, "wait_bound", return_value=True),
+                patch.object(acc.subprocess, "Popen", return_value=_Proc()),
+                patch.object(acc.subprocess, "run", side_effect=fake_run),
+                patch.object(acc, "playwright_argv", return_value=["playwright"]),
+                patch.object(acc, "prepare_test_harness", return_value=None),
+            ):
                 summary = acc.run_acceptance(
-                    root, tests,
-                    web_port=3000, extra_ports=[8080],
+                    root,
+                    tests,
+                    web_port=3000,
+                    extra_ports=[8080],
                     node_ids=["REQ-1", "REQ-9"],
-                    free_port=lambda port: None, log=lambda m: None,
-                    tail=lambda t, n=999: t[-n:], deadline=float("inf"),
+                    free_port=lambda port: None,
+                    log=lambda m: None,
+                    tail=lambda t, n=999: t[-n:],
+                    deadline=float("inf"),
                 )
         self.assertFalse(summary["passed"])
         self.assertTrue(summary["all_specs_green"])
@@ -220,16 +275,23 @@ class InfraTests(unittest.TestCase):
             def fake_run(argv, **kwargs):
                 return SimpleNamespace(returncode=0, stdout="ok", stderr="")
 
-            with patch.object(acc, "wait_bound", return_value=True), \
-                    patch.object(acc.subprocess, "Popen", return_value=_Proc()), \
-                    patch.object(acc.subprocess, "run", side_effect=fake_run), \
-                    patch.object(acc, "playwright_argv", return_value=["playwright"]), \
-                    patch.object(acc, "prepare_test_harness", return_value=None):
+            with (
+                patch.object(acc, "wait_bound", return_value=True),
+                patch.object(acc.subprocess, "Popen", return_value=_Proc()),
+                patch.object(acc.subprocess, "run", side_effect=fake_run),
+                patch.object(acc, "playwright_argv", return_value=["playwright"]),
+                patch.object(acc, "prepare_test_harness", return_value=None),
+            ):
                 summary = acc.run_acceptance(
-                    root, tests,
-                    web_port=3000, extra_ports=[], node_ids=["REQ-1"],
-                    free_port=lambda port: None, log=lambda m: None,
-                    tail=lambda t, n=999: t[-n:], deadline=float("inf"),
+                    root,
+                    tests,
+                    web_port=3000,
+                    extra_ports=[],
+                    node_ids=["REQ-1"],
+                    free_port=lambda port: None,
+                    log=lambda m: None,
+                    tail=lambda t, n=999: t[-n:],
+                    deadline=float("inf"),
                 )
         self.assertTrue(summary["fallback"])
         self.assertTrue(summary["passed"])
@@ -239,20 +301,31 @@ class InfraTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as dir_name:
             root = Path(dir_name)
             tests = self._write_deliverable(root)
-            with patch.object(acc, "wait_bound", return_value=True), \
-                    patch.object(acc.subprocess, "Popen", return_value=_Proc()), \
-                    patch.object(acc.subprocess, "run", return_value=SimpleNamespace(
+            with (
+                patch.object(acc, "wait_bound", return_value=True),
+                patch.object(acc.subprocess, "Popen", return_value=_Proc()),
+                patch.object(
+                    acc.subprocess,
+                    "run",
+                    return_value=SimpleNamespace(
                         returncode=1,
                         stdout="Please install @playwright/test package",
                         stderr="",
-                    )), \
-                    patch.object(acc, "playwright_argv", return_value=["playwright"]), \
-                    patch.object(acc, "prepare_test_harness", return_value=None):
+                    ),
+                ),
+                patch.object(acc, "playwright_argv", return_value=["playwright"]),
+                patch.object(acc, "prepare_test_harness", return_value=None),
+            ):
                 summary = acc.run_acceptance(
-                    root, tests,
-                    web_port=3000, extra_ports=[], node_ids=["REQ-1"],
-                    free_port=lambda port: None, log=lambda m: None,
-                    tail=lambda t, n=999: t[-n:], deadline=float("inf"),
+                    root,
+                    tests,
+                    web_port=3000,
+                    extra_ports=[],
+                    node_ids=["REQ-1"],
+                    free_port=lambda port: None,
+                    log=lambda m: None,
+                    tail=lambda t, n=999: t[-n:],
+                    deadline=float("inf"),
                 )
         self.assertFalse(summary["available"])
         self.assertIsNone(summary["passed"])
@@ -261,15 +334,25 @@ class InfraTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as dir_name:
             root = Path(dir_name)
             tests = self._write_deliverable(root)
-            with patch.object(acc, "wait_bound", return_value=True), \
-                    patch.object(acc.subprocess, "Popen", return_value=_Proc()), \
-                    patch.object(acc, "prepare_test_harness",
-                                 return_value="tests harness install failed: network"):
+            with (
+                patch.object(acc, "wait_bound", return_value=True),
+                patch.object(acc.subprocess, "Popen", return_value=_Proc()),
+                patch.object(
+                    acc,
+                    "prepare_test_harness",
+                    return_value="tests harness install failed: network",
+                ),
+            ):
                 summary = acc.run_acceptance(
-                    root, tests,
-                    web_port=3000, extra_ports=[8080], node_ids=["REQ-1"],
-                    free_port=lambda port: None, log=lambda m: None,
-                    tail=lambda t, n=999: t[-n:], deadline=float("inf"),
+                    root,
+                    tests,
+                    web_port=3000,
+                    extra_ports=[8080],
+                    node_ids=["REQ-1"],
+                    free_port=lambda port: None,
+                    log=lambda m: None,
+                    tail=lambda t, n=999: t[-n:],
+                    deadline=float("inf"),
                 )
         self.assertFalse(summary["available"])
         self.assertIn("harness install failed", summary["message"])

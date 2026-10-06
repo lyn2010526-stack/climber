@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils';
 import { useI18n } from '../../i18n';
 import { formatTime } from '../../i18n/utils';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { StatusDot } from './StatusDot';
 
 /**
  * Reveal-on-hover for the message actions.
@@ -57,7 +58,7 @@ export const MessageContent: React.FC<MessageContentProps> = ({ content, role, t
           className={cn(
             'min-w-0 max-w-full break-words text-sm leading-relaxed text-[var(--color-text-primary)]',
             isUser &&
-              'w-fit whitespace-pre-wrap rounded-[var(--radius-lg)] rounded-br-[var(--radius-sm)] bg-[var(--color-bg-surface-2)] px-4 py-2.5',
+              'w-fit whitespace-pre-wrap rounded-[var(--radius-lg)] rounded-br-[var(--radius-sm)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] px-4 py-2.5',
             isSystem &&
               'border-l-2 border-[var(--color-border-default)] pl-4 text-[var(--color-text-secondary)]',
             !isUser && !isSystem && 'w-full',
@@ -89,6 +90,7 @@ interface MessageActionsProps {
 }
 
 export const MessageActions: React.FC<MessageActionsProps> = ({ onCopy, onFeedback, onEdit }) => {
+  const { t } = useI18n();
   return (
     <div
       data-message-actions
@@ -98,12 +100,12 @@ export const MessageActions: React.FC<MessageActionsProps> = ({ onCopy, onFeedba
       )}
     >
       {onEdit && (
-        <button type="button" onClick={onEdit} className={actionButton} title="编辑">
+        <button type="button" onClick={onEdit} className={actionButton} title={t('message.edit', { defaultValue: '编辑' })}>
           <Edit3 size={12} aria-hidden="true" />
         </button>
       )}
       {onCopy && (
-        <button type="button" onClick={onCopy} className={actionButton} title="复制">
+        <button type="button" onClick={onCopy} className={actionButton} title={t('message.copy', { defaultValue: '复制' })}>
           <Copy size={12} aria-hidden="true" />
         </button>
       )}
@@ -113,7 +115,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({ onCopy, onFeedba
             type="button"
             onClick={() => onFeedback('up')}
             className={cn(actionButton, 'hover:text-[var(--color-success)]')}
-            title="有用"
+            title={t('message.feedback_helpful', { defaultValue: '有用' })}
           >
             <ThumbsUp size={12} aria-hidden="true" />
           </button>
@@ -121,7 +123,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({ onCopy, onFeedba
             type="button"
             onClick={() => onFeedback('down')}
             className={cn(actionButton, 'hover:text-[var(--color-error)]')}
-            title="无用"
+            title={t('message.feedback_not_helpful', { defaultValue: '无用' })}
           >
             <ThumbsDown size={12} aria-hidden="true" />
           </button>
@@ -170,27 +172,24 @@ export const ToolCallCard: React.FC<ToolCallCardProps> = ({ name, arguments: arg
     <div data-tool-call className="w-full min-w-0">
       <div
         className={cn(
-          'overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] transition-colors duration-150 motion-reduce:transition-none',
-          expanded && 'bg-[var(--color-bg-surface-2)] border-[var(--color-border-default)]',
+          'overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] transition-colors duration-150 hover:border-[var(--color-border-default)] motion-reduce:transition-none',
+          expanded && 'border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)]',
         )}
       >
         <button
           type="button"
           onClick={() => setExpanded(open => !open)}
           aria-expanded={expanded}
-          className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--color-text-primary)] transition-colors duration-150 hover:bg-[var(--color-bg-surface-2)] motion-reduce:transition-none"
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[var(--color-text-primary)] transition-colors duration-150 hover:bg-[var(--color-bg-surface-3)] motion-reduce:transition-none"
         >
           <Terminal size={12} aria-hidden="true" className="shrink-0 text-[var(--color-text-muted)]" />
-          <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
+          <span className="min-w-0 flex-1 truncate font-mono font-medium">{name}</span>
           {statusLabel && (
             <span className={cn('flex shrink-0 items-center gap-1.5', statusTone)}>
-              {status === 'running' && (
-                <span
-                  aria-hidden="true"
-                  className="size-1.5 rounded-full bg-[var(--color-accent-foreground)] motion-safe:animate-pulse"
-                />
-              )}
-              {statusLabel}
+              {status === 'running' && <StatusDot status="running" />}
+              {status === 'error' && <StatusDot status="error" />}
+              {status === 'success' && <StatusDot status="success" />}
+              <span className="text-[11px] font-medium leading-[17px]">{statusLabel}</span>
             </span>
           )}
           <ChevronDown
@@ -205,25 +204,25 @@ export const ToolCallCard: React.FC<ToolCallCardProps> = ({ name, arguments: arg
         {expanded && (
           <div className="space-y-3 border-t border-[var(--color-border-subtle)] px-3 py-2.5">
             <div>
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              <p className="mb-1.5 text-[length:var(--text-xs)] font-medium text-[var(--color-text-muted)]">
                 {t('tool_call.arguments', { defaultValue: '参数' })}
               </p>
-              <pre className="code-block text-xs whitespace-pre-wrap">{JSON.stringify(args, null, 2)}</pre>
+              <pre className="code-block text-xs whitespace-pre-wrap tabular-nums">{JSON.stringify(args, null, 2)}</pre>
             </div>
             {hasOutput && (
               <div>
-                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-                {t('tool_call.result', { defaultValue: '执行结果' })}
+                <p className="mb-1.5 text-[length:var(--text-xs)] font-medium text-[var(--color-text-muted)]">
+                  {t('tool_call.result', { defaultValue: '执行结果' })}
                 </p>
-                <pre className="code-block text-xs whitespace-pre-wrap">{result}</pre>
+                <pre className="code-block text-xs whitespace-pre-wrap tabular-nums">{result}</pre>
               </div>
             )}
             {error && (
               <div>
-                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-error)]">
+                <p className="mb-1.5 text-[length:var(--text-xs)] font-medium text-[var(--color-error)]">
                   {t('tool_call.error_detail', { defaultValue: '错误详情' })}
                 </p>
-                <pre className="code-block text-xs whitespace-pre-wrap text-[var(--color-error)]">{error}</pre>
+                <pre className="code-block text-xs whitespace-pre-wrap text-[var(--color-error)] tabular-nums">{error}</pre>
               </div>
             )}
           </div>

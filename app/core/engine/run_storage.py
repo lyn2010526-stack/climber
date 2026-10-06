@@ -3,25 +3,44 @@
 from __future__ import annotations
 
 import math
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any, cast
 from uuid import uuid4
+
+from sqlalchemy import Table
 
 from app.core.engine.session_runner import response_usage
 
 
-def _now():
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+def _now() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _session_context_value(session: Any, key: str) -> str | None:
+    """Read an attribution value from the session context.
+
+    Group tasks stamp ``group_id``/``task_id`` into the session context at
+    creation; record_response persists them on CostRecord rows so group
+    costs can be aggregated (R12-H54).
+    """
+    context = getattr(session, "context", None)
+    if not isinstance(context, dict):
+        return None
+    value = context.get(key)
+    return str(value) if value else None
 
 
 class RunStorage:
-    def __init__(self, session_factory=None):
+    def __init__(self, session_factory: Any = None) -> None:
         if session_factory is None:
             from app.storage import async_session
+
             session_factory = async_session
         self.session_factory = session_factory
 
-    async def begin(self, session):
+    async def begin(self, session: Any) -> None:
         from app.storage.database import Agent, Session, Turn
 
         async with self.session_factory() as db:
@@ -30,17 +49,28 @@ class RunStorage:
                 raise ValueError("Session belongs to another user")
             if row is None:
                 agent = await db.get(Agent, session.agent_id) if session.agent_id else None
-                row = Session(id=session.session_id, agent_id=agent.id if agent else None,
-                              user_id=session.user_id, total_tokens=0)
+                row = Session(
+                    id=session.session_id,
+                    agent_id=agent.id if agent else None,
+                    user_id=session.user_id,
+                    total_tokens=0,
+                )
                 db.add(row)
                 await db.flush()
             turn = await db.get(Turn, session.current_turn_id) if session.current_turn_id else None
             if turn is not None and turn.session_id != session.session_id:
                 raise ValueError("Turn belongs to another session")
-            if turn is None or (turn.status in {"completed", "failed", "cancelled", "stopped"}
-                                and not session._resume_interrupted):
-                turn = Turn(id=str(uuid4()), session_id=session.session_id, started_at=_now(),
-                            metadata_={}, tokens_used=0)
+            if turn is None or (
+                turn.status in {"completed", "failed", "cancelled", "stopped"}
+                and not session._resume_interrupted
+            ):
+                turn = Turn(
+                    id=str(uuid4()),
+                    session_id=session.session_id,
+                    started_at=_now(),
+                    metadata_={},
+                    tokens_used=0,
+                )
                 db.add(turn)
             turn.status = "running"
             turn.started_at = turn.started_at or _now()
@@ -52,8 +82,28 @@ class RunStorage:
             session._run_cost_status = (turn.metadata_ or {}).get("cost_status", "unknown")
             session._run_usage_status = (turn.metadata_ or {}).get("usage_status", "unknown")
             await db.commit()
+        await self._audit_run_action(session, "run_started")
 
-    async def record_response(self, session, response, iteration, *, complete=True):
+    async def _audit_run_action(self, session: Any, action: str, status: str | None = None) -> None:
+        try:
+            from app.core.observability.audit_store import DurableAuditStore
+
+            await DurableAuditStore(self.session_factory).log_agent_action(
+                session_id=getattr(session, "session_id", None),
+                user_id=getattr(session, "user_id", None),
+                action=action,
+                details={
+                    "turn_id": getattr(session, "current_turn_id", None),
+                    "agent_id": getattr(session, "agent_id", None),
+                    "status": status or cast(Any, getattr(session, "status", None)).value,
+                },
+            )
+        except Exception:
+            return
+
+    async def record_response(
+        self, session: Any, response: Any, iteration: int, *, complete: bool = True
+    ) -> None:
         from app.middleware.metrics import TOKEN_USAGE
         from app.storage.database import Session, Turn, UsageLog
         from app.storage.models_cost import CostRecord
@@ -61,22 +111,38 @@ class RunStorage:
         usage = response_usage(response)
         # Existing schemas require numeric cost columns. Unknown costs live in
         # Turn metadata; only authoritative priced responses create CostRecord.
-        costs = [getattr(response, name, None) for name in ("input_cost", "output_cost", "total_cost")]
-        known_cost = complete and all(isinstance(value, (int, float)) and not isinstance(value, bool)
-                         and math.isfinite(value) and value >= 0 for value in costs)
+        costs: list[Any] = [
+            getattr(response, name, None) for name in ("input_cost", "output_cost", "total_cost")
+        ]
+        known_cost = complete and all(
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and math.isfinite(value)
+            and value >= 0
+            for value in costs
+        )
         if known_cost:
             known_cost = math.isclose(costs[0] + costs[1], costs[2], rel_tol=1e-9, abs_tol=1e-12)
-        entry = {"iteration": iteration, "usage": usage, "response_complete": complete,
-                 "cost_status": "known" if known_cost else "unknown",
-                 "cost": costs[2] if known_cost else None,
-                 "cost_source": "model_response" if known_cost else None}
+        entry = {
+            "iteration": iteration,
+            "usage": usage,
+            "response_complete": complete,
+            "cost_status": "known" if known_cost else "unknown",
+            "cost": costs[2] if known_cost else None,
+            "cost_source": "model_response" if known_cost else None,
+        }
         # Legacy NOT NULL integer columns cannot represent unknown counters.
         # Keep partial observations in Turn metadata instead of inventing zeros.
         complete_usage = all(value is not None for value in usage.values())
         entry["unknown_usage_fields"] = [key for key, value in usage.items() if value is None]
         entry["usage_log_status"] = "written" if complete_usage else "incomplete_usage"
-        entry["cost_record_status"] = ("written" if known_cost and complete_usage
-                                       else "incomplete_usage" if known_cost else "unknown_cost")
+        entry["cost_record_status"] = (
+            "written"
+            if known_cost and complete_usage
+            else "incomplete_usage"
+            if known_cost
+            else "unknown_cost"
+        )
         async with self.session_factory() as db:
             turn = await db.get(Turn, session.current_turn_id)
             row = await db.get(Session, session.session_id)
@@ -88,19 +154,49 @@ class RunStorage:
             entry["id"] = call_id
             # Never split total tokens using an assumed ratio.
             if complete_usage:
-                await db.execute(UsageLog.__table__.insert().values(
-                    id=call_id, user_id=session.user_id, session_id=session.session_id,
-                    provider=session.provider, model_id=session.model_id, **usage))
+                await db.execute(
+                    cast(Table, UsageLog.__table__)
+                    .insert()
+                    .values(
+                        id=call_id,
+                        user_id=session.user_id,
+                        session_id=session.session_id,
+                        provider=session.provider,
+                        model_id=session.model_id,
+                        **usage,
+                    )
+                )
             if known_cost and complete_usage:
-                await db.execute(CostRecord.__table__.insert().values(
-                    id=call_id, user_id=session.user_id, session_id=session.session_id,
-                    provider=session.provider, model_id=session.model_id, **usage,
-                    input_cost=costs[0], output_cost=costs[1], total_cost=costs[2]))
+                await db.execute(
+                    cast(Table, CostRecord.__table__)
+                    .insert()
+                    .values(
+                        id=call_id,
+                        user_id=session.user_id,
+                        session_id=session.session_id,
+                        provider=session.provider,
+                        model_id=session.model_id,
+                        **usage,
+                        input_cost=costs[0],
+                        output_cost=costs[1],
+                        total_cost=costs[2],
+                        group_id=_session_context_value(session, "group_id"),
+                        task_id=_session_context_value(session, "task_id"),
+                    )
+                )
             calls.append(entry)
             metadata["model_calls"] = calls
-            metadata["cost_status"] = "known" if all(c["cost_status"] == "known" for c in calls) else "unknown"
-            metadata["usage_status"] = "known" if all(c["usage"]["total_tokens"] is not None
-                and c.get("response_complete", True) for c in calls) else "unknown"
+            metadata["cost_status"] = (
+                "known" if all(c["cost_status"] == "known" for c in calls) else "unknown"
+            )
+            metadata["usage_status"] = (
+                "known"
+                if all(
+                    c["usage"]["total_tokens"] is not None and c.get("response_complete", True)
+                    for c in calls
+                )
+                else "unknown"
+            )
             turn.metadata_ = metadata
             total = usage["total_tokens"] or 0
             turn.tokens_used = (turn.tokens_used or 0) + total
@@ -109,11 +205,17 @@ class RunStorage:
             session._run_cost_status = metadata["cost_status"]
             session._run_usage_status = metadata["usage_status"]
             await db.commit()
-        for kind, field in (("prompt", "prompt_tokens"), ("completion", "completion_tokens"), ("total", "total_tokens")):
+        for kind, field in (
+            ("prompt", "prompt_tokens"),
+            ("completion", "completion_tokens"),
+            ("total", "total_tokens"),
+        ):
             if usage[field] is not None:
-                TOKEN_USAGE.labels(provider=session.provider, model_id=session.model_id, type=kind).inc(usage[field])
+                TOKEN_USAGE.labels(
+                    provider=session.provider, model_id=session.model_id, type=kind
+                ).inc(cast(float, usage[field]))
 
-    async def finish(self, session):
+    async def finish(self, session: Any) -> None:
         from app.storage.database import Session, Turn
 
         async with self.session_factory() as db:
@@ -133,10 +235,21 @@ class RunStorage:
             metadata.setdefault("usage_status", "unknown")
             turn.metadata_ = metadata
             await db.commit()
+            if getattr(session, "_instruction_trace_id", None):
+                from app.storage.repository_instruction_traces import update_trace_outcome
+
+                await update_trace_outcome(
+                    db,
+                    turn_id=session.current_turn_id,
+                    status=status,
+                    outcome=metadata["outcome"],
+                )
+                await db.commit()
+        await self._audit_run_action(session, "run_finished", status=status)
 
 
 @asynccontextmanager
-async def track_run(session, store):
+async def track_run(session: Any, store: Any) -> AsyncIterator[None]:
     from app.middleware.metrics import ACTIVE_SESSIONS, AGENT_ITERATION_COUNT, AGENT_RUN_TOTAL
 
     await store.begin(session)
@@ -150,12 +263,13 @@ async def track_run(session, store):
         session._restore_status("cancelled" if not isinstance(exc, Exception) else "failed")
         raise
     finally:
-        if session.status.value in {"pending", "running", "paused"}:
+        if session.status.value in {"pending", "running"}:
             session._restore_status("cancelled")
         try:
             await store.finish(session)
         finally:
             ACTIVE_SESSIONS.dec()
-            AGENT_RUN_TOTAL.labels(provider=session.provider, model_id=session.model_id,
-                                   status=session.status.value).inc()
+            AGENT_RUN_TOTAL.labels(
+                provider=session.provider, model_id=session.model_id, status=session.status.value
+            ).inc()
             AGENT_ITERATION_COUNT.observe(max(0, session._last_iteration - initial_iteration))

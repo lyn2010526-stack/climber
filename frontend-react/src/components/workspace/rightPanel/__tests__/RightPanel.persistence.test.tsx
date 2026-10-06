@@ -102,8 +102,9 @@ describe('inspector layout memory', () => {
     await act(async () => useWorkspaceStore.setState({ activeSessionId: 's2' }));
     expect(isExpanded('right_panel.groups.changes')).toBe('true');
 
-    await expandGroup('right_panel.groups.execution');
-    await selectTab('right_panel.sections.reasoning');
+    // reasoning is a single-section group, so entering it is a group expand —
+    // there is no tab to pick.
+    await expandGroup('right_panel.sections.reasoning');
     expect(visiblePanel()).toBe('inspector-panel-reasoning');
 
     // s1 keeps the arrangement it was left with, unaffected by s2's.

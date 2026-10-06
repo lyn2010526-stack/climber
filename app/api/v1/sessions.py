@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.core.auth import get_current_user
+from app.core.auth_manager import require_scopes
 from app.storage import async_session
 from app.storage.database import Agent as AgentModel
 from app.storage.database import ApiKey as ApiKeyModel
@@ -39,16 +40,21 @@ def _clean_model_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
 
 
 async def resolve_model_credential(
-    db: AsyncSession, user_id: str, settings: dict[str, Any],
+    db: AsyncSession,
+    user_id: str,
+    settings: dict[str, Any],
 ) -> ApiKeyModel | None:
     """Resolve an explicit credential identically at creation and every chat turn."""
     credential_id = settings.get("credential_id")
     if not credential_id:
         return None
-    row = await db.scalar(select(ApiKeyModel).where(
-        ApiKeyModel.id == credential_id, ApiKeyModel.user_id == user_id,
-        ApiKeyModel.is_active.is_(True),
-    ))
+    row = await db.scalar(
+        select(ApiKeyModel).where(
+            ApiKeyModel.id == credential_id,
+            ApiKeyModel.user_id == user_id,
+            ApiKeyModel.is_active.is_(True),
+        )
+    )
     if row is None:
         raise HTTPException(404, detail="Selected model credential is unavailable or revoked")
     if settings.get("provider") and settings["provider"] != row.provider:
@@ -72,6 +78,116 @@ def _session_effective_model(row: SessionModel, agent: AgentModel | None) -> dic
 
 
 router = APIRouter()
+
+
+class SessionInputCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    client_request_id: str = Field(min_length=1, max_length=200)
+    kind: Literal["steering", "follow_up"]
+    message: str = Field(min_length=1, max_length=100000)
+
+
+class SessionInputOut(BaseModel):
+    id: str
+    client_request_id: str
+    kind: Literal["steering", "follow_up"]
+    message: str
+    status: Literal["queued", "applied", "started", "completed", "blocked", "failed"]
+    sequence: int
+    error: str | None = None
+
+
+class SessionInputPage(BaseModel):
+    items: list[SessionInputOut]
+
+
+class SessionInputReview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    review_confirmed: Literal[True]
+
+
+class SessionRuntimeReport(BaseModel):
+    completed: list[str]
+    executing: list[str]
+    queued: list[str]
+    risks: list[str]
+
+
+@router.get("/{session_id}/inputs/report", response_model=SessionRuntimeReport)
+async def session_input_report(
+    session_id: str,
+    user_id: str = Depends(get_current_user),
+) -> dict[str, Any]:
+    from app.core.engine.input_queue import SessionInputQueue
+
+    try:
+        queue: Any = cast(Any, SessionInputQueue)(async_session)
+        return cast(dict[str, Any], await queue.report(session_id, user_id))
+    except LookupError as exc:
+        raise HTTPException(404, detail=str(exc)) from exc
+
+
+@router.post("/{session_id}/inputs/resume", response_model=SessionInputPage)
+async def resume_session_inputs(
+    session_id: str,
+    payload: SessionInputReview,
+    user_id: str = Depends(get_current_user),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
+    from app.core.engine.input_queue import SessionInputQueue
+
+    try:
+        queue: Any = cast(Any, SessionInputQueue)(async_session)
+        return {
+            "items": await queue.resume_reviewed(
+                session_id,
+                user_id,
+                payload.review_confirmed,
+            )
+        }
+    except LookupError as exc:
+        raise HTTPException(404, detail=str(exc)) from exc
+
+
+@router.post("/{session_id}/inputs", response_model=SessionInputOut)
+async def submit_session_input(
+    session_id: str,
+    payload: SessionInputCreate,
+    user_id: str = Depends(get_current_user),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
+    from app.core.engine.input_queue import SessionInputQueue
+
+    try:
+        queue: Any = cast(Any, SessionInputQueue)(async_session)
+        return cast(
+            dict[str, Any],
+            await queue.submit(
+                session_id,
+                user_id,
+                payload.client_request_id,
+                payload.kind,
+                payload.message,
+            ),
+        )
+    except LookupError as exc:
+        raise HTTPException(404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(409, detail=str(exc)) from exc
+
+
+@router.get("/{session_id}/inputs", response_model=SessionInputPage)
+async def list_session_inputs(
+    session_id: str,
+    user_id: str = Depends(get_current_user),
+) -> dict[str, Any]:
+    from app.core.engine.input_queue import SessionInputQueue
+
+    try:
+        queue: Any = cast(Any, SessionInputQueue)(async_session)
+        return {"items": await queue.list(session_id, user_id)}
+    except LookupError as exc:
+        raise HTTPException(404, detail=str(exc)) from exc
 
 
 class SessionCreate(BaseModel):
@@ -105,6 +221,7 @@ class MessageOut(BaseModel):
     tool_calls: list[dict[str, Any]]
     tool_name: str | None
     created_at: str
+    metadata: dict[str, Any] = {}
 
 
 @router.get("/", response_model=list[SessionOut])
@@ -145,14 +262,18 @@ async def list_sessions_no_slash(user_id: str = Depends(get_current_user)) -> li
 async def create_session_with_slash(
     payload: SessionCreate,
     user_id: str = Depends(get_current_user),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     async with async_session() as session:
         agent = None
         if payload.agent_id:
             agent = (
-                await session.execute(select(AgentModel).where(
-                    AgentModel.id == payload.agent_id, AgentModel.user_id == user_id,
-                ))
+                await session.execute(
+                    select(AgentModel).where(
+                        AgentModel.id == payload.agent_id,
+                        AgentModel.user_id == user_id,
+                    )
+                )
             ).scalar_one_or_none()
             if agent is None:
                 raise HTTPException(404, detail="Agent not found")
@@ -177,12 +298,12 @@ async def create_session_with_slash(
         }
 
 
-
 @router.post("", response_model=dict)
 async def create_session_no_slash(
     payload: SessionCreate,
     user_id: str = Depends(get_current_user),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     return await create_session_with_slash(payload, user_id)
 
 
@@ -190,7 +311,8 @@ async def create_session_no_slash(
 async def create_session_legacy(
     payload: SessionCreate,
     user_id: str = Depends(get_current_user),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     return await create_session_with_slash(payload, user_id)
 
 
@@ -199,7 +321,9 @@ class MessagesResponse(BaseModel):
 
 
 @router.get("/{session_id}/messages", response_model=MessagesResponse)
-async def get_session_messages(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+async def get_session_messages(
+    session_id: str, user_id: str = Depends(get_current_user)
+) -> dict[str, Any]:
     async with async_session() as session:
         owner = await session.scalar(
             select(SessionModel).where(
@@ -210,7 +334,9 @@ async def get_session_messages(session_id: str, user_id: str = Depends(get_curre
         if owner is None:
             raise HTTPException(status_code=404, detail="Session not found")
         result = await session.execute(
-            select(MessageModel).where(MessageModel.session_id == session_id).order_by(MessageModel.created_at.asc())
+            select(MessageModel)
+            .where(MessageModel.session_id == session_id)
+            .order_by(MessageModel.created_at.asc(), MessageModel.id.asc())
         )
         rows = result.scalars().all()
         messages = [
@@ -229,20 +355,25 @@ async def get_session_messages(session_id: str, user_id: str = Depends(get_curre
 
 
 @router.post("/{session_id}/clear")
-async def clear_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+async def clear_session(
+    session_id: str,
+    user_id: str = Depends(get_current_user),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     async with async_session() as session:
         result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
         row = result.scalar_one_or_none()
         if not row or (row.user_id and row.user_id != user_id):
             raise HTTPException(status_code=404, detail="Session not found")
         from sqlalchemy import delete
+
         await session.execute(delete(MessageModel).where(MessageModel.session_id == session_id))
         await session.commit()
     return {"status": "cleared"}
 
 
 @router.get("/{session_id}")
-async def get_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+async def get_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict[str, Any]:
     async with async_session() as session:
         result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
         row = result.scalar_one_or_none()
@@ -267,7 +398,11 @@ async def get_session(session_id: str, user_id: str = Depends(get_current_user))
 
 
 @router.delete("/{session_id}")
-async def delete_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+async def delete_session(
+    session_id: str,
+    user_id: str = Depends(get_current_user),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     async with async_session() as session:
         result = await session.execute(select(SessionModel).where(SessionModel.id == session_id))
         row = result.scalar_one_or_none()
@@ -306,7 +441,7 @@ async def _load_owned_session(db: Any, session_id: str, user_id: str) -> Session
     ).scalar_one_or_none()
     if not row or (row.user_id and row.user_id != user_id):
         raise HTTPException(status_code=404, detail="Session not found")
-    return row
+    return cast(SessionModel, row)
 
 
 def _load_checkpoints(row: SessionModel) -> list[dict[str, Any]]:
@@ -325,7 +460,8 @@ async def save_checkpoint(
     session_id: str,
     body: CheckpointRequest,
     user_id: str = Depends(get_current_user),
-) -> dict:
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     async with async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)
@@ -350,7 +486,9 @@ async def save_checkpoint(
 
 
 @router.get("/{session_id}/checkpoint")
-async def get_latest_checkpoint(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+async def get_latest_checkpoint(
+    session_id: str, user_id: str = Depends(get_current_user)
+) -> dict[str, Any]:
     async with async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)
@@ -360,7 +498,9 @@ async def get_latest_checkpoint(session_id: str, user_id: str = Depends(get_curr
 
 
 @router.get("/{session_id}/history")
-async def get_checkpoint_history(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+async def get_checkpoint_history(
+    session_id: str, user_id: str = Depends(get_current_user)
+) -> dict[str, Any]:
     async with async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)
@@ -368,7 +508,12 @@ async def get_checkpoint_history(session_id: str, user_id: str = Depends(get_cur
 
 
 @router.post("/{session_id}/fork")
-async def fork_session(session_id: str, body: ForkRequest, user_id: str = Depends(get_current_user)) -> dict:
+async def fork_session(
+    session_id: str,
+    body: ForkRequest,
+    user_id: str = Depends(get_current_user),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     async with async_session() as session:
         source = await _load_owned_session(session, session_id, user_id)
         new_id = body.new_session_id or str(uuid.uuid4())
@@ -391,12 +536,16 @@ async def fork_session(session_id: str, body: ForkRequest, user_id: str = Depend
         )
         session.add(snapshot)
         rows = (
-            await session.execute(
-                select(MessageModel)
-                .where(MessageModel.session_id == session_id)
-                .order_by(MessageModel.created_at.asc())
+            (
+                await session.execute(
+                    select(MessageModel)
+                    .where(MessageModel.session_id == session_id)
+                    .order_by(MessageModel.created_at.asc(), MessageModel.id.asc())
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for msg in rows:
             session.add(
                 MessageModel(
@@ -417,7 +566,11 @@ async def fork_session(session_id: str, body: ForkRequest, user_id: str = Depend
 
 
 @router.post("/{session_id}/resume")
-async def resume_session(session_id: str, user_id: str = Depends(get_current_user)) -> dict:
+async def resume_session(
+    session_id: str,
+    user_id: str = Depends(get_current_user),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     async with async_session() as session:
         row = await _load_owned_session(session, session_id, user_id)
         checkpoints = _load_checkpoints(row)
@@ -434,7 +587,7 @@ async def resume_session(session_id: str, user_id: str = Depends(get_current_use
                 await session.execute(
                     select(MessageModel)
                     .where(MessageModel.session_id == session_id)
-                    .order_by(MessageModel.created_at.asc())
+                    .order_by(MessageModel.created_at.asc(), MessageModel.id.asc())
                 )
             )
             .scalars()

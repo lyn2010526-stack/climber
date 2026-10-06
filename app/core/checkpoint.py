@@ -6,12 +6,15 @@
 
 from __future__ import annotations
 
+import builtins
 import json
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, cast
 from uuid import uuid4
-from typing import TYPE_CHECKING, Any
+
+from sqlalchemy import CursorResult
 
 from app.storage import async_session
 
@@ -29,30 +32,45 @@ class CheckpointData:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     # LangGraph-style enhancements
-    channel_values: dict[str, Any] = field(default_factory=dict)        # 状态通道快照
-    channel_versions: dict[str, int] = field(default_factory=dict)      # 通道版本号
+    channel_values: dict[str, Any] = field(default_factory=dict)  # 状态通道快照
+    channel_versions: dict[str, int] = field(default_factory=dict)  # 通道版本号
     versions_seen: dict[str, dict[str, int]] = field(default_factory=dict)  # 节点见过的版本
-    pending_writes: list[dict[str, Any]] = field(default_factory=list)  # 待处理写入
+    # 待处理写入：既可能是 dict（已序列化），也可能是 PendingWrite 对象。
+    pending_writes: list[Any] = field(default_factory=list)
 
 
 @dataclass
 class PendingWrite:
     """A write that is pending commit to a checkpoint."""
+
     channel: str
     value: Any
     write_id: str
     status: str = "pending"  # pending / committed / rolled_back
 
 
-def sanitize_checkpoint(checkpoint: CheckpointData, secrets: tuple[str, ...] = ()) -> CheckpointData:
+def sanitize_checkpoint(
+    checkpoint: CheckpointData, secrets: tuple[str, ...] = ()
+) -> CheckpointData:
     """Copy payloads and redact credential fields and explicitly supplied keys."""
-    secret_fields = {"api_key", "apikey", "authorization", "password",
-                     "access_token", "refresh_token", "client_secret"}
+    secret_fields = {
+        "api_key",
+        "apikey",
+        "authorization",
+        "password",
+        "access_token",
+        "refresh_token",
+        "client_secret",
+    }
 
-    def clean(value):
+    def clean(value: Any) -> Any:
         if isinstance(value, dict):
-            return {key: "[REDACTED]" if str(key).lower().replace("-", "_") in secret_fields
-                    else clean(item) for key, item in value.items()}
+            return {
+                key: "[REDACTED]"
+                if str(key).lower().replace("-", "_") in secret_fields
+                else clean(item)
+                for key, item in value.items()
+            }
         if isinstance(value, (list, tuple)):
             return [clean(item) for item in value]
         if isinstance(value, str):
@@ -67,7 +85,7 @@ def sanitize_checkpoint(checkpoint: CheckpointData, secrets: tuple[str, ...] = (
 class InMemoryCheckpointStore:
     """Simple in-memory checkpoint store with LangGraph-style enhancements."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._store: dict[str, CheckpointData] = {}
         self._parents: dict[str, str | None] = {}
         self._pending_writes: dict[str, list[PendingWrite]] = {}
@@ -91,10 +109,14 @@ class InMemoryCheckpointStore:
     async def get(self, _thread_id: str | None, checkpoint_id: str) -> CheckpointData | None:
         return deepcopy(self._store.get(checkpoint_id))
 
-    async def get_latest(self, _thread_id: str | None, session_id: str, thread_id: str = "") -> tuple[CheckpointData, str] | None:
+    async def get_latest(
+        self, _thread_id: str | None, session_id: str, thread_id: str = ""
+    ) -> tuple[CheckpointData, str] | None:
         candidates = [
-            (cid, cp) for cid, cp in self._store.items()
-            if cp.session_id == session_id and (not thread_id or cp.metadata.get("thread_id") == thread_id)
+            (cid, cp)
+            for cid, cp in self._store.items()
+            if cp.session_id == session_id
+            and (not thread_id or cp.metadata.get("thread_id") == thread_id)
         ]
         if not candidates:
             return None
@@ -103,6 +125,20 @@ class InMemoryCheckpointStore:
 
     async def list_for_session(self, _thread_id: str | None, session_id: str) -> list[str]:
         return [cid for cid, cp in self._store.items() if cp.session_id == session_id]
+
+    async def list_recoverable_sessions(self) -> list[dict[str, Any]]:
+        """Enumerate sessions that have at least one checkpoint in this store.
+
+        The recovery manager routes candidate discovery through the injected
+        store so an in-memory store is not silently bypassed.
+        """
+        counts: dict[str, int] = {}
+        for checkpoint in self._store.values():
+            counts[checkpoint.session_id] = counts.get(checkpoint.session_id, 0) + 1
+        return [
+            {"session_id": session_id, "checkpoint_count": count}
+            for session_id, count in counts.items()
+        ]
 
     async def delete_for_session(self, _thread_id: str | None, session_id: str) -> int:
         to_delete = [cid for cid, cp in self._store.items() if cp.session_id == session_id]
@@ -135,14 +171,13 @@ class SQLiteCheckpointStore:
         checkpoint_id: str = "",
         parent_id: str | None = None,
     ) -> str:
-        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-
+        from app.storage import engine as _db_engine
         from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
 
         await ensure_checkpoint_schema()
         checkpoint = sanitize_checkpoint(checkpoint)
         cid = checkpoint_id or str(uuid4())
-        saved_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        saved_at = datetime.now(UTC).replace(tzinfo=None)
         metadata_payload = {
             **checkpoint.metadata,
             "parent_id": parent_id,
@@ -152,41 +187,36 @@ class SQLiteCheckpointStore:
             asdict(write) if isinstance(write, PendingWrite) else write
             for write in checkpoint.pending_writes
         ]
+        values = {
+            "id": cid,
+            "session_id": checkpoint.session_id,
+            "thread_id": thread_id or "",
+            "messages": json.dumps(checkpoint.messages, ensure_ascii=False),
+            "iteration": checkpoint.iteration,
+            "status": checkpoint.status,
+            "tool_results": json.dumps(checkpoint.tool_results, ensure_ascii=False),
+            "metadata": json.dumps(metadata_payload, ensure_ascii=False),
+            "channel_values": json.dumps(checkpoint.channel_values, ensure_ascii=False),
+            "channel_versions": json.dumps(checkpoint.channel_versions, ensure_ascii=False),
+            "versions_seen": json.dumps(checkpoint.versions_seen, ensure_ascii=False),
+            "pending_writes": json.dumps(pending_writes, ensure_ascii=False),
+            "parent_id": parent_id,
+            "created_at": saved_at,
+        }
+        base: Any
+        if _db_engine.dialect.name == "postgresql":
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            base = pg_insert(CheckpointRecord)
+        else:
+            from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+            base = sqlite_insert(CheckpointRecord)
+        stmt = base.values(**values).on_conflict_do_update(
+            index_elements=["id"],
+            set_={k: v for k, v in values.items() if k != "id"},
+        )
         async with async_session() as db:
-            stmt = sqlite_insert(CheckpointRecord).values(
-                id=cid,
-                session_id=checkpoint.session_id,
-                thread_id=thread_id or "",
-                messages=json.dumps(checkpoint.messages, ensure_ascii=False),
-                iteration=checkpoint.iteration,
-                status=checkpoint.status,
-                tool_results=json.dumps(checkpoint.tool_results, ensure_ascii=False),
-                metadata_=json.dumps(metadata_payload, ensure_ascii=False),
-                channel_values=json.dumps(checkpoint.channel_values, ensure_ascii=False),
-                channel_versions=json.dumps(checkpoint.channel_versions, ensure_ascii=False),
-                versions_seen=json.dumps(checkpoint.versions_seen, ensure_ascii=False),
-                pending_writes=json.dumps(pending_writes, ensure_ascii=False),
-                parent_id=parent_id,
-                created_at=saved_at,
-            )
-            stmt = stmt.on_conflict_do_update(
-                index_elements=["id"],
-                set_={
-                    "session_id": checkpoint.session_id,
-                    "thread_id": thread_id or "",
-                    "messages": json.dumps(checkpoint.messages, ensure_ascii=False),
-                    "iteration": checkpoint.iteration,
-                    "status": checkpoint.status,
-                    "tool_results": json.dumps(checkpoint.tool_results, ensure_ascii=False),
-                    "metadata": json.dumps(metadata_payload, ensure_ascii=False),
-                    "channel_values": json.dumps(checkpoint.channel_values, ensure_ascii=False),
-                    "channel_versions": json.dumps(checkpoint.channel_versions, ensure_ascii=False),
-                    "versions_seen": json.dumps(checkpoint.versions_seen, ensure_ascii=False),
-                    "pending_writes": json.dumps(pending_writes, ensure_ascii=False),
-                    "parent_id": parent_id,
-                    "created_at": saved_at,
-                },
-            )
             await db.execute(stmt)
             await db.commit()
         return cid
@@ -198,7 +228,9 @@ class SQLiteCheckpointStore:
         async with async_session() as db:
             record = (
                 await db.execute(
-                    __import__("sqlalchemy").select(CheckpointRecord).where(CheckpointRecord.id == checkpoint_id)
+                    __import__("sqlalchemy")
+                    .select(CheckpointRecord)
+                    .where(CheckpointRecord.id == checkpoint_id)
                 )
             ).scalar_one_or_none()
             if record is None:
@@ -225,13 +257,17 @@ class SQLiteCheckpointStore:
                 return None
             return self._to_checkpoint(record)
 
-    async def get_latest(self, _thread_id: str | None, session_id: str, thread_id: str = "") -> tuple[CheckpointData, str] | None:
+    async def get_latest(
+        self, _thread_id: str | None, session_id: str, thread_id: str = ""
+    ) -> tuple[CheckpointData, str] | None:
         from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
 
         await ensure_checkpoint_schema()
         async with async_session() as db:
-            query = __import__("sqlalchemy").select(CheckpointRecord).where(
-                CheckpointRecord.session_id == session_id
+            query = (
+                __import__("sqlalchemy")
+                .select(CheckpointRecord)
+                .where(CheckpointRecord.session_id == session_id)
             )
             if thread_id:
                 query = query.where(CheckpointRecord.thread_id == thread_id)
@@ -253,15 +289,42 @@ class SQLiteCheckpointStore:
 
         await ensure_checkpoint_schema()
         async with async_session() as db:
+            rows: Any = (
+                (
+                    await db.execute(
+                        __import__("sqlalchemy")
+                        .select(CheckpointRecord.id)
+                        .where(CheckpointRecord.session_id == session_id)
+                        .order_by(CheckpointRecord.created_at.asc())
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            return list(rows)
+
+    async def list_recoverable_sessions(self) -> list[dict[str, Any]]:
+        """Enumerate sessions that hold at least one checkpoint row.
+
+        The recovery manager routes candidate discovery through the injected
+        store so the current backing store is the single source of truth.
+        """
+        from sqlalchemy import func
+
+        from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
+
+        await ensure_checkpoint_schema()
+        async with async_session() as db:
             rows = (
                 await db.execute(
                     __import__("sqlalchemy")
-                    .select(CheckpointRecord.id)
-                    .where(CheckpointRecord.session_id == session_id)
-                    .order_by(CheckpointRecord.created_at.asc())
+                    .select(CheckpointRecord.session_id, func.count().label("cnt"))
+                    .group_by(CheckpointRecord.session_id)
                 )
-            ).scalars().all()
-            return list(rows)
+            ).all()
+            return [
+                {"session_id": row.session_id, "checkpoint_count": int(row.cnt)} for row in rows
+            ]
 
     async def list(self, session_id: str) -> list[CheckpointData]:
         """Return all checkpoints for a session as CheckpointData objects."""
@@ -269,30 +332,41 @@ class SQLiteCheckpointStore:
 
         await ensure_checkpoint_schema()
         async with async_session() as db:
-            rows = (
-                await db.execute(
-                    __import__("sqlalchemy")
-                    .select(CheckpointRecord)
-                    .where(CheckpointRecord.session_id == session_id)
-                    .order_by(CheckpointRecord.created_at.asc())
+            rows: Any = (
+                (
+                    await db.execute(
+                        __import__("sqlalchemy")
+                        .select(CheckpointRecord)
+                        .where(CheckpointRecord.session_id == session_id)
+                        .order_by(CheckpointRecord.created_at.asc())
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             return [self._to_checkpoint(r) for r in rows]
 
     async def delete_for_session(self, _thread_id: str | None, session_id: str) -> int:
         from app.storage.database import CheckpointRecord
+
         async with async_session() as db:
-            rows = (
-                await db.execute(
-                    __import__("sqlalchemy")
-                    .select(CheckpointRecord.id)
-                    .where(CheckpointRecord.session_id == session_id)
+            rows: Any = (
+                (
+                    await db.execute(
+                        __import__("sqlalchemy")
+                        .select(CheckpointRecord.id)
+                        .where(CheckpointRecord.session_id == session_id)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             ids = list(rows)
             if ids:
                 await db.execute(
-                    __import__("sqlalchemy").delete(CheckpointRecord).where(CheckpointRecord.session_id == session_id)
+                    __import__("sqlalchemy")
+                    .delete(CheckpointRecord)
+                    .where(CheckpointRecord.session_id == session_id)
                 )
                 await db.commit()
             return len(ids)
@@ -300,21 +374,27 @@ class SQLiteCheckpointStore:
     async def delete(self, checkpoint_id: str) -> bool:
         """Remove a single checkpoint by id."""
         from app.storage.database import CheckpointRecord
+
         async with async_session() as db:
             result = await db.execute(
-                __import__("sqlalchemy").delete(CheckpointRecord).where(CheckpointRecord.id == checkpoint_id)
+                __import__("sqlalchemy")
+                .delete(CheckpointRecord)
+                .where(CheckpointRecord.id == checkpoint_id)
             )
             await db.commit()
-            return result.rowcount > 0
+            # 运行期返回 CursorResult（有 rowcount）；stub 仅声明 Result。
+            return cast(CursorResult[Any], result).rowcount > 0
 
-    async def put_writes(self, checkpoint_id: str, writes: list[PendingWrite]) -> None:
+    async def put_writes(self, checkpoint_id: str, writes: builtins.list[PendingWrite]) -> None:
         from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
 
         await ensure_checkpoint_schema()
         async with async_session() as db:
             record = (
                 await db.execute(
-                    __import__("sqlalchemy").select(CheckpointRecord).where(CheckpointRecord.id == checkpoint_id)
+                    __import__("sqlalchemy")
+                    .select(CheckpointRecord)
+                    .where(CheckpointRecord.id == checkpoint_id)
                 )
             ).scalar_one_or_none()
             if record is None:
@@ -324,14 +404,16 @@ class SQLiteCheckpointStore:
             record.pending_writes = json.dumps(pending, ensure_ascii=False)
             await db.commit()
 
-    async def get_writes(self, checkpoint_id: str) -> list[PendingWrite]:
+    async def get_writes(self, checkpoint_id: str) -> builtins.list[PendingWrite]:
         from app.storage.database import CheckpointRecord, ensure_checkpoint_schema
 
         await ensure_checkpoint_schema()
         async with async_session() as db:
             record = (
                 await db.execute(
-                    __import__("sqlalchemy").select(CheckpointRecord).where(CheckpointRecord.id == checkpoint_id)
+                    __import__("sqlalchemy")
+                    .select(CheckpointRecord)
+                    .where(CheckpointRecord.id == checkpoint_id)
                 )
             ).scalar_one_or_none()
             if record is None:
@@ -350,7 +432,7 @@ class SQLiteCheckpointStore:
             return default
 
     @staticmethod
-    def _parse_pending_writes(raw: Any) -> list[PendingWrite]:
+    def _parse_pending_writes(raw: Any) -> builtins.list[PendingWrite]:
         if not isinstance(raw, list):
             return []
         try:
@@ -377,12 +459,8 @@ class SQLiteCheckpointStore:
             status=record.status,
             tool_results=tool_results,
             metadata=metadata,
-            channel_values=self._load_json(
-                getattr(record, "channel_values", "{}"), {}
-            ),
-            channel_versions=self._load_json(
-                getattr(record, "channel_versions", "{}"), {}
-            ),
+            channel_values=self._load_json(getattr(record, "channel_values", "{}"), {}),
+            channel_versions=self._load_json(getattr(record, "channel_versions", "{}"), {}),
             versions_seen=self._load_json(getattr(record, "versions_seen", "{}"), {}),
             pending_writes=pending_writes,
         )

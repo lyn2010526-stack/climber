@@ -27,7 +27,7 @@ import sys
 import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -99,11 +99,9 @@ class QualityReport:
 def calculate_complexity(node: ast.AST) -> int:
     complexity = 1
     for child in ast.walk(node):
-        if isinstance(child, (ast.If, ast.While, ast.For, ast.AsyncFor)):
-            complexity += 1
-        elif isinstance(child, ast.ExceptHandler):
-            complexity += 1
-        elif isinstance(child, ast.With, ast.AsyncWith):
+        if isinstance(
+            child, (ast.If, ast.While, ast.For, ast.AsyncFor, ast.ExceptHandler)
+        ) or isinstance(child, ast.With, ast.AsyncWith):
             complexity += 1
         elif isinstance(child, ast.BoolOp):
             complexity += len(child.values) - 1
@@ -119,9 +117,7 @@ def analyze_file(file_path: Path) -> tuple[FileMetrics, list[FunctionMetrics]]:
 
     total_lines = len(source.splitlines())
     blank_lines = sum(1 for line in source.splitlines() if not line.strip())
-    comment_lines = sum(
-        1 for line in source.splitlines() if line.strip().startswith("#")
-    )
+    comment_lines = sum(1 for line in source.splitlines() if line.strip().startswith("#"))
     code_lines = total_lines - blank_lines - comment_lines
 
     functions = []
@@ -201,9 +197,7 @@ def detect_duplication(files: list[Path]) -> float:
         except (UnicodeDecodeError, OSError):
             continue
 
-    duplicated_lines = sum(
-        len(paths) for paths in line_hashes.values() if len(paths) > 1
-    )
+    duplicated_lines = sum(len(paths) for paths in line_hashes.values() if len(paths) > 1)
     return (duplicated_lines / total_lines * 100) if total_lines > 0 else 0.0
 
 
@@ -277,15 +271,11 @@ def generate_recommendations(report: QualityReport) -> list[str]:
 
     low_mi = [f for f in report.file_metrics if f.maintainability_index < 50]
     if low_mi:
-        recommendations.append(
-            f"Improve maintainability of {len(low_mi)} files (MI < 50)"
-        )
+        recommendations.append(f"Improve maintainability of {len(low_mi)} files (MI < 50)")
 
     long_files = [f for f in report.file_metrics if f.total_lines > 300]
     if long_files:
-        recommendations.append(
-            f"Split {len(long_files)} files exceeding 300 lines"
-        )
+        recommendations.append(f"Split {len(long_files)} files exceeding 300 lines")
 
     return recommendations
 
@@ -298,9 +288,7 @@ def calculate_overall_score(report: QualityReport) -> float:
 
     score -= report.duplication_rate * 2
 
-    high_complexity = len(
-        [f for f in report.function_metrics if f.complexity >= COMPLEXITY_CRIT]
-    )
+    high_complexity = len([f for f in report.function_metrics if f.complexity >= COMPLEXITY_CRIT])
     score -= high_complexity * 2
 
     score -= report.tech_debt_hours * 0.5
@@ -365,9 +353,7 @@ def save_report(report: QualityReport, output_format: str = "json") -> Path:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Code Quality Report Generator")
     parser.add_argument("--output", type=str, help="Output file path")
-    parser.add_argument(
-        "--format", choices=["json", "text"], default="text", help="Output format"
-    )
+    parser.add_argument("--format", choices=["json", "text"], default="text", help="Output format")
     parser.add_argument("--path", default=str(APP_DIR), help="Path to analyze")
     return parser.parse_args()
 
@@ -410,7 +396,7 @@ def main() -> int:
     tech_debt = calculate_tech_debt(all_functions, duplication)
 
     report = QualityReport(
-        timestamp=datetime.now(timezone.utc).isoformat(),
+        timestamp=datetime.now(UTC).isoformat(),
         duration_seconds=time.monotonic() - start,
         overall_score=0,
         file_metrics=file_metrics,
@@ -424,9 +410,7 @@ def main() -> int:
             "total_blank_lines": sum(f.blank_lines for f in file_metrics),
             "total_comment_lines": sum(f.comment_lines for f in file_metrics),
             "avg_maintainability": (
-                round(
-                    sum(f.maintainability_index for f in file_metrics) / len(file_metrics), 1
-                )
+                round(sum(f.maintainability_index for f in file_metrics) / len(file_metrics), 1)
                 if file_metrics
                 else 0
             ),

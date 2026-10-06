@@ -80,7 +80,7 @@ def run_heat_experiment(
     max_stable_dt = _CFL * cell_x * cell_x / (2.0 * alpha)
     cfl = dt / max_stable_dt
 
-    max_steps = int(math.ceil(t_final / dt))
+    max_steps = math.ceil(t_final / dt)
     if max_steps > EXPERIMENT_MAX_STEPS:
         return _diverged(payload, started, "step budget exceeded")
 
@@ -97,9 +97,7 @@ def run_heat_experiment(
     reached_steady = False
     prev = temp.copy()
     for _ in range(max_steps):
-        temp[1:-1] += dt * alpha / (cell_x * cell_x) * (
-            temp[2:] - 2.0 * temp[1:-1] + temp[:-2]
-        )
+        temp[1:-1] += dt * alpha / (cell_x * cell_x) * (temp[2:] - 2.0 * temp[1:-1] + temp[:-2])
         done_steps += 1
         if not np.all(np.isfinite(temp)):
             return _diverged(payload, started, "numerical divergence (CFL violated)")
@@ -111,15 +109,17 @@ def run_heat_experiment(
             reached_steady = True
             break
 
-    payload.update({
-        "converged": True,
-        "steady_state": reached_steady,
-        "cfl": round(cfl, 6),
-        "iterations": done_steps,
-        "max_temperature": float(np.max(temp)),
-        "mean_temperature": float(np.mean(temp)),
-        "min_temperature": float(np.min(temp)),
-    })
+    payload.update(
+        {
+            "converged": True,
+            "steady_state": reached_steady,
+            "cfl": round(cfl, 6),
+            "iterations": done_steps,
+            "max_temperature": float(np.max(temp)),
+            "mean_temperature": float(np.mean(temp)),
+            "min_temperature": float(np.min(temp)),
+        }
+    )
     return _finish(payload, started)
 
 
@@ -145,7 +145,7 @@ def run_oscillator_experiment(
     if mass <= 0 or stiffness <= 0 or damping < 0 or dt <= 0 or duration <= 0:
         return _diverged(payload, started, "non-positive physical parameters")
 
-    steps = int(math.ceil(duration / dt))
+    steps = math.ceil(duration / dt)
     if steps > EXPERIMENT_MAX_STEPS:
         return _diverged(payload, started, "step budget exceeded")
 
@@ -181,14 +181,16 @@ def run_oscillator_experiment(
 
     if steps:
         final_amp = abs(x)
-    payload.update({
-        "converged": True,
-        "settling_time": round(settling_time, 4),
-        "max_displacement": round(max_disp, 6),
-        "final_amplitude": round(final_amp, 6),
-        "damping_ratio": round(zeta, 6),
-        "resonance_ratio": round(drive_frequency / omega0, 6),
-    })
+    payload.update(
+        {
+            "converged": True,
+            "settling_time": round(settling_time, 4),
+            "max_displacement": round(max_disp, 6),
+            "final_amplitude": round(final_amp, 6),
+            "damping_ratio": round(zeta, 6),
+            "resonance_ratio": round(drive_frequency / omega0, 6),
+        }
+    )
     return _finish(payload, started)
 
 
@@ -208,10 +210,16 @@ def run_logistic_experiment(
     started = time.time()
     payload: dict[str, Any] = {"model": "logistic"}
 
-    if growth_rate < 0 or carrying_capacity <= 0 or initial_population < 0 or dt <= 0 or duration <= 0:
+    if (
+        growth_rate < 0
+        or carrying_capacity <= 0
+        or initial_population < 0
+        or dt <= 0
+        or duration <= 0
+    ):
         return _diverged(payload, started, "non-positive model parameters")
 
-    steps = int(math.ceil(duration / dt))
+    steps = math.ceil(duration / dt)
     if steps > EXPERIMENT_MAX_STEPS:
         return _diverged(payload, started, "step budget exceeded")
 
@@ -225,13 +233,15 @@ def run_logistic_experiment(
         if n > max_pop:
             max_pop = n
     overshoot = max(0.0, max_pop - carrying_capacity) / carrying_capacity
-    payload.update({
-        "converged": True,
-        "final_population": round(n, 4),
-        "max_population": round(max_pop, 4),
-        "overshoot": round(overshoot, 6),
-        "carrying_capacity": float(carrying_capacity),
-    })
+    payload.update(
+        {
+            "converged": True,
+            "final_population": round(n, 4),
+            "max_population": round(max_pop, 4),
+            "overshoot": round(overshoot, 6),
+            "carrying_capacity": float(carrying_capacity),
+        }
+    )
     return _finish(payload, started)
 
 
@@ -244,9 +254,12 @@ def run_experiment(model: str, **params: Any) -> str:
         return run_oscillator_experiment(**params)
     if model == "logistic":
         return run_logistic_experiment(**params)
-    return json.dumps({
-        "model": model,
-        "converged": False,
-        "error": f"unknown model '{model}'; expected one of {MODELS}",
-        "nan": True,
-    }, ensure_ascii=False)
+    return json.dumps(
+        {
+            "model": model,
+            "converged": False,
+            "error": f"unknown model '{model}'; expected one of {MODELS}",
+            "nan": True,
+        },
+        ensure_ascii=False,
+    )

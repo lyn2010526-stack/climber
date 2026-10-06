@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -10,13 +11,20 @@ import httpx
 
 from app.core import ChatResult
 from app.models import ModelAdapter, ModelCapability
+from app.models.vision import degrade_image_parts
 from app.services.ollama_queue import ollama_offline_queue
 
 
 class OllamaAdapter(ModelAdapter):
     """Ollama adapter for running local models (Llama, Mistral, Qwen, etc.)."""
 
-    def __init__(self, model_id: str, api_key: str, base_url: str | None = None, capabilities: ModelCapability | None = None):
+    def __init__(
+        self,
+        model_id: str,
+        api_key: str,
+        base_url: str | None = None,
+        capabilities: ModelCapability | None = None,
+    ):
         self._model_id = model_id
         self._api_key = api_key
         self._base_url = (base_url or "http://localhost:11434").rstrip("/")
@@ -62,7 +70,9 @@ class OllamaAdapter(ModelAdapter):
     async def _make_request(self, payload: dict[str, Any], stream: bool = False) -> Any:
         async with httpx.AsyncClient(timeout=120) as client:
             if stream:
-                async with client.stream("POST", f"{self._base_url}/api/chat", json=payload) as resp:
+                async with client.stream(
+                    "POST", f"{self._base_url}/api/chat", json=payload
+                ) as resp:
                     resp.raise_for_status()
                     return resp
             else:
@@ -70,12 +80,16 @@ class OllamaAdapter(ModelAdapter):
                 resp.raise_for_status()
                 return resp.json()
 
-    async def stream_chat(
+    async def stream_chat(  # type: ignore[override]
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[ChatResult]:
+        # 父类 ModelAdapter.stream_chat 被标注成协程返回 AsyncIterator，
+        # 但实际应为异步生成器；此处无法修改父类，故忽略 override 检查。
+        # Ollama models have no image mapping here; vision parts degrade to text.
+        messages = degrade_image_parts(messages, provider=self.provider, model_id=self._model_id)
         payload: dict[str, Any] = {
             "model": self._model_id,
             "messages": messages,
@@ -94,14 +108,16 @@ class OllamaAdapter(ModelAdapter):
                 tool_calls=[],
                 finish_reason="offline",
             )
-            await ollama_offline_queue.enqueue(payload)
+            await ollama_offline_queue.enqueue(payload, base_url=self._base_url)
             return
 
         try:
-            async with httpx.AsyncClient(timeout=120) as client, client.stream(
-                "POST", f"{self._base_url}/api/chat", json=payload
-            ) as response:
+            async with (
+                httpx.AsyncClient(timeout=120) as client,
+                client.stream("POST", f"{self._base_url}/api/chat", json=payload) as response,
+            ):
                 response.raise_for_status()
+                pending_tool_calls: list[dict[str, Any]] = []
                 async for line in response.aiter_lines():
                     if not line.strip():
                         continue
@@ -109,13 +125,36 @@ class OllamaAdapter(ModelAdapter):
                         chunk = json.loads(line)
                     except json.JSONDecodeError:
                         continue
+                    message = chunk.get("message", {}) or {}
+                    if message.get("tool_calls"):
+                        for tc in message["tool_calls"]:
+                            func = tc.get("function", {})
+                            args = func.get("arguments", {})
+                            pending_tool_calls.append(
+                                {
+                                    "id": tc.get("id") or f"call_{uuid.uuid4().hex[:24]}",
+                                    "type": "function",
+                                    "function": {
+                                        "name": func.get("name", ""),
+                                        "arguments": args if isinstance(args, dict) else {},
+                                    },
+                                }
+                            )
                     if chunk.get("done"):
+                        done_reason = chunk.get("done_reason")
                         yield ChatResult(
-                            finish_reason="stop",
+                            tool_calls=pending_tool_calls,
+                            finish_reason=(
+                                "length"
+                                if done_reason == "length"
+                                else "tool_calls"
+                                if pending_tool_calls
+                                else "stop"
+                            ),
                             tokens_used=chunk.get("eval_count", 0),
                         )
                         break
-                    content = chunk.get("message", {}).get("content")
+                    content = message.get("content")
                     if content:
                         yield ChatResult(content=content)
         except Exception as e:
@@ -131,6 +170,8 @@ class OllamaAdapter(ModelAdapter):
         tools: list[dict[str, Any]] | None = None,
         **kwargs: Any,
     ) -> ChatResult:
+        # Ollama models have no image mapping here; vision parts degrade to text.
+        messages = degrade_image_parts(messages, provider=self.provider, model_id=self._model_id)
         payload: dict[str, Any] = {
             "model": self._model_id,
             "messages": messages,
@@ -145,7 +186,7 @@ class OllamaAdapter(ModelAdapter):
             payload["tools"] = tools
 
         if not await self._is_ollama_reachable():
-            await ollama_offline_queue.enqueue(payload)
+            await ollama_offline_queue.enqueue(payload, base_url=self._base_url)
             return ChatResult(
                 content="Ollama offline. Request queued for retry when connection is restored.",
                 tool_calls=[],
@@ -161,14 +202,16 @@ class OllamaAdapter(ModelAdapter):
             for tc in message.get("tool_calls", []):
                 func = tc.get("function", {})
                 args = func.get("arguments", {})
-                tool_calls.append({
-                    "id": func.get("name", ""),
-                    "type": "function",
-                    "function": {
-                        "name": func.get("name", ""),
-                        "arguments": args if isinstance(args, dict) else {},
-                    },
-                })
+                tool_calls.append(
+                    {
+                        "id": tc.get("id") or f"call_{uuid.uuid4().hex[:24]}",
+                        "type": "function",
+                        "function": {
+                            "name": func.get("name", ""),
+                            "arguments": args if isinstance(args, dict) else {},
+                        },
+                    }
+                )
 
             return ChatResult(
                 content=content,

@@ -59,6 +59,8 @@ i18n
   .init(i18nOptions);
 
 const detectedLanguage = i18n.language;
-localStorage.setItem('i18next_lng', detectedLanguage);
+if (typeof localStorage !== 'undefined') {
+  localStorage.setItem('i18next_lng', detectedLanguage);
+}
 
 export default i18n;

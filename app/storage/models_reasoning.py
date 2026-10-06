@@ -40,7 +40,9 @@ class ReasoningFeedbackDB(Base):
     __tablename__ = "reasoning_feedback"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    trace_id: Mapped[str] = mapped_column(String(36), ForeignKey("reasoning_traces.trace_id"), nullable=False, index=True)
+    trace_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("reasoning_traces.trace_id"), nullable=False, index=True
+    )
     user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     rating: Mapped[int] = mapped_column(Integer, nullable=False)
     thumbs: Mapped[str | None] = mapped_column(String(10), nullable=True)

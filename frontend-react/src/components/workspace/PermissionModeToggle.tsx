@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { AlertTriangle, Loader2, RotateCcw, ShieldQuestion } from 'lucide-react';
 import type { PermissionMode } from '../../store/workspace';
 import { PERMISSION_MODES, PERMISSION_MODE_INFO } from './permissionMode';
@@ -28,6 +29,7 @@ export function PermissionModeToggle({
   error = null,
   onRetry,
 }: PermissionModeToggleProps) {
+  const groupRef = useRef<HTMLDivElement>(null);
   if (value === null) {
     return (
       <div className="space-y-1.5" role="status">
@@ -61,9 +63,29 @@ export function PermissionModeToggle({
 
   const active = PERMISSION_MODE_INFO[value];
 
+  const selectByArrow = (key: string) => {
+    const current = PERMISSION_MODES.indexOf(value);
+    let next;
+    if (key === 'ArrowRight' || key === 'ArrowDown') {
+      next = current < PERMISSION_MODES.length - 1 ? current + 1 : 0;
+    } else if (key === 'ArrowLeft' || key === 'ArrowUp') {
+      next = current > 0 ? current - 1 : PERMISSION_MODES.length - 1;
+    } else {
+      return;
+    }
+    (groupRef.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next] ?? null)?.focus();
+    onChange(PERMISSION_MODES[next]!);
+  };
+
   return (
     <div className="space-y-1.5">
-      <div role="radiogroup" aria-label="权限模式" className="flex flex-wrap gap-1">
+      <div
+        ref={groupRef}
+        role="radiogroup"
+        aria-label="权限模式"
+        className="flex flex-wrap gap-1"
+        onKeyDown={event => selectByArrow(event.key)}
+      >
         {PERMISSION_MODES.map((mode) => {
           const info = PERMISSION_MODE_INFO[mode];
           const selected = mode === value;
@@ -73,6 +95,9 @@ export function PermissionModeToggle({
               type="button"
               role="radio"
               aria-checked={selected}
+              // Only the checked radio is in the tab order; the rest are
+              // reached with the arrow keys (roving tabindex, R13-45).
+              tabIndex={selected ? 0 : -1}
               disabled={disabled || loading}
               onClick={() => onChange(mode)}
               title={info.summary}

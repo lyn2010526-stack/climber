@@ -117,11 +117,9 @@ class ReasoningPipeline:
             )
 
             total_tokens = sum(
-                getattr(c, 'token_usage', {}).get('total_tokens', 0) for c in candidates
+                getattr(c, "token_usage", {}).get("total_tokens", 0) for c in candidates
             )
-            total_cost = sum(
-                getattr(c, 'estimated_cost', 0.0) for c in candidates
-            )
+            total_cost = sum(getattr(c, "estimated_cost", 0.0) for c in candidates)
 
             return ReasoningResult(
                 answer=best.content,

@@ -8,14 +8,24 @@
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from typing import Any, cast
 
 import structlog
-from sqlalchemy import delete, select
+from sqlalchemy import CursorResult, Table, delete, select
+from sqlalchemy.exc import IntegrityError
 
 from app.storage import async_session
 from app.storage.models_memory import CoreMemoryBlock
 
 logger = structlog.get_logger()
+
+_MIN_BLOCK_LIMIT = 64
+_MAX_BLOCK_LIMIT = 4096
+
+
+def _clamp_block_limit(limit: int) -> int:
+    """Clamp a configured core-memory block limit into a safe range."""
+    return max(min(int(limit), _MAX_BLOCK_LIMIT), _MIN_BLOCK_LIMIT)
 
 
 class CoreMemoryService:
@@ -30,7 +40,9 @@ class CoreMemoryService:
             result = await db.execute(query)
             return list(result.scalars().all())
 
-    async def get_block(self, user_id: str, label: str, agent_id: str | None = None) -> CoreMemoryBlock | None:
+    async def get_block(
+        self, user_id: str, label: str, agent_id: str | None = None
+    ) -> CoreMemoryBlock | None:
         async with async_session() as db:
             query = select(CoreMemoryBlock).where(
                 CoreMemoryBlock.user_id == user_id,
@@ -53,6 +65,7 @@ class CoreMemoryService:
         description: str = "",
         read_only: bool = False,
     ) -> CoreMemoryBlock:
+        limit = _clamp_block_limit(limit)
         async with async_session() as db:
             query = select(CoreMemoryBlock).where(
                 CoreMemoryBlock.user_id == user_id,
@@ -80,7 +93,22 @@ class CoreMemoryService:
                 block.limit = limit
                 block.description = description
                 block.read_only = read_only
-            await db.commit()
+            try:
+                await db.commit()
+            except IntegrityError:
+                # A concurrent create won the (user_id, agent_id, label) race.
+                # Reload the winner and apply the update instead of surfacing
+                # a 500.
+                await db.rollback()
+                result = await db.execute(query)
+                block = result.scalar_one_or_none()
+                if block is None:
+                    raise
+                block.value = value[:limit]
+                block.limit = limit
+                block.description = description
+                block.read_only = read_only
+                await db.commit()
             await db.refresh(block)
             return block
 
@@ -96,7 +124,7 @@ class CoreMemoryService:
             return await self.create_or_update_block(user_id, label, text, agent_id=agent_id)
         if block.read_only:
             return block
-        new_value = (block.value + "\n" + text).strip()[:block.limit]
+        new_value = (block.value + "\n" + text).strip()[: block.limit]
         block.value = new_value
         await self._update_block(block)
         return block
@@ -132,16 +160,18 @@ class CoreMemoryService:
                 query = query.where(CoreMemoryBlock.agent_id.is_(None))
             result = await db.execute(query)
             await db.commit()
-            return result.rowcount > 0
+            return cast(CursorResult[Any], result).rowcount > 0
 
     @staticmethod
     async def _update_block(block: CoreMemoryBlock) -> None:
         """Update an existing block using UPDATE instead of merge."""
         from app.storage import async_session
         from app.storage.models_memory import CoreMemoryBlock
+
         async with async_session() as db:
             await db.execute(
-                CoreMemoryBlock.__table__.update()
+                cast(Table, CoreMemoryBlock.__table__)
+                .update()
                 .where(CoreMemoryBlock.id == block.id)
                 .values(value=block.value)
             )

@@ -1,0 +1,227 @@
+/*
+ * Codex 卡片语言（chat/agent 组件群共享）。
+ *
+ * 对标 dsh-codex-suite web 版 ConversationCard 的规格：
+ *   1px hairline border · radius 12px · layer 底 · hover border 加深 ·
+ *   标题 15-600 · 描述 13 三级 · 元信息 12 三级 · pill 11-500 全圆 ·
+ *   40px 图标瓦片 · 按钮 13px / radius 8 / 5x14。
+ * 状态色点：running 为 teal 脉动，success / error 为静色。
+ * 全部颜色走 var(--color-*) token；动效 100-200ms 状态级，
+ * prefers-reduced-motion 下全部降级为静色/直变。
+ */
+
+.card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-surface-2);
+  transition:
+    border-color 160ms var(--ease-out),
+    background-color 160ms var(--ease-out);
+}
+
+.card:hover {
+  border-color: var(--color-border-default);
+}
+
+.cardOpen {
+  border-color: var(--color-border-default);
+  background: var(--color-bg-surface-1);
+}
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: 14px 16px;
+}
+
+.cardHeadText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1 1 16rem;
+  overflow-wrap: anywhere;
+}
+
+.cardName {
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--color-text-primary);
+}
+
+.cardDescription {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.cardMetadata {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.pill {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-surface-3);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 17px;
+  white-space: nowrap;
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  margin: 0 16px;
+  padding-bottom: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.iconTile {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-surface-3);
+  color: var(--color-accent-foreground);
+  flex: none;
+}
+
+.cardButton {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 5px 14px;
+  cursor: pointer;
+}
+
+.cardButtonPrimary {
+  background: var(--color-text-primary);
+  color: var(--color-bg-surface-2);
+}
+
+.cardButtonOutline {
+  border-color: var(--color-border-subtle);
+  background: none;
+  color: var(--color-text-secondary);
+  transition:
+    border-color 160ms var(--ease-out),
+    color 160ms var(--ease-out);
+}
+
+.cardButtonOutline:hover:not(:disabled) {
+  border-color: var(--color-border-default);
+  color: var(--color-text-primary);
+}
+
+.cardButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 消息流分隔：8px 节奏里的 hairline，同辈 turn 之间的一条细线。 */
+.turnSeparator {
+  border: 0;
+  border-top: 1px solid var(--color-border-subtle);
+  margin: 0;
+  width: 100%;
+}
+
+/* 状态色点：6px 全圆。running 为 teal 呼吸脉动（transform/opacity only）。 */
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  flex: none;
+}
+
+.statusDotRunning {
+  background: var(--color-accent-foreground);
+  animation: chatCardPulse 1.2s var(--ease-in-out) infinite;
+}
+
+.statusDotSuccess {
+  background: var(--color-success);
+}
+
+.statusDotError {
+  background: var(--color-error);
+}
+
+.statusDotPending {
+  background: var(--color-text-muted);
+}
+
+@keyframes chatCardPulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.75);
+  }
+}
+
+/* 骨架屏：layer-3 底 + layer-4 微脉冲（opacity only），禁止位移。 */
+.skeleton {
+  background: var(--color-bg-surface-3);
+  border-radius: var(--radius-sm);
+}
+
+.skeletonPulse {
+  animation: chatCardShimmer 1.6s var(--ease-in-out) infinite;
+}
+
+@keyframes chatCardShimmer {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .cardButtonOutline {
+    transition: none;
+  }
+
+  .statusDotRunning,
+  .skeletonPulse {
+    animation: none;
+  }
+
+  .statusDotRunning {
+    opacity: 0.7;
+  }
+
+  .skeletonPulse {
+    opacity: 1;
+  }
+}

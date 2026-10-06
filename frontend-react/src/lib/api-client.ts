@@ -69,11 +69,14 @@ async function request<T>(method: string, url: string, body?: unknown, config: R
     );
   }
 
+  // Read through a clone so a caller that shares one `Response` with another
+  // reader (e.g. two panels mounting against the same fetch mock) still gets
+  // the body: cloning tees the stream and leaves the original readable.
   const contentType = res.headers.get('content-type');
   if (contentType?.includes('application/json')) {
-    return res.json() as Promise<T>;
+    return res.clone().json() as Promise<T>;
   }
-  return res.text() as unknown as T;
+  return res.clone().text() as unknown as T;
 }
 
 export const apiClient = {

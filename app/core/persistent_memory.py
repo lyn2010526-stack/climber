@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import and_, desc, func, select
+from sqlalchemy import and_, desc, func, or_, select
 
 from app.core.vector_memory import vector_memory
 from app.storage import async_session
@@ -87,6 +87,7 @@ class PersistentMemoryService:
         limit: int = 10,
         min_importance: float = 0.0,
         session_id: str | None = None,
+        profile_context: dict[str, Any] | None = None,
     ) -> list[EpisodicMemory]:
         """Retrieve relevant memories for a user.
 
@@ -100,6 +101,7 @@ class PersistentMemoryService:
                         query=query,
                         top_k=limit * 3,
                         where={"user_id": user_id},
+                        profile_context=profile_context,
                     )
                 except Exception:
                     vector_results = []
@@ -107,8 +109,7 @@ class PersistentMemoryService:
                 if vector_results:
                     vector_ids = [r["id"] for r in vector_results]
                     result = await db.execute(
-                        select(EpisodicMemory)
-                        .where(
+                        select(EpisodicMemory).where(
                             and_(
                                 EpisodicMemory.user_id == user_id,
                                 EpisodicMemory.id.in_(vector_ids),
@@ -124,16 +125,20 @@ class PersistentMemoryService:
                             mem.access_count += 1
                             mem.last_accessed_at = datetime.now(UTC)
                             ordered.append(mem)
-                    for mem in ordered[:limit]:
-                        log = MemoryRetrievalLog(
-                            memory_id=mem.id,
-                            user_id=user_id,
-                            session_id=session_id,
-                            retrieval_query=query[:500],
-                        )
-                        db.add(log)
-                    await db.commit()
-                    return ordered[:limit]
+                    # Only return early when DB filtering kept at least one
+                    # candidate; otherwise fall through to keyword search so a
+                    # fully-filtered vector hit list cannot hide relevant text.
+                    if ordered:
+                        for mem in ordered[:limit]:
+                            log = MemoryRetrievalLog(
+                                memory_id=mem.id,
+                                user_id=user_id,
+                                session_id=session_id,
+                                retrieval_query=query[:500],
+                            )
+                            db.add(log)
+                        await db.commit()
+                        return ordered[:limit]
 
             # Fallback: keyword search
             result = await db.execute(
@@ -153,6 +158,25 @@ class PersistentMemoryService:
 
             if query:
                 query_lower = query.lower()
+                keywords = [w for w in query_lower.split() if len(w) > 3]
+                if keywords:
+                    # Pull keyword-matched candidates that fall outside the
+                    # importance/recency window so a topical match is not lost
+                    # to the pre-scoring truncation above.
+                    keyword_result = await db.execute(
+                        select(EpisodicMemory)
+                        .where(
+                            and_(
+                                EpisodicMemory.user_id == user_id,
+                                EpisodicMemory.importance >= min_importance,
+                                or_(*(EpisodicMemory.content.ilike(f"%{kw}%") for kw in keywords)),
+                            )
+                        )
+                        .limit(limit * 3)
+                    )
+                    memories = list(
+                        {m.id: m for m in [*memories, *keyword_result.scalars().all()]}.values()
+                    )
                 scored = []
                 for mem in memories:
                     score = mem.importance * mem.recency_score
@@ -192,8 +216,7 @@ class PersistentMemoryService:
             return ""
 
         lines = ["## Relevant Memories:"]
-        for mem in memories:
-            lines.append(f"- [{mem.memory_type}] {mem.content}")
+        lines.extend(f"- [{mem.memory_type}] {mem.content}" for mem in memories)
         return "\n".join(lines)
 
     async def decay_recency_scores(self, decay_factor: float = 0.95) -> int:
@@ -219,9 +242,7 @@ class PersistentMemoryService:
         """Remove low-scoring memories to prevent unbounded growth."""
         async with async_session() as db:
             # Get count
-            result = await db.execute(
-                select(func.count()).where(EpisodicMemory.user_id == user_id)
-            )
+            result = await db.execute(select(func.count()).where(EpisodicMemory.user_id == user_id))
             count = result.scalar() or 0
 
             if count <= keep_count:
@@ -365,12 +386,15 @@ class PersistentMemoryService:
         """Get all relations for a specific entity (both as subject and object)."""
         async with async_session() as db:
             result = await db.execute(
-                select(KnowledgeGraph).where(
+                select(KnowledgeGraph)
+                .where(
                     and_(
                         KnowledgeGraph.user_id == user_id,
                         KnowledgeGraph.subject == entity,
                     )
-                ).order_by(desc(KnowledgeGraph.confidence)).limit(limit)
+                )
+                .order_by(desc(KnowledgeGraph.confidence))
+                .limit(limit)
             )
             return list(result.scalars().all())
 
@@ -385,9 +409,8 @@ class PersistentMemoryService:
         if not relations:
             return ""
 
-        lines = [f"## Knowledge about \"{entity}\":"]
-        for r in relations:
-            lines.append(f"- {r.subject} -[{r.predicate}]-> {r.object_}")
+        lines = [f'## Knowledge about "{entity}":']
+        lines.extend(f"- {r.subject} -[{r.predicate}]-> {r.object_}" for r in relations)
         return "\n".join(lines)
 
     # ─── User Profile ────────────────────────────────────────────────────
@@ -395,9 +418,7 @@ class PersistentMemoryService:
     async def get_or_create_profile(self, user_id: str) -> UserProfile:
         """Get existing profile or create a new one."""
         async with async_session() as db:
-            result = await db.execute(
-                select(UserProfile).where(UserProfile.user_id == user_id)
-            )
+            result = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
             profile = result.scalar_one_or_none()
             if not profile:
                 profile = UserProfile(user_id=user_id)
@@ -415,12 +436,14 @@ class PersistentMemoryService:
     ) -> UserProfile:
         """Add a persistent fact about the user."""
         profile = await self.get_or_create_profile(user_id)
-        profile.facts.append({
-            "category": category,
-            "content": fact,
-            "confidence": confidence,
-            "added_at": datetime.now(UTC).isoformat(),
-        })
+        profile.facts.append(
+            {
+                "category": category,
+                "content": fact,
+                "confidence": confidence,
+                "added_at": datetime.now(UTC).isoformat(),
+            }
+        )
         # Keep facts list manageable
         if len(profile.facts) > 100:
             profile.facts = profile.facts[-100:]
@@ -472,29 +495,27 @@ class PersistentMemoryService:
         # Inviolable rules (highest priority)
         if profile.inviolable:
             lines.append("[INVIOLABLE RULES — MUST FOLLOW]")
-            for rule in profile.inviolable:
-                lines.append(f"- {rule}")
+            lines.extend(f"- {rule}" for rule in profile.inviolable)
             lines.append("")
 
         # User values
         if profile.values:
             lines.append("## User Values")
-            for v in profile.values:
-                lines.append(f"- {v}")
+            lines.extend(f"- {v}" for v in profile.values)
             lines.append("")
 
         # User principles
         if profile.principles:
             lines.append("## User Principles")
-            for p in profile.principles:
-                lines.append(f"- {p}")
+            lines.extend(f"- {p}" for p in profile.principles)
             lines.append("")
 
         facts = profile.facts[-10:]  # Last 10 facts
         if facts:
             lines.append("## User Information:")
-            for f in facts:
-                lines.append(f"- [{f.get('category', 'general')}] {f.get('content', '')}")
+            lines.extend(
+                f"- [{f.get('category', 'general')}] {f.get('content', '')}" for f in facts
+            )
 
         if profile.preferred_model:
             lines.append(f"- Preferred model: {profile.preferred_model}")
@@ -527,7 +548,17 @@ class PersistentMemoryService:
 
             # Simple heuristic: messages containing "I prefer", "I like", "remember"
             lower = content.lower()
-            if any(signal in lower for signal in ["i prefer", "i like", "i want", "remember that", "my name is", "i work"]):
+            if any(
+                signal in lower
+                for signal in [
+                    "i prefer",
+                    "i like",
+                    "i want",
+                    "remember that",
+                    "my name is",
+                    "i work",
+                ]
+            ):
                 await self.create_episodic_memory(
                     user_id=user_id,
                     content=content[:500],
@@ -540,14 +571,14 @@ class PersistentMemoryService:
 
                 # Extract as user fact
                 if "my name is" in lower:
-                    name_part = content[lower.index("my name is") + 11:].strip().split()[0:3]
+                    name_part = content[lower.index("my name is") + 11 :].strip().split()[0:3]
                     name = " ".join(name_part).strip(".,!?")
                     if name:
                         await self.add_user_fact(user_id, f"Name: {name}", "personal", 0.9)
                         stats["facts"] += 1
 
                 elif "i work" in lower:
-                    work_part = content[lower.index("i work") + 7:].strip()[:100]
+                    work_part = content[lower.index("i work") + 7 :].strip()[:100]
                     if work_part:
                         await self.add_user_fact(user_id, f"Work: {work_part}", "work", 0.8)
                         stats["facts"] += 1
@@ -640,7 +671,9 @@ class PersistentMemoryService:
                 base_query = base_query.where(ArchivalPassage.archive_id == archive_id)
             if query:
                 base_query = base_query.where(ArchivalPassage.text.ilike(f"%{query}%"))
-            base_query = base_query.order_by(ArchivalPassage.access_count.desc(), ArchivalPassage.created_at.desc()).limit(limit)
+            base_query = base_query.order_by(
+                ArchivalPassage.access_count.desc(), ArchivalPassage.created_at.desc()
+            ).limit(limit)
             result = await db.execute(base_query)
             like_passages = list(result.scalars().all())
 

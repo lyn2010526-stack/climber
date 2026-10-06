@@ -17,7 +17,7 @@ from typing import Any
 
 import structlog
 
-from app.core.parallel import ParallelToolExecutor
+from app.core.parallel import ParallelToolExecutor, ValidatorLike
 from app.simulation.adjuster import ParameterAdjuster
 from app.simulation.ledger import ExperimentLedger
 from app.simulation.models import (
@@ -35,6 +35,7 @@ logger = structlog.get_logger()
 @dataclass
 class HarnessOptions:
     """Tuning knobs for the orchestration loop."""
+
     max_rounds: int = 8
     concurrency: int = 4
     timeout_per_tool: float = 60.0
@@ -46,6 +47,7 @@ class HarnessOptions:
 @dataclass
 class HarnessRunResult:
     """Aggregate result across all experiments in a plan."""
+
     plan: ExperimentPlan
     reports: list[ExperimentReport] = field(default_factory=list)
     accepted: int = 0
@@ -63,7 +65,7 @@ class SimulationHarness:
         adjuster: ParameterAdjuster | None = None,
         ledger: ExperimentLedger | None = None,
         options: HarnessOptions | None = None,
-        validate_tool_call=None,
+        validate_tool_call: ValidatorLike | None = None,
     ):
         self.tool_registry = tool_registry
         self.reviewer = reviewer or HarnessReviewer()
@@ -86,7 +88,10 @@ class SimulationHarness:
         """
         result = HarnessRunResult(plan=plan)
         if self.ledger is not None:
-            self.ledger.record_goal(goal, plan.to_dict())
+            # ExperimentLedger.record_goal is annotated list[dict] but the plan
+            # snapshot passed by every caller (here and in the orchestrator) is
+            # a dict; the ledger stores it verbatim.
+            self.ledger.record_goal(goal, plan.to_dict())  # type: ignore[arg-type]
 
         if not plan.experiments:
             return result
@@ -218,10 +223,14 @@ class SimulationHarness:
             validator=self._validate_tool_call,
         )
         try:
-            results = await executor.execute_all([{
-                "id": f"{spec.id}-r{round_number}",
-                "function": {"name": spec.tool_name, "arguments": parameters},
-            }])
+            results = await executor.execute_all(
+                [
+                    {
+                        "id": f"{spec.id}-r{round_number}",
+                        "function": {"name": spec.tool_name, "arguments": parameters},
+                    }
+                ]
+            )
             tool_result = results[0]
             attempt.success = tool_result.success
             attempt.output = tool_result.result

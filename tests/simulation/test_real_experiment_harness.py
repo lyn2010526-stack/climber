@@ -11,13 +11,11 @@ from __future__ import annotations
 import asyncio
 import json
 
-import pytest
-
 from app.simulation.harness import HarnessOptions, SimulationHarness
 from app.simulation.planner import plan_from_schema
 from app.simulation.review import HarnessReviewer, ParameterPolicy
 from app.tools import ToolRegistry
-from app.tools.builtins import simulate_experiment  # noqa: F401  (registers tool)
+from app.tools.builtins import simulate_experiment
 
 
 def make_registry() -> ToolRegistry:
@@ -43,9 +41,18 @@ def make_registry() -> ToolRegistry:
 
 def test_real_tool_registers_and_executes():
     registry = make_registry()
-    result = asyncio.run(registry.execute("simulate_experiment", {
-        "model": "heat", "alpha": 1e-4, "dx": 0.02, "dt": 1e-4, "t_final": 5.0,
-    }))
+    result = asyncio.run(
+        registry.execute(
+            "simulate_experiment",
+            {
+                "model": "heat",
+                "alpha": 1e-4,
+                "dx": 0.02,
+                "dt": 1e-4,
+                "t_final": 5.0,
+            },
+        )
+    )
     parsed = json.loads(result)
     assert parsed["model"] == "heat"
     assert parsed["converged"] is True
@@ -55,11 +62,24 @@ def test_real_tool_registers_and_executes():
 def test_harness_real_heat_experiment_converges():
     async def go():
         registry = make_registry()
-        policy = ParameterPolicy(allowed=["model", "alpha", "dx", "dt", "t_final", "n_points", "source_temp", "ambient_temp"])
+        policy = ParameterPolicy(
+            allowed=[
+                "model",
+                "alpha",
+                "dx",
+                "dt",
+                "t_final",
+                "n_points",
+                "source_temp",
+                "ambient_temp",
+            ]
+        )
         harness = SimulationHarness(
             registry,
             reviewer=HarnessReviewer(),
-            options=HarnessOptions(max_rounds=2, expect_numbers=True, metric_keys=["max_temperature"], policy=policy),
+            options=HarnessOptions(
+                max_rounds=2, expect_numbers=True, metric_keys=["max_temperature"], policy=policy
+            ),
         )
         plan = plan_from_schema(
             {

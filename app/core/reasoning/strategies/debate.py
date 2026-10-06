@@ -65,17 +65,22 @@ class DebateAgent:
         """Clear conversation history (keep system prompt)."""
         self.messages = []
 
-    async def chat(self, user_message: str, temperature: float = 0.7, max_tokens: int = 4000) -> str:
+    async def chat(
+        self, user_message: str, temperature: float = 0.7, max_tokens: int = 4000
+    ) -> str:
         """Send a message and get a response, maintaining conversation history."""
         self.messages.append({"role": "user", "content": user_message})
 
         try:
             result = await self.model_adapter.chat(
-                [{"role": "system", "content": self.system_prompt}] + self.messages[-self.max_history:],
+                [
+                    {"role": "system", "content": self.system_prompt},
+                    *self.messages[-self.max_history :],
+                ],
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
-            response = result.content
+            response: str = result.content
             usage = getattr(result, "usage", None) or {}
             self.total_tokens += getattr(result, "tokens_used", 0) or usage.get("total_tokens", 0)
         except Exception as exc:
@@ -88,10 +93,7 @@ class DebateAgent:
     def get_context_summary(self, last_n: int = 4) -> str:
         """Return a summary of recent conversation for context passing."""
         recent = self.messages[-last_n:]
-        return "\n".join(
-            f"[{self.role}]: {m['content'][:200]}"
-            for m in recent
-        )
+        return "\n".join(f"[{self.role}]: {m['content'][:200]}" for m in recent)
 
 
 class DebateStrategy:
@@ -143,12 +145,14 @@ class DebateStrategy:
             DEBATE_USER_PROMPT.format(task=request.task, context=context),
         )
 
-        traces: list[RoundTrace] = [RoundTrace(
-            round_num=0,
-            action="initial_positions",
-            input_summary=request.task[:100],
-            output_summary="Both sides presented initial positions",
-        )]
+        traces: list[RoundTrace] = [
+            RoundTrace(
+                round_num=0,
+                action="initial_positions",
+                input_summary=request.task[:100],
+                output_summary="Both sides presented initial positions",
+            )
+        ]
 
         consensus_reached = False
         final_solution = proponent_position
@@ -200,16 +204,18 @@ class DebateStrategy:
                 }
 
             duration = (time.monotonic() - round_start) * 1000
-            traces.append(RoundTrace(
-                round_num=round_num,
-                action="debate_round",
-                input_summary=f"Round {round_num}",
-                output_summary=(
-                    f"consensus={judge_result.get('converged', False)}, "
-                    f"winner={judge_result.get('winner', 'unknown')}"
-                ),
-                duration_ms=duration,
-            ))
+            traces.append(
+                RoundTrace(
+                    round_num=round_num,
+                    action="debate_round",
+                    input_summary=f"Round {round_num}",
+                    output_summary=(
+                        f"consensus={judge_result.get('converged', False)}, "
+                        f"winner={judge_result.get('winner', 'unknown')}"
+                    ),
+                    duration_ms=duration,
+                )
+            )
 
             if judge_result.get("converged", False):
                 consensus_reached = True
@@ -231,7 +237,9 @@ class DebateStrategy:
             final_critique = CritiqueResult(
                 passed=consensus_reached,
                 summary=summary,
-                scores=dict.fromkeys(("correctness", "completeness", "clarity", "safety", "actionability"), quality),
+                scores=dict.fromkeys(
+                    ("correctness", "completeness", "clarity", "safety", "actionability"), quality
+                ),
             )
             confidence = self._scorer.score_from_critique(final_critique)
         except Exception as exc:
@@ -248,28 +256,30 @@ class DebateStrategy:
             total_tokens=total_tokens,
         )
 
-        return [Candidate(
-            id="debate_01",
-            strategy=self.name,
-            path_type=f"debate_{winner}",
-            content=final_solution,
-            reasoning_chain=[rt.output_summary for rt in traces],
-            confidence=confidence,
-            critique=final_critique,
-            round_created=len(traces),
-            duration_ms=round(elapsed, 1),
-            token_usage={"total_tokens": total_tokens},
-            metadata={
-                "consensus_reached": consensus_reached,
-                "winner": winner,
-                "total_debate_rounds": len(traces),
-                "agent_tokens": {
-                    "proponent": proponent.total_tokens,
-                    "opponent": opponent.total_tokens,
-                    "judge": judge.total_tokens,
+        return [
+            Candidate(
+                id="debate_01",
+                strategy=self.name,
+                path_type=f"debate_{winner}",
+                content=final_solution,
+                reasoning_chain=[rt.output_summary for rt in traces],
+                confidence=confidence,
+                critique=final_critique,
+                round_created=len(traces),
+                duration_ms=round(elapsed, 1),
+                token_usage={"total_tokens": total_tokens},
+                metadata={
+                    "consensus_reached": consensus_reached,
+                    "winner": winner,
+                    "total_debate_rounds": len(traces),
+                    "agent_tokens": {
+                        "proponent": proponent.total_tokens,
+                        "opponent": opponent.total_tokens,
+                        "judge": judge.total_tokens,
+                    },
                 },
-            },
-        )]
+            )
+        ]
 
     def _get_model(self, model_registry: Any) -> Any:
         """Get model adapter from registry."""

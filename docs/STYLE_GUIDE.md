@@ -137,11 +137,13 @@ class AgentEngine:
 # Use specific exceptions
 class AgentEngineError(Exception):
     """Base exception for AgentEngine."""
+
     pass
 
 
 class SessionNotFoundError(AgentEngineError):
     """Raised when session is not found."""
+
     def __init__(self, session_id: str) -> None:
         super().__init__(f"Session not found: {session_id}")
         self.session_id = session_id
@@ -149,6 +151,7 @@ class SessionNotFoundError(AgentEngineError):
 
 class ModelProviderError(AgentEngineError):
     """Raised when model provider fails."""
+
     def __init__(self, provider: str, detail: str) -> None:
         super().__init__(f"Model provider '{provider}' failed: {detail}")
         self.provider = provider
@@ -488,8 +491,10 @@ AgentEngineError (base)
 def test_create_session_returns_valid_session():
     """Should return a session with valid ID when config is valid."""
 
+
 def test_create_session_raises_on_empty_user_id():
     """Should raise ValueError when user_id is empty."""
+
 
 def test_stream_response_emits_tokens_in_order():
     """Should emit tokens in correct order during streaming."""

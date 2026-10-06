@@ -77,7 +77,7 @@ class Workflow(BaseModel):
             in_degree[edge.target] = in_degree.get(edge.target, 0) + 1
 
         layers: list[list[str]] = []
-        remaining = set(n.id for n in self.nodes)
+        remaining = {n.id for n in self.nodes}
 
         while remaining:
             layer = [nid for nid in remaining if in_degree.get(nid, 0) == 0]

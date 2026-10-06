@@ -70,4 +70,38 @@ describe('ApiClient paginated lists', () => {
     );
     cancel();
   });
+
+  // Spec update (R12-H61): the cluster create endpoint requires `name`, so the
+  // client must send that field rather than the former `requirements` payload.
+  it('posts the required name field when creating a cluster node', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'node-1', name: 'worker-a' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await api.createCluster({ name: 'worker-a' });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/cluster/create', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ name: 'worker-a' }),
+    }));
+  });
+
+  // Spec update (R12-H62): FastAPI 422 bodies carry `detail` as an array, which
+  // must be flattened into a readable message instead of "[object Object]".
+  it('flattens a 422 validation detail array into the error message', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({
+        detail: [
+          { loc: ['body', 'name'], msg: 'field required', type: 'value_error.missing' },
+          { loc: ['body', 'endpoint'], msg: 'invalid url', type: 'value_error' },
+        ],
+      }),
+    }));
+
+    await expect(api.listAgents()).rejects.toThrow('field required; invalid url');
+  });
 });

@@ -15,6 +15,49 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from app.core.instruction.understanding import (
+    InstructionUnderstanding,
+    understand_instruction,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class InstructionGoalValidation:
+    """Public validation metadata for an understood instruction."""
+
+    status: str
+    goal: str | None
+    confidence: float
+    needs_clarification: bool
+    clarification_questions: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "goal": self.goal,
+            "confidence": self.confidence,
+            "needs_clarification": self.needs_clarification,
+            "clarification_questions": list(self.clarification_questions),
+        }
+
+
+def validate_instruction_goal(
+    raw_text: str,
+    understanding: InstructionUnderstanding | None = None,
+) -> InstructionGoalValidation:
+    """Validate that an instruction has an actionable main goal."""
+    result = understanding or understand_instruction(raw_text)
+    needs_clarification = result.goal_missing or bool(result.ambiguities)
+    return InstructionGoalValidation(
+        status="blocked"
+        if result.goal_missing
+        else ("needs_clarification" if needs_clarification else "ready"),
+        goal=result.main_goal,
+        confidence=result.confidence,
+        needs_clarification=needs_clarification,
+        clarification_questions=result.clarification_questions,
+    )
+
 
 @dataclass
 class AlignmentCheck:
@@ -116,9 +159,7 @@ class GoalTracker:
         row = self._conn.execute("SELECT id FROM goals WHERE id = ?", (goal_id,)).fetchone()
         if not row:
             return False
-        self._conn.execute(
-            "UPDATE goals SET is_active = 0 WHERE id = ?", (goal_id,)
-        )
+        self._conn.execute("UPDATE goals SET is_active = 0 WHERE id = ?", (goal_id,))
         self._conn.commit()
         return True
 
@@ -170,7 +211,7 @@ class GoalTracker:
         ).fetchall()
         if not rows:
             return 0.0
-        avg_scores = [row["avg_score"] for row in rows]
+        avg_scores: list[float] = [row["avg_score"] for row in rows]
         overall_avg = sum(avg_scores) / len(avg_scores)
         return max(0.0, min(1.0, 1.0 - overall_avg))
 
@@ -207,7 +248,7 @@ class GoalTracker:
             return 0.5
 
         action_lower = action.lower()
-        action_words = set(re.findall(r'\w+', action_lower))
+        action_words = set(re.findall(r"\w+", action_lower))
         if not action_words:
             return 0.0
 
@@ -225,14 +266,56 @@ class GoalTracker:
 
     def _extract_keywords(self, text: str) -> list[str]:
         """Extract meaningful keywords from text."""
-        words = re.findall(r'\w+', text.lower())
+        words = re.findall(r"\w+", text.lower())
         stopwords = {
-            "the", "a", "an", "is", "are", "was", "were", "be", "been",
-            "being", "have", "has", "had", "do", "does", "did", "will",
-            "would", "could", "should", "may", "might", "can", "shall",
-            "to", "of", "in", "for", "on", "with", "at", "by", "from",
-            "as", "into", "through", "during", "before", "after", "and",
-            "but", "or", "not", "no", "this", "that", "it", "its",
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "can",
+            "shall",
+            "to",
+            "of",
+            "in",
+            "for",
+            "on",
+            "with",
+            "at",
+            "by",
+            "from",
+            "as",
+            "into",
+            "through",
+            "during",
+            "before",
+            "after",
+            "and",
+            "but",
+            "or",
+            "not",
+            "no",
+            "this",
+            "that",
+            "it",
+            "its",
         }
         return [w for w in words if w not in stopwords and len(w) > 2]
 

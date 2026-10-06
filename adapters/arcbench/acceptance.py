@@ -13,6 +13,7 @@ with main.py.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import signal
@@ -59,21 +60,15 @@ def wait_bound(port: int, proc, timeout: float) -> bool:
 
 
 def stop_server(proc) -> None:
-    try:
+    with contextlib.suppress(OSError):
         os.killpg(proc.pid, signal.SIGKILL)
-    except OSError:
-        pass
     stdout = getattr(proc, "stdout", None)
     close = getattr(stdout, "close", None)
     if callable(close):
-        try:
+        with contextlib.suppress(OSError):
             close()
-        except OSError:
-            pass
-    try:
+    with contextlib.suppress(subprocess.TimeoutExpired):
         proc.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        pass
 
 
 def playwright_argv(tests_dir: Path, config: Path | None) -> list[str]:
@@ -88,7 +83,9 @@ def playwright_argv(tests_dir: Path, config: Path | None) -> list[str]:
     argv = ["test", "--reporter=json"]
     if config is not None:
         argv += ["--config", str(config)]
-    has_local_runner = (tests_dir / "node_modules").is_dir() or (tests_dir / "package.json").is_file()
+    has_local_runner = (tests_dir / "node_modules").is_dir() or (
+        tests_dir / "package.json"
+    ).is_file()
     if has_local_runner:
         local_bin = tests_dir / "node_modules" / ".bin" / "playwright"
         if local_bin.is_file():
@@ -305,7 +302,7 @@ def run_acceptance(
         except subprocess.TimeoutExpired as exc:
             rc = -1
             raw = exc.stdout or ""
-            combined = (raw if isinstance(raw, str) else raw.decode("utf-8", "replace"))
+            combined = raw if isinstance(raw, str) else raw.decode("utf-8", "replace")
             combined += "\nplaywright run exceeded its timeout"
         except OSError as exc:
             summary.update(ran=True, available=False, message=f"playwright unavailable: {exc}")
@@ -327,7 +324,9 @@ def run_acceptance(
                 summary.update(available=False, message="playwright found no runnable specs")
                 return summary
             if "install @playwright/test" in combined:
-                summary.update(available=False, message="playwright runner missing @playwright/test")
+                summary.update(
+                    available=False, message="playwright runner missing @playwright/test"
+                )
                 return summary
             # No machine-readable per-spec outcome: fall back to the process
             # exit code, flagging the attribution as a fallback.
@@ -347,9 +346,7 @@ def run_acceptance(
         mapped = map_results_to_nodes(parsed, node_ids)
         passed_nodes = sorted(nid for nid, ok in mapped.items() if ok)
         evidence_failed = sorted(nid for nid, ok in mapped.items() if not ok)
-        unknown = sorted(
-            n for n in node_ids if n not in passed_nodes and n not in evidence_failed
-        )
+        unknown = sorted(n for n in node_ids if n not in passed_nodes and n not in evidence_failed)
         failed_specs = sum(1 for r in parsed if not r["passed"])
         all_specs_green = failed_specs == 0 and rc == 0
         summary.update(
@@ -366,24 +363,20 @@ def run_acceptance(
     finally:
         if workdir is not None:
             for leftover in workdir.glob("*"):
-                try:
+                with contextlib.suppress(OSError):
                     leftover.unlink()
-                except OSError:
-                    pass
-            try:
+            with contextlib.suppress(OSError):
                 workdir.rmdir()
-            except OSError:
-                pass
         stop_server(proc)
 
 
 __all__ = [
     "find_test_infra",
-    "wait_bound",
-    "stop_server",
-    "playwright_argv",
-    "parse_playwright_report",
-    "try_json_from_text",
     "map_results_to_nodes",
+    "parse_playwright_report",
+    "playwright_argv",
     "run_acceptance",
+    "stop_server",
+    "try_json_from_text",
+    "wait_bound",
 ]

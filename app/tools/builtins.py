@@ -8,34 +8,78 @@ import math
 import re
 import urllib.parse
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
-from sqlalchemy import select
 
 from app.core.di import resolve as di_resolve
-from app.tools import tool
+from app.core.security.network_allowlist import network_allowlist
+from app.tools import native_tools, tool
 from app.utils.ssrf import blocked_reason
 
+if TYPE_CHECKING:
+    from app.core.collaboration.base import GroupCollaborationEngine
+
 _SAFE_EVAL_BUILTINS = {
-    "len": len, "str": str, "int": int, "float": float,
-    "abs": abs, "round": round, "True": True, "False": False,
+    "len": len,
+    "str": str,
+    "int": int,
+    "float": float,
+    "abs": abs,
+    "round": round,
+    "True": True,
+    "False": False,
     "None": None,
-    "sqrt": math.sqrt, "pow": pow,
-    "sin": math.sin, "cos": math.cos, "tan": math.tan,
-    "asin": math.asin, "acos": math.acos, "atan": math.atan,
-    "log": math.log, "log10": math.log10, "log2": math.log2,
-    "exp": math.exp, "ceil": math.ceil, "floor": math.floor,
-    "pi": math.pi, "e": math.e,
-    "gcd": math.gcd, "factorial": math.factorial,
+    "sqrt": math.sqrt,
+    "pow": pow,
+    "sin": math.sin,
+    "cos": math.cos,
+    "tan": math.tan,
+    "asin": math.asin,
+    "acos": math.acos,
+    "atan": math.atan,
+    "log": math.log,
+    "log10": math.log10,
+    "log2": math.log2,
+    "exp": math.exp,
+    "ceil": math.ceil,
+    "floor": math.floor,
+    "pi": math.pi,
+    "e": math.e,
+    "gcd": math.gcd,
+    "factorial": math.factorial,
 }
 _SAFE_EXPR_NODES = (
-    ast.Expression, ast.BinOp, ast.UnaryOp, ast.BoolOp, ast.Compare,
-    ast.Call, ast.Constant, ast.Name, ast.Load,
-    ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod, ast.Pow,
-    ast.USub, ast.UAdd, ast.Not, ast.And, ast.Or,
-    ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE,
-    ast.Is, ast.IsNot, ast.In, ast.NotIn,
+    ast.Expression,
+    ast.BinOp,
+    ast.UnaryOp,
+    ast.BoolOp,
+    ast.Compare,
+    ast.Call,
+    ast.Constant,
+    ast.Name,
+    ast.Load,
+    ast.Add,
+    ast.Sub,
+    ast.Mult,
+    ast.Div,
+    ast.Mod,
+    ast.Pow,
+    ast.USub,
+    ast.UAdd,
+    ast.Not,
+    ast.And,
+    ast.Or,
+    ast.Eq,
+    ast.NotEq,
+    ast.Lt,
+    ast.LtE,
+    ast.Gt,
+    ast.GtE,
+    ast.Is,
+    ast.IsNot,
+    ast.In,
+    ast.NotIn,
 )
 
 
@@ -44,13 +88,45 @@ def _safe_eval_math(expression: str, local_vars: dict[str, Any]) -> Any:
     for node in ast.walk(tree):
         if not isinstance(node, _SAFE_EXPR_NODES):
             raise ValueError(f"Unsafe math expression node: {type(node).__name__}")
-        if isinstance(node, ast.Name) and node.id not in _SAFE_EVAL_BUILTINS and node.id not in local_vars:
+        if (
+            isinstance(node, ast.Name)
+            and node.id not in _SAFE_EVAL_BUILTINS
+            and node.id not in local_vars
+        ):
             raise ValueError(f"Unsupported name in math expression: {node.id}")
-    return eval(compile(tree, "<calculator>", "eval"), {"__builtins__": _SAFE_EVAL_BUILTINS}, local_vars)
+    return eval(
+        compile(tree, "<calculator>", "eval"), {"__builtins__": _SAFE_EVAL_BUILTINS}, local_vars
+    )
+
 
 # Register browser tools so they are available in the tool registry
 # (native_tools registers screen/browser-style tools and lives in this package too)
 from app.tools import browser_tools  # noqa: E402, F401
+
+
+def _outbound_denial(url: str) -> str:
+    """Return why an outbound request is denied, or an empty string when allowed.
+
+    Every tool that talks to the network goes through here before opening a
+    connection: the SSRF layer rejects loopback, private, link-local and cloud
+    metadata destinations, and the network allowlist applies its domain policy.
+    """
+    reason = blocked_reason(url)
+    if reason:
+        return reason
+    allowed, allowlist_reason = network_allowlist.check_url(url)
+    if not allowed:
+        return f"blocked by network allowlist: {allowlist_reason}"
+    return ""
+
+
+def _validated_path(path: str, writable: bool) -> tuple[bool, str]:
+    """Check a filesystem path against the shared native_tools path policy.
+
+    Accessing the validator through the module keeps the lookup dynamic and
+    avoids importing a private name directly from a sibling module.
+    """
+    return native_tools._validate_file_path(path, writable=writable)
 
 
 @tool(description="Get the current date and time")
@@ -61,7 +137,7 @@ async def get_datetime() -> str:
 @tool(description="Fetch content from a URL")
 async def fetch_url(url: str) -> str:
     try:
-        reason = blocked_reason(url)
+        reason = _outbound_denial(url)
         if reason:
             return f"Error fetching URL: {reason}"
         async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
@@ -73,7 +149,7 @@ async def fetch_url(url: str) -> str:
                 if redirects == 5:
                     return "Error fetching URL: too many redirects (maximum 5)"
                 current_url = urllib.parse.urljoin(str(resp.url), resp.headers["location"])
-                reason = blocked_reason(current_url)
+                reason = _outbound_denial(current_url)
                 if reason:
                     return f"Error fetching URL: redirect blocked: {reason}"
             resp.raise_for_status()
@@ -85,11 +161,13 @@ async def fetch_url(url: str) -> str:
         return f"Error fetching URL: {e!s}"
 
 
-@tool(description="Search the web for current information, news, facts, or documentation. Use when the user asks about recent events, current data, or information you don't know. Returns text snippets from search results.")
+@tool(
+    description="Search the web for current information, news, facts, or documentation. Use when the user asks about recent events, current data, or information you don't know. Returns text snippets from search results."
+)
 async def web_search(query: str) -> str:
     try:
         url = f"https://lite.duckduckgo.com/lite/?q={urllib.parse.quote(query)}"
-        reason = blocked_reason(url)
+        reason = _outbound_denial(url)
         if reason:
             return f"Search error: {reason}"
         async with httpx.AsyncClient(timeout=15, follow_redirects=False) as client:
@@ -103,11 +181,15 @@ async def web_search(query: str) -> str:
         return f"Search error: {e!s}"
 
 
-@tool(description="Evaluate mathematical expressions and calculations. Supports +, -, *, /, ^ (power), %, sqrt(), sin(), cos(), tan(), log(), pow(), pi, e, and comparison operators.")
+@tool(
+    description="Evaluate mathematical expressions and calculations. Supports +, -, *, /, ^ (power), %, sqrt(), sin(), cos(), tan(), log(), pow(), pi, e, and comparison operators."
+)
 async def calculator(expression: str) -> str:
     try:
         expression = expression.replace("^", "**")
-        allowed = set("0123456789+-*/(). %,<>=!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
+        allowed = set(
+            "0123456789+-*/(). %,<>=!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
+        )
         if not all(c in allowed for c in expression):
             return "Error: Only math operators and functions allowed"
         result = _safe_eval_math(expression, {})
@@ -116,10 +198,15 @@ async def calculator(expression: str) -> str:
         return f"Error: {e!s}"
 
 
-@tool(description="Get current weather conditions for any city worldwide. Use when the user asks about weather, temperature, or forecast for a specific location. Returns temperature, humidity, wind speed, and conditions.")
+@tool(
+    description="Get current weather conditions for any city worldwide. Use when the user asks about weather, temperature, or forecast for a specific location. Returns temperature, humidity, wind speed, and conditions."
+)
 async def get_weather(city: str) -> str:
     try:
         url = f"https://wttr.in/{urllib.parse.quote(city)}?format=j1"
+        reason = _outbound_denial(url)
+        if reason:
+            return f"Weather error: {reason}"
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(url)
             resp.raise_for_status()
@@ -137,8 +224,13 @@ async def get_weather(city: str) -> str:
         return f"Weather error: {e!s}"
 
 
-@tool(description="Read content from a file on the local filesystem. Use when the user wants to view, analyze, or reference an existing file. Returns up to 10,000 characters.")
+@tool(
+    description="Read content from a file on the local filesystem. Use when the user wants to view, analyze, or reference an existing file. Returns up to 10,000 characters."
+)
 async def read_file(path: str) -> str:
+    valid, reason = _validated_path(path, writable=False)
+    if not valid:
+        return f"Error reading file: {reason}"
     try:
         with open(path, encoding="utf-8") as f:
             content = f.read()
@@ -147,8 +239,13 @@ async def read_file(path: str) -> str:
         return f"Error reading file: {e!s}"
 
 
-@tool(description="Write content to a file on the local filesystem. Use when the user wants to create a new file or overwrite an existing one. Automatically creates parent directories if needed.")
+@tool(
+    description="Write content to a file on the local filesystem. Use when the user wants to create a new file or overwrite an existing one. Automatically creates parent directories if needed."
+)
 async def write_file(path: str, content: str) -> str:
+    valid, reason = _validated_path(path, writable=True)
+    if not valid:
+        return f"Error writing file: {reason}"
     try:
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
@@ -160,6 +257,7 @@ async def write_file(path: str, content: str) -> str:
 @tool(description="List files in a directory")
 async def list_files(directory: str = ".") -> str:
     import os
+
     try:
         entries = []
         for entry in os.listdir(directory):
@@ -173,14 +271,17 @@ async def list_files(directory: str = ".") -> str:
 
 @tool(description="Run a shell command and return output")
 async def run_command(command: str) -> str:
-    sandbox = di_resolve("SandboxExecutor")
-    return await sandbox.execute(command)
+    sandbox: Any = di_resolve("SandboxExecutor")
+    return cast("str", await sandbox.execute(command))
 
 
 @tool(description="Generate an image using a text description (via pollinations.ai)")
 async def generate_image(prompt: str) -> str:
     try:
         url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&nologo=true"
+        reason = _outbound_denial(url)
+        if reason:
+            return f"Image generation error: {reason}"
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.get(url)
             if resp.status_code == 200:
@@ -196,15 +297,21 @@ async def translate(text: str, target_language: str = "en", source_language: str
     try:
         # Use LibreTranslate public instance or similar
         url = "https://libretranslate.de/translate"
+        reason = _outbound_denial(url)
+        if reason:
+            return f"Translation error: {reason}"
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(url, json={
-                "q": text,
-                "source": source_language,
-                "target": target_language,
-                "format": "text",
-            })
+            resp = await client.post(
+                url,
+                json={
+                    "q": text,
+                    "source": source_language,
+                    "target": target_language,
+                    "format": "text",
+                },
+            )
             if resp.status_code == 200:
-                return resp.json().get("translatedText", "Translation failed")
+                return cast("str", resp.json().get("translatedText", "Translation failed"))
             # Fallback: return a note
             return f"Translation service unavailable. Text: {text}"
     except Exception as e:
@@ -215,6 +322,9 @@ async def translate(text: str, target_language: str = "en", source_language: str
 async def wikipedia_summary(topic: str) -> str:
     try:
         url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(topic)}"
+        reason = _outbound_denial(url)
+        if reason:
+            return f"Wikipedia error: {reason}"
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(url, headers={"User-Agent": "AgentEngine/0.1"})
             if resp.status_code == 200:
@@ -244,6 +354,7 @@ async def summarize(text: str, max_sentences: int = 3) -> str:
 @tool(description="Encode/decode base64")
 async def base64_encode(text: str, decode: bool = False) -> str:
     import base64
+
     try:
         if decode:
             return base64.b64decode(text.encode()).decode("utf-8")
@@ -270,11 +381,11 @@ async def json_get(json_string: str, key_path: str) -> str:
         return f"JSON parse error: {e!s}"
 
 
-@tool(description="Edit a file by replacing old_string with new_string. Shows unified diff preview before applying. Use longer unique context for accuracy.")
+@tool(
+    description="Edit a file by replacing old_string with new_string. Shows unified diff preview before applying. Use longer unique context for accuracy."
+)
 async def edit_file(path: str, old_string: str, new_string: str) -> str:
-    """Edit a file by replacing exact text with preview and validation.
-
-    """
+    """Edit a file by replacing exact text with preview and validation."""
     try:
         from app.core.file_patch import FilePatchService, get_current_agent_mode
         from app.core.security_sandbox import security_sandbox
@@ -313,6 +424,7 @@ async def file_diff(path: str, new_content: str) -> str:
     """Show unified diff for a file."""
     try:
         import difflib
+
         with open(path, encoding="utf-8") as f:
             old = f.read().splitlines()
         new = new_content.splitlines()
@@ -338,6 +450,7 @@ async def file_exists(path: str) -> str:
     """Check file/directory existence."""
     try:
         import os
+
         if os.path.exists(path):
             kind = "dir" if os.path.isdir(path) else "file"
             return f"Exists: {path} ({kind})"
@@ -351,6 +464,7 @@ async def file_info(path: str) -> str:
     """Get file metadata."""
     try:
         import os
+
         stat = os.stat(path)
         return (
             f"Path: {path}\n"
@@ -362,7 +476,7 @@ async def file_info(path: str) -> str:
         return f"Error getting file info: {e!s}"
 
 
-def _get_group_engine():
+def _get_group_engine() -> GroupCollaborationEngine:
     from app.core.group_collaboration import get_group_collaboration_engine
 
     return get_group_collaboration_engine()
@@ -374,8 +488,11 @@ def _get_group_engine():
         "type": "object",
         "properties": {
             "task_id": {"type": "string", "description": "The task ID to hand off"},
-            "target_agent_id": {"type": "string", "description": "The agent ID to hand the task to"},
-            "reason": {"type": "string", "description": "Reason for the handoff"}
+            "target_agent_id": {
+                "type": "string",
+                "description": "The agent ID to hand the task to",
+            },
+            "reason": {"type": "string", "description": "Reason for the handoff"},
         },
         "required": ["task_id", "target_agent_id"],
     },
@@ -416,7 +533,10 @@ async def run_group_tasks(group_id: str) -> str:
         "type": "object",
         "properties": {
             "file_path": {"type": "string", "description": "Path to the file to patch"},
-            "patch": {"type": "string", "description": "Unified diff patch content (e.g., @@ -1,4 +1,4 @@)"},
+            "patch": {
+                "type": "string",
+                "description": "Unified diff patch content (e.g., @@ -1,4 +1,4 @@)",
+            },
         },
         "required": ["file_path", "patch"],
     },
@@ -466,8 +586,16 @@ async def apply_patch(file_path: str, patch: str) -> str:
         "type": "object",
         "properties": {
             "command": {"type": "string", "description": "Shell command to execute"},
-            "timeout": {"type": "integer", "description": "Timeout in seconds (default: 120)", "default": 120},
-            "workdir": {"type": "string", "description": "Working directory (optional)", "default": ""},
+            "timeout": {
+                "type": "integer",
+                "description": "Timeout in seconds (default: 120)",
+                "default": 120,
+            },
+            "workdir": {
+                "type": "string",
+                "description": "Working directory (optional)",
+                "default": "",
+            },
         },
         "required": ["command"],
     },
@@ -476,10 +604,49 @@ async def stream_command(command: str, timeout: int = 120, workdir: str = "") ->
     """Execute a shell command with streaming output."""
     try:
         from app.core.di import resolve as di_resolve
-        sandbox = di_resolve("SandboxExecutor")
-        return await sandbox.execute(command)
+
+        sandbox: Any = di_resolve("SandboxExecutor")
+        return cast("str", await sandbox.execute(command))
     except Exception as e:
         return f"Error executing command: {e!s}"
+
+
+# Dangerous shell patterns rejected before container_exec hands a command to
+# `docker exec ... sh -c`; follows the SandboxConfig.blocked_patterns style in
+# app/core/sandbox.py while staying import-free to avoid DI side effects.
+_CONTAINER_EXEC_BLOCKED_PATTERNS: frozenset[str] = frozenset(
+    (
+        r";",  # semicolon command chaining
+        r"`",  # backtick command substitution
+        r"\$\(",  # $() command substitution
+        r"&&",  # logical AND chaining
+        r"\|\|",  # logical OR chaining
+        r"\|\s*(ba|z|da|k)?sh\b",  # piping into a shell
+        r"\brm\s+(-\w+\s+)*-\w*[rR]\w*",  # recursive rm (rm -rf and friends)
+        r"sudo\s+",  # privilege escalation
+        r"chmod\s+777",  # world-writable permissions
+        r"chown\s+root",  # ownership change to root
+        r"curl\s+.*\|\s*sh",  # remote script execution
+        r"wget\s+.*\|\s*sh",  # remote script execution
+        r"dd\s+if=",  # raw disk writes
+        r"mkfs\.",  # filesystem creation
+        r"fdisk",  # disk partitioning
+        r":\(\)\{.*\|.*\};",  # fork bomb
+        r">\s*/dev/sd",  # raw device overwrite
+        r"shutdown",  # power control
+        r"reboot",  # power control
+        r"init\s+[06]",  # runlevel switch
+        r"kill\s+-9\s+1",  # killing init
+    )
+)
+
+
+def _container_command_blocked(command: str) -> str:
+    """Return the first dangerous pattern matched by the command, or "" if safe."""
+    for pattern in _CONTAINER_EXEC_BLOCKED_PATTERNS:
+        if re.search(pattern, command, re.IGNORECASE):
+            return pattern
+    return ""
 
 
 @tool(
@@ -489,7 +656,11 @@ async def stream_command(command: str, timeout: int = 120, workdir: str = "") ->
         "properties": {
             "container": {"type": "string", "description": "Container name or ID"},
             "command": {"type": "string", "description": "Command to execute inside the container"},
-            "workdir": {"type": "string", "description": "Working directory inside container (optional)", "default": ""},
+            "workdir": {
+                "type": "string",
+                "description": "Working directory inside container (optional)",
+                "default": "",
+            },
         },
         "required": ["container", "command"],
     },
@@ -498,6 +669,10 @@ async def container_exec(container: str, command: str, workdir: str = "") -> str
     """Execute a command inside a Docker container."""
     try:
         import subprocess
+
+        blocked_pattern = _container_command_blocked(command)
+        if blocked_pattern:
+            return f"Command rejected: dangerous pattern detected ({blocked_pattern})"
 
         full_cmd = ["docker", "exec"]
         if workdir:
@@ -520,153 +695,26 @@ async def container_exec(container: str, command: str, workdir: str = "") -> str
 
 
 @tool(
-    description="Auto-decompose a complex task into sub-tasks using LLM and create them in the group task queue.",
-    parameters={
-        "type": "object",
-        "properties": {
-            "group_id": {"type": "string", "description": "Group ID to create tasks in"},
-            "objective": {"type": "string", "description": "The complex objective to decompose"},
-            "max_steps": {"type": "integer", "description": "Maximum number of sub-tasks (default: 5)", "default": 5},
-        },
-        "required": ["group_id", "objective"],
-    },
-)
-async def auto_decompose_task(group_id: str, objective: str, max_steps: int = 5) -> str:
-    """Decompose a complex task into sub-tasks and create them in the DAG."""
-    try:
-        model_registry = di_resolve("ModelRegistry")
-        import json
-
-        from app.storage import async_session
-        from app.storage.models_groups import AgentGroup, AgentGroupMember, AgentGroupTask
-
-        async with async_session() as db:
-            group = (
-                await db.execute(
-                    select(AgentGroup).where(AgentGroup.id == group_id)
-                )
-            ).scalar_one_or_none()
-            if not group:
-                return f"Error: Group {group_id} not found"
-
-            members = (
-                await db.execute(
-                    select(AgentGroupMember).where(AgentGroupMember.group_id == group_id)
-                )
-            ).scalars().all()
-
-        if not members:
-            return f"Error: Group {group_id} has no members"
-
-        # Use LLM to decompose the task
-        model_registry = di_resolve("ModelRegistry")
-        provider = "openai"
-        model_id = "gpt-4o"
-        decomposition_prompt = f"""Decompose this objective into {max_steps} atomic, verifiable sub-tasks.
-
-Objective: {objective}
-
-Available agents: {', '.join(m.agent_id or m.id for m in members)}
-
-Output JSON format:
-{{
-  "tasks": [
-    {{
-      "name": "Task name",
-      "description": "Detailed description",
-      "depends_on": ["task_id_1", "task_id_2"],
-      "assignee": "agent_id or null",
-      "estimate": "S/M/L"
-    }}
-  ]
-}}
-
-Rules:
-- Tasks must form a DAG (no circular dependencies)
-- Each task independently verifiable
-- Maximum {max_steps} tasks
-- Use depends_on: [] for tasks with no dependencies
-- Return ONLY valid JSON, no markdown code blocks"""
-
-        try:
-            from app.core.agent_engine import AgentEngine
-            engine = AgentEngine(model_registry, __import__("app.tools", fromlist=["ToolRegistry"]).ToolRegistry())
-            session = engine.create_session(
-                agent_id="decomposer",
-                user_id="default-user",
-                provider=provider,
-                model_id=model_id,
-                api_key="",
-                base_url=None,
-                system_prompt="You are a task decomposition expert. Output only valid JSON.",
-            )
-            result = await engine.run_agent(session, decomposition_prompt)
-            response_text = result.get("output", "")
-        except Exception as e:
-            return f"LLM decomposition failed: {e!s}"
-
-        # Parse JSON from response
-        json_str = response_text
-        if "```json" in response_text:
-            json_str = response_text.split("```json")[1].split("```")[0]
-        elif "```" in response_text:
-            json_str = response_text.split("```")[1].split("```")[0]
-
-        plan = json.loads(json_str)
-        tasks_data = plan.get("tasks", [])
-
-        # Create tasks in database
-        created_tasks: dict[str, str] = {}  # name -> task_id
-        async with async_session() as db:
-            for task_data in tasks_data:
-                task_name = task_data.get("name", f"Task {len(created_tasks) + 1}")
-                task_desc = task_data.get("description", task_name)
-                assignee = task_data.get("assignee")
-                depends_on_names = task_data.get("depends_on", [])
-
-                member = next((m for m in members if m.agent_id == assignee), None)
-                if not member:
-                    member = next((m for m in members if m.role in ("worker", "participant")), members[0] if members else None)
-
-                task = AgentGroupTask(
-                    group_id=group_id,
-                    description=task_desc,
-                    worker_id=member.id if member else None,
-                    reviewer_ids=[],
-                    dependencies=[created_tasks[n] for n in depends_on_names if n in created_tasks],
-                    max_rounds=3,
-                )
-                db.add(task)
-                await db.flush()
-                created_tasks[task_name] = task.id
-
-            await db.commit()
-
-        return f"Decomposed into {len(created_tasks)} tasks:\n" + "\n".join(f"- {k}: {v}" for k, v in created_tasks.items())
-    except json.JSONDecodeError as e:
-        return f"Failed to parse decomposition plan: {e!s}\nRaw response: {response_text}"
-    except Exception as e:
-        return f"Auto-decomposition failed: {e!s}"
-
-
-@tool(
     description="Analyze an error message and return structured error analysis. "
     "Use when you need to understand what went wrong with a tool execution.",
     parameters={
         "type": "object",
         "properties": {
             "error_message": {"type": "string", "description": "The raw error message to analyze"},
-            "context": {"type": "string", "description": "Optional context JSON (e.g., tool name, arguments)", "default": "{}"},
+            "context": {
+                "type": "string",
+                "description": "Optional context JSON (e.g., tool name, arguments)",
+                "default": "{}",
+            },
         },
         "required": ["error_message"],
     },
 )
 async def analyze_error(error_message: str, context: str = "{}") -> str:
-    """Analyze an error message and return structured error analysis.
-
-    """
+    """Analyze an error message and return structured error analysis."""
     try:
         from app.core.error_analyzer import ErrorAnalyzer
+
         ctx = json.loads(context) if context else {}
         analyzer = ErrorAnalyzer()
         analysis = analyzer.analyze(error_message, context=ctx)
@@ -700,10 +748,16 @@ async def analyze_error(error_message: str, context: str = "{}") -> str:
             "damping": {"type": "number", "description": "Damping coefficient (oscillator)"},
             "drive_amplitude": {"type": "number", "description": "Drive amplitude (oscillator)"},
             "drive_frequency": {"type": "number", "description": "Drive frequency (oscillator)"},
-            "duration": {"type": "number", "description": "Simulated duration (oscillator/logistic)"},
+            "duration": {
+                "type": "number",
+                "description": "Simulated duration (oscillator/logistic)",
+            },
             "growth_rate": {"type": "number", "description": "Growth rate (logistic)"},
             "carrying_capacity": {"type": "number", "description": "Carrying capacity (logistic)"},
-            "initial_population": {"type": "number", "description": "Initial population (logistic)"},
+            "initial_population": {
+                "type": "number",
+                "description": "Initial population (logistic)",
+            },
         },
         "required": ["model"],
     },
@@ -713,61 +767,3 @@ async def simulate_experiment(model: str, **params: Any) -> str:
     from app.simulation.experiments import run_experiment
 
     return run_experiment(model, **params)
-
-
-@tool(
-    description="Suggest a fix for an error given an analysis and optional file content. "
-    "Use after analyze_error to get a fix strategy.",
-    parameters={
-        "type": "object",
-        "properties": {
-            "error_analysis": {"type": "string", "description": "JSON output from analyze_error"},
-            "file_content": {"type": "string", "description": "Current content of the relevant file (optional)", "default": ""},
-        },
-        "required": ["error_analysis"],
-    },
-)
-async def suggest_fix(error_analysis: str, file_content: str = "") -> str:
-    """Suggest a fix for an error given an analysis and optional file content.
-
-    """
-    try:
-        from app.core.debug_loop import DebugLoop
-        from app.core.error_analyzer import ErrorAnalysis
-
-        analysis_dict = json.loads(error_analysis)
-        error_type = analysis_dict.get("error_type", "unknown")
-        message = analysis_dict.get("message", "")
-        file_path = analysis_dict.get("file_path")
-        line_number = analysis_dict.get("line_number")
-
-        analysis = ErrorAnalysis(
-            error_type=error_type,
-            message=message,
-            file_path=file_path,
-            line_number=line_number,
-            cause=analysis_dict.get("cause"),
-            raw_error=analysis_dict.get("raw_error", message),
-            context=analysis_dict.get("context", {}),
-            confidence=analysis_dict.get("confidence", 0.5),
-        )
-
-        loop = DebugLoop()
-        strategy = await loop._generate_fix_strategy(
-            analysis=analysis,
-            tool_name=analysis_dict.get("tool_name", ""),
-            arguments=analysis_dict.get("arguments", {}),
-            learned_fix=None,
-        )
-
-        result = {
-            "approach": strategy.approach,
-            "description": strategy.description,
-            "confidence": strategy.confidence,
-            "patch_content": strategy.patch_content,
-            "new_arguments": strategy.new_arguments,
-            "new_tool": strategy.new_tool,
-        }
-        return json.dumps(result, ensure_ascii=False, indent=2)
-    except Exception as e:
-        return f"Error suggesting fix: {e!s}"

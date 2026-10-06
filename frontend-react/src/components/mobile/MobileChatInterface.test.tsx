@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import i18n from '../../i18n';
 import { MobileChatInterface } from './MobileChatInterface';
 
 const SAFARI_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
@@ -13,6 +14,10 @@ function setMetrics(element: HTMLElement, { scrollHeight, clientHeight }: { scro
   Object.defineProperty(element, 'scrollHeight', { value: scrollHeight, configurable: true });
   Object.defineProperty(element, 'clientHeight', { value: clientHeight, configurable: true });
 }
+
+beforeAll(async () => {
+  await i18n.changeLanguage('zh-CN');
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -43,6 +48,14 @@ describe('MobileChatInterface', () => {
     // the composer must not stack a second bottom inset on top of it.
     expect(form.style.paddingBottom).toBe('12px');
     expect(form.getAttribute('style')).not.toContain('safe-area-inset-bottom');
+  });
+
+  it('frosts the composer with a backdrop blur and a translucent surface', () => {
+    render(<MobileChatInterface messages={[]} onSend={vi.fn()} />);
+    const form = screen.getByRole('textbox').closest('form') as HTMLElement;
+    expect(form.style.backdropFilter).toContain('blur');
+    expect(form.style.backgroundColor).toContain('color-mix');
+    expect(form.style.backgroundColor).toContain('var(--color-glass-bg)');
   });
 
   it('holds the composer at the minimum touch height when the draft is empty', () => {
@@ -119,9 +132,52 @@ describe('MobileChatInterface', () => {
   it('retains tool and reasoning data and disables refresh during streaming', () => {
     render(<MobileChatInterface messages={[{ id: '1', role: 'assistant', content: '结果', reasoning: '分析', toolCalls: [{ id: 't1', name: 'read_file', arguments: { path: 'test.ts' }, status: 'error', error: '读取失败' }] }]} onSend={vi.fn()} onRefresh={vi.fn()} isLoading />);
     expect(screen.getByText('分析')).toBeInTheDocument();
-    expect(screen.getByText('read_file · 失败')).toBeInTheDocument();
+    expect(screen.getByText('read_file')).toBeInTheDocument();
+    expect(screen.getByText('失败')).toBeInTheDocument();
     expect(screen.getByText('读取失败')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '刷新消息' })).toBeDisabled();
+  });
+
+  it('renders tool calls as cards with a running pulse and a success state', () => {
+    render(<MobileChatInterface messages={[{ id: '1', role: 'assistant', content: '结果', toolCalls: [
+      { id: 't1', name: 'read_file', arguments: { path: 'test.ts' }, status: 'running' },
+      { id: 't2', name: 'list_dir', arguments: {}, status: 'success', result: 'ok' },
+    ] }]} onSend={vi.fn()} />);
+    const running = screen.getByText('read_file').closest('[data-tool-call]') as HTMLElement;
+    expect(running.dataset.toolStatus).toBe('running');
+    const done = screen.getByText('list_dir').closest('[data-tool-call]') as HTMLElement;
+    expect(done.dataset.toolStatus).toBe('success');
+    // Payloads stay collapsed until the reader expands the card.
+    expect(screen.queryByText('test.ts')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /read_file/ }));
+    expect(screen.getByText(/"path": "test\.ts"/)).toBeInTheDocument();
+  });
+
+  it('collapses the thinking panel and expands it with an animated chevron', () => {
+    render(<MobileChatInterface messages={[{ id: '1', role: 'assistant', content: '结果', reasoning: '分析' }]} onSend={vi.fn()} />);
+    const panel = screen.getByRole('button', { name: /思考过程/ });
+    expect(panel).toHaveAttribute('aria-expanded', 'false');
+    const body = screen.getByText('分析').parentElement!.parentElement!.parentElement!;
+    expect(body.style.gridTemplateRows).toBe('0fr');
+    fireEvent.click(panel);
+    expect(panel).toHaveAttribute('aria-expanded', 'true');
+    expect(body.style.gridTemplateRows).toBe('1fr');
+  });
+
+  it('renders markdown in assistant bubbles and plain text for the user', () => {
+    render(<MobileChatInterface
+      messages={[
+        { id: '1', role: 'user', content: '**bold** 输入' },
+        { id: '2', role: 'assistant', content: '# 标题\n\n正文' },
+      ]}
+      onSend={vi.fn()}
+    />);
+    const userBubble = screen.getByText('**bold** 输入');
+    expect(userBubble.tagName).toBe('DIV');
+    // The assistant turn goes through the markdown pipeline: the heading text
+    // becomes a real heading, and the TOC kicks in at three headings only.
+    expect(screen.getByRole('heading', { name: '标题' })).toBeInTheDocument();
+    expect(screen.getByText('正文').closest('article')).toHaveAttribute('data-role', 'assistant');
   });
 
   it('announces streaming without repeating the page title', () => {

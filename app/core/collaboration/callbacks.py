@@ -34,10 +34,13 @@ async def invoke_step_callback(task: Any, role: str, agent_id: str, output: str)
         result = fn(task_id=task.id, role=role, agent_id=agent_id, output=output)
         if asyncio.iscoroutine(result):
             await result
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "step_callback",
-            "data": {"callback": task.step_callback, "role": role, "agent_id": agent_id},
-        })
+        await group_ws_hub.broadcast(
+            task.group_id,
+            {
+                "type": "step_callback",
+                "data": {"callback": task.step_callback, "role": role, "agent_id": agent_id},
+            },
+        )
     except Exception as e:
         logger.error("step_callback_failed", task_id=task.id, error=str(e))
 
@@ -59,10 +62,13 @@ async def invoke_task_callback(task: Any, final_output: str) -> None:
         result = fn(task_id=task.id, final_output=final_output)
         if asyncio.iscoroutine(result):
             await result
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "task_callback",
-            "data": {"callback": task.task_callback, "task_id": task.id},
-        })
+        await group_ws_hub.broadcast(
+            task.group_id,
+            {
+                "type": "task_callback",
+                "data": {"callback": task.task_callback, "task_id": task.id},
+            },
+        )
     except Exception as e:
         logger.error("task_callback_failed", task_id=task.id, error=str(e))
 
@@ -86,12 +92,19 @@ async def wait_for_human_review(task: Any, output: str) -> bool:
             t.status = "awaiting_human_review"
             await db.commit()
 
-    await group_ws_hub.broadcast(task.group_id, {
-        "type": "human_review_needed",
-        "data": {"task_id": task.id, "output": output},
-    })
+    await group_ws_hub.broadcast(
+        task.group_id,
+        {
+            "type": "human_review_needed",
+            "data": {"task_id": task.id, "output": output},
+        },
+    )
 
-    max_wait = task.human_review_timeout if hasattr(task, "human_review_timeout") and task.human_review_timeout else 3600
+    max_wait = (
+        task.human_review_timeout
+        if hasattr(task, "human_review_timeout") and task.human_review_timeout
+        else 3600
+    )
     waited = 0
     while waited < max_wait:
         await asyncio.sleep(5)

@@ -7,7 +7,7 @@ All endpoints require authentication.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -16,6 +16,9 @@ from app.core.observability.alignment import GoalTracker
 from app.core.observability.audit import AuditChain
 from app.core.observability.emergency_stop import EmergencyStopManager
 from app.core.observability.trace import TraceCollector
+
+if TYPE_CHECKING:
+    from app.core.observability.audit_store import DurableAuditStore
 
 router = APIRouter(prefix="/api/v1/observability", tags=["observability"])
 
@@ -92,6 +95,40 @@ async def get_trace(
 
 
 # --- Audit Endpoints ---
+
+
+def _durable_audit() -> DurableAuditStore:
+    from app.core.observability.audit_store import audit_log
+
+    return audit_log
+
+
+@router.get("/audit-log")
+async def list_durable_audit_entries(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    action: str | None = None,
+    severity: str | None = None,
+    session_id: str | None = None,
+    user_id: str | None = None,
+) -> dict[str, Any]:
+    """List persisted operation audit events (login, permission, file, agent)."""
+    store = _durable_audit()
+    entries = await store.list_events(
+        user_id=user_id,
+        session_id=session_id,
+        action=action,
+        severity=severity,
+        limit=limit,
+        offset=offset,
+    )
+    total = await store.count_events(
+        user_id=user_id,
+        session_id=session_id,
+        action=action,
+        severity=severity,
+    )
+    return {"entries": entries, "total": total, "limit": limit, "offset": offset}
 
 
 @router.get("/audit")

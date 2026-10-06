@@ -23,7 +23,7 @@ from app.core.security_sandbox import SandboxConfig, SecuritySandbox
 
 
 class _StubRegistry:
-    def get_tool(self, name):  # noqa: D102
+    def get_tool(self, name):
         return None
 
 
@@ -35,11 +35,22 @@ def _validator(registry=None, sandbox=None, capabilities=None):
     )
 
 
-@pytest.mark.parametrize("tool", [
-    "write_file", "edit_file", "append_file", "apply_patch",
-    "run_command", "shell", "execute_command", "bash", "stream_command",
-    "container_exec", "docker",
-])
+@pytest.mark.parametrize(
+    "tool",
+    [
+        "write_file",
+        "edit_file",
+        "append_file",
+        "apply_patch",
+        "run_command",
+        "shell",
+        "execute_command",
+        "bash",
+        "stream_command",
+        "container_exec",
+        "docker",
+    ],
+)
 def test_high_risk_tools_denied_by_default(tool):
     ok, reason = _validator()(tool, {})
     assert ok is False
@@ -114,7 +125,7 @@ def test_shell_command_still_hits_sandbox_hazard_policy():
     with tempfile.TemporaryDirectory() as workdir:
         sandbox = SecuritySandbox(SandboxConfig(workdir=workdir))
         validator = _validator(sandbox=sandbox, capabilities=["run_command"])
-        ok, reason = validator("run_command", {"command": "rm -rf /"})
+        ok, _reason = validator("run_command", {"command": "rm -rf /"})
         assert ok is False
 
 

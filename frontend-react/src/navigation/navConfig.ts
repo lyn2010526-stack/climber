@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   MessageSquare, Bot, Network, Cpu, BarChart3,
   Factory, Brain, GitBranch, Stethoscope, Settings, Workflow, Terminal, Key, Activity, FlaskConical, DollarSign,
-  Puzzle, Package, Clock, Users, History, Bell, ShieldCheck,
+  Puzzle, Package, Clock, Users, History, Bell, ShieldCheck, ScrollText, FileText, Plug, Lock,
 } from 'lucide-react';
 
 export type NavGroup = 'main' | 'manage' | 'config';
@@ -17,7 +17,8 @@ export type Page =
   | 'dashboard' | 'chat' | 'agents' | 'workflows' | 'crews' | 'apikeys' | 'authapikeys'
   | 'skills' | 'notifications' | 'doctor' | 'mcp' | 'stats' | 'factory' | 'plugins'
   | 'scheduler' | 'cluster' | 'traces' | 'eval' | 'cost' | 'plugin-manage' | 'settings'
-  | 'tasks' | 'task-history' | 'reasoning' | 'reasoning-history' | 'terminal';
+  | 'tasks' | 'task-history' | 'reasoning' | 'reasoning-history' | 'terminal' | 'audit' | 'prompt-templates' | 'documents'
+  | 'integrations' | 'security';
 
 export interface NavItem {
   id: Page;
@@ -47,12 +48,17 @@ export const ALL_NAV_ITEMS_BASE: NavItem[] = [
   { id: 'mcp', icon: Terminal, labelKey: 'navigation.mcp', group: 'manage', keywords: 'mcp protocol tool' },
   { id: 'plugins', icon: Puzzle, labelKey: 'navigation.plugins', group: 'manage', keywords: 'plugin marketplace 插件 市场' },
   { id: 'plugin-manage', icon: Package, labelKey: 'navigation.plugin_management', group: 'manage', keywords: 'plugin manage installed 插件 管理' },
+  { id: 'prompt-templates', icon: FileText, labelKey: 'navigation.prompt_templates', group: 'manage', keywords: 'prompt template 提示词 模板' },
+  { id: 'documents', icon: FileText, labelKey: 'navigation.documents', group: 'manage', keywords: 'document knowledge rag 文档 检索' },
   { id: 'notifications', icon: Bell, labelKey: 'navigation.notifications', group: 'config', keywords: 'notification alert 通知' },
   { id: 'doctor', icon: Stethoscope, labelKey: 'navigation.monitoring', group: 'config', keywords: 'health debug 诊断 系统' },
   { id: 'apikeys', icon: Key, labelKey: 'navigation.api_keys', group: 'config', keywords: 'api key secret 密钥' },
   { id: 'authapikeys', icon: ShieldCheck, labelKey: 'apiKeys.authApiKeys.create_new', group: 'config', keywords: 'auth access token API 访问密钥 授权' },
   { id: 'stats', icon: BarChart3, labelKey: 'navigation.analytics', group: 'config', keywords: 'stats analytics chart 统计 数据' },
   { id: 'traces', icon: GitBranch, labelKey: 'navigation.traces', group: 'config', keywords: 'trace debug 追踪 链路' },
+  { id: 'audit', icon: ScrollText, labelKey: 'navigation.audit', group: 'config', keywords: 'audit log observability 审计 日志' },
+  { id: 'integrations', icon: Plug, labelKey: 'navigation.integrations', group: 'config', keywords: 'integration qqbot langgraph mem0 agent 集成' },
+  { id: 'security', icon: Lock, labelKey: 'navigation.security', group: 'config', keywords: 'security policy quota allowlist 安全 策略 配额 白名单' },
   { id: 'eval', icon: FlaskConical, labelKey: 'navigation.eval', group: 'config', keywords: 'eval benchmark 评估 效果' },
   { id: 'cost', icon: DollarSign, labelKey: 'navigation.costs', group: 'config', keywords: 'cost billing token 成本' },
   { id: 'settings', icon: Settings, labelKey: 'navigation.settings', group: 'config', keywords: 'settings config preference 设置' },
@@ -68,5 +74,5 @@ export const NAV_ITEM_IDS = new Set(ALL_NAV_ITEMS_BASE.map(item => item.id));
 // editors, traces, terminals and settings remain desktop-first and fall back
 // to the mobile chat entry instead of rendering an unusable desktop surface.
 export const MOBILE_ADAPTED_PAGE_IDS: ReadonlySet<Page> = new Set<Page>([
-  'dashboard', 'chat', 'factory', 'tasks', 'agents', 'cluster', 'crews', 'apikeys', 'authapikeys', 'settings',
+  'dashboard', 'chat', 'factory', 'tasks', 'agents', 'cluster', 'apikeys', 'authapikeys', 'settings',
 ]);

@@ -2,10 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useWorkspaceStore, type Message, type Session } from '../../../store/workspace';
 import { ControlBar } from '../ControlBar';
-
-vi.mock('../../../i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key }),
-}));
+import i18n from '../../../i18n/config';
 
 const message = (id: string): Message => ({ id, type: 'user', content: id, timestamp: 1 });
 
@@ -27,9 +24,11 @@ const restorableSnapshot = {
   id: 'snap-1', sessionId: 's1', timestamp: 1, label: 'Snapshot 1', messages: [message('m1')],
 };
 
-const rollbackButton = () => screen.queryByRole('button', { name: /恢复到/ });
+const rollbackButton = () => screen.queryByRole('button', { name: new RegExp(i18n.t('anchored.controlbar.restore_snapshot').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) });
+const restoreNamed = (name: string) => i18n.t('anchored.controlbar.restore_named', { name });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('zh-CN');
   useWorkspaceStore.setState({
     sessions: [],
     sessionsLoaded: false,
@@ -53,13 +52,13 @@ describe('ControlBar snapshot rollback', () => {
     useWorkspaceStore.setState({ sessions: [makeSession()], activeSessionId: 's1' });
     render(<ControlBar />);
     // A session with no snapshot has nothing to go back to.
-    expect(screen.queryAllByRole('button', { name: /恢复到/ })).toHaveLength(0);
+    expect(screen.queryAllByRole('button', { name: /还原视图/ })).toHaveLength(0);
 
     // A marker without a transcript is not offered as a control that would fail.
     useWorkspaceStore.setState({
       snapshots: [{ id: 'snap-0', sessionId: 's1', timestamp: 1, label: 'Snapshot 1' }],
     });
-    expect(screen.queryAllByRole('button', { name: /恢复到/ })).toHaveLength(0);
+    expect(screen.queryAllByRole('button', { name: /还原视图/ })).toHaveLength(0);
   });
 
   it('rolls a session back to the newest restorable snapshot of that session', async () => {
@@ -75,7 +74,7 @@ describe('ControlBar snapshot rollback', () => {
     render(<ControlBar />);
 
     // The newest complete snapshot of THIS session is the target.
-    fireEvent.click(screen.getByRole('button', { name: '恢复到 Snapshot 2' }));
+    fireEvent.click(screen.getByRole('button', { name: restoreNamed('Snapshot 2') }));
     await waitFor(() => {
       expect(useWorkspaceStore.getState().sessions[0]!.messages.map(entry => entry.id))
         .toEqual(['m1', 'm2', 'm3']);
@@ -85,13 +84,13 @@ describe('ControlBar snapshot rollback', () => {
   it('captures the transcript with the snapshot it records', () => {
     useWorkspaceStore.setState({ sessions: [makeSession()], activeSessionId: 's1' });
     render(<ControlBar />);
-    fireEvent.click(screen.getByRole('button', { name: '保存快照' }));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('anchored.controlbar.save_snapshot') }));
     expect(useWorkspaceStore.getState().snapshots[0]).toMatchObject({
       sessionId: 's1',
       messages: [{ id: 'm1' }, { id: 'm2' }],
     });
     // The snapshot it just wrote is immediately a rollback target.
-    expect(screen.getByRole('button', { name: '恢复到 Snapshot 1' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: restoreNamed('Snapshot 1') })).toBeEnabled();
   });
 
   it('serialises rollback attempts and reports the outcome in place', async () => {
@@ -101,7 +100,7 @@ describe('ControlBar snapshot rollback', () => {
       sessions: [makeSession()], activeSessionId: 's1', snapshots: [restorableSnapshot], restoreSnapshot,
     });
     render(<ControlBar />);
-    const trigger = screen.getByRole('button', { name: '恢复到 Snapshot 1' });
+    const trigger = screen.getByRole('button', { name: restoreNamed('Snapshot 1') });
 
     fireEvent.click(trigger);
     fireEvent.click(trigger);
@@ -109,7 +108,7 @@ describe('ControlBar snapshot rollback', () => {
     expect(restoreSnapshot).toHaveBeenCalledOnce();
     expect(trigger).toBeDisabled();
     expect(trigger).toHaveAttribute('aria-busy', 'true');
-    expect(screen.getByRole('status')).toHaveTextContent('回滚中');
+    expect(screen.getByRole('status')).toHaveTextContent(i18n.t('anchored.controlbar.rolling_back'));
     await act(async () => { restore(); });
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
@@ -122,10 +121,10 @@ describe('ControlBar snapshot rollback', () => {
       sessions: [makeSession()], activeSessionId: 's1', snapshots: [restorableSnapshot], restoreSnapshot,
     });
     render(<ControlBar />);
-    const trigger = screen.getByRole('button', { name: '恢复到 Snapshot 1' });
+    const trigger = screen.getByRole('button', { name: restoreNamed('Snapshot 1') });
 
     await act(async () => { fireEvent.click(trigger); });
-    expect(screen.getByRole('alert')).toHaveTextContent('回滚失败');
+    expect(screen.getByRole('alert')).toHaveTextContent(i18n.t('anchored.controlbar.rollback_failed', { message: '' }).replace('{{message}}', '').trim());
     expect(screen.getByRole('alert')).toHaveTextContent('Snapshot session no longer exists');
     expect(trigger).toBeEnabled();
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import smtplib
 from datetime import datetime
 from email.mime.text import MIMEText
@@ -41,7 +40,7 @@ class AlertConfig:
             self.cooldown_seconds = config.get("cooldown_seconds", 300)
 
     @classmethod
-    def load(cls) -> "AlertConfig":
+    def load(cls) -> AlertConfig:
         if ALERT_CONFIG_FILE.exists():
             try:
                 data = json.loads(ALERT_CONFIG_FILE.read_text())
@@ -113,12 +112,14 @@ class AlertSender:
         """Send Slack webhook alert."""
         color_map = {"error": "#ff0000", "warning": "#ffaa00", "info": "#00a0ff"}
         payload = {
-            "attachments": [{
-                "color": color_map.get(severity, "#ff0000"),
-                "title": title,
-                "text": message,
-                "ts": int(datetime.now().timestamp()),
-            }]
+            "attachments": [
+                {
+                    "color": color_map.get(severity, "#ff0000"),
+                    "title": title,
+                    "text": message,
+                    "ts": int(datetime.now().timestamp()),
+                }
+            ]
         }
         if metadata:
             fields = [{"title": k, "value": str(v), "short": True} for k, v in metadata.items()]

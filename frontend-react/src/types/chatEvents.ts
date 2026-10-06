@@ -54,15 +54,53 @@ export interface DonePayload {
   message_id?: string;
 }
 
+export type SessionInputKind = 'steering' | 'follow_up';
+export interface SessionInput {
+  id: string;
+  client_request_id: string;
+  kind: SessionInputKind;
+  message: string;
+  status: 'queued' | 'applied' | 'started' | 'completed' | 'blocked' | 'failed';
+  sequence: number;
+  error?: string | null;
+}
+
+export function parseSessionInput(value: unknown): SessionInput | null {
+  const item = asRecord(value);
+  if (typeof item.id !== 'string' || typeof item.client_request_id !== 'string' ||
+      (item.kind !== 'steering' && item.kind !== 'follow_up') || typeof item.message !== 'string' ||
+      !['queued', 'applied', 'started', 'completed', 'blocked', 'failed'].includes(String(item.status)) ||
+      typeof item.sequence !== 'number') return null;
+  return item as unknown as SessionInput;
+}
+
+export type RuntimeReport = Record<'completed' | 'executing' | 'queued' | 'risks', string[] | null>;
+
+export function parseRuntimeReport(value: unknown): RuntimeReport {
+  const payload = asRecord(value);
+  const read = (key: keyof RuntimeReport): string[] | null => {
+    const value = payload[key];
+    if (typeof value === 'string') return value ? [value] : [];
+    if (Array.isArray(value) && value.every(item => typeof item === 'string')) return value;
+    return null;
+  };
+  return { completed: read('completed'), executing: read('executing'), queued: read('queued'), risks: read('risks') };
+}
+
 export type ChatStreamEvent =
   | { type: 'text'; delta: string }
   | { type: 'thinking'; delta: string }
   | {
       type: 'tool_call';
-      toolCall: { id: string; name: string; arguments: Record<string, unknown> };
+      toolCall: { id: string; name: string; arguments: Record<string, unknown>; requiresApproval?: boolean; description?: string; severity?: 'low' | 'medium' | 'high' };
     }
   | { type: 'tool_result'; toolCallId: string; result: string; error: string }
-  | { type: 'done'; messageId?: string }
+  | { type: 'done'; messageId?: string; content?: string; status?: string }
+  | { type: 'turn_started'; inputId: string; message: string }
+  | { type: 'turn_done'; messageId?: string; inputId?: string; turnId?: string; status?: string }
+  | { type: 'runtime_report'; report: RuntimeReport }
+  | { type: 'loop_status'; outerRound: number; currentInput: string; completed: string[]; followupQueue: string[]; steeringQueue: string[]; noProgressCount: number }
+  | { type: 'input_status'; item: SessionInput }
   | { type: 'error'; message: string }
   | { type: 'unknown'; raw: RawSSEEvent };
 
@@ -90,6 +128,31 @@ export function normalizeChatEvent(raw: RawSSEEvent): ChatStreamEvent {
   const name = (typeof payload.type === 'string' && payload.type) || raw.event;
 
   switch (name) {
+    case 'turn_started':
+      return { type: 'turn_started', inputId: readString(payload, ['input_id']), message: readString(payload, ['message']) };
+    case 'turn_done':
+      return { type: 'turn_done', messageId: readString(payload, ['message_id']) || undefined,
+        ...(typeof payload.input_id === 'string' ? { inputId: payload.input_id } : {}),
+        ...(typeof payload.turn_id === 'string' ? { turnId: payload.turn_id } : {}),
+        ...(typeof payload.status === 'string' ? { status: payload.status } : {}),
+      };
+    case 'runtime_report':
+      return { type: 'runtime_report', report: parseRuntimeReport(payload) };
+    case 'loop_status': {
+      return {
+        type: 'loop_status',
+        outerRound: typeof payload.outer_round === 'number' ? payload.outer_round : 0,
+        currentInput: readString(payload, ['current_input']),
+        completed: Array.isArray(payload.completed) ? payload.completed.filter((x): x is string => typeof x === 'string') : [],
+        followupQueue: Array.isArray(payload.followup_queue) ? payload.followup_queue.filter((x): x is string => typeof x === 'string') : [],
+        steeringQueue: Array.isArray(payload.steering_queue) ? payload.steering_queue.filter((x): x is string => typeof x === 'string') : [],
+        noProgressCount: typeof payload.no_progress_count === 'number' ? payload.no_progress_count : 0,
+      };
+    }
+    case 'input_status': {
+      const item = parseSessionInput(payload.item);
+      return item ? { type: 'input_status', item } : { type: 'unknown', raw };
+    }
     case CHAT_EVENT.TEXT: {
       const delta = readString(payload, ['content', 'delta', 'text']);
       return { type: 'text', delta: typeof raw.data === 'string' ? raw.data : delta };
@@ -105,6 +168,11 @@ export function normalizeChatEvent(raw: RawSSEEvent): ChatStreamEvent {
           id: readString(payload, ['id', 'tool_call_id', 'toolCallId']) || '',
           name: readString(payload, ['name', 'tool_name']) || 'unknown',
           arguments: asRecord(payload.arguments ?? payload.args ?? payload.input),
+          ...(payload.requires_approval === true ? {
+            requiresApproval: true,
+            description: readString(payload, ['description', 'reason']),
+            severity: payload.severity === 'low' || payload.severity === 'high' ? payload.severity : 'medium' as const,
+          } : {}),
         },
       };
     }
@@ -118,7 +186,10 @@ export function normalizeChatEvent(raw: RawSSEEvent): ChatStreamEvent {
     }
     case CHAT_EVENT.DONE: {
       const messageId = readString(payload, ['message_id', 'messageId', 'id']);
-      return { type: 'done', messageId: messageId || undefined };
+      return { type: 'done', messageId: messageId || undefined,
+        ...(typeof payload.content === 'string' ? { content: payload.content } : {}),
+        ...(typeof payload.status === 'string' ? { status: payload.status } : {}),
+      };
     }
     case CHAT_EVENT.ERROR: {
       const message =

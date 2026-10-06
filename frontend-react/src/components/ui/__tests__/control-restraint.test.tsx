@@ -319,8 +319,13 @@ describe('icon scale', () => {
   });
 
   it('keeps every shared icon genuinely consumed and re-exports no lucide wildcard', () => {
+    const iconConsumers = [
+      uiSources,
+      readFileSync(resolve(process.cwd(), 'src/components/workspace/AnchoredLeftNav.tsx'), 'utf8'),
+      readFileSync(resolve(process.cwd(), 'src/components/privacy/LocalPinSettings.tsx'), 'utf8'),
+    ].join('\n');
     for (const name of Object.keys(icons)) {
-      expect(uiSources).toContain(`icons.${name}`);
+      expect(iconConsumers).toContain(`icons.${name}`);
     }
     const source = readFileSync(resolve(process.cwd(), 'src/lib/icons.ts'), 'utf8');
     // A wildcard re-export would defeat the semantic mapping entirely.

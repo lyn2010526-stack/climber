@@ -12,12 +12,12 @@ from __future__ import annotations
 import asyncio
 import inspect
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from enum import StrEnum
 from typing import Any
 
 import structlog
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.agent_engine import AgentEngine
 from app.models.registry import ModelRegistry
@@ -34,7 +34,16 @@ class FlowStatus(StrEnum):
 
 
 class FlowState(BaseModel):
-    """Type-safe state shared across flow methods."""
+    """Type-safe state shared across flow methods.
+
+    ``extra="allow"`` lets a Flow declare custom shared state keys; the
+    FlowExecutor injects arbitrary ``initial_state`` keys via ``setattr``
+    (R13-56), and flow methods commonly read non-schema attributes such as
+    ``state.input_value``.
+    """
+
+    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+
     flow_id: str = Field(default_factory=lambda: str(uuid.uuid4())[:8])
     results: dict[str, Any] = Field(default_factory=dict)
     errors: dict[str, str] = Field(default_factory=dict)
@@ -43,47 +52,52 @@ class FlowState(BaseModel):
 
 # ── Decorator markers ──
 
-def start() -> Callable:
+
+def start() -> Callable[..., Any]:
     """Mark a method as a flow entry point."""
-    def decorator(func: Callable) -> Callable:
+
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         func._flow_start = True  # type: ignore[attr-defined]
         return func
+
     return decorator
 
 
-def listen(*methods: str | Callable) -> Callable:
+def listen(*methods: str | Callable[..., Any]) -> Callable[..., Any]:
     """Mark a method to trigger when specified methods complete."""
     method_names = []
     for m in methods:
-        if callable(m) and hasattr(m, '__name__'):
+        if callable(m) and hasattr(m, "__name__"):
             method_names.append(m.__name__)
         elif isinstance(m, str):
             method_names.append(m)
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         func._flow_listens = method_names  # type: ignore[attr-defined]
         func._flow_trigger = "all"  # type: ignore[attr-defined]
         return func
+
     return decorator
 
 
-def listen_or(*methods: str | Callable) -> Callable:
+def listen_or(*methods: str | Callable[..., Any]) -> Callable[..., Any]:
     """Listen to multiple methods, fire when ANY completes."""
     method_names = []
     for m in methods:
-        if callable(m) and hasattr(m, '__name__'):
+        if callable(m) and hasattr(m, "__name__"):
             method_names.append(m.__name__)
         elif isinstance(m, str):
             method_names.append(m)
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         func._flow_listens = method_names  # type: ignore[attr-defined]
         func._flow_trigger = "any"  # type: ignore[attr-defined]
         return func
+
     return decorator
 
 
-def router(*methods: str | Callable) -> Callable:
+def router(*methods: str | Callable[..., Any]) -> Callable[..., Any]:
     """Mark a method as a conditional router.
 
     The decorated method must return a string label.
@@ -91,25 +105,28 @@ def router(*methods: str | Callable) -> Callable:
     """
     method_names = []
     for m in methods:
-        if callable(m) and hasattr(m, '__name__'):
+        if callable(m) and hasattr(m, "__name__"):
             method_names.append(m.__name__)
         elif isinstance(m, str):
             method_names.append(m)
 
-    def decorator(func: Callable) -> Callable:
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         func._flow_router_for = method_names  # type: ignore[attr-defined]
         func._flow_returns_routes = True  # type: ignore[attr-defined]
         return func
+
     return decorator
 
 
-def listen_route(router_method: Callable, route_label: str) -> Callable:
+def listen_route(router_method: Callable[..., Any], route_label: str) -> Callable[..., Any]:
     """Listen to a router method for a specific route label."""
-    def decorator(func: Callable) -> Callable:
+
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         func._flow_listens = [router_method.__name__]  # type: ignore[attr-defined]
         func._flow_route_label = route_label  # type: ignore[attr-defined]
         func._flow_trigger = "route"  # type: ignore[attr-defined]
         return func
+
     return decorator
 
 
@@ -146,7 +163,7 @@ class FlowExecutor:
         methods = self._discover_methods(flow_instance)
         completed: set[str] = set()
         failed: set[str] = set()
-        running_tasks: dict[str, asyncio.Task] = {}
+        running_tasks: dict[str, asyncio.Task[Any]] = {}
 
         # Start methods run first
         start_methods = methods.get("start", [])
@@ -175,7 +192,11 @@ class FlowExecutor:
                 del running_tasks[method_name]
 
                 try:
-                    result = task.completed_result() if hasattr(task, 'completed_result') else task.result()
+                    result = (
+                        task.completed_result()
+                        if hasattr(task, "completed_result")
+                        else task.result()
+                    )
                     if isinstance(task.result(), Exception):
                         raise task.result()
                     completed.add(method_name)
@@ -187,7 +208,11 @@ class FlowExecutor:
 
                 # Find triggered methods
                 triggered = self._find_triggered_methods(
-                    methods, completed, failed, state, running_tasks,
+                    methods,
+                    completed,
+                    failed,
+                    state,
+                    running_tasks,
                 )
                 for name, method in triggered:
                     if name not in running_tasks and name not in completed:
@@ -206,7 +231,7 @@ class FlowExecutor:
 
     async def _run_method(
         self,
-        method: Callable,
+        method: Callable[..., Any],
         state: FlowState,
         instance: Any,
     ) -> Any:
@@ -217,9 +242,9 @@ class FlowExecutor:
             return await result
         return result
 
-    def _discover_methods(self, instance: Any) -> dict[str, list[tuple[str, Callable]]]:
+    def _discover_methods(self, instance: Any) -> dict[str, list[tuple[Any, ...]]]:
         """Categorize methods by their flow role."""
-        methods: dict[str, list[tuple[str, Callable]]] = {
+        methods: dict[str, list[tuple[Any, ...]]] = {
             "start": [],
             "listen": [],
             "router": [],
@@ -233,11 +258,11 @@ class FlowExecutor:
             if not callable(attr):
                 continue
 
-            is_start = getattr(attr, '_flow_start', False)
-            listens = getattr(attr, '_flow_listens', None)
-            is_router = getattr(attr, '_flow_returns_routes', False)
-            route_label = getattr(attr, '_flow_route_label', None)
-            trigger = getattr(attr, '_flow_trigger', 'all')
+            is_start = getattr(attr, "_flow_start", False)
+            listens = getattr(attr, "_flow_listens", None)
+            is_router = getattr(attr, "_flow_returns_routes", False)
+            route_label = getattr(attr, "_flow_route_label", None)
+            trigger = getattr(attr, "_flow_trigger", "all")
 
             if is_start:
                 methods["start"].append((name, attr))
@@ -252,20 +277,20 @@ class FlowExecutor:
 
     def _find_triggered_methods(
         self,
-        methods: dict,
+        methods: dict[str, list[tuple[Any, ...]]],
         completed: set[str],
         failed: set[str],
         state: FlowState,
-        running: dict[str, asyncio.Task],
-    ) -> list[tuple[str, Callable]]:
+        running: dict[str, asyncio.Task[Any]],
+    ) -> list[tuple[str, Callable[..., Any]]]:
         """Find methods that should run now."""
-        triggered: list[tuple[str, Callable]] = []
+        triggered: list[tuple[str, Callable[..., Any]]] = []
 
         # Check router methods (listen to their deps like "all" trigger)
         for entry in methods.get("router", []):
             name, method = entry
-            listens = getattr(method, '_flow_router_for', [])
-            if name in completed or name in running:
+            listens = getattr(method, "_flow_router_for", [])
+            if name in completed or name in failed or name in running:
                 continue
             if all(m in completed for m in listens):
                 triggered.append((name, method))
@@ -273,8 +298,8 @@ class FlowExecutor:
         # Check listen methods
         for entry in methods.get("listen", []):
             name, method, trigger = entry
-            listens = getattr(method, '_flow_listens', [])
-            if name in completed or name in running:
+            listens = getattr(method, "_flow_listens", [])
+            if name in completed or name in failed or name in running:
                 continue
 
             if trigger == "any":
@@ -287,8 +312,8 @@ class FlowExecutor:
         # Check listen_route methods
         for entry in methods.get("listen_route", []):
             name, method, route_label = entry
-            listens = getattr(method, '_flow_listens', [])
-            if name in completed or name in running:
+            listens = getattr(method, "_flow_listens", [])
+            if name in completed or name in failed or name in running:
                 continue
 
             router_method_name = listens[0] if listens else None
@@ -349,7 +374,7 @@ class Flow:
     async def execute(
         self,
         params: dict[str, Any] | None = None,
-        on_progress=None,
+        on_progress: Callable[[int, int, str], Awaitable[None]] | None = None,
     ) -> dict[str, Any]:
         from app.workflow.engine import WorkflowEngine
 
@@ -370,7 +395,7 @@ class Flow:
         from app.core.di import resolve as di_resolve
 
         try:
-            agent_engine = di_resolve("AgentEngine")
+            agent_engine: AgentEngine = di_resolve("AgentEngine")
         except KeyError:
             from app.core.agent_engine import AgentEngine
 

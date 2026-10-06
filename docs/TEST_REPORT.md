@@ -105,7 +105,7 @@ npm test -- --run
 |------|------|------|
 | README.md | 项目说明 | 218 |
 | CONTRIBUTING.md | 贡献指南 | 37 |
-| SECURITY_AUDIT_REPORT.md | 安全审计报告 | 364 |
+| docs/archive/reports/SECURITY_AUDIT_REPORT.md | 安全审计报告 | 364 |
 | docs/ARCHITECTURE.md | 系统架构 | 414 |
 | docs/API.md | API 文档 | 981 |
 | docs/DEPLOYMENT.md | 部署指南 | 512 |

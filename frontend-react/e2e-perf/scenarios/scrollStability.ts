@@ -6,8 +6,8 @@
  * - A jump to the bottom lands exactly at the bottom, not near it.
  * - During a stream the view follows new output when the user is already at
  *   the bottom, and leaves the user's viewport alone when they scrolled away.
- *   The app gates this on an 80px threshold (`followOutput` in ChatInterface),
- *   so both halves are measured.
+ *   The app gates this on a 48px threshold (`AnchoredChatColumn` onScroll
+ *   handler), so both halves are measured.
  *
  * Why `scrollTop` and not distance-from-bottom is the stability signal: while a
  * stream appends content below the viewport, the distance from the bottom grows
@@ -81,6 +81,13 @@ export async function runScrollStabilityScenario(
   } = options;
 
   await page.setViewportSize(viewport);
+
+  // Pre-seed the AppLockGate skip marker: the first-run enrollment overlay
+  // (added 2026-10-05) covers the viewport and blocks the composer otherwise.
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem('climber.privacy.skipped', '1'); } catch { /* storage may be unavailable */ }
+  });
+
   server.state.messagesPayload = buildMessagesPayload(historySize, seed);
   server.state.messageCount = historySize;
   server.requestLog.length = 0;
@@ -156,8 +163,8 @@ export async function runScrollStabilityScenario(
     roundTripOffsetAfterReturn,
     followFrames: follow.frames,
     followMaxDistanceFromBottom: followDistances.length ? Math.max(...followDistances) : null,
-    // The app's own follow threshold is 80px.
-    followStayedAtBottom: followDistances.every((d) => d <= 80),
+    // The app's own follow threshold is 48px (AnchoredChatColumn onScroll).
+    followStayedAtBottom: followDistances.every((d) => d <= 48),
     followStreamCommits: follow.commits,
     holdFrames: hold.frames,
     holdMaxViewportShiftPx: Number(holdShift.toFixed(1)),
@@ -190,15 +197,13 @@ async function runStreamPhase(
   timeoutMs: number,
   position: 'bottom' | 'away',
 ): Promise<StreamPhaseResult> {
-  const composer = page.locator('form textarea').first();
+  // Anchored composer: standalone textarea + icon-only send button labelled
+  // by i18n `chat.send` ("Send"). The button is never disabled; an empty
+  // submit is a no-op inside the composer, so a click after fill is enough.
+  const composer = page.getByRole('textbox', { name: 'Ask Climber to do anything' });
   await composer.click();
   await composer.fill(`scroll stability probe ${position}`);
-  const sendButton = page.locator('form button[type="submit"]');
-  const deadline = Date.now() + 15_000;
-  while (await sendButton.isDisabled()) {
-    if (Date.now() > deadline) throw new Error('send button stayed disabled after typing');
-    await new Promise((r) => setTimeout(r, 50));
-  }
+  const sendButton = page.getByRole('button', { name: 'Send' });
 
   // Sampling is armed before the click so no frame of the stream is missed.
   const sampling = page.evaluate((parked) => new Promise<FrameSample[]>((done) => {
@@ -210,7 +215,7 @@ async function runStreamPhase(
     };
     if (parked === 'away') {
       const el = find();
-      // Park well above the bottom so the 80px follow threshold is disengaged.
+      // Park well above the bottom so the 48px follow threshold is disengaged.
       if (el) el.scrollTop = Math.max(0, el.scrollTop - 1200);
     }
     let settled = 0;
@@ -222,9 +227,12 @@ async function runStreamPhase(
         scrollTop: Math.round(node.scrollTop),
         scrollHeight: Math.round(node.scrollHeight),
       });
-      const cursorGone = document.querySelectorAll('[data-streaming-cursor]').length === 0;
-      const busy = document.querySelector('form')?.getAttribute('aria-busy') === 'true';
-      if (cursorGone && !busy) {
+      // Anchored flow: no [data-streaming-cursor] and no form[aria-busy] exist
+      // anymore. The stream is over once the assistant turn exists and its
+      // status dot stopped pulsing (active=false on the last ThinkingBubble).
+      const bubbleCount = document.querySelectorAll('[data-testid="anchored-thinking-bubble"]').length;
+      const pulsing = document.querySelectorAll('[data-testid="anchored-thinking-icon"].motion-safe\\:animate-pulse').length;
+      if (bubbleCount > 0 && pulsing === 0) {
         settled += 1;
         // A few extra frames so the post-stream layout is captured too.
         if (settled > 10) { done(frames); return; }

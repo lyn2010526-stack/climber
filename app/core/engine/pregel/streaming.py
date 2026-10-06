@@ -11,7 +11,7 @@ Provides real-time event streams for:
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -114,9 +114,9 @@ class StreamManager:
 
     async def stream_values(
         self,
-        initial_input: dict,
-        execute_func,
-    ) -> AsyncIterator[StreamEvent]:
+        initial_input: dict[str, Any],
+        execute_func: Callable[[dict[str, Any]], AsyncIterator[Any]],
+    ) -> None:
         """Stream full state values after each super-step.
 
         Args:
@@ -139,9 +139,11 @@ class StreamManager:
 
     async def stream_updates(
         self,
-        initial_input: dict,
-        execute_func,
-    ) -> AsyncIterator[StreamEvent]:
+        initial_input: dict[str, Any],
+        execute_func: Callable[
+            [dict[str, Any]], AsyncIterator[tuple[dict[str, Any], str | None, int]]
+        ],
+    ) -> None:
         """Stream incremental updates (delta) after each super-step.
 
         Args:
@@ -171,7 +173,7 @@ class StreamManager:
 
 
 async def stream_events(
-    execute_func,
+    execute_func: AsyncIterator[tuple[dict[str, Any], str | None, int]],
     mode: str = "values",
 ) -> AsyncIterator[StreamEvent]:
     """Convenience function to stream events from an async generator.

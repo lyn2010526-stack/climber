@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -64,7 +64,9 @@ async def list_models() -> list[dict[str, Any]]:
         key = f"{m['provider']}:{m['model_id']}"
         if key not in seen:
             seen.add(key)
-            models.append({"provider": m["provider"], "model_id": m["model_id"], "label": m["model_id"]})
+            models.append(
+                {"provider": m["provider"], "model_id": m["model_id"], "label": m["model_id"]}
+            )
 
     await _add_local_ollama_models(models)
     return models
@@ -87,7 +89,11 @@ async def _add_local_ollama_models(models: list[dict[str, Any]]) -> None:
             if resp.status_code == 200:
                 for m in resp.json().get("models", []):
                     models.append(
-                        {"provider": "ollama", "model_id": m.get("name", ""), "label": f"{m.get('name', '')} (local)"}
+                        {
+                            "provider": "ollama",
+                            "model_id": m.get("name", ""),
+                            "label": f"{m.get('name', '')} (local)",
+                        }
                     )
     except Exception as e:
         logger.warning("list_models_ollama_discovery", error=str(e))
@@ -101,6 +107,7 @@ async def _add_local_ollama_models(models: list[dict[str, Any]]) -> None:
 async def list_tools() -> list[dict[str, Any]]:
     """List all registered tools from the tool registry."""
     import app.tools.builtins  # noqa: F401  ensures builtin tools are registered
+
     tool_registry = __import__("app.core.di", fromlist=["resolve"]).resolve("ToolRegistry")
 
     return [
@@ -119,10 +126,13 @@ async def get_stats() -> dict[str, Any]:
     from app.storage.database import Agent, ApiKey, Message, Session, UsageLog
 
     async with async_session() as db:
+
         async def count(model: Any) -> int:
             return (await db.execute(select(func.count()).select_from(model))).scalar() or 0
 
-        total_tokens = (await db.execute(select(func.coalesce(func.sum(UsageLog.total_tokens), 0)))).scalar() or 0
+        total_tokens = (
+            await db.execute(select(func.coalesce(func.sum(UsageLog.total_tokens), 0)))
+        ).scalar() or 0
 
         return {
             "total_users": 1,
@@ -132,7 +142,9 @@ async def get_stats() -> dict[str, Any]:
             "total_messages": await count(Message),
             "total_tokens": int(total_tokens),
             "total_workflows": await count(Workflow),
-            "total_crews": await count(__import__("app.storage.models_platform", fromlist=["Crew"]).Crew),
+            "total_crews": await count(
+                __import__("app.storage.models_platform", fromlist=["Crew"]).Crew
+            ),
         }
 
 
@@ -153,7 +165,12 @@ async def get_profile(request: Request) -> dict[str, Any]:
     role = principal.role if principal else None
     scopes = principal.scopes if principal else ()
     is_admin = role == "admin" or "admin" in scopes
-    return {"id": subject, "display_name": subject, "email": f"{subject}@localhost", "is_admin": is_admin}
+    return {
+        "id": subject,
+        "display_name": subject,
+        "email": f"{subject}@localhost",
+        "is_admin": is_admin,
+    }
 
 
 # ─── Terminal ───────────────────────────────────────────────────────────────
@@ -168,7 +185,7 @@ class TerminalExecuteRequest(BaseModel):
 async def terminal_execute(
     request: Request,
     body: TerminalExecuteRequest,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Execute a sandboxed shell command and return stdout / exit status."""
     from app.core.di import resolve as di_resolve
@@ -177,14 +194,20 @@ async def terminal_execute(
     if not command:
         raise HTTPException(status_code=422, detail="command is required")
     try:
-        sandbox = di_resolve("SandboxExecutor")
+        sandbox: Any = di_resolve("SandboxExecutor")
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"sandbox unavailable: {exc}") from exc
+        logger.warning("sandbox_executor_unavailable", error=str(exc))
+        raise HTTPException(status_code=503, detail="sandbox is unavailable") from exc
     effective_timeout = min(body.timeout or 30, 120)
     output = await sandbox.execute(command, timeout=effective_timeout)
-    logger.info("terminal_command_executed", command=command, user_id=current_user_id(request), timeout=effective_timeout)
+    logger.info(
+        "terminal_command_executed",
+        command=command,
+        user_id=current_user_id(request),
+        timeout=effective_timeout,
+    )
     blocked = output.startswith("BLOCKED:")
-    failed = blocked or output.startswith("TIMEOUT:") or output.startswith("Error:")
+    failed = blocked or output.startswith(("TIMEOUT:", "Error:"))
     return {"command": command, "output": output, "success": not failed}
 
 
@@ -196,7 +219,9 @@ async def terminal_execute(
 async def list_cluster_nodes() -> list[dict[str, Any]]:
     """List all cluster nodes."""
     async with async_session() as db:
-        rows = (await db.execute(select(Cluster).order_by(Cluster.created_at.desc()))).scalars().all()
+        rows = (
+            (await db.execute(select(Cluster).order_by(Cluster.created_at.desc()))).scalars().all()
+        )
         return [_cluster_node_dict(n) for n in rows]
 
 
@@ -205,7 +230,7 @@ async def list_cluster_nodes() -> list[dict[str, Any]]:
 @router.post("/cluster/create")
 async def create_cluster_node(
     request: Request,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Create a new cluster node."""
     data = await parse_request_payload(request)
@@ -235,7 +260,9 @@ async def get_cluster_status() -> dict[str, Any]:
             "status": "ok",
             "total_nodes": len(rows),
             "online_nodes": len(online),
-            "nodes": [{"id": n.id, "name": n.name, "status": n.status, "role": n.role} for n in rows],
+            "nodes": [
+                {"id": n.id, "name": n.name, "status": n.status, "role": n.role} for n in rows
+            ],
         }
 
 
@@ -256,7 +283,7 @@ async def get_cluster_stats() -> dict[str, Any]:
 @router.delete("/cluster/{node_id}")
 async def delete_cluster_node(
     node_id: str,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, bool | str]:
     """Delete a cluster node."""
     async with async_session() as db:
@@ -271,18 +298,24 @@ async def delete_cluster_node(
 
 @router.get("/traces")
 @router.get("/traces/")
-async def list_traces(request: Request, limit: int = 100) -> list[dict[str, Any]]:
+async def list_traces(
+    request: Request, limit: int = Query(default=100, ge=1, le=500)
+) -> list[dict[str, Any]]:
     """List the current user's traces ordered by creation date (newest first)."""
     user_id = current_user_id(request)
     async with async_session() as db:
         rows = (
-            await db.execute(
-                select(Trace)
-                .where(Trace.user_id == user_id)
-                .order_by(Trace.created_at.desc())
-                .limit(limit)
+            (
+                await db.execute(
+                    select(Trace)
+                    .where(Trace.user_id == user_id)
+                    .order_by(Trace.created_at.desc())
+                    .limit(limit)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [_trace_dict(t) for t in rows]
 
 
@@ -327,7 +360,10 @@ async def get_marketplace() -> list[dict[str, Any]]:
             for p in (await db.execute(select(PluginRecord))).scalars().all()
             if p.plugin_key
         }
-    return [{**item, "is_installed": item["plugin_key"] in installed} for item in settings.plugin_marketplace]
+    return [
+        {**item, "is_installed": item["plugin_key"] in installed}
+        for item in settings.plugin_marketplace
+    ]
 
 
 @router.get("/plugins/categories")
@@ -338,14 +374,16 @@ async def get_plugin_categories() -> list[str]:
 
     async with async_session() as db:
         rows = (await db.execute(select(PluginRecord.category).distinct())).scalars().all()
-    return sorted({*(r for r in (rows or []) if r), *(m["category"] for m in settings.plugin_marketplace)})
+    return sorted(
+        {*(r for r in (rows or []) if r), *(m["category"] for m in settings.plugin_marketplace)}
+    )
 
 
 @router.post("/plugins/{plugin_key}/install")
 async def install_plugin(
     plugin_key: str,
     request: Request,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Install a plugin from the marketplace or with custom data."""
     from app.config import settings
@@ -354,8 +392,10 @@ async def install_plugin(
     data = await parse_request_payload(request)
     async with async_session() as db:
         existing = (
-            await db.execute(select(PluginRecord).where(PluginRecord.plugin_key == plugin_key))
-        ).scalars().first()
+            (await db.execute(select(PluginRecord).where(PluginRecord.plugin_key == plugin_key)))
+            .scalars()
+            .first()
+        )
         if existing is not None:
             existing.status = "installed"
             await db.commit()
@@ -383,7 +423,7 @@ async def install_plugin(
 @router.post("/plugins/{plugin_id}/enable")
 async def enable_plugin(
     plugin_id: str,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Enable a plugin by ID or key."""
     return await _set_plugin_enabled(plugin_id, True)
@@ -392,7 +432,7 @@ async def enable_plugin(
 @router.post("/plugins/{plugin_id}/disable")
 async def disable_plugin(
     plugin_id: str,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Disable a plugin by ID or key."""
     return await _set_plugin_enabled(plugin_id, False)
@@ -402,7 +442,7 @@ async def disable_plugin(
 @router.post("/plugins/{plugin_id}/uninstall")
 async def uninstall_plugin(
     plugin_id: str,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, bool | str]:
     """Uninstall a plugin by ID or key."""
     async with async_session() as db:
@@ -431,7 +471,7 @@ async def get_plugin_status(plugin_id: str) -> dict[str, Any]:
 @router.post("/plugins/import")
 async def import_plugin(
     request: Request,
-    _auth: dict = Depends(require_admin()),
+    _auth: dict[str, Any] = Depends(require_admin()),
 ) -> dict[str, Any]:
     """Import a custom plugin."""
     data = await parse_request_payload(request)
@@ -467,7 +507,17 @@ async def list_scheduled(request: Request) -> list[dict[str, Any]]:
     """List all scheduled workflows."""
     user_id = current_user_id(request)
     async with async_session() as db:
-        rows = (await db.execute(select(Workflow).where(Workflow.schedule.isnot(None), Workflow.user_id == user_id))).scalars().all()
+        rows = (
+            (
+                await db.execute(
+                    select(Workflow).where(
+                        Workflow.schedule.isnot(None), Workflow.user_id == user_id
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
         return [
             {
                 "id": w.id,
@@ -482,9 +532,10 @@ async def list_scheduled(request: Request) -> list[dict[str, Any]]:
 
 @router.post("/scheduler")
 @router.post("/scheduler/")
-async def create_scheduled(request: Request,
-    _auth: dict = Depends(require_scopes("write")),
-)  -> dict[str, Any]:
+async def create_scheduled(
+    request: Request,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     """Create a scheduled workflow."""
     data = await parse_request_payload(request)
     user_id = current_user_id(request)
@@ -510,19 +561,27 @@ async def create_scheduled(request: Request,
 async def list_mcp_servers() -> list[dict[str, Any]]:
     """List all MCP servers."""
     async with async_session() as db:
-        rows = (await db.execute(select(MCPServerRecord).order_by(MCPServerRecord.created_at.desc()))).scalars().all()
+        rows = (
+            (await db.execute(select(MCPServerRecord).order_by(MCPServerRecord.created_at.desc())))
+            .scalars()
+            .all()
+        )
         return [_mcp_dict(m) for m in rows]
 
 
 @router.post("/mcp")
 @router.post("/mcp/")
-async def create_mcp_server(request: Request,
-    _auth: dict = Depends(require_admin()),
-)  -> dict[str, Any]:
+async def create_mcp_server(
+    request: Request,
+    _auth: dict[str, Any] = Depends(require_admin()),
+) -> dict[str, Any]:
     """Create a new MCP server."""
     data = await parse_request_payload(request)
     if not data.get("command") and not data.get("url"):
-        raise HTTPException(status_code=422, detail="MCP server requires either a command (stdio) or a url (sse/http)")
+        raise HTTPException(
+            status_code=422,
+            detail="MCP server requires either a command (stdio) or a url (sse/http)",
+        )
     async with async_session() as db:
         server = MCPServerRecord(
             plugin_id=data.get("plugin_id"),
@@ -539,9 +598,10 @@ async def create_mcp_server(request: Request,
 
 
 @router.post("/mcp/{server_id}/start")
-async def start_mcp_server(server_id: str,
-    _auth: dict = Depends(require_admin()),
-)  -> dict[str, Any]:
+async def start_mcp_server(
+    server_id: str,
+    _auth: dict[str, Any] = Depends(require_admin()),
+) -> dict[str, Any]:
     """Start an MCP server."""
     async with async_session() as db:
         server = await get_or_404(db, MCPServerRecord, server_id, detail="MCP server not found")
@@ -551,9 +611,10 @@ async def start_mcp_server(server_id: str,
 
 
 @router.post("/mcp/{server_id}/stop")
-async def stop_mcp_server(server_id: str,
-    _auth: dict = Depends(require_admin()),
-)  -> dict[str, Any]:
+async def stop_mcp_server(
+    server_id: str,
+    _auth: dict[str, Any] = Depends(require_admin()),
+) -> dict[str, Any]:
     """Stop an MCP server."""
     async with async_session() as db:
         server = await get_or_404(db, MCPServerRecord, server_id, detail="MCP server not found")
@@ -563,9 +624,10 @@ async def stop_mcp_server(server_id: str,
 
 
 @router.delete("/mcp/{server_id}")
-async def delete_mcp_server(server_id: str,
-    _auth: dict = Depends(require_admin()),
-)  -> dict[str, bool | str]:
+async def delete_mcp_server(
+    server_id: str,
+    _auth: dict[str, Any] = Depends(require_admin()),
+) -> dict[str, bool | str]:
     """Delete an MCP server."""
     async with async_session() as db:
         server = await get_or_404(db, MCPServerRecord, server_id, detail="MCP server not found")
@@ -586,31 +648,69 @@ async def list_eval_datasets(request: Request) -> list[dict[str, Any]]:
     user_id = current_user_id(request)
     async with async_session() as db:
         rows = (
-            await db.execute(
-                select(EvalDataset)
-                .where(EvalDataset.user_id == user_id)
-                .order_by(EvalDataset.created_at.desc())
+            (
+                await db.execute(
+                    select(EvalDataset)
+                    .where(EvalDataset.user_id == user_id)
+                    .order_by(EvalDataset.created_at.desc())
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [_eval_dataset_dict(e) for e in rows]
 
 
 @router.post("/eval/datasets")
 @router.post("/eval/datasets/")
-async def create_eval_dataset(request: Request,
-    _auth: dict = Depends(require_scopes("write")),
-)  -> dict[str, Any]:
-    """Create an evaluation dataset."""
+async def create_eval_dataset(
+    request: Request,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
+    """Create an evaluation dataset.
+
+    Rejects malformed or non-object JSON bodies instead of silently creating a
+    default dataset, and derives ``case_count`` from ``data_json`` so the value
+    mirrors the stored cases.
+    """
+    import json as _json
+
     from app.storage.models_eval import EvalDataset
 
-    data = await parse_request_payload(request)
+    try:
+        raw = await request.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Request body must be valid JSON") from exc
+    if not isinstance(raw, dict):
+        raise HTTPException(status_code=422, detail="Request body must be a JSON object")
+    nested_data = raw.get("data")
+    data: dict[str, Any] = nested_data if isinstance(nested_data, dict) else raw
+
+    data_json = data.get("data_json", "[]")
+    if isinstance(data_json, list):
+        case_count = len(data_json)
+        data_json = _json.dumps(data_json, ensure_ascii=False)
+    elif isinstance(data_json, str):
+        try:
+            parsed = _json.loads(data_json)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422, detail="data_json must be a valid JSON array"
+            ) from exc
+        if not isinstance(parsed, list):
+            raise HTTPException(status_code=422, detail="data_json must be a JSON array")
+        case_count = len(parsed)
+    else:
+        raise HTTPException(status_code=422, detail="data_json must be a JSON array or string")
+
     user_id = current_user_id(request)
     async with async_session() as db:
         ds = EvalDataset(
             user_id=user_id,
             name=data.get("name", "New Dataset"),
             description=data.get("description", ""),
-            data_json=data.get("data_json", "[]"),
+            data_json=data_json,
+            case_count=case_count,
         )
         db.add(ds)
         await db.commit()
@@ -620,9 +720,10 @@ async def create_eval_dataset(request: Request,
 
 @router.post("/eval/run")
 @router.post("/eval/run/")
-async def run_evaluation(request: Request,
-    _auth: dict = Depends(require_scopes("write")),
-)  -> dict[str, Any]:
+async def run_evaluation(
+    request: Request,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     """Create an evaluation run record."""
     from app.storage.database import Agent
     from app.storage.models_eval import EvalDataset, EvalRun
@@ -642,15 +743,28 @@ async def run_evaluation(request: Request,
         agent = await db.get(Agent, agent_id)
         if agent is None or agent.user_id != user_id:
             raise HTTPException(status_code=404, detail="Agent not found")
+
+        def _as_int(value: Any, field: str) -> int:
+            try:
+                return int(value)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(status_code=422, detail=f"{field} must be an integer") from exc
+
+        def _as_float(value: Any, field: str) -> float:
+            try:
+                return float(value)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(status_code=422, detail=f"{field} must be a number") from exc
+
         run = EvalRun(
             user_id=user_id,
             dataset_id=dataset_id,
             agent_id=agent_id,
-            total_cases=int(data.get("total_cases") or 0),
-            passed_cases=int(data.get("passed_cases") or 0),
-            failed_cases=int(data.get("failed_cases") or 0),
-            average_score=float(data.get("average_score") or 0.0),
-            pass_rate=float(data.get("pass_rate") or 0.0),
+            total_cases=_as_int(data.get("total_cases") or 0, "total_cases"),
+            passed_cases=_as_int(data.get("passed_cases") or 0, "passed_cases"),
+            failed_cases=_as_int(data.get("failed_cases") or 0, "failed_cases"),
+            average_score=_as_float(data.get("average_score") or 0.0, "average_score"),
+            pass_rate=_as_float(data.get("pass_rate") or 0.0, "pass_rate"),
             results_json=data.get("results_json", "[]"),
         )
         db.add(run)
@@ -658,9 +772,107 @@ async def run_evaluation(request: Request,
             await db.commit()
         except IntegrityError as exc:
             await db.rollback()
-            raise HTTPException(status_code=409, detail="Evaluation run conflicts with stored data") from exc
+            raise HTTPException(
+                status_code=409, detail="Evaluation run conflicts with stored data"
+            ) from exc
         await db.refresh(run)
         return _eval_run_dict(run)
+
+
+class EvalAssessItem(BaseModel):
+    """One rubric criterion for the offline scoring endpoint."""
+
+    item_id: str
+    description: str = ""
+    contains_any: list[str] = []
+    not_contains_any: list[str] = []
+    weight: float = 1.0
+    essential: bool = False
+    veto: bool = False
+
+
+class EvalAssessRequest(BaseModel):
+    """Payload for ``POST /eval/assess``: score arbitrary output offline."""
+
+    output: str = ""
+    rubric: list[EvalAssessItem] = []
+    scenario_id: str = ""
+    expected_points: list[str] = []
+
+
+@router.post("/eval/assess")
+@router.post("/eval/assess/")
+async def assess_eval_output(
+    payload: EvalAssessRequest,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
+    """Score arbitrary agent output against a rubric with the offline judge.
+
+    Reuses the core ``DeterministicJudge`` (keyword evidence, weighted mean,
+    essential/veto semantics). No LLM call is made, so this gives an immediate,
+    reproducible pass/score verdict that a task or skill can gate on.
+    """
+    from app.core.evaluation.judges import DeterministicJudge
+    from app.core.evaluation.models import RubricItem, Trajectory
+
+    if not payload.output.strip():
+        raise HTTPException(status_code=422, detail="output is required")
+    if not payload.rubric:
+        raise HTTPException(status_code=422, detail="rubric must not be empty")
+
+    trajectory = Trajectory(
+        scenario_id=payload.scenario_id or "assess",
+        user_input=payload.scenario_id or "",
+        output=payload.output,
+    )
+    rubric = [
+        RubricItem(
+            item_id=item.item_id,
+            description=item.description,
+            contains_any=list(item.contains_any),
+            not_contains_any=list(item.not_contains_any),
+            weight=item.weight,
+            essential=item.essential,
+            veto=item.veto,
+        )
+        for item in payload.rubric
+    ]
+    result = DeterministicJudge().judge(
+        trajectory,
+        rubric,
+        scenario_id=payload.scenario_id or "assess",
+        expected_points=list(payload.expected_points),
+    )
+    return result.to_dict()
+
+
+@router.get("/eval/reports")
+@router.get("/eval/reports/")
+async def list_eval_reports(
+    request: Request,
+) -> list[dict[str, Any]]:
+    """List in-memory evaluation reports most recent first."""
+    from app.core.evaluation.report_store import REPORT_STORE
+
+    del request
+    reports = REPORT_STORE.list_all()
+    reports.reverse()
+    return [_eval_report_summary(r) for r in reports[:50]]
+
+
+@router.get("/eval/reports/{report_id}")
+async def get_eval_report(
+    report_id: str,
+    request: Request,
+) -> dict[str, Any]:
+    """Return one stored evaluation report with per-scenario detail."""
+    from app.core.evaluation.report_store import REPORT_STORE
+
+    del request
+    report = REPORT_STORE.get(report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Evaluation report not found")
+    return report.to_dict()
 
 
 # ─── Cost ───────────────────────────────────────────────────────────────────
@@ -693,12 +905,29 @@ async def get_budget(request: Request) -> dict[str, Any]:
 
     user_id = current_user_id(request)
     async with async_session() as db:
-        cfg = (await db.execute(select(BudgetConfig).where(BudgetConfig.user_id == user_id))).scalars().first()
+        cfg = (
+            (await db.execute(select(BudgetConfig).where(BudgetConfig.user_id == user_id)))
+            .scalars()
+            .first()
+        )
         if cfg is None:
-            cfg = BudgetConfig(user_id=user_id)
-            db.add(cfg)
-            await db.commit()
-            await db.refresh(cfg)
+            # Concurrent requests may race on the check-then-insert; the unique
+            # user_id constraint turns the loser into an IntegrityError, and the
+            # re-query makes this endpoint idempotent instead of raising 500.
+            db.add(BudgetConfig(user_id=user_id))
+            try:
+                await db.commit()
+            except IntegrityError:
+                await db.rollback()
+                cfg = (
+                    (await db.execute(select(BudgetConfig).where(BudgetConfig.user_id == user_id)))
+                    .scalars()
+                    .first()
+                )
+            else:
+                await db.refresh(cfg)
+        if cfg is None:
+            raise HTTPException(status_code=503, detail="预算配置暂不可用")
         current_spend = 0.0
         try:
             window_start = _budget_window_start(cfg.period)
@@ -712,7 +941,13 @@ async def get_budget(request: Request) -> dict[str, Any]:
             ).scalar()
             if total is not None:
                 current_spend = round(float(total), 6)
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "budget_current_spend_query_failed",
+                user_id=user_id,
+                period=cfg.period,
+                error=str(exc),
+            )
             current_spend = 0.0
         return {
             "amount": cfg.amount,
@@ -732,12 +967,28 @@ async def get_quota(request: Request) -> dict[str, Any]:
 
     user_id = current_user_id(request)
     async with async_session() as db:
-        q = (await db.execute(select(UsageQuota).where(UsageQuota.user_id == user_id))).scalars().first()
+        q = (
+            (await db.execute(select(UsageQuota).where(UsageQuota.user_id == user_id)))
+            .scalars()
+            .first()
+        )
         if q is None:
-            q = UsageQuota(user_id=user_id)
-            db.add(q)
-            await db.commit()
-            await db.refresh(q)
+            # Same check-then-insert race as get_budget: degrade to an
+            # idempotent re-query when a concurrent request wins the insert.
+            db.add(UsageQuota(user_id=user_id))
+            try:
+                await db.commit()
+            except IntegrityError:
+                await db.rollback()
+                q = (
+                    (await db.execute(select(UsageQuota).where(UsageQuota.user_id == user_id)))
+                    .scalars()
+                    .first()
+                )
+            else:
+                await db.refresh(q)
+        if q is None:
+            raise HTTPException(status_code=503, detail="用量配额暂不可用")
         return {
             "max_requests_per_day": q.max_requests_per_day,
             "max_tokens_per_day": q.max_tokens_per_day,
@@ -753,7 +1004,9 @@ async def get_quota(request: Request) -> dict[str, Any]:
 
 @router.get("/search")
 @router.get("/search/")
-async def search_documents(request: Request, q: str = "", limit: int = 20) -> list[dict[str, Any]]:
+async def search_documents(
+    request: Request, q: str = "", limit: int = Query(default=20, ge=1, le=500)
+) -> list[dict[str, Any]]:
     """Search the current user's document chunks by content (case-insensitive LIKE)."""
     if not q:
         return []
@@ -761,17 +1014,21 @@ async def search_documents(request: Request, q: str = "", limit: int = 20) -> li
     async with async_session() as db:
         pattern = f"%{q}%"
         rows = (
-            await db.execute(
-                select(DocumentChunk)
-                .join(Document, Document.id == DocumentChunk.document_id)
-                .where(
-                    DocumentChunk.content.ilike(pattern),
-                    Document.user_id == user_id,
+            (
+                await db.execute(
+                    select(DocumentChunk)
+                    .join(Document, Document.id == DocumentChunk.document_id)
+                    .where(
+                        DocumentChunk.content.ilike(pattern),
+                        Document.user_id == user_id,
+                    )
+                    .order_by(DocumentChunk.created_at.desc())
+                    .limit(limit)
                 )
-                .order_by(DocumentChunk.created_at.desc())
-                .limit(limit)
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [_chunk_dict(c) for c in rows]
 
 
@@ -788,13 +1045,20 @@ async def _find_plugin(db: Any, plugin_id: str) -> PluginRecord | None:
     Returns:
         The PluginRecord if found, None otherwise.
     """
-    return (
-        await db.execute(
-            select(PluginRecord).where(
-                (PluginRecord.id == plugin_id) | (PluginRecord.plugin_key == plugin_id)
+    return cast(
+        "PluginRecord | None",
+        (
+            (
+                await db.execute(
+                    select(PluginRecord).where(
+                        (PluginRecord.id == plugin_id) | (PluginRecord.plugin_key == plugin_id)
+                    )
+                )
             )
-        )
-    ).scalars().first()
+            .scalars()
+            .first()
+        ),
+    )
 
 
 async def _set_plugin_enabled(plugin_id: str, enabled: bool) -> dict[str, Any]:
@@ -848,10 +1112,12 @@ def _trace_dict(t: Trace) -> dict[str, Any]:
 def _trace_detail_dict(t: Trace) -> dict[str, Any]:
     """Convert a Trace model instance to a detailed response dictionary."""
     base = _trace_dict(t)
-    base.update({
-        "input_data": t.input_data,
-        "output_data": t.output_data,
-    })
+    base.update(
+        {
+            "input_data": t.input_data,
+            "output_data": t.output_data,
+        }
+    )
     return base
 
 
@@ -892,11 +1158,25 @@ def _mcp_dict(m: MCPServerRecord) -> dict[str, Any]:
 
 def _eval_dataset_dict(e: Any) -> dict[str, Any]:
     """Convert an EvalDataset model instance to a response dictionary."""
+    case_count = e.case_count
+    if not case_count and getattr(e, "data_json", None):
+        # Legacy rows stored a default case_count of 0; derive it from the
+        # stored JSON payload so the reported count is never a hard-coded 0.
+        import json as _json
+
+        raw = e.data_json
+        if isinstance(raw, str):
+            try:
+                raw = _json.loads(raw)
+            except (TypeError, ValueError):
+                raw = None
+        if isinstance(raw, list):
+            case_count = len(raw)
     return {
         "id": e.id,
         "name": e.name,
         "description": e.description,
-        "case_count": e.case_count,
+        "case_count": case_count,
         "created_at": e.created_at.isoformat() if e.created_at else "",
     }
 
@@ -913,6 +1193,22 @@ def _eval_run_dict(r: Any) -> dict[str, Any]:
         "pass_rate": r.pass_rate,
         "average_score": r.average_score,
         "created_at": r.created_at.isoformat() if r.created_at else "",
+    }
+
+
+def _eval_report_summary(r: Any) -> dict[str, Any]:
+    """Compact summary of a stored evaluation report for list responses."""
+    return {
+        "report_id": r.report_id,
+        "created_at": r.created_at,
+        "total_scenarios": r.total_scenarios,
+        "passed_scenarios": r.passed_scenarios,
+        "average_score": r.average_score,
+        "pass_at_k": r.pass_at_k,
+        "pass_hat_k": r.pass_hat_k,
+        "total_tokens": r.total_tokens,
+        "duration_ms": r.duration_ms,
+        "metadata": r.metadata,
     }
 
 

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth_manager import require_scopes
 from app.core.principal import CurrentPrincipal
+from app.services.notifications import compute_delivery_availability
 from app.services.settings_service import SettingsService
 from app.storage import get_db
 
@@ -24,6 +25,7 @@ async def get_settings(
     service = SettingsService(db)
     settings = await service.get_settings(principal.subject_id)
     mode = service.get_effective_mode(settings)
+    delivery = compute_delivery_availability(settings.notifications)
 
     return {
         "autonomous_agent_mode": settings.autonomous_agent_mode,
@@ -31,7 +33,8 @@ async def get_settings(
         "mcp_status": settings.mcp_status,
         "mcp_ready": settings.mcp_status == "ready",
         "notifications": settings.notifications,
-        "notification_delivery_available": False,
+        "notification_delivery_available": delivery["available"],
+        "notification_delivery_channels": delivery,
         **mode,
     }
 
@@ -40,7 +43,7 @@ async def get_settings(
 async def update_settings(
     principal: CurrentPrincipal,
     data: dict[str, Any],
-    _auth: dict = Depends(require_scopes("write")),
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Update user settings."""
@@ -70,6 +73,7 @@ async def update_settings(
         raise HTTPException(status_code=422, detail=str(exc)) from None
 
     mode = service.get_effective_mode(settings)
+    delivery = compute_delivery_availability(settings.notifications)
 
     return {
         "autonomous_agent_mode": settings.autonomous_agent_mode,
@@ -77,6 +81,7 @@ async def update_settings(
         "mcp_status": settings.mcp_status,
         "mcp_ready": settings.mcp_status == "ready",
         "notifications": settings.notifications,
-        "notification_delivery_available": False,
+        "notification_delivery_available": delivery["available"],
+        "notification_delivery_channels": delivery,
         **mode,
     }

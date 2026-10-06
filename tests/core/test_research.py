@@ -33,9 +33,7 @@ def offline_browser(monkeypatch):
 
 
 def test_run_research_returns_full_structure(monkeypatch, offline_browser) -> None:
-    monkeypatch.setattr(
-        research, "_fetch_url_sync", lambda url, timeout_s: _FIXED_HTML
-    )
+    monkeypatch.setattr(research, "_fetch_url_sync", lambda url, timeout_s: _FIXED_HTML)
     result = research.run_research("pytest testing pitfalls", sources=3, timeout_s=5)
 
     assert result["ok"] is True
@@ -55,9 +53,7 @@ def test_run_research_returns_full_structure(monkeypatch, offline_browser) -> No
 
 
 def test_run_research_respects_sources_limit(monkeypatch, offline_browser) -> None:
-    monkeypatch.setattr(
-        research, "_fetch_url_sync", lambda url, timeout_s: _FIXED_HTML
-    )
+    monkeypatch.setattr(research, "_fetch_url_sync", lambda url, timeout_s: _FIXED_HTML)
     result = research.run_research("pytest testing pitfalls", sources=2, timeout_s=5)
 
     assert result["ok"] is True
@@ -92,9 +88,7 @@ def test_run_research_never_raises_when_candidates_fail(monkeypatch, offline_bro
 
 
 def test_report_text_renders_with_title(monkeypatch, offline_browser) -> None:
-    monkeypatch.setattr(
-        research, "_fetch_url_sync", lambda url, timeout_s: _FIXED_HTML
-    )
+    monkeypatch.setattr(research, "_fetch_url_sync", lambda url, timeout_s: _FIXED_HTML)
     result = research.run_research("pytest testing pitfalls", sources=2, timeout_s=5)
     report = research.research_report_text(result)
 

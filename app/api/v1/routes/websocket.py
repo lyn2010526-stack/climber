@@ -77,7 +77,7 @@ async def _safe_close(websocket: WebSocket, log_key: str) -> None:
 
 async def _authenticate_websocket(
     websocket: WebSocket,
-    resource_model: type | None = None,
+    resource_model: Any = None,
     resource_id: str | None = None,
 ) -> str | None:
     """Authenticate a socket and authorize access to an existing resource."""
@@ -85,7 +85,9 @@ async def _authenticate_websocket(
         return LOCAL_USER_ID
 
     # Prefer headers or cookies so credentials do not enter URL logs and history.
-    auth = await authenticate_credentials(websocket.headers, token=websocket.cookies.get("access_token"))
+    auth = await authenticate_credentials(
+        websocket.headers, token=websocket.cookies.get("access_token")
+    )
     user_id = None
     if auth:
         user_id = auth.get("sub") or auth.get("owner")
@@ -115,7 +117,7 @@ async def ws_endpoint(websocket: WebSocket, session_id: str) -> None:
         websocket: The WebSocket connection.
         session_id: The session identifier.
     """
-    heartbeat_task: asyncio.Task | None = None
+    heartbeat_task: asyncio.Task[Any] | None = None
     try:
         user_id = await _authenticate_websocket(websocket, Session, session_id)
         if user_id is None:
@@ -127,11 +129,13 @@ async def ws_endpoint(websocket: WebSocket, session_id: str) -> None:
         state["connected"] = True
         _store_state(_session_states, session_id, state)
 
-        await websocket.send_json({
-            "type": "connected",
-            "session_id": session_id,
-            "reconnect": state.get("disconnect_count", 0) > 0,
-        })
+        await websocket.send_json(
+            {
+                "type": "connected",
+                "session_id": session_id,
+                "reconnect": state.get("disconnect_count", 0) > 0,
+            }
+        )
 
         heartbeat_task = asyncio.create_task(_websocket_heartbeat(websocket, session_id))
 
@@ -160,7 +164,9 @@ async def ws_endpoint(websocket: WebSocket, session_id: str) -> None:
                 state["messages"] = state["messages"][-_MAX_WS_STATE_MESSAGES:]
                 state["last_active"] = time.time()
 
-                await websocket.send_json({"type": "echo", "data": payload, "session_id": session_id})
+                await websocket.send_json(
+                    {"type": "echo", "data": payload, "session_id": session_id}
+                )
 
             except WebSocketDisconnect:
                 raise
@@ -174,11 +180,11 @@ async def ws_endpoint(websocket: WebSocket, session_id: str) -> None:
             with contextlib.suppress(asyncio.CancelledError):
                 await heartbeat_task
 
-        state = _session_states.get(session_id)
-        if state:
-            state["connected"] = False
-            state["disconnect_count"] = state.get("disconnect_count", 0) + 1
-            state["last_disconnect"] = time.time()
+        final_state = _session_states.get(session_id)
+        if final_state:
+            final_state["connected"] = False
+            final_state["disconnect_count"] = final_state.get("disconnect_count", 0) + 1
+            final_state["last_disconnect"] = time.time()
 
         await _safe_close(websocket, "ws_endpoint_close")
 
@@ -191,7 +197,7 @@ async def ws_group_endpoint(websocket: WebSocket, group_id: str) -> None:
         websocket: The WebSocket connection.
         group_id: The group identifier.
     """
-    heartbeat_task: asyncio.Task | None = None
+    heartbeat_task: asyncio.Task[Any] | None = None
     try:
         user_id = await _authenticate_websocket(websocket, AgentGroup, group_id)
         if user_id is None:
@@ -265,7 +271,7 @@ async def ws_agent_endpoint(websocket: WebSocket, agent_id: str) -> None:
         websocket: The WebSocket connection.
         agent_id: The agent identifier.
     """
-    heartbeat_task: asyncio.Task | None = None
+    heartbeat_task: asyncio.Task[Any] | None = None
     try:
         user_id = await _authenticate_websocket(websocket, Agent, agent_id)
         if user_id is None:
@@ -290,12 +296,14 @@ async def ws_agent_endpoint(websocket: WebSocket, agent_id: str) -> None:
         state["connected"] = True
         _store_state(_agent_states, agent_id, state)
 
-        await websocket.send_json({
-            "type": "connected",
-            "agent_id": agent_id,
-            "agent_name": agent.name,
-            "reconnect": state.get("disconnect_count", 0) > 0,
-        })
+        await websocket.send_json(
+            {
+                "type": "connected",
+                "agent_id": agent_id,
+                "agent_name": agent.name,
+                "reconnect": state.get("disconnect_count", 0) > 0,
+            }
+        )
 
         heartbeat_task = asyncio.create_task(_websocket_heartbeat(websocket, f"agent:{agent_id}"))
 
@@ -324,11 +332,13 @@ async def ws_agent_endpoint(websocket: WebSocket, agent_id: str) -> None:
                 state["messages"] = state["messages"][-_MAX_WS_STATE_MESSAGES:]
                 state["last_active"] = time.time()
 
-                await websocket.send_json({
-                    "type": "agent_message",
-                    "agent_id": agent_id,
-                    "data": payload,
-                })
+                await websocket.send_json(
+                    {
+                        "type": "agent_message",
+                        "agent_id": agent_id,
+                        "data": payload,
+                    }
+                )
 
             except WebSocketDisconnect:
                 raise
@@ -342,10 +352,10 @@ async def ws_agent_endpoint(websocket: WebSocket, agent_id: str) -> None:
             with contextlib.suppress(asyncio.CancelledError):
                 await heartbeat_task
 
-        state = _agent_states.get(agent_id)
-        if state:
-            state["connected"] = False
-            state["disconnect_count"] = state.get("disconnect_count", 0) + 1
-            state["last_disconnect"] = time.time()
+        final_state = _agent_states.get(agent_id)
+        if final_state:
+            final_state["connected"] = False
+            final_state["disconnect_count"] = final_state.get("disconnect_count", 0) + 1
+            final_state["last_disconnect"] = time.time()
 
         await _safe_close(websocket, "ws_agent_endpoint_close")

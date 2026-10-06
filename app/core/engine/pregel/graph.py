@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
-from collections.abc import Awaitable, Callable
-from typing import Any, Protocol, runtime_checkable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any, Protocol, cast, runtime_checkable
 
 import structlog
 
@@ -20,7 +20,9 @@ from app.core.engine.pregel.state import GraphState, StateReducer
 
 logger = structlog.get_logger(__name__)
 
-NodeFunc = Callable[[GraphState], Awaitable[dict | Command | str] | dict | Command | str]
+NodeFunc = Callable[
+    [GraphState], Awaitable[dict[str, Any] | Command | str] | dict[str, Any] | Command | str
+]
 RouterFunc = Callable[[GraphState], str | Awaitable[str]]
 
 
@@ -28,11 +30,19 @@ RouterFunc = Callable[[GraphState], str | Awaitable[str]]
 class CompiledGraph(Protocol):
     """Protocol for a compiled, executable graph."""
 
-    async def invoke(self, input: dict, config: dict | None = None) -> dict: ...
-    async def astream(self, input: dict, config: dict | None = None) -> Any: ...
-    async def astream_events(self, input: dict, config: dict | None = None) -> Any: ...
-    async def get_state(self, config: dict) -> GraphState: ...
-    async def update_state(self, config: dict, values: dict) -> dict: ...
+    async def invoke(
+        self, input: dict[str, Any], config: dict[str, Any] | None = None
+    ) -> dict[str, Any]: ...
+    def astream(
+        self, input: dict[str, Any], config: dict[str, Any] | None = None
+    ) -> AsyncIterator[Any]: ...
+    def astream_events(
+        self, input: dict[str, Any], config: dict[str, Any] | None = None
+    ) -> AsyncIterator[Any]: ...
+    async def get_state(self, config: dict[str, Any]) -> GraphState: ...
+    async def update_state(
+        self, config: dict[str, Any], values: dict[str, Any]
+    ) -> dict[str, Any]: ...
 
 
 class Branch:
@@ -166,6 +176,9 @@ class StateGraph:
         checkpointer: Any = None,
         interrupt_before: list[str] | None = None,
         interrupt_after: list[str] | None = None,
+        error_handler: Any = None,
+        retry_policy: Any = None,
+        timeout_policy: Any = None,
         debug: bool = False,
     ) -> CompiledGraph:
         """Compile the graph into an executable form.
@@ -174,6 +187,9 @@ class StateGraph:
             checkpointer: Optional checkpoint saver for persistence.
             interrupt_before: Nodes to interrupt before execution.
             interrupt_after: Nodes to interrupt after execution.
+            error_handler: Custom error handler after retries are exhausted.
+            retry_policy: Retry policy for node execution failures.
+            timeout_policy: Per-node or whole-run timeout policy.
             debug: Enable verbose debug logging.
 
         Returns:
@@ -190,6 +206,9 @@ class StateGraph:
                 checkpointer=checkpointer,
                 interrupt_before=interrupt_before or [],
                 interrupt_after=interrupt_after or [],
+                retry_policy=retry_policy,
+                timeout_policy=timeout_policy,
+                error_handler=error_handler,
                 debug=debug,
             ),
         )
@@ -199,7 +218,9 @@ class StateGraph:
         if not self._nodes:
             raise ValueError("Graph has no nodes")
         if not self._entry_point and "__start__" not in self._conditional_edges:
-            raise ValueError("No entry point set. Call set_entry_point() or set_conditional_entry_point()")
+            raise ValueError(
+                "No entry point set. Call set_entry_point() or set_conditional_entry_point()"
+            )
         if self._entry_point and self._entry_point not in self._nodes:
             raise ValueError(f"Entry point '{self._entry_point}' is not a registered node")
         for src, dst in self._edges:
@@ -207,6 +228,9 @@ class StateGraph:
                 raise ValueError(f"Edge source '{src}' is not a registered node")
             if dst not in self._nodes and dst != "__end__":
                 raise ValueError(f"Edge target '{dst}' is not a registered node")
+        for src, _branch in self._conditional_edges.items():
+            if src != "__start__" and src not in self._nodes:
+                raise ValueError(f"Conditional edge source '{src}' is not a registered node")
 
     def get_node(self, name: str) -> NodeFunc | None:
         """Get a registered node function."""
@@ -241,12 +265,14 @@ class CompiledGraphImpl:
         return self._graph
 
     @staticmethod
-    def _execution_config(config: dict | None) -> dict:
+    def _execution_config(config: dict[str, Any] | None) -> dict[str, Any]:
         execution_config = dict(config or {})
         execution_config.setdefault("thread_id", str(uuid.uuid4()))
         return execution_config
 
-    async def invoke(self, input: dict, config: dict | None = None) -> dict:
+    async def invoke(
+        self, input: dict[str, Any], config: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Execute the graph synchronously and return final state.
 
         Args:
@@ -261,7 +287,9 @@ class CompiledGraphImpl:
         result = await self._engine.run(state, config=config)
         return dict(result)
 
-    async def astream(self, input: dict, config: dict | None = None):
+    async def astream(
+        self, input: dict[str, Any], config: dict[str, Any] | None = None
+    ) -> AsyncIterator[dict[str, Any]]:
         """Stream state updates after each super-step.
 
         Args:
@@ -276,7 +304,9 @@ class CompiledGraphImpl:
         async for step_state in self._engine.astream(state, config=config):
             yield dict(step_state)
 
-    async def astream_events(self, input: dict, config: dict | None = None):
+    async def astream_events(
+        self, input: dict[str, Any], config: dict[str, Any] | None = None
+    ) -> AsyncIterator[Any]:
         """Stream detailed execution events.
 
         Args:
@@ -291,14 +321,14 @@ class CompiledGraphImpl:
         async for event in self._engine.astream_events(state, config=config):
             yield event
 
-    async def get_state(self, config: dict) -> GraphState:
+    async def get_state(self, config: dict[str, Any]) -> GraphState:
         """Get the current state for a thread."""
-        return await self._engine.get_state(config)
+        return cast(GraphState, await self._engine.get_state(config))
 
-    async def update_state(self, config: dict, values: dict) -> dict:
+    async def update_state(self, config: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:
         """Update the state for a thread."""
-        return await self._engine.update_state(config, values)
+        return cast(dict[str, Any], await self._engine.update_state(config, values))
 
-    async def resume_with(self, config: dict, value: Any) -> dict:
+    async def resume_with(self, config: dict[str, Any], value: Any) -> dict[str, Any]:
         """Resume from an interrupt with a value."""
-        return await self._engine.resume_with(config, value)
+        return cast(dict[str, Any], await self._engine.resume_with(config, value))

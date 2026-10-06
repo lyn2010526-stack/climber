@@ -22,7 +22,7 @@ async def _get_session(session_id: str) -> Any:
     return await get_browser_pool().acquire(session_id)
 
 
-async def _get_or_create_page(session_id: str):
+async def _get_or_create_page(session_id: str) -> Any:
     """Get current page or create a new one."""
     session = await _get_session(session_id)
     context = session.context
@@ -30,22 +30,6 @@ async def _get_or_create_page(session_id: str):
     if pages:
         return pages[-1]
     return await context.new_page()
-
-
-async def close_session(session_id: str) -> None:
-    """Close a single browser session."""
-    await get_browser_pool().release(session_id)
-
-
-async def close_all_sessions() -> None:
-    """Close all browser sessions (app shutdown)."""
-    await get_browser_pool().close_all()
-
-
-def browser_pool_stats() -> dict[str, Any]:
-    """Expose pool state for the health endpoint."""
-    return get_browser_pool().stats()
-
 
 
 @tool(description="Navigate to a URL and return the page title and content summary.")
@@ -63,7 +47,9 @@ async def browser_navigate(url: str, session_id: str = "default") -> str:
 
 
 @tool(description="Take screenshot of a webpage. Returns file path.")
-async def browser_screenshot(url: str, output_path: str = "/tmp/browser_screenshot.png", session_id: str = "default") -> str:
+async def browser_screenshot(
+    url: str, output_path: str = "/tmp/browser_screenshot.png", session_id: str = "default"
+) -> str:
     """Screenshot a webpage."""
     try:
         page = await _get_or_create_page(session_id)
@@ -106,9 +92,7 @@ async def browser_extract_links(session_id: str = "default") -> str:
             "elements => elements.map(e => ({text: e.textContent.trim(), href: e.href}))",
         )
         formatted = [
-            f"- {link['text'][:80]}\n  {link['href']}"
-            for link in links[:30]
-            if link["text"]
+            f"- {link['text'][:80]}\n  {link['href']}" for link in links[:30] if link["text"]
         ]
         return "\n".join(formatted) if formatted else "No links found"
     except Exception as e:

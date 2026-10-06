@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -21,6 +22,7 @@ logger = structlog.get_logger()
 DEFAULT_MAX_INSTANCES = 2
 DEFAULT_IDLE_TIMEOUT = 300.0  # 5 minutes
 DEFAULT_SWEEP_INTERVAL = 60.0
+SESSION_CLOSE_TIMEOUT = 10.0
 
 
 @dataclass
@@ -44,15 +46,18 @@ class BrowserSession:
         return time.monotonic() - self.last_used
 
     async def close(self) -> None:
-        for closer in (
+        closers: tuple[Callable[[], Any], ...] = (
             lambda: self.context.close(),
             lambda: self.browser.close(),
             lambda: self.playwright.stop(),
-        ):
+        )
+        for closer in closers:
             try:
                 await closer()
             except Exception as exc:  # pragma: no cover - best effort teardown
-                logger.debug("browser_session_close_error", session_id=self.session_id, error=str(exc))
+                logger.debug(
+                    "browser_session_close_error", session_id=self.session_id, error=str(exc)
+                )
 
 
 class BrowserPool:
@@ -69,7 +74,7 @@ class BrowserPool:
         self.sweep_interval = sweep_interval
         self._sessions: dict[str, BrowserSession] = {}
         self._lock = asyncio.Lock()
-        self._sweeper: asyncio.Task | None = None
+        self._sweeper: asyncio.Task[Any] | None = None
         self._evictions = 0
         self._reclaimed = 0
 
@@ -121,7 +126,9 @@ class BrowserPool:
         victim_id = min(self._sessions, key=lambda k: self._sessions[k].last_used)
         victim = self._sessions.pop(victim_id)
         self._evictions += 1
-        logger.info("browser_session_evicted", session_id=victim_id, idle=round(victim.idle_seconds, 1))
+        logger.info(
+            "browser_session_evicted", session_id=victim_id, idle=round(victim.idle_seconds, 1)
+        )
         await victim.close()
 
     async def release(self, session_id: str) -> None:
@@ -139,7 +146,15 @@ class BrowserPool:
             sessions = list(self._sessions.values())
             self._sessions.clear()
         for session in sessions:
-            await session.close()
+            try:
+                # A hung playwright teardown must not stall shutdown.
+                await asyncio.wait_for(session.close(), timeout=SESSION_CLOSE_TIMEOUT)
+            except Exception as exc:
+                logger.warning(
+                    "browser_session_close_timeout",
+                    session_id=session.session_id,
+                    error=str(exc),
+                )
         if sessions:
             logger.info("browser_pool_drained", count=len(sessions))
 
@@ -165,9 +180,7 @@ class BrowserPool:
     async def reclaim_idle(self) -> int:
         """Close sessions idle beyond the timeout. Returns count reclaimed."""
         async with self._lock:
-            stale = [
-                sid for sid, s in self._sessions.items() if s.idle_seconds > self.idle_timeout
-            ]
+            stale = [sid for sid, s in self._sessions.items() if s.idle_seconds > self.idle_timeout]
             victims = [self._sessions.pop(sid) for sid in stale]
         for victim in victims:
             await victim.close()
@@ -212,9 +225,3 @@ def get_browser_pool() -> BrowserPool:
     if _pool is None:
         _pool = BrowserPool()
     return _pool
-
-
-def reset_browser_pool() -> None:
-    """Test helper: drop the global pool without closing it."""
-    global _pool
-    _pool = None

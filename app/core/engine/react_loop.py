@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import AsyncIterator, Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 
 from app.core import AgentEvent, AgentEventType, ChatResult, CheckpointData
 from app.core.compressor import ContextCompressor, estimate_tokens
+from app.core.engine.llm_calls import sampling_kwargs
 from app.core.parallel import ParallelToolExecutor
 from app.core.session import AgentSession
 from app.core.task_state_machine import TaskState
@@ -30,7 +31,7 @@ class ReActLoopExecutor:
         tool_registry: ToolRegistry,
         checkpoint_store: InMemoryCheckpointStore,
         tool_prioritizer: ToolPrioritizer,
-        build_tools_fn: Callable[[list[str], str], list[dict[str, Any]]],
+        build_tools_fn: Callable[..., list[dict[str, Any]]],
         validate_tool_call_fn: Callable[[str, dict[str, Any]], tuple[bool, str]] | None = None,
     ):
         self.model_registry = model_registry
@@ -69,33 +70,55 @@ class ReActLoopExecutor:
                 iteration += 1
 
                 ctx_tokens = estimate_tokens(session.messages)
-                ctx_limit = getattr(adapter.capabilities, "max_tokens", None) or session.context_config.max_tokens
-                if compressor.needs_compression(session.messages) or (ctx_limit and ctx_tokens > ctx_limit * 0.8):
+                ctx_limit = (
+                    getattr(adapter.capabilities, "max_tokens", None)
+                    or session.context_config.max_tokens
+                )
+                if compressor.needs_compression(session.messages) or (
+                    ctx_limit and ctx_tokens > ctx_limit * 0.8
+                ):
                     session.messages = await compressor.compress(session.messages, adapter)
-                    yield AgentEvent(type=AgentEventType.CONTEXT_COMPRESSION, data={"iteration": iteration, "tokens": ctx_tokens, "limit": ctx_limit})
+                    yield AgentEvent(
+                        type=AgentEventType.CONTEXT_COMPRESSION,
+                        data={"iteration": iteration, "tokens": ctx_tokens, "limit": ctx_limit},
+                    )
 
                 yield AgentEvent(type=AgentEventType.THINKING, data={"iteration": iteration})
 
                 try:
                     if adapter.capabilities.streaming:
                         full_content = ""
-                        accumulated_tool_calls = []
-                        async for chunk in adapter.stream_chat(messages=session.messages, tools=tools or None):
+                        accumulated_tool_calls: list[dict[str, Any]] = []
+                        stream = cast(
+                            "AsyncIterator[ChatResult]",
+                            adapter.stream_chat(
+                                messages=session.messages,
+                                tools=tools or None,
+                                **sampling_kwargs(session),
+                            ),
+                        )
+                        async for chunk in stream:
                             if chunk.content:
                                 full_content += chunk.content
-                                yield AgentEvent(type=AgentEventType.TEXT, data={"content": chunk.content})
+                                yield AgentEvent(
+                                    type=AgentEventType.TEXT, data={"content": chunk.content}
+                                )
                             for tc in chunk.tool_calls:
                                 idx = tc.get("index", 0) if "index" in tc else 0
                                 while len(accumulated_tool_calls) <= idx:
-                                    accumulated_tool_calls.append({
-                                        "id": "",
-                                        "type": "function",
-                                        "function": {"name": "", "arguments": ""},
-                                    })
+                                    accumulated_tool_calls.append(
+                                        {
+                                            "id": "",
+                                            "type": "function",
+                                            "function": {"name": "", "arguments": ""},
+                                        }
+                                    )
                                 if tc.get("id"):
                                     accumulated_tool_calls[idx]["id"] = tc["id"]
                                 if tc.get("function", {}).get("name"):
-                                    accumulated_tool_calls[idx]["function"]["name"] = tc["function"]["name"]
+                                    accumulated_tool_calls[idx]["function"]["name"] = tc[
+                                        "function"
+                                    ]["name"]
                                 if tc.get("function", {}).get("arguments"):
                                     new_args = tc["function"]["arguments"]
                                     if isinstance(new_args, dict):
@@ -103,13 +126,24 @@ class ReActLoopExecutor:
                                     elif not isinstance(new_args, str):
                                         new_args = str(new_args)
                                     accumulated_tool_calls[idx]["function"]["arguments"] += new_args
-                        result = ChatResult(content=full_content, tool_calls=accumulated_tool_calls, finish_reason="stop", tokens_used=0)
+                        result = ChatResult(
+                            content=full_content,
+                            tool_calls=accumulated_tool_calls,
+                            finish_reason="stop",
+                            tokens_used=0,
+                        )
                     else:
-                        result = await adapter.chat(messages=session.messages, tools=tools or None)
+                        result = await adapter.chat(
+                            messages=session.messages,
+                            tools=tools or None,
+                            **sampling_kwargs(session),
+                        )
                 except Exception as e:
                     if session._stop_requested:
                         yield AgentEvent(type=AgentEventType.ERROR, data={"error": str(e)})
-                        await session.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
+                        await session.state_machine.transition(
+                            TaskState.CANCELLED, trigger="user_stop"
+                        )
                         return
                     yield AgentEvent(type=AgentEventType.ERROR, data={"error": str(e)})
                     await session.state_machine.transition(TaskState.FAILED, trigger="llm_error")
@@ -121,18 +155,35 @@ class ReActLoopExecutor:
                     xml_tool_calls = OpenAIAdapter._parse_xml_tool_calls(result.content)
                     if xml_tool_calls:
                         result.tool_calls = xml_tool_calls
-                        cleaned = re.sub(r'<function([^>]+)>.*?</\1>', '', result.content, flags=re.DOTALL | re.IGNORECASE).strip()
+                        cleaned = re.sub(
+                            r"<function([^>]+)>.*?</\1>",
+                            "",
+                            result.content,
+                            flags=re.DOTALL | re.IGNORECASE,
+                        ).strip()
                         if not cleaned:
                             result.content = ""
 
                 if result.content:
                     session.messages.append({"role": "assistant", "content": result.content})
-                    yield AgentEvent(type=AgentEventType.TEXT, data={"content": result.content})
+                    if not adapter.capabilities.streaming:
+                        # Streaming already emitted each delta; re-emitting the
+                        # assembled body here would duplicate the text.
+                        yield AgentEvent(type=AgentEventType.TEXT, data={"content": result.content})
 
                 if result.tool_calls:
-                    session.messages.append({"role": "assistant", "content": "", "tool_calls": result.tool_calls})
+                    session.messages.append(
+                        {"role": "assistant", "content": "", "tool_calls": result.tool_calls}
+                    )
                     for tc in result.tool_calls:
-                        yield AgentEvent(type=AgentEventType.TOOL_CALL, data={"id": tc.get("id"), "name": tc.get("function", {}).get("name"), "arguments": tc.get("function", {}).get("arguments", {})})
+                        yield AgentEvent(
+                            type=AgentEventType.TOOL_CALL,
+                            data={
+                                "id": tc.get("id"),
+                                "name": tc.get("function", {}).get("name"),
+                                "arguments": tc.get("function", {}).get("arguments", {}),
+                            },
+                        )
                     tool_results = await executor.execute_all(result.tool_calls)
                     for tr in tool_results:
                         self.tool_prioritizer.record_outcome(
@@ -140,8 +191,17 @@ class ReActLoopExecutor:
                             tr.success,
                             tr.duration_ms,
                         )
-                        yield AgentEvent(type=AgentEventType.TOOL_RESULT, data={"tool_name": tr.tool_name, "result": tr.result, "error": tr.error})
-                        session.messages.append({"role": "tool", "content": tr.result, "tool_name": tr.tool_name})
+                        yield AgentEvent(
+                            type=AgentEventType.TOOL_RESULT,
+                            data={
+                                "tool_name": tr.tool_name,
+                                "result": tr.result,
+                                "error": tr.error,
+                            },
+                        )
+                        session.messages.append(
+                            {"role": "tool", "content": tr.result, "tool_name": tr.tool_name}
+                        )
 
                     cp = CheckpointData(
                         session_id=session.session_id,
@@ -162,10 +222,17 @@ class ReActLoopExecutor:
                             "context_tokens": ctx_tokens,
                         },
                         channel_versions={"messages": iteration, "tools": len(result.tool_calls)},
-                        versions_seen={"node": {"messages": iteration, "tools": len(result.tool_calls)}},
+                        versions_seen={
+                            "node": {"messages": iteration, "tools": len(result.tool_calls)}
+                        },
                     )
-                    await self._checkpoints.save(None, cp, checkpoint_id=f"{session.session_id}-{iteration}")
-                    yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration, "tool_calls": len(result.tool_calls)})
+                    await self._checkpoints.save(
+                        None, cp, checkpoint_id=f"{session.session_id}-{iteration}"
+                    )
+                    yield AgentEvent(
+                        type=AgentEventType.CHECKPOINT,
+                        data={"iteration": iteration, "tool_calls": len(result.tool_calls)},
+                    )
                     continue
 
                 cp = CheckpointData(
@@ -181,13 +248,18 @@ class ReActLoopExecutor:
                     channel_versions={"messages": iteration},
                     versions_seen={"node": {"messages": iteration}},
                 )
-                await self._checkpoints.save(None, cp, checkpoint_id=f"{session.session_id}-{iteration}")
+                await self._checkpoints.save(
+                    None, cp, checkpoint_id=f"{session.session_id}-{iteration}"
+                )
                 yield AgentEvent(type=AgentEventType.CHECKPOINT, data={"iteration": iteration})
                 break
 
             if iteration >= session.max_iterations and result and result.tool_calls:
                 await session.state_machine.transition(TaskState.FAILED, trigger="max_iterations")
-                yield AgentEvent(type=AgentEventType.DONE, data={"status": "max_iterations_reached", "iterations": iteration})
+                yield AgentEvent(
+                    type=AgentEventType.DONE,
+                    data={"status": "max_iterations_reached", "iterations": iteration},
+                )
                 return
 
             if session._stop_requested:

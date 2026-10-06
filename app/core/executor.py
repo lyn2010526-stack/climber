@@ -27,6 +27,7 @@ logger = structlog.get_logger()
 
 # ── Workflow Engine Adapter ──
 
+
 class WorkflowExecutorAdapter:
     def __init__(self, workflow_engine: Any) -> None:
         self._engine = workflow_engine
@@ -49,6 +50,7 @@ class WorkflowExecutorAdapter:
 
 # ── Skill Composer Adapter ──
 
+
 class SkillComposerExecutorAdapter:
     def __init__(self, composer: Any) -> None:
         self._composer = composer
@@ -58,7 +60,9 @@ class SkillComposerExecutorAdapter:
         if composition is None:
             return ExecutionResult(status=ExecutionStatus.FAILED, error="composition is required")
         try:
-            result = await self._composer.execute_composition(composition, context=context.variables)
+            result = await self._composer.execute_composition(
+                composition, context=context.variables
+            )
             if isinstance(result, dict):
                 ok = result.get("status") in ("completed", "partial")
                 return ExecutionResult(
@@ -78,6 +82,7 @@ class SkillComposerExecutorAdapter:
 
 
 # ── Crew Adapter ──
+
 
 class CrewExecutorAdapter:
     def __init__(self, crew: Any) -> None:
@@ -102,6 +107,7 @@ class CrewExecutorAdapter:
 
 # ── Unified Executor Dispatcher ──
 
+
 class UnifiedExecutor(IExecutor):
     def __init__(self) -> None:
         self._adapters: dict[str, IExecutor] = {}
@@ -119,13 +125,15 @@ class UnifiedExecutor(IExecutor):
             )
         return await adapter.execute(context, **kwargs)
 
-    async def execute_stream(self, context: ExecutionContext, **kwargs: Any) -> AsyncIterator[Any]:
+    async def execute_stream(  # type: ignore[override]  # IExecutor declares async->AsyncIterator; impls are async generators consumed via `async for`
+        self, context: ExecutionContext, **kwargs: Any
+    ) -> AsyncIterator[Any]:
         executor_type = kwargs.get("executor_type", "workflow")
         adapter = self._adapters.get(executor_type)
         if adapter is None:
             raise ValueError(f"Unknown executor type: {executor_type}")
         if hasattr(adapter, "execute_stream"):
-            async for chunk in adapter.execute_stream(context, **kwargs):
+            async for chunk in adapter.execute_stream(context, **kwargs):  # type: ignore[attr-defined]  # concrete executors' execute_stream are async generators
                 yield chunk
         else:
             result = await adapter.execute(context, **kwargs)

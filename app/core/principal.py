@@ -76,8 +76,10 @@ def principal_from_auth(auth: dict[str, Any]) -> Principal:
     if isinstance(raw_scopes, str):
         raw_scopes = raw_scopes.split()
     scopes = tuple(str(scope) for scope in raw_scopes)
-    role = str(auth["role"]) if auth.get("role") is not None else (
-        "admin" if "admin" in scopes else None
+    role = (
+        str(auth["role"])
+        if auth.get("role") is not None
+        else ("admin" if "admin" in scopes else None)
     )
     return Principal(
         subject_id=subject_id,

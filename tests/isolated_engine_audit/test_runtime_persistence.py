@@ -22,10 +22,23 @@ from app.core.engine.run_storage import RunStorage
 from app.core.engine.session_runner import merge_stream_chunk, response_usage
 from app.core.recovery import RecoveryManager
 from app.core.session import AgentSession, SessionConfig
-from app.middleware.metrics import (ACTIVE_SESSIONS, AGENT_RUN_TOTAL, TOKEN_USAGE,
-                                    TOOL_CALL_LATENCY, TOOL_CALL_TOTAL)
+from app.middleware.metrics import (
+    ACTIVE_SESSIONS,
+    AGENT_RUN_TOTAL,
+    TOKEN_USAGE,
+    TOOL_CALL_LATENCY,
+    TOOL_CALL_TOTAL,
+)
 from app.storage import Base
-from app.storage.database import Agent, CheckpointRecord, Message, Session, Turn, UsageLog
+from app.storage.database import (
+    Agent,
+    CheckpointRecord,
+    Message,
+    Session,
+    SessionInput,
+    Turn,
+    UsageLog,
+)
 from app.storage.models_cost import CostRecord
 
 
@@ -61,22 +74,43 @@ class ScriptedModel:
 
 class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        self.engines = []
         self.tmp = tempfile.TemporaryDirectory(prefix="engine-audit-")
-        self.db_engine = create_async_engine("sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "isolated.db"))
+        self.addCleanup(self.tmp.cleanup)
+        self.db_engine = create_async_engine(
+            "sqlite+aiosqlite:///" + str(Path(self.tmp.name) / "isolated.db")
+        )
+        self.addAsyncCleanup(self.db_engine.dispose)
 
         @event.listens_for(self.db_engine.sync_engine, "connect")
         def foreign_keys(connection, record):
             connection.execute("PRAGMA foreign_keys=ON")
 
         self.factory = async_sessionmaker(self.db_engine, expire_on_commit=False)
-        tables = [model.__table__ for model in (Agent, Session, Turn, Message, UsageLog, CheckpointRecord, CostRecord)]
+        tables = [
+            model.__table__
+            for model in (
+                Agent,
+                Session,
+                Turn,
+                Message,
+                UsageLog,
+                CheckpointRecord,
+                CostRecord,
+                SessionInput,
+            )
+        ]
         async with self.db_engine.begin() as connection:
             await connection.run_sync(lambda conn: Base.metadata.create_all(conn, tables=tables))
         self.patches = [
             patch("app.storage.async_session", self.factory),
             patch("app.storage.engine", self.db_engine),
             patch("app.core.checkpoint.async_session", self.factory),
-            patch.object(AgentEngine, "_init_sandbox", lambda engine: setattr(engine, "sandbox", None)),
+            patch("app.core.ui_rules.refresh_rule_context", new_callable=AsyncMock),
+            patch("app.core.prompt_optimizer.maybe_optimize_instruction", new_callable=AsyncMock),
+            patch.object(
+                AgentEngine, "_init_sandbox", lambda engine: setattr(engine, "sandbox", None)
+            ),
             patch.object(AgentEngine, "_init_reasoning"),
             patch.object(AgentEngine, "_init_permissions"),
             patch.object(AgentEngine, "_set_agent_mode"),
@@ -87,29 +121,49 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
             patch.object(AgentEngine, "_inject_core_memory", new_callable=AsyncMock),
             patch.object(AgentEngine, "_store_episodic_memory", new_callable=AsyncMock),
             patch.object(AgentEngine, "_trigger_memory_reflection"),
+            patch.object(AgentEngine, "_record_profile_outcome"),
+            patch.object(AgentEngine, "_tick_evolution"),
+            patch.object(AgentEngine, "_archive_instruction", new_callable=AsyncMock),
+            patch.object(AgentEngine, "_inject_profile_context", new_callable=AsyncMock),
             patch("app.core.agent_engine.build_tools", return_value=[]),
         ]
         for item in self.patches:
             item.start()
+            self.addCleanup(item.stop)
+        self.addAsyncCleanup(self.cleanup_engines)
         self.active = ACTIVE_SESSIONS._value.get()
 
+    async def cleanup_engines(self):
+        for engine in self.engines:
+            await engine.resource_tracker.cleanup()
+            while engine._background_tasks:
+                await asyncio.gather(*list(engine._background_tasks), return_exceptions=True)
+
     async def asyncTearDown(self):
-        for item in reversed(self.patches):
-            item.stop()
-        await self.db_engine.dispose()
-        self.tmp.cleanup()
         self.assertEqual(ACTIVE_SESSIONS._value.get(), self.active)
 
     def engine(self, model):
-        engine = AgentEngine(model_registry=SimpleNamespace(get_or_create=lambda **kwargs: model),
-                             tool_registry=Mock(), run_store=RunStorage(self.factory))
+        engine = AgentEngine(
+            model_registry=SimpleNamespace(get_or_create=lambda **kwargs: model),
+            tool_registry=Mock(),
+            run_store=RunStorage(self.factory),
+        )
+        self.engines.append(engine)
         engine.permission_overlay = None
         engine.agent_mode = None
         return engine
 
     def session(self, sid="session", **kwargs):
-        return AgentSession(SessionConfig(session_id=sid, user_id="audit-user", agent_id="",
-                                          provider="scripted-test", model_id="fake-model", **kwargs))
+        return AgentSession(
+            SessionConfig(
+                session_id=sid,
+                user_id="audit-user",
+                agent_id="",
+                provider="scripted-test",
+                model_id="fake-model",
+                **kwargs,
+            )
+        )
 
     async def rows(self, model):
         async with self.factory() as db:
@@ -128,7 +182,9 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(item.data["tokens_used"], 7)
         turn = (await self.rows(Turn))[0]
         usage = (await self.rows(UsageLog))[0]
-        self.assertEqual((usage.prompt_tokens, usage.completion_tokens, usage.total_tokens), (4, 3, 7))
+        self.assertEqual(
+            (usage.prompt_tokens, usage.completion_tokens, usage.total_tokens), (4, 3, 7)
+        )
         self.assertEqual(turn.result, "answer")
         self.assertIsNotNone(turn.completed_at)
         self.assertEqual((await self.rows(Session))[0].total_tokens, 7)
@@ -173,14 +229,18 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.rows(Turn))[0].metadata_["usage_status"], "unknown")
 
     async def test_stream_deltas_and_final_snapshot_are_not_duplicated(self):
-        chunks = [ChatResult(content="ha", accumulated_content="ha"),
-                  ChatResult(content="ha", accumulated_content="haha"),
-                  ChatResult(content="haha", accumulated_content="haha", tokens_used=9)]
+        chunks = [
+            ChatResult(content="ha", accumulated_content="ha"),
+            ChatResult(content="ha", accumulated_content="haha"),
+            ChatResult(content="haha", accumulated_content="haha", tokens_used=9),
+        ]
         output = await self.engine(ScriptedModel([chunks], True)).run_agent(self.session(), "hi")
         self.assertEqual(output["output"], "haha")
         messages = await self.rows(Message)
         self.assertEqual([row.content for row in messages if row.role == "assistant"], ["haha"])
-        self.assertEqual((await self.rows(Turn))[0].metadata_["model_calls"][0]["usage"]["total_tokens"], 9)
+        self.assertEqual(
+            (await self.rows(Turn))[0].metadata_["model_calls"][0]["usage"]["total_tokens"], 9
+        )
         self.assertEqual(await self.rows(UsageLog), [])
 
     async def test_repeated_plain_deltas_are_preserved(self):
@@ -196,9 +256,13 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((usage.prompt_tokens, usage.completion_tokens), (5, 2))
 
     async def test_failure_sets_session_and_turn_and_metrics(self):
-        counter = AGENT_RUN_TOTAL.labels(provider="scripted-test", model_id="fake-model", status="failed")
+        counter = AGENT_RUN_TOTAL.labels(
+            provider="scripted-test", model_id="fake-model", status="failed"
+        )
         before = counter._value.get()
-        output = await self.engine(ScriptedModel([RuntimeError("scripted failure")])).run_agent(self.session(), "hi")
+        output = await self.engine(ScriptedModel([RuntimeError("scripted failure")])).run_agent(
+            self.session(), "hi"
+        )
         self.assertEqual(output["status"], "failed")
         self.assertEqual(output["error"], "scripted failure")
         self.assertEqual((await self.rows(Session))[0].status, "failed")
@@ -231,7 +295,9 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.rows(Turn))[0].status, "stopped")
 
     async def test_empty_response_limit_is_failure(self):
-        output = await self.engine(ScriptedModel([reply("", 0)])).run_agent(self.session(max_iterations=1), "hi")
+        output = await self.engine(ScriptedModel([reply("", 0)])).run_agent(
+            self.session(max_iterations=1), "hi"
+        )
         self.assertEqual(output["status"], "max_iterations_reached")
         self.assertEqual((await self.rows(Turn))[0].status, "failed")
 
@@ -248,6 +314,7 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
         engine = self.engine(ScriptedModel([reply("test-key-marker")]))
         session = self.session(api_key="test-key-marker")
         await engine.run_agent(session, "hi")
+        await self.cleanup_engines()
         await self.db_engine.dispose()
         fresh = self.session(api_key="fresh-key")
         self.assertTrue(await self.engine(ScriptedModel([])).recover_session(fresh))
@@ -255,13 +322,19 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fresh.messages[-1]["content"], "[REDACTED]")
         self.assertEqual(fresh.status.value, "completed")
         for row in await self.rows(CheckpointRecord):
-            payload = " ".join([row.messages, row.metadata_, row.channel_values, row.pending_writes])
+            payload = f"{row.messages} {row.metadata_} {row.channel_values} {row.pending_writes}"
             self.assertNotIn("test-key-marker", payload)
 
     async def test_store_redacts_nested_credential_fields(self):
         store = SQLiteCheckpointStore()
-        cp = CheckpointData("s", [], 0, "processing", metadata={"api_key": "private"},
-                            channel_values={"nested": {"authorization": "Bearer private"}})
+        cp = CheckpointData(
+            "s",
+            [],
+            0,
+            "processing",
+            metadata={"api_key": "private"},
+            channel_values={"nested": {"authorization": "Bearer private"}},
+        )
         cid = await store.save(None, cp)
         restored = await store.get(None, cid)
         self.assertEqual(restored.metadata["api_key"], "[REDACTED]")
@@ -289,9 +362,16 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
         session = self.session()
         store = RunStorage(self.factory)
         await store.begin(session)
-        cp = CheckpointData(session.session_id, [{"role": "user", "content": "original"},
-            {"role": "assistant", "content": "", "tool_calls": [{"id": "t1"}]},
-            {"role": "tool", "content": "saved tool result", "tool_call_id": "t1"}], 2, "processing")
+        cp = CheckpointData(
+            session.session_id,
+            [
+                {"role": "user", "content": "original"},
+                {"role": "assistant", "content": "", "tool_calls": [{"id": "t1"}]},
+                {"role": "tool", "content": "saved tool result", "tool_call_id": "t1"},
+            ],
+            2,
+            "processing",
+        )
         await SQLiteCheckpointStore().save(None, cp, thread_id=session.current_turn_id)
         model = ScriptedModel([reply("resumed")])
         engine = self.engine(model)
@@ -305,8 +385,15 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(restored.current_turn_id, session.current_turn_id)
 
     async def test_pending_tool_side_effects_block_automatic_restore(self):
-        cp = CheckpointData("s", [], 1, "processing", pending_writes=[
-            {"channel": "tools", "value": {}, "write_id": "t", "status": "pending"}])
+        cp = CheckpointData(
+            "s",
+            [],
+            1,
+            "processing",
+            pending_writes=[
+                {"channel": "tools", "value": {}, "write_id": "t", "status": "pending"}
+            ],
+        )
         await SQLiteCheckpointStore().save(None, cp)
         with self.assertRaisesRegex(ValueError, "pending writes"):
             await self.engine(ScriptedModel([])).recover_session(self.session("s"))
@@ -319,20 +406,37 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_metrics_increment_using_real_counts(self):
         total = TOKEN_USAGE.labels(provider="scripted-test", model_id="fake-model", type="total")
-        run = AGENT_RUN_TOTAL.labels(provider="scripted-test", model_id="fake-model", status="completed")
+        run = AGENT_RUN_TOTAL.labels(
+            provider="scripted-test", model_id="fake-model", status="completed"
+        )
         before_total, before_run = total._value.get(), run._value.get()
         await self.engine(ScriptedModel([reply(total=17)])).run_agent(self.session(), "hi")
         self.assertEqual(total._value.get() - before_total, 17)
         self.assertEqual(run._value.get() - before_run, 1)
 
     async def test_tools_metrics_and_multicall_usage(self):
-        tool_call = {"id": "call1", "type": "function", "function": {"name": "fake_tool", "arguments": "{}"}}
-        model = ScriptedModel([reply("", 4, {"prompt_tokens": 3, "completion_tokens": 1}, [tool_call]),
-                               reply("done", 9, {"prompt_tokens": 5, "completion_tokens": 4})])
+        tool_call = {
+            "id": "call1",
+            "type": "function",
+            "function": {"name": "fake_tool", "arguments": "{}"},
+        }
+        model = ScriptedModel(
+            [
+                reply("", 4, {"prompt_tokens": 3, "completion_tokens": 1}, [tool_call]),
+                reply("done", 9, {"prompt_tokens": 5, "completion_tokens": 4}),
+            ]
+        )
         engine = self.engine(model)
         engine._validate_tool_call = Mock(return_value=(True, ""))
-        result = SimpleNamespace(tool_name="fake_tool", tool_call_id="call1", success=True,
-                                 duration_ms=250, result="ok", error="", arguments={})
+        result = SimpleNamespace(
+            tool_name="fake_tool",
+            tool_call_id="call1",
+            success=True,
+            duration_ms=250,
+            result="ok",
+            error="",
+            arguments={},
+        )
         executor = SimpleNamespace(execute_all=AsyncMock(return_value=[result]))
         count = TOOL_CALL_TOTAL.labels(tool_name="fake_tool", status="success")
         latency = TOOL_CALL_LATENCY.labels(tool_name="fake_tool")
@@ -343,7 +447,9 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(await self.rows(UsageLog)), 2)
         self.assertEqual(count._value.get() - before_count, 1)
         self.assertAlmostEqual(latency._sum.get() - before_latency, 0.25)
-        pending = [row for row in await self.rows(CheckpointRecord) if json.loads(row.pending_writes)]
+        pending = [
+            row for row in await self.rows(CheckpointRecord) if json.loads(row.pending_writes)
+        ]
         self.assertEqual(len(pending), 1)
 
     async def test_error_event_is_emitted_after_failed_turn_commit(self):
@@ -412,8 +518,10 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(session._resume_interrupted)
 
     async def test_resilience_accumulator_uses_same_snapshot_rules(self):
-        chunks = [ChatResult(content="one", accumulated_content="one"),
-                  ChatResult(content="one", accumulated_content="one", tokens_used=3)]
+        chunks = [
+            ChatResult(content="one", accumulated_content="one"),
+            ChatResult(content="one", accumulated_content="one", tokens_used=3),
+        ]
         engine = self.engine(ScriptedModel([]))
         result = await engine._stream_accumulate(ScriptedModel([chunks], True), [], [])
         self.assertEqual(result.content, "one")
@@ -426,7 +534,7 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
         output = await self.engine(ScriptedModel([result])).run_agent(session, "hi")
         self.assertEqual(output["tokens_used"], 8)
         self.assertEqual(session.metrics.total_tokens_used, 8)
-        assistant = [row for row in await self.rows(Message) if row.role == "assistant"][0]
+        assistant = next(row for row in await self.rows(Message) if row.role == "assistant")
         self.assertEqual(assistant.tokens, 8)
 
     async def test_busy_session_does_not_create_second_turn(self):
@@ -443,11 +551,15 @@ class RuntimePersistenceTests(unittest.IsolatedAsyncioTestCase):
 class ResponseContractTests(unittest.TestCase):
     def test_zero_usage_is_known_only_when_explicit(self):
         self.assertIsNone(response_usage(ChatResult())["total_tokens"])
-        self.assertEqual(response_usage(reply(total=0, usage={"total_tokens": 0}))["total_tokens"], 0)
+        self.assertEqual(
+            response_usage(reply(total=0, usage={"total_tokens": 0}))["total_tokens"], 0
+        )
 
     def test_partial_usage_is_not_guessed(self):
         usage = response_usage(reply(total=0, usage={"prompt_tokens": 4}))
-        self.assertEqual(usage, {"prompt_tokens": 4, "completion_tokens": None, "total_tokens": None})
+        self.assertEqual(
+            usage, {"prompt_tokens": 4, "completion_tokens": None, "total_tokens": None}
+        )
 
     def test_diverging_snapshot_fails_explicitly(self):
         result = ChatResult(content="old")
@@ -457,16 +569,19 @@ class ResponseContractTests(unittest.TestCase):
     def test_distinct_complete_tool_calls_are_retained(self):
         calls = []
         for name in ("a", "b"):
-            AgentEngine._accumulate_stream_tool_calls(calls, [{"id": name,
-                "function": {"name": name, "arguments": {"x": 1}}}])
+            AgentEngine._accumulate_stream_tool_calls(
+                calls, [{"id": name, "function": {"name": name, "arguments": {"x": 1}}}]
+            )
         self.assertEqual([call["id"] for call in calls], ["a", "b"])
 
     def test_indexed_tool_argument_deltas_are_joined(self):
         calls = []
-        AgentEngine._accumulate_stream_tool_calls(calls, [{"index": 0, "id": "a",
-            "function": {"name": "tool", "arguments": '{"x":'}}])
-        AgentEngine._accumulate_stream_tool_calls(calls, [{"index": 0,
-            "function": {"arguments": '1}'}}])
+        AgentEngine._accumulate_stream_tool_calls(
+            calls, [{"index": 0, "id": "a", "function": {"name": "tool", "arguments": '{"x":'}}]
+        )
+        AgentEngine._accumulate_stream_tool_calls(
+            calls, [{"index": 0, "function": {"arguments": "1}"}}]
+        )
         self.assertEqual(json.loads(calls[0]["function"]["arguments"]), {"x": 1})
 
 

@@ -162,7 +162,7 @@ def _detect_title(raw: str, url: str) -> str:
 def _title_from_browser_summary(summary: str) -> str:
     for line in summary.splitlines():
         if line.startswith("Title:"):
-            return line[len("Title:"):].strip()
+            return line[len("Title:") :].strip()
     return ""
 
 
@@ -222,7 +222,7 @@ def _fetch_url_sync(url: str, timeout_s: int) -> str:
     request = Request(url, headers={"User-Agent": _USER_AGENT, "Accept-Language": "en,en-US;q=0.9"})
     with urlopen(request, timeout=timeout_s) as response:
         charset = response.headers.get_content_charset() or "utf-8"
-        payload = response.read(_MAX_BYTES)
+        payload: bytes = response.read(_MAX_BYTES)
     return payload.decode(charset, errors="replace")
 
 
@@ -283,8 +283,11 @@ def _collect_sync(candidates: list[str], query: str, timeout_s: int) -> list[dic
     return findings
 
 
-async def _collect_browser(candidates: list[str], query: str, timeout_s: int) -> list[dict[str, Any]]:
+async def _collect_browser(
+    candidates: list[str], query: str, timeout_s: int
+) -> list[dict[str, Any]]:
     from app.tools import browser_tools
+    from app.tools.browser_pool import get_browser_pool
 
     findings: list[dict[str, Any]] = []
     try:
@@ -305,7 +308,7 @@ async def _collect_browser(candidates: list[str], query: str, timeout_s: int) ->
                 findings.append(finding)
     finally:
         with contextlib.suppress(Exception):
-            await browser_tools.close_all_sessions()
+            await get_browser_pool().close_all()
     return findings
 
 
@@ -377,7 +380,9 @@ def research_report_text(result: dict[str, Any]) -> str:
         lines.append("")
     for finding in findings:
         lines.append(f"### {finding.get('title', finding.get('source', ''))}")
-        lines.append(f"- 来源：{finding.get('source', '')}（相关度 {finding.get('rel_score', 0.0)}）")
+        lines.append(
+            f"- 来源：{finding.get('source', '')}（相关度 {finding.get('rel_score', 0.0)}）"
+        )
         for point in finding.get("key_points", []):
             lines.append(f"- {point}")
         lines.append("")

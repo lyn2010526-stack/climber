@@ -2,7 +2,6 @@ const CACHE_NAME = 'climber-v1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json',
   '/favicon.svg'
 ];
 
@@ -13,14 +12,14 @@ self.addEventListener('install', (event) => {
       return cache.addAll(STATIC_ASSETS);
     })
   );
-  
+
   self.skipWaiting(); // Activate immediately
 });
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
   const cacheWhitelist = [CACHE_NAME];
-  
+
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -32,7 +31,7 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
-  
+
   self.clients.claim(); // Take control of all clients
 });
 
@@ -40,17 +39,17 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
-  
+
   // Skip non-GET requests
   if (request.method !== 'GET') {
     return;
   }
-  
+
   // Skip chrome-extension and other non-http requests
   if (!url.protocol.startsWith('http')) {
     return;
   }
-  
+
   event.respondWith(
     fetch(request)
       .then((response) => {
@@ -64,13 +63,24 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        // Fallback to cache for navigation requests
-        if (request.mode === 'navigate') {
-          return caches.match('/index.html');
-        }
-        
-        // For API requests, return error
-        return caches.match(request);
+        return caches.match(request).then((cached) => {
+          if (!cached) {
+            // For navigation requests without a cached copy, fall back to the
+            // shell so the app can still start; for everything else, let the
+            // fetch reject so callers see a real network failure.
+            if (request.mode === 'navigate') {
+              return caches.match('/index.html');
+            }
+            return undefined;
+          }
+          // Serving a stale cached response for a list/detail payload. Tell the
+          // page so it can surface an offline hint instead of pretending the
+          // data is current (R12-H63).
+          self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+            clients.forEach((client) => client.postMessage({ type: 'STALE_RESPONSE', url: request.url }));
+          });
+          return cached;
+        });
       })
   );
 });
@@ -99,7 +109,7 @@ self.addEventListener('push', (event) => {
     icon: '/icon-192x192.png',
     badge: '/icon-96x96.png'
   };
-  
+
   event.waitUntil(
     self.registration.showNotification(title, options)
   );
@@ -108,7 +118,7 @@ self.addEventListener('push', (event) => {
 // Notification click handler
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  
+
   event.waitUntil(
     self.clients.openWindow('/')
   );

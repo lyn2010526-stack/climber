@@ -11,6 +11,7 @@ import structlog
 
 from app.core import ChatResult
 from app.models import ModelAdapter, ModelCapability
+from app.models.vision import is_image_reference, split_data_url
 
 logger = structlog.get_logger()
 
@@ -72,6 +73,7 @@ class AnthropicAdapter(ModelAdapter):
             streaming=True,
             tools=True,
             vision=True,
+            file_attachments=False,
             embedding=False,
             max_tokens=200_000,
         )
@@ -90,14 +92,18 @@ class AnthropicAdapter(ModelAdapter):
                 system_parts.append(content or "")
                 continue
             if role == "tool":
-                converted.append({
-                    "role": "user",
-                    "content": [{
-                        "type": "tool_result",
-                        "tool_use_id": msg.get("tool_call_id", ""),
-                        "content": content or "",
-                    }],
-                })
+                converted.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": msg.get("tool_call_id", ""),
+                                "content": content or "",
+                            }
+                        ],
+                    }
+                )
                 continue
             if role == "assistant" and msg.get("tool_calls"):
                 anthropic_content: list[dict[str, Any]] = []
@@ -111,32 +117,73 @@ class AnthropicAdapter(ModelAdapter):
                             args = json.loads(args)
                         except json.JSONDecodeError:
                             args = {}
-                    anthropic_content.append({
-                        "type": "tool_use",
-                        "id": tc.get("id", ""),
-                        "name": func.get("name", ""),
-                        "input": args,
-                    })
+                    anthropic_content.append(
+                        {
+                            "type": "tool_use",
+                            "id": tc.get("id", ""),
+                            "name": func.get("name", ""),
+                            "input": args,
+                        }
+                    )
                 converted.append({"role": "assistant", "content": anthropic_content})
                 continue
 
-            converted.append({"role": role, "content": content or ""})
+            converted.append({"role": role, "content": self._convert_content(content)})
 
         system = "\n\n".join(system_parts) if system_parts else None
         return system, converted
+
+    def _convert_content(self, content: Any) -> Any:
+        """Map OpenAI vision content parts to Anthropic blocks; text passes through."""
+        if not isinstance(content, list):
+            return content or ""
+        blocks: list[dict[str, Any]] = []
+        for part in content:
+            if isinstance(part, str):
+                blocks.append({"type": "text", "text": part})
+                continue
+            if not isinstance(part, dict):
+                continue
+            part_type = part.get("type")
+            if part_type == "text":
+                blocks.append({"type": "text", "text": str(part.get("text", ""))})
+            elif part_type == "image_url":
+                source = self._image_source(str((part.get("image_url") or {}).get("url", "")))
+                if source is not None:
+                    blocks.append({"type": "image", "source": source})
+                else:
+                    logger.warning(
+                        "chat_image_part_unmapped",
+                        provider=self.provider,
+                        url_prefix=str(part)[:32],
+                    )
+        return blocks or [{"type": "text", "text": ""}]
+
+    @staticmethod
+    def _image_source(url: str) -> dict[str, Any] | None:
+        """Convert an image reference into an Anthropic image source block."""
+        split = split_data_url(url)
+        if split is not None:
+            media_type, payload = split
+            return {"type": "base64", "media_type": media_type, "data": payload}
+        if is_image_reference(url):
+            return {"type": "url", "url": url}
+        return None
 
     def _convert_tools(self, tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
         result = []
         for t in tools:
             func = t.get("function", {})
-            result.append({
-                "name": func.get("name", ""),
-                "description": func.get("description", ""),
-                "input_schema": func.get("parameters", {"type": "object", "properties": {}}),
-            })
+            result.append(
+                {
+                    "name": func.get("name", ""),
+                    "description": func.get("description", ""),
+                    "input_schema": func.get("parameters", {"type": "object", "properties": {}}),
+                }
+            )
         return result
 
-    async def stream_chat(
+    async def stream_chat(  # type: ignore[override]  # base declares async->AsyncIterator; impl is an async generator consumed via `async for`
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
@@ -167,6 +214,12 @@ class AnthropicAdapter(ModelAdapter):
         current_tool_name = None
         current_tool_input = ""
         tokens_used = 0
+        input_tokens = 0
+        output_tokens = 0
+        usage: dict[str, Any] | None = None
+
+        def _result(**kwargs: Any) -> ChatResult:
+            return ChatResult(usage=usage, **kwargs)
 
         try:
             client = self.get_client()
@@ -178,64 +231,79 @@ class AnthropicAdapter(ModelAdapter):
             ) as resp:
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():
-                        if not line.startswith("data: "):
-                            continue
-                        data = line[6:].strip()
-                        try:
-                            event = json.loads(data)
-                        except json.JSONDecodeError:
-                            continue
+                    if not line.startswith("data: "):
+                        continue
+                    data = line[6:].strip()
+                    try:
+                        event = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
 
-                        etype = event.get("type")
+                    etype = event.get("type")
 
-                        if etype == "message_start":
-                            usage = event.get("message", {}).get("usage", {})
-                            tokens_used = usage.get("input_tokens", 0)
+                    if etype == "message_start":
+                        starter_usage = event.get("message", {}).get("usage", {})
+                        input_tokens = starter_usage.get("input_tokens", 0)
+                        tokens_used = input_tokens
 
-                        elif etype == "content_block_start":
-                            block = event.get("content_block", {})
-                            if block.get("type") == "tool_use":
-                                current_tool_id = block.get("id")
-                                current_tool_name = block.get("name")
-                                current_tool_input = ""
+                    elif etype == "content_block_start":
+                        block = event.get("content_block", {})
+                        if block.get("type") == "tool_use":
+                            current_tool_id = block.get("id")
+                            current_tool_name = block.get("name")
+                            current_tool_input = ""
 
-                        elif etype == "content_block_delta":
-                            delta = event.get("delta", {})
-                            if delta.get("type") == "text_delta":
-                                yield ChatResult(
-                                    content=delta.get("text", ""),
-                                    tool_calls=[],
-                                    finish_reason=None,
-                                    tokens_used=tokens_used,
-                                )
-                            elif delta.get("type") == "input_json_delta":
-                                current_tool_input += delta.get("partial_json", "")
+                    elif etype == "content_block_delta":
+                        delta = event.get("delta", {})
+                        if delta.get("type") == "text_delta":
+                            yield ChatResult(
+                                content=delta.get("text", ""),
+                                tool_calls=[],
+                                finish_reason=None,
+                                tokens_used=tokens_used,
+                            )
+                        elif delta.get("type") == "input_json_delta":
+                            current_tool_input += delta.get("partial_json", "")
 
-                        elif etype == "content_block_stop":
-                            if current_tool_id and current_tool_name:
-                                try:
-                                    args = json.loads(current_tool_input) if current_tool_input else {}
-                                except json.JSONDecodeError:
-                                    args = {}
-                                yield ChatResult(
-                                    content="",
-                                    tool_calls=[{
+                    elif etype == "content_block_stop":
+                        if current_tool_id and current_tool_name:
+                            try:
+                                args = json.loads(current_tool_input) if current_tool_input else {}
+                            except json.JSONDecodeError:
+                                args = {}
+                            yield ChatResult(
+                                content="",
+                                tool_calls=[
+                                    {
                                         "id": current_tool_id,
                                         "type": "function",
                                         "function": {
                                             "name": current_tool_name,
                                             "arguments": args,
                                         },
-                                    }],
-                                    finish_reason="tool_use",
-                                    tokens_used=tokens_used,
-                                )
-                            current_tool_id = None
-                            current_tool_name = None
-                            current_tool_input = ""
+                                    }
+                                ],
+                                finish_reason="tool_use",
+                                tokens_used=tokens_used,
+                            )
+                        current_tool_id = None
+                        current_tool_name = None
+                        current_tool_input = ""
 
-                        elif etype == "message_delta":
-                            tokens_used += event.get("usage", {}).get("output_tokens", 0)
+                    elif etype == "message_delta":
+                        output_tokens = event.get("usage", {}).get("output_tokens", 0)
+                        tokens_used = input_tokens + output_tokens
+                        usage = {
+                            "prompt_tokens": input_tokens,
+                            "completion_tokens": output_tokens,
+                            "total_tokens": tokens_used,
+                        }
+                        yield _result(
+                            content="",
+                            tool_calls=[],
+                            finish_reason=None,
+                            tokens_used=tokens_used,
+                        )
 
         except Exception as e:
             logger.error("Anthropic streaming error", error=str(e))
@@ -257,18 +325,22 @@ class AnthropicAdapter(ModelAdapter):
         tool_calls = []
         finish_reason = "stop"
         tokens_used = 0
+        final_usage: dict[str, Any] | None = None
 
         async for chunk in self.stream_chat(messages, tools, **kwargs):
             full_content += chunk.content
             if chunk.tool_calls:
-                tool_calls = chunk.tool_calls
+                tool_calls.extend(chunk.tool_calls)
             if chunk.finish_reason:
                 finish_reason = chunk.finish_reason
             tokens_used = max(tokens_used, chunk.tokens_used)
+            if chunk.usage is not None:
+                final_usage = chunk.usage
 
         return ChatResult(
             content=full_content,
             tool_calls=tool_calls,
             finish_reason=finish_reason,
             tokens_used=tokens_used,
+            usage=final_usage,
         )

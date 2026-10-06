@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 
 async def test_create_session_persists_and_lists_model_override(client) -> None:
     created = await client.post(
@@ -75,7 +77,14 @@ class _FakeRun:
 class _FakeEngine:
     def __init__(self):
         self._sessions: dict = {}
+        self._session_locks: dict = {}
         self.created: dict = {}
+
+    def _init_reasoning(self):
+        return None
+
+    def __copy__(self):
+        return self
 
     def create_session(self, **kwargs):
         self.created = kwargs
@@ -83,6 +92,7 @@ class _FakeEngine:
         class _Session:
             def __init__(self, user_id):
                 self.user_id = user_id
+                self.session_config = SimpleNamespace()
 
         return _Session(kwargs.get("user_id", ""))
 
@@ -93,45 +103,89 @@ class _FakeEngine:
 async def test_chat_applies_session_model_override(client, monkeypatch) -> None:
     from app.api.v1 import chat as chat_module
 
-    created = await client.post(
-        "/api/v1/sessions/",
-        json={
-            "title": "chat-override",
-            "model_settings": {"provider": "deepseek", "model_id": "deepseek-chat"},
-        },
-    )
-    assert created.status_code == 200
-    session_id = created.json()["id"]
+    credential_id = "chat-override-credential"
+    await _seed_credential(credential_id, provider="openai")
+    try:
+        created = await client.post(
+            "/api/v1/sessions/",
+            json={
+                "title": "chat-override",
+                "model_settings": {
+                    "provider": "openai",
+                    "model_id": "gpt-4o-mini",
+                    "credential_id": credential_id,
+                },
+            },
+        )
+        assert created.status_code == 200
+        session_id = created.json()["id"]
 
-    fake = _FakeEngine()
-    monkeypatch.setattr(chat_module, "get_engine", lambda: fake)
-    monkeypatch.setattr(chat_module.RecoveryManager, "restore_session", lambda self, session: _noop())
+        fake = _FakeEngine()
+        monkeypatch.setattr(chat_module, "get_engine", lambda: fake)
+        monkeypatch.setattr(
+            chat_module.RecoveryManager, "restore_session", lambda self, session: _noop()
+        )
 
-    stream = await client.post(f"/api/v1/sessions/{session_id}/chat", json={"message": "hi"})
-    assert stream.status_code == 200
-    await stream.aread()
+        stream = await client.post(f"/api/v1/sessions/{session_id}/chat", json={"message": "hi"})
+        assert stream.status_code == 200
+        await stream.aread()
 
-    assert fake.created["provider"] == "deepseek"
-    assert fake.created["model_id"] == "deepseek-chat"
+        assert fake.created["provider"] == "openai"
+        assert fake.created["model_id"] == "gpt-4o-mini"
+    finally:
+        await _drop_credential(credential_id)
 
 
 async def _noop():
     return None
 
 
+async def _seed_credential(credential_id: str, provider: str) -> None:
+    from app.core.api_key_crypto import encrypt_api_key
+    from app.storage import async_session
+    from app.storage.database import ApiKey as ApiKeyModel
+
+    async with async_session() as db:
+        db.add(
+            ApiKeyModel(
+                id=credential_id,
+                user_id="default-user",
+                provider=provider,
+                name="chat-override-key",
+                api_key_encrypted=encrypt_api_key("test-credential-key"),
+                is_active=True,
+            )
+        )
+        await db.commit()
+
+
+async def _drop_credential(credential_id: str) -> None:
+    from app.storage import async_session
+    from app.storage.database import ApiKey as ApiKeyModel
+
+    async with async_session() as db:
+        row = await db.get(ApiKeyModel, credential_id)
+        if row is not None:
+            await db.delete(row)
+            await db.commit()
+
+
 async def _seed_agent(agent_id: str) -> None:
+    from app.core.api_key_crypto import encrypt_api_key
     from app.storage import async_session
     from app.storage.database import Agent as AgentModel
 
     async with async_session() as db:
-        db.add(AgentModel(
-            id=agent_id,
-            name="chat-model-test",
-            provider="openai",
-            model_id="gpt-4o-mini",
-            api_key_encrypted="",
-            user_id="default-user",
-        ))
+        db.add(
+            AgentModel(
+                id=agent_id,
+                name="chat-model-test",
+                provider="openai",
+                model_id="gpt-4o-mini",
+                api_key_encrypted=encrypt_api_key("test-agent-key"),
+                user_id="default-user",
+            )
+        )
         await db.commit()
 
 
@@ -153,7 +207,9 @@ async def _chat_kwargs_for(session_id: str, monkeypatch) -> dict:
 
     fake = _FakeEngine()
     monkeypatch.setattr(chat_module, "get_engine", lambda: fake)
-    monkeypatch.setattr(chat_module.RecoveryManager, "restore_session", lambda self, session: _noop())
+    monkeypatch.setattr(
+        chat_module.RecoveryManager, "restore_session", lambda self, session: _noop()
+    )
 
     dependency_overrides = dict(fastapi_app.dependency_overrides)
     fastapi_app.dependency_overrides[chat_module.get_current_user] = lambda: "default-user"
@@ -175,7 +231,11 @@ async def test_chat_same_provider_override_keeps_agent_key(client, monkeypatch) 
     try:
         created = await client.post(
             "/api/v1/sessions/",
-            json={"title": "same-provider", "agent_id": agent_id, "model_settings": {"model_id": "gpt-4o"}},
+            json={
+                "title": "same-provider",
+                "agent_id": agent_id,
+                "model_settings": {"model_id": "gpt-4o"},
+            },
         )
         assert created.status_code == 200
         assert created.json()["provider"] == "openai"

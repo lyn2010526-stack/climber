@@ -6,27 +6,35 @@ import {
 import { useWorkspaceStore } from '../../store/workspace';
 import { useI18n } from '../../i18n';
 import { PermissionModeToggle } from './PermissionModeToggle';
-import { AutonomySlider } from './AutonomySlider';
 import { usePermissionConfig } from './usePermissionConfig';
 import { SessionStatusBadge } from './SessionStatusBadge';
+import './codex-suite.css';
 
-const ICON_BUTTON = 'icon-button text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] disabled:opacity-30';
+const ICON_BUTTON = 'icon-button cx-bar-btn';
+
+export interface ControlBarProps {
+  /** Anchored mounts the slim variant at the top of the chat column. */
+  variant?: 'full' | 'slim';
+}
 
 /**
- * The bar carries one thing per row of the workspace: the actions that belong to
- * the active session, then the single switch that reveals its inspector. Group
- * and section navigation lives inside the inspector itself, so repeating it here
- * would offer two paths to the same state.
+ * Session actions for the anchored workspace: the controls that act on the
+ * active session (pause/stop, snapshot & rollback), the expert / focus
+ * switches and the permission-mode popover. `variant="slim"` keeps the bar to
+ * those anchored capabilities on a 40px strip; `variant="full"` is the
+ * legacy 52px bar kept for its own test harness.
  */
-export function ControlBar() {
+export function ControlBar({ variant = 'full' }: ControlBarProps) {
   const { t } = useI18n();
   const {
-    activeSessionId, sessions, rightPanelOpen, toggleRightPanel,
+    activeSessionId, sessions,
+    rightPanelOpen, toggleRightPanel,
     focusMode, toggleFocusMode,
     expertMode, toggleExpertMode,
     updateSession, addSnapshot, restoreSnapshot, snapshots,
   } = useWorkspaceStore();
   const permission = usePermissionConfig();
+  const slim = variant === 'slim';
 
   const activeSession = sessions.find(s => s.id === activeSessionId);
   const hasSession = Boolean(activeSession);
@@ -77,8 +85,8 @@ export function ControlBar() {
     .find(snapshot => snapshot.sessionId === activeSessionId && Array.isArray(snapshot.messages));
   const canRollback = Boolean(activeSession) && Boolean(restorableSnapshot);
   const rollbackLabel = restorableSnapshot?.label
-    ? `恢复到 ${restorableSnapshot.label}`
-    : '恢复到快照';
+    ? t('anchored.controlbar.restore_named', { name: restorableSnapshot.label })
+    : t('anchored.controlbar.restore_snapshot');
   const [rollbackState, setRollbackState] = useState<{ kind: 'pending' } | { kind: 'failed'; message: string }>();
   // Synchronous mutex: a second activation before the bar re-renders would
   // otherwise start a second rollback on the same snapshot.
@@ -101,7 +109,16 @@ export function ControlBar() {
   }, [restorableSnapshot, restoreSnapshot, t]);
 
   return (
-    <div className="workspace-control-bar" role="toolbar" aria-label={t('sidebar.workspace')} aria-orientation="horizontal">
+    <div
+      className={slim
+        ? 'flex h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] px-2'
+        : 'workspace-control-bar'}
+      role="toolbar"
+      aria-label={t('sidebar.workspace')}
+      aria-orientation="horizontal"
+      data-testid={slim ? 'anchored-control-bar' : undefined}
+      data-variant={slim ? 'slim' : 'full'}
+    >
       {/* Session-scoped primary actions. Each one acts on the active session and
           nothing else, so each is disabled while there is no session to act on. */}
       <div role="group" aria-label={t('navigation.sessions')} className="flex shrink-0 items-center gap-1">
@@ -117,7 +134,7 @@ export function ControlBar() {
         <button type="button"
           onClick={handleStop}
           disabled={!hasSession}
-          className={`${ICON_BUTTON} hover:bg-[var(--color-error-subtle)] hover:text-[var(--color-error)]`}
+          className={`${ICON_BUTTON} cx-bar-btn-danger`}
           title={t('chat.stop_generation')}
           aria-label={t('chat.stop_generation')}
         >
@@ -127,8 +144,8 @@ export function ControlBar() {
           onClick={handleSnapshot}
           disabled={!hasSession}
           className={ICON_BUTTON}
-          title="保存快照"
-          aria-label="保存快照"
+          title={t('anchored.controlbar.save_snapshot')}
+          aria-label={t('anchored.controlbar.save_snapshot')}
         >
           <Camera size={14} aria-hidden="true" />
         </button>
@@ -149,24 +166,24 @@ export function ControlBar() {
       {rollbackState && (
         <span
           role={rollbackState.kind === 'failed' ? 'alert' : 'status'}
-          className={`shrink-0 truncate text-[10px] ${rollbackState.kind === 'failed' ? 'text-[var(--color-error)]' : 'text-[var(--color-text-muted)]'}`}
+          className={`cx-pill shrink-0 truncate ${rollbackState.kind === 'failed' ? 'text-[var(--color-error)]' : ''}`}
         >
-          {rollbackState.kind === 'failed' ? `回滚失败：${rollbackState.message}` : '回滚中…'}
+          {rollbackState.kind === 'failed' ? t('anchored.controlbar.rollback_failed', { message: rollbackState.message }) : t('anchored.controlbar.rolling_back')}
         </span>
       )}
 
       <div className="flex-1" />
 
-      {activeSession && (
+      {!slim && activeSession && (
         <span
-          className="control-bar-session-title hidden min-w-0 max-w-[180px] truncate text-xs font-medium text-[var(--color-text-primary)] sm:block"
+          className="control-bar-session-title hidden min-w-0 max-w-[180px] truncate text-[13px] font-medium text-[var(--color-text-primary)] sm:block"
           title={activeSession.title || t('right_panel.summary.untitled')}
         >
           {activeSession.title || t('right_panel.summary.untitled')}
         </span>
       )}
 
-      {activeSession && hasTokenUsage && (
+      {!slim && activeSession && hasTokenUsage && (
         // One gauge, one number: the bar already encodes the ratio, so the
         // adjacent percentage that repeated it is gone.
         <div className="hidden shrink-0 items-center gap-1.5 px-2 lg:flex">
@@ -196,20 +213,20 @@ export function ControlBar() {
               }}
             />
           </div>
-          <span className="font-mono text-[10px] tabular-nums text-[var(--color-text-muted)]">
+          <span className="cx-mono text-[10px] text-[var(--color-text-muted)]">
             {usedTokens}
           </span>
         </div>
       )}
 
-      {activeSession && !hasTokenUsage && (
+      {!slim && activeSession && !hasTokenUsage && (
         // No usage in the payload is a fact worth showing, not a zero to hide.
         <span className="hidden shrink-0 text-[10px] text-[var(--color-text-disabled)] lg:block">
           {t('right_panel.summary.tokens')} {t('right_panel.summary.not_reported')}
         </span>
       )}
 
-      {activeSession && (
+      {!slim && activeSession && (
         // Status only. The token gauge above is the single token readout, and
         // model identity belongs to the inspector's overview group.
         <SessionStatusBadge status={activeSession.status} />
@@ -221,47 +238,47 @@ export function ControlBar() {
         onClick={toggleFocusMode}
         aria-pressed={focusMode}
         aria-keyshortcuts="Escape"
-        className={`icon-button ${
-          focusMode ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent-foreground)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)]'
+        className={`icon-button cx-bar-btn ${
+          focusMode ? '' : 'text-[var(--color-text-muted)]'
         }`}
-        title={`${focusMode ? '退出专注模式' : '进入专注模式'} (Esc)`}
-        aria-label={focusMode ? '退出专注模式' : '进入专注模式'}
+        title={focusMode ? t('anchored.controlbar.focus_shortcut', { label: t('anchored.controlbar.exit_focus') }) : t('anchored.controlbar.focus_shortcut', { label: t('anchored.controlbar.enter_focus') })}
+        aria-label={focusMode ? t('anchored.controlbar.exit_focus') : t('anchored.controlbar.enter_focus')}
       >
         {focusMode ? <Minimize2 size={14} aria-hidden="true" /> : <Maximize2 size={14} aria-hidden="true" />}
       </button>
 
-      {/* The one switch that reveals the inspector; its groups and sections are
-          navigated inside the panel. */}
-      <button type="button"
-         onClick={toggleRightPanel}
-         aria-pressed={rightPanelOpen}
-         aria-controls={rightPanelOpen ? 'workspace-inspector' : undefined}
-         data-testid="right-panel-toggle"
-        className={`icon-button shrink-0 ${
-          rightPanelOpen
-            ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent-foreground)]'
-            : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)]'
-        }`}
-        title={t('right_panel.title')}
-        aria-label={t('right_panel.title')}
-      >
-        <PanelRight size={14} aria-hidden="true" />
-      </button>
+      {/* The one switch that reveals the inspector; only the legacy full bar
+          carries it — anchored owns its own inspect toggle. */}
+      {!slim && (
+        <button type="button"
+          onClick={toggleRightPanel}
+          aria-pressed={rightPanelOpen}
+          aria-controls={rightPanelOpen ? 'workspace-inspector' : undefined}
+          data-testid="right-panel-toggle"
+          className={`icon-button cx-bar-btn shrink-0 ${
+            rightPanelOpen ? '' : 'text-[var(--color-text-muted)]'
+          }`}
+          title={t('right_panel.title')}
+          aria-label={t('right_panel.title')}
+        >
+          <PanelRight size={14} aria-hidden="true" />
+        </button>
+      )}
 
       <Popover.Root>
         <Popover.Trigger asChild>
-          <button type="button" aria-label={t('sidebar.more')} title={t('sidebar.more')} className="icon-button shrink-0 text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-2)] focus-visible:outline-2 focus-visible:outline-[var(--color-accent)]">
+          <button type="button" aria-label={t('sidebar.more')} title={t('sidebar.more')} className="icon-button cx-bar-btn shrink-0 text-[var(--color-text-muted)] focus-visible:outline-2 focus-visible:outline-[var(--color-accent)]">
             <MoreHorizontal size={16} aria-hidden="true" />
           </button>
         </Popover.Trigger>
         <Popover.Portal>
-          <Popover.Content aria-label={t('sidebar.more')} align="end" sideOffset={8} collisionPadding={12} className="z-50 w-[min(320px,calc(100vw-24px))] max-h-[min(520px,80dvh)] overflow-y-auto rounded-lg border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] p-3 text-[var(--color-text-primary)] shadow-[var(--shadow-xl)]">
+          <Popover.Content aria-label={t('sidebar.more')} align="end" sideOffset={8} collisionPadding={12} className="z-50 w-[min(320px,calc(100vw-24px))] max-h-[min(520px,80dvh)] overflow-y-auto rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)] p-3 text-[var(--color-text-primary)] shadow-[var(--shadow-xl)]">
             <div className="flex items-center gap-2 border-b border-[var(--color-border-subtle)] pb-3">
-              <button type="button" onClick={toggleExpertMode} aria-pressed={expertMode} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-[var(--color-bg-surface-2)] aria-pressed:bg-[var(--color-accent-subtle)] aria-pressed:text-[var(--color-accent-foreground)]">
-                {expertMode ? <Eye size={14} aria-hidden="true" /> : <EyeOff size={14} aria-hidden="true" />}专家模式
+              <button type="button" onClick={toggleExpertMode} aria-pressed={expertMode} className="cx-chip">
+                {expertMode ? <Eye size={14} aria-hidden="true" /> : <EyeOff size={14} aria-hidden="true" />}{t('anchored.controlbar.expert')}
               </button>
             </div>
-            <div className="py-3">
+            <div className="pt-3">
               <PermissionModeToggle
                 value={permission.mode}
                 onChange={(mode) => void permission.setMode(mode)}
@@ -271,11 +288,6 @@ export function ControlBar() {
                 onRetry={permission.reload}
               />
             </div>
-            <AutonomySlider
-              value={permission.mode}
-              onChange={(mode) => void permission.setMode(mode)}
-              disabled={permission.loading}
-            />
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>

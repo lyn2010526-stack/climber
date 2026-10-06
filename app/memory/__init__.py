@@ -55,17 +55,19 @@ class LongTermMemory:
     Uses a simple in-memory store. Later can be backed by PostgreSQL.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # user_id -> list of facts
         self._facts: dict[str, list[dict[str, Any]]] = {}
 
     def add_fact(self, user_id: str, fact: str, category: str = "general") -> None:
         if user_id not in self._facts:
             self._facts[user_id] = []
-        self._facts[user_id].append({
-            "fact": fact,
-            "category": category,
-        })
+        self._facts[user_id].append(
+            {
+                "fact": fact,
+                "category": category,
+            }
+        )
 
     def get_facts(self, user_id: str, limit: int = 20) -> list[dict[str, Any]]:
         return self._facts.get(user_id, [])[-limit:]
@@ -88,16 +90,17 @@ class VectorMemory:
 
     def __init__(self, persist_path: str = "./data/chroma"):
         self.persist_path = persist_path
-        self._client = None
+        self._client: Any = None
         self._collections: dict[str, Any] = {}
 
-    async def _get_client(self):
+    async def _get_client(self) -> Any:
         if self._client is None:
             import chromadb
+
             self._client = chromadb.PersistentClient(path=self.persist_path)
         return self._client
 
-    async def _get_collection(self, name: str):
+    async def _get_collection(self, name: str) -> Any:
         if name not in self._collections:
             client = await self._get_client()
             self._collections[name] = client.get_or_create_collection(name)
@@ -108,12 +111,13 @@ class VectorMemory:
         collection: str,
         documents: list[str],
         ids: list[str] | None = None,
-        metadatas: list[dict] | None = None,
+        metadatas: list[dict[str, Any]] | None = None,
     ) -> None:
         """Add text chunks to a collection. Uses default embedding (all-MiniLM)."""
         coll = await self._get_collection(collection)
         if ids is None:
             import uuid
+
             ids = [str(uuid.uuid4()) for _ in documents]
         coll.add(documents=documents, ids=ids, metadatas=metadatas)
 

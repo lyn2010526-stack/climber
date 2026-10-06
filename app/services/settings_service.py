@@ -1,16 +1,24 @@
 """Settings service — get-or-create and update per-user application settings."""
+
 from __future__ import annotations
 
-from typing import Any
+import contextlib
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from pydantic import AnyHttpUrl, EmailStr, TypeAdapter
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.core.api_key_crypto import encrypt_api_key
 from app.services import BaseService
 from app.storage import async_session
 from app.storage.models_platform import UserSettings
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 NOTIFICATION_DEFAULTS = {
     "email_address": "",
@@ -23,6 +31,10 @@ NOTIFICATION_DEFAULTS = {
     "webhook_task_failed": False,
 }
 
+# Computed read-only keys returned by GET (see _SettingsDTO) that PATCH
+# receives unchanged in a full round-trip; they carry no write intent.
+READONLY_NOTIFICATION_KEYS = frozenset({"webhook_configured"})
+
 
 class _SettingsDTO:
     """Lightweight attribute container returned to the API layer."""
@@ -34,15 +46,32 @@ class _SettingsDTO:
         stored = row.notifications or {}
         self.notifications = {
             key: stored.get(key, default)
-            for key, default in NOTIFICATION_DEFAULTS.items() if key != "webhook_url"
+            for key, default in NOTIFICATION_DEFAULTS.items()
+            if key != "webhook_url"
         }
-        self.notifications.update(webhook_url="", webhook_configured=bool(stored.get("webhook_url")))
+        self.notifications.update(
+            webhook_url="", webhook_configured=bool(stored.get("webhook_url"))
+        )
 
 
 class SettingsService(BaseService):
     """Manage per-user application settings with a persisted backing store."""
 
-    WRITABLE_SETTINGS = frozenset({"autonomous_agent_mode", "token_throttle_mcp_enabled", "notifications"})
+    WRITABLE_SETTINGS = frozenset(
+        {"autonomous_agent_mode", "token_throttle_mcp_enabled", "notifications"}
+    )
+
+    def __init__(self, db: AsyncSession | None = None) -> None:
+        self._db = db
+
+    @contextlib.asynccontextmanager
+    async def _session(self) -> AsyncIterator[AsyncSession]:
+        """Use the injected session when one was provided, else open a new one."""
+        if self._db is not None:
+            yield self._db
+        else:
+            async with async_session() as db:
+                yield db
 
     @classmethod
     def validate_update(cls, data: dict[str, Any]) -> dict[str, Any]:
@@ -54,9 +83,13 @@ class SettingsService(BaseService):
         result = dict(data)
         if "notifications" in result:
             incoming = result["notifications"]
-            if not isinstance(incoming, dict) or incoming.keys() - NOTIFICATION_DEFAULTS.keys():
+            if not isinstance(incoming, dict) or (
+                incoming.keys() - NOTIFICATION_DEFAULTS.keys() - READONLY_NOTIFICATION_KEYS
+            ):
                 raise ValueError("通知配置格式或字段无效，本次修改未保存。")
-            notification = dict(incoming)
+            notification = {
+                key: value for key, value in incoming.items() if key in NOTIFICATION_DEFAULTS
+            }
             for key, value in notification.items():
                 if isinstance(NOTIFICATION_DEFAULTS[key], bool):
                     if type(value) is not bool:
@@ -74,24 +107,44 @@ class SettingsService(BaseService):
                                     raise ValueError
                                 TypeAdapter(AnyHttpUrl).validate_python(value)
                                 url = urlsplit(value)
-                                if url.username is not None or url.password is not None or url.fragment:
+                                if (
+                                    url.username is not None
+                                    or url.password is not None
+                                    or url.fragment
+                                ):
                                     raise ValueError
                         except ValueError:
-                            label = "邮件地址" if key == "email_address" else "webhook URL（仅支持 HTTP/HTTPS，禁止用户信息和片段）"
+                            label = (
+                                "邮件地址"
+                                if key == "email_address"
+                                else "webhook URL（仅支持 HTTP/HTTPS，禁止用户信息和片段）"
+                            )
                             raise ValueError(label + "格式无效，本次修改未保存。") from None
                     notification[key] = value
             result["notifications"] = notification
         return result
 
     async def get_settings(self, user_id: str) -> _SettingsDTO:
-        async with async_session() as db:
+        async with self._session() as db:
             row = (
-                await db.execute(select(UserSettings).where(UserSettings.user_id == user_id))
+                await db.execute(
+                    select(UserSettings).where(UserSettings.user_id == user_id).with_for_update()
+                )
             ).scalar_one_or_none()
             if row is None:
                 row = UserSettings(user_id=user_id)
                 db.add(row)
-                await db.commit()
+                try:
+                    await db.commit()
+                except IntegrityError:
+                    # Concurrent first-read race: another request already
+                    # created the row. Roll back and re-read it.
+                    await db.rollback()
+                    row = (
+                        await db.execute(
+                            select(UserSettings).where(UserSettings.user_id == user_id)
+                        )
+                    ).scalar_one()
                 await db.refresh(row)
             return _SettingsDTO(row)
 
@@ -102,14 +155,22 @@ class SettingsService(BaseService):
         token_throttle_mcp_enabled: bool | None = None,
         notifications: dict[str, Any] | None = None,
     ) -> _SettingsDTO:
-        values = self.validate_update({key: value for key, value in {
-            "autonomous_agent_mode": autonomous_agent_mode,
-            "token_throttle_mcp_enabled": token_throttle_mcp_enabled,
-            "notifications": notifications,
-        }.items() if value is not None})
-        async with async_session() as db:
+        values = self.validate_update(
+            {
+                key: value
+                for key, value in {
+                    "autonomous_agent_mode": autonomous_agent_mode,
+                    "token_throttle_mcp_enabled": token_throttle_mcp_enabled,
+                    "notifications": notifications,
+                }.items()
+                if value is not None
+            }
+        )
+        async with self._session() as db:
             row = (
-                await db.execute(select(UserSettings).where(UserSettings.user_id == user_id).with_for_update())
+                await db.execute(
+                    select(UserSettings).where(UserSettings.user_id == user_id).with_for_update()
+                )
             ).scalar_one_or_none()
             if row is None:
                 row = UserSettings(user_id=user_id)
@@ -117,9 +178,22 @@ class SettingsService(BaseService):
             if "notifications" in values:
                 incoming = values["notifications"]
                 merged = {**NOTIFICATION_DEFAULTS, **(row.notifications or {}), **incoming}
-                if any(merged[key] for key in ("email_system", "email_task_done", "email_weekly", "email_marketing")) and not merged["email_address"]:
+                if (
+                    any(
+                        merged[key]
+                        for key in (
+                            "email_system",
+                            "email_task_done",
+                            "email_weekly",
+                            "email_marketing",
+                        )
+                    )
+                    and not merged["email_address"]
+                ):
                     raise ValueError("启用邮件通知时必须填写邮件地址，本次修改未保存。")
-                if (merged["webhook_task_done"] or merged["webhook_task_failed"]) and not merged["webhook_url"]:
+                if (merged["webhook_task_done"] or merged["webhook_task_failed"]) and not merged[
+                    "webhook_url"
+                ]:
                     raise ValueError("启用 webhook 事件时必须配置 URL，本次修改未保存。")
                 if "webhook_url" in incoming:
                     merged["webhook_url"] = encrypt_api_key(incoming["webhook_url"])

@@ -11,6 +11,17 @@ from pydantic import BaseModel
 
 logger = structlog.get_logger()
 
+# Inventory-only marker for native tools superseded by controlled built-ins.
+# Registration and execution remain unchanged.
+DEPRECATED_TOOL_NAMES: frozenset[str] = frozenset(
+    {
+        "native_read_file",
+        "native_write_file",
+        "native_list_dir",
+        "native_web_search",
+    }
+)
+
 
 class ToolDefinition(BaseModel):
     name: str
@@ -22,8 +33,8 @@ class ToolDefinition(BaseModel):
 class ToolRegistry:
     """Central registry for all available tools."""
 
-    def __init__(self):
-        self._tools: dict[str, Callable] = {}
+    def __init__(self) -> None:
+        self._tools: dict[str, Callable[..., Any]] = {}
         self._definitions: dict[str, ToolDefinition] = {}
         self._mcp_clients: list[Any] = []
 
@@ -32,7 +43,7 @@ class ToolRegistry:
         name: str,
         description: str,
         parameters: dict[str, Any],
-        func: Callable,
+        func: Callable[..., Any],
     ) -> None:
         """Register a callable tool."""
         self._tools[name] = func
@@ -52,7 +63,8 @@ class ToolRegistry:
         mcp_tool_name: str,
     ) -> None:
         """Register an MCP tool that delegates to an MCP server."""
-        async def _mcp_wrapper(**kwargs):
+
+        async def _mcp_wrapper(**kwargs: Any) -> Any:
             return await mcp_client.call_tool(mcp_tool_name, kwargs)
 
         self._tools[name] = _mcp_wrapper
@@ -64,24 +76,15 @@ class ToolRegistry:
         )
         logger.info("MCP tool registered", name=name, server=mcp_client.name)
 
-    def unregister(self, name: str) -> bool:
-        """Remove a tool from the registry."""
-        if name in self._tools:
-            del self._tools[name]
-            del self._definitions[name]
-            logger.info("Tool unregistered", name=name)
-            return True
-        return False
-
     def tool(
         self,
         name: str | None = None,
         description: str = "",
         parameters: dict[str, Any] | None = None,
-    ) -> Callable:
+    ) -> Callable[..., Any]:
         """Decorator to register a function as a tool."""
 
-        def decorator(func: Callable) -> Callable:
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             tool_name = name or func.__name__
             tool_desc = description or func.__doc__ or ""
             tool_params = parameters or self._infer_schema(func)
@@ -90,7 +93,7 @@ class ToolRegistry:
 
         return decorator
 
-    def _infer_schema(self, func: Callable) -> dict[str, Any]:
+    def _infer_schema(self, func: Callable[..., Any]) -> dict[str, Any]:
         """Infer JSON Schema from function signature (basic)."""
         import inspect
         import typing
@@ -151,6 +154,7 @@ class ToolRegistry:
                 return result
             if isinstance(result, (dict, list)):
                 import json
+
                 return json.dumps(result, ensure_ascii=False, default=str)
             return str(result)
         except Exception as e:
@@ -161,14 +165,16 @@ class ToolRegistry:
         """Return tools in OpenAI function calling format."""
         result = []
         for _name, defn in self._definitions.items():
-            result.append({
-                "type": "function",
-                "function": {
-                    "name": defn.name,
-                    "description": defn.description,
-                    "parameters": defn.parameters,
-                },
-            })
+            result.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": defn.name,
+                        "description": defn.description,
+                        "parameters": defn.parameters,
+                    },
+                }
+            )
         return result
 
     def list_tools(self) -> list[ToolDefinition]:
@@ -180,10 +186,10 @@ class ToolRegistry:
 
 
 class ToolRegistryProvider:
-    """Provides isolated tool registry instances.
+    """Provides the global tool registry instance.
 
-    Use get_registry() for the global default, or create_isolated()
-    for test/tenant-specific registries.
+    Use get_registry() for the shared default registry; each module-level
+    accessor below delegates here so the singleton lives in one place.
     """
 
     _global: ToolRegistry | None = None
@@ -194,21 +200,9 @@ class ToolRegistryProvider:
             cls._global = ToolRegistry()
         return cls._global
 
-    @classmethod
-    def create_isolated(cls) -> ToolRegistry:
-        return ToolRegistry()
-
-    @classmethod
-    def reset_global(cls) -> None:
-        cls._global = None
-
 
 def get_tool_registry() -> ToolRegistry:
     return ToolRegistryProvider.get_registry()
-
-
-def create_isolated_registry() -> ToolRegistry:
-    return ToolRegistryProvider.create_isolated()
 
 
 tool_registry = ToolRegistryProvider.get_registry()
@@ -218,7 +212,7 @@ def tool(
     name: str | None = None,
     description: str = "",
     parameters: dict[str, Any] | None = None,
-) -> Callable:
+) -> Callable[..., Any]:
     """Convenience decorator using global registry."""
     return tool_registry.tool(name, description, parameters)
 

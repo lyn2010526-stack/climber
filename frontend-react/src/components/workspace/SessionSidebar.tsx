@@ -155,7 +155,10 @@ export function SessionSidebar() {
     api.listAgents().then((data) => {
       if (!active) return;
       setAgents(data);
-      if (data.length > 0) setSelectedAgent(data[0].id);
+      if (data.length > 0) {
+        const first = data[0];
+        if (first) setSelectedAgent(first.id);
+      }
     }).catch(() => {
       // Distinct from "no agents available": the select must not offer an empty
       // list as if the backend had reported one.
@@ -230,7 +233,7 @@ export function SessionSidebar() {
   ]);
 
   const view = useMemo(
-    () => buildSessionView(sessions, filter, now, sessionTimeline),
+    () => buildSessionView(sessions, filter, now, sessionTimeline, 'recent'),
     [sessions, filter, now, sessionTimeline],
   );
   const filterActive = isSessionFilterActive(filter);

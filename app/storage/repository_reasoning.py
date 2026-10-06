@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, cast
 
-from sqlalchemy import delete, desc, select
+from sqlalchemy import CursorResult, delete, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.storage.models_reasoning import ReasoningFeedbackDB, ReasoningTraceDB
@@ -14,8 +14,11 @@ from app.storage.models_reasoning import ReasoningFeedbackDB, ReasoningTraceDB
 class ReasoningTraceRepository:
     """CRUD operations for reasoning traces."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(
+        self, session: AsyncSession, feedback_repository: ReasoningFeedbackRepository | None = None
+    ):
         self._session = session
+        self._feedback = feedback_repository
 
     async def create(self, data: dict[str, Any]) -> ReasoningTraceDB:
         trace = ReasoningTraceDB(**data)
@@ -45,10 +48,16 @@ class ReasoningTraceRepository:
         return result.scalars().all()
 
     async def delete(self, trace_id: str) -> bool:
+        # reasoning_feedback.trace_id references reasoning_traces.trace_id, so
+        # feedback (and any other direct dependents) must go first.
+        await self._session.execute(
+            delete(ReasoningFeedbackDB).where(ReasoningFeedbackDB.trace_id == trace_id)
+        )
         result = await self._session.execute(
             delete(ReasoningTraceDB).where(ReasoningTraceDB.trace_id == trace_id)
         )
-        return result.rowcount > 0
+        # 运行期返回的是 CursorResult（有 rowcount）；mypy 的 stub 只声明 Result。
+        return cast(CursorResult[Any], result).rowcount > 0
 
 
 class ReasoningFeedbackRepository:

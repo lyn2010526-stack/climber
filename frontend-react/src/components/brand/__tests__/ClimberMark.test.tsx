@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import { CLIMBER_MARK, ClimberMark } from '../ClimberMark';
+import favicon from '../../../../public/favicon.svg?raw';
 
 const geometry = () => {
   const { container } = render(<ClimberMark />);
@@ -23,6 +24,17 @@ const vertices = (points: string) =>
     }, []);
 
 describe('ClimberMark', () => {
+  it('shares its geometry with the neutral black and white favicon', () => {
+    const svg = new DOMParser().parseFromString(favicon, 'image/svg+xml');
+    expect(svg.querySelector('svg')?.getAttribute('viewBox')).toBe(CLIMBER_MARK.viewBox);
+    expect(svg.querySelector('polyline')?.getAttribute('points')).toBe(CLIMBER_MARK.ridge);
+    expect(svg.querySelector('circle')?.getAttribute('cx')).toBe(String(CLIMBER_MARK.node.cx));
+    expect(svg.querySelector('circle')?.getAttribute('cy')).toBe(String(CLIMBER_MARK.node.cy));
+    expect(svg.querySelector('circle')?.getAttribute('r')).toBe(String(CLIMBER_MARK.node.r));
+    expect(svg.querySelector('rect')?.getAttribute('fill')).toBe('#000000');
+    expect(svg.querySelector('g')?.getAttribute('stroke')).toBe('#FFFFFF');
+  });
+
   it('renders an inline svg marked aria-hidden', () => {
     const { svg } = geometry();
     expect(svg).toBeTruthy();

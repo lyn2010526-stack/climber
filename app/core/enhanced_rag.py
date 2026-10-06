@@ -34,7 +34,9 @@ def compute_bm25(query: str, documents: list[str], k1: float = 1.5, b: float = 0
     return scores
 
 
-def rerank_results(query: str, results: list[dict[str, Any]], top_k: int = 5) -> list[dict[str, Any]]:
+def rerank_results(
+    query: str, results: list[dict[str, Any]], top_k: int = 5
+) -> list[dict[str, Any]]:
     """Rerank search results using BM25."""
     if not results:
         return []
@@ -82,7 +84,9 @@ def compress_context(contexts: list[str], max_total_tokens: int = 2000) -> str:
     return result
 
 
-def reciprocal_rank_fusion(results_list: list[list[dict[str, Any] | tuple[str, float]]], k: int = 60) -> list[tuple[str, float]]:
+def reciprocal_rank_fusion(
+    results_list: list[list[dict[str, Any] | tuple[str, float]]], k: int = 60
+) -> list[tuple[str, float]]:
     """Combine multiple result lists using reciprocal rank fusion."""
     scores: dict[str, float] = {}
     for results in results_list:
@@ -90,6 +94,6 @@ def reciprocal_rank_fusion(results_list: list[list[dict[str, Any] | tuple[str, f
             doc_id = result[0] if isinstance(result, tuple) else result.get("id", str(rank))
             scores[doc_id] = scores.get(doc_id, 0) + 1.0 / (k + rank + 1)
 
-    scored = [(doc_id, score) for doc_id, score in scores.items()]
+    scored = list(scores.items())
     scored.sort(key=lambda x: x[1], reverse=True)
     return scored[:10]

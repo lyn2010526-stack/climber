@@ -1,33 +1,54 @@
+"""Legacy safety shim kept for backwards compatibility.
+
+The tool-call validation chain lives in :mod:`app.core.engine.validation`.
+The capability constants are re-exported from there as the single source of
+truth; the legacy helpers below are retained because tests and older call
+sites still import them from this module.
+"""
+
 from __future__ import annotations
 
 from typing import Any
 
-COMMAND_TOOLS = {
-    "run_command", "shell", "execute_command", "bash",
-    "stream_command", "container_exec",
-}
+from app.core.engine.validation import COMMAND_TOOLS, FILE_TOOLS
 
-FILE_TOOLS: dict[str, tuple[str, str]] = {
-    "read_file": ("path", "read"),
-    "write_file": ("path", "write"),
-    "edit_file": ("path", "write"),
-    "append_file": ("path", "write"),
-    "file_exists": ("path", "read"),
-    "file_info": ("path", "read"),
-    "file_diff": ("path", "read"),
-    "list_directory": ("dir", "read"),
-}
+__all__ = ["COMMAND_TOOLS", "FILE_TOOLS", "setup_default_permissions", "validate_tool_call"]
 
 
 def setup_default_permissions(permission_overlay: Any) -> None:
     from app.core.security_sandbox import PermissionLevel, PermissionRule
 
     defaults = [
-        PermissionRule(action="read", resource_pattern="*", level=PermissionLevel.ALLOW, description="Read any file"),
-        PermissionRule(action="write", resource_pattern="./data/*", level=PermissionLevel.ALLOW, description="Write to data dir"),
-        PermissionRule(action="write", resource_pattern="*.py", level=PermissionLevel.ASK, description="Write Python files"),
-        PermissionRule(action="execute", resource_pattern="*", level=PermissionLevel.ASK, description="Execute any command"),
-        PermissionRule(action="delete", resource_pattern="*", level=PermissionLevel.DENY, description="Delete forbidden"),
+        PermissionRule(
+            action="read",
+            resource_pattern="*",
+            level=PermissionLevel.ALLOW,
+            description="Read any file",
+        ),
+        PermissionRule(
+            action="write",
+            resource_pattern="./data/*",
+            level=PermissionLevel.ALLOW,
+            description="Write to data dir",
+        ),
+        PermissionRule(
+            action="write",
+            resource_pattern="*.py",
+            level=PermissionLevel.ASK,
+            description="Write Python files",
+        ),
+        PermissionRule(
+            action="execute",
+            resource_pattern="*",
+            level=PermissionLevel.ASK,
+            description="Execute any command",
+        ),
+        PermissionRule(
+            action="delete",
+            resource_pattern="*",
+            level=PermissionLevel.DENY,
+            description="Delete forbidden",
+        ),
     ]
     permission_overlay.set_defaults(defaults)
 

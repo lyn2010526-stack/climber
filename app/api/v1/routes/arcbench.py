@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import APIRouter
@@ -90,7 +90,7 @@ def _read_run_summary(run_dir: Path) -> dict[str, Any] | None:
     if not path.is_file():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return cast(dict[str, Any], json.loads(path.read_text(encoding="utf-8")))
     except (OSError, json.JSONDecodeError) as exc:
         logger.warning("arcbench_summary_read_failed", path=str(path), error=str(exc))
         return None
@@ -133,10 +133,11 @@ def _derive_phase(events: list[dict[str, Any]], summary: dict[str, Any] | None) 
     return "design", "planning / design in progress"
 
 
-def _build_acceptance(events: list[dict[str, Any]], summary: dict[str, Any] | None) -> ArcBenchAcceptance:
+def _build_acceptance(
+    events: list[dict[str, Any]], summary: dict[str, Any] | None
+) -> ArcBenchAcceptance:
     test_nodes = [
-        e for e in events
-        if e.get("type") == "requirement_state" and e.get("phase") == "test"
+        e for e in events if e.get("type") == "requirement_state" and e.get("phase") == "test"
     ]
     passed = sum(1 for e in test_nodes if e.get("status") == "passed")
     failed = sum(1 for e in test_nodes if e.get("status") == "failed")
@@ -176,7 +177,10 @@ async def arcbench_status() -> ArcBenchStatus:
     last_events = []
     for raw in events[-_MAX_EVENTS:]:
         payload = dict(raw)
-        event = {"type": str(payload.pop("type", "")), "timestamp": str(payload.pop("timestamp", "") or "")}
+        event: dict[str, Any] = {
+            "type": str(payload.pop("type", "")),
+            "timestamp": str(payload.pop("timestamp", "") or ""),
+        }
         event["data"] = payload
         last_events.append(ArcBenchEvent(**event))
 

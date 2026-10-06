@@ -14,7 +14,7 @@ import subprocess
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, ClassVar
 
 import structlog
 
@@ -32,6 +32,7 @@ class FileCategory(StrEnum):
 @dataclass
 class FileState:
     """State of a single file in the workspace."""
+
     path: str
     category: FileCategory = FileCategory.UNKNOWN
     size_bytes: int = 0
@@ -42,6 +43,7 @@ class FileState:
 @dataclass
 class ToolReceipt:
     """Record of a tool execution that modified workspace state."""
+
     tool_name: str
     arguments: dict[str, Any] = field(default_factory=dict)
     files_affected: list[str] = field(default_factory=list)
@@ -53,6 +55,7 @@ class ToolReceipt:
 @dataclass
 class BlockingFact:
     """A condition that should be reviewed before proceeding."""
+
     description: str
     severity: str = "warning"  # info / warning / critical
     related_files: list[str] = field(default_factory=list)
@@ -62,6 +65,7 @@ class BlockingFact:
 @dataclass
 class WorkspaceSnapshot:
     """Full snapshot of workspace state."""
+
     files: dict[str, FileState] = field(default_factory=dict)
     receipts: list[ToolReceipt] = field(default_factory=list)
     blocking_facts: list[BlockingFact] = field(default_factory=list)
@@ -98,10 +102,30 @@ class RuntimeStateCapsule:
     mutation receipts, and blocking fact detection.
     """
 
-    SOURCE_EXTENSIONS = {".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".c", ".cpp", ".h"}
-    TEST_PATTERNS = {"test_", "_test", ".test.", ".spec.", "/tests/", "/test/"}
-    SCRATCH_PATTERNS = {"/tmp/", "temp_", "scratch", ".tmp"}
-    CONFIG_EXTENSIONS = {".json", ".yaml", ".yml", ".toml", ".cfg", ".ini", ".xml"}
+    SOURCE_EXTENSIONS: ClassVar[set[str]] = {
+        ".py",
+        ".js",
+        ".ts",
+        ".tsx",
+        ".jsx",
+        ".go",
+        ".rs",
+        ".java",
+        ".c",
+        ".cpp",
+        ".h",
+    }
+    TEST_PATTERNS: ClassVar[set[str]] = {"test_", "_test", ".test.", ".spec.", "/tests/", "/test/"}
+    SCRATCH_PATTERNS: ClassVar[set[str]] = {"/tmp/", "temp_", "scratch", ".tmp"}
+    CONFIG_EXTENSIONS: ClassVar[set[str]] = {
+        ".json",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".cfg",
+        ".ini",
+        ".xml",
+    }
 
     def __init__(self, workdir: str | None = None) -> None:
         self._workdir = workdir or os.getcwd()
@@ -226,34 +250,44 @@ class RuntimeStateCapsule:
 
         # Scratch files without source files — likely incomplete
         if scratch_files and not source_files:
-            facts.append(BlockingFact(
-                description=f"{len(scratch_files)} scratch file(s) present but no source changes",
-                severity="warning",
-                related_files=[f.path for f in scratch_files],
-                suggestion="Review scratch files — they may contain unintegrated work",
-            ))
+            facts.append(
+                BlockingFact(
+                    description=f"{len(scratch_files)} scratch file(s) present but no source changes",
+                    severity="warning",
+                    related_files=[f.path for f in scratch_files],
+                    suggestion="Review scratch files — they may contain unintegrated work",
+                )
+            )
 
         # Source changes without tests
         if source_files and not test_files:
             # Check if any source file looks like production code (not config/utils)
-            prod_sources = [f for f in source_files if "util" not in f.path.lower() and "config" not in f.path.lower()]
+            prod_sources = [
+                f
+                for f in source_files
+                if "util" not in f.path.lower() and "config" not in f.path.lower()
+            ]
             if len(prod_sources) > 2:
-                facts.append(BlockingFact(
-                    description=f"{len(prod_sources)} source file(s) modified but no test changes detected",
-                    severity="info",
-                    related_files=[f.path for f in prod_sources],
-                    suggestion="Consider adding or updating tests for the modified source files",
-                ))
+                facts.append(
+                    BlockingFact(
+                        description=f"{len(prod_sources)} source file(s) modified but no test changes detected",
+                        severity="info",
+                        related_files=[f.path for f in prod_sources],
+                        suggestion="Consider adding or updating tests for the modified source files",
+                    )
+                )
 
         # Large number of modified files — might be too ambitious
         modified = [f for f in files.values() if f.change_type == "modified"]
         if len(modified) > 15:
-            facts.append(BlockingFact(
-                description=f"{len(modified)} files modified — large change set",
-                severity="info",
-                related_files=[f.path for f in modified[:10]],
-                suggestion="Large change set detected — consider breaking into smaller PRs",
-            ))
+            facts.append(
+                BlockingFact(
+                    description=f"{len(modified)} files modified — large change set",
+                    severity="info",
+                    related_files=[f.path for f in modified[:10]],
+                    suggestion="Large change set detected — consider breaking into smaller PRs",
+                )
+            )
 
         return facts
 

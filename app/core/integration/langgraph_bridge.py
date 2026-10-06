@@ -7,8 +7,8 @@ enabling access to LangGraph's checkpointing, streaming, and tool calling.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
-from typing import Any
+from collections.abc import AsyncIterator, Callable
+from typing import Any, cast
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
@@ -32,13 +32,13 @@ class LangGraphBridge:
         """Register a LangGraph StateGraph."""
         self._graphs[name] = graph
         self._compiled[name] = graph.compile(checkpointer=self._checkpointer)
-        logger.info("langgraph_registered", name=name)
+        logger.info("langgraph_registered", name=name)  # type: ignore[call-arg]
 
     def create_simple_graph(
         self,
         name: str,
-        nodes: dict[str, Callable],
-        edges: list[tuple[str, str | Callable]],
+        nodes: dict[str, Callable[..., Any]],
+        edges: list[tuple[str, str | Callable[..., Any]]],
         entry_point: str | None = None,
     ) -> StateGraph:
         """Create and register a simple StateGraph from node functions and edges."""
@@ -72,15 +72,14 @@ class LangGraphBridge:
             raise ValueError(f"Graph '{name}' not registered")
 
         cfg = {"configurable": config or {}}
-        result = await self._compiled[name].ainvoke(inputs, cfg)
-        return result
+        return cast(dict[str, Any], await self._compiled[name].ainvoke(inputs, cfg))
 
     async def astream(
         self,
         name: str,
         inputs: dict[str, Any],
         config: dict[str, Any] | None = None,
-    ):
+    ) -> AsyncIterator[Any]:
         """Stream graph execution events."""
         if name not in self._compiled:
             raise ValueError(f"Graph '{name}' not registered")

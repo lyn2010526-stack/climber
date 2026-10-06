@@ -29,7 +29,9 @@ async def test_conditional_entry_returning_end_completes_cleanly():
 
 
 async def test_conditional_entry_returning_uppercase_end_is_ignored():
-    result = await build_conditional_entry(lambda state: "END").invoke({}, {"thread_id": "END-entry"})
+    result = await build_conditional_entry(lambda state: "END").invoke(
+        {}, {"thread_id": "END-entry"}
+    )
 
     assert result.get("ran") is None
 
@@ -111,7 +113,9 @@ async def test_execute_node_defends_against_terminal_sentinels():
     engine = PregelEngine(graph)
 
     for sentinel in ("__end__", "END"):
-        result = await engine._execute_node(sentinel, GraphState(), {}, ExecutionContext(thread_id="x"))
+        result = await engine._execute_node(
+            sentinel, GraphState(), {}, ExecutionContext(thread_id="x")
+        )
         assert result is None
 
 
@@ -123,3 +127,34 @@ async def test_start_router_awaitable_returning_end_is_filtered():
     result = await build_conditional_entry(router).invoke({}, {"thread_id": "async-end"})
 
     assert result.get("ran") is None
+
+
+async def test_astream_resume_after_terminal_interrupt_does_not_replay_entry():
+    """R9-18: interrupt_after on a node that routes to END must not replay
+    the graph from entry when resumed through the streaming API."""
+    calls = []
+
+    def node_a(state):
+        calls.append("a")
+        return {"a": True}
+
+    def node_b(state):
+        calls.append("b")
+        return {"b": True}
+
+    graph = StateGraph()
+    graph.add_node("a", node_a)
+    graph.add_node("b", node_b)
+    graph.set_entry_point("a")
+    graph.add_edge("a", "b")
+    graph.add_edge("b", "__end__")
+    compiled = graph.compile(interrupt_after=["b"])
+
+    first = [step async for step in compiled.astream({}, {"thread_id": "term-interrupt"})]
+    assert calls == ["a", "b"]
+    assert first[-1].get("__interrupted__") is True
+
+    resumed = [step async for step in compiled.astream({}, {"thread_id": "term-interrupt"})]
+    # Entry node must not be re-executed on resume.
+    assert calls == ["a", "b"]
+    assert resumed[-1].get("b") is True

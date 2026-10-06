@@ -32,6 +32,7 @@ def event_loop():
 def _create_tables_sync():
     """Create database tables synchronously."""
     import asyncio
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
@@ -55,15 +56,18 @@ def cleanup_db():
     import contextlib
 
     from sqlalchemy.exc import OperationalError
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
+
         async def _cleanup():
             async with engine.begin() as conn:
                 for table in reversed(Base.metadata.sorted_tables):
                     with contextlib.suppress(OperationalError):
                         await conn.execute(text(f"DELETE FROM {table.name}"))
                 await conn.commit()
+
         loop.run_until_complete(_cleanup())
     finally:
         loop.close()

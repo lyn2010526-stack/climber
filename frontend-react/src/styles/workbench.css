@@ -1,0 +1,308 @@
+/* The workbench deliberately inherits the app palette from `index.css`
+   (Codex-aligned light/dark). Only workbench-scoped tokens that have no
+   home in the base theme are defined here; everything else must resolve to
+   the shared `--color-*` variables so the workbench never shadows the app
+   theme and flips with `[data-theme]` for free. */
+.workbench-theme {
+  --color-diff-added-num-bg: #2c4f3a;
+  --color-diff-removed-num-bg: #63302a;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --workbench-message-radius: 12px;
+  --workbench-rule-width: 2px;
+  --workbench-code-gutter: 3ch;
+  --workbench-line-height: 1.7;
+  --workbench-user-width: 85%;
+  --workbench-agent-width: 92%;
+  color: var(--color-text-primary);
+}
+[data-theme="light"] .workbench-theme {
+  --color-diff-added-num-bg: #aceebb;
+  --color-diff-removed-num-bg: #ffcecb;
+}
+.workbench-nav section + section {
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-2);
+}
+.workbench-nav [aria-current="true"] {
+  color: var(--color-accent-foreground);
+  box-shadow: inset var(--workbench-rule-width) 0 var(--color-accent);
+}
+.workbench-skill { color: var(--color-text-muted); }
+.workbench-skill[data-enabled="true"],
+.workbench-skill[data-enabled="true"] > span { color: var(--color-accent-foreground); }
+.workbench-user-message {
+  max-width: var(--workbench-user-width);
+  border: 1px solid var(--color-border-accent);
+  border-radius: var(--workbench-message-radius) var(--workbench-message-radius) var(--radius-sm) var(--workbench-message-radius);
+  padding: var(--space-3) var(--space-4);
+}
+.workbench-agent-message {
+  max-width: var(--workbench-agent-width);
+  background: var(--color-bg-surface-1);
+  border-inline-start: var(--workbench-rule-width) solid var(--color-border-default);
+  border-radius: var(--radius-sm) var(--radius-lg) var(--radius-lg) var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  line-height: var(--workbench-line-height);
+}
+.workbench-tool { border-radius: var(--radius-md); }
+.workbench-tool > header { background: var(--color-bg-surface-2); }
+.workbench-tool[data-tool-status="running"] { border-inline-start: var(--workbench-rule-width) solid var(--color-info); }
+.workbench-tool[data-tool-status="error"] { border-color: var(--color-error); }
+.workbench-tool-result {
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-code-bg);
+}
+.workbench-info-card { flex-shrink: 0; border-radius: var(--radius-md); }
+.workbench-info-card[data-open="true"] > button { background: var(--color-bg-surface-2); }
+.workbench-info-card > button > span { font-weight: var(--weight-semibold); }
+.workbench-info-card dl > div {
+  padding: var(--space-1);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.workbench-info-card dd { font-weight: var(--weight-semibold); }
+[data-testid="anchored-file-preview"] [role="tab"] {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+[data-testid="anchored-file-preview"] [aria-selected="true"] {
+  background: var(--color-accent-subtle);
+  box-shadow: inset 0 calc(-1 * var(--workbench-rule-width)) var(--color-accent);
+}
+[data-testid="anchored-file-preview"] pre { padding: var(--space-1) 0; background: var(--color-code-bg); }
+.workbench-code-line { display: flex; min-width: max-content; padding-inline-end: var(--space-2); }
+.workbench-code-line[data-line-marker="add"] { background: var(--color-diff-added-bg); }
+.workbench-code-line[data-line-marker="del"] { background: var(--color-diff-removed-bg); }
+.workbench-code-line[data-line-marker="change"] { border-inline-start: var(--workbench-rule-width) solid var(--color-diff-hunk); }
+.workbench-line-number {
+  width: var(--workbench-code-gutter);
+  flex-shrink: 0;
+  text-align: right;
+  user-select: none;
+  color: var(--color-text-muted);
+  padding-inline: var(--space-1);
+  border-inline-end: 1px solid var(--color-border-subtle);
+}
+.workbench-line-sign { width: var(--space-4); flex-shrink: 0; text-align: center; user-select: none; }
+/* Diff rows read through the same diff roles the token layer already declares,
+   so a themed workbench and the rest of the app tint a change the same way. The
+   number cell takes the stronger of the two so the gutter stays legible. */
+.anchored-diff-add-line,
+.anchored-diff-add-num { background: var(--color-diff-added-bg); }
+.anchored-diff-del-line,
+.anchored-diff-del-num { background: var(--color-diff-removed-bg); }
+.anchored-diff-add-num { background: var(--color-diff-added-num-bg); }
+.anchored-diff-del-num { background: var(--color-diff-removed-num-bg); }
+.anchored-diff-add-line,
+.anchored-diff-del-line { color: var(--color-text-primary); }
+.workbench-theme button:focus-visible, .workbench-theme a:focus-visible {
+  outline: var(--workbench-rule-width) solid var(--color-border-accent);
+  outline-offset: var(--space-0-5);
+}
+.workbench-theme button:active { background-color: var(--color-accent-subtle); }
+.workbench-theme button:disabled { color: var(--color-text-muted); cursor: not-allowed; }
+[data-testid="anchored-composer"] > .flex:has(textarea) {
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-page);
+}
+[data-testid="anchored-composer"] > .flex:has(textarea):focus-within { border-color: var(--color-border-accent); }
+
+@media (min-width: 1024px) {
+  /* The three-column desktop layout refines geometry only; colour comes from
+     the shared app theme so the workbench stays Codex-aligned. */
+  .workbench-theme[data-layout="three-column"] {
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --workbench-message-radius: 14px;
+    --workbench-line-height: 1.75;
+    --workbench-code-leading: 1.9;
+    --workbench-section-tracking: .08em;
+  }
+  [data-layout="three-column"] .workbench-nav h3 {
+    letter-spacing: var(--workbench-section-tracking);
+  }
+  [data-layout="three-column"] .workbench-nav [aria-current="true"] {
+    box-shadow: none;
+    font-weight: var(--weight-medium);
+  }
+  [data-layout="three-column"] .workbench-agent-message {
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--workbench-message-radius);
+  }
+  [data-layout="three-column"] .workbench-tool {
+    border-color: var(--color-border-subtle);
+    border-radius: var(--radius-lg);
+  }
+  [data-layout="three-column"] .workbench-tool > header {
+    background: var(--color-bg-surface-1);
+  }
+  [data-layout="three-column"] .workbench-tool[data-tool-status="error"] {
+    border-color: var(--color-error);
+  }
+  [data-layout="three-column"] .workbench-tool-result {
+    border-radius: var(--radius-sm);
+  }
+  [data-layout="three-column"] .workbench-info-card {
+    border-color: var(--color-border-subtle);
+    border-radius: var(--radius-lg);
+  }
+  [data-layout="three-column"] .workbench-info-card[data-open="true"] > button {
+    background: var(--color-bg-surface-1);
+  }
+  [data-layout="three-column"] .workbench-info-card dd {
+    color: var(--color-text-primary);
+  }
+  [data-layout="three-column"] [data-testid="anchored-tasks-panel"] article {
+    background: var(--color-bg-surface-2);
+    border-radius: var(--radius-sm);
+  }
+  [data-layout="three-column"] [data-testid="anchored-tasks-panel"] article > p:first-child {
+    color: var(--color-text-primary);
+    font-weight: var(--weight-medium);
+  }
+  [data-layout="three-column"] [data-testid="anchored-file-preview"] pre {
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-md);
+    line-height: var(--workbench-code-leading);
+  }
+  [data-layout="three-column"] [data-testid="anchored-file-preview"] [role="tab"] {
+    border-radius: var(--radius-sm);
+    padding: var(--space-1) var(--space-2);
+    box-shadow: none;
+  }
+  [data-layout="three-column"] [data-workbench-icon] { flex-shrink: 0; }
+}
+
+/* Layout-owned hooks style the existing navigation, chat and inspect components.
+   The desktop workbench follows the app theme switch: the block below is the
+   dark default inherited from `index.css`, and `[data-theme="light"]` overrides
+   it with the light surface set. Keeping only theme-independent geometry here
+   is what lets the user flip the whole workbench without a second layout. */
+.workbench-theme.workbench-desktop {
+  --workbench-content-width: 800px;
+  --workbench-content-padding: clamp(20px, 3vw, 48px);
+  --workbench-header-height: 52px;
+  --workbench-control-size: 28px;
+  --workbench-line-height: 1.75;
+  background: var(--color-bg-page);
+}
+.workbench-desktop-sidebar,
+.workbench-desktop-sidebar .workbench-nav,
+.workbench-desktop-rail {
+  background: var(--color-bg-surface-1);
+}
+.workbench-desktop .workbench-nav { border-inline-end: 0; }
+.workbench-desktop .workbench-nav section + section {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+}
+.workbench-desktop .workbench-nav [aria-current="true"] {
+  box-shadow: none;
+  background: var(--color-bg-surface-2);
+  color: var(--color-text-primary);
+  font-weight: var(--weight-medium);
+}
+.workbench-desktop-canvas { background: var(--color-bg-page); }
+.workbench-desktop [data-testid="anchored-title-bar"] {
+  height: var(--workbench-header-height);
+  background: var(--color-bg-page);
+  padding-inline: var(--workbench-content-padding);
+}
+.workbench-desktop [data-testid="anchored-message-scroll"] {
+  padding: var(--space-6) var(--workbench-content-padding);
+  scrollbar-gutter: stable;
+}
+.workbench-desktop [data-testid="anchored-message-scroll"] > *,
+.workbench-desktop [data-testid="anchored-composer"] {
+  width: 100%;
+  max-width: var(--workbench-content-width);
+  margin-inline: auto;
+}
+.workbench-desktop [data-testid="anchored-composer"] {
+  width: calc(100% - 2 * var(--workbench-content-padding));
+  padding-inline: 0;
+  border-top: 0;
+  background: var(--color-bg-page);
+}
+.workbench-desktop .workbench-user-message {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-surface-1);
+  border-radius: var(--radius-lg);
+}
+.workbench-desktop .workbench-agent-message {
+  background: var(--color-bg-page);
+  border: 0;
+  border-radius: var(--radius-lg);
+  line-height: var(--workbench-line-height);
+}
+.workbench-desktop .workbench-tool,
+.workbench-desktop .workbench-info-card {
+  border-color: var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+.workbench-desktop .workbench-tool[data-tool-status="error"] { border-color: var(--color-error); }
+.workbench-desktop .workbench-tool > header,
+.workbench-desktop .workbench-info-card[data-open="true"] > button {
+  background: var(--color-bg-surface-1);
+}
+.workbench-desktop-separator {
+  position: relative;
+  width: 1px;
+  flex-shrink: 0;
+  background: var(--color-border-subtle);
+  outline: none;
+}
+.workbench-desktop-separator::after {
+  content: '';
+  position: absolute;
+  inset: 0 -3px;
+  z-index: 1;
+}
+.workbench-desktop-separator:hover,
+.workbench-desktop-separator:focus-visible,
+.workbench-desktop-separator[data-separator="active"] { background: var(--color-border-accent); }
+.workbench-desktop[data-inspect-open="false"] .workbench-desktop-inspect-separator { visibility: hidden; }
+.workbench-desktop-rail {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  flex-direction: column;
+  padding-block: var(--space-3);
+}
+.workbench-desktop-panel-button {
+  display: inline-flex;
+  width: var(--workbench-control-size);
+  height: var(--workbench-control-size);
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+}
+.workbench-desktop-panel-button:hover { background: var(--color-bg-surface-2); color: var(--color-text-primary); }
+.workbench-desktop-inspect-content {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--color-bg-page);
+}
+.workbench-desktop-inspect-header {
+  display: flex;
+  min-height: var(--workbench-header-height);
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  padding-inline: var(--space-3);
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}

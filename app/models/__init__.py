@@ -12,10 +12,12 @@ from app.core import ChatResult
 
 class ModelCapability(BaseModel):
     """What a model can do."""
+
     chat: bool = True
     streaming: bool = False
     tools: bool = False
     vision: bool = False
+    file_attachments: bool = False
     embedding: bool = False
     max_tokens: int = 4096
 

@@ -64,11 +64,15 @@ class FakeDeepRefineModel:
             self.improve_calls.append(improved)
             return _Result(improved)
         if "Generate a structured reflection" in user_text:
-            return _Result(json.dumps({
-                "failure_reason": "some gap",
-                "lesson": "check completeness",
-                "suggested_approach": "be more explicit",
-            }))
+            return _Result(
+                json.dumps(
+                    {
+                        "failure_reason": "some gap",
+                        "lesson": "check completeness",
+                        "suggested_approach": "be more explicit",
+                    }
+                )
+            )
         if "Evaluate this output against the task" in user_text:
             return _Result(json.dumps(self._critiques.pop(0)))
         raise AssertionError(f"unexpected chat call: {user_text[:120]!r}")
@@ -123,9 +127,39 @@ async def test_deep_refine_returns_last_improved_content():
     fake = FakeDeepRefineModel(
         initial="initial",
         critiques=[
-            {"passed": False, "scores": {"correctness": 2.0, "completeness": 2.0, "clarity": 2.0, "safety": 2.0, "actionability": 2.0}, "issues": [{"severity": "minor", "description": "round 1 issue"}]},
-            {"passed": False, "scores": {"correctness": 3.0, "completeness": 3.0, "clarity": 3.0, "safety": 3.0, "actionability": 3.0}, "issues": [{"severity": "minor", "description": "round 2 issue"}]},
-            {"passed": False, "scores": {"correctness": 3.9, "completeness": 3.9, "clarity": 3.9, "safety": 3.9, "actionability": 3.9}, "issues": [{"severity": "minor", "description": "round 3 issue"}]},
+            {
+                "passed": False,
+                "scores": {
+                    "correctness": 2.0,
+                    "completeness": 2.0,
+                    "clarity": 2.0,
+                    "safety": 2.0,
+                    "actionability": 2.0,
+                },
+                "issues": [{"severity": "minor", "description": "round 1 issue"}],
+            },
+            {
+                "passed": False,
+                "scores": {
+                    "correctness": 3.0,
+                    "completeness": 3.0,
+                    "clarity": 3.0,
+                    "safety": 3.0,
+                    "actionability": 3.0,
+                },
+                "issues": [{"severity": "minor", "description": "round 2 issue"}],
+            },
+            {
+                "passed": False,
+                "scores": {
+                    "correctness": 3.9,
+                    "completeness": 3.9,
+                    "clarity": 3.9,
+                    "safety": 3.9,
+                    "actionability": 3.9,
+                },
+                "issues": [{"severity": "minor", "description": "round 3 issue"}],
+            },
         ],
         improvements=["improved_v1", "improved_v2"],
     )
@@ -135,7 +169,9 @@ async def test_deep_refine_returns_last_improved_content():
         max_refine_rounds=3,
     )
 
-    candidates = await strategy.execute(request, self_refine=None, model_registry=FakeRegistry(fake))
+    candidates = await strategy.execute(
+        request, self_refine=None, model_registry=FakeRegistry(fake)
+    )
 
     assert len(candidates) == 1
     candidate = candidates[0]
@@ -148,19 +184,32 @@ async def test_deep_refine_returns_last_improved_content():
 @pytest.mark.asyncio
 async def test_debate_each_agent_reads_own_history():
     strategy = DebateStrategy()
-    fake = FakeDebateModel(judge_responses=[
-        {"converged": True, "winner": "synthesis", "final_solution": "consensus answer", "quality_score": 4},
-    ])
-    request = ReasoningRequest(task="debate this topic", mode=ReasoningMode.DEBATE, max_refine_rounds=1)
+    fake = FakeDebateModel(
+        judge_responses=[
+            {
+                "converged": True,
+                "winner": "synthesis",
+                "final_solution": "consensus answer",
+                "quality_score": 4,
+            },
+        ]
+    )
+    request = ReasoningRequest(
+        task="debate this topic", mode=ReasoningMode.DEBATE, max_refine_rounds=1
+    )
 
-    candidates = await strategy.execute(request, self_refine=None, model_registry=FakeRegistry(fake))
+    candidates = await strategy.execute(
+        request, self_refine=None, model_registry=FakeRegistry(fake)
+    )
 
     proponent_rebuttal = next(
-        user for role, system, user in fake.calls
+        user
+        for role, system, user in fake.calls
         if role == "proponent" and "Opponent's argument" in user
     )
     opponent_rebuttal = next(
-        user for role, system, user in fake.calls
+        user
+        for role, system, user in fake.calls
         if role == "opponent" and "Opponent's argument" in user
     )
 
@@ -183,7 +232,9 @@ async def test_debate_each_agent_reads_own_history():
 
 @pytest.mark.asyncio
 async def test_debate_agent_tokens_accumulate_tokens_used():
-    agent = DebateAgent(role="Proponent", system_prompt=PROPONENT_SYSTEM_PROMPT, model_adapter=FakeDebateModel([]))
+    agent = DebateAgent(
+        role="Proponent", system_prompt=PROPONENT_SYSTEM_PROMPT, model_adapter=FakeDebateModel([])
+    )
     await agent.chat("request one")
     await agent.chat("Opponent's argument\nrespond to this")
     assert agent.total_tokens == 3 + 5
@@ -199,7 +250,11 @@ async def test_debate_agent_tokens_fall_back_to_usage():
     async def chat(messages, **kwargs):
         return _UsageResult("answer", total=24)
 
-    agent = DebateAgent(role="Opponent", system_prompt=OPPONENT_SYSTEM_PROMPT, model_adapter=SimpleNamespace(chat=chat))
+    agent = DebateAgent(
+        role="Opponent",
+        system_prompt=OPPONENT_SYSTEM_PROMPT,
+        model_adapter=SimpleNamespace(chat=chat),
+    )
     response = await agent.chat("request")
     assert response == "answer"
     assert agent.total_tokens == 24
@@ -209,11 +264,22 @@ async def test_debate_agent_tokens_fall_back_to_usage():
 async def test_debate_confidence_comes_from_scorer():
     strategy = DebateStrategy()
     strategy._scorer = SimpleNamespace(score_from_critique=lambda critique: 0.42)
-    fake = FakeDebateModel(judge_responses=[
-        {"converged": True, "winner": "synthesis", "final_solution": "consensus answer", "quality_score": 4},
-    ])
-    request = ReasoningRequest(task="debate this topic", mode=ReasoningMode.DEBATE, max_refine_rounds=1)
+    fake = FakeDebateModel(
+        judge_responses=[
+            {
+                "converged": True,
+                "winner": "synthesis",
+                "final_solution": "consensus answer",
+                "quality_score": 4,
+            },
+        ]
+    )
+    request = ReasoningRequest(
+        task="debate this topic", mode=ReasoningMode.DEBATE, max_refine_rounds=1
+    )
 
-    candidates = await strategy.execute(request, self_refine=None, model_registry=FakeRegistry(fake))
+    candidates = await strategy.execute(
+        request, self_refine=None, model_registry=FakeRegistry(fake)
+    )
 
     assert candidates[0].confidence == 0.42

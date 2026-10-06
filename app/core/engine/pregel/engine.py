@@ -14,7 +14,7 @@ import asyncio
 import uuid
 from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -25,7 +25,7 @@ from app.core.engine.pregel.checkpoint import (
     InMemoryCheckpointSaver,
 )
 from app.core.engine.pregel.command import Command, is_command, parse_node_output
-from app.core.engine.pregel.graph import StateGraph
+from app.core.engine.pregel.graph import RouterFunc, StateGraph
 from app.core.engine.pregel.hitl import HITLManager
 from app.core.engine.pregel.policies import (
     DefaultErrorHandler,
@@ -108,7 +108,7 @@ class PregelEngine:
         self._hitl = hitl_manager or HITLManager()
         self._debug = debug
 
-    async def run(self, state: GraphState, config: dict | None = None) -> GraphState:
+    async def run(self, state: GraphState, config: dict[str, Any] | None = None) -> GraphState:
         """Run the graph until completion.
 
         Args:
@@ -147,9 +147,12 @@ class PregelEngine:
         if resume_nodes:
             context.active_nodes = _drop_terminals(resume_nodes)
         elif not context.active_nodes:
-            # Check if we're resuming from an interrupt
+            # Resumed from an interrupt: the checkpoint records the pending
+            # successors (possibly none when the interrupt fired on the final
+            # node). Never fall back to the entry point in that case, or an
+            # interrupted terminal-adjacent node would replay the whole graph.
             interrupt_node = state.get("__interrupt_node__")
-            if interrupt_node and state.get("__interrupted__"):
+            if interrupt_node:
                 context.active_nodes = _drop_terminals(existing.next_nodes) if existing else []
             else:
                 entry = self._graph._entry_point
@@ -170,7 +173,9 @@ class PregelEngine:
                 state.step = context.step
                 context.active_nodes = step_result.next_active
                 if step_result.interrupted:
-                    logger.info("execution_interrupted", node=step_result.active_nodes, step=context.step)
+                    logger.info(
+                        "execution_interrupted", node=step_result.active_nodes, step=context.step
+                    )
                     break
 
         try:
@@ -186,7 +191,9 @@ class PregelEngine:
 
         return state
 
-    async def astream(self, state: GraphState, config: dict | None = None) -> AsyncIterator[GraphState]:
+    async def astream(
+        self, state: GraphState, config: dict[str, Any] | None = None
+    ) -> AsyncIterator[GraphState]:
         """Stream state after each super-step.
 
         Args:
@@ -209,13 +216,30 @@ class PregelEngine:
             context.step = existing.step
             context.active_nodes = _drop_terminals(existing.next_nodes)
 
-        if not context.active_nodes:
-            entry = self._graph._entry_point
-            if entry is None:
-                branch = self._graph.get_conditional_edges("__start__")
-                if branch:
-                    entry = await self._resolve_router(branch.router, state)
-            context.active_nodes = _drop_terminals([entry]) if entry else []
+        resume_value = config.get("__resume_value__")
+        resume_nodes = config.get("__resume_nodes__")
+        if resume_value is not None:
+            state["__resume_value__"] = resume_value
+            state["__interrupted__"] = False
+
+        if resume_nodes:
+            context.active_nodes = _drop_terminals(resume_nodes)
+        elif not context.active_nodes:
+            # A restored interrupted graph has no pending nodes; only fall back
+            # to the entry point for a genuinely fresh run. Falling back here
+            # after an after-interrupt on a terminal-adjacent node would replay
+            # the whole graph from entry. The interrupt marker survives in
+            # state even though the __interrupted__ flag is cleared on resume.
+            interrupt_node = state.get("__interrupt_node__")
+            if interrupt_node:
+                context.active_nodes = _drop_terminals(existing.next_nodes) if existing else []
+            else:
+                entry = self._graph._entry_point
+                if entry is None:
+                    branch = self._graph.get_conditional_edges("__start__")
+                    if branch:
+                        entry = await self._resolve_router(branch.router, state)
+                context.active_nodes = _drop_terminals([entry]) if entry else []
 
         yield state.clone()
 
@@ -237,7 +261,9 @@ class PregelEngine:
             self._merge_error_update(state, handler_result)
             yield state.clone()
 
-    async def astream_events(self, state: GraphState, config: dict | None = None) -> AsyncIterator[StreamEvent]:
+    async def astream_events(
+        self, state: GraphState, config: dict[str, Any] | None = None
+    ) -> AsyncIterator[StreamEvent]:
         """Stream detailed execution events.
 
         Args:
@@ -260,13 +286,28 @@ class PregelEngine:
             context.step = existing.step
             context.active_nodes = _drop_terminals(existing.next_nodes)
 
-        if not context.active_nodes:
-            entry = self._graph._entry_point
-            if entry is None:
-                branch = self._graph.get_conditional_edges("__start__")
-                if branch:
-                    entry = await self._resolve_router(branch.router, state)
-            context.active_nodes = _drop_terminals([entry]) if entry else []
+        resume_value = config.get("__resume_value__")
+        resume_nodes = config.get("__resume_nodes__")
+        if resume_value is not None:
+            state["__resume_value__"] = resume_value
+            state["__interrupted__"] = False
+
+        if resume_nodes:
+            context.active_nodes = _drop_terminals(resume_nodes)
+        elif not context.active_nodes:
+            # See astream(): only fall back to entry for a fresh run, never for
+            # a restored interrupt that legitimately has no pending nodes. The
+            # interrupt marker survives in state after resume clears the flag.
+            interrupt_node = state.get("__interrupt_node__")
+            if interrupt_node:
+                context.active_nodes = _drop_terminals(existing.next_nodes) if existing else []
+            else:
+                entry = self._graph._entry_point
+                if entry is None:
+                    branch = self._graph.get_conditional_edges("__start__")
+                    if branch:
+                        entry = await self._resolve_router(branch.router, state)
+                context.active_nodes = _drop_terminals([entry]) if entry else []
 
         yield StreamEvent(type=StreamEventType.START, data={"input": dict(state)})
 
@@ -274,7 +315,9 @@ class PregelEngine:
             async with asyncio.timeout(self._timeout_policy.run_timeout):
                 for _ in range(max_steps):
                     if not context.active_nodes:
-                        yield StreamEvent(type=StreamEventType.END, data={"total_steps": context.step})
+                        yield StreamEvent(
+                            type=StreamEventType.END, data={"total_steps": context.step}
+                        )
                         break
 
                     for node in context.active_nodes:
@@ -331,7 +374,7 @@ class PregelEngine:
             )
             yield StreamEvent(type=StreamEventType.END, data={"total_steps": context.step})
 
-    async def get_state(self, config: dict) -> GraphState:
+    async def get_state(self, config: dict[str, Any]) -> GraphState:
         """Get current state from the latest checkpoint."""
         thread_id = config.get("thread_id", "default")
         checkpoint_config = CheckpointConfig(thread_id=thread_id)
@@ -342,7 +385,7 @@ class PregelEngine:
             return state
         return GraphState(schema=self._graph.schema)
 
-    async def update_state(self, config: dict, values: dict) -> dict:
+    async def update_state(self, config: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:
         """Update state by saving a new checkpoint."""
         thread_id = config.get("thread_id", "default")
         checkpoint_config = CheckpointConfig(thread_id=thread_id)
@@ -363,7 +406,7 @@ class PregelEngine:
         await self._checkpointer.put(checkpoint_config, checkpoint)
         return config
 
-    async def resume_with(self, config: dict, value: Any) -> dict:
+    async def resume_with(self, config: dict[str, Any], value: Any) -> dict[str, Any]:
         """Resume from an interrupt with a human-provided value."""
         # Inject resume value into config so run() can apply it after checkpoint restore
         config = {**config, "__resume_value__": value}
@@ -372,7 +415,7 @@ class PregelEngine:
         return dict(result)
 
     async def _execute_super_step(
-        self, state: GraphState, config: dict, context: ExecutionContext
+        self, state: GraphState, config: dict[str, Any], context: ExecutionContext
     ) -> SuperStepResult:
         """Execute a single super-step: run all active nodes in parallel."""
         context.step += 1
@@ -382,7 +425,10 @@ class PregelEngine:
 
         tasks = []
         for node_name in active_nodes:
-            if node_name in self._interrupt_before and node_name not in context.skip_interrupt_before:
+            if (
+                node_name in self._interrupt_before
+                and node_name not in context.skip_interrupt_before
+            ):
                 state["__interrupted__"] = True
                 state["__interrupt_node__"] = node_name
                 checkpoint = await self._save_checkpoint(
@@ -426,7 +472,7 @@ class PregelEngine:
 
             next_nodes = await self._route_next(node_name, goto, state)
             next_active.extend(next_nodes)
-            if is_command(result) and result.metadata.get("interrupt"):
+            if is_command(result) and cast(Any, result).metadata.get("interrupt"):
                 all_interrupted = True
                 interrupt_node = node_name
 
@@ -498,7 +544,7 @@ class PregelEngine:
         return checkpoint
 
     async def _execute_node(
-        self, node_name: str, state: GraphState, config: dict, context: ExecutionContext
+        self, node_name: str, state: GraphState, config: dict[str, Any], context: ExecutionContext
     ) -> Any:
         """Execute a single node with retry and timeout."""
         if node_name in TERMINAL_NODES:
@@ -521,11 +567,16 @@ class PregelEngine:
             if self._timeout_policy.node_timeout is None:
                 result = await execution
             else:
-                result = await asyncio.wait_for(execution, timeout=self._timeout_policy.node_timeout)
+                result = await asyncio.wait_for(
+                    execution, timeout=self._timeout_policy.node_timeout
+                )
 
             if node_name in self._interrupt_after:
                 if not is_command(result):
-                    result = Command(update=result if isinstance(result, dict) else None, metadata={"interrupt": True})
+                    result = Command(
+                        update=result if isinstance(result, dict) else None,
+                        metadata={"interrupt": True},
+                    )
                 else:
                     result.metadata["interrupt"] = True
 
@@ -535,11 +586,15 @@ class PregelEngine:
             logger.error("node_failed", node=node_name, error=str(e))
             raise
 
-    def _parse_output(self, output: Any) -> tuple[dict | None, str | list[str] | None, Any]:
+    def _parse_output(
+        self, output: Any
+    ) -> tuple[dict[str, Any] | None, str | list[str] | None, Any]:
         """Parse a node's output into update, goto, resume components."""
         return parse_node_output(output)
 
-    async def _route_next(self, current_node: str, goto: str | list[str] | None, state: GraphState) -> list[str]:
+    async def _route_next(
+        self, current_node: str, goto: str | list[str] | None, state: GraphState
+    ) -> list[str]:
         """Determine next nodes based on explicit goto or graph edges."""
         if goto is not None:
             if isinstance(goto, list):
@@ -552,6 +607,8 @@ class PregelEngine:
         branch = self._graph.get_conditional_edges(current_node)
         if branch:
             next_node = await self._resolve_router(branch.router, state)
+            if branch.path_map:
+                next_node = branch.path_map.get(next_node, next_node)
             if next_node in TERMINAL_NODES:
                 return []
             if next_node in self._graph.nodes:
@@ -559,10 +616,9 @@ class PregelEngine:
             return []
 
         # Use static edges
-        outgoing = self._graph.get_outgoing_edges(current_node)
-        return outgoing
+        return self._graph.get_outgoing_edges(current_node)
 
-    async def _resolve_router(self, router: callable, state: GraphState) -> str:
+    async def _resolve_router(self, router: RouterFunc, state: GraphState) -> str:
         """Resolve a router function to a node name."""
         try:
             result = router(state)

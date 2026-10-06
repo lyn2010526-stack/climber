@@ -70,10 +70,7 @@ class TreeOfThoughtStrategy:
             concurrency_limit=concurrency_limit,
         )
 
-        tasks = [
-            _run_path_with_limit(i, path_type)
-            for i, path_type in enumerate(path_types)
-        ]
+        tasks = [_run_path_with_limit(i, path_type) for i, path_type in enumerate(path_types)]
         results = await asyncio.gather(*tasks)
         candidates = [r for r in results if r is not None]
 
@@ -103,7 +100,12 @@ class TreeOfThoughtStrategy:
         )
 
         refined_content, critique, round_traces = await self._refine_path(
-            request.task, initial_content, self_refine, model_adapter, path_type, request.max_refine_rounds
+            request.task,
+            initial_content,
+            self_refine,
+            model_adapter,
+            path_type,
+            request.max_refine_rounds,
         )
 
         confidence = self._scorer.score_from_critique(critique)

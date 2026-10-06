@@ -48,12 +48,17 @@ MODEL_ALIASES: dict[str, tuple[str, str]] = {
 }
 
 
+# Soft cap on the size of ``ModelRegistry._models``; crossing it logs a warning once.
+_MODELS_SOFT_LIMIT = 200
+
+
 class ModelRegistry:
     """In-memory registry of configured models. Later backed by database."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._models: dict[str, ModelAdapter] = {}
         self._user_keys: dict[str, dict[str, dict[str, str]]] = {}
+        self._size_warning_emitted = False
 
     def register_model(
         self,
@@ -66,9 +71,7 @@ class ModelRegistry:
         """Register a model with direct API key."""
         adapter_cls = PROVIDERS.get(provider)
         if not adapter_cls:
-            raise ValueError(
-                f"Unknown provider: {provider}. Supported: {list(PROVIDERS.keys())}"
-            )
+            raise ValueError(f"Unknown provider: {provider}. Supported: {list(PROVIDERS.keys())}")
 
         kwargs: dict[str, Any] = {"model_id": model_id, "api_key": api_key}
         if base_url:
@@ -111,20 +114,32 @@ class ModelRegistry:
             return self._resolve_spec(provider)
         resolved_provider, resolved_model = MODEL_ALIASES.get(provider, (provider, model_id))
         if resolved_provider != provider or resolved_model != model_id:
-            logger.info("model_alias_resolved", alias=f"{provider}:{model_id}", resolved=f"{resolved_provider}:{resolved_model}")
+            logger.info(
+                "model_alias_resolved",
+                alias=f"{provider}:{model_id}",
+                resolved=f"{resolved_provider}:{resolved_model}",
+            )
         try:
             return self.get_model(resolved_provider, resolved_model)
         except ValueError:
             return self.register_model(resolved_model, resolved_provider, api_key, base_url)
 
     def _resolve_spec(self, spec: str) -> ModelAdapter:
-        """Resolve a single-string alias or ``provider:model`` spec into an adapter."""
+        """Resolve a single-string alias or ``provider:model`` spec into an adapter.
+
+        Raises ``ValueError`` for an unknown bare spec instead of silently
+        inventing an OpenAI model: an unrecognized name is almost always a
+        typo, and registering it under the wrong provider hides the mistake.
+        """
         if ":" in spec:
             provider, model_id = spec.split(":", 1)
         elif spec in MODEL_ALIASES:
             provider, model_id = MODEL_ALIASES[spec]
         else:
-            provider, model_id = "openai", spec
+            raise ValueError(
+                f"Unknown model spec: {spec!r}. "
+                f"Use a provider:model string or one of: {sorted(MODEL_ALIASES)}"
+            )
         try:
             return self.get_model(provider, model_id)
         except ValueError:
@@ -157,9 +172,7 @@ class ModelRegistry:
         """
         adapter_cls = PROVIDERS.get(provider)
         if not adapter_cls:
-            raise ValueError(
-                f"Unknown provider: {provider}. Supported: {list(PROVIDERS.keys())}"
-            )
+            raise ValueError(f"Unknown provider: {provider}. Supported: {list(PROVIDERS.keys())}")
 
         for idx, api_key in enumerate(api_keys):
             cache_key = f"{provider}:{model_id}:key:{idx}"
@@ -169,6 +182,16 @@ class ModelRegistry:
             adapter = adapter_cls(**kwargs)
             self._models[cache_key] = adapter
 
+        if len(self._models) > _MODELS_SOFT_LIMIT and not self._size_warning_emitted:
+            self._size_warning_emitted = True
+            logger.warning(
+                "model_registry_soft_limit_exceeded",
+                count=len(self._models),
+                limit=_MODELS_SOFT_LIMIT,
+            )
+        elif len(self._models) <= _MODELS_SOFT_LIMIT:
+            self._size_warning_emitted = False
+
         logger.info(
             "Multiple keys registered",
             provider=provider,
@@ -176,16 +199,60 @@ class ModelRegistry:
             count=len(api_keys),
         )
 
+    def unregister_key(self, provider: str, model_id: str, idx: int | None = None) -> int:
+        """Remove adapters registered via ``register_keys`` for a provider/model.
+
+        Uses the same ``{provider}:{model_id}:key:{idx}`` cache key rule. With
+        ``idx`` a single suffixed entry is removed; with ``None`` every suffixed
+        entry for the provider/model is removed. Returns the number removed.
+        """
+        prefix = f"{provider}:{model_id}:key:"
+        if idx is not None:
+            target = f"{prefix}{idx}"
+            if self._models.pop(target, None) is None:
+                return 0
+            removed = 1
+        else:
+            stale = [key for key in self._models if key.startswith(prefix)]
+            for key in stale:
+                del self._models[key]
+            removed = len(stale)
+
+        if len(self._models) <= _MODELS_SOFT_LIMIT:
+            self._size_warning_emitted = False
+
+        logger.info(
+            "Keys unregistered",
+            provider=provider,
+            model=model_id,
+            count=removed,
+        )
+        return removed
+
     def list_models(self) -> list[dict[str, Any]]:
-        """List all registered models."""
+        """List all registered models, deduplicated by provider/model.
+
+        ``register_keys`` stores one adapter per rotated API key under
+        suffixed cache keys; those all map to the same logical model, so
+        only the first instance is reported.
+        """
         result = []
-        for _key, adapter in self._models.items():
+        seen: set[tuple[str, str]] = set()
+        for adapter in self._models.values():
+            provider = adapter.provider
+            model_id = adapter.model_id
+            key = (provider, model_id)
+            if key in seen:
+                continue
+            seen.add(key)
             caps = adapter.capabilities
-            result.append({
-                "provider": adapter.provider,
-                "model_id": adapter.model_id,
-                "capabilities": caps.model_dump(),
-            })
+            result.append(
+                {
+                    "provider": provider,
+                    "model_id": model_id,
+                    "capabilities": caps.model_dump(),
+                }
+            )
         return result
 
 

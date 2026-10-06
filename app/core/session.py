@@ -13,6 +13,7 @@ from app.core import (
     ContextConfig,
     SessionStatus,
 )
+from app.core.exceptions import InvalidStateTransitionError
 from app.core.resilience import (
     CircuitBreaker,
     CircuitBreakerConfig,
@@ -34,6 +35,7 @@ class SessionConfig:
     Encapsulates all session parameters to avoid excessive function arguments.
     All identity fields default to empty strings so partial configs are valid.
     """
+
     session_id: str = ""
     agent_id: str = ""
     user_id: str = ""
@@ -52,10 +54,22 @@ class SessionConfig:
     enable_checkpoint_recovery: bool = False
     enable_graceful_shutdown: bool = False
     shutdown_drain_seconds: float = 0.0
+    # Per-session LLM sampling overrides (e.g. set by workflow LLM nodes);
+    # None means "provider default" and is never forwarded to the adapter.
+    temperature: float | None = None
+    max_tokens: int | None = None
 
 
 class AgentSession:
     """Represents a single agent interaction session with state management."""
+
+    # Runtime-set flags/diagnostics written and read by the engine submodules
+    # (runner, tool_exec, run_progress, run_storage) and the engine facade.
+    _continuing_input: bool
+    _outer_rounds: int
+    _run_status_override: str | None
+    task_memory_diagnostics: dict[str, Any]
+    task_memory_summary_diagnostics: dict[str, Any]
 
     def __init__(
         self,
@@ -73,6 +87,8 @@ class AgentSession:
         context_config: Any = _SENTINEL,
         mode: Any = _SENTINEL,
         max_iterations: Any = _SENTINEL,
+        temperature: Any = _SENTINEL,
+        max_tokens: Any = _SENTINEL,
         session_config: SessionConfig | None = None,
         context: dict[str, Any] | None = None,
     ) -> None:
@@ -81,7 +97,11 @@ class AgentSession:
         Supports either a single SessionConfig positional argument or explicit
         keyword arguments (optionally combined with a session_config override).
         """
-        base = config if config is not None else (session_config if session_config is not None else SessionConfig())
+        base = copy.deepcopy(
+            config
+            if config is not None
+            else (session_config if session_config is not None else SessionConfig())
+        )
         overrides = {
             "session_id": session_id,
             "agent_id": agent_id,
@@ -95,6 +115,8 @@ class AgentSession:
             "context_config": context_config,
             "mode": mode,
             "max_iterations": max_iterations,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
         }
         for name, value in overrides.items():
             if value is not _SENTINEL:
@@ -113,6 +135,8 @@ class AgentSession:
         self.context_config = base.context_config or ContextConfig()
         self.max_iterations = base.max_iterations
         self.mode = base.mode
+        self.temperature = base.temperature
+        self.max_tokens = base.max_tokens
         self.context: dict[str, Any] = context or {}
         self.messages: list[dict[str, Any]] = []
         self._stop_requested = False
@@ -122,7 +146,9 @@ class AgentSession:
         self.tool_results: list[dict[str, Any]] = []
         self.session_memory = _SessionMemory(self)
         self.current_turn_id: str | None = None
-        self.state_machine = TaskStateMachine(task_id=self.session_id or "session", initial_state=TaskState.PENDING)
+        self.state_machine = TaskStateMachine(
+            task_id=self.session_id or "session", initial_state=TaskState.PENDING
+        )
         self.debug_attempts: dict[str, int] = {}
         self.restart_count: int = 0
         self.paused_at: str | None = None
@@ -130,7 +156,7 @@ class AgentSession:
         self._init_permission_system()
         self._pending_permission: dict[str, Any] | None = None
         self._permission_event: asyncio.Event | None = None
-        self._pending_tasks: set[asyncio.Task] = set()
+        self._pending_tasks: set[asyncio.Task[Any]] = set()
         self.metrics = SessionMetrics(session_id=self.session_id or "session")
         self._session_deadline: float | None = None
         self._iteration_deadline: float | None = None
@@ -185,11 +211,7 @@ class AgentSession:
         config_data["api_key"] = api_key
         allowed_config_fields = SessionConfig.__dataclass_fields__
         config = SessionConfig(
-            **{
-                key: value
-                for key, value in config_data.items()
-                if key in allowed_config_fields
-            }
+            **{key: value for key, value in config_data.items() if key in allowed_config_fields}
         )
         raw_context = snapshot.get("context")
         session = cls(
@@ -197,9 +219,7 @@ class AgentSession:
             context=copy.deepcopy(raw_context) if isinstance(raw_context, dict) else {},
         )
         raw_messages = snapshot.get("messages")
-        session.messages = (
-            copy.deepcopy(raw_messages) if isinstance(raw_messages, list) else []
-        )
+        session.messages = copy.deepcopy(raw_messages) if isinstance(raw_messages, list) else []
         raw_tool_results = snapshot.get("tool_results")
         session.tool_results = (
             copy.deepcopy(raw_tool_results) if isinstance(raw_tool_results, list) else []
@@ -238,7 +258,12 @@ class AgentSession:
         self.current_turn_id = checkpoint.metadata.get("thread_id") or None
         self._resume_interrupted = interrupted
         self._stop_requested = False
-        status = checkpoint.status if interrupted else TaskState.COMPLETED.value
+        if interrupted:
+            status = checkpoint.status
+        elif checkpoint.status == TaskState.COMPLETED.value:
+            status = TaskState.COMPLETED.value
+        else:
+            status = checkpoint.status
         self._restore_status(status)
 
     def _restore_status(self, status: Any) -> None:
@@ -259,8 +284,9 @@ class AgentSession:
     def _init_permission_system(self) -> None:
         """Initialize the permission system for this session."""
         try:
-            from app.core.permission_rules import get_default_config
-            self.permission_config = get_default_config()
+            from app.core.permission_rules import PermissionConfig, get_default_config
+
+            self.permission_config: PermissionConfig | None = get_default_config()
         except Exception:
             self.permission_config = None
 
@@ -286,17 +312,34 @@ class AgentSession:
         """Seconds remaining before the session deadline."""
         if self._session_deadline is not None:
             return max(0.0, self._session_deadline - time.monotonic())
-        return self.session_config.timeouts.per_session_seconds if self.session_config.timeouts else 1800.0
+        return (
+            self.session_config.timeouts.per_session_seconds
+            if self.session_config.timeouts
+            else 1800.0
+        )
 
     def stop(self) -> None:
         """Request the session to stop processing."""
         self._stop_requested = True
-        import asyncio
         try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(self.state_machine.transition(TaskState.CANCELLED, trigger="user_stop"))
+            asyncio.get_running_loop()
         except RuntimeError:
-            pass
+            return
+        if self.state_machine.can_transition_to(TaskState.CANCELLED):
+            self._fire_and_forget(self._transition_to_stopped())
+
+    async def _transition_to_stopped(self) -> None:
+        # Execution may have completed after the synchronous stop request, so
+        # the CANCELLED transition can become illegal between the check above
+        # and this background task running. A terminal state already won the
+        # race; swallow the state-machine rejection instead of leaking an
+        # unretrieved InvalidStateTransitionError from the fire-and-forget task.
+        if not self.state_machine.can_transition_to(TaskState.CANCELLED):
+            return
+        try:
+            await self.state_machine.transition(TaskState.CANCELLED, trigger="user_stop")
+        except InvalidStateTransitionError:
+            return
 
     async def pause(self) -> None:
         """Pause the session, recording the pause timestamp."""
@@ -322,7 +365,7 @@ class AgentSession:
         self.termination_reason = None
         self.paused_at = None
 
-    def _fire_and_forget(self, coro: Any) -> asyncio.Task:
+    def _fire_and_forget(self, coro: Any) -> asyncio.Task[Any]:
         """Create a background task and track it for cleanup.
 
         Args:
@@ -332,26 +375,43 @@ class AgentSession:
             The created asyncio Task.
         """
         import asyncio
+
         task = asyncio.create_task(coro)
         self._pending_tasks.add(task)
-        task.add_done_callback(self._pending_tasks.discard)
+
+        def on_done(completed: asyncio.Task[Any]) -> None:
+            self._pending_tasks.discard(completed)
+            if not completed.cancelled():
+                completed.exception()
+
+        task.add_done_callback(on_done)
         return task
 
     async def _await_pending_tasks(self) -> None:
         """Await all pending fire-and-forget tasks and clear the set."""
         import asyncio
-        if self._pending_tasks:
-            await asyncio.gather(*self._pending_tasks, return_exceptions=True)
-            self._pending_tasks.clear()
+
+        while self._pending_tasks:
+            tasks = tuple(self._pending_tasks)
+            await asyncio.gather(*tasks, return_exceptions=True)
+            self._pending_tasks.difference_update(tasks)
 
     def start_session_timer(self) -> None:
         """Start the overall session deadline timer."""
-        timeout = self.session_config.timeouts.per_session_seconds if self.session_config.timeouts else 1800.0
+        timeout = (
+            self.session_config.timeouts.per_session_seconds
+            if self.session_config.timeouts
+            else 1800.0
+        )
         self._session_deadline = time.monotonic() + timeout
 
     def start_iteration_timer(self) -> None:
         """Start the per-iteration deadline timer."""
-        timeout = self.session_config.timeouts.per_iteration_seconds if self.session_config.timeouts else 120.0
+        timeout = (
+            self.session_config.timeouts.per_iteration_seconds
+            if self.session_config.timeouts
+            else 120.0
+        )
         self._iteration_deadline = time.monotonic() + timeout
 
     def check_timeouts(self) -> None:
@@ -365,7 +425,9 @@ class AgentSession:
         if self._session_deadline is not None and now > self._session_deadline:
             raise SessionTimeoutError(f"Session deadline exceeded for session '{self.session_id}'")
         if self._iteration_deadline is not None and now > self._iteration_deadline:
-            raise IterationTimeoutError(f"Iteration deadline exceeded for session '{self.session_id}'")
+            raise IterationTimeoutError(
+                f"Iteration deadline exceeded for session '{self.session_id}'"
+            )
 
     async def graceful_shutdown(self) -> None:
         """Gracefully stop the session, draining pending tasks and closing metrics."""
@@ -385,6 +447,7 @@ class AgentSession:
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Exit the session context, requesting stop and closing metrics."""
         self._stop_requested = True
+        await self._await_pending_tasks()
         if self.metrics.end_time is None:
             self.metrics.end_time = time.monotonic()
 

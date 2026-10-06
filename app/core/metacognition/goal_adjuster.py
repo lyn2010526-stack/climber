@@ -31,7 +31,7 @@ class AdjustmentResult:
 class GoalDynamicAdjuster:
     """Detects infeasible goals and proposes alternatives."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._adjustment_history: list[AdjustmentResult] = []
         self._max_adjustments = 3
 
@@ -136,7 +136,9 @@ class GoalDynamicAdjuster:
         if needs_db and not has_db:
             gaps.append("database_access")
 
-        needs_browser = any(kw in goal_lower for kw in ["screenshot", "scrape", "web page", "browser"])
+        needs_browser = any(
+            kw in goal_lower for kw in ["screenshot", "scrape", "web page", "browser"]
+        )
         has_browser = "browser" in tools
         if needs_browser and not has_browser:
             gaps.append("browser_access")

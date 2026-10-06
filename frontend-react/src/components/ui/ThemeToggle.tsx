@@ -1,10 +1,12 @@
 import React from 'react';
 import { icons, iconSizes } from '../../lib/icons';
-import { useTheme } from '../../hooks/useTheme.tsx';
+import { useOptionalTheme } from '../../hooks/useTheme.tsx';
 import { cn } from '../../lib/utils';
 
 export const ThemeToggle: React.FC<{ className?: string }> = ({ className }) => {
-  const { theme, toggleTheme, isLoading } = useTheme();
+  const context = useOptionalTheme();
+  if (!context) return null;
+  const { theme, toggleTheme, isLoading } = context;
   // The glyph names the mode the control reports, so the dark theme shows the
   // moon. Both come from the shared icon table, never a local glyph.
   const ThemeIcon = theme === 'dark' ? icons.darkTheme : icons.lightTheme;

@@ -47,6 +47,22 @@ describe('chatStream SSE idle handling', () => {
     vi.unstubAllGlobals();
   });
 
+  it('handles byte-split CRLF, mixed separators, multiline JSON and UTF-8 at EOF', async () => {
+    // Hand-authored SSE fixture with each byte delivered separately.
+    const bytes = encoder.encode('event: text\r\ndata: {"content":"中文"}\r\n\r\nevent: text\ndata: {\ndata: "content":" next"}\n\nevent: done\r\ndata: {}');
+    const body = new ReadableStream<Uint8Array>({ start(controller) {
+      for (const byte of bytes) controller.enqueue(Uint8Array.of(byte));
+      controller.close();
+    } });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body)));
+    const { events, onEvent } = collect();
+    await new Promise<void>(resolve => api.chatStream('a', 'fixture', event => {
+      onEvent(event);
+      if (event.type === 'done' || event.type === 'error') resolve();
+    }));
+    expect(events).toEqual([{ type: 'text', delta: '中文' }, { type: 'text', delta: ' next' }, { type: 'done' }]);
+  });
+
   it('parses AG-UI frames and finishes cleanly on a normal close', async () => {
     const stream = controllableStream();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, body: stream.body }));

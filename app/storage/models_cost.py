@@ -25,8 +25,17 @@ class CostRecord(Base):
     __tablename__ = "cost_records"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True, default="default-user")
-    session_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("sessions.id"), nullable=True, index=True)
+    user_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, index=True, default="default-user"
+    )
+    session_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("sessions.id"), nullable=True, index=True
+    )
+
+    # Group attribution: the collaboration group and sub-task that produced
+    # this call, enabling per-group cost aggregation (R12-H54).
+    group_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    task_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
 
     # Model info
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -51,7 +60,9 @@ class BudgetConfig(Base):
     __tablename__ = "budget_configs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, default="default-user")
+    user_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, unique=True, default="default-user"
+    )
 
     # Budget settings
     amount: Mapped[float] = mapped_column(Float, default=10.0)  # Default $10/month
@@ -63,7 +74,9 @@ class BudgetConfig(Base):
     per_request_limit: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
 
 class UsageQuota(Base):
@@ -72,7 +85,9 @@ class UsageQuota(Base):
     __tablename__ = "usage_quotas"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, default="default-user")
+    user_id: Mapped[str] = mapped_column(
+        String(36), nullable=False, unique=True, default="default-user"
+    )
 
     # Quota limits
     max_requests_per_day: Mapped[int] = mapped_column(Integer, default=100)
@@ -88,4 +103,6 @@ class UsageQuota(Base):
     last_reset_date: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     last_reset_month: Mapped[str] = mapped_column(String(7), default="")  # YYYY-MM
 
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )

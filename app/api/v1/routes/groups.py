@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.core.api_key_crypto import encrypt_api_key
+from app.core.auth_manager import require_scopes
 from app.core.principal import CurrentPrincipal
 from app.schemas.api_v1.groups import (
     GroupCreateRequest,
@@ -25,12 +26,28 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 
-async def _get_owned_group(db: Any, group_id: str, user_id: str, *, with_members: bool = False) -> AgentGroup | None:
+@router.get("/groups/{group_id}/snapshot")
+async def group_snapshot(
+    group_id: str,
+    principal: CurrentPrincipal,
+    _auth: dict[str, Any] = Depends(require_scopes("read")),
+) -> dict[str, Any]:
+    from app.core.group_ws_hub import get_group_state_snapshot
+
+    async with async_session() as db:
+        if await _get_owned_group(db, group_id, principal.subject_id) is None:
+            raise HTTPException(status_code=404, detail="Group not found")
+    return {**get_group_state_snapshot(group_id), "history_scope": "process_recent"}
+
+
+async def _get_owned_group(
+    db: Any, group_id: str, user_id: str, *, with_members: bool = False
+) -> AgentGroup | None:
     """Fetch a group owned by the given user, or None when not found/owned."""
     stmt = select(AgentGroup).where(AgentGroup.id == group_id, AgentGroup.user_id == user_id)
     if with_members:
         stmt = stmt.options(selectinload(AgentGroup.members))
-    return (await db.execute(stmt)).scalars().first()
+    return cast("AgentGroup | None", (await db.execute(stmt)).scalars().first())
 
 
 @router.get("/groups")
@@ -40,19 +57,27 @@ async def list_groups(principal: CurrentPrincipal) -> list[dict[str, Any]]:
     user_id = principal.subject_id
     async with async_session() as db:
         rows = (
-            await db.execute(
-                select(AgentGroup)
-                .where(AgentGroup.user_id == user_id)
-                .options(selectinload(AgentGroup.members))
-                .order_by(AgentGroup.created_at.desc())
+            (
+                await db.execute(
+                    select(AgentGroup)
+                    .where(AgentGroup.user_id == user_id)
+                    .options(selectinload(AgentGroup.members))
+                    .order_by(AgentGroup.created_at.desc())
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [_group_dict(g, members=_build_member_dicts(g.members)) for g in rows]
 
 
 @router.post("/groups")
 @router.post("/groups/", include_in_schema=False)
-async def create_group(payload: GroupCreateRequest, principal: CurrentPrincipal) -> dict[str, Any]:
+async def create_group(
+    payload: GroupCreateRequest,
+    principal: CurrentPrincipal,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     """Create a new group, optionally with default template members."""
     data = payload.model_dump()
     user_id = principal.subject_id
@@ -74,13 +99,18 @@ async def create_group(payload: GroupCreateRequest, principal: CurrentPrincipal)
         if data.get("template") == "default":
             await _add_default_members(db, group.id, user_id)
 
-        group = (
-            await db.execute(
-                select(AgentGroup)
-                .where(AgentGroup.id == group.id)
-                .options(selectinload(AgentGroup.members))
+        group = cast(
+            AgentGroup,
+            (
+                await db.execute(
+                    select(AgentGroup)
+                    .where(AgentGroup.id == group.id)
+                    .options(selectinload(AgentGroup.members))
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first(),
+        )
         return _group_dict(group, members=_build_member_dicts(group.members if group else []))
 
 
@@ -92,13 +122,17 @@ async def _add_default_members(db: Any, group_id: str, user_id: str) -> None:
         group_id: The group ID to add members to.
     """
     agents = (
-        await db.execute(
-            select(Agent)
-            .where(Agent.user_id == user_id)
-            .order_by(Agent.created_at.desc())
-            .limit(3)
+        (
+            await db.execute(
+                select(Agent)
+                .where(Agent.user_id == user_id)
+                .order_by(Agent.created_at.desc())
+                .limit(3)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     roles = ("planner", "executor", "reviewer")
     for agent, role in zip(agents, roles, strict=False):
         member = AgentGroupMember(
@@ -124,7 +158,11 @@ async def get_group(group_id: str, principal: CurrentPrincipal) -> dict[str, Any
 
 
 @router.delete("/groups/{group_id}")
-async def delete_group(group_id: str, principal: CurrentPrincipal) -> dict[str, bool]:
+async def delete_group(
+    group_id: str,
+    principal: CurrentPrincipal,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, bool]:
     """Delete a group by ID."""
     user_id = principal.subject_id
     async with async_session() as db:
@@ -138,7 +176,10 @@ async def delete_group(group_id: str, principal: CurrentPrincipal) -> dict[str, 
 
 @router.post("/groups/{group_id}/members")
 async def add_group_member(
-    group_id: str, payload: GroupMemberCreateRequest, principal: CurrentPrincipal
+    group_id: str,
+    payload: GroupMemberCreateRequest,
+    principal: CurrentPrincipal,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Add a member to a group."""
     data = payload.model_dump()
@@ -153,7 +194,17 @@ async def add_group_member(
             )
         ).scalar_one_or_none()
         if agent is None:
-            raise HTTPException(status_code=422, detail="agent_id must reference an owned agent")
+            raise HTTPException(status_code=404, detail="agent_id must reference an owned agent")
+        duplicate = (
+            await db.execute(
+                select(AgentGroupMember).where(
+                    AgentGroupMember.group_id == group_id,
+                    AgentGroupMember.agent_id == payload.agent_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if duplicate is not None:
+            raise HTTPException(status_code=409, detail="Agent is already a member of this group")
         member = AgentGroupMember(
             group_id=group_id,
             agent_id=data.get("agent_id", ""),
@@ -184,19 +235,26 @@ async def list_group_messages(
         if group is None:
             raise HTTPException(status_code=404, detail="Group not found")
         rows = (
-            await db.execute(
-                select(AgentGroupMessage)
-                .where(AgentGroupMessage.group_id == group_id)
-                .order_by(AgentGroupMessage.created_at.desc())
-                .limit(limit)
+            (
+                await db.execute(
+                    select(AgentGroupMessage)
+                    .where(AgentGroupMessage.group_id == group_id)
+                    .order_by(AgentGroupMessage.created_at.desc())
+                    .limit(limit)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return {"messages": [_message_dict(m) for m in rows]}
 
 
 @router.delete("/groups/{group_id}/members/{member_id}")
 async def remove_group_member(
-    group_id: str, member_id: str, principal: CurrentPrincipal
+    group_id: str,
+    member_id: str,
+    principal: CurrentPrincipal,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, bool | str]:
     """Remove a member from a group."""
     user_id = principal.subject_id
@@ -225,6 +283,7 @@ async def update_group_member(
     member_id: str,
     payload: GroupMemberUpdateRequest,
     principal: CurrentPrincipal,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Update a group member's fields."""
     data = payload.model_dump(exclude_unset=True)
@@ -250,7 +309,7 @@ async def update_group_member(
         if "is_worker" in data:
             member.is_worker = bool(data["is_worker"])
         if "current_task_id" in data:
-            member.current_task_id = data["current_task_id"]
+            cast(Any, member).current_task_id = data["current_task_id"]
         await db.commit()
         return _member_dict(member)
 
@@ -280,7 +339,7 @@ def _group_dict(
         "process_type": getattr(g, "process_type", "sequential"),
         "manager_agent_id": getattr(g, "manager_agent_id", None),
         "manager_llm": getattr(g, "manager_llm", None),
-        "member_count": member_count,
+        "member_count": len(members) if members is not None else member_count,
         "members": members or [],
         "created_at": g.created_at.isoformat() if g.created_at else "",
     }

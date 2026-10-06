@@ -1,0 +1,2225 @@
+{
+  "hitl_yield": {
+    "scenario": "hitl_yield",
+    "objective": "把配置写入 x.py 后总结",
+    "status": "yielded",
+    "outer_rounds": 1,
+    "inner_turns": 1,
+    "tool_calls": 1,
+    "retries": 0,
+    "rollbacks": 0,
+    "audits": 2,
+    "audit_actions": [
+      "add",
+      "merge"
+    ],
+    "snapshot_kinds": {
+      "milestone": 2,
+      "incremental": 2
+    },
+    "executed": [],
+    "duration_ms": 11.6,
+    "events": 13,
+    "report": {
+      "session_id": "eval-session",
+      "objective": "把配置写入 x.py 后总结",
+      "report": {
+        "task_id": "eval-session",
+        "objective": "把配置写入 x.py 后总结",
+        "mode": "hitl",
+        "status": "yielded",
+        "outer_rounds": 1,
+        "inner_turns": 1,
+        "tokens_used": 0,
+        "tool_calls": 1,
+        "result_summary": "",
+        "completed_tasks": [
+          "第1轮: 触发人机接力暂停"
+        ],
+        "risk_events": [],
+        "retries": 0,
+        "rollbacks": 0,
+        "snapshots_taken": 0,
+        "memory_added": 0,
+        "failures": [],
+        "started_at": "2026-10-04 20:42:52.104705+00:00",
+        "finished_at": "2026-10-04 20:42:52.106841+00:00"
+      },
+      "events": [
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "sysboot"
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 1
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 1
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 1
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "write_file",
+            "arguments": {
+              "path": "x.py"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "write_file",
+            "is_error": false,
+            "error": null
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 1
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 1,
+            "tool_errors": 0,
+            "no_progress": false
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 1
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_f8f28976d4714d65a27d5c1c202b4942",
+            "round": 1
+          }
+        },
+        {
+          "event": "milestone_saved",
+          "data": {
+            "id": "snap_aed79034c8d24bc7a876b786b4470cae",
+            "reason": "高风险工具类 write; 高风险工具 write_file"
+          }
+        },
+        {
+          "event": "yield_pending",
+          "data": {
+            "reason": "高风险工具类 write; 高风险工具 write_file"
+          }
+        },
+        {
+          "event": "done",
+          "data": {
+            "status": "yielded",
+            "rounds": 1,
+            "completed_tasks": [
+              "第1轮: 触发人机接力暂停"
+            ],
+            "result_summary": ""
+          }
+        }
+      ],
+      "audits": [
+        {
+          "action": "add",
+          "memory_id": "mem_88e9c0f35f364fc89cec2fb583918e14",
+          "kind": "fact",
+          "text_preview": "报告 关联/设置 写入 report.md",
+          "score_before": null,
+          "score_after": 0.55,
+          "reason": "后台精炼事实抽取入库",
+          "timestamp": "2026-10-04 20:42:52.112688+00:00"
+        },
+        {
+          "action": "merge",
+          "memory_id": "mem_a1bd23ae571e40cc9ad38eb3f1ce3c66",
+          "kind": "fact",
+          "text_preview": "报告 关联/设置 写入 report.md",
+          "score_before": null,
+          "score_after": null,
+          "reason": "与 mem_88e9c0f35f364fc89cec2fb583918e14 重复，合并",
+          "timestamp": "2026-10-04 20:42:52.112857+00:00"
+        }
+      ],
+      "snapshots": [
+        {
+          "id": "snap_aed79034c8d24bc7a876b786b4470cae",
+          "kind": "milestone",
+          "phase": "yield",
+          "base_on": null,
+          "created_at": "2026-10-04T20:42:52.106269+00:00",
+          "milestone_label": "yield_pause"
+        },
+        {
+          "id": "snap_f8f28976d4714d65a27d5c1c202b4942",
+          "kind": "incremental",
+          "phase": "yield",
+          "base_on": "snap_30ff833432e440ab8c6efa2851796824",
+          "created_at": "2026-10-04T20:42:52.105331+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_30ff833432e440ab8c6efa2851796824",
+          "kind": "milestone",
+          "phase": "yield",
+          "base_on": null,
+          "created_at": "2026-10-04T20:42:26.823930+00:00",
+          "milestone_label": "yield_pause"
+        },
+        {
+          "id": "snap_f82f4c0e4f8d4c11aea38ad57d4af841",
+          "kind": "incremental",
+          "phase": "yield",
+          "base_on": null,
+          "created_at": "2026-10-04T20:42:26.822728+00:00",
+          "milestone_label": null
+        }
+      ]
+    },
+    "note": "HITL 模式：写工具触发人机接力暂停（YIELD）+ 里程碑快照",
+    "pass": true,
+    "fail_reasons": []
+  },
+  "linear_complete": {
+    "scenario": "linear_complete",
+    "objective": "查询数据库并按部门汇总生成报告",
+    "status": "completed",
+    "outer_rounds": 3,
+    "inner_turns": 3,
+    "tool_calls": 2,
+    "retries": 0,
+    "rollbacks": 0,
+    "audits": 3,
+    "audit_actions": [
+      "add",
+      "add",
+      "merge"
+    ],
+    "snapshot_kinds": {
+      "incremental": 3
+    },
+    "executed": [],
+    "duration_ms": 6.1,
+    "events": 28,
+    "report": {
+      "session_id": "eval-session",
+      "objective": "查询数据库并按部门汇总生成报告",
+      "report": {
+        "task_id": "eval-session",
+        "objective": "查询数据库并按部门汇总生成报告",
+        "mode": "auto",
+        "status": "completed",
+        "outer_rounds": 3,
+        "inner_turns": 3,
+        "tokens_used": 0,
+        "tool_calls": 2,
+        "result_summary": "任务完成，输出最终总结。",
+        "completed_tasks": [
+          "第1轮",
+          "第2轮",
+          "第3轮: 完成"
+        ],
+        "risk_events": [],
+        "retries": 0,
+        "rollbacks": 0,
+        "snapshots_taken": 0,
+        "memory_added": 0,
+        "failures": [],
+        "started_at": "2026-10-04 20:42:52.114610+00:00",
+        "finished_at": "2026-10-04 20:42:52.117733+00:00"
+      },
+      "events": [
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "sysboot"
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 1
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 1
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 1
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "query_db",
+            "arguments": {
+              "sql": "SELECT * FROM orders"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "query_db",
+            "is_error": false,
+            "error": null
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 1
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 1,
+            "tool_errors": 0,
+            "no_progress": false
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 1
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_26e895a14a5c41d8a713ca46e91c19de",
+            "round": 1
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 2
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 2
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 2
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "analyze",
+            "arguments": {
+              "field": "department"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "analyze",
+            "is_error": false,
+            "error": null
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 2
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 2,
+            "tool_errors": 0,
+            "no_progress": false
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 2
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_69a71e4cb8a44714826cfd81d6f656a3",
+            "round": 2
+          }
+        },
+        {
+          "event": "memory_refined",
+          "data": {
+            "round": 2
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 3
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 3
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 3
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 3
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 3,
+            "tool_errors": 0,
+            "no_progress": false
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 3
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_c2ad07c310af4b3fac30940e7dc932cd",
+            "round": 3
+          }
+        },
+        {
+          "event": "done",
+          "data": {
+            "status": "completed",
+            "rounds": 3,
+            "completed_tasks": [
+              "第1轮",
+              "第2轮",
+              "第3轮: 完成"
+            ],
+            "result_summary": "任务完成，输出最终总结。"
+          }
+        }
+      ],
+      "audits": [
+        {
+          "action": "add",
+          "memory_id": "mem_48ff7043d5f14e6fa9b33bf30bd6f691",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}]",
+          "score_before": null,
+          "score_after": 0.6,
+          "reason": "后台精炼事实抽取入库",
+          "timestamp": "2026-10-04 20:42:52.118676+00:00"
+        },
+        {
+          "action": "add",
+          "memory_id": "mem_60967be823b247a2a57a646f77c273ba",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}]",
+          "score_before": null,
+          "score_after": 0.6,
+          "reason": "后台精炼事实抽取入库",
+          "timestamp": "2026-10-04 20:42:52.119306+00:00"
+        },
+        {
+          "action": "merge",
+          "memory_id": "mem_48ff7043d5f14e6fa9b33bf30bd6f691",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}]",
+          "score_before": null,
+          "score_after": null,
+          "reason": "与 mem_60967be823b247a2a57a646f77c273ba 重复，合并",
+          "timestamp": "2026-10-04 20:42:52.119376+00:00"
+        }
+      ],
+      "snapshots": [
+        {
+          "id": "snap_c2ad07c310af4b3fac30940e7dc932cd",
+          "kind": "incremental",
+          "phase": "done",
+          "base_on": "snap_69a71e4cb8a44714826cfd81d6f656a3",
+          "created_at": "2026-10-04T20:42:52.116856+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_69a71e4cb8a44714826cfd81d6f656a3",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_26e895a14a5c41d8a713ca46e91c19de",
+          "created_at": "2026-10-04T20:42:52.116004+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_26e895a14a5c41d8a713ca46e91c19de",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": null,
+          "created_at": "2026-10-04T20:42:52.114974+00:00",
+          "milestone_label": null
+        }
+      ]
+    },
+    "note": "线性任务：2 次工具调用后输出总结 → DONE",
+    "pass": true,
+    "fail_reasons": []
+  },
+  "long_milestones": {
+    "scenario": "long_milestones",
+    "objective": "分五步完成数据分析并汇报",
+    "status": "completed",
+    "outer_rounds": 6,
+    "inner_turns": 6,
+    "tool_calls": 5,
+    "retries": 0,
+    "rollbacks": 0,
+    "audits": 12,
+    "audit_actions": [
+      "add",
+      "add",
+      "add",
+      "add",
+      "add",
+      "merge",
+      "add",
+      "add",
+      "add",
+      "merge",
+      "merge",
+      "merge"
+    ],
+    "snapshot_kinds": {
+      "incremental": 6
+    },
+    "executed": [],
+    "duration_ms": 118.8,
+    "events": 57,
+    "report": {
+      "session_id": "eval-session",
+      "objective": "分五步完成数据分析并汇报",
+      "report": {
+        "task_id": "eval-session",
+        "objective": "分五步完成数据分析并汇报",
+        "mode": "auto",
+        "status": "completed",
+        "outer_rounds": 6,
+        "inner_turns": 6,
+        "tokens_used": 0,
+        "tool_calls": 5,
+        "result_summary": "任务完成，输出最终总结。",
+        "completed_tasks": [
+          "第1轮",
+          "第2轮",
+          "第3轮",
+          "第4轮",
+          "第5轮",
+          "第6轮: 完成"
+        ],
+        "risk_events": [],
+        "retries": 0,
+        "rollbacks": 0,
+        "snapshots_taken": 0,
+        "memory_added": 0,
+        "failures": [],
+        "started_at": "2026-10-04 20:42:52.126062+00:00",
+        "finished_at": "2026-10-04 20:42:52.232469+00:00"
+      },
+      "events": [
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "sysboot"
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 1
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 1
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 1
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "query_db",
+            "arguments": {
+              "sql": "s1"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "query_db",
+            "is_error": false,
+            "error": null
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 1
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 1,
+            "tool_errors": 0,
+            "no_progress": false
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 1
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_349bf1bb178c454681971963a2600239",
+            "round": 1
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 2
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 2
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 2
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "query_db",
+            "arguments": {
+              "sql": "s2"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "query_db",
+            "is_error": false,
+            "error": null
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 2
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 2,
+            "tool_errors": 0,
+            "no_progress": false
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 2
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_f7578ffb1dc14edb838f6b41497e7e2d",
+            "round": 2
+          }
+        },
+        {
+          "event": "memory_refined",
+          "data": {
+            "round": 2
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 3
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 3
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 3
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "analyze",
+            "arguments": {
+              "field": "a"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "analyze",
+            "is_error": false,
+            "error": null
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 3
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 3,
+            "tool_errors": 0,
+            "no_progress": false
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 3
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_109f02b7c8f84999a4dddb6860810329",
+            "round": 3
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 4
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 4
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 4
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "analyze",
+            "arguments": {
+              "field": "b"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "analyze",
+            "is_error": false,
+            "error": null
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 4
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 4,
+            "tool_errors": 0,
+            "no_progress": false
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 4
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_f8a3e5edc8e94982bb3ba3a4680cb856",
+            "round": 4
+          }
+        },
+        {
+          "event": "memory_refined",
+          "data": {
+            "round": 4
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 5
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 5
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 5
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "write_file",
+            "arguments": {
+              "path": "r.md"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "write_file",
+            "is_error": false,
+            "error": null
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 5
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 5,
+            "tool_errors": 0,
+            "no_progress": false
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 5
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_ab09894bc7a64a4d99a4acceed1e0407",
+            "round": 5
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 6
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 6
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 6
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 6
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 6,
+            "tool_errors": 0,
+            "no_progress": false
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 6
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_c723e9d72b554580bd79765fe84fc911",
+            "round": 6
+          }
+        },
+        {
+          "event": "memory_refined",
+          "data": {
+            "round": 6
+          }
+        },
+        {
+          "event": "done",
+          "data": {
+            "status": "completed",
+            "rounds": 6,
+            "completed_tasks": [
+              "第1轮",
+              "第2轮",
+              "第3轮",
+              "第4轮",
+              "第5轮",
+              "第6轮: 完成"
+            ],
+            "result_summary": "任务完成，输出最终总结。"
+          }
+        }
+      ],
+      "audits": [
+        {
+          "action": "add",
+          "memory_id": "mem_36e7e769af5842d2bac79f27eff28703",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}, {\"round",
+          "score_before": null,
+          "score_after": 0.6,
+          "reason": "后台精炼事实抽取入库",
+          "timestamp": "2026-10-04 20:42:52.233403+00:00"
+        },
+        {
+          "action": "add",
+          "memory_id": "mem_464bace0ed674daab68a5f20929218eb",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}]",
+          "score_before": null,
+          "score_after": 0.6,
+          "reason": "后台精炼事实抽取入库",
+          "timestamp": "2026-10-04 20:42:52.233846+00:00"
+        },
+        {
+          "action": "add",
+          "memory_id": "mem_77f80b8092cc471e8aaaacfbbea89ec7",
+          "kind": "fact",
+          "text_preview": "报告 关联/设置 写入 report.md",
+          "score_before": null,
+          "score_after": 0.55,
+          "reason": "后台精炼事实抽取入库",
+          "timestamp": "2026-10-04 20:42:52.234503+00:00"
+        },
+        {
+          "action": "add",
+          "memory_id": "mem_4979fa91842748b9858f1548f5844c38",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}, {\"round",
+          "score_before": null,
+          "score_after": 0.6,
+          "reason": "后台精炼事实抽取入库",
+          "timestamp": "2026-10-04 20:42:52.234836+00:00"
+        },
+        {
+          "action": "add",
+          "memory_id": "mem_3ba3bb46577f4fd8b4f718849e812a07",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}, {\"round",
+          "score_before": null,
+          "score_after": 0.6,
+          "reason": "后台精炼事实抽取入库",
+          "timestamp": "2026-10-04 20:42:52.235129+00:00"
+        },
+        {
+          "action": "merge",
+          "memory_id": "mem_36e7e769af5842d2bac79f27eff28703",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}, {\"round",
+          "score_before": null,
+          "score_after": null,
+          "reason": "与 mem_4979fa91842748b9858f1548f5844c38 重复，合并",
+          "timestamp": "2026-10-04 20:42:52.235237+00:00"
+        },
+        {
+          "action": "add",
+          "memory_id": "mem_12b873cc68b24a61b77dd5be2cafb166",
+          "kind": "fact",
+          "text_preview": "报告 关联/设置 写入 report.md",
+          "score_before": null,
+          "score_after": 0.55,
+          "reason": "后台精炼事实抽取入库",
+          "timestamp": "2026-10-04 20:42:52.236365+00:00"
+        },
+        {
+          "action": "add",
+          "memory_id": "mem_f468868e5a914b6d86af7f12efc1270e",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}, {\"round",
+          "score_before": null,
+          "score_after": 0.6,
+          "reason": "后台精炼事实抽取入库",
+          "timestamp": "2026-10-04 20:42:52.236743+00:00"
+        },
+        {
+          "action": "add",
+          "memory_id": "mem_95a1cbfc410c421a8e4d7c60f41c6e5e",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}, {\"round",
+          "score_before": null,
+          "score_after": 0.6,
+          "reason": "后台精炼事实抽取入库",
+          "timestamp": "2026-10-04 20:42:52.237086+00:00"
+        },
+        {
+          "action": "merge",
+          "memory_id": "mem_3ba3bb46577f4fd8b4f718849e812a07",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}, {\"round",
+          "score_before": null,
+          "score_after": null,
+          "reason": "与 mem_95a1cbfc410c421a8e4d7c60f41c6e5e 重复，合并",
+          "timestamp": "2026-10-04 20:42:52.237206+00:00"
+        },
+        {
+          "action": "merge",
+          "memory_id": "mem_4979fa91842748b9858f1548f5844c38",
+          "kind": "fact",
+          "text_preview": "结果 华东 42 / 华北 56 / 华南 30，华北占比最高，为当前重点部门\"}, {\"round",
+          "score_before": null,
+          "score_after": null,
+          "reason": "与 mem_f468868e5a914b6d86af7f12efc1270e 重复，合并",
+          "timestamp": "2026-10-04 20:42:52.237669+00:00"
+        },
+        {
+          "action": "merge",
+          "memory_id": "mem_77f80b8092cc471e8aaaacfbbea89ec7",
+          "kind": "fact",
+          "text_preview": "报告 关联/设置 写入 report.md",
+          "score_before": null,
+          "score_after": null,
+          "reason": "与 mem_12b873cc68b24a61b77dd5be2cafb166 重复，合并",
+          "timestamp": "2026-10-04 20:42:52.238140+00:00"
+        }
+      ],
+      "snapshots": [
+        {
+          "id": "snap_c723e9d72b554580bd79765fe84fc911",
+          "kind": "incremental",
+          "phase": "done",
+          "base_on": "snap_ab09894bc7a64a4d99a4acceed1e0407",
+          "created_at": "2026-10-04T20:42:52.231504+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_ab09894bc7a64a4d99a4acceed1e0407",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_f8a3e5edc8e94982bb3ba3a4680cb856",
+          "created_at": "2026-10-04T20:42:52.230522+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_f8a3e5edc8e94982bb3ba3a4680cb856",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_109f02b7c8f84999a4dddb6860810329",
+          "created_at": "2026-10-04T20:42:52.229372+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_109f02b7c8f84999a4dddb6860810329",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_f7578ffb1dc14edb838f6b41497e7e2d",
+          "created_at": "2026-10-04T20:42:52.228091+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_f7578ffb1dc14edb838f6b41497e7e2d",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_349bf1bb178c454681971963a2600239",
+          "created_at": "2026-10-04T20:42:52.127059+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_349bf1bb178c454681971963a2600239",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": null,
+          "created_at": "2026-10-04T20:42:52.126404+00:00",
+          "milestone_label": null
+        }
+      ]
+    },
+    "note": "长任务：多轮工具调用 + 每轮增量快照 + 中途后台精炼",
+    "pass": true,
+    "fail_reasons": []
+  },
+  "observe_block": {
+    "scenario": "observe_block",
+    "objective": "检查配置（写工具应被拦截）",
+    "status": "running",
+    "outer_rounds": 2,
+    "inner_turns": 2,
+    "tool_calls": 0,
+    "retries": 1,
+    "rollbacks": 1,
+    "audits": 3,
+    "audit_actions": [
+      "add",
+      "add",
+      "merge"
+    ],
+    "snapshot_kinds": {
+      "incremental": 2
+    },
+    "executed": [],
+    "duration_ms": 111.0,
+    "events": 19,
+    "report": {
+      "session_id": "eval-session",
+      "objective": "检查配置（写工具应被拦截）",
+      "report": {
+        "task_id": "eval-session",
+        "objective": "检查配置（写工具应被拦截）",
+        "mode": "observe",
+        "status": "running",
+        "outer_rounds": 2,
+        "inner_turns": 2,
+        "tokens_used": 0,
+        "tool_calls": 0,
+        "result_summary": "",
+        "completed_tasks": [
+          "第1轮"
+        ],
+        "risk_events": [],
+        "retries": 1,
+        "rollbacks": 1,
+        "snapshots_taken": 0,
+        "memory_added": 0,
+        "failures": [],
+        "started_at": "2026-10-04 20:42:52.346633+00:00",
+        "finished_at": "2026-10-04 20:42:52.348952+00:00"
+      },
+      "events": [
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "sysboot"
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 1
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 1
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 1
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "write_file",
+            "error": "观察复盘模式禁用 write_file（write 类工具）",
+            "blocked": true
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 1
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 1,
+            "tool_errors": 1,
+            "no_progress": true
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 1
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_9b17f98c0d5443f2bb3ace60aa39c9e8",
+            "round": 1
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 2
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 2
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 2
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "write_file",
+            "error": "观察复盘模式禁用 write_file（write 类工具）",
+            "blocked": true
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 2
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 2,
+            "tool_errors": 1,
+            "no_progress": true
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 2
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_faba339940934d02a0d735a8983e35c4",
+            "round": 2
+          }
+        },
+        {
+          "event": "memory_refined",
+          "data": {
+            "round": 2
+          }
+        },
+        {
+          "event": "done",
+          "data": {
+            "status": "running",
+            "rounds": 2,
+            "completed_tasks": [
+              "第1轮"
+            ],
+            "result_summary": ""
+          }
+        }
+      ],
+      "audits": [
+        {
+          "action": "add",
+          "memory_id": "mem_f0949595629f4810aad20febbea9cff9",
+          "kind": "failure",
+          "text_preview": "[{\"round\": 1, \"type\": \"tools\", \"result\": \"[tool:wr",
+          "score_before": null,
+          "score_after": 0.3,
+          "reason": "失败案例沉淀入库",
+          "timestamp": "2026-10-04 20:42:52.349697+00:00"
+        },
+        {
+          "action": "add",
+          "memory_id": "mem_d3774c34db6f4df1938dddc3a237bc50",
+          "kind": "failure",
+          "text_preview": "[{\"round\": 1, \"type\": \"tools\", \"result\": \"[tool:wr",
+          "score_before": null,
+          "score_after": 0.3,
+          "reason": "失败案例沉淀入库",
+          "timestamp": "2026-10-04 20:42:52.350378+00:00"
+        },
+        {
+          "action": "merge",
+          "memory_id": "mem_f0949595629f4810aad20febbea9cff9",
+          "kind": "failure",
+          "text_preview": "[{\"round\": 1, \"type\": \"tools\", \"result\": \"[tool:wr",
+          "score_before": null,
+          "score_after": null,
+          "reason": "与 mem_d3774c34db6f4df1938dddc3a237bc50 重复，合并",
+          "timestamp": "2026-10-04 20:42:52.350439+00:00"
+        }
+      ],
+      "snapshots": [
+        {
+          "id": "snap_faba339940934d02a0d735a8983e35c4",
+          "kind": "incremental",
+          "phase": "rollback",
+          "base_on": "snap_9b17f98c0d5443f2bb3ace60aa39c9e8",
+          "created_at": "2026-10-04T20:42:52.347931+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_9b17f98c0d5443f2bb3ace60aa39c9e8",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": null,
+          "created_at": "2026-10-04T20:42:52.347021+00:00",
+          "milestone_label": null
+        }
+      ]
+    },
+    "note": "OBSERVE 模式：写工具被三态控制器拦截，不真正执行",
+    "pass": true,
+    "fail_reasons": []
+  },
+  "stall_rollback": {
+    "scenario": "stall_rollback",
+    "objective": "写入后总结（工具持续报错）",
+    "status": "running",
+    "outer_rounds": 8,
+    "inner_turns": 8,
+    "tool_calls": 8,
+    "retries": 4,
+    "rollbacks": 4,
+    "audits": 9,
+    "audit_actions": [
+      "add",
+      "add",
+      "merge",
+      "add",
+      "merge",
+      "add",
+      "merge",
+      "add",
+      "merge"
+    ],
+    "snapshot_kinds": {
+      "incremental": 8,
+      "milestone": 1
+    },
+    "executed": [],
+    "duration_ms": 225.7,
+    "events": 78,
+    "report": {
+      "session_id": "eval-session",
+      "objective": "写入后总结（工具持续报错）",
+      "report": {
+        "task_id": "eval-session",
+        "objective": "写入后总结（工具持续报错）",
+        "mode": "auto",
+        "status": "running",
+        "outer_rounds": 8,
+        "inner_turns": 8,
+        "tokens_used": 0,
+        "tool_calls": 8,
+        "result_summary": "",
+        "completed_tasks": [
+          "第1轮",
+          "第3轮",
+          "第5轮",
+          "第7轮"
+        ],
+        "risk_events": [],
+        "retries": 4,
+        "rollbacks": 4,
+        "snapshots_taken": 0,
+        "memory_added": 0,
+        "failures": [],
+        "started_at": "2026-10-04 20:42:52.458653+00:00",
+        "finished_at": "2026-10-04 20:42:52.470591+00:00"
+      },
+      "events": [
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "sysboot"
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 1
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 1
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 1
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "write_file",
+            "arguments": {
+              "path": "x.py"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "write_file",
+            "is_error": true,
+            "error": "object ToolResult can't be used in 'await' expression"
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 1
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 1,
+            "tool_errors": 1,
+            "no_progress": true
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 1
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_407ee8ce1c4d49c293495b18c3fb34aa",
+            "round": 1
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 2
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 2
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 2
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "write_file",
+            "arguments": {
+              "path": "x.py"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "write_file",
+            "is_error": true,
+            "error": "object ToolResult can't be used in 'await' expression"
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 2
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 2,
+            "tool_errors": 1,
+            "no_progress": true
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 2
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_a216d4b77b4440eb9ede50d58eab4456",
+            "round": 2
+          }
+        },
+        {
+          "event": "memory_refined",
+          "data": {
+            "round": 2
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 3
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 3
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 3
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "write_file",
+            "arguments": {
+              "path": "x.py"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "write_file",
+            "is_error": true,
+            "error": "object ToolResult can't be used in 'await' expression"
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 3
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 3,
+            "tool_errors": 1,
+            "no_progress": true
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 3
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_ae1dc9ca34b94c2aa0d6688f4612e146",
+            "round": 3
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 4
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 4
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 4
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "write_file",
+            "arguments": {
+              "path": "x.py"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "write_file",
+            "is_error": true,
+            "error": "object ToolResult can't be used in 'await' expression"
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 4
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 4,
+            "tool_errors": 1,
+            "no_progress": true
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 4
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_b093c2b91f10461a8c57e3296c1be298",
+            "round": 4
+          }
+        },
+        {
+          "event": "memory_refined",
+          "data": {
+            "round": 4
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 5
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 5
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 5
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "write_file",
+            "arguments": {
+              "path": "x.py"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "write_file",
+            "is_error": true,
+            "error": "object ToolResult can't be used in 'await' expression"
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 5
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 5,
+            "tool_errors": 1,
+            "no_progress": true
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 5
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_48317f73454746e2be883ff009ca63b4",
+            "round": 5
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 6
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 6
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 6
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "write_file",
+            "arguments": {
+              "path": "x.py"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "write_file",
+            "is_error": true,
+            "error": "object ToolResult can't be used in 'await' expression"
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 6
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 6,
+            "tool_errors": 1,
+            "no_progress": true
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 6
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_e5c39b04985946de994b75125ad5b369",
+            "round": 6
+          }
+        },
+        {
+          "event": "memory_refined",
+          "data": {
+            "round": 6
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 7
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 7
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 7
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "write_file",
+            "arguments": {
+              "path": "x.py"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "write_file",
+            "is_error": true,
+            "error": "object ToolResult can't be used in 'await' expression"
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 7
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 7,
+            "tool_errors": 1,
+            "no_progress": true
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 7
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_a670a34092114749ad79f1bc25aad787",
+            "round": 7
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "think",
+            "round": 8
+          }
+        },
+        {
+          "event": "thinking",
+          "data": {
+            "round": 8
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "act",
+            "round": 8
+          }
+        },
+        {
+          "event": "tool_call",
+          "data": {
+            "name": "write_file",
+            "arguments": {
+              "path": "x.py"
+            }
+          }
+        },
+        {
+          "event": "tool_result",
+          "data": {
+            "name": "write_file",
+            "is_error": true,
+            "error": "object ToolResult can't be used in 'await' expression"
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "observe",
+            "round": 8
+          }
+        },
+        {
+          "event": "observation",
+          "data": {
+            "round": 8,
+            "tool_errors": 1,
+            "no_progress": true
+          }
+        },
+        {
+          "event": "phase_changed",
+          "data": {
+            "phase": "branch",
+            "round": 8
+          }
+        },
+        {
+          "event": "snapshot_saved",
+          "data": {
+            "id": "snap_7556cbce1a634a7182c494dc26149c3b",
+            "round": 8
+          }
+        },
+        {
+          "event": "memory_refined",
+          "data": {
+            "round": 8
+          }
+        },
+        {
+          "event": "done",
+          "data": {
+            "status": "running",
+            "rounds": 8,
+            "completed_tasks": [
+              "第1轮",
+              "第3轮",
+              "第5轮",
+              "第7轮"
+            ],
+            "result_summary": ""
+          }
+        }
+      ],
+      "audits": [
+        {
+          "action": "add",
+          "memory_id": "mem_75b573cc381a4606952f3c6a19d289c2",
+          "kind": "failure",
+          "text_preview": "[{\"round\": 1, \"type\": \"tools\", \"result\": \"[tool:wr",
+          "score_before": null,
+          "score_after": 0.3,
+          "reason": "失败案例沉淀入库",
+          "timestamp": "2026-10-04 20:42:52.471373+00:00"
+        },
+        {
+          "action": "add",
+          "memory_id": "mem_0d5af8ddd8a84296a9791ddf879cb7b9",
+          "kind": "failure",
+          "text_preview": "[{\"round\": 1, \"type\": \"tools\", \"result\": \"[tool:wr",
+          "score_before": null,
+          "score_after": 0.3,
+          "reason": "失败案例沉淀入库",
+          "timestamp": "2026-10-04 20:42:52.472105+00:00"
+        },
+        {
+          "action": "merge",
+          "memory_id": "mem_75b573cc381a4606952f3c6a19d289c2",
+          "kind": "failure",
+          "text_preview": "[{\"round\": 1, \"type\": \"tools\", \"result\": \"[tool:wr",
+          "score_before": null,
+          "score_after": null,
+          "reason": "与 mem_0d5af8ddd8a84296a9791ddf879cb7b9 重复，合并",
+          "timestamp": "2026-10-04 20:42:52.472164+00:00"
+        },
+        {
+          "action": "add",
+          "memory_id": "mem_be6f5b945b884539a1ce618e7081e32b",
+          "kind": "failure",
+          "text_preview": "[{\"round\": 1, \"type\": \"tools\", \"result\": \"[tool:wr",
+          "score_before": null,
+          "score_after": 0.3,
+          "reason": "失败案例沉淀入库",
+          "timestamp": "2026-10-04 20:42:52.573556+00:00"
+        },
+        {
+          "action": "merge",
+          "memory_id": "mem_0d5af8ddd8a84296a9791ddf879cb7b9",
+          "kind": "failure",
+          "text_preview": "[{\"round\": 1, \"type\": \"tools\", \"result\": \"[tool:wr",
+          "score_before": null,
+          "score_after": null,
+          "reason": "与 mem_be6f5b945b884539a1ce618e7081e32b 重复，合并",
+          "timestamp": "2026-10-04 20:42:52.573690+00:00"
+        },
+        {
+          "action": "add",
+          "memory_id": "mem_69363124a3c548959daaecb9e57a540b",
+          "kind": "failure",
+          "text_preview": "[{\"round\": 1, \"type\": \"tools\", \"result\": \"[tool:wr",
+          "score_before": null,
+          "score_after": 0.3,
+          "reason": "失败案例沉淀入库",
+          "timestamp": "2026-10-04 20:42:52.575023+00:00"
+        },
+        {
+          "action": "merge",
+          "memory_id": "mem_be6f5b945b884539a1ce618e7081e32b",
+          "kind": "failure",
+          "text_preview": "[{\"round\": 1, \"type\": \"tools\", \"result\": \"[tool:wr",
+          "score_before": null,
+          "score_after": null,
+          "reason": "与 mem_69363124a3c548959daaecb9e57a540b 重复，合并",
+          "timestamp": "2026-10-04 20:42:52.575096+00:00"
+        },
+        {
+          "action": "add",
+          "memory_id": "mem_8c1991603d754bf3b43fc654c4907bbc",
+          "kind": "failure",
+          "text_preview": "[{\"round\": 1, \"type\": \"tools\", \"result\": \"[tool:wr",
+          "score_before": null,
+          "score_after": 0.3,
+          "reason": "失败案例沉淀入库",
+          "timestamp": "2026-10-04 20:42:52.576289+00:00"
+        },
+        {
+          "action": "merge",
+          "memory_id": "mem_69363124a3c548959daaecb9e57a540b",
+          "kind": "failure",
+          "text_preview": "[{\"round\": 1, \"type\": \"tools\", \"result\": \"[tool:wr",
+          "score_before": null,
+          "score_after": null,
+          "reason": "与 mem_8c1991603d754bf3b43fc654c4907bbc 重复，合并",
+          "timestamp": "2026-10-04 20:42:52.576349+00:00"
+        }
+      ],
+      "snapshots": [
+        {
+          "id": "snap_7556cbce1a634a7182c494dc26149c3b",
+          "kind": "incremental",
+          "phase": "rollback",
+          "base_on": "snap_a670a34092114749ad79f1bc25aad787",
+          "created_at": "2026-10-04T20:42:52.468878+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_a670a34092114749ad79f1bc25aad787",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_4e4d63b96bdf4c8ba31a610e9a808728",
+          "created_at": "2026-10-04T20:42:52.467689+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_e5c39b04985946de994b75125ad5b369",
+          "kind": "incremental",
+          "phase": "rollback",
+          "base_on": "snap_48317f73454746e2be883ff009ca63b4",
+          "created_at": "2026-10-04T20:42:52.465852+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_48317f73454746e2be883ff009ca63b4",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_4e4d63b96bdf4c8ba31a610e9a808728",
+          "created_at": "2026-10-04T20:42:52.464844+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_b093c2b91f10461a8c57e3296c1be298",
+          "kind": "incremental",
+          "phase": "rollback",
+          "base_on": "snap_ae1dc9ca34b94c2aa0d6688f4612e146",
+          "created_at": "2026-10-04T20:42:52.463064+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_ae1dc9ca34b94c2aa0d6688f4612e146",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_4e4d63b96bdf4c8ba31a610e9a808728",
+          "created_at": "2026-10-04T20:42:52.462178+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_a216d4b77b4440eb9ede50d58eab4456",
+          "kind": "incremental",
+          "phase": "rollback",
+          "base_on": "snap_407ee8ce1c4d49c293495b18c3fb34aa",
+          "created_at": "2026-10-04T20:42:52.460134+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_407ee8ce1c4d49c293495b18c3fb34aa",
+          "kind": "incremental",
+          "phase": "think",
+          "base_on": "snap_4e4d63b96bdf4c8ba31a610e9a808728",
+          "created_at": "2026-10-04T20:42:52.459028+00:00",
+          "milestone_label": null
+        },
+        {
+          "id": "snap_4e4d63b96bdf4c8ba31a610e9a808728",
+          "kind": "milestone",
+          "phase": "plan",
+          "base_on": null,
+          "created_at": "2026-10-04T20:42:52.457460+00:00",
+          "milestone_label": "plan"
+        }
+      ]
+    },
+    "note": "连续无进展 → ROLLBACK 到最近里程碑",
+    "pass": true,
+    "fail_reasons": []
+  }
+}

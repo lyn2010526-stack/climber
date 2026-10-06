@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import json
 import re
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -14,6 +15,7 @@ import structlog
 
 from app.core import ChatResult
 from app.models import ModelAdapter, ModelCapability
+from app.models.vision import degrade_image_parts
 
 logger = structlog.get_logger()
 
@@ -42,6 +44,14 @@ class OpenAIAdapter(ModelAdapter):
         stream: bool = False,
         **kwargs: Any,
     ) -> dict[str, Any]:
+        if not self.capabilities.vision:
+            # Providers/models without image support get plain text; the request
+            # still completes (with a warning) instead of failing on image parts.
+            messages = degrade_image_parts(
+                messages,
+                provider=getattr(self, "provider", "openai"),
+                model_id=self._model_id,
+            )
         payload: dict[str, Any] = {
             "model": self._model_id,
             "messages": messages,
@@ -68,17 +78,21 @@ class OpenAIAdapter(ModelAdapter):
             cls._client = None
 
     @staticmethod
-    def _parse_tool_calls_from_delta(tool_calls_delta: list[dict]) -> list[dict]:
+    def _parse_tool_calls_from_delta(
+        tool_calls_delta: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         """Parse tool calls from OpenAI streaming delta format."""
-        result = []
+        result: list[dict[str, Any]] = []
         for tc in tool_calls_delta:
             idx = tc.get("index", 0)
             while len(result) <= idx:
-                result.append({
-                    "id": "",
-                    "type": "function",
-                    "function": {"name": "", "arguments": ""},
-                })
+                result.append(
+                    {
+                        "id": "",
+                        "type": "function",
+                        "function": {"name": "", "arguments": ""},
+                    }
+                )
             if tc.get("id"):
                 result[idx]["id"] = tc["id"]
             if tc.get("function", {}).get("name"):
@@ -88,10 +102,10 @@ class OpenAIAdapter(ModelAdapter):
         return result
 
     @staticmethod
-    def _parse_xml_tool_calls(text: str) -> list[dict]:
+    def _parse_xml_tool_calls(text: str) -> list[dict[str, Any]]:
         """Parse XML-style tool calls like <function=browser_navigate>..."""
-        results: list[dict] = []
-        for m in re.finditer(r'<function=([^>]+)>(.*?)</\1>', text, re.DOTALL | re.IGNORECASE):
+        results: list[dict[str, Any]] = []
+        for m in re.finditer(r"<function=([^>]+)>(.*?)</\1>", text, re.DOTALL | re.IGNORECASE):
             name = m.group(1).strip()
             args_text = m.group(2).strip()
             args: dict[str, Any] = {}
@@ -100,14 +114,16 @@ class OpenAIAdapter(ModelAdapter):
                     args = json.loads(args_text)
                 except json.JSONDecodeError:
                     args = {"text": args_text}
-            results.append({
-                "id": "",
-                "type": "function",
-                "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)},
-            })
+            results.append(
+                {
+                    "id": f"call_{uuid.uuid4().hex[:24]}",
+                    "type": "function",
+                    "function": {"name": name, "arguments": json.dumps(args, ensure_ascii=False)},
+                }
+            )
         return results
 
-    async def stream_chat(
+    async def stream_chat(  # type: ignore[override]  # base declares async->AsyncIterator; impl is an async generator consumed via `async for`
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
@@ -123,7 +139,13 @@ class OpenAIAdapter(ModelAdapter):
         """
         payload = self._build_payload(messages, tools, stream=True, **kwargs)
         import structlog
-        structlog.get_logger().debug("adapter_request", model=self._model_id, message_count=len(messages), messages_preview=str(payload.get("messages", []))[:500])
+
+        structlog.get_logger().debug(
+            "adapter_request",
+            model=self._model_id,
+            message_count=len(messages),
+            messages_preview=str(payload.get("messages", []))[:500],
+        )
         headers = {
             "Content-Type": "application/json",
         }
@@ -133,23 +155,25 @@ class OpenAIAdapter(ModelAdapter):
         total_timeout = kwargs.get("timeout", 120)
         idle_timeout = kwargs.get("idle_timeout", 15)
         accumulated_content = ""
-        accumulated_tool_calls: list[dict] = []
+        accumulated_tool_calls: list[dict[str, Any]] = []
         finish_reason = None
         tokens_used = 0
+        usage: dict[str, Any] | None = None
+
+        def _result(**kwargs: Any) -> ChatResult:
+            return ChatResult(usage=usage, **kwargs)
 
         client = self.get_client()
         response: httpx.Response | None = None
-        watchdog_task: asyncio.Task | None = None
+        watchdog_task: asyncio.Task[Any] | None = None
         idle_event = asyncio.Event()
 
-        async def _watchdog():
+        async def _watchdog() -> None:
             """Close the response when idle timeout fires."""
             try:
                 while True:
                     try:
-                        await asyncio.wait_for(
-                            idle_event.wait(), timeout=idle_timeout
-                        )
+                        await asyncio.wait_for(idle_event.wait(), timeout=idle_timeout)
                         idle_event.clear()
                     except TimeoutError:
                         if response is not None:
@@ -192,8 +216,9 @@ class OpenAIAdapter(ModelAdapter):
                         continue
 
                     if line == "data: [DONE]":
-                        yield ChatResult(
-                            finish_reason=finish_reason or ("tool_calls" if accumulated_tool_calls else "stop"),
+                        yield _result(
+                            finish_reason=finish_reason
+                            or ("tool_calls" if accumulated_tool_calls else "stop"),
                             tokens_used=tokens_used,
                             accumulated_content=accumulated_content,
                         )
@@ -219,21 +244,37 @@ class OpenAIAdapter(ModelAdapter):
                         new_calls = self._parse_tool_calls_from_delta(delta["tool_calls"])
                         for i, tc in enumerate(new_calls):
                             while len(accumulated_tool_calls) <= i:
-                                accumulated_tool_calls.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+                                accumulated_tool_calls.append(
+                                    {
+                                        "id": "",
+                                        "type": "function",
+                                        "function": {"name": "", "arguments": ""},
+                                    }
+                                )
                             if tc.get("id"):
                                 accumulated_tool_calls[i]["id"] = tc["id"]
                             if tc.get("function", {}).get("name"):
-                                accumulated_tool_calls[i]["function"]["name"] = tc["function"]["name"]
+                                accumulated_tool_calls[i]["function"]["name"] = tc["function"][
+                                    "name"
+                                ]
                             if tc.get("function", {}).get("arguments"):
                                 args = tc["function"]["arguments"]
-                                accumulated_tool_calls[i]["function"]["arguments"] += args if isinstance(args, str) else str(args)
+                                accumulated_tool_calls[i]["function"]["arguments"] += (
+                                    args if isinstance(args, str) else str(args)
+                                )
                     if chunk.get("usage"):
-                        tokens_used = chunk["usage"].get("total_tokens", tokens_used)
+                        raw_usage = chunk["usage"]
+                        tokens_used = raw_usage.get("total_tokens", tokens_used)
+                        usage = {
+                            "prompt_tokens": raw_usage.get("prompt_tokens"),
+                            "completion_tokens": raw_usage.get("completion_tokens"),
+                            "total_tokens": raw_usage.get("total_tokens"),
+                        }
                     fr = chunk.get("choices", [{}])[0].get("finish_reason")
                     if fr:
                         finish_reason = fr
 
-                    yield ChatResult(
+                    yield _result(
                         content=delta_content,
                         tool_calls=new_calls if delta.get("tool_calls") else [],
                         finish_reason=finish_reason,
@@ -244,7 +285,11 @@ class OpenAIAdapter(ModelAdapter):
                     if self._is_stream_terminated(chunk):
                         return
 
-            # Process any remaining data in buffer (no trailing newline)
+            # Process any remaining data in buffer (no trailing newline).
+            # Mirror the main loop so usage/finish_reason/tool-call deltas that
+            # arrive on a final unterminated frame are not lost, and emit only
+            # the incremental tool-call deltas (not the accumulated snapshot)
+            # so downstream delta merging never double-counts arguments.
             if buffer.strip():
                 line = buffer.decode("utf-8", errors="replace").strip("\r")
                 if line.startswith("data:") and line[5:].strip():
@@ -254,9 +299,44 @@ class OpenAIAdapter(ModelAdapter):
                         delta_content = delta.get("content") or ""
                         if delta_content:
                             accumulated_content += delta_content
-                            yield ChatResult(
+                        new_calls = []
+                        if delta.get("tool_calls"):
+                            new_calls = self._parse_tool_calls_from_delta(delta["tool_calls"])
+                            for i, tc in enumerate(new_calls):
+                                while len(accumulated_tool_calls) <= i:
+                                    accumulated_tool_calls.append(
+                                        {
+                                            "id": "",
+                                            "type": "function",
+                                            "function": {"name": "", "arguments": ""},
+                                        }
+                                    )
+                                if tc.get("id"):
+                                    accumulated_tool_calls[i]["id"] = tc["id"]
+                                if tc.get("function", {}).get("name"):
+                                    accumulated_tool_calls[i]["function"]["name"] = tc["function"][
+                                        "name"
+                                    ]
+                                if tc.get("function", {}).get("arguments"):
+                                    args = tc["function"]["arguments"]
+                                    accumulated_tool_calls[i]["function"]["arguments"] += (
+                                        args if isinstance(args, str) else str(args)
+                                    )
+                        if chunk.get("usage"):
+                            raw_usage = chunk["usage"]
+                            tokens_used = raw_usage.get("total_tokens", tokens_used)
+                            usage = {
+                                "prompt_tokens": raw_usage.get("prompt_tokens"),
+                                "completion_tokens": raw_usage.get("completion_tokens"),
+                                "total_tokens": raw_usage.get("total_tokens"),
+                            }
+                        fr = chunk.get("choices", [{}])[0].get("finish_reason")
+                        if fr:
+                            finish_reason = fr
+                        if delta_content or new_calls or fr:
+                            yield _result(
                                 content=delta_content,
-                                tool_calls=list(accumulated_tool_calls),
+                                tool_calls=new_calls,
                                 finish_reason=finish_reason,
                                 tokens_used=tokens_used,
                                 accumulated_content=accumulated_content,
@@ -266,18 +346,21 @@ class OpenAIAdapter(ModelAdapter):
 
         except httpx.ReadTimeout:
             logger.warning("stream_read_timeout", model=self._model_id)
-            yield ChatResult(
+            # Tool-call deltas were already emitted incrementally; do not
+            # re-emit the accumulated snapshot or consumers will append the
+            # arguments a second time.
+            yield _result(
                 content="",
-                tool_calls=list(accumulated_tool_calls),
+                tool_calls=[],
                 finish_reason=finish_reason or "stop",
                 tokens_used=tokens_used,
                 accumulated_content=accumulated_content,
             )
         except TimeoutError:
             logger.warning("stream_total_timeout", model=self._model_id, timeout=total_timeout)
-            yield ChatResult(
+            yield _result(
                 content="",
-                tool_calls=list(accumulated_tool_calls),
+                tool_calls=[],
                 finish_reason=finish_reason or "stop",
                 tokens_used=tokens_used,
                 accumulated_content=accumulated_content,
@@ -341,11 +424,13 @@ class OpenAIAdapter(ModelAdapter):
                 parsed_tool_calls = []
                 for tc in tool_calls:
                     if tc.get("type") == "function":
-                        parsed_tool_calls.append({
-                            "id": tc.get("id", ""),
-                            "type": "function",
-                            "function": tc.get("function", {}),
-                        })
+                        parsed_tool_calls.append(
+                            {
+                                "id": tc.get("id", ""),
+                                "type": "function",
+                                "function": tc.get("function", {}),
+                            }
+                        )
                 tool_calls = parsed_tool_calls
             else:
                 tool_calls = []
@@ -377,16 +462,18 @@ class OpenAIAdapter(ModelAdapter):
             return ChatResult(content="", tool_calls=[], finish_reason="stop", tokens_used=0)
         chunks[-1]
         full_content = "".join(c.content or "" for c in chunks)
-        all_tool_calls: list[dict] = []
+        all_tool_calls: list[dict[str, Any]] = []
         for c in chunks:
             self._accumulate_tool_call_deltas(all_tool_calls, c.tool_calls)
         total_tokens = max((c.tokens_used or 0 for c in chunks), default=0)
+        final_usage = next((c.usage for c in reversed(chunks) if c.usage is not None), None)
         return ChatResult(
             content=full_content or "",
             tool_calls=all_tool_calls,
             finish_reason=chunks[-1].finish_reason or "stop",
             tokens_used=total_tokens,
             accumulated_content=full_content or "",
+            usage=final_usage,
         )
 
     @staticmethod
@@ -412,14 +499,26 @@ class OpenAIAdapter(ModelAdapter):
     def capabilities(self) -> ModelCapability:
         if self._capabilities is not None:
             return self._capabilities
+        # The default chat models (gpt-4o family) accept OpenAI vision parts;
+        # text-only models should be registered with vision=False so image
+        # parts degrade to plain text before the request is built.
         return ModelCapability(
             chat=True,
             streaming=True,
             tools=True,
-            vision=False,
+            vision=True,
+            file_attachments=True,
             embedding=False,
             max_tokens=128000,
         )
+
+    @property
+    def provider(self) -> str:
+        return "openai"
+
+    @property
+    def model_id(self) -> str:
+        return self._model_id
 
     @property
     def api_key(self) -> str:

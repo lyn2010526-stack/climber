@@ -110,6 +110,8 @@ export interface ModalProps {
   footer?: React.ReactNode;
   showClose?: boolean;
   depth?: ModalDepth;
+  /** Forwarded to the panel root so wrappers can target a specific dialog. */
+  'data-testid'?: string;
 }
 
 /** Shared with the other dialog surfaces so the trap cannot drift per modal. */
@@ -129,6 +131,7 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(({
   footer,
   showClose = true,
   depth = 'default',
+  'data-testid': testId,
 }, ref) => {
   const { t } = useTranslation();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -189,7 +192,7 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(({
         data-modal-overlay=""
         data-state="open"
         data-depth={depth}
-        className={cn('absolute inset-0 motion-reduce:animate-none', rung.scrim)}
+        className={cn('absolute inset-0 animate-fadeIn motion-reduce:animate-none', rung.scrim)}
         onClick={closeOnOverlay ? onClose : undefined}
         aria-hidden="true"
       />
@@ -203,12 +206,16 @@ const Modal = React.forwardRef<HTMLDivElement, ModalProps>(({
         aria-labelledby={title ? titleId : undefined}
         aria-describedby={description ? descId : undefined}
         data-depth={depth}
+        data-testid={testId}
         tabIndex={-1}
         className={cn(
           'relative w-full border',
           rung.panel,
           rung.edge,
-          'rounded-[var(--radius-xl)] max-h-[90vh] overflow-hidden flex flex-col',
+          // The iOS corner rung (20px) reads softer than the generic xl rung at
+          // dialog scale, and the spring entrance lives in the token layer as
+          // `.modal-panel-in` — the scrim stays alpha-only by contract.
+          'rounded-[var(--radius-ios-lg)] max-h-[90vh] overflow-hidden flex flex-col modal-panel-in',
           rung.shadow,
           'focus-visible:outline-none',
           sizeClasses[size],

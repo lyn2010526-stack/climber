@@ -19,7 +19,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -29,6 +29,7 @@ logger = structlog.get_logger()
 @dataclass
 class ModelResponse:
     """Response from a single model in ensemble."""
+
     model_id: str
     provider: str
     content: str
@@ -41,6 +42,7 @@ class ModelResponse:
 @dataclass
 class ConsensusResult:
     """Result of ensemble consensus evaluation."""
+
     consensus_reached: bool
     consensus_content: str
     consensus_model: str
@@ -98,7 +100,7 @@ class EnsembleEngine:
         time.monotonic()
 
         # Execute all runners in parallel
-        tasks = [r(task) for r in runners[:self._max_models]]
+        tasks = [r(task) for r in runners[: self._max_models]]
         responses = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Process results
@@ -106,7 +108,7 @@ class EnsembleEngine:
         for r in responses:
             if isinstance(r, Exception):
                 continue
-            valid_responses.append(r)
+            valid_responses.append(cast(ModelResponse, r))
 
         if not valid_responses:
             return ConsensusResult(
@@ -212,6 +214,7 @@ class MessageType(StrEnum):
 @dataclass
 class AgentMessage:
     """Message passed between agents on the bus."""
+
     sender_id: str
     recipient_id: str | None  # None = broadcast
     msg_type: MessageType
@@ -227,7 +230,9 @@ class AgentMessage:
             "sender_id": self.sender_id,
             "recipient_id": self.recipient_id,
             "msg_type": self.msg_type.value,
-            "payload": self.payload if isinstance(self.payload, (str, int, float, bool, dict, list, type(None))) else str(self.payload),
+            "payload": self.payload
+            if isinstance(self.payload, (str, int, float, bool, dict, list, type(None)))
+            else str(self.payload),
             "timestamp": self.timestamp,
             "reply_to": self.reply_to,
         }
@@ -253,7 +258,7 @@ class MessageBus:
         """
         self._history.append(message)
         if len(self._history) > self._max_history:
-            self._history = self._history[-self._max_history // 2:]
+            self._history = self._history[-self._max_history :]
 
         notified = 0
 
@@ -267,28 +272,51 @@ class MessageBus:
                 subscribers.extend(subs)
 
         for callback in subscribers:
-            try:
-                await callback(message)
-                notified += 1
-            except Exception as e:
-                logger.warning("message_bus.delivery_failed", error=str(e), msg_id=message.msg_id)
+            attempts = 0
+            while attempts < 3:
+                try:
+                    await callback(message)
+                    notified += 1
+                    break
+                except Exception as e:
+                    attempts += 1
+                    if attempts >= 3:
+                        logger.warning(
+                            "message_bus.delivery_failed",
+                            error=str(e),
+                            msg_id=message.msg_id,
+                            attempts=attempts,
+                        )
+                    else:
+                        await asyncio.sleep(0.05 * attempts)
 
         return notified
 
     def subscribe(self, agent_id: str, callback: Callable[[AgentMessage], Awaitable[None]]) -> None:
-        """Subscribe an agent to receive messages."""
+        """Subscribe an agent to receive messages.
+
+        Subscribing the same callback twice for the same agent is a no-op:
+        a duplicate registration would otherwise deliver each matching message
+        to the callback once per entry (R12-H18 duplicate subscription /
+        duplicate delivery).
+        """
         if agent_id not in self._subscribers:
             self._subscribers[agent_id] = []
-        self._subscribers[agent_id].append(callback)
+        if callback not in self._subscribers[agent_id]:
+            self._subscribers[agent_id].append(callback)
 
-    def unsubscribe(self, agent_id: str, callback: Callable[[AgentMessage], Awaitable[None]] | None = None) -> None:
+    def unsubscribe(
+        self, agent_id: str, callback: Callable[[AgentMessage], Awaitable[None]] | None = None
+    ) -> None:
         """Unsubscribe an agent. If callback is None, remove all subscriptions."""
         if agent_id not in self._subscribers:
             return
         if callback is None:
             del self._subscribers[agent_id]
         else:
-            self._subscribers[agent_id] = [cb for cb in self._subscribers[agent_id] if cb != callback]
+            self._subscribers[agent_id] = [
+                cb for cb in self._subscribers[agent_id] if cb != callback
+            ]
 
     def get_history(
         self,
@@ -301,7 +329,9 @@ class MessageBus:
         filtered = self._history
 
         if agent_id:
-            filtered = [m for m in filtered if m.recipient_id == agent_id or m.sender_id == agent_id]
+            filtered = [
+                m for m in filtered if m.recipient_id == agent_id or m.sender_id == agent_id
+            ]
 
         if msg_type:
             filtered = [m for m in filtered if m.msg_type == msg_type]
@@ -337,17 +367,19 @@ class EnsembleCoordinator:
         result = await self._engine.execute_parallel(task, runners)
 
         # Publish result
-        await self._bus.publish(AgentMessage(
-            sender_id="ensemble_coordinator",
-            recipient_id=None,  # Broadcast
-            msg_type=MessageType.TASK_RESPONSE,
-            payload={
-                "task_id": task_id,
-                "result": result.to_dict(),
-                "consensus_content": result.consensus_content[:500],
-            },
-            metadata={"consensus_reached": result.consensus_reached},
-        ))
+        await self._bus.publish(
+            AgentMessage(
+                sender_id="ensemble_coordinator",
+                recipient_id=None,  # Broadcast
+                msg_type=MessageType.TASK_RESPONSE,
+                payload={
+                    "task_id": task_id,
+                    "result": result.to_dict(),
+                    "consensus_content": result.consensus_content[:500],
+                },
+                metadata={"consensus_reached": result.consensus_reached},
+            )
+        )
 
         return result
 

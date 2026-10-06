@@ -6,14 +6,17 @@ functions used across all route modules.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from fastapi import HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.orm import DeclarativeBase
 
+from app.api.v1.schemas.response import ApiResponse, ErrorResponse, PaginatedResponse
 from app.core.principal import LOCAL_SUBJECT_ID, get_context_principal
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
 
 DEFAULT_USER: str = LOCAL_SUBJECT_ID
 
@@ -26,6 +29,7 @@ def mask_env_values(env: dict[str, Any] | None) -> dict[str, str]:
 
 
 T = TypeVar("T", bound=DeclarativeBase)
+DataT = TypeVar("DataT")
 
 _SENSITIVE_RESPONSE_FIELDS = {"api_key", "api_key_encrypted", "env", "environment"}
 
@@ -36,7 +40,7 @@ def current_user_id(request: Request) -> str:
     try:
         return get_context_principal().subject_id
     except RuntimeError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        raise HTTPException(status_code=401, detail="Authenticated principal is missing") from exc
 
 
 async def parse_request_payload(request: Request) -> dict[str, Any]:
@@ -81,13 +85,17 @@ async def get_or_404(
     Raises:
         HTTPException: 404 if the entity is not found.
     """
-    result = (await db.execute(select(model).where(model.id == entity_id))).scalar_one_or_none()
+    result = (
+        await db.execute(select(model).where(cast(Any, model).id == entity_id))
+    ).scalar_one_or_none()
     if result is None:
         raise HTTPException(status_code=404, detail=detail or f"{model.__name__} not found")
-    return result
+    return cast(T, result)
 
 
-def entities_to_dicts(entities: Sequence[T], dict_fn: callable) -> list[dict[str, Any]]:
+def entities_to_dicts(
+    entities: Sequence[T], dict_fn: Callable[[T], dict[str, Any]]
+) -> list[dict[str, Any]]:
     """Convert a sequence of database entities to dictionaries using a mapping function.
 
     Args:
@@ -100,8 +108,54 @@ def entities_to_dicts(entities: Sequence[T], dict_fn: callable) -> list[dict[str
     return [dict_fn(e) for e in entities]
 
 
+def success_response(data: DataT) -> ApiResponse[DataT]:
+    """Wrap a single success payload in the unified response envelope.
+
+    Args:
+        data: The payload returned by the endpoint.
+
+    Returns:
+        An ApiResponse with ok=True.
+    """
+    return ApiResponse[DataT](data=data)
+
+
+def error_response(detail: str, error_type: str = "error") -> ErrorResponse:
+    """Wrap an error message in the unified error envelope.
+
+    Args:
+        detail: Human-readable error message.
+        error_type: Machine-readable error category.
+
+    Returns:
+        An ErrorResponse with ok=False.
+    """
+    return ErrorResponse(detail=detail, type=error_type)
+
+
+def paginated_response(
+    items: list[DataT], total: int, limit: int, offset: int = 0
+) -> PaginatedResponse[DataT]:
+    """Wrap a page of list results in the unified response envelope.
+
+    Args:
+        items: The page of items returned by the endpoint.
+        total: Total number of items available across all pages.
+        limit: The page size that was applied.
+        offset: The number of items skipped before this page.
+
+    Returns:
+        A PaginatedResponse with ok=True.
+    """
+    return PaginatedResponse[DataT](items=items, total=total, limit=limit, offset=offset)
+
+
 def ok_response(deleted: str) -> dict[str, bool | str]:
     """Create a standard deletion success response.
+
+    Compatibility helper for existing delete routes that still return the
+    legacy ``{"ok": True, "deleted": ...}`` shape. New handlers should use
+    ``success_response({"deleted": ...})`` with the unified ApiResponse.
 
     Args:
         deleted: The ID of the deleted entity.

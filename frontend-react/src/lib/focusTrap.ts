@@ -23,6 +23,23 @@ const FOCUSABLE_SELECTOR = [
 const NEGATIVE_TABINDEX = /^-[1-9][0-9]*$/;
 
 /**
+ * True when `element` is not hidden by CSS.
+ *
+ * A `display: none` ancestor hides a whole subtree, so the chain up to the
+ * root is checked as well. `visibility: hidden` only hides the element itself
+ * unless a descendant opts back in, which is rare inside a dialog, so the
+ * element's own value is enough for that case.
+ */
+function isCssVisible(element: HTMLElement): boolean {
+  let node: HTMLElement | null = element;
+  while (node) {
+    if (window.getComputedStyle(node).display === 'none') return false;
+    node = node.parentElement;
+  }
+  return window.getComputedStyle(element).visibility !== 'hidden';
+}
+
+/**
  * Visible, enabled tab stops inside `root`, in document order.
  *
  * Hidden subtrees are skipped because a `display: none` control cannot receive
@@ -37,6 +54,7 @@ export function collectFocusable(root: HTMLElement): HTMLElement[] {
     if (element.closest('[inert]')) continue;
     if (element.hidden) continue;
     if (element.getAttribute('aria-hidden') === 'true') continue;
+    if (!isCssVisible(element)) continue;
     stops.push(element);
   }
   return stops;

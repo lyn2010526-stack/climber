@@ -32,9 +32,9 @@ const storage = {
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode; defaultTheme?: Theme }> = ({
   children,
-  defaultTheme = 'dark',
+  defaultTheme = 'light',
 }) => {
-  const [theme, setThemeState] = useState<Theme>('dark');
+  const [theme, setThemeState] = useState<Theme>(defaultTheme);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -117,3 +117,10 @@ export const useTheme = (): ThemeContextType => {
   }
   return context;
 };
+
+/**
+ * Non-throwing variant for leaf controls that may render outside the app shell
+ * (for example in focused component tests). Returns `null` when no provider is
+ * mounted so the caller can skip rendering instead of crashing the tree.
+ */
+export const useOptionalTheme = (): ThemeContextType | null => useContext(ThemeContext) ?? null;

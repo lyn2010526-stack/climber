@@ -9,6 +9,7 @@ import signal
 import subprocess
 from contextlib import suppress
 from pathlib import Path
+from typing import Any
 
 COMMAND_OUTPUT_LIMIT = 8000
 
@@ -57,11 +58,14 @@ class WorkspaceSandbox:
         candidate = (self.root / path).resolve()
         if not candidate.is_relative_to(self.root):
             raise ValueError("Path escapes workspace")
-        if any(part == ".git" or part.startswith(".env") for part in candidate.relative_to(self.root).parts):
+        if any(
+            part == ".git" or part.startswith(".env")
+            for part in candidate.relative_to(self.root).parts
+        ):
             raise ValueError("Protected workspace path")
         return candidate
 
-    def execute(self, name: str, arguments: dict) -> dict:
+    def execute(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if name == "run_command":
             if not self.allow_commands:
                 raise ValueError("Tool disabled or unknown; command execution is unavailable")
@@ -73,7 +77,7 @@ class WorkspaceSandbox:
             raise ValueError("Invalid tool arguments")
         path = self.resolve(arguments["path"])
         if name == "list_files":
-            entries = []
+            entries: list[str] = []
             for child in path.iterdir():
                 if len(entries) >= 500:
                     raise ValueError("Directory exceeds 500 entries")
@@ -100,8 +104,8 @@ class WorkspaceSandbox:
         path.write_text(content, encoding="utf-8")
         return {"written_bytes": len(content.encode("utf-8"))}
 
-    def _sandbox_env(self) -> dict:
-        env = {}
+    def _sandbox_env(self) -> dict[str, str]:
+        env: dict[str, str] = {}
         for key in _ENV_ALLOWLIST:
             if key in os.environ:
                 env[key] = os.environ[key]
@@ -111,7 +115,7 @@ class WorkspaceSandbox:
         env.update(self.command_env)
         return env
 
-    def _run_command(self, arguments: dict) -> dict:
+    def _run_command(self, arguments: dict[str, Any]) -> dict[str, Any]:
         if set(arguments) != {"command"}:
             raise ValueError("Invalid tool arguments")
         command = arguments["command"]
@@ -147,8 +151,8 @@ class WorkspaceSandbox:
         return {"exit_code": exit_code, "output": output}
 
     @property
-    def tools(self) -> list:
-        return TOOLS + [COMMAND_TOOL] if self.allow_commands else TOOLS
+    def tools(self) -> list[dict[str, Any]]:
+        return [*TOOLS, COMMAND_TOOL] if self.allow_commands else TOOLS
 
 
 TOOLS = [
@@ -168,7 +172,11 @@ TOOLS = [
     for name, description, properties in [
         ("list_files", "List one directory, using . for root", {"path": {"type": "string"}}),
         ("read_file", "Read a UTF-8 file", {"path": {"type": "string"}}),
-        ("write_file", "Write a UTF-8 file", {"path": {"type": "string"}, "content": {"type": "string"}}),
+        (
+            "write_file",
+            "Write a UTF-8 file",
+            {"path": {"type": "string"}, "content": {"type": "string"}},
+        ),
     ]
 ]
 

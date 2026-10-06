@@ -29,3 +29,4 @@ class WorkflowRunRequest(StrictRequest):
     edges: list[dict[str, Any]] | None = None
     inputs: dict[str, Any] = Field(default_factory=dict)
     workflow_id: str = ""
+    pregel: bool = False

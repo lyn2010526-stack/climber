@@ -20,30 +20,30 @@ else
 fi
 
 # Test 2: Optimization report MD
-if [ -f "OPTIMIZATION_REPORT.md" ]; then
-    SIZE=$(du -h OPTIMIZATION_REPORT.md | cut -f1)
-    LINES=$(wc -l < OPTIMIZATION_REPORT.md)
-    echo "✅ OPTIMIZATION_REPORT.md ($SIZE, $LINES lines)"
+if [ -f "docs/archive/reports/OPTIMIZATION_REPORT.md" ]; then
+    SIZE=$(du -h docs/archive/reports/OPTIMIZATION_REPORT.md | cut -f1)
+    LINES=$(wc -l < docs/archive/reports/OPTIMIZATION_REPORT.md)
+    echo "✅ docs/archive/reports/OPTIMIZATION_REPORT.md ($SIZE, $LINES lines)"
     PASSED=$((PASSED+1))
 else
-    echo "❌ OPTIMIZATION_REPORT.md MISSING"
+    echo "❌ docs/archive/reports/OPTIMIZATION_REPORT.md MISSING"
     FAILED=$((FAILED+1))
 fi
 
 # Test 3: Testing summary MD
-if [ -f "PERFORMANCE_TESTING_SUMMARY.md" ]; then
-    SIZE=$(du -h PERFORMANCE_TESTING_SUMMARY.md | cut -f1)
-    LINES=$(wc -l < PERFORMANCE_TESTING_SUMMARY.md)
-    echo "✅ PERFORMANCE_TESTING_SUMMARY.md ($SIZE, $LINES lines)"
+if [ -f "docs/archive/reports/PERFORMANCE_TESTING_SUMMARY.md" ]; then
+    SIZE=$(du -h docs/archive/reports/PERFORMANCE_TESTING_SUMMARY.md | cut -f1)
+    LINES=$(wc -l < docs/archive/reports/PERFORMANCE_TESTING_SUMMARY.md)
+    echo "✅ docs/archive/reports/PERFORMANCE_TESTING_SUMMARY.md ($SIZE, $LINES lines)"
     PASSED=$((PASSED+1))
 else
-    echo "❌ PERFORMANCE_TESTING_SUMMARY.md MISSING"
+    echo "❌ docs/archive/reports/PERFORMANCE_TESTING_SUMMARY.md MISSING"
     FAILED=$((FAILED+1))
 fi
 
 # Test 4: Database optimization script
-if [ -f "optimize_database.py" ]; then
-    SIZE=$(du -h optimize_database.py | cut -f1)
+if [ -f "scripts/optimize_database.py" ]; then
+    SIZE=$(du -h scripts/optimize_database.py | cut -f1)
     echo "✅ optimize_database.py ($SIZE)"
     PASSED=$((PASSED+1))
 else
@@ -52,8 +52,8 @@ else
 fi
 
 # Test 5: Redis cache warming script
-if [ -f "redis_cache_warming.py" ]; then
-    SIZE=$(du -h redis_cache_warming.py | cut -f1)
+if [ -f "scripts/redis_cache_warming.py" ]; then
+    SIZE=$(du -h scripts/redis_cache_warming.py | cut -f1)
     echo "✅ redis_cache_warming.py ($SIZE)"
     PASSED=$((PASSED+1))
 else
@@ -62,8 +62,8 @@ else
 fi
 
 # Test 6: Comprehensive test framework
-if [ -f "comprehensive_performance_test.py" ]; then
-    SIZE=$(du -h comprehensive_performance_test.py | cut -f1)
+if [ -f "scripts/comprehensive_performance_test.py" ]; then
+    SIZE=$(du -h scripts/comprehensive_performance_test.py | cut -f1)
     echo "✅ comprehensive_performance_test.py ($SIZE)"
     PASSED=$((PASSED+1))
 else

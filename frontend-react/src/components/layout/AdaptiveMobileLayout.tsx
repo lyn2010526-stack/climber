@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useId, useRef, type CSSProperties } from 'react';
+import { useState, useMemo, useEffect, useId, useRef, type CSSProperties, type ReactNode } from 'react';
 import { MoreHorizontal, X, ChevronRight } from 'lucide-react';
 import { ClimberMark } from '../brand/ClimberMark';
 import { CORE_NAV_ITEMS_BASE, ALL_NAV_ITEMS_BASE, MOBILE_ADAPTED_PAGE_IDS, type Page } from '../../navigation/navConfig';
@@ -18,7 +18,7 @@ const MOBILE_USABLE_PAGE_IDS: ReadonlySet<string> = new Set([
 ]);
 
 const CHAT_PAGE_ID = 'chat';
-const MOBILE_FALLBACK_PAGE_IDS = new Set(['agents', 'apikeys', 'settings']);
+const MOBILE_FALLBACK_PAGE_IDS = new Set(['agents', 'apikeys']);
 
 // The shell is clamped to the software keyboard. A zero height would hide the
 // composer entirely, so the clamp keeps a floor that still fits one row.
@@ -27,6 +27,18 @@ const MIN_SHELL_HEIGHT = 120;
 // Breathing room below the composer once the navigation is behind the keyboard
 // and its reserved strip is no longer reachable.
 const KEYBOARD_CONTENT_PADDING = 12;
+
+/**
+ * The frosted bar treatment: a translucent surface fill plus a real backdrop
+ * blur, so the page scrolls behind the strip the way an iOS bar does. The
+ * stylesheet's `.mobile-bottom-nav` keeps the strip geometry and the safe-area
+ * padding; this style carries only the glass on top of it.
+ */
+const NAV_GLASS_STYLE: CSSProperties = {
+  background: 'color-mix(in srgb, var(--color-bg-surface-1) 78%, transparent)',
+  backdropFilter: 'blur(20px) saturate(180%)',
+  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+};
 
 interface ShellMetrics {
   /** Visible shell height in layout-viewport pixels, or null to let CSS own it. */
@@ -91,10 +103,12 @@ function useShellMetrics(shellRef: React.RefObject<HTMLElement | null>): ShellMe
   return { clamp };
 }
 
-export function AdaptiveMobileLayout({ children, currentPage, onNavigate }: {
+export function AdaptiveMobileLayout({ children, currentPage, onNavigate, headerAction }: {
   children: React.ReactNode;
   currentPage: string;
   onNavigate: (page: string) => void;
+  /** The right-side action slot next to the large title. Defaults to the brand. */
+  headerAction?: ReactNode;
 }) {
   const { t } = useI18n();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -190,19 +204,18 @@ export function AdaptiveMobileLayout({ children, currentPage, onNavigate }: {
   return (
     <div ref={shellRef} className="mobile-workspace-shell" style={shellStyle}>
       <header className="mobile-context-bar safe-area-top">
-        <div className="workspace-mark" aria-hidden="true"><ClimberMark size={15} /></div>
         <div className="min-w-0 flex-1">
-           <p className="workspace-eyebrow">Climber · {t('sidebar.workspace')}</p>
-          <h1 className="truncate text-sm font-semibold text-[var(--color-text-primary)]">{currentItem?.label ?? t('sidebar.workspace')}</h1>
+          <p className="workspace-eyebrow">Climber · {t('sidebar.workspace')}</p>
+          <h1 className="truncate text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">{currentItem?.label ?? t('sidebar.workspace')}</h1>
+        </div>
+        <div className="flex shrink-0 items-center" aria-hidden={headerAction ? undefined : 'true'} data-testid="mobile-header-action">
+          {headerAction ?? <span className="workspace-mark"><ClimberMark size={15} /></span>}
         </div>
       </header>
 
       <main id="main-content" className="mobile-content" style={contentStyle}>
         {MOBILE_FALLBACK_PAGE_IDS.has(effectivePage) ? (
-          <MobileDesktopFallback
-            title={currentItem?.label ?? t('sidebar.workspace')}
-            description="此页面属于桌面工作台，移动端保留明确入口并提供稳定导航。"
-          />
+          <MobileDesktopFallback title={currentItem?.label ?? t('sidebar.workspace')} />
         ) : children ?? (
           <div className="flex min-h-full items-center justify-center px-6 text-center text-sm text-[var(--color-text-muted)]" role="status">
             {t('common.no_data')}
@@ -210,19 +223,40 @@ export function AdaptiveMobileLayout({ children, currentPage, onNavigate }: {
         )}
       </main>
 
-      <nav className="mobile-bottom-nav safe-area-bottom" aria-label={t('sidebar.main_nav')}>
+      <nav className="mobile-bottom-nav safe-area-bottom" aria-label={t('sidebar.main_nav')} style={NAV_GLASS_STYLE}>
         {primaryItems.map(({ id, label, icon: Icon }) => {
           const active = effectivePage === id;
           return (
-            <button type="button" key={id} onClick={() => navigate(id)} aria-current={active ? 'page' : undefined} className="mobile-nav-item">
-              <Icon size={19} strokeWidth={active ? 2.4 : 1.8} />
+            <button
+              type="button"
+              key={id}
+              onClick={() => navigate(id)}
+              aria-current={active ? 'page' : undefined}
+              className="mobile-nav-item transition duration-200 ease-out motion-reduce:transition-none active:scale-95"
+            >
+              {/* iOS tab behaviour: the active glyph fills with the current
+                  colour, so the accent reads before the label does. */}
+              <Icon
+                size={19}
+                strokeWidth={active ? 2.4 : 1.8}
+                fill={active ? 'currentColor' : 'none'}
+                className="shrink-0 transition duration-200 ease-out motion-reduce:transition-none"
+              />
               <span>{label}</span>
             </button>
           );
         })}
-        <button type="button" ref={moreButtonRef} onClick={() => setMoreOpen(true)} aria-expanded={moreOpen} aria-current={moreActive ? 'page' : undefined} className="mobile-nav-item" data-active={moreActive || undefined}>
-          <MoreHorizontal size={19} />
-          <span>{t('sidebar.more')}</span>
+        <button
+          type="button"
+          ref={moreButtonRef}
+          onClick={() => setMoreOpen(true)}
+          aria-expanded={moreOpen}
+          aria-label={t('sidebar.more')}
+          aria-current={moreActive ? 'page' : undefined}
+          className="mobile-icon-button rounded-full text-[var(--color-text-muted)] transition duration-200 ease-out motion-reduce:transition-none active:scale-95 data-[active=true]:text-[var(--color-accent-foreground)]"
+          data-active={moreActive || undefined}
+        >
+          <MoreHorizontal size={20} fill={moreActive ? 'currentColor' : 'none'} />
         </button>
       </nav>
 
@@ -244,9 +278,9 @@ export function AdaptiveMobileLayout({ children, currentPage, onNavigate }: {
           >
             <div className="mobile-sheet-header">
               <div>
-                 <p className="workspace-eyebrow">{t('sidebar.workspace')}</p>
+                <p className="workspace-eyebrow">{t('sidebar.workspace')}</p>
                 <h2 id={sheetTitleId} className="text-base font-semibold">{t('sidebar.all_entries')}</h2>
-                <p id={`${sheetTitleId}-description`} className="sr-only">使用 Tab 浏览移动端页面，按 Escape 关闭菜单。</p>
+                <p id={`${sheetTitleId}-description`} className="sr-only">{t('mobile.sheet_help')}</p>
               </div>
               <button type="button" ref={sheetCloseRef} className="icon-button" onClick={() => setMoreOpen(false)} aria-label={t('common.close')}><X size={18} aria-hidden="true" focusable="false" /></button>
             </div>

@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import i18n from '../../../i18n';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MobileChatPage } from '../../MobileChatPage';
 
@@ -39,6 +40,10 @@ class FakeVisualViewport extends EventTarget {
 }
 
 describe('MobileChatPage', () => {
+  beforeAll(async () => {
+    await i18n.changeLanguage('zh-CN');
+  });
+
   beforeEach(() => {
     state.sessionId = 'test-session';
     state.creationError = null;

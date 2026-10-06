@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  User, Cpu, Key, Bell, Shield, Info,
+  User, Cpu, Key, Bell, Shield, Info, Check, Server,
   Mail,
    ChevronRight, AlertCircle, RefreshCw,
-   MessageSquare, Database, ExternalLink,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Input } from '../components/ui/Input';
@@ -14,9 +13,12 @@ import { Card, CardContent } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { SkeletonList } from '../components/ui/Skeleton';
 import { useI18n } from '../i18n';
-import { api } from '../api';
+import { api, type CurrentUserOut, type PermissionTier } from '../api';
+import type { SettingsResponse } from '../types/api';
 import { ApiKeysPage } from './ApiKeysPage';
 import { AuthApiKeysPage } from './AuthApiKeysPage';
+import { LocalPinSettings } from '../components/privacy/LocalPinSettings';
+import { ProfileLearningSettings } from '../components/privacy/ProfileLearningSettings';
 
 type SettingsSection = 'profile' | 'models' | 'apikeys' | 'accessTokens' | 'notifications' | 'security' | 'about';
 
@@ -84,7 +86,7 @@ export function SettingsPage() {
                   )}
                 >
                   <div className={cn(
-                    'p-1.5 rounded-lg transition-colors',
+                    'p-1.5 rounded-[var(--radius-md)] transition-colors motion-reduce:transition-none',
                     isActive
                       ? 'bg-[var(--color-accent-subtle)] text-[var(--color-accent-foreground)]'
                       : 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)]'
@@ -98,7 +100,7 @@ export function SettingsPage() {
                     )}>
                       {item.label}
                     </div>
-                    <div id={descriptionId} className="text-[10px] text-[var(--color-text-muted)] truncate">{item.description}</div>
+                    <div id={descriptionId} className="text-[length:var(--text-2xs)] text-[var(--color-text-muted)] truncate">{item.description}</div>
                   </div>
                   {isActive && <ChevronRight size={12} aria-hidden="true" focusable="false" className="text-[var(--color-accent-foreground)] shrink-0" />}
                 </button>
@@ -111,7 +113,9 @@ export function SettingsPage() {
           nested inside it would announce two main landmarks. This region only
           scrolls, so it is labelled as such. */}
       <section className="min-w-0 flex-1 overflow-y-auto" aria-label={t('settings.title')}>
-         <div className="mx-auto max-w-3xl p-4 md:p-6">
+          <div className="mx-auto max-w-3xl p-4 md:p-6">
+            <LocalPinSettings />
+           <ProfileLearningSettings />
           {activeSection === 'profile' && <ProfileSection />}
           {activeSection === 'models' && <ModelsSection />}
           {activeSection === 'apikeys' && <ApiKeysSection />}
@@ -133,9 +137,9 @@ export function SettingsPage() {
  */
 function SettingsSectionHeader({ title, description }: { title: string; description?: string }) {
   return (
-    <div className="mb-5">
-      <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">{title}</h1>
-      {description && <p className="text-sm text-[var(--color-text-muted)] mt-1">{description}</p>}
+    <div className="mb-5 border-b border-[var(--color-border-subtle)] pb-[var(--space-4)]">
+      <h1 className="text-[length:var(--text-base)] font-semibold text-[var(--color-text-primary)]">{title}</h1>
+      {description && <p className="text-[length:var(--text-sm)] text-[var(--color-text-muted)] mt-1">{description}</p>}
     </div>
   );
 }
@@ -148,9 +152,9 @@ function SectionCard({ title, description, children, className }: {
 }) {
   return (
     <Card variant="default" padding="none" className={cn('mb-4', className)}>
-      <div className="px-4 py-3 border-b border-[var(--color-border-subtle)]">
-        <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{title}</h3>
-        {description && <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{description}</p>}
+      <div className="px-4 py-4 border-b border-[var(--color-border-subtle)]">
+        <h3 className="text-[length:var(--text-sm)] font-semibold text-[var(--color-text-primary)]">{title}</h3>
+        {description && <p className="text-[length:var(--text-2xs)] text-[var(--color-text-muted)] mt-1">{description}</p>}
       </div>
       <div className="p-4">{children}</div>
     </Card>
@@ -163,6 +167,7 @@ interface ErrorBannerProps {
 }
 
 function ErrorBanner({ message, onRetry }: ErrorBannerProps) {
+  const { t } = useI18n();
   return (
     <Card variant="default" className="mb-4 border-[var(--color-error)]/30">
       <CardContent className="p-3 md:p-4 flex items-center gap-3">
@@ -170,7 +175,7 @@ function ErrorBanner({ message, onRetry }: ErrorBannerProps) {
         <p role="alert" className="text-sm text-[var(--color-error)] flex-1">{message}</p>
         {onRetry && (
           <Button variant="ghost" size="sm" onClick={onRetry} icon={<RefreshCw size={14} />}>
-            重新加载
+            {t('settings_page.reload')}
           </Button>
         )}
       </CardContent>
@@ -178,23 +183,13 @@ function ErrorBanner({ message, onRetry }: ErrorBannerProps) {
   );
 }
 
-interface CurrentUser {
-  id: number;
-  username: string;
-  email: string;
-  role: string;
-  scopes?: string[];
-}
-
 function ProfileSection() {
   const { t } = useI18n();
-  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [user, setUser] = useState<CurrentUserOut | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -205,7 +200,7 @@ function ProfileSection() {
       setUsername(data.username || '');
       setEmail(data.email || '');
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载账户资料失败');
+      setError(e instanceof Error ? e.message : t('settings_page.account_load_failed'));
     } finally {
       setLoading(false);
     }
@@ -213,22 +208,9 @@ function ProfileSection() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleSave = async () => {
-    if (saving) return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      await api.updateSettings({
-        profile: { username, email },
-        autonomous_agent_mode: false,
-      });
-      setSaveError('后端暂未支持账户资料更新接口，修改未持久化。');
-    } catch (e) {
-      setSaveError(e instanceof Error ? e.message : '保存账户资料失败');
-    } finally {
-      setSaving(false);
-    }
-  };
+  // The settings endpoint only accepts autonomous_agent_mode,
+  // token_throttle_mcp_enabled and notifications; profile/username/email are
+  // not writable, so the account fields render read-only (R10-09).
 
   if (loading) {
     return (
@@ -252,41 +234,37 @@ function ProfileSection() {
     <div>
       <SettingsSectionHeader title={t('settings.account_settings')} description={t('settings.account_settings')} />
 
-      <SectionCard title="基本信息">
+      <SectionCard title={t('settings_page.basic_title')}>
         <div className="space-y-4">
-          <FormField label="用户名" description="你的公开显示名称" required>
+          <p className="text-xs text-[var(--color-text-muted)]">{t('settings_page.account_readonly_note', { defaultValue: 'Account details are managed by your identity provider and are read-only here.' })}</p>
+          <FormField label={t('settings_page.username')} description={t('settings_page.username_desc')} required>
               <Input
                 id="settings-username"
-              placeholder="输入用户名"
+              placeholder={t('settings_page.username_placeholder')}
               value={username}
-              disabled={saving}
-              onChange={(e) => setUsername(e.target.value)}
+              disabled
+              readOnly
             />
           </FormField>
-          <FormField label="邮箱地址" description="用于登录和接收通知" required>
+          <FormField label={t('settings_page.email')} description={t('settings_page.email_desc')} required>
               <Input
                 id="settings-email"
               type="email"
-              placeholder="your@email.com"
+              placeholder={t('settings_page.email_placeholder', { defaultValue: 'your@email.com' })}
               value={email}
-              disabled={saving}
-              onChange={(e) => setEmail(e.target.value)}
+              disabled
+              readOnly
               leftIcon={<Mail size={14} />}
             />
           </FormField>
-          <FormField label="角色" description="账户权限角色">
+          <FormField label={t('settings_page.role')} description={t('settings_page.role_desc')}>
             <Input value={user?.role || ''} disabled />
           </FormField>
         </div>
       </SectionCard>
 
-      {saveError && <ErrorBanner message={saveError} />}
-
       <div className="flex justify-end gap-2 border-t border-[var(--color-border-subtle)] pt-4 mt-4">
-        <Button variant="outline" onClick={load} disabled={saving}>{t('common.cancel')}</Button>
-        <Button onClick={handleSave} loading={saving} disabled={saving}>
-          {saving ? '正在提交…' : t('settings.save_changes')}
-        </Button>
+        <Button variant="outline" onClick={load}>{t('common.refresh')}</Button>
       </div>
     </div>
   );
@@ -301,6 +279,9 @@ interface SettingsData {
 
 function ModelsSection() {
   const { t } = useI18n();
+  const [models, setModels] = useState<Array<{ provider: string; model_id: string; label?: string | null }>>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
+  const [modelError, setModelError] = useState<string | null>(null);
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -311,6 +292,7 @@ function ModelsSection() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setModelsLoading(true);
     try {
       const data = await api.getSettings();
       setSettings({
@@ -320,9 +302,18 @@ function ModelsSection() {
         mcp_ready: !!data.mcp_ready,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载设置失败');
+      setError(e instanceof Error ? e.message : t('settings_page.settings_load_failed'));
     } finally {
       setLoading(false);
+    }
+    try {
+      const catalog = await api.listModels();
+      setModels(catalog);
+      setModelError(null);
+    } catch (e) {
+      setModelError(e instanceof Error ? e.message : t('settings_page.model_load_failed'));
+    } finally {
+      setModelsLoading(false);
     }
   }, []);
 
@@ -343,7 +334,7 @@ function ModelsSection() {
       });
       setSaveOk(true);
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : '更新设置失败');
+      setSaveError(e instanceof Error ? e.message : t('settings_page.settings_update_failed'));
     } finally {
       setSaving(false);
     }
@@ -371,18 +362,18 @@ function ModelsSection() {
     <div>
       <SettingsSectionHeader title={t('settings.api_settings')} description={t('settings.api_settings')} />
 
-      <SectionCard title="执行模式">
+      <SectionCard title={t('settings_page.execution_mode')}>
         <div className="space-y-4">
           <Switch
-            label="自主智能体模式"
-            description="开启后智能体可自主决策执行多步任务"
+            label={t('settings_page.auto_agent')}
+            description={t('settings_page.auto_agent_desc')}
             checked={settings?.autonomous_agent_mode ?? false}
             onChange={(v) => updateFlag('autonomous_agent_mode', v)}
             disabled={saving}
           />
           <Switch
-            label="MCP Token 节流"
-            description="对 MCP 工具调用进行 Token 限流，防止超额消耗"
+            label={t('settings_page.mcp_throttle')}
+            description={t('settings_page.mcp_throttle_desc')}
             checked={settings?.token_throttle_mcp_enabled ?? false}
             onChange={(v) => updateFlag('token_throttle_mcp_enabled', v)}
             disabled={saving}
@@ -390,10 +381,36 @@ function ModelsSection() {
         </div>
       </SectionCard>
 
-      <SectionCard title="MCP 状态">
+      <SectionCard title={t('settings_page.available_models')} description={t('settings_page.available_models_desc')}>
+        {modelsLoading ? (
+          <p role="status" className="text-sm text-[var(--color-text-muted)]">{t('settings_page.loading_models')}</p>
+        ) : modelError ? (
+          <div className="flex items-center gap-2 text-sm text-[var(--color-error)]">
+            <span role="alert" className="flex-1">{modelError}</span>
+            <Button variant="ghost" size="sm" onClick={() => void load()} icon={<RefreshCw size={14} />}>{t('settings_page.retry')}</Button>
+          </div>
+        ) : models.length === 0 ? (
+          <p className="text-sm text-[var(--color-text-muted)]">{t('settings_page.no_models')}</p>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {models.map(model => (
+              <div key={`${model.provider}:${model.model_id}`} className="flex min-w-0 items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] px-3 py-2">
+                <Server size={15} className="shrink-0 text-[var(--color-accent-foreground)]" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-[var(--color-text-primary)]">{model.label || model.model_id}</p>
+                  <p className="truncate font-mono text-[length:var(--text-2xs)] text-[var(--color-text-muted)]">{model.provider}:{model.model_id}</p>
+                </div>
+                <Check size={14} className="shrink-0 text-[var(--color-success)]" aria-label={t('settings_page.available')} />
+              </div>
+            ))}
+          </div>
+        )}
+      </SectionCard>
+
+      <SectionCard title={t('settings_page.mcp_status')}>
         <div className="flex items-center gap-3">
           <div className={cn(
-            'p-2 rounded-xl',
+            'p-2 rounded-[var(--radius-lg)]',
             settings?.mcp_ready
               ? 'bg-[var(--color-success-subtle)]'
               : 'bg-[var(--color-bg-surface-2)]'
@@ -402,7 +419,7 @@ function ModelsSection() {
           </div>
           <div>
             <div className="text-sm font-medium text-[var(--color-text-primary)]">
-              {settings?.mcp_ready ? '已就绪' : '未就绪'}
+              {settings?.mcp_ready ? t('settings_page.mcp_ready') : t('settings_page.mcp_not_ready')}
             </div>
             <div className="text-xs text-[var(--color-text-muted)]">{settings?.mcp_status}</div>
           </div>
@@ -415,7 +432,7 @@ function ModelsSection() {
       {saveError && <ErrorBanner message={saveError} onRetry={load} />}
 
       <div className="flex items-center justify-between gap-3 border-t border-[var(--color-border-subtle)] pt-4 mt-4">
-        <p role="status" className="text-xs text-[var(--color-text-muted)]">{saving ? '正在保存…' : saveOk ? '设置已保存' : '更改后自动保存'}</p>
+        <p role="status" className="text-xs text-[var(--color-text-muted)]">{saving ? t('settings_page.saving') : saveOk ? t('settings_page.saved') : t('settings_page.auto_saved')}</p>
         <Button size="sm" variant="outline" onClick={load} disabled={saving}>{t('common.refresh')}</Button>
       </div>
     </div>
@@ -453,15 +470,32 @@ export function NotificationsSection() {
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATIONS);
   const [webhookConfigured, setWebhookConfigured] = useState(false);
   const [webhookAction, setWebhookAction] = useState<'keep' | 'replace' | 'clear'>('keep');
+  const webhookSnapshot = useRef<{ done: boolean; failed: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; error?: string } | null>(null);
 
-  const applySaved = useCallback((data: { notifications?: Partial<NotificationSettings> & { webhook_configured?: boolean } }) => {
-    const n = data.notifications;
-    if (!n) throw new Error('服务器未返回通知配置，请重新加载。');
+  const handleTestNotification = async () => {
+    if (testing) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      await api.testNotification();
+      setTestResult({ ok: true });
+    } catch (e) {
+      setTestResult({ ok: false, error: e instanceof Error ? e.message : t('settings_page.test_notification_failed', { defaultValue: 'Failed to send the test notification.' }) });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const applySaved = useCallback((data: SettingsResponse) => {
+    const n = data.notifications as (Partial<NotificationSettings> & { webhook_configured?: boolean }) | undefined;
+    if (!n) throw new Error(t('settings_page.notif_missing'));
     setSettings({
       email_address: n.email_address ?? '',
       email_system: n.email_system ?? false,
@@ -485,7 +519,7 @@ export function NotificationsSection() {
       const data = await api.getSettings();
       applySaved(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载通知设置失败');
+      setError(e instanceof Error ? e.message : t('settings_page.notif_load_failed'));
     } finally {
       setLoading(false);
     }
@@ -495,7 +529,7 @@ export function NotificationsSection() {
 
   const handleSave = async () => {
     if (saving) return;
-    if (webhookAction === 'clear' && !window.confirm('确认清除已保存的 Webhook 地址和事件开关？保存后生效。')) return;
+    if (webhookAction === 'clear' && !window.confirm(t('settings_page.clear_webhook_confirm'))) return;
     setSaving(true);
     setSaveError(null);
     setSaveOk(false);
@@ -508,7 +542,7 @@ export function NotificationsSection() {
       applySaved(data);
       setSaveOk(true);
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : '保存通知设置失败');
+      setSaveError(e instanceof Error ? e.message : t('settings_page.notif_save_failed'));
     } finally {
       setSaving(false);
     }
@@ -541,29 +575,29 @@ export function NotificationsSection() {
     <div>
       <SettingsSectionHeader title={t('settings.notifications')} description={t('settings.notifications')} />
 
-      <SectionCard title="邮件通知">
+      <SectionCard title={t('settings_page.email_notif')}>
         <div className="space-y-4">
-          <FormField label="通知邮件地址" description="启用邮件事件时必填">
+          <FormField label={t('settings_page.notif_email')} description={t('settings_page.notif_email_desc')}>
             <Input
-              aria-label="通知邮件地址" type="email" autoComplete="email"
+              aria-label={t('settings_page.notif_email')} type="email" autoComplete="email"
               value={settings.email_address}
               onChange={(e) => { setSaveOk(false); setSettings(prev => ({ ...prev, email_address: e.target.value })); }}
               disabled={saving}
             />
           </FormField>
-          <Switch label="系统通知" description="接收系统更新、维护公告和安全警报" checked={settings.email_system} onChange={(v) => toggle('email_system', v)} disabled={saving} />
-          <Switch label="任务完成" description="当 Agent 任务执行完成时通知我" checked={settings.email_task_done} onChange={(v) => toggle('email_task_done', v)} disabled={saving} />
-          <Switch label="周报摘要" description="每周一发送使用统计和摘要" checked={settings.email_weekly} onChange={(v) => toggle('email_weekly', v)} disabled={saving} />
-          <Switch label="营销邮件" description="接收产品更新和优惠信息" checked={settings.email_marketing} onChange={(v) => toggle('email_marketing', v)} disabled={saving} />
+          <Switch label={t('settings_page.email_system')} description={t('settings_page.email_system_desc')} checked={settings.email_system} onChange={(v) => toggle('email_system', v)} disabled={saving} />
+          <Switch label={t('settings_page.email_task_done_label')} description={t('settings_page.email_task_done_desc')} checked={settings.email_task_done} onChange={(v) => toggle('email_task_done', v)} disabled={saving} />
+          <Switch label={t('settings_page.email_weekly')} description={t('settings_page.email_weekly_desc')} checked={settings.email_weekly} onChange={(v) => toggle('email_weekly', v)} disabled={saving} />
+          <Switch label={t('settings_page.email_marketing')} description={t('settings_page.email_marketing_desc')} checked={settings.email_marketing} onChange={(v) => toggle('email_marketing', v)} disabled={saving} />
         </div>
       </SectionCard>
 
-       <SectionCard title="Webhook">
+       <SectionCard title={t('settings_page.webhook_title', { defaultValue: 'Webhook' })}>
         <div className="space-y-4">
-          <FormField label="Webhook URL" description="支持 HTTP/HTTPS。地址按凭据保护；留空保留现有地址，清除请使用下方按钮。">
+          <FormField label={t('settings_page.webhook_url')} description={t('settings_page.webhook_url_desc')}>
             <Input
-              aria-label="Webhook URL" type="password" autoComplete="new-password"
-              placeholder={webhookConfigured ? '已配置，输入新地址以替换' : 'https://your-webhook-url.com/endpoint'}
+              aria-label={t('settings_page.webhook_url', { defaultValue: 'Webhook URL' })} type="password" autoComplete="new-password"
+              placeholder={webhookConfigured ? t('settings_page.webhook_placeholder_configured') : 'https://your-webhook-url.com/endpoint'}
               value={settings.webhook_url}
               onChange={(e) => {
                 const value = e.target.value;
@@ -574,35 +608,78 @@ export function NotificationsSection() {
               disabled={saving}
             />
             <p className="text-xs text-[var(--color-text-muted)] mt-2">
-              {webhookAction === 'clear' ? '保存后清除 Webhook 地址和事件开关' : webhookConfigured ? 'Webhook 已配置，地址不回显' : 'Webhook 尚未配置'}
+              {webhookAction === 'clear' ? t('settings_page.webhook_state_clear') : webhookConfigured ? t('settings_page.webhook_state_configured') : t('settings_page.webhook_state_not')}
             </p>
             {webhookConfigured && (
               <Button variant="ghost" size="sm" disabled={saving} onClick={() => {
                 setSaveOk(false);
-                setWebhookAction(webhookAction === 'clear' ? 'keep' : 'clear');
-                setSettings(prev => ({ ...prev, webhook_url: '', webhook_task_done: false, webhook_task_failed: false }));
+                if (webhookAction === 'clear') {
+                  // Restore the event flags captured when entering clear mode,
+                  // so toggling back to "keep" does not silently drop them (R10-10).
+                  setWebhookAction('keep');
+                  setSettings(prev => ({
+                    ...prev,
+                    webhook_url: '',
+                    webhook_task_done: webhookSnapshot.current?.done ?? prev.webhook_task_done,
+                    webhook_task_failed: webhookSnapshot.current?.failed ?? prev.webhook_task_failed,
+                  }));
+                } else {
+                  webhookSnapshot.current = {
+                    done: settings.webhook_task_done,
+                    failed: settings.webhook_task_failed,
+                  };
+                  setWebhookAction('clear');
+                  setSettings(prev => ({ ...prev, webhook_url: '', webhook_task_done: false, webhook_task_failed: false }));
+                }
               }}>
-                {webhookAction === 'clear' ? '保留现有 Webhook' : '清除已保存 Webhook'}
+                {webhookAction === 'clear' ? t('settings_page.webhook_keep') : t('settings_page.webhook_clear')}
               </Button>
             )}
           </FormField>
-          <FormField label="触发事件">
+          <FormField label={t('settings_page.trigger_events')}>
             <div className="space-y-2 mt-1">
-              <Switch label="任务完成" description="Agent 任务执行结束时触发" checked={settings.webhook_task_done} onChange={(v) => toggle('webhook_task_done', v)} disabled={saving} />
-              <Switch label="任务失败" description="Agent 任务执行失败时触发" checked={settings.webhook_task_failed} onChange={(v) => toggle('webhook_task_failed', v)} disabled={saving} />
+              <Switch label={t('settings_page.webhook_task_done')} description={t('settings_page.webhook_task_done_desc')} checked={settings.webhook_task_done} onChange={(v) => toggle('webhook_task_done', v)} disabled={saving} />
+              <Switch label={t('settings_page.webhook_task_failed')} description={t('settings_page.webhook_task_failed_desc')} checked={settings.webhook_task_failed} onChange={(v) => toggle('webhook_task_failed', v)} disabled={saving} />
             </div>
           </FormField>
         </div>
       </SectionCard>
 
       {saveError && <ErrorBanner message={saveError} />}
-      {saveOk && <p role="status" className="text-sm text-[var(--color-success)]">配置已保存。</p>}
+      {saveOk && <p role="status" className="text-sm text-[var(--color-success)]">{t('settings_page.config_saved')}</p>}
 
       <div className="flex justify-end gap-2 border-t border-[var(--color-border-subtle)] pt-4 mt-4">
-        <Button variant="outline" onClick={() => { if (window.confirm('重新加载服务器配置并放弃当前未保存的修改？')) void load(); }} disabled={saving}>{t('common.reset')}</Button>
+        <Button variant="outline" onClick={() => { if (window.confirm(t('settings_page.reload_confirm'))) void load(); }} disabled={saving}>{t('common.reset')}</Button>
         <Button onClick={handleSave} loading={saving} disabled={saving}>
           {saveOk ? t('common.saved') : t('settings.save_changes')}
         </Button>
+      </div>
+
+      <div className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-1)] p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-[var(--color-text-primary)]">
+              {t('settings_page.test_notification_title', { defaultValue: 'Test notification' })}
+            </p>
+            <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              {t('settings_page.test_notification_desc', { defaultValue: 'Send a test notification to verify the current channel configuration.' })}
+            </p>
+          </div>
+          <Button variant="secondary" size="sm" onClick={() => { void handleTestNotification(); }} loading={testing} disabled={testing || saving}>
+            {t('settings_page.test_notification_action', { defaultValue: 'Send test notification' })}
+          </Button>
+        </div>
+        {testResult && (
+          <p
+            role="status"
+            aria-live="polite"
+            className={`mt-2 text-sm ${testResult.ok ? 'text-[var(--color-success)]' : 'text-[var(--color-error)]'}`}
+          >
+            {testResult.ok
+              ? t('settings_page.test_notification_sent', { defaultValue: 'Test notification sent.' })
+              : t('settings_page.test_notification_failed', { defaultValue: 'Failed to send the test notification.', error: testResult.error ?? '' })}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -620,6 +697,15 @@ function SecuritySection() {
   const [pwdError, setPwdError] = useState<string | null>(null);
   const [pwdOk, setPwdOk] = useState(false);
 
+  const PERMISSION_LEVELS = [
+    { tier: 'read_only', mode: 'plan', labelKey: 'permission_level_readonly', descKey: 'permission_level_readonly_desc' },
+    { tier: 'partial_write', mode: 'default', labelKey: 'permission_level_partial', descKey: 'permission_level_partial_desc' },
+    { tier: 'full_write', mode: 'auto', labelKey: 'permission_level_full', descKey: 'permission_level_full_desc' },
+  ] as const;
+  const [permTier, setPermTier] = useState<PermissionTier | null>(null);
+  const [permSaving, setPermSaving] = useState<PermissionTier | null>(null);
+  const [permError, setPermError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -627,24 +713,29 @@ function SecuritySection() {
       const data = await api.getAuthHealth();
       setAuthHealth(data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : '加载安全状态失败');
+      setError(e instanceof Error ? e.message : t('settings_page.security_load_failed'));
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+    try {
+      const perm = await api.getPermissionTiers();
+      setPermTier(perm.current.tier);
+    } catch {
+      // A non-admin account cannot read the policy; the selector stays hidden.
+      setPermTier(null);
+    }
+  }, []);  useEffect(() => { load(); }, [load]);
 
   const handleChangePassword = async () => {
     if (pwdSaving) return;
     setPwdOk(false);
     setPwdError(null);
     if (pwd.next !== pwd.confirm) {
-      setPwdError('两次输入的新密码不一致');
+      setPwdError(t('settings_page.pwd_mismatch'));
       return;
     }
     if (pwd.next.length < 6) {
-      setPwdError('新密码至少 6 位');
+      setPwdError(t('settings_page.pwd_too_short'));
       return;
     }
     setPwdSaving(true);
@@ -654,9 +745,23 @@ function SecuritySection() {
       setShowPwdForm(false);
       setPwdOk(true);
     } catch (e) {
-      setPwdError(e instanceof Error ? e.message : '修改密码失败');
+      setPwdError(e instanceof Error ? e.message : t('settings_page.pwd_change_failed'));
     } finally {
       setPwdSaving(false);
+    }
+  };
+
+  const handlePermissionChange = async (tier: PermissionTier, mode: string) => {
+    if (permSaving) return;
+    setPermSaving(tier);
+    setPermError(null);
+    try {
+      const updated = await api.updatePermissionConfig({ tier, mode });
+      setPermTier(updated.tier);
+    } catch (e) {
+      setPermError(e instanceof Error ? e.message : t('settings_page.perm_update_failed'));
+    } finally {
+      setPermSaving(null);
     }
   };
 
@@ -684,22 +789,22 @@ function SecuritySection() {
     <div>
       <SettingsSectionHeader title={t('settings.security')} description={t('settings.security')} />
 
-      <SectionCard title="认证状态" description="当前账户的认证配置">
+      <SectionCard title={t('settings_page.auth_status')} description={t('settings_page.auth_status_desc')}>
         <div className="flex items-center gap-3">
           <div className={cn(
-            'p-2 rounded-xl',
+            'p-2 rounded-[var(--radius-lg)]',
             authEnabled ? 'bg-[var(--color-success-subtle)]' : 'bg-[var(--color-bg-surface-2)]'
           )}>
             <Shield size={20} className={authEnabled ? 'text-[var(--color-success)]' : 'text-[var(--color-text-muted)]'} />
           </div>
           <div>
                <div role="status" className="text-sm font-medium text-[var(--color-text-primary)]">
-              {authEnabled ? '认证已启用' : '认证未启用'}
+              {authEnabled ? t('settings_page.auth_enabled') : t('settings_page.auth_disabled')}
             </div>
             <div className="text-xs text-[var(--color-text-muted)]">
               {authHealth?.auth_method && authHealth.auth_method !== 'disabled'
-                ? `认证方式: ${authHealth.auth_method}`
-                : '当前未启用认证'}
+                ? t('settings_page.auth_method', { method: authHealth.auth_method })
+                : t('settings_page.auth_none')}
             </div>
           </div>
           <Badge variant={authEnabled ? 'success' : 'warning'} className="ml-auto">
@@ -708,35 +813,74 @@ function SecuritySection() {
         </div>
       </SectionCard>
 
-      <SectionCard title="修改密码" description="定期更换密码以保障账户安全">
+      {permTier !== null && (
+        <SectionCard title={t('settings.permission_mode')} description={t('settings.permission_mode_desc')}>
+          <div className="space-y-2">
+            {PERMISSION_LEVELS.map((level) => {
+               const selected = permTier === level.tier;
+               const busy = permSaving === level.tier;
+              return (
+                <button
+                  key={level.tier}
+                  type="button"
+                  disabled={permSaving !== null}
+                  onClick={() => { void handlePermissionChange(level.tier, level.mode); }}
+                  aria-pressed={selected}
+                  className={cn(
+                    'w-full text-left p-3 rounded-[var(--radius-lg)] border transition-colors motion-reduce:transition-none',
+                    selected
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary-subtle,var(--color-bg-surface-2))]'
+                      : 'border-[var(--color-border-subtle)] hover:bg-[var(--color-bg-surface-2)]',
+                    permSaving !== null && !busy && 'opacity-60'
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <Shield size={16} className={selected ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'} />
+                    <span className="text-sm font-medium text-[var(--color-text-primary)]">
+                      {t(`settings.${level.labelKey}`)}
+                    </span>
+                    {selected && <Badge variant="success" className="ml-auto">✓</Badge>}
+                  </div>
+                  <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                    {t(`settings.${level.descKey}`)}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+          {permError && <p role="alert" className="text-xs text-[var(--color-error)] mt-2">{permError}</p>}
+        </SectionCard>
+      )}
+
+      <SectionCard title={t('settings_page.pwd_title')} description={t('settings_page.pwd_desc')}>
         {!showPwdForm ? (
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm font-medium text-[var(--color-text-primary)]">
-                {pwdOk ? '密码已成功修改' : '密码'}
+                {pwdOk ? t('settings_page.pwd_changed') : t('settings_page.pwd_label')}
               </div>
               <div className="text-xs text-[var(--color-text-muted)] mt-0.5">
-                {pwdOk ? '请使用新密码重新登录' : '点击右侧按钮修改当前账户密码'}
+                {pwdOk ? t('settings_page.pwd_reuse') : t('settings_page.pwd_change_hint')}
               </div>
             </div>
-            <Button size="sm" variant="outline" onClick={() => setShowPwdForm(true)}>修改密码</Button>
+            <Button size="sm" variant="outline" onClick={() => setShowPwdForm(true)}>{t('settings_page.change_pwd')}</Button>
           </div>
         ) : (
            <form onSubmit={(event) => { event.preventDefault(); void handleChangePassword(); }}>
            <fieldset disabled={pwdSaving} className="space-y-3">
-             <FormField label="当前密码" required>
-               <Input type="password" autoComplete="current-password" placeholder="输入当前密码" aria-label="当前密码" value={pwd.current} onChange={(e) => setPwd({ ...pwd, current: e.target.value })} />
+             <FormField label={t('settings_page.current_pwd')} required>
+               <Input type="password" autoComplete="current-password" placeholder={t('settings_page.current_pwd_ph')} aria-label={t('settings_page.current_pwd')} value={pwd.current} onChange={(e) => setPwd({ ...pwd, current: e.target.value })} />
              </FormField>
-             <FormField label="新密码" required>
-               <Input type="password" autoComplete="new-password" placeholder="输入新密码（至少 6 位）" aria-label="新密码" value={pwd.next} onChange={(e) => setPwd({ ...pwd, next: e.target.value })} />
+             <FormField label={t('settings_page.new_pwd')} required>
+               <Input type="password" autoComplete="new-password" placeholder={t('settings_page.new_pwd_ph')} aria-label={t('settings_page.new_pwd')} value={pwd.next} onChange={(e) => setPwd({ ...pwd, next: e.target.value })} />
              </FormField>
-             <FormField label="确认新密码" required>
-               <Input type="password" autoComplete="new-password" placeholder="再次输入新密码" aria-label="确认新密码" value={pwd.confirm} onChange={(e) => setPwd({ ...pwd, confirm: e.target.value })} />
+             <FormField label={t('settings_page.confirm_pwd')} required>
+               <Input type="password" autoComplete="new-password" placeholder={t('settings_page.confirm_pwd_ph')} aria-label={t('settings_page.confirm_pwd')} value={pwd.confirm} onChange={(e) => setPwd({ ...pwd, confirm: e.target.value })} />
              </FormField>
             {pwdError && <p role="alert" className="text-xs text-[var(--color-error)]">{pwdError}</p>}
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={handleChangePassword} loading={pwdSaving} disabled={pwdSaving}>
-                确认修改
+                {t('settings_page.confirm_btn')}
               </Button>
               <Button size="sm" variant="ghost" onClick={() => { setShowPwdForm(false); setPwdError(null); setPwd({ current: '', next: '', confirm: '' }); }}>
                 {t('common.cancel')}
@@ -760,45 +904,21 @@ function AboutSection() {
         <div className="p-4 border-b border-[var(--color-border-subtle)]">
           <div className="flex items-center gap-3">
             <div>
-              <h2 className="text-lg font-bold text-[var(--color-text-primary)]">Climber</h2>
-              <p className="text-sm text-[var(--color-text-muted)]">版本未上报</p>
+              <h2 className="text-[length:var(--text-base)] font-semibold text-[var(--color-text-primary)]">Climber</h2>
+              <p className="text-sm text-[var(--color-text-muted)]">{t('settings_page.version_unreported')}</p>
             </div>
           </div>
         </div>
         <div className="px-4 py-2">
           <div className="flex items-center justify-between py-2">
-            <span className="text-sm text-[var(--color-text-secondary)]">版本</span>
+            <span className="text-sm text-[var(--color-text-secondary)]">{t('settings_page.version')}</span>
             {/* No backend endpoint reports a version, so say so instead of
                 printing a plausible number. */}
-            <span className="text-sm text-[var(--color-text-muted)]">未上报</span>
+            <span className="text-sm text-[var(--color-text-muted)]">{t('settings_page.version_unset')}</span>
           </div>
         </div>
       </Card>
 
-      <SectionCard title="相关链接">
-        <div className="space-y-1">
-          {[
-            { label: '帮助文档', icon: MessageSquare },
-            { label: 'API 文档', icon: Database },
-            { label: 'GitHub 仓库', icon: ExternalLink },
-          ].map(link => {
-            const Icon = link.icon;
-            return (
-              <a
-                key={link.label}
-                href="#"
-                className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-[var(--color-bg-surface-2)] transition-colors group"
-              >
-                <div className="flex items-center gap-3">
-                  <Icon size={14} className="text-[var(--color-text-muted)]" />
-                  <span className="text-sm text-[var(--color-text-secondary)]">{link.label}</span>
-                </div>
-                <ChevronRight size={14} className="text-[var(--color-text-muted)] group-hover:translate-x-0.5 transition-transform" />
-              </a>
-            );
-          })}
-        </div>
-      </SectionCard>
     </div>
   );
 }

@@ -30,7 +30,10 @@ def call(name="write_file", arguments=None, call_id="c1"):
     return {
         "id": call_id,
         "type": "function",
-        "function": {"name": name, "arguments": json.dumps(arguments or {"path": "hello.txt", "content": "hello"})},
+        "function": {
+            "name": name,
+            "arguments": json.dumps(arguments or {"path": "hello.txt", "content": "hello"}),
+        },
     }
 
 
@@ -74,8 +77,13 @@ class HarnessTests(unittest.TestCase):
 
     def test_file_tool_failure_then_completion_is_unverified(self):
         for error in (ValueError, OSError, RuntimeError):
-            with self.subTest(error=error), patch.object(self.workspace, "execute", side_effect=error):
-                result, _ = self.run_script([response(calls=[call()]), response("Everything succeeded")])
+            with (
+                self.subTest(error=error),
+                patch.object(self.workspace, "execute", side_effect=error),
+            ):
+                result, _ = self.run_script(
+                    [response(calls=[call()]), response("Everything succeeded")]
+                )
             self.assertEqual(result.status, ExitStatus.MODEL_COMPLETED_UNVERIFIED)
             self.assertNotEqual(result.status, 0)
             self.assertEqual(result.tool_errors, 1)
@@ -83,11 +91,13 @@ class HarnessTests(unittest.TestCase):
             self.assertIn("recovery not verified", result.reason)
 
     def test_tool_error_allows_later_correction(self):
-        result, _ = self.run_script([
-            response(calls=[call("read_file", {"path": "missing.txt"})]),
-            response(calls=[call()]),
-            response(),
-        ])
+        result, _ = self.run_script(
+            [
+                response(calls=[call("read_file", {"path": "missing.txt"})]),
+                response(calls=[call()]),
+                response(),
+            ]
+        )
         self.assertEqual(result.status, ExitStatus.MODEL_COMPLETED_UNVERIFIED)
         self.assertEqual(result.tool_errors, 1)
         self.assertEqual(result.tool_calls, 2)
@@ -103,8 +113,12 @@ class HarnessTests(unittest.TestCase):
 
     def test_read_list_and_limits(self):
         self.workspace.execute("write_file", {"path": "nested/a", "content": "text"})
-        self.assertEqual(self.workspace.execute("read_file", {"path": "nested/a"}), {"content": "text"})
-        self.assertEqual(self.workspace.execute("list_files", {"path": "."}), {"entries": ["nested/"]})
+        self.assertEqual(
+            self.workspace.execute("read_file", {"path": "nested/a"}), {"content": "text"}
+        )
+        self.assertEqual(
+            self.workspace.execute("list_files", {"path": "."}), {"entries": ["nested/"]}
+        )
         with self.assertRaises(ValueError):
             WorkspaceSandbox(self.work, 2).execute("read_file", {"path": "nested/a"})
         with self.assertRaises(ValueError):
@@ -112,7 +126,13 @@ class HarnessTests(unittest.TestCase):
 
     def test_containment_and_protected_paths(self):
         (self.work / "outside").symlink_to(self.root, target_is_directory=True)
-        for path in ("../escape", str(self.root / "absolute"), "outside/escape", ".git/config", ".env"):
+        for path in (
+            "../escape",
+            str(self.root / "absolute"),
+            "outside/escape",
+            ".git/config",
+            ".env",
+        ):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 self.workspace.execute("write_file", {"path": path, "content": "x"})
 
@@ -137,7 +157,9 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(result.status, ExitStatus.BUDGET_EXHAUSTED)
 
     def test_tool_budget_prevents_partial_batch(self):
-        result, _ = self.run_script([response(calls=[call(), call(call_id="c2")])], max_tool_calls=1)
+        result, _ = self.run_script(
+            [response(calls=[call(), call(call_id="c2")])], max_tool_calls=1
+        )
         self.assertEqual(result.status, ExitStatus.BUDGET_EXHAUSTED)
         self.assertFalse((self.work / "hello.txt").exists())
 

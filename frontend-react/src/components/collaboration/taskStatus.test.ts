@@ -5,6 +5,7 @@ const translate = (key: string) => ({
   'collaboration.not_reported': 'Not reported',
   'collaboration.task_status.pending': 'Pending',
   'collaboration.task_status.running': 'Running',
+  'collaboration.task_status.paused': 'Paused',
 }[key] ?? key);
 
 describe('task status contract', () => {
@@ -23,7 +24,7 @@ describe('task status contract', () => {
 
   it('reports missing and unknown states explicitly', () => {
     expect(taskStatusLabel(undefined, translate)).toBe('Not reported');
-    expect(taskStatusLabel('paused', translate)).toBe('Not reported');
+    expect(taskStatusLabel('paused', translate)).toBe('Paused');
     expect(taskStatusLabel('completed', translate)).toBe('collaboration.task_status.completed');
   });
 });

@@ -22,6 +22,7 @@ logger = structlog.get_logger()
 @dataclass
 class ResourceQuota:
     """Resource quota configuration."""
+
     cpu_cores: float = 1.0
     memory_mb: int = 512
     disk_mb: int = 1024
@@ -31,6 +32,7 @@ class ResourceQuota:
 @dataclass
 class ResourceUsage:
     """Current resource usage snapshot."""
+
     cpu_seconds: float = 0.0
     memory_mb: float = 0.0
     disk_mb: float = 0.0
@@ -77,7 +79,10 @@ class QuotaManager:
         if usage.disk_mb > quota.disk_mb:
             return False, f"Disk quota exceeded: {usage.disk_mb:.0f}MB > {quota.disk_mb}MB"
         if usage.network_kb * 8 > quota.network_kbps:
-            return False, f"Network quota exceeded: {usage.network_kb * 8:.0f}kbps > {quota.network_kbps}kbps"
+            return (
+                False,
+                f"Network quota exceeded: {usage.network_kb * 8:.0f}kbps > {quota.network_kbps}kbps",
+            )
 
         return True, ""
 
@@ -111,9 +116,9 @@ class QuotaManager:
 
     def get_all_quotas(self) -> dict[str, dict[str, Any]]:
         """Get all agent quotas as dict."""
-        result = {"_default": self._quota_to_dict(self._default_quota)}
+        result = {"_default": self.quota_to_dict(self._default_quota)}
         for agent_id, quota in self._agent_quotas.items():
-            result[agent_id] = self._quota_to_dict(quota)
+            result[agent_id] = self.quota_to_dict(quota)
         return result
 
     def get_all_usage(self) -> dict[str, dict[str, Any]]:
@@ -130,7 +135,7 @@ class QuotaManager:
         return result
 
     @staticmethod
-    def _quota_to_dict(quota: ResourceQuota) -> dict[str, Any]:
+    def quota_to_dict(quota: ResourceQuota) -> dict[str, Any]:
         return {
             "cpu_cores": quota.cpu_cores,
             "memory_mb": quota.memory_mb,

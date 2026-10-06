@@ -8,7 +8,7 @@ import { SkillsPage } from '../SkillsPage';
 
 vi.mock('../../api', () => ({ api: {
   listAgents: vi.fn(), deleteAgent: vi.fn(), createAgent: vi.fn(),
-  listTools: vi.fn(), listSkills: vi.fn(), updateSkill: vi.fn(),
+  listTools: vi.fn(), listSkills: vi.fn(), toggleSkill: vi.fn(),
 } }));
 
 const agent = { id: 'a1', name: 'Builder', provider: 'ollama', model_id: 'llama3.3', tool_ids: [], skill_ids: [] };
@@ -37,12 +37,12 @@ describe('Task 10 resource lists', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(2);
   });
 
-  it('preserves enabled state on update failure and retries the same payload', async () => {
-    vi.mocked(api.updateSkill).mockRejectedValueOnce(new Error('Update unavailable')).mockResolvedValueOnce({} as any);
+  it('preserves enabled state on toggle failure and retries the same payload', async () => {
+    vi.mocked(api.toggleSkill).mockRejectedValueOnce(new Error('Update unavailable')).mockResolvedValueOnce({} as any);
     render(<SkillsPage />);
     fireEvent.click(await screen.findByRole('button', { name: 'Deactivate: Review' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Update unavailable');
-    expect(api.updateSkill).toHaveBeenCalledWith('1', { enabled: false });
+    expect(api.toggleSkill).toHaveBeenCalledWith('1', false);
     fireEvent.click(screen.getByRole('button', { name: 'Deactivate: Review' }));
     await screen.findByRole('button', { name: 'Activate: Review' });
     expect(screen.queryByRole('alert')).toBeNull();

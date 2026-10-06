@@ -40,9 +40,21 @@ class TaskState(StrEnum):
 TRANSITIONS: dict[TaskState, list[TaskState]] = {
     TaskState.PENDING: [TaskState.ASSIGNED, TaskState.PROCESSING, TaskState.CANCELLED],
     TaskState.ASSIGNED: [TaskState.RUNNING, TaskState.CANCELLED],
-    TaskState.RUNNING: [TaskState.WAITING, TaskState.PROCESSING, TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED],
+    TaskState.RUNNING: [
+        TaskState.WAITING,
+        TaskState.PROCESSING,
+        TaskState.COMPLETED,
+        TaskState.FAILED,
+        TaskState.CANCELLED,
+    ],
     TaskState.WAITING: [TaskState.ASSIGNED, TaskState.RUNNING, TaskState.CANCELLED],
-    TaskState.PROCESSING: [TaskState.PAUSED, TaskState.COMPLETED, TaskState.FAILED, TaskState.CANCELLED, TaskState.RETRYING],
+    TaskState.PROCESSING: [
+        TaskState.PAUSED,
+        TaskState.COMPLETED,
+        TaskState.FAILED,
+        TaskState.CANCELLED,
+        TaskState.RETRYING,
+    ],
     TaskState.PAUSED: [TaskState.PROCESSING, TaskState.CANCELLED, TaskState.PENDING],
     TaskState.COMPLETED: [TaskState.PENDING],
     TaskState.FAILED: [TaskState.PROCESSING, TaskState.PENDING],
@@ -139,12 +151,14 @@ class TaskStateMachine:
         self._transition_count += 1
 
         # Update metadata
-        self._metadata.update({
-            "state": new_state.value,
-            "from_state": old_state.value,
-            "updated_at": __import__("datetime").datetime.utcnow().isoformat(),
-            "transition_trigger": trigger,
-        })
+        self._metadata.update(
+            {
+                "state": new_state.value,
+                "from_state": old_state.value,
+                "updated_at": __import__("datetime").datetime.utcnow().isoformat(),
+                "transition_trigger": trigger,
+            }
+        )
 
         # Execute hook chain
         for _, hook in self._hooks:

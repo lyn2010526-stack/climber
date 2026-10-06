@@ -1,4 +1,9 @@
 import { ALL_NAV_ITEMS_BASE, NAV_GROUPS, type NavGroup, type Page } from '../navigation/navConfig';
+import { WorkbenchIcon, type WorkbenchIconName } from '../components/ui/WorkbenchIcon';
+
+const NAV_ICON: Partial<Record<Page, WorkbenchIconName>> = {
+  chat: 'conversation', tasks: 'task', skills: 'skill', settings: 'settings', mcp: 'tool', terminal: 'tool', agents: 'agent',
+};
 
 interface SidebarNavigationProps {
   currentPage: Page;
@@ -35,7 +40,7 @@ export function SidebarNavigation({ currentPage, onNavigate, collapsed = false, 
                     data-secondary={item.secondary || undefined}
                     className={`flex min-h-11 w-full items-center gap-2 rounded-md px-2 text-left text-sm transition-colors [@media(pointer:fine)]:min-h-9 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)] ${collapsed ? 'justify-center' : ''} ${active ? 'bg-[var(--color-accent-subtle)] font-medium text-[var(--color-accent-foreground)]' : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)]'}`}
                   >
-                    <Icon size={16} aria-hidden="true" className={`shrink-0 ${item.secondary && !active ? 'text-[var(--color-text-muted)]' : ''}`} />
+                    {NAV_ICON[item.id] ? <WorkbenchIcon name={NAV_ICON[item.id]!} className="shrink-0" /> : <Icon size={16} aria-hidden="true" className={`shrink-0 ${item.secondary && !active ? 'text-[var(--color-text-muted)]' : ''}`} />}
                     {!collapsed && <span className={`truncate ${item.secondary && !active ? 'text-[var(--color-text-muted)]' : ''}`}>{title}</span>}
                   </button>
                 </li>

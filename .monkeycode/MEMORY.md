@@ -38,7 +38,7 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 前端定位为桌面（电脑）使用，布局以桌面优先，移动端仅作兼容。
   - 前端不得出现登录界面/登录流程。
   - 前端代码避免装饰性、描述 JSX 结构的注释（"AI 味"），注释只在解释 why 时保留。
-  - 参考开源 Agent 产品（如 Hermes）时只借鉴交互范式，不复制源码/图标/品牌资产。
+   - 参考开源 Agent 产品（如 Hermes）时只借鉴交互范式，不复制源码/图标/品牌资产。2026-10-02 补充：仅访问源码、README 和架构资料，禁止访问第三方在线演示；记录实际阅读路径与范围，访问失败单独列明。
   - 多批次子任务持续推进，不要中途停下来反复询问。
 
 [Headless 开发协作约束]
@@ -168,7 +168,7 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 平台 Git 凭证助手（/app/agent/bin/agent git-credential-helper）会间歇性返回 500 导致 push 失败；git 提交需在仓库级先 `git config user.name/user.email`，否则容器内无法自动探测身份
 
 [用户指令摘要]
-- Date: 2026-09-26
+- Date: 2026-09-26（2026-10-05 用户再次确认：以后做任务就用中文对话）
 - Context: 多轮英文回复后用户纠正
 - Instructions:
   - 与用户对话一律使用中文（含推理过程与工具调用标题）
@@ -184,3 +184,84 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 将设计规范与开发规则写成独立文档，并在 Agent 宪法中索引；每次开发前读取，完成后按文档自查。
   - 使用截图或产品参考时学习布局、结构和设计思路，优先遵循项目既有 token 与组件规范，不直接照搬表面样式。
   - 区分 Tag、Chip、Badge 的语义：Tag 用于分类属性，Chip 用于选择筛选交互，Badge 用于数量或状态提醒。
+
+[用户指令摘要]
+- Date: 2026-10-01
+- Context: 用户对多轮串行处理方式纠正，要求按其设计文档的工作方式执行
+- Instructions:
+  - 多个子任务必须并发执行（用户明示"并发8个子任务"级别：能拆尽拆、一次拉满并行），不要串行逐项处理。
+  - 执行前先读用户的设计文档（docs/DESIGN.md 及其提供的完整资料），按文档要求与功能清单落地，做完为止。
+  - 用户要求报错时完整贴出原始信息再分析；对任务要"全部拉全"，不要只问不做。
+  - 长任务里某个子代理报错/上游中断不是停止信号：记录原始错误、立即重跑或换更小批次，直到整批完成；未全部完成前不得只汇报"报错了"就结束。
+  - 长任务的最终汇报必须逐项给"完成/失败原因/重跑结果"，并继续下一步，不能停在半途。
+
+[项目知识摘要]
+- Date: 2026-10-01
+- Context: Agent 在执行 iOS 风格 UI 打磨任务时发现（frontend-react 呈现契约测试）
+- Category: Troubleshooting & Debugging
+- Instructions:
+  - ui 契约测试（presentation-contract / control-restraint / overlay-empty-state）用正则扫描源码与 index.css，注释里的字面量也会命中；在 src 内写注释、文档、类名时避免出现 banned 模式原文（如 press/scale 组合的 `:scale-` 形式、backdrop-blur、gradient 等词，Skeleton.tsx 源码禁含 "gradient" 一词）。
+  - index.css 中动画若与 Tailwind v4 的 translate-*/scale-* 工具类同元素叠加，keyframes 应使用独立变换属性 `scale` / `translate` 而非 `transform`，避免 fill 状态覆盖工具类。
+   - Modal 遮罩按契约只能用 alpha 调光（scrim 类名与 innerHTML 禁含 blur/backdrop/gradient），毛玻璃效果只能进 index.css 的 .glass-panel 工具类供调用方选择。
+
+[项目知识摘要]
+- Date: 2026-10-01
+- Context: Agent 在编写 chat 图片消息测试时发现（OllamaAdapter 离线队列路径）
+- Category: Troubleshooting & Debugging
+- Instructions:
+  - app/services/ollama_queue.py 存在既有 bug：对 stdlib logger 传结构化 kwargs（`logger.info(..., request_id=..., queue_size=...)`）会在运行时抛 TypeError；写涉及离线队列的测试需 stub `app.services.ollama_queue.logger`，修复产品代码时改为 structlog 或去掉 kwargs。
+
+[项目知识摘要]
+- Date: 2026-10-01
+- Context: Agent 在 climber 仓执行全量回归与文档解析时发现
+- Category: Build Methods|Environment Configuration
+- Instructions:
+  - climber 仓验证基线：后端 `python3 -m pytest tests/ -q`（工作目录 /workspace/climber，2026-10-01 时点 1150 passed）；环境无 `python`、无 `uv`，只有 `python3`。
+  - docparse 服务对 33 页 DOCX 附件（缓存于 .monkeycode-tmp-files/）两次解析均 failed（document_id 13903/13907），大文档需请用户直接贴文本。
+  - ruff 全仓检查会命中大量既有基线错误（app/ 下约 864 个），只对本次改动的文件做 ruff check，不做全仓断言。
+  - 算法层深挖文档位于 docs/references/deep-dives/（9 篇），移植方案见各文档"Climber 映射"与"可借鉴/不采用"节；NeMo/Zep/OpenSandbox/HyperAgents 四篇标注"未读源码"，其移植项均为"待评估"，不要直接实现。
+
+[用户指令摘要]
+- Date: 2026-10-02
+- Context: 用户要求 Climber 前端按 Codex / DeepSeek Hermes / Workbay 三家优点 + 锚定式三栏 UI 规范执行，并要求记入记忆
+- Instructions:
+  - Climber 前端修改前必须先读取 `docs/plans/frontend-anchored-ui.md`，按锚定式三栏布局、组件顺序、显隐触发规则和设计令牌约束落地，禁止自由发挥布局。
+  - 前端多 Agent 协同交互参考 `cc-haha`，仅借鉴交互范式，不复制源码、图标或品牌资产。
+  - 后端群组协作按 multi-agent 方向继续完善，用户称其为“群组协作 / 多 Agent”。
+
+[项目知识摘要]
+- Date: 2026-10-02
+- Context: Agent 克隆公开参考仓库时发现
+- Category: 环境配置
+- Instructions:
+  - `/tmp/opencode/cc-haha` 是本环境可用的 cc-haha 浅克隆（2026-10-02），可用于前端多 Agent UI 与协作层参考阅读。
+
+[项目知识摘要]
+- Date: 2026-10-02
+- Context: Agent 在拆分 agent_engine 为 app/core/engine/ 子模块并验证测试基线时发现
+- Category: 测试方法|排错调试
+- Instructions:
+  - agent_engine 拆分后 facade 覆写点（_validate_tool_call/_persist_message/_iteration_loop/_make_parallel_executor 等）是测试契约：tests patch `app.core.agent_engine.persist_message`/`build_tools`/`ParallelToolExecutor` 模块属性与 engine 实例方法，engine/ 子模块实现必须经 `engine._xxx` 调用，禁止直调模块级函数绕过（曾修复 runner.run_locked 直调 iteration_loop 的绕过）。
+  - 指定 5 文件测试基线（metacognition wiring/reasoning levels/dual loop/runtime persistence/pregel hardening）：91 passed + 1 预存失败 test_permission_tiers_report_mode_and_tool_states（根因 app/core/permission_rules.py `_tier_decision` 对 file_delete 无条件 DENY 覆盖 DEFAULT 模式 ask 语义；该文件在拆分任务的修改白名单外，未修复）。
+  - 同期预存失败（非拆分引起，均在允许修改范围外）：tests/test_chat_model_credentials.py 7 个、tests/test_chat_images.py 2 个（API 层 error 事件路径）、tests/test_factory_path_regressions.py::test_task_control_loop_persists_pause_resume_and_progress 为 flaky（单跑通过、全文件跑偶发 NoneType）。
+  - 2026-10-02 04:47 有另一并发 agent 会话批量写入 92 个文件（app/api/v1/、engine/safety.py 变 legacy shim、tool_capabilities.py import 改源等），多会话并行时文件状态需先 git diff 核实归属。
+  - 新增 tests/core/test_engine_facade_wiring.py（7 用例）固化 busy 路径锁语义、executor validator 走 facade、debug 恢复走 engine.tool_registry、_iteration_loop 覆写不被绕过。
+
+[项目知识摘要]
+- Date: 2026-10-05
+- Context: Agent 在升级 BootSplash/PageTransition 进入动画体系并补测试时发现
+- Category: 测试方法
+- Instructions:
+  - jsdom 的 localStorage/sessionStorage 每次 setItem/removeItem 都会调度一个 0ms setTimeout（异步派发 storage 事件），会污染 `vi.getTimerCount()` 精确断言；同一 flush 期间新增的同刻 timer 不会被本次 `advanceTimersByTime` 追平，需再 advance（至少 1ms）一次清尾巴。
+  - framer-motion 13 的 `useReducedMotion` 读 motion-dom 全局单例 `prefersReducedMotion.current`，首次调用时初始化后不再读 matchMedia；测试中途 `vi.spyOn(window,'matchMedia')` 无效，需用 `vi.hoisted` + `vi.mock('framer-motion', ...)` 局部覆写 `useReducedMotion` 才能按用例控制。
+  - vitest v4 无 `--last-failed` CLI 参数；后台终端跑全量时不要用 `| tail` 截断输出，否则失败用例名会丢失。
+
+[项目知识摘要]
+- Date: 2026-10-05
+- Context: Agent 在依据 docs/audits/dead-code-scan.md 执行后端死代码清理时发现
+- Category: 排错调试|测试方法
+- Instructions:
+  - 本环境 FastAPI 0.142.2 的路由挂载是 lazy 的：`app.routes` 里的 `_IncludedRouter` 没有 `path` 属性，导出真实路由清单必须递归调用 `effective_candidates()` 并读 `_EffectiveRouteContext.path/methods`，直接遍历 `app.routes` 会得到 0 结果或 AttributeError。
+  - `app/api/v1/__init__.py::_include_extension_routes` 按 `path.startswith(prefixes)` 摘取挂载，前缀会连带挂载子路径（如前缀 `/mcp/servers` 同时挂载 `/mcp/servers/{id}/install`），审计报告中"未挂载"结论必须以实际展开的路由清单复核，不能手推。
+  - `app/core/scheduler.py`（TaskScheduler）有活调用链：`app/api/v1/scheduler.py` 被挂载的 `/scheduler/tasks` POST/PATCH/DELETE 经 `_register_scheduled_task`/`remove_task`/`register_handler` 引用它；死代码扫描报告曾误判其"零调用方"。
+  - 2026-10-05 全量 pytest 既有失败基线 9 个：tests/test_profile_persistence.py 7 个（"profile learning is disabled"）+ tests/test_chat_images.py 2 个（sqlite no such table），与代码改动无关；tests/test_factory_path_regressions.py::test_task_control_loop_persists_pause_resume_and_progress 为 flaky（单跑通过）。

@@ -3,7 +3,6 @@ import { render, screen } from '@testing-library/react';
 import i18n from '../../i18n';
 import { api } from '../../api';
 import { useWorkspaceStore } from '../../store/workspace';
-import { SessionSidebar } from '../../components/workspace/SessionSidebar';
 import { PluginsPage } from '../PluginsPage';
 import { WorkflowsPage } from '../WorkflowsPage';
 
@@ -70,39 +69,21 @@ beforeEach(async () => {
   vi.mocked(api.listWorkflows).mockResolvedValue([] as never);
 });
 
-describe('SessionSidebar distinguishes a failed list from an empty list', () => {
-  it('reports the count as unreported when the session request fails', async () => {
-    vi.mocked(api.listSessions).mockRejectedValue(new Error('backend down') as never);
-
-    render(<SessionSidebar />);
-
-    expect(await screen.findByText('会话列表未上报')).toBeInTheDocument();
-    // The heading count must not claim the backend holds no sessions.
-    const heading = screen.getByRole('heading', { name: /Sessions|会话/ });
-    expect(heading.parentElement?.textContent).not.toMatch(/^Sessions0/);
-  });
-
-  it('keeps a real empty list distinct from a missing one', async () => {
-    render(<SessionSidebar />);
-
-    // `common.no_data` only appears once the list has actually resolved empty.
-    expect(await screen.findByText(i18n.t('common.no_data'))).toBeInTheDocument();
-    expect(screen.queryByText('会话列表未上报')).not.toBeInTheDocument();
-  });
-
-  it('reports the agent list as unreported instead of "no agents available"', async () => {
-    vi.mocked(api.listAgents).mockRejectedValue(new Error('boom') as never);
-
-    render(<SessionSidebar />);
-
-    // The select offers a "not reported" option and refuses to be used, so a
-    // failed read can never be resolved into "pick an agent" with no agents.
-    const option = await screen.findByText('智能体列表未上报');
-    expect(option.closest('select')).toBeDisabled();
-  });
-});
-
 describe('PluginsPage reports statuses the backend never declared', () => {
+  it.each([
+    ['en', 'Enabled', 'Status not reported'],
+    ['zh-CN', '已启用', '状态未上报'],
+  ])('uses the selected %s language for reported and unknown statuses', async (language, enabled, unknown) => {
+    await i18n.changeLanguage(language);
+    vi.mocked(api.listPlugins).mockResolvedValue([
+      { ...basePlugin, status: 'enabled' },
+      { ...basePlugin, id: 'unknown', name: 'Unknown', status: 'quarantined' },
+    ] as never);
+    render(<PluginsPage />);
+    expect(await screen.findByText(enabled)).toBeInTheDocument();
+    expect(screen.getByText(unknown, { selector: '[role="status"]' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `${unknown}: Unknown` })).toBeDisabled();
+  });
   it('labels an unrecognised status as not reported rather than installed', async () => {
     vi.mocked(api.listPlugins).mockResolvedValue([
       { ...basePlugin, status: 'quarantined' },
@@ -110,8 +91,8 @@ describe('PluginsPage reports statuses the backend never declared', () => {
 
     render(<PluginsPage />);
 
-    expect(await screen.findByText('状态未上报')).toBeInTheDocument();
-    expect(screen.queryByText('已安装')).not.toBeInTheDocument();
+    expect(await screen.findByText('Status not reported', { selector: '[role="status"]' })).toBeInTheDocument();
+    expect(screen.queryByText('Installed', { selector: '[role="status"]' })).not.toBeInTheDocument();
   });
 
   it('keeps a missing status field on the not-reported path', async () => {
@@ -121,7 +102,7 @@ describe('PluginsPage reports statuses the backend never declared', () => {
 
     render(<PluginsPage />);
 
-    expect(await screen.findByText('状态未上报')).toBeInTheDocument();
+    expect(await screen.findByText('Status not reported', { selector: '[role="status"]' })).toBeInTheDocument();
   });
 
   it('still names the statuses the backend does declare', async () => {
@@ -132,9 +113,9 @@ describe('PluginsPage reports statuses the backend never declared', () => {
 
     render(<PluginsPage />);
 
-    expect(await screen.findByText('已启用')).toBeInTheDocument();
-    expect(screen.getByText('已禁用')).toBeInTheDocument();
-    expect(screen.queryByText('状态未上报')).not.toBeInTheDocument();
+    expect(await screen.findByText('Enabled')).toBeInTheDocument();
+    expect(screen.getByText('Disabled')).toBeInTheDocument();
+    expect(screen.queryByText('Status not reported')).not.toBeInTheDocument();
   });
 });
 

@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 
 from app.api.v1.common import ok_response, redact_sensitive_fields
 from app.core.api_key_crypto import decrypt_api_key
+from app.core.auth_manager import require_scopes
 from app.core.di import resolve as di_resolve
 from app.core.principal import CurrentPrincipal
 from app.schemas.api_v1.crews import CrewCreateRequest, CrewRunRequest
@@ -25,9 +26,12 @@ router = APIRouter()
 
 async def _owned_crew(db: Any, crew_id: str, user_id: str) -> Crew | None:
     """Fetch a crew owned by the given user, or None."""
-    return (
-        await db.execute(select(Crew).where(Crew.id == crew_id, Crew.user_id == user_id))
-    ).scalar_one_or_none()
+    return cast(
+        "Crew | None",
+        (
+            await db.execute(select(Crew).where(Crew.id == crew_id, Crew.user_id == user_id))
+        ).scalar_one_or_none(),
+    )
 
 
 @router.get("/crews")
@@ -37,16 +41,24 @@ async def list_crews(principal: CurrentPrincipal) -> list[dict[str, Any]]:
     user_id = principal.subject_id
     async with async_session() as db:
         rows = (
-            await db.execute(
-                select(Crew).where(Crew.user_id == user_id).order_by(Crew.created_at.desc())
+            (
+                await db.execute(
+                    select(Crew).where(Crew.user_id == user_id).order_by(Crew.created_at.desc())
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         return [_crew_dict(c) for c in rows]
 
 
 @router.post("/crews")
 @router.post("/crews/", include_in_schema=False)
-async def create_crew(payload: CrewCreateRequest, principal: CurrentPrincipal) -> dict[str, Any]:
+async def create_crew(
+    payload: CrewCreateRequest,
+    principal: CurrentPrincipal,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, Any]:
     """Create a new crew."""
     data = payload.model_dump()
     user_id = principal.subject_id
@@ -65,7 +77,9 @@ async def create_crew(payload: CrewCreateRequest, principal: CurrentPrincipal) -
                             Agent.id.in_(agent_ids),
                         )
                     )
-                ).scalars().all()
+                )
+                .scalars()
+                .all()
             )
             if owned_agent_ids != agent_ids:
                 raise HTTPException(
@@ -87,7 +101,11 @@ async def create_crew(payload: CrewCreateRequest, principal: CurrentPrincipal) -
 
 
 @router.delete("/crews/{crew_id}")
-async def delete_crew(crew_id: str, principal: CurrentPrincipal) -> dict[str, bool | str]:
+async def delete_crew(
+    crew_id: str,
+    principal: CurrentPrincipal,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
+) -> dict[str, bool | str]:
     """Delete a crew and its run history."""
     user_id = principal.subject_id
     async with async_session() as db:
@@ -102,7 +120,10 @@ async def delete_crew(crew_id: str, principal: CurrentPrincipal) -> dict[str, bo
 
 @router.post("/crews/{crew_id}/run")
 async def run_crew(
-    crew_id: str, payload: CrewRunRequest, principal: CurrentPrincipal
+    crew_id: str,
+    payload: CrewRunRequest,
+    principal: CurrentPrincipal,
+    _auth: dict[str, Any] = Depends(require_scopes("write")),
 ) -> dict[str, Any]:
     """Run a crew's tasks sequentially through the agent engine."""
     from app.core.agent_engine import AgentEngine
@@ -134,8 +155,8 @@ async def run_crew(
     if not crew_tasks:
         raise HTTPException(status_code=422, detail="Crew has no tasks defined")
 
-    model_registry = di_resolve("ModelRegistry")
-    tool_registry = di_resolve("ToolRegistry")
+    model_registry: Any = di_resolve("ModelRegistry")
+    tool_registry: Any = di_resolve("ToolRegistry")
     engine = AgentEngine(model_registry=model_registry, tool_registry=tool_registry)
 
     task_results, transcript, status, error = await _execute_crew_tasks(
@@ -180,7 +201,9 @@ async def _execute_crew_tasks(
     try:
         for idx, task in enumerate(crew_tasks):
             description = task.get("description") or task.get("name") or f"Task {idx + 1}"
-            prompt = description if not transcript else f"{description}\n\n上一步结果：\n{transcript}"
+            prompt = (
+                description if not transcript else f"{description}\n\n上一步结果：\n{transcript}"
+            )
 
             session = engine.create_session(
                 agent_id=agent_row.id,
@@ -200,8 +223,11 @@ async def _execute_crew_tasks(
             transcript = "".join(parts)
             task_results.append({"task": description, "output": transcript})
     except Exception as e:
+        logger.exception(
+            "crew_execution_failed", crew_id=getattr(agent_row, "id", None), error=str(e)
+        )
         status = "failed"
-        error = str(e)
+        error = "Crew execution failed"
 
     return task_results, transcript, status, error
 

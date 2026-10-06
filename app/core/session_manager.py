@@ -1,4 +1,5 @@
 """Session manager — handles agent sessions."""
+
 from __future__ import annotations
 
 import uuid
@@ -18,10 +19,10 @@ class SessionInfo:
 class SessionManager:
     """Manages agent sessions."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._sessions: dict[str, SessionInfo] = {}
 
-    def create(self, user_id: str = "", **kwargs) -> SessionInfo:
+    def create(self, user_id: str = "", **kwargs: Any) -> SessionInfo:
         session_id = str(uuid.uuid4())[:12]
         info = SessionInfo(session_id=session_id, user_id=user_id, metadata=kwargs)
         self._sessions[session_id] = info

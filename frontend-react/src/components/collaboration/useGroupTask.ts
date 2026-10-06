@@ -18,6 +18,9 @@ export function useGroupTask(groupId: string) {
   const [error, setError] = useState('');
   const [lastSubmission, setLastSubmission] = useState<{ objective: string; maxSteps: number } | null>(null);
   const mounted = useRef(true);
+  /** 当前群组标识：在异步响应落地前核对，避免旧群组响应写进新群组状态。 */
+  const groupIdRef = useRef(groupId);
+  groupIdRef.current = groupId;
 
   useEffect(() => {
     mounted.current = true;
@@ -37,9 +40,14 @@ export function useGroupTask(groupId: string) {
 
   const taskId = task?.task_id;
   const active = !!task && isActiveTaskStatus(task.status);
+  /** Whether the error on screen was raised by the poll itself. */
+  const pollFailed = useRef(false);
 
   useEffect(() => {
-    if (!taskId || !active) return;
+    if (!taskId || !active) {
+      pollFailed.current = false;
+      return;
+    }
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
     const refresh = async () => {
@@ -47,10 +55,19 @@ export function useGroupTask(groupId: string) {
         const result = await api.getTask(taskId);
         if (!disposed) {
           setTask(result);
-          setError('');
+          // Only retire the error this poll raised. A refused cancellation or a
+          // failed submission belongs to the user's action and must stay on
+          // screen until the user does something else.
+          if (pollFailed.current) {
+            pollFailed.current = false;
+            setError('');
+          }
         }
       } catch (reason) {
-        if (!disposed) setError(reason instanceof Error ? reason.message : '查询任务失败');
+        if (!disposed) {
+          pollFailed.current = true;
+          setError(reason instanceof Error ? reason.message : '查询任务失败');
+        }
       } finally {
         if (!disposed) timer = setTimeout(refresh, POLL_INTERVAL_MS);
       }
@@ -65,6 +82,7 @@ export function useGroupTask(groupId: string) {
   const submitTask = useCallback(
     async (objective: string, maxSteps: number) => {
       if (submitting || active) return;
+      const requestGroupId = groupId;
       setSubmitting(true);
       setError('');
       setLastSubmission({ objective, maxSteps });
@@ -73,11 +91,16 @@ export function useGroupTask(groupId: string) {
           task_type: 'agent_run',
           payload: { group_id: groupId, objective, max_steps: maxSteps },
         });
-        if (mounted.current) setTask(result);
+        // A submit that resolves after the user switched groups must not write
+        // its task into the new group's slot (R10-01).
+        if (!mounted.current || groupIdRef.current !== requestGroupId) return;
+        setTask(result);
       } catch (reason) {
-        if (mounted.current) setError(reason instanceof Error ? reason.message : '提交任务失败');
+        if (mounted.current && groupIdRef.current === requestGroupId) {
+          setError(reason instanceof Error ? reason.message : '提交任务失败');
+        }
       } finally {
-        if (mounted.current) setSubmitting(false);
+        if (mounted.current && groupIdRef.current === requestGroupId) setSubmitting(false);
       }
     },
     [active, groupId, submitting],
@@ -85,11 +108,12 @@ export function useGroupTask(groupId: string) {
 
   const refreshTask = useCallback(async (updatedTaskId = taskId) => {
     if (!updatedTaskId || updatedTaskId !== taskId) return;
+    const requestGroupId = groupIdRef.current;
     try {
       const latest = await api.getTask(updatedTaskId);
-      if (mounted.current) setTask(latest);
+      if (mounted.current && groupIdRef.current === requestGroupId) setTask(latest);
     } catch (reason) {
-      if (mounted.current) setError(reason instanceof Error ? reason.message : '查询任务失败');
+      if (mounted.current && groupIdRef.current === requestGroupId) setError(reason instanceof Error ? reason.message : '查询任务失败');
     }
   }, [taskId]);
 
@@ -99,6 +123,7 @@ export function useGroupTask(groupId: string) {
 
   const cancelTask = useCallback(async () => {
     if (!taskId || cancelling) return;
+    const requestGroupId = groupIdRef.current;
     setCancelling(true);
     setError('');
     try {
@@ -107,11 +132,11 @@ export function useGroupTask(groupId: string) {
       // The cancel endpoint only acknowledges the request; re-read the task so
       // the rendered status is the one the backend actually persisted.
       const latest = await api.getTask(taskId);
-      if (mounted.current) setTask(latest);
+      if (mounted.current && groupIdRef.current === requestGroupId) setTask(latest);
     } catch (reason) {
-      if (mounted.current) setError(reason instanceof Error ? reason.message : '取消任务失败');
+      if (mounted.current && groupIdRef.current === requestGroupId) setError(reason instanceof Error ? reason.message : '取消任务失败');
     } finally {
-      if (mounted.current) setCancelling(false);
+      if (mounted.current && groupIdRef.current === requestGroupId) setCancelling(false);
     }
   }, [cancelling, taskId]);
 

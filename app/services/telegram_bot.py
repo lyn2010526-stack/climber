@@ -28,7 +28,7 @@ def _allowed_chat_ids() -> set[int]:
     return {int(value.strip()) for value in raw.split(",") if value.strip().lstrip("-").isdigit()}
 
 
-def configure_bot(model_registry, tool_registry) -> None:
+def configure_bot(model_registry: Any, tool_registry: Any) -> None:
     """Configure the bot with engine dependencies."""
     global _registry, _tool_registry
     _registry = model_registry
@@ -75,17 +75,27 @@ async def start_telegram_bot() -> bool:
             )
 
     async def cmd_list_tools(update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        if not _tool_registry or not update.effective_chat or update.effective_chat.id not in allowed_chat_ids:
+        if (
+            not _tool_registry
+            or not update.effective_chat
+            or update.effective_chat.id not in allowed_chat_ids
+        ):
             return
         tools = _tool_registry.list_tools()
         names = "\n".join(f"- {t.name}: {t.description[:40]}" for t in tools[:20])
         await update.effective_chat.send_message(f"可用工具 ({len(tools)}):\n{names}")
 
     async def cmd_list_models(update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        if not _registry or not update.effective_chat or update.effective_chat.id not in allowed_chat_ids:
+        if (
+            not _registry
+            or not update.effective_chat
+            or update.effective_chat.id not in allowed_chat_ids
+        ):
             return
         providers = list(_registry.PROVIDERS.keys()) if hasattr(_registry, "PROVIDERS") else []
-        await update.effective_chat.send_message(f"已注册 Provider: {', '.join(providers) or '(none)'}")
+        await update.effective_chat.send_message(
+            f"已注册 Provider: {', '.join(providers) or '(none)'}"
+        )
 
     async def handle_message(update: Update, _ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.effective_chat or not update.message or not update.message.text:
@@ -104,7 +114,9 @@ async def start_telegram_bot() -> bool:
                 "model_id": os.environ.get("TELEGRAM_DEFAULT_MODEL", "gpt-4o-mini"),
                 "api_key": os.environ.get("USER_LLM_API_KEY", ""),
                 "base_url": os.environ.get("USER_LLM_BASE_URL") or None,
-                "system_prompt": os.environ.get("TELEGRAM_SYSTEM_PROMPT", "You are a helpful assistant."),
+                "system_prompt": os.environ.get(
+                    "TELEGRAM_SYSTEM_PROMPT", "You are a helpful assistant."
+                ),
                 "agent_id": f"tg-{tg_user_id}",
                 "messages": [],
             }
@@ -141,7 +153,9 @@ async def start_telegram_bot() -> bool:
                 elif event.type.value == "done":
                     pass
                 elif event.type.value == "error":
-                    await update.effective_chat.send_message(f"[Error] {event.data.get('error', '')}")
+                    await update.effective_chat.send_message(
+                        f"[Error] {event.data.get('error', '')}"
+                    )
                     return
 
             # Telegram message limit is 4096 chars
@@ -160,10 +174,14 @@ async def start_telegram_bot() -> bool:
     application.add_handler(CommandHandler("models", cmd_list_models))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+    updater = application.updater
+    if updater is None:
+        raise RuntimeError("Telegram application has no updater; cannot start polling")
+
     _bot_app = application
     await application.initialize()
     await application.start()
-    await application.updater.start_polling()
+    await updater.start_polling()
     logger.info("Telegram bot started")
     return True
 

@@ -1,4 +1,5 @@
 """Authentication manager — handles user auth, tokens, and password hashing."""
+
 from __future__ import annotations
 
 import base64
@@ -6,8 +7,9 @@ import hashlib
 import hmac
 import json
 import secrets
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from fastapi import HTTPException, Request
 
@@ -54,7 +56,9 @@ def create_access_token(user_id: str, scopes: list[str] | None = None) -> str:
     return _encode_token(payload)
 
 
-def create_refresh_token(user_id: str, scopes: list[str] | None = None, lifetime: timedelta | None = None) -> str:
+def create_refresh_token(
+    user_id: str, scopes: list[str] | None = None, lifetime: timedelta | None = None
+) -> str:
     payload = {
         "sub": user_id,
         "type": "refresh",
@@ -73,7 +77,7 @@ def verify_token(token: str, expected_type: str = "access") -> dict[str, Any]:
     if not hmac.compare_digest(sig, expected_sig):
         raise HTTPException(401, "Invalid token signature")
     try:
-        payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode()))
+        payload: dict[str, Any] = json.loads(base64.urlsafe_b64decode(payload_b64.encode()))
     except Exception:
         raise HTTPException(401, "Malformed token") from None
     exp = payload.get("exp")
@@ -101,7 +105,9 @@ class AuthManager:
     def create_access_token(self, user_id: str, scopes: list[str] | None = None) -> str:
         return create_access_token(user_id, scopes)
 
-    def create_refresh_token(self, user_id: str, scopes: list[str] | None = None, lifetime: timedelta | None = None) -> str:
+    def create_refresh_token(
+        self, user_id: str, scopes: list[str] | None = None, lifetime: timedelta | None = None
+    ) -> str:
         return create_refresh_token(user_id, scopes, lifetime)
 
     def verify_token(self, token: str, expected_type: str = "access") -> dict[str, Any]:
@@ -128,16 +134,25 @@ async def authenticate_user(username: str, password: str) -> dict[str, Any]:
 
     from app.models.users import User, UserStatus
     from app.storage import async_session
+
     async with async_session() as session:
         result = await session.execute(
             select(User).where(User.username == username, User.status == UserStatus.ACTIVE.value)
         )
         user = result.scalar_one_or_none()
-        if user and verify_password(password, user.hashed_password):
+        if user and verify_password(password, cast(str, user.hashed_password)):
             from datetime import datetime
-            user.last_login_at = datetime.utcnow()
+
+            # users.py uses legacy Column(...) declarations, so the instrumented
+            # attribute is typed Column[datetime]; cast keeps the runtime value.
+            user.last_login_at = cast(Any, datetime.utcnow())
             await session.commit()
-            return {"user_id": str(user.id), "username": user.username, "role": user.role, "scopes": scopes_for_role(user.role)}
+            return {
+                "user_id": str(user.id),
+                "username": user.username,
+                "role": user.role,
+                "scopes": scopes_for_role(cast("str | None", user.role)),
+            }
     raise HTTPException(401, "Invalid credentials")
 
 
@@ -148,7 +163,7 @@ async def get_current_user(request: Request) -> str:
     try:
         return get_context_principal().subject_id
     except RuntimeError as exc:
-        raise HTTPException(401, str(exc)) from exc
+        raise HTTPException(401, "Authenticated principal is missing") from exc
 
 
 def _principal_dict() -> dict[str, Any]:
@@ -157,7 +172,7 @@ def _principal_dict() -> dict[str, Any]:
     try:
         principal = get_context_principal()
     except RuntimeError as exc:
-        raise HTTPException(401, str(exc)) from exc
+        raise HTTPException(401, "Authenticated principal is missing") from exc
     return {
         "id": principal.subject_id,
         "user_id": principal.subject_id,
@@ -168,11 +183,17 @@ def _principal_dict() -> dict[str, Any]:
 
 def _has_scope(principal: dict[str, Any], scope: str) -> bool:
     scopes = principal.get("scopes") or []
-    return "admin" in scopes or scope in scopes or principal.get("role") == scope or principal.get("role") == "admin"
+    return (
+        "admin" in scopes
+        or scope in scopes
+        or principal.get("role") == scope
+        or principal.get("role") == "admin"
+    )
 
 
-def require_admin():
+def require_admin() -> Callable[[Request], Awaitable[dict[str, Any]]]:
     """Dependency factory that rejects callers without admin scope."""
+
     async def _check(request: Request) -> dict[str, Any]:
         principal = _principal_dict()
         # Local mode (auth disabled) resolves to the seeded default identity.
@@ -181,11 +202,13 @@ def require_admin():
         if principal.get("role") == "admin" or "admin" in principal["scopes"]:
             return principal
         raise HTTPException(403, "Admin scope required")
+
     return _check
 
 
-def require_scopes(*required_scopes: str):
+def require_scopes(*required_scopes: str) -> Callable[[Request], Awaitable[dict[str, Any]]]:
     """Dependency factory that enforces each required scope."""
+
     async def _check(request: Request) -> dict[str, Any]:
         principal = _principal_dict()
         if not settings.enable_auth and principal["id"] == "default-user":
@@ -194,6 +217,7 @@ def require_scopes(*required_scopes: str):
             if not _has_scope(principal, scope):
                 raise HTTPException(403, f"Missing required scope: {scope}")
         return principal
+
     return _check
 
 
@@ -209,9 +233,7 @@ async def validate_api_key(raw_key: str) -> dict[str, Any]:
 
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
     async with async_session() as session:
-        result = await session.execute(
-            select(ApiKey).where(ApiKey.key_hash == key_hash)
-        )
+        result = await session.execute(select(ApiKey).where(ApiKey.key_hash == key_hash))
         record = result.scalar_one_or_none()
         if record is None or not record.is_active:
             raise HTTPException(401, "Invalid API key")
@@ -222,13 +244,17 @@ async def validate_api_key(raw_key: str) -> dict[str, Any]:
             if datetime.now(UTC) >= expires:
                 raise HTTPException(401, "API key expired")
         try:
-            decoded_scopes = json.loads(record.scopes) if record.scopes else ["read", "write"]
+            decoded_scopes = (
+                json.loads(cast(str, record.scopes)) if record.scopes else ["read", "write"]
+            )
         except (TypeError, ValueError):
             raise HTTPException(401, "Invalid API key scopes") from None
-        if not isinstance(decoded_scopes, list) or not all(isinstance(scope, str) for scope in decoded_scopes):
+        if not isinstance(decoded_scopes, list) or not all(
+            isinstance(scope, str) for scope in decoded_scopes
+        ):
             raise HTTPException(401, "Invalid API key scopes")
         scopes = decoded_scopes
-        record.last_used_at = datetime.utcnow()
+        record.last_used_at = cast(Any, datetime.utcnow())
         await session.commit()
 
     return {
@@ -256,7 +282,9 @@ async def initialize_auth_system() -> dict[str, Any] | None:
             if not bootstrap_password:
                 environment = settings.app_env.strip().lower()
                 if environment in {"production", "prod", "staging"}:
-                    raise RuntimeError("INITIAL_ADMIN_PASSWORD must be configured before first startup")
+                    raise RuntimeError(
+                        "INITIAL_ADMIN_PASSWORD must be configured before first startup"
+                    )
                 bootstrap_password = secrets.token_urlsafe(24)
             admin = User(
                 username="admin",
@@ -267,6 +295,10 @@ async def initialize_auth_system() -> dict[str, Any] | None:
             )
             session.add(admin)
             await session.commit()
-            return {"username": "admin", "password_set": True, "bootstrap_generated": not settings.initial_admin_password}
+            return {
+                "username": "admin",
+                "password_set": True,
+                "bootstrap_generated": not settings.initial_admin_password,
+            }
 
     return None

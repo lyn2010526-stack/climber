@@ -61,9 +61,18 @@ class ResourceOrchestrator:
 
         # Keyword-based
         complex_keywords = [
-            "refactor", "architecture", "implement", "design",
-            "migrate", "optimize", "debug", "full", "complete",
-            "multiple", "all", "entire",
+            "refactor",
+            "architecture",
+            "implement",
+            "design",
+            "migrate",
+            "optimize",
+            "debug",
+            "full",
+            "complete",
+            "multiple",
+            "all",
+            "entire",
         ]
         for kw in complex_keywords:
             if kw in goal_lower:
@@ -158,10 +167,7 @@ class ResourceOrchestrator:
         if not self._allocation:
             return False
         status = self.get_status()
-        return (
-            status.tokens_remaining <= 0
-            or status.iterations_remaining <= 0
-        )
+        return status.tokens_remaining <= 0 or status.iterations_remaining <= 0
 
     def get_meta_monitoring_config(self) -> dict[str, Any]:
         """Return config for meta-cognition monitoring."""

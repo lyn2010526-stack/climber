@@ -119,7 +119,7 @@ export function SchedulerPage() {
     return (
       <div className="h-full overflow-y-auto page-transition">
         <div className="p-4 md:p-6 lg:p-8 max-w-4xl mx-auto">
-          <PageHeader title={t('scheduler.title')} description={t('scheduler.description')} icon={<Clock size={20} />} />
+          <PageHeader title={t('scheduler.title')} description={t('scheduler.description')} icon={<Clock size={20} />} className="border-b border-[var(--color-border-subtle)] pb-[var(--space-4)] [&_h1]:text-[length:var(--text-base)] [&_h1]:md:text-[length:var(--text-base)] [&_p]:text-[var(--color-text-muted)]" />
           <SkeletonList count={3} />
         </div>
       </div>
@@ -150,6 +150,7 @@ export function SchedulerPage() {
             enabled: tasks.filter(task => task.enabled).length,
           })}
           icon={<Clock size={20} />}
+          className="border-b border-[var(--color-border-subtle)] pb-[var(--space-4)] [&_h1]:text-[length:var(--text-base)] [&_h1]:md:text-[length:var(--text-base)] [&_p]:text-[var(--color-text-muted)]"
           actions={
             <div className="flex gap-2">
             <Button variant="ghost" size="sm" icon={<RefreshCw size={14} />} onClick={fetchTasks} disabled={pending}>{t('common.refresh')}</Button>

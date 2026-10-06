@@ -8,7 +8,6 @@ from pathlib import Path
 from .context import RuntimePaths
 from .events import EventClient
 
-
 DEFAULT_GIT_USER_NAME = "ARC Bench Agent"
 DEFAULT_GIT_USER_EMAIL = "arcbench@example.com"
 ARC_GITIGNORE_START = "# >>> arcbench-agent-runtime >>>"
@@ -80,28 +79,13 @@ class GitClient:
 
     def ensure_arc_gitignore(self) -> Path:
         gitignore_path = self.paths.project_dir / ".gitignore"
-        managed_block = "\n".join(
-            [
-                ARC_GITIGNORE_START,
-                "backend/node_modules/",
-                "frontend/node_modules/",
-                "backend/coverage/",
-                "frontend/dist/",
-                "frontend/dist-ssr/",
-                "*.db",
-                ".env",
-                ".arc/*",
-                "!.arc/traceability/",
-                "!.arc/traceability/**",
-                ARC_GITIGNORE_END,
-            ]
-        )
+        managed_block = f"{ARC_GITIGNORE_START}\nbackend/node_modules/\nfrontend/node_modules/\nbackend/coverage/\nfrontend/dist/\nfrontend/dist-ssr/\n*.db\n.env\n.arc/*\n!.arc/traceability/\n!.arc/traceability/**\n{ARC_GITIGNORE_END}"
         old_content = gitignore_path.read_text(encoding="utf-8") if gitignore_path.exists() else ""
         start = old_content.find(ARC_GITIGNORE_START)
         end = old_content.find(ARC_GITIGNORE_END)
         if start != -1 and end != -1 and end > start:
             before = old_content[:start].rstrip()
-            after = old_content[end + len(ARC_GITIGNORE_END):].lstrip()
+            after = old_content[end + len(ARC_GITIGNORE_END) :].lstrip()
             merged = ""
             if before:
                 merged += before + "\n\n"
@@ -130,7 +114,9 @@ class GitClient:
             if result.returncode == 0:
                 self.events.notify_commit_history_changed("git_init_commit", preview=True)
             elif "nothing to commit" not in (result.stdout + result.stderr):
-                raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "git init commit failed")
+                raise RuntimeError(
+                    result.stderr.strip() or result.stdout.strip() or "git init commit failed"
+                )
         self.events._emit_traceability_event(
             {
                 "type": "signal",

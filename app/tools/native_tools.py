@@ -20,6 +20,7 @@ import subprocess
 
 import structlog
 
+from app.core.resource_limits import build_preexec
 from app.tools import tool
 
 logger = structlog.get_logger()
@@ -39,11 +40,42 @@ async def native_run(command: str, timeout: int = 120, cwd: str | None = None) -
 
         base = os.path.basename(args[0])
         allowed_binaries = {
-            "ls", "cat", "echo", "pwd", "mkdir", "cp", "mv", "rm",
-            "touch", "head", "tail", "grep", "find", "wc", "sort", "uniq",
-            "diff", "file", "which", "env", "git", "curl", "wget",
-            "tar", "zip", "unzip", "chmod", "chown", "ln", "tee", "awk",
-            "sed", "xargs", "jq", "make", "pytest",
+            "ls",
+            "cat",
+            "echo",
+            "pwd",
+            "mkdir",
+            "cp",
+            "mv",
+            "rm",
+            "touch",
+            "head",
+            "tail",
+            "grep",
+            "find",
+            "wc",
+            "sort",
+            "uniq",
+            "diff",
+            "file",
+            "which",
+            "env",
+            "git",
+            "curl",
+            "wget",
+            "tar",
+            "zip",
+            "unzip",
+            "chmod",
+            "chown",
+            "ln",
+            "tee",
+            "awk",
+            "sed",
+            "xargs",
+            "jq",
+            "make",
+            "pytest",
         }
         if base not in allowed_binaries:
             return f"Command rejected: '{base}' is not in the allowed binaries list"
@@ -51,15 +83,21 @@ async def native_run(command: str, timeout: int = 120, cwd: str | None = None) -
         # Block dangerous argument patterns for sensitive commands
         if base == "rm":
             full_args = " ".join(args[1:])
-            for pattern in [r"-[rR][fF]", r"-[fF][rR]", r"-r\s+-?[fF]", r"-[fF]\s+-?r",
-                            r"--recursive.*--force", r"--force.*--recursive"]:
+            for pattern in [
+                r"-[rR][fF]",
+                r"-[fF][rR]",
+                r"-r\s+-?[fF]",
+                r"-[fF]\s+-?r",
+                r"--recursive.*--force",
+                r"--force.*--recursive",
+            ]:
                 if re.search(pattern, full_args):
                     return f"Command rejected: dangerous rm flags detected ({full_args})"
             # Block rm targeting root or system paths (allow /workspace, /tmp)
-            target_paths = [p for p in full_args.split() if not p.startswith('-')]
+            target_paths = [p for p in full_args.split() if not p.startswith("-")]
             for tp in target_paths:
                 abs_tp = os.path.abspath(tp)
-                if abs_tp == '/' or abs_tp.startswith('/etc') or abs_tp.startswith('/root') or abs_tp.startswith('/home'):
+                if abs_tp == "/" or abs_tp.startswith(("/etc", "/root", "/home")):
                     return f"Command rejected: rm targeting system path ({full_args})"
 
         proc = await asyncio.create_subprocess_exec(
@@ -67,6 +105,7 @@ async def native_run(command: str, timeout: int = 120, cwd: str | None = None) -
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
+            preexec_fn=build_preexec(),
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         output = stdout.decode("utf-8", errors="replace")[:10000]
@@ -134,6 +173,7 @@ async def open_browser(url: str) -> str:
     """Open URL in default browser."""
     try:
         import webbrowser
+
         webbrowser.open(url)
         return f"Opened {url} in browser"
     except Exception as e:
@@ -146,6 +186,7 @@ async def take_screenshot(output_path: str = "/tmp/screenshot.png") -> str:
     try:
         try:
             import pyautogui
+
             img = pyautogui.screenshot()
             img.save(output_path)
             return output_path
@@ -162,6 +203,7 @@ async def click_mouse(x: int, y: int, button: str = "left") -> str:
     """Click mouse at coordinates."""
     try:
         import pyautogui
+
         pyautogui.click(x, y, button=button)
         return f"Clicked ({x}, {y})"
     except ImportError:
@@ -175,6 +217,7 @@ async def type_text(text: str, interval: float = 0.02) -> str:
     """Type text using keyboard."""
     try:
         import pyautogui
+
         pyautogui.typewrite(text, interval=interval)
         return f"Typed {len(text)} chars"
     except ImportError:
@@ -195,7 +238,7 @@ async def process_video(command: str) -> str:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+        _stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
         output = stderr.decode("utf-8", errors="replace")[:5000]
         return output if output else "Video processing completed"
     except TimeoutError:
@@ -228,13 +271,16 @@ async def process_image(command: str) -> str:
         return f"Error: {e!s}"
 
 
-@tool(description="Search the web using a search engine. Returns top results (native mode — enhanced with num_results).")
+@tool(
+    description="Search the web using a search engine. Returns top results (native mode — enhanced with num_results)."
+)
 async def native_web_search(query: str, num_results: int = 10) -> str:
     """Search the web with enhanced result count (native mode only)."""
     try:
         import re
 
         import httpx
+
         url = "https://html.duckduckgo.com/html/"
         resp = await httpx.AsyncClient(timeout=15).post(url, data={"q": query})
         results = re.findall(
@@ -260,6 +306,7 @@ async def download_file(url: str, output_path: str) -> str:
             return f"Error downloading: blocked ({reason})"
 
         import httpx
+
         # Disable automatic redirects: each hop must be independently
         # validated against the SSRF policy before being followed.
         async with httpx.AsyncClient(timeout=60, follow_redirects=False) as client:
@@ -270,6 +317,7 @@ async def download_file(url: str, output_path: str) -> str:
                     next_url = str(resp.headers["location"])
                     if not next_url.startswith(("http://", "https://")):
                         import urllib.parse
+
                         next_url = urllib.parse.urljoin(current_url, next_url)
                     next_reason = blocked_reason(next_url)
                     if next_reason:
@@ -292,12 +340,12 @@ async def download_file(url: str, output_path: str) -> str:
 
 # Dangerous shell patterns that indicate command injection
 _DANGEROUS_SHELL_PATTERNS = [
-    r';',           # semicolon chaining
-    r'\|',          # pipe
-    r'\$\(',        # $() command substitution
-    r'`',           # backtick command substitution
-    r'&&',          # logical AND chaining
-    r'\|\|',        # logical OR chaining
+    r";",  # semicolon chaining
+    r"\|",  # pipe
+    r"\$\(",  # $() command substitution
+    r"`",  # backtick command substitution
+    r"&&",  # logical AND chaining
+    r"\|\|",  # logical OR chaining
 ]
 
 
@@ -339,8 +387,7 @@ def _validate_path_within_workspace(path: str) -> tuple[bool, str]:
     return True, "OK"
 
 
-_BLOCKED_PREFIXES = ("/etc/", "/etc", "/root/", "/root", "/home/", "/home",
-                     "/proc", "/sys", "/dev")
+_BLOCKED_PREFIXES = ("/etc/", "/etc", "/root/", "/root", "/home/", "/home", "/proc", "/sys", "/dev")
 _ALLOWED_FILE_ROOTS = ("/workspace", "/tmp")
 
 
@@ -352,17 +399,20 @@ def _validate_file_path(path: str, writable: bool = False) -> tuple[bool, str]:
     abs_path = os.path.abspath(path)
 
     for blocked in _BLOCKED_PREFIXES:
-        if abs_path == blocked or abs_path.startswith(blocked + "/") or abs_path.startswith(blocked + os.sep):
+        if abs_path == blocked or abs_path.startswith((blocked + "/", blocked + os.sep)):
             return False, f"Access denied: path '{abs_path}' is in a blocked system directory"
 
     allowed = False
     for root in _ALLOWED_FILE_ROOTS:
-        if abs_path == root or abs_path.startswith(root + "/") or abs_path.startswith(root + os.sep):
+        if abs_path == root or abs_path.startswith((root + "/", root + os.sep)):
             allowed = True
             break
 
     if not allowed:
-        return False, f"Access denied: path '{abs_path}' is outside allowed directories ({', '.join(_ALLOWED_FILE_ROOTS)})"
+        return (
+            False,
+            f"Access denied: path '{abs_path}' is outside allowed directories ({', '.join(_ALLOWED_FILE_ROOTS)})",
+        )
 
     if writable and os.path.exists(abs_path) and not os.path.isfile(abs_path):
         return False, f"Path '{abs_path}' is not a regular file"

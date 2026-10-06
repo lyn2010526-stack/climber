@@ -10,7 +10,7 @@ Categories:
 
 import structlog
 
-from app.skills.definitions import BUILTIN_HANDLER_MAP, BUILTIN_SKILLS
+from app.skills.definitions import register_builtin_skills
 from app.skills.registry import (
     LegacySkillRegistry,
     SkillCategory,
@@ -26,11 +26,7 @@ logger = structlog.get_logger()
 class SkillRegistry(_BaseSkillRegistry):
     def __init__(self) -> None:
         super().__init__()
-        self._load_builtins()
-
-    def _load_builtins(self):
-        for info in BUILTIN_SKILLS:
-            self.register(info, BUILTIN_HANDLER_MAP[info.id])
+        register_builtin_skills(self)
 
 
 # Global singleton
@@ -42,5 +38,6 @@ __all__ = [
     "SkillCategory",
     "SkillInfo",
     "SkillRegistry",
+    "register_builtin_skills",
     "skill_registry",
 ]

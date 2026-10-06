@@ -168,9 +168,10 @@ export function Switch({
         className={cn(
           // The knob is the page colour with a hairline of its own, so it stays
           // the same object in both positions and the track colour alone carries
-          // the state.
-          'pointer-events-none inline-block rounded-[var(--radius-pill)] border border-[var(--color-border-default)] bg-[var(--color-bg-page)]',
-          'transition-transform duration-150 motion-reduce:transition-none',
+          // the state. `.switch-thumb` (token layer) takes the slide onto the
+          // spring curve, and the soft lift is the iOS shadow rung.
+          'pointer-events-none inline-block rounded-[var(--radius-pill)] border border-[var(--color-border-default)] bg-[var(--color-bg-page)] shadow-[var(--shadow-1)]',
+          'transition-transform duration-150 motion-reduce:transition-none switch-thumb',
           config.thumb,
           checked ? config.translate : config.rest
         )}

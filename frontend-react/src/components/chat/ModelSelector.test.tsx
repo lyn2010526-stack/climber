@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelSelector, type ModelSelectorProps } from './ModelSelector';
 import { ModelConfig } from './ModelConfig';
+import i18n from '../../i18n/config';
 
 // Only HTTP is mocked: components and apiClient execute their real branches.
 const fetchMock = vi.fn();
@@ -16,7 +17,8 @@ const props = (): ModelSelectorProps => ({
   ownerKey: 'owner-a', credentialId: 'mine', provider: 'openai', value: null, onChange: vi.fn(),
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  await i18n.changeLanguage('zh-CN');
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
   localStorage.removeItem('auth_token');

@@ -60,6 +60,7 @@ class HITLManager:
         self._thread_index: dict[str, list[str]] = {}
         self._lock = asyncio.Lock()
         self._default_timeout = default_timeout
+        self._expire_tasks: set[asyncio.Task[Any]] = set()
 
     async def interrupt(
         self,
@@ -101,7 +102,9 @@ class HITLManager:
         )
 
         if self._default_timeout:
-            asyncio.create_task(self._auto_expire(interrupt_obj.id, self._default_timeout))
+            task = asyncio.create_task(self._auto_expire(interrupt_obj.id, self._default_timeout))
+            self._expire_tasks.add(task)
+            task.add_done_callback(self._expire_tasks.discard)
 
         return interrupt_obj.id
 
@@ -124,9 +127,7 @@ class HITLManager:
             if not intr:
                 raise KeyError(f"Interrupt {interrupt_id} not found")
             if intr.status != "pending":
-                raise RuntimeError(
-                    f"Interrupt {interrupt_id} already {intr.status}"
-                )
+                raise RuntimeError(f"Interrupt {interrupt_id} already {intr.status}")
             intr.status = "resolved"
             intr.response = value
             intr.resolved_at = datetime.now(UTC)
@@ -192,9 +193,7 @@ class HITLManager:
                     for iid in ids
                     if iid in self._interrupts and self._interrupts[iid].status == "pending"
                 ]
-            return [
-                intr for intr in self._interrupts.values() if intr.status == "pending"
-            ]
+            return [intr for intr in self._interrupts.values() if intr.status == "pending"]
 
     async def get(self, interrupt_id: str) -> Interrupt | None:
         """Get an interrupt by ID."""

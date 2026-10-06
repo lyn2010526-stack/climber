@@ -1,0 +1,1445 @@
+[
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R9-07 Anthropic chat 仅保留最后一个工具调用",
+    "detail": "位置：app/models/anthropic_adapter.py:214-235,261-264 · 边界：chat覆盖列表；主runner的不同ID完整工具聚合已有保护，需区分入口 · 来源：第 9、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/models/anthropic_adapter.py:320-321 完整 extend 工具调用列表"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R9-08 Ollama 流式响应丢弃 tool_calls",
+    "detail": "位置：app/models/ollama_adapter.py:88-120 ollama_adapter.py:105-120 · 边界：流式仅处理正文与 token，未解析 message.tool_calls，并在 done 时直接退出 · 来源：第 9、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/models/ollama_adapter.py:118-141 解析 message.tool_calls"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R9-09 OpenAI 读取超时尾块重复追加工具参数",
+    "detail": "位置：app/models/openai_adapter.py:218-229,267-275 app/core/engine/llm_calls.py:171-180 openai_adapter.py:218-242,267-275 llm_calls.py:171-180 · 来源：第 9、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/models/openai_adapter.py:265-319 超时尾块不再重复追加工具参数"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R10-07 Anthropic 最终累计 token 没有发给消费端",
+    "detail": "位置：app/models/anthropic_adapter.py:191-209,237-238,261-267 app/core/engine/session_runner.py:48-51 · 来源：第 10、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/models/anthropic_adapter.py:281-294,325-326 + session_runner.py:48-51 累计 token 下发消费端"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R10-08 Ollama 流式终帧丢失 length 截断原因",
+    "detail": "位置：app/models/ollama_adapter.py:112-117 engine/session_runner.py:52-53 ollama_adapter.py:112-117,173-176 · 来源：第 10、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/models/ollama_adapter.py:130-138 done_reason 映射 length 截断原因"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R11-N07 N07 OpenAI无换行尾帧漏工具用量结束原因",
+    "detail": "位置：openai_adapter.py:247-265 · 边界：EOF尾buffer只读content；无尾随换行且仅工具/usage/length的帧丢失 · 来源：第 11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-N12 N12 压缩删除本轮已注入记忆",
+    "detail": "位置：memory_hooks.py:62,84 compressor.py:44-51 iteration.py:67-72 runner.py:77-79,158-175 · 来源：第 11 轮",
+    "verified_status": "证据不足",
+    "verified_at": "2026-10-05",
+    "evidence": "memory_hooks.py:40-58 注入为一次性(insert(-1))，compressor.py:45-78 压缩仅保留 head+recent；是否在本轮必然丢失依赖 keep_recent/消息量，无法从代码断言"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H32 Ollama离线队列缺消费链",
+    "detail": "位置：app/models/ollama_adapter.py:91-98,147-153 services/ollama_queue.py:40-45,52-75 · 边界：process_queue在app内仅定义，入队无callback，消费缺payload执行点 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/services/ollama_queue.py:64-112 存在入队+消费链"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H48 未知spec回退及registry重复模型",
+    "detail": "位置：app/models/registry.py:120-135,164-189 api/v1/routes/misc.py:55-67 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/models/registry.py:125-148 未知 spec raise ValueError; 232-254 去重"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H51 reasoning Candidate计量断链",
+    "detail": "位置：app/core/reasoning/base.py:91-104 strategies/debate.py:240-270 pipeline.py:119-135 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/reasoning/base.py:105-106 Candidate.token_usage/estimated_cost; pipeline.py:119-135"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H52 摘要额外模型调用漏计",
+    "detail": "位置：app/core/compressor.py:90-106 engine/iteration.py:67-72 runner.py:164-175,209-211 · 边界：SUMMARIZE有可摘要中段时仅消费额外调用正文，主账只记普通响应 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/compressor.py:99-105 meter 回调 + engine/runner.py:33-44 _meter_summarize"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H55 技能invoke参数缺契约校验",
+    "detail": "位置：app/skills/registry.py:96-111 · 边界：直接invoke固定签名handler传未知键时TypeError传播，类型交handler处理；外部生产接线未确认，状态收窄 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R13-11 Ollama 非流式把 tool_call id 设为函数名",
+    "detail": "位置：app/models/ollama_adapter.py:161-171 · 来源：第 13 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-52 Ollama 离线队列 deque(maxlen) 静默淘汰最旧请求",
+    "detail": "位置：app/services/ollama_queue.py:34,47-49 app/models/ollama_adapter.py:97,148 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/services/ollama_queue.py:39 deque 无 maxlen; 54-58 满则 raise"
+  },
+  {
+    "sev": "low",
+    "status": "条件成立",
+    "title": "R13-10 ReasoningTraceRepository.delete 漏删 feedback",
+    "detail": "位置：app/storage/repository_reasoning.py:47-51 models_reasoning.py:43 · 来源：第 13 轮"
+  },
+  {
+    "sev": "low",
+    "status": "条件成立",
+    "title": "R13-14 _parse_xml_tool_calls 生成调用 id 恒为空串",
+    "detail": "位置：app/models/openai_adapter.py:92-108 runner.py:271 react_loop.py:121 · 来源：第 13 轮"
+  },
+  {
+    "sev": "low",
+    "status": "条件成立",
+    "title": "R13-15 Google 适配器 finishReason 直接 lower 语义不一致",
+    "detail": "位置：app/models/google_adapter.py:151 · 来源：第 13 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R10-01 切换群组后，旧提交响应覆盖当前群组任务",
+    "detail": "位置：frontend-react/src/components/collaboration/useGroupTask.ts:29-36,72-80 pages/ClusterPage.ts · 边界：A 提交尚未返回时切换 B，组件保持挂载；响应仅检查 mounted，随后将 A 写入 B 当前任务状态并触发轮询，可能锁住 B 的提交表单 · 来源：第 10、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/components/collaboration/useGroupTask.ts:74-83 groupIdRef 校验，旧群组响应不写入"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R10-06 多个同名输出节点互相覆盖最终结果",
+    "detail": "位置：frontend-react/src/components/workflow/WorkflowNodes.ts app/core/workflow_executor.py:97-102 app/workflow/engine.py:760-775 · 来源：第 10、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/workflow/engine.py:796-810 重名 end 节点写盘加后缀"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H01 think标记渲染链缺口",
+    "detail": "位置：frontend-react/src/components/chat/MarkdownRenderer.ts · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/components/chat/MarkdownRenderer.tsx:107-125,396-397 think 分段+渲染"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H02 会话侧栏渲染内反复findIndex",
+    "detail": "位置：frontend-react/src/components/workspace/SessionSidebar.ts · 边界：每条会话扫描visible，全展开累计O(n²)；实际列表规模和延迟未测 · 来源：第 12 轮",
+    "verified_status": "已失效",
+    "verified_at": "2026-10-05",
+    "evidence": "SessionSidebar.ts 已不存在，findIndex 不再用于会话列表渲染（全仓仅 Tabs.tsx/ApiKeysPage.tsx 使用）"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H03 Date.now生成ID同毫秒碰撞",
+    "detail": "位置：frontend-react/src/components/workflow/WorkflowNodes.ts useChat.ts:67-79,123-128 · 边界：同类型节点或缺ID工具事件同毫秒生成重复键；普通串行聊天频率未测 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H56 推理反馈静默失败及缺提交锁",
+    "detail": "位置：frontend-react/src/components/workspace/ReasoningPanel.ts · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/components/workspace/ReasoningPanel.tsx:107,118-121,397 提交锁+role=alert 错误展示"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H57 聊天反馈失败仅控制台记录",
+    "detail": "位置：frontend-react/src/components/agent/ChatInterface.ts · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/components/agent/ChatInterface.tsx:164-165,251-252,609-615 失败反馈可见"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H59 评估表单提前结束加载及缺键盘选择",
+    "detail": "位置：frontend-react/src/components/eval/EvalDashboard.ts · 边界：启动异步后立即结束initialLoading；数据集div仅点击，无键盘入口 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/components/eval/EvalDashboard.tsx:350-357 Promise.allSettled 后置 loading; 380-402 数据集用原生 button"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-N06 N06 推理反馈状态跨结果沿用",
+    "detail": "位置：frontend-react/src/components/workspace/ReasoningPanel.ts · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/components/workspace/ReasoningPanel.tsx:78-79 结果变化重置 feedbackRating"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-44 群聊连接指示用状态/错误代替已连接/已断开",
+    "detail": "位置：frontend-react/src/components/group/GroupRoom.ts zh-CN.js en.js · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/components/group/GroupRoom.tsx:170 使用 chat.connected/disconnected; locales/zh-CN.json:547,549; en.json:547,549"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R12-H07 移动中文文案残留",
+    "detail": "位置：frontend-react/src/components/mobile/MobileChatInterface.ts pages/mobile/MobileDesktopFallback.ts MobileTasksPage/MobileClusterPage/MobileFactoryPage.ts components/layout/AdaptiveMobileLayout.ts · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "components/mobile/* 与 pages/mobile/* 生产文件无中文残留（仅测试文件存在）"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R12-H12 聊天正文缺动态播报",
+    "detail": "位置：frontend-react/src/components/agent/ChatInterface.ts pages/ChatPage.ts · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/components/agent/ChatInterface.tsx:804 aria-live 动态播报"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R12-H15 语言菜单缺Escape与选中语义",
+    "detail": "位置：frontend-react/src/components/LanguageSwitcher.ts App.ts · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/components/LanguageSwitcher.tsx:50,73,80-81,119-121,141-142 Escape+menuitemradio/aria-checked"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R13-45 权限模式组声明 radiogroup 却无 roving tabindex",
+    "detail": "位置：frontend-react/src/components/workspace/PermissionModeToggle.ts · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/components/workspace/PermissionModeToggle.tsx:76,84-100 roving tabindex+方向键"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R13-46 推理置信度为 0 时被渲染为未上报",
+    "detail": "位置：frontend-react/src/components/workspace/ReasoningPanel.ts · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/components/workspace/ReasoningPanel.tsx:329 confidence=0 用 != null 判定"
+  },
+  {
+    "sev": "low",
+    "status": "条件成立",
+    "title": "R13-47 目录锚点用位置游标对位遇漏计即错位",
+    "detail": "位置：frontend-react/src/components/chat/MarkdownRenderer.ts · 来源：第 13 轮"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R13-48 自主级别滑块每次实例化注入同一全局样式",
+    "detail": "位置：frontend-react/src/components/workspace/AutonomySlider.ts · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/components/workspace/AutonomySlider.tsx 不再注入全局 <style>，改用内联 Tailwind"
+  },
+  {
+    "sev": "low",
+    "status": "条件成立",
+    "title": "R13-49 工作流画布初值不回灌",
+    "detail": "位置：frontend-react/src/components/workflow/WorkflowEditor.ts · 边界：useNodesState(initialNodes) 仅作首次状态，父级换 workflowId/initialNodes 时画布保留上一工作流节点 · 来源：第 13 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R9-17 ReAct 流式正文发送两遍",
+    "detail": "位置：app/core/engine/react_loop.py:83-86,106,128-130 · 边界：静态确认，直接调用执行器范围，生产入口接入证据为空 · app/core/engine/react_loop.py:83-86,106,128-130 · 来源：第 9、11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R9-18 流式图末节点中断后从入口重跑",
+    "detail": "位置：app/core/engine/pregel/engine.py:207-229,269-291,449-475,548-552 · 边界：静态确认，限定 A → B → END 且 interrupt_after=[B] · app/core/engine/pregel/engine.py:207-229,269-291,449-475,548-552 · 来源：第 9、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/engine/pregel/engine.py:192-238,260-304 复刻中断恢复"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R10-11 新一轮记忆为空时旧上下文仍保留",
+    "detail": "位置：app/core/engine/memory_hooks.py:50-62,75-84 runner.py:77-79 · 来源：第 10、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/engine/memory_hooks.py:50-58 空记忆清除旧 marker"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R10-13 后台通知同步等待子进程阻塞事件循环",
+    "detail": "位置：app/core/engine/notifications.py:16-19,33 app/services/notifications.py:21-24 app/utils/notifications.py:27-47 · 边界：系统命令存在且执行缓慢时同步subprocess阻塞；实际延迟未测 · 来源：第 10、11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R11-N04 N04 独立执行器丢合法假值结果",
+    "detail": "位置：execution/engine.py:148-155 · 边界：str(result) if result else 空串使0/False/空容器失真；限定直接类调用，生产接线为空 · 来源：第 11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-N08 N08 工具失败原因未写模型工具正文",
+    "detail": "位置：parallel.py:98-103 tool_exec.py:189-209,221-234 · 边界：事件带error，模型历史仅tr.result；失败空result且debug未补正文时下一轮模型缺失败原因 · 来源：第 11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/engine/tool_exec.py:105-113 persist_tool_result 取 tr.result or tr.error"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-N14 N14 最大迭代失败缺桌面失败通知",
+    "detail": "位置：runner.py:75-76,99-124,235-242 · 边界：max_iterations分支写FAILED后正常return；失败通知仅异常分支发送 · 来源：第 11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/engine/runner.py:334-338 max_iterations 分支发送失败通知"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H17 MessageBus失败无重试及历史砍半",
+    "detail": "位置：app/core/engine/ensemble.py:243-276 · 边界：callback异常仅日志，第501条历史缩至250；内部Coordinator使用，外部生产接线未确认 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-25 非对象工具参数击穿权限校验致整轮失败",
+    "detail": "位置：app/core/engine/tool_exec.py:27-33 validation.py:151 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/engine/tool_exec.py:30-38 非 dict 参数归一为 {}"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-26 同批无 id 工具调用生成重复 tool_call_id",
+    "detail": "位置：app/core/engine/tool_exec.py:272 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/engine/tool_exec.py:316-322 同批无 id 调用生成唯一 id"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-27 流式中途用户停止被上报为 ERROR",
+    "detail": "位置：app/core/engine/runner.py:177-206 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/engine/runner.py:119-129,258-266 stop 归 CANCELLED/stopped"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-29 用量计量完整分支不可达",
+    "detail": "位置：app/core/engine/run_storage.py:75-98 session_runner.py:13-34 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/engine/run_storage.py:93-137 usage 完整分支可达"
+  },
+  {
+    "sev": "low",
+    "status": "条件成立",
+    "title": "R12-H18 重复订阅重复投递",
+    "detail": "位置：app/core/engine/ensemble.py:269-282 · 边界：同agent/callback订阅两次，一条消息回调两次；直接组件成立，生产外部接线未确认 · 来源：第 12 轮"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R13-30 run_llm_single 每次调用泄漏一个会话",
+    "detail": "位置：app/core/engine/session_runner.py:77-86 app/core/agent_engine.py:191 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/engine/session_runner.py:86-92 finally 关闭会话"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R13-31 pending 写入 write_id 对空 id 退化为空串",
+    "detail": "位置：app/core/engine/tool_exec.py:305-306 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/engine/tool_exec.py:342-345 write_id 空 id 回退"
+  },
+  {
+    "sev": "high",
+    "status": "条件成立",
+    "title": "R9-15 PostgreSQL checkpoint upsert 编译失败",
+    "detail": "位置：app/core/checkpoint.py:138,156-191 · 来源：第 9、11 轮"
+  },
+  {
+    "sev": "high",
+    "status": "仍存在",
+    "title": "R11-H18 历史：迁移与ORM关键漂移",
+    "detail": "边界：c3迁移裸alter；d4直接ALTER未建auto_loop_tasks；initial users String ID与ORM Integer不一致；checkpoint四列仅SQLite补丁 · 来源：第 11 轮",
+    "verified_status": "仍存在",
+    "verified_at": "2026-10-05",
+    "evidence": "alembic/versions/dd8212a8f22a_initial.py:179 users.id String(36) 与 app/models/users.py:34 Integer 主键不一致，迁移链未重建该表"
+  },
+  {
+    "sev": "high",
+    "status": "仍存在",
+    "title": "R13-17 ORM 独有列 sessions.working_memory 全链无迁移",
+    "detail": "位置：app/storage/database.py:89 alembic/versions/dd8212a8f22a_initial.py:553-567 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "alembic/versions/a1b2c3d4e5f7_align_orm_drift_columns_and_constraints.py:74 补 sessions.working_memory"
+  },
+  {
+    "sev": "high",
+    "status": "仍存在",
+    "title": "R13-18 sessions.agent_id NOT NULL 与 ORM nullable 冲突",
+    "detail": "位置：alembic/versions/dd8212a8f22a_initial.py:555 app/storage/database.py:77 app/core/engine/run_storage.py:33 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "同迁移:77-90 batch_alter_table 将 sessions.agent_id 改为 nullable"
+  },
+  {
+    "sev": "high",
+    "status": "仍存在",
+    "title": "R13-19 documents.content_hash/indexed_at 迁移缺失",
+    "detail": "位置：app/storage/database.py:167,171 alembic/versions/dd8212a8f22a_initial.py:281-294 app/api/v1/documents.py:81,85 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "同迁移:94-100 补 documents.content_hash/indexed_at 及索引"
+  },
+  {
+    "sev": "high",
+    "status": "仍存在",
+    "title": "R13-20 agents.agent_role/goal/backstory 迁移缺失",
+    "detail": "位置：app/storage/database.py:52-54 alembic/versions/dd8212a8f22a_initial.py:221-241 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "同迁移:106-108 补 agents.agent_role/goal/backstory"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R9-14 auto_recover 候选发现绕过注入的 store",
+    "detail": "位置：app/core/recovery.py:14-19,63-86 checkpoint.py:67-105 · 边界：recover_session 查询 self._store，候选枚举却查询全局数据库；注入 InMemoryCheckpointStore 时仅在内存中的 processing 检查点无法被发现 · 来源：第 9、11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R9-16 默认用户设置写入与迁移外键不匹配",
+    "detail": "位置：alembic/versions/b2c3d4e5f6a7_create_user_settings_table_with_code_review_graph.py:24,32 app/services/settings_service.py:92-94,115-116,131 settings_service.py:91-95,114-116 · 边界：静态确认，条件项 · alembic/versions/b2c3d4e5f6a7_create_user_settings_table_with_code_review_graph.py:24,32；app/services/settings_service.py:92-94,115-116,131 · 来源：第 9、11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "证据不足",
+    "title": "R11-H09 历史：内存latest按插入顺序必定错误",
+    "detail": "位置：checkpoint.py:94-102 isolated_engine_audit/test_runtime_persistence.py:271-276 · 来源：第 11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-21 skills 多列迁移缺失",
+    "detail": "位置：app/storage/models_platform.py:128-139 alembic/versions/dd8212a8f22a_initial.py:134-146 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "同迁移:127-144 补 skills scope/scope_id/is_orphan 等列"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-22 user_profiles.inviolable/values/principles 迁移缺失",
+    "detail": "位置：app/storage/models_memory.py:122-124 alembic/versions/dd8212a8f22a_initial.py:417-434 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "同迁移:150-152 补 user_profiles.inviolable/values/principles"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R13-23 e5 迁移 upgrade/downgrade 不对称",
+    "detail": "位置：alembic/versions/e5f6a7b8c9d0_add_user_notification_settings.py:14-24 · 边界：upgrade 跳过已存在表但 downgrade 无条件 drop，可能误删；server_default 变更无还原 · 来源：第 13 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R13-24 离线/多方言迁移路径不成立",
+    "detail": "位置：alembic/env.py:44,66 · 来源：第 13 轮"
+  },
+  {
+    "sev": "high",
+    "status": "仍存在",
+    "title": "R11-H11 历史：工作流错误事件吞掉、条件死分支执行",
+    "detail": "位置：workflow/engine.py:177-219,274-283 · 边界：仅text消费导致ERROR节点记completed；分支跳过只处理直接后继，非递归闭包 · 来源：第 11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/workflow/engine.py:290-302 error 事件抛错，不再记 completed"
+  },
+  {
+    "sev": "high",
+    "status": "仍存在",
+    "title": "R11-H12 历史：协作空输出挂起与checkpoint假恢复",
+    "detail": "位置：collaboration/sequential.py:68-75 base.py:221-225 checkpoint.py:80-95 · 来源：第 11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/collaboration/sequential.py:98-99 空输出标记失败"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-H13 历史：群聊disagree计为赞成",
+    "detail": "位置：collaboration/group_chat.py:141-148 · 来源：第 11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/collaboration/group_chat.py:173-187 拒绝词优先排除"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-N05 N05 协作DAG后继读取旧依赖产物",
+    "detail": "位置：collaboration/base.py:268-274,298,311-315,347-354,400-407 · 来源：第 11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/collaboration/base.py:258-293 拓扑序+死锁检测+仅注入已完成依赖产物"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-N06 N06 工作流采样参数没有执行消费点",
+    "detail": "位置：workflow_executor.py:65-66 workflow/engine.py:255-272 · 来源：第 11 轮",
+    "verified_status": "仍存在",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/workflow_executor.py:66-67 存 temperature/max_tokens，但 app/workflow/engine.py:270-287 _execute_llm_node 从不读取/传入"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H16 加权共识与数值分歧脱节",
+    "detail": "位置：app/core/collaboration/aggregation.py:184-215 · 边界：直接类调用0/100且confidence各0.9，均值50却共识True；生产实例化未确认 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H19 不能通过误判PASS",
+    "detail": "位置：app/core/collaboration/verdict.py:21-79 base.py:394-398 · 边界：拒绝词缺不能通过，批准词通过命中；生产DAG评审消费该判定 · 来源：第 12 轮",
+    "verified_status": "已失效",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/collaboration/verdict.py 不存在；改为 prompts.parse_review_result 严格 fail-closed JSON 判定"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H20 hierarchical全文上下文缺局部预算",
+    "detail": "位置：app/core/collaboration/hierarchical.py:136-152 prompts.py:108-118 · 边界：外部生产调用未确认 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H21 reviewer全部失败仍finalize",
+    "detail": "位置：app/core/collaboration/sequential.py:93-104,248-302 · 边界：外部生产调用未确认 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H22 DAG reviewer缺整体超时",
+    "detail": "位置：app/core/collaboration/base.py:303-325,379-393 agent_runner.py:110-124 · 边界：reviewer持续等待阻塞当前和后续串行调度；run_group_tasks生产工具可达 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/collaboration/base.py:361 reviewer 执行加 asyncio.timeout(TASK_TIMEOUT)"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H23 node_id.key解析与扁平输出错位",
+    "detail": "位置：app/workflow/engine.py:457-464,680-727 · 边界：前驱results被扁平合并，p.results得到None，iterator为空；显式嵌套映射可避开，条件及原生Flow可达 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/workflow/engine.py:694-738 node_id.key 解析与输出映射修正"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H53 旧协作重试失败吞为空结果",
+    "detail": "位置：app/core/collaboration/base.py:141-184 agent_runner.py:119-124,265-270 · 边界：直接旧类方法全部重试失败返回空正文和0；主函数已抛错，旧方法生产接线未确认 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H54 群组费用缺归属维度",
+    "detail": "位置：app/core/collaboration/agent_runner.py:49-59,89-100 storage/database.py:189-201 models_cost.py:22-45 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/collaboration/agent_runner.py:194-196 盖 group_id/task_id; storage/models_cost.py:33-34 列存在"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-N01 N01 iterator上游输入覆盖循环变量",
+    "detail": "位置：app/workflow/engine.py:451-474 multi_agent/flow.py:408-420 · 边界：items=[1,2]且item=99，transform=item得到[99,99]；局部变量展开顺序独立于输出重名及参数丢弃，生产命名Flow可达 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/workflow/engine.py:494 局部变量覆盖顺序修正"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-N05 N05 评审事件用量固定零",
+    "detail": "位置：app/core/collaboration/sequential.py:94-96,258-268,287-296 · 边界：限定sequential内部dispatch，外部生产调用未确认 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R9-03 已有成员的群组仍返回 member_count=0",
+    "detail": "位置：app/api/v1/routes/groups.py:36-50,77-84,115-123,258-285 frontend-react/src/pages/ClusterPage.ts routes/groups.py:50,84,123,258-284 · 来源：第 9、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/routes/groups.py:65,101,140,319 member_count 由 members 列表长度计算"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R9-06 任务历史页显示和导出丢失结构化结果",
+    "detail": "位置：frontend-react/src/pages/TaskHistoryPage.ts app/core/task_worker.py:715-734 · 边界：data_processing 返回 processed/results，历史页仅取 result.output，缺失时序列化空字符串，展示、复制和下载均丢失原始对象 · 来源：第 9、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/pages/TaskHistoryPage.tsx:17-25,81-88 结构化结果回退序列化"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R10-09 账户资料保存固定提交不支持的 profile 字段",
+    "detail": "位置：frontend-react/src/pages/SettingsPage.ts app/services/settings_service.py:45-51 app/api/v1/settings.py:48-51 · 边界：建议接入资料接口或将待支持字段明确设为只读 · 来源：第 10、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/pages/SettingsPage.tsx:220-224 不再提交后端不支持的 profile 字段"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R10-10 撤销清除 Webhook 后仍关闭原事件开关",
+    "detail": "位置：frontend-react/src/pages/SettingsPage.ts app/services/settings_service.py:117-126 · 边界：clear 操作将事件开关置 false，改回 keep 时仍保留 false；保存仅省略地址字段，两个 false 被写回，地址保留但原通知开关关闭 · 来源：第 10、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/pages/SettingsPage.tsx:616-628 clear 快照+改回 keep 恢复事件开关"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H11 Factory运行中切语言卡运行态",
+    "detail": "位置：frontend-react/src/pages/FactoryModePage.ts api.ts:813-818 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H58 工具技能加载失败显示空态",
+    "detail": "位置：frontend-react/src/pages/AgentsPage.ts · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/pages/AgentsPage.tsx:197-211,334,369 加载失败可区分并重试"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-40 SettingsPage 相关链接用 href=# 触发 hash 导航",
+    "detail": "位置：frontend-react/src/pages/SettingsPage.ts App.ts · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/pages/SettingsPage.tsx:892-911 相关链接改为 disabled 行，无 href=#"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-41 PluginsPage 已安装分类过滤与行内安装态口径不一致",
+    "detail": "位置：frontend-react/src/pages/PluginsPage.ts · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/pages/PluginsPage.tsx:167-183 过滤与计数同用 isInstalledStatus"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R9-04 任务详情覆盖列表后丢失创建时间",
+    "detail": "位置：app/api/v1/routes/tasks.py:22-29,63-73 frontend-react/src/pages/TaskMonitorPage.ts · 来源：第 9、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/routes/tasks.py:81-90 返回 created_at; frontend TaskMonitorPage.tsx:99-101 详情缺失时保留列表时间"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R12-H08 Factory翻译键缺失",
+    "detail": "位置：frontend-react/src/pages/FactoryModePage.ts · 边界：7份locale缺factory_mode子树，标题、阶段及条件空态显示裸键；来源附录14 I-1、37 #1 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "src/locales/{zh-CN,en,fr,de,es,ja,ko}.json 均含 factory_mode 子树"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R12-H09 英文创建按钮回退中文",
+    "detail": "位置：frontend-react/src/pages/AuthApiKeysPage.ts locales/en.js zh-CN.js i18n/config.ts:37 · 边界：仅复核文案 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/locales/en.json:433,440 存在 authApiKeys.create 英文键"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R12-H14 工作流tablist语义与行为错位",
+    "detail": "位置：frontend-react/src/pages/WorkflowsPage.ts · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/pages/WorkflowsPage.tsx:146-157 改用 role=group+aria-pressed，无 tablist 语义错位"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R13-42 ReasoningHistoryPage 无分页且计数误导",
+    "detail": "位置：frontend-react/src/pages/ReasoningHistoryPage.ts api.ts:681 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/pages/ReasoningHistoryPage.tsx:45-60,148 分页 PAGE_SIZE+hasMore"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R13-43 TaskMonitorPage 详情成功不清除 error",
+    "detail": "位置：frontend-react/src/pages/TaskMonitorPage.ts · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/pages/TaskMonitorPage.tsx:93 详情成功清除 error"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R10-12 关键词回退先截断候选导致相关记忆漏召回",
+    "detail": "位置：app/core/persistent_memory.py:138-167,183-196 · 来源：第 10、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/persistent_memory.py:155-190 关键词命中候选单独拉取并合并后再评分"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-H19 历史：lifecycle索引仅元数据、技能记忆字段漂移",
+    "detail": "位置：memory/lifecycle.py:137-155 skills/builtins.py:978-994 skills/memory_manager.py:19-60 · 来源：第 11 轮",
+    "verified_status": "证据不足",
+    "verified_at": "2026-10-05",
+    "evidence": "技能记忆字段已统一到 MemoryType/MemoryEntry；lifecycle.py:165-177 index_memory 仍仅写 metadata。是否构成缺陷无法判定"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R11-N13 N13 向量候选过滤为空短路关键词回退",
+    "detail": "位置：persistent_memory.py:98-150,230-242 · 来源：第 11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H25 首次同步Chroma集合获取",
+    "detail": "位置：app/core/vector_memory.py:61-81,91-98,114-120 · 边界：首次未缓存集合同步创建，慢创建占用事件循环；add/query主体已有executor，实际延迟未测 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H26 导入即创建向量客户端",
+    "detail": "位置：app/core/vector_memory.py:52-59,192-193 persistent_memory.py:19 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/vector_memory.py:99-109,248 客户端惰性创建，导入不再建连"
+  },
+  {
+    "sev": "medium",
+    "status": "证据不足",
+    "title": "R12-H27 Git失败中断写入旧断言",
+    "detail": "位置：app/core/memfs/store.py:213-216,501-521 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H28 分类静默默认reference",
+    "detail": "位置：app/core/memfs/memory_block.py:54-64,107-120 · 边界：未知路径首段且省略category默认reference；显式错误category原样保留，分别限定 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/memfs/memory_block.py:57-67 未知前缀不设 category（不再默认 reference）"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H29 frontmatter有损往返",
+    "detail": "位置：app/core/memfs/memory_block.py:131-145,170-198,201-221 store.py:203-213 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/memfs/memory_block.py:134-209 自定义 YAML 序列化/解析，含换行与特殊字符引用"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H30 core_memory容量契约未约束",
+    "detail": "位置：app/core/core_memory.py:46-54,67-82,94-99,119 storage/models_memory.py:175-177 · 边界：直接create/update接受负值、超大limit并重置限额；内部用默认值，生产任意值请求入口未确认 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H31 默认embedding离线行为",
+    "detail": "位置：app/core/vector_memory.py:28-40,52-59,64-66 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H43 后台任务未排空及DB未dispose",
+    "detail": "位置：app/main.py:198-215 core/task_worker.py:190-192,388-395 engine/notifications.py:16-19 memory_hooks.py:15-23 · 边界：缺TaskManager、通知和记忆统一等待；强引用缺失旧断言已修复 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/main.py:267-270,298-315 注册 drain 与 db dispose teardown"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-N02 N02 MemFS初始化门禁倒置",
+    "detail": "位置：app/core/memfs/store.py:75-82,92-115,215-216,232-233 · 边界：仓库外新目录检查失败后跳过git init与自动提交；限直接类调用，独立于提交后失败 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R9-01 Agent 创建响应丢失已保存配置",
+    "detail": "位置：app/api/v1/routes/agents.py:57-75 schemas/api_v1/agents.py:23-33 · 边界：创建保存 description/system_prompt/tool_ids/skill_ids，返回对象仅含基础字段，响应模型将缺失字段回填为空；GET 的 _agent_dict 返回真实配置 · 来源：第 9、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/routes/agents.py:81-87,127-145 创建响应含 description/system_prompt/tool_ids/skill_ids"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R9-02 无效 JSON 被转为空输入并创建默认数据集",
+    "detail": "位置：app/api/v1/common.py:42-60 routes/misc.py:602-622 app/api/v1/common.py:51-56 routes/misc.py:602-622 · 边界：限定数据集路径 · 来源：第 9、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/routes/misc.py:614-619 非法 JSON 返回 400、非对象返回 422，不再建默认数据集"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R10-05 可视化 LLM 节点提示词模板被转换层丢弃",
+    "detail": "位置：app/api/v1/routes/workflows.py:238-250 app/core/workflow_executor.py:60-67 app/workflow/engine.py:260-275 · 来源：第 10、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/workflow/engine.py:275-278 提示词模板保留并渲染"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R10-14 通知命令非零退出仍报告 ok=true",
+    "detail": "位置：app/utils/notifications.py:33-38,47-48 app/services/notifications.py:21-27 app/api/v1/notifications.py:31-32,44-45 · 来源：第 10、11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-01 工作流 import/export 裸读 JSON 体致 500",
+    "detail": "位置：app/api/v1/workflows.py:163,204 request.js · 边界：向 import/export 发送非法或空 JSON 体时 await request.json() 抛 JSONDecodeError，被全局兜底归为 500，应为 400/422；既有仅覆盖 run 端点与 integrations · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/workflows.py:27-30 _read_json_body 解析失败返回 400"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-02 反馈统计把非 up 一律计入 down",
+    "detail": "位置：app/api/v1/feedback.py:111-112,121 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/feedback.py:111-123 down 仅计 rating==down，approval_rate=up/rated"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-03 评估运行数值字段裸转换致 500",
+    "detail": "位置：app/api/v1/routes/misc.py:653-657 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/routes/misc.py:677-696 _as_int/_as_float 非法返回 422"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-04 评估数据集 case_count 恒为 0",
+    "detail": "位置：app/api/v1/routes/misc.py:613-618,903 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/routes/misc.py:622-644 case_count 由 data_json 派生"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R13-12 AgentGroupMember 缺唯一约束且 add 不查重",
+    "detail": "位置：app/storage/models_groups.py:56-63 app/api/v1/routes/groups.py:139-173 · 来源：第 13 轮"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R13-06 引用不存在 agent 返回 422 而非 404",
+    "detail": "位置：app/api/v1/routes/groups.py:155-156 routes/workflows.py:186-188 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/routes/groups.py:178 引用不存在 agent 返回 404; routes/workflows.py:185-186 同"
+  },
+  {
+    "sev": "low",
+    "status": "条件成立",
+    "title": "R13-07 GET/PATCH 通知配置键不对称",
+    "detail": "位置：app/api/v1/settings.py:28-36,48-51 · 来源：第 13 轮"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R13-08 任务请求 schema 与实际端点脱节",
+    "detail": "位置：app/schemas/api_v1/tasks.py:12-21 app/api/v1/routes/tasks.py:17-19 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/schemas/api_v1/tasks.py SubmitTaskRequest(task_type+payload) 与 routes/tasks.py:61-68 一致"
+  },
+  {
+    "sev": "low",
+    "status": "条件成立",
+    "title": "R13-13 消息排序仅按秒级 created_at 无次序键",
+    "detail": "位置：app/storage/database.py:96,132 app/api/v1/sessions.py:213,397,437 · 来源：第 13 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R9-05 后续工具调用覆盖前序工具结果和状态",
+    "detail": "位置：frontend-react/src/useChat.ts:128-135,148-155 · 边界：tool_result 仅更新消息，toolCallsMap 仍存 running 对象；收到 B 的 tool_call 后从 Map 重建列表，A 的 result/error/success 状态被旧值覆盖 · 来源：第 9、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/useChat.ts:448-467 tool_result 按 id 更新，Map 保留各工具状态"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R10-02 聊天 done 将已失败工具改成成功",
+    "detail": "位置：frontend-react/src/useChat.ts:148-155,160-171 useChat.ts:148-155,168-171 · 边界：tool_result(error) 先置 error，done 随后对全部工具无条件置 success；后端允许工具失败后模型正常回答并完成聊天 · 来源：第 10、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/useChat.ts:352,470-471 finishTurn 按 status 结束，不再无条件置 success"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-H14 历史：聊天EOF与历史加载竞态",
+    "detail": "位置：useChat.ts:42-60,160-187 api.ts:169-230,389-397 · 来源：第 11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/useChat.ts:89,108-134,319 historyGeneration/streamGeneration 竞态防护"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R11-N01 N01 GroupRoom共享取消ref被新effect复位",
+    "detail": "位置：GroupRoom.ts · 来源：第 11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-N02 N02 群聊重连缺历史补拉",
+    "detail": "位置：GroupRoom.ts · 边界：onopen仅更新连接状态；断线期间已持久化消息在重连后无新广播时持续缺失 · 来源：第 11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/components/group/GroupRoom.tsx:71-79 onopen 重新加载历史"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-N09 N09 历史搜索只覆盖最近50条",
+    "detail": "位置：TaskHistoryPage.ts routes/tasks.py:80 task_worker.py:300-305 · 来源：第 11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/pages/TaskHistoryPage.tsx:53 搜索改为 limit:500（后端上限 500）"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H04 SSE多行data丢换行和空白",
+    "detail": "位置：frontend-react/src/api.ts:187-205 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/api.ts:482 data 多行以 join(\"\\n\") 保留换行"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H05 SSE EOF多行尾帧拆为多个回调",
+    "detail": "位置：frontend-react/src/api.ts:188,212-225 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/api.ts:527-528 EOF 前 flush 未闭合尾帧"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H06 本地会话合并旧字段覆盖新载荷",
+    "detail": "位置：frontend-react/src/store/workspace.ts:305-310 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/store/workspace.ts:305-310 合并改为 {...s,...session} 新载荷优先"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H61 createCluster SDK字段契约错位",
+    "detail": "位置：frontend-react/src/api.ts:489-493 app/api/v1/routes/misc.py:209-217 · 边界：SDK发requirements，后端要求name；直接调用422，src仅定义，页面触发未证实 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H62 422字段错误结构丢失",
+    "detail": "位置：frontend-react/src/api.ts:13-20,312-314 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "frontend-react/src/api.ts:47-62 422 detail 数组展平 msg"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H63 离线列表回显旧缓存缺提示",
+    "detail": "位置：frontend-react/public/sw.js:44-63,66-73 index.html:39-42 · 边界：SW控制且GET已缓存，后续失败回旧响应，列表缺过期提示；静态限定 · 来源：第 12 轮"
+  },
+  {
+    "sev": "high",
+    "status": "仍存在",
+    "title": "R13-32 _running_tasks 从不写入致取消死代码与状态回写",
+    "detail": "位置：app/core/execution/engine.py:51,95,249-250 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/execution/engine.py:52,69,99,254 _running_tasks 写入并用于取消"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R9-11 失败子任务仍解锁下游依赖",
+    "detail": "位置：app/core/execution/engine.py:169-173,182-193 · 边界：静态确认，执行类级别，当前生产任务 API 使用 TaskManager · app/core/execution/engine.py:169-173,182-193 · 来源：第 9、11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R9-12 resume_task 重新执行已完成子任务",
+    "detail": "位置：app/core/execution/engine.py:239-241,104-106,119-123 execution/engine.py:104-106,119-123,239-241 · 边界：静态确认，执行类级别，生产入口接入证据为空 · app/core/execution/engine.py:239-241,104-106,119-123 · 来源：第 9、11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H24 importance边界限定入口",
+    "detail": "位置：app/tools/memory_mcp_server.py:47-64,213-226 core/memory/lifecycle.py:100-120 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-28 工具执行吞掉 CancelledError",
+    "detail": "位置：app/core/parallel.py:100-101 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/parallel.py:129-132 CancelledError 重抛"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-33 _wait_for_approval 无超时上限绕过 task.timeout",
+    "detail": "位置：app/core/execution/engine.py:200-213,109 · 边界：HITL 待审期间无限轮询，超时仅在 DAG 循环顶检查，任务可超 timeout_seconds 永久挂起 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/execution/engine.py:207-216 HITL 审批超时抛 TimeoutError"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-34 HITL 被拒/失败的子任务仍加入 completed",
+    "detail": "位置：app/core/execution/engine.py:139-144,169-173,177-180 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/execution/engine.py:139-160 被拒/失败子任务不加入 completed"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-35 resume_task 重建本地 completed 集重跑副作用子任务",
+    "detail": "位置：app/core/execution/engine.py:239-241,53-64,104-106,121 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/execution/engine.py:108-112 resume 重建 completed"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R13-36 并行执行只按 Error executing 前缀判失败",
+    "detail": "位置：app/core/parallel.py:87-97 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/parallel.py:137-146 _is_error_result 覆盖非固定前缀失败"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R13-37 call_tool 参数校验在 try 外抛异常",
+    "detail": "位置：app/tools/mcp_client.py:275-277,295-300 · 边界：tools 已填充且 inputSchema 有 required 时缺参/多余参数抛 ValueError，而非返回 isError 结果；仅因上游 try 未炸出 · 来源：第 13 轮"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R13-38 get_skill_manager 声称全局却每次新建实例",
+    "detail": "位置：app/skills/package_manager.py:21-23 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/skills/package_manager.py:21-28 get_skill_manager 返回单例"
+  },
+  {
+    "sev": "low",
+    "status": "条件成立",
+    "title": "R13-39 recall(limit<=0) 返回全部记忆而非空",
+    "detail": "位置：app/skills/memory_manager.py:53 · 来源：第 13 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R9-10 新提交 agent 任务跳过已存储模型配置解析",
+    "detail": "位置：app/core/task_worker.py:190,320-322,355-357,427-433 routes/tasks.py:53-58 task_worker.py:190,320-322,355-357,427-435 · 边界：新提交默认不解析，恢复显式解析；供应商失败结果依赖配置条件 · 来源：第 9、11 轮",
+    "verified_status": "仍存在",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/task_worker.py:262-264 新提交以默认 resolve_credentials=False 派发，而 409/695-696 恢复路径才解析存储配置；handle_agent_run:1022-1044 直接取 payload.api_key"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R9-13 运行中 snapshot 恢复丢失续跑语义",
+    "detail": "位置：app/core/session.py:148-157,207-216 engine/runner.py:68-73,144-145 · 边界：执行时 resume 标志清空，snapshot/from_snapshot 原样传递 False；恢复入口因此清零迭代并追加用户输入，重新获得完整迭代预算 · 来源：第 9、11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R10-03 认领事务异常导致已提交任务滞留 pending",
+    "detail": "位置：app/core/task_worker.py:190-192,329-355 task_worker.py:187-192,329-355 · 边界：任务先落库，worker 初次读取、条件 UPDATE 和认领提交位于执行 try 外；暂时数据库异常直接退出，回调移除 active 条目，未安排重试 · 来源：第 10、11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R10-04 JSON 标量或数组形式的目标使列表查询失败",
+    "detail": "位置：app/core/task_worker.py:278-289,265-267,308-311 app/core/auto_loop.py:131-145,432-435 · 来源：第 10、11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/task_worker.py:442-455 _objective_from_record 兼容非 dict/标量/数组"
+  },
+  {
+    "sev": "medium",
+    "status": "证据不足",
+    "title": "R11-H10 历史：AutoLoop monitor取消后必然僵尸",
+    "detail": "位置：auto_loop.py:100-106,345-346 · 边界：父task await子task取消通常传播；stop未接线仍存在，必然僵尸断言证据不足 · 来源：第 11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-N03 N03 数据处理结果静默截断100条",
+    "detail": "位置：task_worker.py:719-734,380 · 边界：101输入全部处理并报告101，results[:100]只持久化100；无截断标识或剩余读取入口 · 来源：第 11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/task_worker.py:1395-1429 offset/limit 窗口+results_truncated+next_offset"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R11-N10 N10 复用SessionConfig污染先前快照",
+    "detail": "位置：session.py:84-115,141-145 · 边界：实际生产复用范围未确认 · 来源：第 11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-N11 N11 paused/pending检查点恢复为completed",
+    "detail": "位置：recovery.py:47-61 session.py:239-242 · 边界：仅running/processing/retrying视为中断，paused/pending未补偿，显式restore_session将非终态改为completed · 来源：第 11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/engine/session.py:242-261 restore_checkpoint 不再把非终态强制为 completed"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H33 删除文档后向量残留",
+    "detail": "位置：app/api/v1/documents.py:144-159,195-207 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/documents.py:332,336 删除时清理 Chroma 与索引缓存"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H34 向量索引失败仍缓存成功",
+    "detail": "位置：app/api/v1/documents.py:69-70,84-104 core/file_index.py:44-49,55-64 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/documents.py:156-159 仅向量写入成功才 record_index"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H35 同名文件更新保留过期版本",
+    "detail": "位置：app/api/v1/documents.py:69,75-100,146-159 storage/database.py:158-172 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/documents.py:101-102 _supersede_documents 清理旧版本向量与缓存"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H36 普通创建文档缺索引管线",
+    "detail": "位置：app/api/v1/documents.py:119-135,144-164 storage/database.py:169-170 · 边界：POST正文仅落DB却ready/chunks=0；其他向量结果存在时跳过LIKE回退 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/documents.py:213-229 普通创建走同一向量索引管线"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H37 增强RAG缺生产消费点",
+    "detail": "位置：app/core/enhanced_rag.py:48-95 api/v1/documents.py:13,182-184 · 边界：expand_query/compress_context/reciprocal_rank_fusion仅定义；文档搜索仅接BM25重排 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/documents.py:245-270 搜索消费 expand_query+reciprocal_rank_fusion"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H38 Doctor工作区根路径偏一级",
+    "detail": "位置：app/api/v1/doctor.py:35-41,103-105,118-119 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/doctor.py:37-40 工作区根路径上溯四级修正"
+  },
+  {
+    "sev": "medium",
+    "status": "证据不足",
+    "title": "R12-H39 JSON文档摄入静默skipped候选",
+    "detail": "位置：app/api/v1/documents.py:57-67 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H46 Redis失败缺负缓存及客户端收尾",
+    "detail": "位置：app/storage/cache.py:24-38,106-120 main.py:305-313 api/v1/doctor.py:79-87 · 边界：持续不可达反复创建ping，失败客户端丢引用；时长依赖库默认值，cached生产消费未见 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/storage/cache.py:36-40 Redis 负缓存 _redis_retry_after"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-N03 N03 删除文档后重传被旧缓存拦截",
+    "detail": "位置：app/api/v1/documents.py:68-70,90,187-209 core/file_index.py:32,44-49,55-64 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/documents.py:336 删除清理索引缓存，重传不被旧缓存拦截"
+  },
+  {
+    "sev": "low",
+    "status": "条件成立",
+    "title": "R13-05 建文档对 content 直接 len 致 500",
+    "detail": "位置：app/api/v1/documents.py:120-135 · 来源：第 13 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-H15 历史：调度创建未进入实际运行时",
+    "detail": "位置：api/v1/scheduler.py:74-87 core/scheduler.py:37-49 main.py:160-164 · 边界：写Workflow但缺add_task/register_handler生产调用；enabled列表恒True · 来源：第 11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/api/v1/scheduler.py:87-95 register_handler; app/main.py:193-199 watchdog 启动调度"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R13-50 FlowExecutor 失败节点被无限重触发",
+    "detail": "位置：app/multi_agent/flow.py:188-197,274-300 · 边界：触发匹配仅判 completed/running，缺 failed 守卫，失败节点每轮重新调度，最小 Flow 复现 5+ 次 · 来源：第 13 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R13-51 Crew 忽略 ERROR 事件并把失败任务置 COMPLETED",
+    "detail": "位置：app/multi_agent/crew.py:53-56,103-107 · 边界：engine.run 产出 ERROR 时仅收集 TEXT，返回空串仍无条件置 COMPLETED 并写结果 · 来源：第 13 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R13-53 调度任务无 handler 时静默跳过并推进 next_run",
+    "detail": "位置：app/core/scheduler.py:77-90 · 来源：第 13 轮"
+  },
+  {
+    "sev": "low",
+    "status": "条件成立",
+    "title": "R13-54 process_queue 在 callback 为空时仍出队并记 processed",
+    "detail": "位置：app/services/ollama_queue.py:61-65 · 来源：第 13 轮"
+  },
+  {
+    "sev": "low",
+    "status": "条件成立",
+    "title": "R13-55 SettingsService 忽略注入 db 且首次读取存竞态",
+    "detail": "位置：app/services/settings_service.py:86-96,110-116 · 来源：第 13 轮"
+  },
+  {
+    "sev": "low",
+    "status": "条件成立",
+    "title": "R13-56 FlowExecutor setattr 注入任意 initial_state 键被拒",
+    "detail": "位置：app/multi_agent/flow.py:139-141 · 来源：第 13 轮"
+  },
+  {
+    "sev": "low",
+    "status": "条件成立",
+    "title": "R13-57 Crew.execute 缺逐任务异常隔离",
+    "detail": "位置：app/multi_agent/crew.py:41-56 · 来源：第 13 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-H20 历史：健康响应与资源关闭缺口",
+    "detail": "位置：main.py:128-144,198-215,298-340 storage/__init__.py:164-166 · 来源：第 11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/main.py:419-426 健康检查含 schema/watchdog，降级 503；资源经 teardown 关闭"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H40 初始化异常继续启动",
+    "detail": "位置：app/main.py:128-150 storage/__init__.py:164-166 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/main.py:278-281 启动异常逆序回滚并重新抛出"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H41 健康降级HTTP成功且缺schema门禁",
+    "detail": "位置：app/main.py:335-340 storage/__init__.py:113-128 docker-compose.yml:42-46 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/main.py:419-426 降级返回 503 且含 schema_ready 门禁"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H42 AutoLoop停机未接stop",
+    "detail": "位置：app/main.py:198-215 core/auto_loop.py:100-128,148-151,321-328,345-346 · 边界：teardown缺集中取消等待；收到取消已有落库 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/main.py:192 defer(\"auto_loop\", auto_loop_engine.stop)"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H44 启动失败缺逆序回滚",
+    "detail": "位置：app/main.py:146-196,198-215 core/di.py:71-74 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/main.py:154-157,278-281 逆序 teardown/回滚"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H45 停机串行等待缺时限及失败隔离",
+    "detail": "位置：app/main.py:198-215 tools/browser_pool.py:135-142 gunicorn.conf.py:34 · 边界：关闭协程挂起或未保护步骤抛错影响后续收尾；实际挂起强杀未测 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R12-H47 watchdog串行退避且backoff不复位",
+    "detail": "位置：app/core/watchdog.py:85-89,127-147 · 来源：第 12 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/core/watchdog.py:130-145 恢复健康后 backoff 复位、按 next_restart_at 调度"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-N04 N04 watchdog全部停止仍healthy",
+    "detail": "位置：app/core/watchdog.py:132-136,170-179 main.py:322,335-340 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-H16 历史：邮件Webhook保存缺投递链",
+    "detail": "位置：settings.py:33-34,79-80 services/notifications.py · 边界：settings.py:33-34,79-80返回delivery unavailable；services/notifications.py仅桌面通知；SettingsPage未消费能力状态 · 来源：第 11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/services/notifications.py:34-44,71-111 webhook+email 投递; app/api/v1/settings.py:36-37 返回可用性"
+  },
+  {
+    "sev": "medium",
+    "status": "仍存在",
+    "title": "R11-H17 历史：持久EventBus与任务恢复未接线",
+    "detail": "位置：execution/event_bus.py:62-119 task_worker.py:109,195-241,754-759 main.py · 来源：第 11 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/main.py:247-252 注册 EventBus; app/core/task_worker.py:269 recover_pending_tasks"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R11-N15 N15 macOS通知普通引号文本失真",
+    "detail": "位置：utils/notifications.py:20,35-37 engine/notifications.py:46-48 · 边界：结果正文直接插入AppleScript双引号字符串，正常双引号可破坏字面文本；仅静态字符串推演，未执行系统命令 · 来源：第 11 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R12-H13 焦点陷阱纳入CSS隐藏控件",
+    "detail": "位置：frontend-react/src/lib/focusTrap.ts:31-40,55-69 components/ui/Modal.ts · 边界：首末候选CSS隐藏或位于disabled fieldset时绕回可能失败并阻止Tab；具体页面实例未确认 · 来源：第 12 轮"
+  },
+  {
+    "sev": "medium",
+    "status": "条件成立",
+    "title": "R13-09 CoreMemoryBlock 缺唯一约束且先查后插竞态",
+    "detail": "位置：app/storage/models_memory.py:164-182 app/core/core_memory.py:47-78 · 来源：第 13 轮"
+  },
+  {
+    "sev": "low",
+    "status": "仍存在",
+    "title": "R13-16 Mapped 注解与 nullable=True 矛盾",
+    "detail": "位置：app/storage/database.py:47,80,126-129 · 来源：第 13 轮",
+    "verified_status": "已修复",
+    "verified_at": "2026-10-05",
+    "evidence": "app/storage/database.py:47-119 注解改为 Mapped[str | None] 与 nullable=True 一致"
+  }
+]

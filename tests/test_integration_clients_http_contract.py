@@ -14,20 +14,20 @@ https://developers.notion.com/reference/post-page
 https://developers.notion.com/guides/get-started/upgrade-guide-2025-09-03
 https://developers.notion.com/reference/retrieve-a-data-source
 """
+
 from __future__ import annotations
 
 import asyncio
 import base64
 import importlib
 import json
-from pathlib import Path
 import sys
 import types
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import httpx
-
 
 PACKAGE = "_isolated_integration_http_contract"
 package = types.ModuleType(PACKAGE)
@@ -52,10 +52,16 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
         self.responses = []
         self.clients = []
         for target in ("socket.create_connection", "socket.socket.connect", "socket.getaddrinfo"):
-            self.enterContext(patch(target, side_effect=AssertionError("Live networking forbidden")))
-        self.factory = self.enterContext(patch.object(
-            http.httpx, "AsyncClient", side_effect=self.make_http_client,
-        ))
+            self.enterContext(
+                patch(target, side_effect=AssertionError("Live networking forbidden"))
+            )
+        self.factory = self.enterContext(
+            patch.object(
+                http.httpx,
+                "AsyncClient",
+                side_effect=self.make_http_client,
+            )
+        )
 
     def make_http_client(self, **kwargs):
         self.assertIs(kwargs["trust_env"], False)
@@ -80,9 +86,16 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
         self.responses.append(httpx.Response(status, json=payload, **kwargs))
 
     def source_schema(self):
-        self.respond({"object": "data_source", "id": SOURCE, "properties": {
-            "Work title": {"type": "title"}, "Notes": {"type": "rich_text"},
-        }})
+        self.respond(
+            {
+                "object": "data_source",
+                "id": SOURCE,
+                "properties": {
+                    "Work title": {"type": "title"},
+                    "Notes": {"type": "rich_text"},
+                },
+            }
+        )
 
     def make_service(self, name):
         if name == "slack":
@@ -90,10 +103,15 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
         if name == "discord":
             return discord.DiscordClient(discord.DiscordConfig(TOKEN, CHANNEL))
         if name == "jira":
-            return jira.JiraClient(jira.JiraConfig(
-                "https://tenant.example.invalid", TOKEN, "DEMO",
-                email="bot@example.invalid", issue_type="Bug",
-            ))
+            return jira.JiraClient(
+                jira.JiraConfig(
+                    "https://tenant.example.invalid",
+                    TOKEN,
+                    "DEMO",
+                    email="bot@example.invalid",
+                    issue_type="Bug",
+                )
+            )
         return notion.NotionClient(notion.NotionConfig(TOKEN, data_source_id=SOURCE))
 
     async def invoke(self, name, client):
@@ -113,16 +131,24 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(client.last_message_id, "1700000000.123456")
         self.assertEqual(client.last_channel_id, "C123")
         request = self.requests[0]
-        self.assertEqual((request.method, str(request.url)), ("POST", "https://slack.com/api/chat.postMessage"))
-        self.assertEqual(json.loads(request.content), {"channel": "C123", "text": "hello \u4e16\u754c"})
+        self.assertEqual(
+            (request.method, str(request.url)), ("POST", "https://slack.com/api/chat.postMessage")
+        )
+        self.assertEqual(
+            json.loads(request.content), {"channel": "C123", "text": "hello \u4e16\u754c"}
+        )
         self.assertEqual(request.headers["Authorization"], f"Bearer {TOKEN}")
         self.assertEqual(request.headers["Content-Type"], "application/json")
 
     async def test_slack_api_errors_and_missing_confirmation_raise(self):
-        for payload in ({"ok": False, "error": "invalid_auth"}, {"ok": False, "error": "missing_scope"},
-                        {"ok": 1, "ts": "1.2", "channel": "C123"},
-                        {"ok": True}, {"ok": True, "ts": "1.2"},
-                        {"ok": True, "ts": "", "channel": "C123"}):
+        for payload in (
+            {"ok": False, "error": "invalid_auth"},
+            {"ok": False, "error": "missing_scope"},
+            {"ok": 1, "ts": "1.2", "channel": "C123"},
+            {"ok": True},
+            {"ok": True, "ts": "1.2"},
+            {"ok": True, "ts": "", "channel": "C123"},
+        ):
             with self.subTest(payload=payload):
                 client = self.make_service("slack")
                 self.respond(payload)
@@ -143,14 +169,20 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
         self.assertIs(await client.send_message("hello"), True)
         self.assertEqual(client.last_message_id, "987654321098765432")
         request = self.requests[0]
-        self.assertEqual((request.method, str(request.url)),
-                         ("POST", f"https://discord.com/api/v10/channels/{CHANNEL}/messages"))
+        self.assertEqual(
+            (request.method, str(request.url)),
+            ("POST", f"https://discord.com/api/v10/channels/{CHANNEL}/messages"),
+        )
         self.assertEqual(request.headers["Authorization"], f"Bot {TOKEN}")
         self.assertEqual(json.loads(request.content), {"content": "hello"})
 
     async def test_discord_invalid_success_payloads_raise(self):
-        for payload in ({}, {"id": 123, "channel_id": CHANNEL},
-                        {"id": "123"}, {"id": "123", "channel_id": "999"}):
+        for payload in (
+            {},
+            {"id": 123, "channel_id": CHANNEL},
+            {"id": "123"},
+            {"id": "123", "channel_id": "999"},
+        ):
             with self.subTest(payload=payload):
                 client = self.make_service("discord")
                 self.respond(payload)
@@ -172,20 +204,35 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
         client = self.make_service("jira")
         self.respond({"id": "10042", "key": "DEMO-42", "self": "fixture-url"}, 201)
         result = await client.create_issue("Summary", "First\n\nLast")
-        self.assertEqual(result, {"id": "10042", "key": "DEMO-42", "self": "fixture-url", "summary": "Summary"})
+        self.assertEqual(
+            result, {"id": "10042", "key": "DEMO-42", "self": "fixture-url", "summary": "Summary"}
+        )
         request = self.requests[0]
-        self.assertEqual((request.method, str(request.url)),
-                         ("POST", "https://tenant.example.invalid/rest/api/3/issue"))
+        self.assertEqual(
+            (request.method, str(request.url)),
+            ("POST", "https://tenant.example.invalid/rest/api/3/issue"),
+        )
         auth = base64.b64encode(f"bot@example.invalid:{TOKEN}".encode()).decode()
         self.assertEqual(request.headers["Authorization"], f"Basic {auth}")
-        self.assertEqual(json.loads(request.content), {"fields": {
-            "project": {"key": "DEMO"}, "issuetype": {"name": "Bug"},
-            "summary": "Summary", "description": {"type": "doc", "version": 1, "content": [
-                {"type": "paragraph", "content": [{"type": "text", "text": "First"}]},
-                {"type": "paragraph", "content": []},
-                {"type": "paragraph", "content": [{"type": "text", "text": "Last"}]},
-            ]},
-        }})
+        self.assertEqual(
+            json.loads(request.content),
+            {
+                "fields": {
+                    "project": {"key": "DEMO"},
+                    "issuetype": {"name": "Bug"},
+                    "summary": "Summary",
+                    "description": {
+                        "type": "doc",
+                        "version": 1,
+                        "content": [
+                            {"type": "paragraph", "content": [{"type": "text", "text": "First"}]},
+                            {"type": "paragraph", "content": []},
+                            {"type": "paragraph", "content": [{"type": "text", "text": "Last"}]},
+                        ],
+                    },
+                }
+            },
+        )
 
     async def test_jira_empty_description_omitted_and_base_path_preserved(self):
         client = self.make_service("jira")
@@ -212,8 +259,13 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
         self.factory.assert_not_called()
 
     async def test_jira_invalid_base_urls_fail_before_http(self):
-        for server in ("http://example.invalid", "https://name:secret@example.invalid",
-                       "https://example.invalid?token=secret", "https://example.invalid#x", "relative"):
+        for server in (
+            "http://example.invalid",
+            "https://name:secret@example.invalid",
+            "https://example.invalid?token=secret",
+            "https://example.invalid#x",
+            "relative",
+        ):
             with self.subTest(server=server):
                 client = self.make_service("jira")
                 client.config.server = server
@@ -227,22 +279,38 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
         self.source_schema()
         self.respond({"object": "page", "id": PAGE, "url": "fixture-page-url"})
         result = await client.create_page("Title", "Body")
-        self.assertEqual(result, {"object": "page", "id": PAGE, "url": "fixture-page-url", "title": "Title"})
-        self.assertEqual([(r.method, str(r.url)) for r in self.requests], [
-            ("GET", f"https://api.notion.com/v1/databases/{DATABASE}"),
-            ("GET", f"https://api.notion.com/v1/data_sources/{SOURCE}"),
-            ("POST", "https://api.notion.com/v1/pages"),
-        ])
+        self.assertEqual(
+            result, {"object": "page", "id": PAGE, "url": "fixture-page-url", "title": "Title"}
+        )
+        self.assertEqual(
+            [(r.method, str(r.url)) for r in self.requests],
+            [
+                ("GET", f"https://api.notion.com/v1/databases/{DATABASE}"),
+                ("GET", f"https://api.notion.com/v1/data_sources/{SOURCE}"),
+                ("POST", "https://api.notion.com/v1/pages"),
+            ],
+        )
         for request in self.requests:
             self.assertEqual(request.headers["Authorization"], f"Bearer {TOKEN}")
             self.assertEqual(request.headers["Notion-Version"], "2025-09-03")
-        self.assertEqual(json.loads(self.requests[-1].content), {
-            "parent": {"data_source_id": SOURCE},
-            "properties": {"Work title": {"title": [{"type": "text", "text": {"content": "Title"}}]}},
-            "children": [{"object": "block", "type": "paragraph", "paragraph": {
-                "rich_text": [{"type": "text", "text": {"content": "Body"}}],
-            }}],
-        })
+        self.assertEqual(
+            json.loads(self.requests[-1].content),
+            {
+                "parent": {"data_source_id": SOURCE},
+                "properties": {
+                    "Work title": {"title": [{"type": "text", "text": {"content": "Title"}}]}
+                },
+                "children": [
+                    {
+                        "object": "block",
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [{"type": "text", "text": {"content": "Body"}}],
+                        },
+                    }
+                ],
+            },
+        )
 
     async def test_notion_explicit_source_skips_database_and_empty_children(self):
         self.source_schema()
@@ -258,7 +326,9 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
         self.source_schema()
         self.respond({"object": "page", "id": PAGE})
         await client.create_page("Title")
-        self.assertEqual(json.loads(self.requests[-1].content)["parent"], {"data_source_id": SOURCE})
+        self.assertEqual(
+            json.loads(self.requests[-1].content)["parent"], {"data_source_id": SOURCE}
+        )
 
     async def test_notion_ambiguous_database_never_creates_page(self):
         for sources in ([], [{"id": SOURCE}, {"id": PAGE}]):
@@ -277,8 +347,11 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.requests), 1)
 
     async def test_notion_bad_database_response_never_creates_page(self):
-        for payload in ({}, {"object": "database", "data_sources": [None]},
-                        {"object": "database", "data_sources": [{}]}):
+        for payload in (
+            {},
+            {"object": "database", "data_sources": [None]},
+            {"object": "database", "data_sources": [{}]},
+        ):
             with self.subTest(payload=payload):
                 self.respond(payload)
                 client = notion.NotionClient(notion.NotionConfig(TOKEN, DATABASE))
@@ -300,8 +373,11 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
             await self.make_service("notion").create_page("Title")
 
     async def test_notion_bad_page_response_raises(self):
-        for payload in ({"object": "page"}, {"object": "error", "id": PAGE},
-                        {"object": "page", "id": ""}):
+        for payload in (
+            {"object": "page"},
+            {"object": "error", "id": PAGE},
+            {"object": "page", "id": ""},
+        ):
             with self.subTest(payload=payload):
                 self.source_schema()
                 self.respond(payload)
@@ -319,7 +395,10 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("".join(chunks), content)
 
     async def test_notion_lookup_http_failure_stops_before_creation(self):
-        for config in (notion.NotionConfig(TOKEN, DATABASE), notion.NotionConfig(TOKEN, data_source_id=SOURCE)):
+        for config in (
+            notion.NotionConfig(TOKEN, DATABASE),
+            notion.NotionConfig(TOKEN, data_source_id=SOURCE),
+        ):
             self.respond({}, 403)
             with self.assertRaises(http.IntegrationError):
                 await notion.NotionClient(config).create_page("Title")
@@ -330,7 +409,11 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
             for status in (301, 302, 307, 400, 401, 403, 404, 422, 429, 500, 503):
                 with self.subTest(service=name, status=status):
                     before = len(self.requests)
-                    self.respond({"error": TOKEN}, status, headers={"Retry-After": "2", "Location": "https://unused.invalid"})
+                    self.respond(
+                        {"error": TOKEN},
+                        status,
+                        headers={"Retry-After": "2", "Location": "https://unused.invalid"},
+                    )
                     with self.assertRaises(http.IntegrationError) as caught:
                         await self.invoke(name, self.make_service(name))
                     self.assertEqual(caught.exception.status_code, status)
@@ -349,7 +432,11 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
     async def test_all_clients_reject_malformed_json(self):
         for name in ("slack", "discord", "jira", "notion"):
             with self.subTest(service=name):
-                self.responses.append(httpx.Response(201 if name == "jira" else 200, content=b"<html>bad response</html>"))
+                self.responses.append(
+                    httpx.Response(
+                        201 if name == "jira" else 200, content=b"<html>bad response</html>"
+                    )
+                )
                 with self.assertRaisesRegex(http.IntegrationError, "invalid JSON"):
                     await self.invoke(name, self.make_service(name))
 
@@ -357,9 +444,12 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
         for name in ("slack", "discord", "jira", "notion"):
             for payload in ([], None, True, "success"):
                 with self.subTest(service=name, payload=payload):
-                    self.responses.append(httpx.Response(
-                        201 if name == "jira" else 200, content=json.dumps(payload).encode(),
-                    ))
+                    self.responses.append(
+                        httpx.Response(
+                            201 if name == "jira" else 200,
+                            content=json.dumps(payload).encode(),
+                        )
+                    )
                     with self.assertRaisesRegex(http.IntegrationError, "JSON object"):
                         await self.invoke(name, self.make_service(name))
 
@@ -375,26 +465,38 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(len(self.requests) - before, 2 if name == "notion" else 1)
 
     async def test_defaults_and_missing_credentials_never_reach_http(self):
-        for name, client in (("slack", slack.SlackClient()), ("discord", discord.DiscordClient()),
-                             ("jira", jira.JiraClient()), ("notion", notion.NotionClient())):
+        for name, client in (
+            ("slack", slack.SlackClient()),
+            ("discord", discord.DiscordClient()),
+            ("jira", jira.JiraClient()),
+            ("notion", notion.NotionClient()),
+        ):
             with self.subTest(service=name):
-                method = client.send_message if name in ("slack", "discord") else (
-                    client.create_issue if name == "jira" else client.create_page
+                method = (
+                    client.send_message
+                    if name in ("slack", "discord")
+                    else (client.create_issue if name == "jira" else client.create_page)
                 )
                 with self.assertRaisesRegex(NotImplementedError, "unsupported configuration"):
                     await method("Title")
         self.factory.assert_not_called()
 
     async def test_each_required_configuration_field_is_checked_before_http(self):
-        fields = {"slack": ("token", "channel"), "discord": ("token", "channel_id"),
-                  "jira": ("server", "token", "project", "email", "issue_type"), "notion": ("token",)}
+        fields = {
+            "slack": ("token", "channel"),
+            "discord": ("token", "channel_id"),
+            "jira": ("server", "token", "project", "email", "issue_type"),
+            "notion": ("token",),
+        }
         for name, names in fields.items():
             for field in names:
                 with self.subTest(service=name, field=field):
                     client = self.make_service(name)
                     setattr(client.config, field, " ")
-                    method = client.send_message if name in ("slack", "discord") else (
-                        client.create_issue if name == "jira" else client.create_page
+                    method = (
+                        client.send_message
+                        if name in ("slack", "discord")
+                        else (client.create_issue if name == "jira" else client.create_page)
                     )
                     with self.assertRaisesRegex(NotImplementedError, field):
                         await method("Title")
@@ -407,8 +509,10 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
             for value in ("", " ", None, 123, "x" * (limit + 1)):
                 with self.subTest(service=name, value_type=type(value).__name__):
                     client = self.make_service(name)
-                    method = client.send_message if name in ("slack", "discord") else (
-                        client.create_issue if name == "jira" else client.create_page
+                    method = (
+                        client.send_message
+                        if name in ("slack", "discord")
+                        else (client.create_issue if name == "jira" else client.create_page)
                     )
                     with self.assertRaises(ValueError):
                         await method(value)
@@ -437,8 +541,10 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
                 with self.subTest(service=name, timeout=timeout):
                     client = self.make_service(name)
                     client.config.timeout = timeout
-                    method = client.send_message if name in ("slack", "discord") else (
-                        client.create_issue if name == "jira" else client.create_page
+                    method = (
+                        client.send_message
+                        if name in ("slack", "discord")
+                        else (client.create_issue if name == "jira" else client.create_page)
                     )
                     with self.assertRaisesRegex(ValueError, "timeout"):
                         await method("Title")
@@ -449,8 +555,10 @@ class LocalMockHTTPContracts(unittest.IsolatedAsyncioTestCase):
         client.config.timeout = 2.5
         self.respond({"ok": True, "ts": "1700000000.123456", "channel": "C123"})
         await client.send_message("hello")
-        self.assertEqual(self.requests[0].extensions["timeout"],
-                         {"connect": 2.5, "read": 2.5, "write": 2.5, "pool": 2.5})
+        self.assertEqual(
+            self.requests[0].extensions["timeout"],
+            {"connect": 2.5, "read": 2.5, "write": 2.5, "pool": 2.5},
+        )
 
     async def test_notion_blank_database_with_explicit_source_is_unsupported(self):
         client = notion.NotionClient(notion.NotionConfig(TOKEN, " ", SOURCE))

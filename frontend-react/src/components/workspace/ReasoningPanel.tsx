@@ -4,7 +4,7 @@ import {
   ChevronDown, ChevronRight, Zap, MessageSquare, Scale, Loader2,
   ThumbsUp, ThumbsDown, Star,
 } from 'lucide-react';
-import { api } from '../../api';
+import { api, type ReasoningModeOut, type ReasoningResultOut } from '../../api';
 import { useI18n } from '../../i18n';
 import { formatDuration } from '../../lib/duration';
 
@@ -31,50 +31,8 @@ const STRATEGY_BLURBS = [
   { id: 'debate', tone: 'text-[var(--color-warning)]', labelKey: 'reasoning.mode.debate', hintKey: 'reasoning.strategy.debate' },
 ] as const;
 
-interface ReasoningMode {
-  id: string;
-  name: string;
-  description: string;
-  available: boolean;
-}
-
-interface PathTrace {
-  candidate_id: string;
-  path_type: string;
-  rounds: Array<{ round_num: number; action: string; output_summary: string }>;
-  final_confidence: number;
-}
-
-interface CoverageReport {
-  score: number;
-  edge_cases_count: number;
-  risks_count: number;
-  assumptions_count: number;
-  blind_spots_count: number;
-  high_risks: number;
-  checklist: Record<string, boolean>;
-}
-
-interface ReasoningResult {
-  answer: string;
-  mode_used: string;
-  candidates: Array<{
-    id: string;
-    strategy: string;
-    path_type: string;
-    content: string;
-    confidence: number;
-    metadata: Record<string, any>;
-  }>;
-  coverage: CoverageReport | null;
-  total_duration_ms: number;
-  trace: {
-    trace_id: string;
-    path_traces: PathTrace[];
-    coverage_checks: any[];
-    final_selection_reason: string;
-  } | null;
-}
+type ReasoningMode = ReasoningModeOut;
+type ReasoningResult = ReasoningResultOut;
 
 export function ReasoningPanel() {
   const { t } = useI18n();
@@ -98,6 +56,8 @@ export function ReasoningPanel() {
   const [feedbackThumbs, setFeedbackThumbs] = useState<'up' | 'down' | null>(null);
   const [feedbackComment, setFeedbackComment] = useState('');
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
 
   const loadModes = useCallback(async () => {
     setModesError(null);
@@ -114,6 +74,13 @@ export function ReasoningPanel() {
     setIsRunning(true);
     setError(null);
     setResult(null);
+    // A new run is a fresh subject: feedback entered for the previous result
+    // must not carry over (R12-N06).
+    setFeedbackRating(0);
+    setFeedbackThumbs(null);
+    setFeedbackComment('');
+    setFeedbackSubmitted(false);
+    setFeedbackError(null);
 
     if (modes.length === 0) await loadModes();
 
@@ -137,7 +104,9 @@ export function ReasoningPanel() {
   };
 
   const handleFeedback = async () => {
-    if (!result?.trace?.trace_id || feedbackRating === 0) return;
+    if (!result?.trace?.trace_id || feedbackRating === 0 || feedbackSubmitting) return;
+    setFeedbackSubmitting(true);
+    setFeedbackError(null);
     try {
       const feedback: { rating: number; thumbs?: string; comment?: string } = {
         rating: feedbackRating,
@@ -148,7 +117,11 @@ export function ReasoningPanel() {
       }
       await api.submitReasoningFeedback(result.trace.trace_id, feedback);
       setFeedbackSubmitted(true);
-    } catch { /* skip */ }
+    } catch {
+      setFeedbackError(t('reasoning.errors.feedback_failed'));
+    } finally {
+      setFeedbackSubmitting(false);
+    }
   };
 
   const getModeIcon = (modeId: string) => {
@@ -353,7 +326,7 @@ export function ReasoningPanel() {
                       {expandedPaths.has(path.candidate_id) ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                       <span className="text-[var(--color-accent-foreground)] font-mono">{path.path_type}</span>
                       <span className="ml-auto text-[var(--color-text-secondary)]">
-                        {path.final_confidence > 0 ? `${(path.final_confidence * 100).toFixed(0)}%` : '—'}
+                        {path.final_confidence != null ? `${(path.final_confidence * 100).toFixed(0)}%` : '—'}
                       </span>
                     </button>
                     {expandedPaths.has(path.candidate_id) && (
@@ -420,12 +393,15 @@ export function ReasoningPanel() {
                   className="w-full px-2 py-1 bg-[var(--color-bg-base)] border border-[var(--color-border-subtle)] rounded text-xs text-[var(--color-text-secondary)] placeholder:text-[var(--color-text-muted)] focus:outline-none resize-none"
                   rows={2}
                 />
+                {feedbackError && (
+                  <p role="alert" className="text-xs text-[var(--color-error)]">{feedbackError}</p>
+                )}
                 <button type="button"
                   onClick={handleFeedback}
-                  disabled={feedbackRating === 0}
+                  disabled={feedbackRating === 0 || feedbackSubmitting}
                   className="px-3 py-1 bg-[var(--color-accent)] hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-surface-2)] disabled:text-[var(--color-text-muted)] text-[var(--color-accent-text)] text-xs rounded transition-colors"
                 >
-                   {t('reasoning.submit_feedback')}
+                   {feedbackSubmitting ? t('reasoning.submitting_feedback') : t('reasoning.submit_feedback')}
                 </button>
               </div>
             ) : (

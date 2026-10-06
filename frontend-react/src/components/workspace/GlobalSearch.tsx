@@ -6,6 +6,7 @@ import {
 import { api } from '../../api';
 import { useI18n } from '../../i18n';
 import type { Page } from '../../navigation/navConfig';
+import './codex-suite.css';
 
 const DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 2;
@@ -252,11 +253,7 @@ export function GlobalSearch({ isOpen, onClose, onNavigate }: GlobalSearchProps)
                 key={f || 'all'}
                  onClick={() => { setFilter(f); setSelectedIndex(0); setExpanded(null); }}
                  aria-pressed={filter === f}
-                 className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-[var(--color-accent)] ${
-                  filter === f
-                    ? 'border border-[var(--color-border-accent)] bg-[var(--color-accent-subtle)] text-[var(--color-text-primary)]'
-                    : 'border border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
-                }`}
+                 className="cx-chip"
               >
                 {label}
               </button>
@@ -274,7 +271,7 @@ export function GlobalSearch({ isOpen, onClose, onNavigate }: GlobalSearchProps)
           {error && (
             <div role="alert" className="px-4 py-8 text-center text-sm text-[var(--color-error)]">
               <p>{error}</p>
-              <button type="button" onClick={() => setRetry(value => value + 1)} className="mt-3 rounded-md border border-[var(--color-border-default)] px-3 py-1.5 text-[var(--color-text-primary)] focus-visible:outline-2 focus-visible:outline-[var(--color-accent)]">{t('common.retry')}</button>
+              <button type="button" onClick={() => setRetry(value => value + 1)} className="cx-btn cx-btn-ghost mt-3 focus-visible:outline-2 focus-visible:outline-[var(--color-accent)]">{t('common.retry')}</button>
             </div>
           )}
           {!loading && !error && filtered.length === 0 && (
@@ -299,22 +296,22 @@ export function GlobalSearch({ isOpen, onClose, onNavigate }: GlobalSearchProps)
                 tabIndex={-1}
                 onMouseDown={event => event.preventDefault()}
                 onMouseEnter={() => setSelectedIndex(index)}
-                onClick={() => { setSelectedIndex(index); openResult(result); }}
-                className={`flex w-full items-start gap-3 rounded-md px-3 py-2.5 text-left transition-colors ${selected ? 'bg-[var(--color-bg-surface-2)]' : 'hover:bg-[var(--color-bg-surface-2)]'}`}
+                 onClick={() => { setSelectedIndex(index); openResult(result); }}
+                className={`cx-row flex w-full items-start gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-left ${selected ? 'bg-[var(--color-bg-surface-2)]' : 'hover:bg-[var(--color-bg-surface-2)]'}`}
               >
                 <span className="shrink-0 pt-1">
                   <Icon size={14} aria-hidden="true" className={TYPE_COLORS[result.type]} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--color-text-primary)]">{result.title}</span>
-                     <span className="shrink-0 text-[10px] text-[var(--color-text-muted)]">{t(`global_search.${result.type}`)}</span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--color-text-primary)]">{result.title}</span>
+                     <span className="cx-pill shrink-0">{t(`global_search.${result.type}`)}</span>
                   </span>
                    <span id={`${listId}-${key}-preview`} className={`mt-1 block text-xs leading-relaxed text-[var(--color-text-muted)] ${expanded === key ? 'whitespace-pre-wrap break-words' : 'truncate'}`}>{result.preview}</span>
                    {/* A row with no detail page says so, so pressing Enter on it
                        reads as "no place to go" instead of a dead key. */}
                    {!canOpen && (
-                     <span id={`${listId}-${key}-note`} className="mt-1 flex items-center gap-1 text-[10px] text-[var(--color-text-muted)]">
+                     <span id={`${listId}-${key}-note`} className="mt-1 flex items-center gap-1 text-[11px] text-[var(--color-text-muted)]">
                        <Lock size={10} aria-hidden="true" className="shrink-0" />
                        {t(`global_search.preview_only.${result.type}`)}
                      </span>
@@ -333,7 +330,7 @@ export function GlobalSearch({ isOpen, onClose, onNavigate }: GlobalSearchProps)
 
         {/* The visible keys only: navigation, the open Enter performs, and
             closing through Escape needs no second label. */}
-        <div className="flex items-center gap-4 border-t border-[var(--color-border-subtle)] px-4 py-2 text-[10px] text-[var(--color-text-muted)]">
+        <div className="flex items-center gap-4 border-t border-[var(--color-border-subtle)] px-4 py-2 text-[11px] text-[var(--color-text-muted)]">
           <span className="flex items-center gap-1"><ArrowUpDown size={12} aria-hidden="true" /> {t('common.navigate')}</span>
           <span className="flex items-center gap-1"><CornerDownLeft size={12} aria-hidden="true" /> {t('common.open')}</span>
         </div>

@@ -24,14 +24,18 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.core.collaboration.agent_runner import run_agent_with_retry
+from app.config import settings
+from app.core.collaboration import agent_runner
+from app.core.collaboration.agent_runner import principal_for_group, run_agent_with_retry
 from app.core.collaboration.checkpoint import load_latest_checkpoint, resume_from_checkpoint
+from app.core.collaboration.constants import TASK_TIMEOUT
 from app.core.collaboration.group_chat import run_group_chat_process
 from app.core.collaboration.hierarchical import run_hierarchical_process
 from app.core.collaboration.memory import inject_memory, store_memory
 from app.core.collaboration.prompts import (
     build_reviewer_prompt,
     build_worker_prompt,
+    parse_review_result,
 )
 from app.core.collaboration.resolver import resolve_api_key, resolve_base_url
 from app.core.collaboration.sequential import run_sequential_process
@@ -50,14 +54,18 @@ class GroupCollaborationEngine:
         self,
         model_registry: Any,
         tool_registry: Any,
-        max_concurrent_tasks: int = 10,
+        max_concurrent_tasks: int | None = None,
     ) -> None:
         self.model_registry = model_registry
         self.tool_registry = tool_registry
-        self._max_concurrent = max_concurrent_tasks
-        self._task_semaphore = asyncio.Semaphore(max_concurrent_tasks)
+        self._max_concurrent = (
+            settings.max_concurrent_subtasks
+            if max_concurrent_tasks is None
+            else max_concurrent_tasks
+        )
+        self._task_semaphore = asyncio.Semaphore(self._max_concurrent)
         self._review_states: dict[str, dict[str, str]] = {}
-        self._running_tasks: dict[str, asyncio.Task] = {}
+        self._running_tasks: dict[str, asyncio.Task[Any]] = {}
 
     async def _run_sequential_process(
         self,
@@ -66,9 +74,19 @@ class GroupCollaborationEngine:
         reviewers: list[Any],
         group: Any,
         max_rounds: int | None = None,
+        checkpoint: Any = None,
+        principal: Any = None,
     ) -> None:
         """Run the sequential collaboration process for a task."""
-        await run_sequential_process(task, worker, reviewers, group, max_rounds or task.max_rounds or 5)
+        await run_sequential_process(
+            task,
+            worker,
+            reviewers,
+            group,
+            max_rounds or task.max_rounds or 5,
+            checkpoint=checkpoint,
+            principal=principal,
+        )
 
     async def _run_agent_simple(
         self,
@@ -111,76 +129,25 @@ class GroupCollaborationEngine:
         base_url: str | None = None,
         principal: Any = None,
     ) -> tuple[str, int]:
-        """Run agent with retry and fallback, calling ``self._run_agent_simple``.
+        """Run agent with retry via the shared agent_runner implementation.
 
-        Primary attempts plus a fallback attempt match the retry contract:
-        ``MAX_RETRIES + 1`` calls to ``_run_agent_simple`` for the primary
-        attempts, and one final fallback call before returning ``("", 0)``.
+        Retry, timeout, fallback and failure semantics (RuntimeError after the
+        final attempt) are owned by ``agent_runner.run_agent_with_retry``; this
+        method only forwards so there is a single source of truth.
         """
-        from app.core.collaboration.agent_runner import _get_fallback_model
-        from app.core.collaboration.constants import MAX_RETRIES as _MAX_RETRIES
-        from app.core.collaboration.constants import TASK_TIMEOUT as _TASK_TIMEOUT
-        from app.core.group_ws_hub import group_ws_hub as _hub
-
-        last_error: Exception | None = None
-        for attempt in range(_MAX_RETRIES + 1):
-            try:
-                async with asyncio.timeout(_TASK_TIMEOUT):
-                    output, total_tokens = await self._run_agent_simple(
-                        agent_id=agent_id,
-                        provider=provider,
-                        model_id=model_id,
-                        api_key=api_key,
-                        system_prompt=system_prompt,
-                        user_message=user_message,
-                        tools=tools,
-                        base_url=base_url,
-                        principal=principal,
-                    )
-                if output or not last_error:
-                    return output, total_tokens
-            except TimeoutError as e:
-                last_error = e
-            except Exception as e:
-                last_error = e
-
-            if attempt < _MAX_RETRIES:
-                await _hub.broadcast(group_id, {
-                    "type": "system_message",
-                    "data": {"content": f"{role} 调用失败，正在重试 ({attempt + 1}/{_MAX_RETRIES})..."},
-                })
-
-        fallback = _get_fallback_model(provider, model_id)
-        if fallback:
-            fb_provider, fb_model = fallback
-            await _hub.broadcast(group_id, {
-                "type": "system_message",
-                "data": {"content": f"正在降级到 {fb_model}..."},
-            })
-            try:
-                async with asyncio.timeout(_TASK_TIMEOUT):
-                    output, total_tokens = await self._run_agent_simple(
-                        agent_id=agent_id,
-                        provider=fb_provider,
-                        model_id=fb_model,
-                        api_key=api_key,
-                        system_prompt=system_prompt,
-                        user_message=user_message,
-                        tools=tools,
-                        base_url=base_url,
-                        principal=principal,
-                    )
-                if output:
-                    return output, total_tokens
-            except Exception:
-                pass
-
-        logger.error(
-            f"{role}_failed_after_retry",
+        return await run_agent_with_retry(
             agent_id=agent_id,
-            error=str(last_error) if last_error else "unknown",
+            provider=provider,
+            model_id=model_id,
+            api_key=api_key,
+            system_prompt=system_prompt,
+            user_message=user_message,
+            tools=tools,
+            group_id=group_id,
+            role=role,
+            base_url=base_url,
+            principal=principal,
         )
-        return "", 0
 
     async def _load_latest_checkpoint(self, task_id: str) -> Any:
         """Load the latest checkpoint for a task."""
@@ -198,10 +165,11 @@ class GroupCollaborationEngine:
         """
         db_task = None
         db_worker = None
-        db_reviewers = []
+        db_reviewers: list[Any] = []
         db_group = None
 
         current_task = asyncio.current_task()
+        assert current_task is not None  # run_task always executes inside a task
         self._running_tasks[task_id] = current_task
         try:
             try:
@@ -217,13 +185,27 @@ class GroupCollaborationEngine:
             reviewers = db_reviewers
             group = db_group
 
+            principal = principal_for_group(group)
             checkpoint = await self._load_latest_checkpoint(task_id)
             if checkpoint and checkpoint.status in ("running", "paused"):
-                logger.info("resuming_from_checkpoint", task_id=task_id, checkpoint_id=checkpoint.id)
+                logger.info(
+                    "resuming_from_checkpoint", task_id=task_id, checkpoint_id=checkpoint.id
+                )
                 await self._resume_from_checkpoint(task, checkpoint)
+                await _dispatch_by_process_type(
+                    self,
+                    task,
+                    worker,
+                    reviewers,
+                    group,
+                    checkpoint=checkpoint,
+                    principal=principal,
+                )
                 return
 
-            await _dispatch_by_process_type(self, task, worker, reviewers, group)
+            await _dispatch_by_process_type(
+                self, task, worker, reviewers, group, principal=principal
+            )
 
         except asyncio.CancelledError:
             logger.info("task_cancelled", task_id=task_id)
@@ -232,10 +214,13 @@ class GroupCollaborationEngine:
         except Exception as e:
             logger.exception("group_task_failed", task_id=task_id)
             await _update_task_status(task_id, "failed")
-            await group_ws_hub.broadcast(task.group_id, {
-                "type": "task_failed",
-                "data": {"task_id": task_id, "error": str(e)},
-            })
+            await group_ws_hub.broadcast(
+                task.group_id,
+                {
+                    "type": "task_failed",
+                    "data": {"task_id": task_id, "error": str(e)},
+                },
+            )
         finally:
             self._running_tasks.pop(task_id, None)
 
@@ -249,17 +234,23 @@ class GroupCollaborationEngine:
             A dictionary with execution results.
         """
         async with async_session() as db:
-            group = (await db.execute(select(AgentGroup).where(AgentGroup.id == group_id))).scalar_one_or_none()
+            group = (
+                await db.execute(select(AgentGroup).where(AgentGroup.id == group_id))
+            ).scalar_one_or_none()
             if not group:
                 return {"error": "Group not found"}
 
             tasks = (
-                await db.execute(
-                    select(AgentGroupTask)
-                    .where(AgentGroupTask.group_id == group_id)
-                    .where(AgentGroupTask.status.in_(["pending"]))
+                (
+                    await db.execute(
+                        select(AgentGroupTask)
+                        .where(AgentGroupTask.group_id == group_id)
+                        .where(AgentGroupTask.status.in_(["pending", "running"]))
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
 
         if not tasks:
             return {"status": "no_pending_tasks"}
@@ -273,7 +264,9 @@ class GroupCollaborationEngine:
         dependency_map = {t.id: list(t.dependencies or []) for t in tasks}
         deadlock_cycles = detect_deadlock(dependency_map)
         if deadlock_cycles:
-            logger.warning("deadlock_detected_in_group_tasks", group_id=group_id, cycles=deadlock_cycles)
+            logger.warning(
+                "deadlock_detected_in_group_tasks", group_id=group_id, cycles=deadlock_cycles
+            )
             blocked = deadlocked_task_ids(dependency_map)
             if all(t.id in blocked for t in tasks):
                 return {
@@ -281,7 +274,9 @@ class GroupCollaborationEngine:
                     "error": f"Cycle detected in task dependencies: {deadlock_cycles}",
                     "cycles": deadlock_cycles,
                 }
-            logger.warning("deadlock_skipping_blocked_tasks", group_id=group_id, blocked=sorted(blocked))
+            logger.warning(
+                "deadlock_skipping_blocked_tasks", group_id=group_id, blocked=sorted(blocked)
+            )
 
         task_map: dict[str, AgentGroupTask] = {t.id: t for t in tasks}
         execution_levels = topological_order(dependency_map)
@@ -294,24 +289,50 @@ class GroupCollaborationEngine:
                 task = task_map.get(task_id)
                 if not task:
                     continue
+                if any(
+                    dep in task_map and dep not in completed_tasks
+                    for dep in task.dependencies or []
+                ):
+                    await _update_task_status(task_id, "failed")
+                    level_results.append(
+                        {
+                            "task_id": task_id,
+                            "status": "failed",
+                            "error": "Dependency did not complete",
+                        }
+                    )
+                    results["status"] = "partial"
+                    continue
 
                 context_data: dict[str, str] = {}
-                for dep_id in (task.dependencies or []):
+                for dep_id in task.dependencies or []:
                     if dep_id in completed_tasks and dep_id in task_map:
                         dep_task = task_map[dep_id]
                         if dep_task.final_output:
                             context_data[dep_id] = dep_task.final_output
 
-                await group_ws_hub.broadcast(group_id, {
-                    "type": "dag_level_start",
-                    "data": {"task_id": task_id, "level": len(results["levels"]) + 1},
-                })
+                await group_ws_hub.broadcast(
+                    group_id,
+                    {
+                        "type": "dag_level_start",
+                        "data": {"task_id": task_id, "level": len(results["levels"]) + 1},
+                    },
+                )
 
                 try:
                     await self._run_single_task_in_dag(task, group, context_data)
-                    completed_tasks.add(task_id)
-                    level_results.append({"task_id": task_id, "status": "completed"})
+                    async with async_session() as db:
+                        saved = await db.get(AgentGroupTask, task_id)
+                        status = saved.status if saved else "failed"
+                        task.final_output = saved.final_output if saved else None
+                    if status == "completed":
+                        completed_tasks.add(task_id)
+                    else:
+                        results["status"] = "partial"
+                    level_results.append({"task_id": task_id, "status": status})
                 except Exception as e:
+                    await _update_task_status(task_id, "failed")
+                    results["status"] = "partial"
                     logger.error("dag_task_failed", task_id=task_id, error=str(e))
                     level_results.append({"task_id": task_id, "status": "failed", "error": str(e)})
 
@@ -345,6 +366,7 @@ class GroupCollaborationEngine:
         if not worker:
             raise Exception("No worker available")
 
+        principal = principal_for_group(group)
         memory_context = await inject_memory(task.group_id, task.id, task.description)
         context_parts = [memory_context]
         if context_data:
@@ -362,43 +384,63 @@ class GroupCollaborationEngine:
             group_id=task.group_id,
             role="worker",
             base_url=resolve_base_url(worker.model_provider, None),
+            principal=principal,
+            task_name=task.description,
         )
 
         final_output = worker_output
         reviewers = await _load_reviewers(task)
-        if reviewers:
-            review_output, _ = await __import__("app.core.collaboration.agent_runner", fromlist=["run_agent_simple"]).run_agent_simple(
-                agent_id=reviewers[0].agent_id,
-                provider=reviewers[0].model_provider or "openai",
-                model_id=reviewers[0].model_id or "gpt-4o",
-                api_key=resolve_api_key(reviewers[0].model_provider, reviewers[0].api_key_encrypted),
-                system_prompt=build_reviewer_prompt(task.description),
-                user_message=f"Review this output:\n{worker_output}",
-                tools=reviewers[0].tools or [],
-                group_id=task.group_id,
-                role="reviewer",
-                base_url=resolve_base_url(reviewers[0].model_provider, None),
-            )
-            lower = review_output.lower()
-            passed = any(k in lower for k in ["通过", "pass", "approved", "acceptable", "valid"])
-            final_output = review_output if passed else worker_output
+        all_issues = []
+        review_tokens = 0
+        for reviewer in reviewers:
+            try:
+                async with asyncio.timeout(TASK_TIMEOUT):
+                    review_output, tokens = await agent_runner.run_agent_simple(
+                        agent_id=reviewer.agent_id,
+                        provider=reviewer.model_provider or "openai",
+                        model_id=reviewer.model_id or "gpt-4o",
+                        api_key=resolve_api_key(
+                            reviewer.model_provider, reviewer.api_key_encrypted
+                        ),
+                        system_prompt=build_reviewer_prompt(task.description),
+                        user_message=f"Review this output:\n{worker_output}",
+                        tools=reviewer.tools or [],
+                        group_id=task.group_id,
+                        role="reviewer",
+                        base_url=resolve_base_url(reviewer.model_provider, None),
+                        principal=principal,
+                        task_name=task.description,
+                    )
+            except Exception:
+                await _update_task_status(task.id, "failed")
+                raise
+            review_tokens += tokens
+            _, issues = parse_review_result(review_output)
+            all_issues.extend(issues)
+        passed = not all_issues
 
         async with async_session() as db:
             t = await db.get(AgentGroupTask, task.id)
             if t:
-                t.status = "completed"
+                t.status = "completed" if passed else "partial"
                 t.final_output = final_output
-                t.total_tokens = (t.total_tokens or 0) + worker_tokens
+                t.total_tokens = (t.total_tokens or 0) + worker_tokens + review_tokens
                 t.completed_at = datetime.now(UTC)
                 await db.commit()
 
-        await store_memory(task.group_id, task.id, worker.agent_id, final_output, "task_result")
-        await group_ws_hub.broadcast(task.group_id, {
-            "type": "task_completed",
-            "data": {"task_id": task.id, "output": final_output},
-        })
+        if passed:
+            await store_memory(task.group_id, task.id, worker.agent_id, final_output, "task_result")
+        await group_ws_hub.broadcast(
+            task.group_id,
+            {
+                "type": "task_completed" if passed else "task_partial",
+                "data": {"task_id": task.id, "output": final_output, "issues": all_issues},
+            },
+        )
 
-    async def handoff_task(self, task_id: str, target_agent_id: str, reason: str = "") -> dict[str, Any]:
+    async def handoff_task(
+        self, task_id: str, target_agent_id: str, reason: str = ""
+    ) -> dict[str, Any]:
         """Hand off a task from one agent to another.
 
         Args:
@@ -439,15 +481,18 @@ class GroupCollaborationEngine:
                 reason=reason,
             )
 
-            await group_ws_hub.broadcast(task.group_id, {
-                "type": "task_handoff",
-                "data": {
-                    "task_id": task_id,
-                    "from_agent": msg.source_agent,
-                    "to_agent": target.id,
-                    "reason": reason,
+            await group_ws_hub.broadcast(
+                task.group_id,
+                {
+                    "type": "task_handoff",
+                    "data": {
+                        "task_id": task_id,
+                        "from_agent": msg.source_agent,
+                        "to_agent": target.id,
+                        "reason": reason,
+                    },
                 },
-            })
+            )
 
             return {"ok": True, "task_id": task_id, "handoff_to": target.id}
 
@@ -506,7 +551,7 @@ class GroupCollaborationEngine:
         return summary
 
 
-async def _load_task_context(task_id: str) -> tuple:
+async def _load_task_context(task_id: str) -> tuple[Any, Any, Any, Any]:
     """Load task, worker, reviewers, and group from database.
 
     Args:
@@ -516,7 +561,9 @@ async def _load_task_context(task_id: str) -> tuple:
         A tuple of (task, worker, reviewers, group) or Nones on failure.
     """
     async with async_session() as db:
-        task = (await db.execute(select(AgentGroupTask).where(AgentGroupTask.id == task_id))).scalar_one_or_none()
+        task = (
+            await db.execute(select(AgentGroupTask).where(AgentGroupTask.id == task_id))
+        ).scalar_one_or_none()
         if task is None:
             logger.error("task_not_found", task_id=task_id)
             return None, None, None, None
@@ -535,13 +582,21 @@ async def _load_task_context(task_id: str) -> tuple:
         worker = None
         if task.worker_id:
             worker = (
-                await db.execute(select(AgentGroupMember).where(AgentGroupMember.id == task.worker_id))
+                await db.execute(
+                    select(AgentGroupMember).where(AgentGroupMember.id == task.worker_id)
+                )
             ).scalar_one_or_none()
 
         if worker is None:
             worker = (
-                await db.execute(select(AgentGroupMember).where(AgentGroupMember.group_id == task.group_id))
-            ).scalars().first()
+                (
+                    await db.execute(
+                        select(AgentGroupMember).where(AgentGroupMember.group_id == task.group_id)
+                    )
+                )
+                .scalars()
+                .first()
+            )
         if worker is None:
             logger.error("worker_not_found", task_id=task_id, worker_id=task.worker_id)
             task.status = "failed"
@@ -549,8 +604,14 @@ async def _load_task_context(task_id: str) -> tuple:
             return None, None, None, None
 
         reviewers = (
-            await db.execute(select(AgentGroupMember).where(AgentGroupMember.id.in_(task.reviewer_ids or [])))
-        ).scalars().all()
+            (
+                await db.execute(
+                    select(AgentGroupMember).where(AgentGroupMember.id.in_(task.reviewer_ids or []))
+                )
+            )
+            .scalars()
+            .all()
+        )
 
         task.started_at = datetime.now(UTC)
         task.status = "running"
@@ -565,6 +626,8 @@ async def _dispatch_by_process_type(
     worker: Any,
     reviewers: list[Any],
     group: Any,
+    checkpoint: Any = None,
+    principal: Any = None,
 ) -> None:
     """Dispatch task execution based on the group's process type.
 
@@ -574,19 +637,34 @@ async def _dispatch_by_process_type(
         worker: The assigned worker.
         reviewers: List of reviewers.
         group: The group entity.
+        checkpoint: Optional checkpoint to resume from.
+        principal: Explicit principal propagated to every agent call.
     """
     process_type = group.process_type or "sequential"
     if process_type == "sequential":
-        await engine._run_sequential_process(task, worker, reviewers, group, task.max_rounds or 5)
+        await engine._run_sequential_process(
+            task,
+            worker,
+            reviewers,
+            group,
+            task.max_rounds or 5,
+            checkpoint=checkpoint,
+            principal=principal,
+        )
     elif process_type == "hierarchical":
-        await run_hierarchical_process(task, group)
+        await run_hierarchical_process(task, group, principal=principal)
     elif process_type == "group_chat":
-        await run_group_chat_process(task, group)
+        await run_group_chat_process(task, group, principal=principal)
     else:
         logger.error("unknown_process_type", process_type=process_type, task_id=task.id)
-        task.status = "failed"
-        async with async_session() as db:
-            await db.commit()
+        await _update_task_status(task.id, "failed")
+        await group_ws_hub.broadcast(
+            task.group_id,
+            {
+                "type": "task_failed",
+                "data": {"task_id": task.id, "error": f"Unknown process type: {process_type}"},
+            },
+        )
 
 
 async def _update_task_status(task_id: str, status: str) -> None:
@@ -618,20 +696,25 @@ async def _select_worker(task: Any) -> Any | None:
     if task.worker_id:
         async with async_session() as db:
             worker = (
-                await db.execute(select(AgentGroupMember).where(AgentGroupMember.id == task.worker_id))
+                await db.execute(
+                    select(AgentGroupMember).where(AgentGroupMember.id == task.worker_id)
+                )
             ).scalar_one_or_none()
             if worker:
                 return worker
 
     async with async_session() as db:
-        worker = (
-            await db.execute(
-                select(AgentGroupMember)
-                .where(AgentGroupMember.group_id == task.group_id)
-                .where(AgentGroupMember.role.in_(["worker", "participant"]))
+        return (
+            (
+                await db.execute(
+                    select(AgentGroupMember)
+                    .where(AgentGroupMember.group_id == task.group_id)
+                    .where(AgentGroupMember.role.in_(["worker", "participant"]))
+                )
             )
-        ).scalars().first()
-    return worker
+            .scalars()
+            .first()
+        )
 
 
 async def _load_reviewers(task: Any) -> list[Any]:
@@ -647,8 +730,16 @@ async def _load_reviewers(task: Any) -> list[Any]:
         t = await db.get(AgentGroupTask, task.id)
         if t:
             reviewers = (
-                await db.execute(select(AgentGroupMember).where(AgentGroupMember.id.in_(t.reviewer_ids or [])))
-            ).scalars().all()
+                (
+                    await db.execute(
+                        select(AgentGroupMember).where(
+                            AgentGroupMember.id.in_(t.reviewer_ids or [])
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
             return list(reviewers)
     return []
 
@@ -685,9 +776,10 @@ def get_group_collaboration_engine() -> GroupCollaborationEngine:
     global _group_collaboration_engine
     if _group_collaboration_engine is None:
         try:
-            model_registry = di_resolve("ModelRegistry")
+            model_registry: Any = di_resolve("ModelRegistry")
         except KeyError:
             from app.models.registry import ModelRegistry
+
             model_registry = ModelRegistry()
         _group_collaboration_engine = GroupCollaborationEngine(
             model_registry=model_registry,

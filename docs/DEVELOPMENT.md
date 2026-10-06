@@ -173,6 +173,7 @@ python3 -m pytest tests/ -v --asyncio-mode=auto
 import pytest
 from app.core.agent_engine import AgentEngine
 
+
 class TestAgentEngine:
     """AgentEngine 测试套件"""
 
@@ -284,8 +285,10 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
+
 class ExampleRequest(BaseModel):
     message: str
+
 
 @router.post("/example")
 async def example_endpoint(request: ExampleRequest):
@@ -342,6 +345,7 @@ async def example_endpoint(request: ExampleRequest):
 
 ```python
 import structlog
+
 logger = structlog.get_logger()
 
 logger.debug("调试信息", key=value)

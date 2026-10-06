@@ -10,40 +10,70 @@ tool still goes through schema + sandbox checks.
 
 from __future__ import annotations
 
-import structlog
 from typing import Any
+
+import structlog
 
 logger = structlog.get_logger()
 
 # Tools that modify the local filesystem.
-FILE_WRITE_TOOLS: frozenset[str] = frozenset({
-    "write_file", "edit_file", "append_file", "apply_patch",
-})
+FILE_WRITE_TOOLS: frozenset[str] = frozenset(
+    {
+        "write_file",
+        "edit_file",
+        "append_file",
+        "apply_patch",
+    }
+)
 
 # Tools that execute arbitrary shell commands.
-SHELL_TOOLS: frozenset[str] = frozenset({
-    "run_command", "shell", "execute_command", "bash",
-    "stream_command",
-})
+SHELL_TOOLS: frozenset[str] = frozenset(
+    {
+        "run_command",
+        "shell",
+        "execute_command",
+        "bash",
+        "stream_command",
+    }
+)
 
 # Tools that reach into containers / system-level execution.
-DOCKER_TOOLS: frozenset[str] = frozenset({
-    "container_exec", "docker",
-})
+DOCKER_TOOLS: frozenset[str] = frozenset(
+    {
+        "container_exec",
+        "docker",
+    }
+)
 
 # Tools that are rejected by default in workflow tool nodes.  A workflow
 # author must explicitly opt in via workflow-level tool capabilities.
 DEFAULT_DENIED_TOOLS: frozenset[str] = frozenset().union(
-    FILE_WRITE_TOOLS, SHELL_TOOLS, DOCKER_TOOLS,
+    FILE_WRITE_TOOLS,
+    SHELL_TOOLS,
+    DOCKER_TOOLS,
 )
 
 # Tools that are always allowed in workflow tool nodes.
-DEFAULT_ALLOWED_TOOLS: frozenset[str] = frozenset({
-    "read_file", "list_files", "file_exists", "file_info", "file_diff",
-    "get_datetime", "calculator", "web_search", "fetch_url",
-    "get_weather", "translate", "wikipedia_summary", "summarize",
-    "base64_encode", "json_get", "simulate_experiment",
-})
+DEFAULT_ALLOWED_TOOLS: frozenset[str] = frozenset(
+    {
+        "read_file",
+        "list_files",
+        "file_exists",
+        "file_info",
+        "file_diff",
+        "get_datetime",
+        "calculator",
+        "web_search",
+        "fetch_url",
+        "get_weather",
+        "translate",
+        "wikipedia_summary",
+        "summarize",
+        "base64_encode",
+        "json_get",
+        "simulate_experiment",
+    }
+)
 
 
 def _parse_tool_capabilities(workflow_capabilities: Any) -> set[str]:
@@ -60,9 +90,7 @@ def _parse_tool_capabilities(workflow_capabilities: Any) -> set[str]:
     if isinstance(raw, str):
         raw = [part.strip() for part in raw.split(",") if part.strip()]
     if not isinstance(raw, list):
-        raise ValueError(
-            "tool_capabilities must be a string or list of tool names"
-        )
+        raise ValueError("tool_capabilities must be a string or list of tool names")
 
     resolved = set(DEFAULT_ALLOWED_TOOLS)
     for item in raw:
@@ -132,7 +160,7 @@ def build_workflow_tool_validator(
         if sandbox is None:
             return True, "OK"
         try:
-            from app.core.engine.safety import COMMAND_TOOLS, FILE_TOOLS
+            from app.core.engine.validation import COMMAND_TOOLS, FILE_TOOLS
 
             if tool_name in COMMAND_TOOLS:
                 cmd = arguments.get("command") or ""

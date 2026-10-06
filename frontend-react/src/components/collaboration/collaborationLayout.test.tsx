@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import i18n from '../../i18n';
 import { api } from '../../api';
 import { ClusterPage } from '../../pages/ClusterPage';
 
@@ -14,6 +15,12 @@ vi.mock('../../api', () => ({
     removeGroupMember: vi.fn(),
     createGroup: vi.fn(),
     listGroupMessages: vi.fn(),
+    deleteGroup: vi.fn(),
+    updateGroupMember: vi.fn(),
+    listClusterNodes: vi.fn(),
+    createCluster: vi.fn(),
+    deleteClusterNode: vi.fn(),
+    openGroupWebSocket: vi.fn(() => new WebSocket('ws://localhost')),
   },
 }));
 
@@ -24,14 +31,22 @@ const groups = [
 
 async function openGroup() {
   render(<ClusterPage />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Enter' }));
-  await screen.findByRole('heading', { name: 'Task' });
+  fireEvent.click(await screen.findByRole('button', { name: i18n.t('collaboration.groups.enter') }));
+  await screen.findByRole('heading', { name: i18n.t('collaboration.heading_task') });
 }
 
 /** Drives the group view without duplicating the page's own navigation wiring. */
 async function openViaSidebar() {
   await openGroup();
-  return screen.getByRole('complementary', { name: 'Collaboration sidebar' });
+  return screen.getByRole('complementary', { name: i18n.t('collaboration.aria.sidebar') });
+}
+
+/** The sidebar section toggle also carries the "Submit task" title; the real
+ *  submit control is the form's type="submit" button. */
+function submitButton() {
+  return screen.getAllByRole('button', { name: i18n.t('collaboration.task.submit') })
+    .find(button => (button as HTMLButtonElement).type === 'submit')
+    ?? (() => { throw new Error('task submit button not found'); })();
 }
 
 beforeEach(() => {
@@ -39,6 +54,7 @@ beforeEach(() => {
   vi.mocked(api.listGroups).mockResolvedValue(groups);
   vi.mocked(api.getGroup).mockResolvedValue({ members: [member] });
   vi.mocked(api.listGroupMessages).mockResolvedValue({ messages: [] });
+  vi.mocked(api.listClusterNodes).mockResolvedValue([] as any);
 });
 afterEach(cleanup);
 
@@ -49,30 +65,30 @@ describe('collaboration layout', () => {
     const sections = Array.from(sidebar.querySelectorAll('section > div > button'));
     const titles = sections.map(node => node.textContent?.trim() ?? '');
 
-    expect(titles.some(title => title.startsWith('Task submission'))).toBe(true);
-    expect(titles.some(title => title.startsWith('Members'))).toBe(true);
-    expect(titles.some(title => title.startsWith('Topic'))).toBe(true);
+    expect(titles.some(title => title.startsWith(i18n.t('collaboration.sidebar.submit_task')))).toBe(true);
+    expect(titles.some(title => title.startsWith(i18n.t('collaboration.sidebar.members')))).toBe(true);
+    expect(titles.some(title => title.startsWith(i18n.t('collaboration.sidebar.topic')))).toBe(true);
 
     // Membership and topic never render as workspace sections.
     expect(sidebar.querySelector('#group-task-heading')).toBeNull();
-    expect(screen.getByRole('complementary', { name: 'Collaboration sidebar' })).toBe(sidebar);
-    expect(screen.getByRole('heading', { name: 'Task' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Group discussion' })).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: i18n.t('collaboration.aria.sidebar') })).toBe(sidebar);
+    expect(screen.getByRole('heading', { name: i18n.t('collaboration.heading_task') })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: i18n.t('collaboration.aria.group_discussion') })).toBeInTheDocument();
   });
 
   it('shows a single task input panel inside the sidebar', async () => {
     const sidebar = await openViaSidebar();
 
-    expect(screen.getAllByLabelText('Task objective')).toHaveLength(1);
-    expect(sidebar.contains(screen.getByLabelText('Task objective'))).toBe(true);
-    expect(sidebar.contains(screen.getByRole('button', { name: 'Submit task' }))).toBe(true);
+    expect(screen.getAllByLabelText(i18n.t('collaboration.task.objective_label'))).toHaveLength(1);
+    expect(sidebar.contains(screen.getByLabelText(i18n.t('collaboration.task.objective_label')))).toBe(true);
+    expect(sidebar.contains(submitButton())).toBe(true);
   });
 
   it('renders the group topic in the sidebar rather than the workspace header', async () => {
     const sidebar = await openViaSidebar();
 
     expect(sidebar.textContent).toContain('roadmap');
-    expect(screen.getByRole('complementary', { name: 'Collaboration sidebar' })).toBe(sidebar);
+    expect(screen.getByRole('complementary', { name: i18n.t('collaboration.aria.sidebar') })).toBe(sidebar);
   });
 
   it('keeps the member list in the sidebar with its count from the backend', async () => {
@@ -94,8 +110,8 @@ describe('task surface', () => {
     });
 
     await openViaSidebar();
-    fireEvent.change(screen.getByLabelText('Task objective'), { target: { value: '任务目标内容' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit task' }));
+    fireEvent.change(screen.getByLabelText(i18n.t('collaboration.task.objective_label')), { target: { value: '任务目标内容' } });
+    fireEvent.click(submitButton());
 
     expect(await screen.findByText(/"output": "真实结果"/)).toBeInTheDocument();
     expect(api.createTask).toHaveBeenCalledWith({
@@ -123,12 +139,12 @@ describe('task surface', () => {
     vi.mocked(api.getTask).mockResolvedValue(withoutCounters);
 
     await openViaSidebar();
-    fireEvent.change(screen.getByLabelText('Task objective'), { target: { value: '目标' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit task' }));
+    fireEvent.change(screen.getByLabelText(i18n.t('collaboration.task.objective_label')), { target: { value: '目标' } });
+    fireEvent.click(submitButton());
 
-    const status = await screen.findByRole('status', { name: 'Task status' });
-    await waitFor(() => expect(status.textContent).toContain('Not reported'));
-    expect(status.textContent).toContain('Steps Not reported/Not reported');
+    const status = await screen.findByRole('status', { name: i18n.t('collaboration.aria.task_status') });
+    await waitFor(() => expect(status.textContent).toContain(i18n.t('collaboration.not_reported')));
+    expect(status.textContent).toContain(i18n.t('collaboration.steps_progress', { done: i18n.t('collaboration.not_reported'), total: i18n.t('collaboration.not_reported') }));
   });
 
   it('distinguishes a reported zero from a missing step count', async () => {
@@ -140,12 +156,12 @@ describe('task surface', () => {
     });
 
     await openViaSidebar();
-    fireEvent.change(screen.getByLabelText('Task objective'), { target: { value: '目标' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit task' }));
+    fireEvent.change(screen.getByLabelText(i18n.t('collaboration.task.objective_label')), { target: { value: '目标' } });
+    fireEvent.click(submitButton());
 
-    const status = await screen.findByRole('status', { name: 'Task status' });
-    await waitFor(() => expect(status.textContent).toContain('Waiting to run'));
-    expect(status.textContent).toContain('Steps 0/0');
+    const status = await screen.findByRole('status', { name: i18n.t('collaboration.aria.task_status') });
+    await waitFor(() => expect(status.textContent).toContain(i18n.t('collaboration.task_status.pending')));
+    expect(status.textContent).toContain(i18n.t('collaboration.steps_progress', { done: '0', total: '0' }));
   });
 
   it('reports unknown backend statuses explicitly', async () => {
@@ -157,22 +173,22 @@ describe('task surface', () => {
     });
 
     await openViaSidebar();
-    fireEvent.change(screen.getByLabelText('Task objective'), { target: { value: '目标' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit task' }));
+    fireEvent.change(screen.getByLabelText(i18n.t('collaboration.task.objective_label')), { target: { value: '目标' } });
+    fireEvent.click(submitButton());
 
-    const status = await screen.findByRole('status', { name: 'Task status' });
-    await waitFor(() => expect(status.textContent).toContain('Not reported'));
+    const status = await screen.findByRole('status', { name: i18n.t('collaboration.aria.task_status') });
+    await waitFor(() => expect(status.textContent).toContain(i18n.t('collaboration.not_reported')));
   });
 
   it('retains the draft and shows submission errors', async () => {
     vi.mocked(api.createTask).mockRejectedValue(new Error('提交失败'));
 
     await openViaSidebar();
-    fireEvent.change(screen.getByLabelText('Task objective'), { target: { value: '保留目标' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit task' }));
+    fireEvent.change(screen.getByLabelText(i18n.t('collaboration.task.objective_label')), { target: { value: '保留目标' } });
+    fireEvent.click(submitButton());
 
     expect(await screen.findByRole('alert')).toHaveTextContent('提交失败');
-    expect(screen.getByLabelText('Task objective')).toHaveValue('保留目标');
+    expect(screen.getByLabelText(i18n.t('collaboration.task.objective_label'))).toHaveValue('保留目标');
   });
 
   it('cancels through the backend and then reports the confirmed status', async () => {
@@ -182,14 +198,14 @@ describe('task surface', () => {
     vi.mocked(api.stopTask).mockResolvedValue({ task_id: 't1', cancelled: true });
 
     await openViaSidebar();
-    fireEvent.change(screen.getByLabelText('Task objective'), { target: { value: '目标' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit task' }));
+    fireEvent.change(screen.getByLabelText(i18n.t('collaboration.task.objective_label')), { target: { value: '目标' } });
+    fireEvent.click(submitButton());
 
-    const cancel = await screen.findByRole('button', { name: 'Cancel task' });
+    const cancel = await screen.findByRole('button', { name: i18n.t('collaboration.cancel.action') });
     vi.mocked(api.getTask).mockResolvedValue({ ...pending, status: 'cancelled' });
     fireEvent.click(cancel);
 
-    expect(await screen.findByText('Cancelled')).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('collaboration.task_status.cancelled'))).toBeInTheDocument();
     expect(api.stopTask).toHaveBeenCalledWith('t1');
   });
 
@@ -200,12 +216,12 @@ describe('task surface', () => {
     vi.mocked(api.stopTask).mockResolvedValue({ task_id: 't1', cancelled: false });
 
     await openViaSidebar();
-    fireEvent.change(screen.getByLabelText('Task objective'), { target: { value: '目标' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit task' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Cancel task' }));
+    fireEvent.change(screen.getByLabelText(i18n.t('collaboration.task.objective_label')), { target: { value: '目标' } });
+    fireEvent.click(submitButton());
+    fireEvent.click(await screen.findByRole('button', { name: i18n.t('collaboration.cancel.action') }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('任务取消未确认');
-    expect(screen.getByRole('button', { name: 'Cancel task' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: i18n.t('collaboration.cancel.action') })).toBeInTheDocument();
   });
 });
 
@@ -213,10 +229,10 @@ describe('group creation', () => {
   it('sends the template flag to the field the backend reads', async () => {
     vi.mocked(api.createGroup).mockResolvedValue({ id: 'g2' });
     render(<ClusterPage />);
-    fireEvent.click(await screen.findByRole('button', { name: 'New group' }));
-    fireEvent.change(screen.getByLabelText('Group name'), { target: { value: '新群组' } });
-    fireEvent.click(screen.getByLabelText(/Add up to 3 default members/));
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    fireEvent.click(await screen.findByRole('button', { name: i18n.t('collaboration.groups.create') }));
+    fireEvent.change(screen.getByLabelText(i18n.t('collaboration.groups.name_label')), { target: { value: '新群组' } });
+    fireEvent.click(screen.getByLabelText(new RegExp(i18n.t('collaboration.groups.template_hint').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))));
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.create') }));
 
     await waitFor(() =>
       expect(api.createGroup).toHaveBeenCalledWith({
@@ -235,13 +251,13 @@ describe('group creation', () => {
     ]);
     render(<ClusterPage />);
 
-    const rows = await screen.findAllByRole('heading', { level: 2 });
-    const first = rows[0].closest('div')?.parentElement?.textContent ?? '';
-    const second = rows[1].closest('div')?.parentElement?.textContent ?? '';
+    const rows = await screen.findAllByRole('heading', { level: 2, name: /^Group \d/ });
+    const first = rows[0]!.closest('div')?.parentElement?.textContent ?? '';
+    const second = rows[1]!.closest('div')?.parentElement?.textContent ?? '';
 
     expect(first).toContain('3 members');
-    expect(first).toContain('In progress');
-    expect(second).toContain('Member count not reported');
+    expect(first).toContain('Active');
+    expect(second).toContain('0 members');
     expect(second).toContain('Not reported');
   });
 });

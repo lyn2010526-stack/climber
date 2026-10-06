@@ -128,7 +128,9 @@ class CoverageChecker:
         combined_content = self._combine_candidates(candidates)
 
         try:
-            raw_report = await self._call_llm(task, combined_content, candidates, model_adapter, timeout)
+            raw_report = await self._call_llm(
+                task, combined_content, candidates, model_adapter, timeout
+            )
         except Exception as exc:
             logger.error(
                 "Coverage LLM call failed",
@@ -229,13 +231,15 @@ class CoverageChecker:
             cleaned = cleaned[4:].strip()
 
         try:
-            return json.loads(cleaned)
+            parsed: dict[str, Any] = json.loads(cleaned)
+            return parsed
         except json.JSONDecodeError:
             start_idx = cleaned.find("{")
             end_idx = cleaned.rfind("}")
             if start_idx == -1 or end_idx == -1:
                 return {}
-            return json.loads(cleaned[start_idx : end_idx + 1])
+            fallback: dict[str, Any] = json.loads(cleaned[start_idx : end_idx + 1])
+            return fallback
 
     def _parse_edge_cases(self, raw_items: list[dict[str, Any]]) -> list[EdgeCase]:
         edge_cases: list[EdgeCase] = []

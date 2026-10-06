@@ -23,9 +23,28 @@ from app.storage.models_skills import SkillTestCase, SkillTestResult, SkillVersi
 logger = structlog.get_logger()
 
 
+def _dump_json_list(value: Any) -> str:
+    """Serialize a list for the text JSON columns."""
+    if isinstance(value, str):
+        return value
+    return json.dumps(list(value or []), ensure_ascii=False)
+
+
+def _load_json_list(value: Any) -> list[Any]:
+    """Parse a text JSON column back into a list."""
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except ValueError:
+            return [value] if value else []
+        return parsed if isinstance(parsed, list) else []
+    return list(value or [])
+
+
 @dataclass
 class SkillInvocation:
     """A single skill invocation within a composition."""
+
     skill_id: str
     params: dict[str, Any] = field(default_factory=dict)
     depends_on: list[str] = field(default_factory=list)  # other invocation IDs
@@ -36,20 +55,28 @@ class SkillInvocation:
 @dataclass
 class SkillComposition:
     """A composition of multiple skills that work together."""
+
     id: str
     name: str
     description: str
     invocations: list[SkillInvocation] = field(default_factory=list)
     created_at: str = ""
 
-    def add_step(self, skill_id: str, params: dict[str, Any] | None = None, depends_on: list[str] | None = None) -> str:
+    def add_step(
+        self,
+        skill_id: str,
+        params: dict[str, Any] | None = None,
+        depends_on: list[str] | None = None,
+    ) -> str:
         """Add a skill invocation step. Returns invocation ID."""
         inv_id = f"step_{len(self.invocations)}"
-        self.invocations.append(SkillInvocation(
-            skill_id=skill_id,
-            params=params or {},
-            depends_on=depends_on or [],
-        ))
+        self.invocations.append(
+            SkillInvocation(
+                skill_id=skill_id,
+                params=params or {},
+                depends_on=depends_on or [],
+            )
+        )
         return inv_id
 
 
@@ -143,7 +170,7 @@ class SkillVersionManager:
                 skill_id=skill_id,
                 version=version,
                 prompt=prompt,
-                tools=tools,
+                tools=_dump_json_list(tools),
                 author=author,
                 changelog=changelog,
             )
@@ -151,7 +178,7 @@ class SkillVersionManager:
             await db.commit()
             return version_id
 
-    async def get_versions(self, skill_id: str) -> list[dict]:
+    async def get_versions(self, skill_id: str) -> list[dict[str, Any]]:
         """Get all versions of a skill."""
         async with async_session() as db:
             result = await db.execute(
@@ -165,15 +192,16 @@ class SkillVersionManager:
                     "id": v.id,
                     "version": v.version,
                     "prompt": v.prompt,
-                    "tools": v.tools,
+                    "tools": _load_json_list(v.tools),
                     "author": v.author,
                     "changelog": v.changelog,
+                    "is_active": bool(v.is_active),
                     "created_at": v.created_at.isoformat() if v.created_at else None,
                 }
                 for v in versions
             ]
 
-    async def get_version(self, skill_id: str, version: str) -> dict | None:
+    async def get_version(self, skill_id: str, version: str) -> dict[str, Any] | None:
         """Get a specific version of a skill."""
         async with async_session() as db:
             result = await db.execute(
@@ -192,12 +220,12 @@ class SkillVersionManager:
                 "skill_id": v.skill_id,
                 "version": v.version,
                 "prompt": v.prompt,
-                "tools": v.tools,
+                "tools": _load_json_list(v.tools),
                 "author": v.author,
                 "changelog": v.changelog,
             }
 
-    async def rollback(self, skill_id: str, version: str) -> dict | None:
+    async def rollback(self, skill_id: str, version: str) -> dict[str, Any] | None:
         """Rollback to a specific version (creates a new version with old content)."""
         target = await self.get_version(skill_id, version)
         if not target:
@@ -242,7 +270,7 @@ class SkillTester:
                 name=name,
                 input_params=json.dumps(input_params, ensure_ascii=False),
                 expected_output_contains=expected_output_contains,
-                expected_tools=expected_tools or [],
+                expected_tools=_dump_json_list(expected_tools or []),
                 timeout_seconds=timeout_seconds,
             )
             db.add(record)
@@ -266,7 +294,11 @@ class SkillTester:
 
             try:
                 output = await skill_handler(**input_params)
-                passed = test.expected_output_contains in output if test.expected_output_contains else True
+                passed = (
+                    test.expected_output_contains in output
+                    if test.expected_output_contains
+                    else True
+                )
                 duration = (datetime.now(UTC) - start).total_seconds() * 1000
 
                 result_record = SkillTestResult(

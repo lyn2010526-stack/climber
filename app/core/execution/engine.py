@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -48,7 +49,7 @@ class TaskExecutionEngine:
         self._circuit_breaker = circuit_breaker or CircuitBreaker()
         self._timeout = timeout_manager or TimeoutManager()
         self._subtask_executor = subtask_executor or self._default_subtask_executor
-        self._running_tasks: dict[str, asyncio.Task] = {}
+        self._running_tasks: dict[str, asyncio.Task[Any]] = {}
 
     async def execute_task(self, task: Task) -> Task:
         """Execute a task and its sub-tasks according to DAG dependencies."""
@@ -56,13 +57,18 @@ class TaskExecutionEngine:
             task.status = TaskState.FAILED.value
             task.metadata["failure_reason"] = "circuit_breaker_open"
             self._store.save(task)
-            await self._publish_event(EventBus.EVENT_FAILED, task.id, {"reason": "circuit_breaker_open"})
+            await self._publish_event(
+                EventBus.EVENT_FAILED, task.id, {"reason": "circuit_breaker_open"}
+            )
             return task
 
         task.status = TaskState.RUNNING.value
         task.current_iteration += 1
         self._store.save(task)
         self._timeout.start_task(task.id, task.timeout_seconds)
+        running = asyncio.current_task()
+        if running is not None:
+            self._running_tasks[task.id] = running
         await self._publish_event(EventBus.EVENT_STARTED, task.id)
 
         try:
@@ -101,9 +107,11 @@ class TaskExecutionEngine:
         if not task.sub_tasks:
             return True
 
-        completed: set[str] = set()
+        completed: set[str] = {
+            st.id for st in task.sub_tasks if st.status == TaskState.COMPLETED.value
+        }
         subtask_map = {st.id: st for st in task.sub_tasks}
-        remaining = set(subtask_map.keys())
+        remaining = set(subtask_map.keys()) - completed
 
         while remaining:
             if self._timeout.check_timeout(task.id):
@@ -135,13 +143,11 @@ class TaskExecutionEngine:
                     )
                     task.status = TaskState.PAUSED.value
                     self._store.save(task)
-                    approved = await self._wait_for_approval(hitl_req.id)
+                    approved = await self._wait_for_approval(hitl_req.id, task)
                     if not approved:
                         subtask.status = TaskState.FAILED.value
                         subtask.error = "HITL rejected"
-                        completed.add(subtask_id)
-                        remaining.discard(subtask_id)
-                        continue
+                        return False
                     task.status = TaskState.RUNNING.value
                     self._store.save(task)
 
@@ -150,7 +156,7 @@ class TaskExecutionEngine:
                         self._run_subtask(subtask, task),
                         timeout=self._timeout.get_remaining_time(task.id),
                     )
-                    subtask.result = str(result) if result else ""
+                    subtask.result = str(result) if result is not None else ""
                     subtask.status = TaskState.COMPLETED.value
                     subtask.completed_at = datetime.now(UTC).isoformat()
                     completed.add(subtask_id)
@@ -163,21 +169,15 @@ class TaskExecutionEngine:
                 except TimeoutError:
                     subtask.status = TaskState.FAILED.value
                     subtask.error = "timeout"
-                    completed.add(subtask_id)
-                    remaining.discard(subtask_id)
                     raise
                 except Exception as e:
                     subtask.status = TaskState.FAILED.value
                     subtask.error = str(e)
-                    completed.add(subtask_id)
-                    remaining.discard(subtask_id)
+                    return False
 
             self._store.save(task)
 
-        return all(
-            subtask_map[st_id].status == TaskState.COMPLETED.value
-            for st_id in subtask_map
-        )
+        return all(subtask_map[st_id].status == TaskState.COMPLETED.value for st_id in subtask_map)
 
     def _get_ready_subtasks(
         self,
@@ -197,7 +197,10 @@ class TaskExecutionEngine:
         desc_lower = subtask.description.lower()
         return any(kw in desc_lower for kw in sensitive_keywords)
 
-    async def _wait_for_approval(self, hitl_request_id: str, poll_interval: float = 0.1) -> bool:
+    async def _wait_for_approval(
+        self, hitl_request_id: str, task: Task, poll_interval: float = 0.1
+    ) -> bool:
+        deadline = time.monotonic() + self._timeout.get_remaining_time(task.id)
         while True:
             request = self._hitl.get_request(hitl_request_id)
             if not request:
@@ -210,6 +213,8 @@ class TaskExecutionEngine:
             for exp in expired:
                 if exp.id == hitl_request_id:
                     return False
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"Task {task.id} HITL approval timed out")
             await asyncio.sleep(poll_interval)
 
     async def _run_subtask(self, subtask: SubTask, task: Task) -> Any:
@@ -219,7 +224,9 @@ class TaskExecutionEngine:
     def _default_subtask_executor(self, subtask: SubTask, task: Task) -> str:
         return f"Executed: {subtask.description}"
 
-    async def _publish_event(self, event_type: str, task_id: str, data: dict[str, Any] | None = None) -> None:
+    async def _publish_event(
+        self, event_type: str, task_id: str, data: dict[str, Any] | None = None
+    ) -> None:
         event = TaskEvent(
             event_type=event_type,
             task_id=task_id,

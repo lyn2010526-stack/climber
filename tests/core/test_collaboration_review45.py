@@ -18,17 +18,24 @@ from fastapi import HTTPException
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+APPROVED = '{"passed":true,"issues":[]}'
 # Isolate storage initialization as well as every session used by this suite.
-with patch.dict(os.environ, {
-    "APP_TESTING": "true",
-    "TEST_DATABASE_URL": "sqlite+aiosqlite:///:memory:",
-    "DATABASE_URL": "sqlite+aiosqlite:///:memory:",
-}):
+with patch.dict(
+    os.environ,
+    {
+        "APP_TESTING": "true",
+        "TEST_DATABASE_URL": "sqlite+aiosqlite:///:memory:",
+        "DATABASE_URL": "sqlite+aiosqlite:///:memory:",
+    },
+):
     from app.core import AgentEvent, AgentEventType
     from app.core.collaboration import agent_runner, base, checkpoint, handoff, hierarchical
     from app.storage import Base
     from app.storage.models_groups import (
-        AgentGroup, AgentGroupMember, AgentGroupTask, AgentGroupTaskCheckpoint,
+        AgentGroup,
+        AgentGroupMember,
+        AgentGroupTask,
+        AgentGroupTaskCheckpoint,
     )
 
 
@@ -50,9 +57,15 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
         async with self.db_engine.begin() as connection:
             await connection.run_sync(
                 Base.metadata.create_all,
-                tables=[model.__table__ for model in (
-                    AgentGroup, AgentGroupMember, AgentGroupTask, AgentGroupTaskCheckpoint,
-                )],
+                tables=[
+                    model.__table__
+                    for model in (
+                        AgentGroup,
+                        AgentGroupMember,
+                        AgentGroupTask,
+                        AgentGroupTaskCheckpoint,
+                    )
+                ],
             )
         for module in (base, hierarchical, checkpoint):
             self.enterContext(patch.object(module, "async_session", self.sessions))
@@ -65,7 +78,7 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
         self.enterContext(patch.object(hierarchical, "resolve_api_key", return_value="test-only"))
         self.enterContext(patch.object(hierarchical, "resolve_base_url", return_value=None))
         self.calls = []
-        self.responses = ["Assign work to worker-agent", "worker result", "approved"]
+        self.responses = ["Assign work to worker-agent", "worker result", APPROVED]
 
         async def scripted_agent(*args, **kwargs):
             self.calls.append({"agent_id": args[0], "model_id": args[2], "prompt": args[5]})
@@ -85,22 +98,35 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
         self.enterContext(patch.object(agent_runner, "run_agent", scripted_agent))
         self.engine = base.GroupCollaborationEngine(None, None)
         async with self.sessions() as db:
-            self.manager = AgentGroupMember(id="manager-member", agent_id="manager-agent", role="manager")
-            self.worker = AgentGroupMember(id="worker-member", agent_id="worker-agent", role="worker")
-            self.target = AgentGroupMember(id="target-member", agent_id="target-agent", role="reviewer")
+            self.manager = AgentGroupMember(
+                id="manager-member", agent_id="manager-agent", role="manager"
+            )
+            self.worker = AgentGroupMember(
+                id="worker-member", agent_id="worker-agent", role="worker"
+            )
+            self.target = AgentGroupMember(
+                id="target-member", agent_id="target-agent", role="reviewer"
+            )
             self.group = AgentGroup(
-                id="group", name="Review 4/5", process_type="hierarchical",
-                manager_agent_id=self.manager.id, members=[self.manager, self.worker, self.target],
+                id="group",
+                name="Review 4/5",
+                process_type="hierarchical",
+                manager_agent_id=self.manager.id,
+                members=[self.manager, self.worker, self.target],
             )
             foreign_group = AgentGroup(
-                id="foreign-group", name="Other group",
+                id="foreign-group",
+                name="Other group",
                 members=[AgentGroupMember(id="foreign-member", agent_id="foreign-agent")],
             )
             db.add_all([self.group, foreign_group])
             await db.flush()
             self.task = AgentGroupTask(
-                id="task", group_id=self.group.id, description="Review the implementation",
-                worker_id=self.worker.id, status="pending",
+                id="task",
+                group_id=self.group.id,
+                description="Review the implementation",
+                worker_id=self.worker.id,
+                status="pending",
             )
             db.add(self.task)
             await db.commit()
@@ -110,8 +136,11 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
             return await db.get(AgentGroupTask, self.task.id)
 
     def events(self, kind):
-        return [call.args[1]["data"] for call in self.broadcast.await_args_list
-                if call.args[1]["type"] == kind]
+        return [
+            call.args[1]["data"]
+            for call in self.broadcast.await_args_list
+            if call.args[1]["type"] == kind
+        ]
 
     async def assert_failed(self, message):
         task = await self.persisted_task()
@@ -137,18 +166,31 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, {"ok": True, "task_id": "task", "handoff_to": "target-member"})
         self.assertEqual(len(messages), 1)
         self.assertIsInstance(messages[0], message_type)
-        self.assertEqual(vars(messages[0]), {
-            "source_agent": "worker-member", "target_agent": "target-member",
-            "task_id": "task", "context": self.task.description, "reason": "Review needed",
-        })
+        self.assertEqual(
+            vars(messages[0]),
+            {
+                "source_agent": "worker-member",
+                "target_agent": "target-member",
+                "task_id": "task",
+                "context": self.task.description,
+                "reason": "Review needed",
+            },
+        )
         self.assertIsInstance(messages[0].context, str)
         task = await self.persisted_task()
         self.assertEqual(task.worker_id, "target-member")
         self.assertEqual(task.status, "pending")
-        self.assertEqual(self.events("task_handoff"), [{
-            "task_id": "task", "from_agent": "worker-member",
-            "to_agent": "target-member", "reason": "Review needed",
-        }])
+        self.assertEqual(
+            self.events("task_handoff"),
+            [
+                {
+                    "task_id": "task",
+                    "from_agent": "worker-member",
+                    "to_agent": "target-member",
+                    "reason": "Review needed",
+                }
+            ],
+        )
 
     async def test_handoff_missing_task_returns_404_without_event(self):
         with self.assertRaises(HTTPException) as raised:
@@ -189,10 +231,12 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
         await self.engine.run_task("task")
         task = await self.persisted_task()
         self.assertEqual(task.status, "completed")
-        self.assertEqual(task.final_output, "approved")
+        self.assertEqual(task.final_output, "worker result")
         self.assertIsNotNone(task.completed_at)
-        self.assertEqual([call["agent_id"] for call in self.calls],
-                         ["manager-agent", "worker-agent", "manager-agent"])
+        self.assertEqual(
+            [call["agent_id"] for call in self.calls],
+            ["manager-agent", "worker-agent", "target-agent"],
+        )
         self.assertIn("- worker-agent (worker)", self.calls[0]["prompt"])
         self.assertEqual(len(self.events("task_completed")), 1)
         self.assertEqual(self.events("task_failed"), [])
@@ -260,22 +304,37 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
 
     async def run_worker_with_retry(self):
         return await agent_runner.run_agent_with_retry(
-            agent_id="worker-agent", provider="openai", model_id="gpt-4o",
-            api_key="test-only", system_prompt="worker", user_message="task",
-            tools=[], group_id="group", role="worker",
+            agent_id="worker-agent",
+            provider="openai",
+            model_id="gpt-4o",
+            api_key="test-only",
+            system_prompt="worker",
+            user_message="task",
+            tools=[],
+            group_id="group",
+            role="worker",
         )
 
     async def test_exhausted_worker_and_fallback_persist_failed_before_validation(self):
-        self.responses = ["plan", RuntimeError("primary failed"),
-                          RuntimeError("fallback failed"), "approved"]
-        with patch.object(agent_runner, "MAX_RETRIES", 0), patch.object(
-            agent_runner, "_get_fallback_model", return_value=("openai", "test-fallback")
+        self.responses = [
+            "plan",
+            RuntimeError("primary failed"),
+            RuntimeError("fallback failed"),
+            APPROVED,
+        ]
+        with (
+            patch.object(agent_runner, "MAX_RETRIES", 0),
+            patch.object(
+                agent_runner, "_get_fallback_model", return_value=("openai", "test-fallback")
+            ),
         ):
             await self.engine.run_task("task")
         await self.assert_failed("worker failed after retry")
-        self.assertEqual([call["agent_id"] for call in self.calls],
-                         ["manager-agent", "worker-agent", "worker-agent"])
-        self.assertEqual(self.responses, ["approved"])
+        self.assertEqual(
+            [call["agent_id"] for call in self.calls],
+            ["manager-agent", "worker-agent", "worker-agent"],
+        )
+        self.assertEqual(self.responses, [APPROVED])
 
     async def test_retry_exhaustion_preserves_last_exception_cause(self):
         for fallback in (None, ("openai", "test-fallback")):
@@ -286,9 +345,11 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
                 last_error = errors[-1]
                 self.responses = list(errors)
                 self.calls.clear()
-                with patch.object(agent_runner, "MAX_RETRIES", 1), patch.object(
-                    agent_runner, "_get_fallback_model", return_value=fallback
-                ), self.assertRaisesRegex(RuntimeError, "worker failed after retry") as raised:
+                with (
+                    patch.object(agent_runner, "MAX_RETRIES", 1),
+                    patch.object(agent_runner, "_get_fallback_model", return_value=fallback),
+                    self.assertRaisesRegex(RuntimeError, "worker failed after retry") as raised,
+                ):
                     await self.run_worker_with_retry()
                 self.assertIs(raised.exception.__cause__, last_error)
                 self.assertEqual(len(self.calls), len(errors))
@@ -301,18 +362,24 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
                 if in_fallback:
                     self.responses.append(RuntimeError("primary failed"))
                 cancelled = asyncio.CancelledError()
-                self.responses.extend([cancelled, "approved"])
+                self.responses.extend([cancelled, APPROVED])
                 self.calls.clear()
                 self.broadcast.reset_mock()
-                with patch.object(agent_runner, "MAX_RETRIES", 0), patch.object(
-                    agent_runner, "_get_fallback_model", return_value=("openai", "test-fallback")
-                ) as fallback, self.assertRaises(asyncio.CancelledError) as raised:
+                with (
+                    patch.object(agent_runner, "MAX_RETRIES", 0),
+                    patch.object(
+                        agent_runner,
+                        "_get_fallback_model",
+                        return_value=("openai", "test-fallback"),
+                    ) as fallback,
+                    self.assertRaises(asyncio.CancelledError) as raised,
+                ):
                     await self.engine.run_task("task")
                 self.assertIs(raised.exception, cancelled)
                 self.assertEqual((await self.persisted_task()).status, "stopped")
                 self.assertEqual(len(self.calls), 3 if in_fallback else 2)
                 self.assertEqual(fallback.call_count, int(in_fallback))
-                self.assertEqual(self.responses, ["approved"])
+                self.assertEqual(self.responses, [APPROVED])
                 self.assertEqual(self.events("task_failed"), [])
                 self.assertEqual(self.events("task_completed"), [])
                 self.assertEqual(self.engine._running_tasks, {})
@@ -329,25 +396,39 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
                 self.responses = [] if mode == "primary" else [RuntimeError("transient failure")]
                 self.responses.append(tool_completion)
                 self.calls.clear()
-                with patch.object(agent_runner, "MAX_RETRIES", int(mode == "retry")), patch.object(
-                    agent_runner, "_get_fallback_model", return_value=("openai", "test-fallback")
-                ) as fallback:
+                with (
+                    patch.object(agent_runner, "MAX_RETRIES", int(mode == "retry")),
+                    patch.object(
+                        agent_runner,
+                        "_get_fallback_model",
+                        return_value=("openai", "test-fallback"),
+                    ) as fallback,
+                ):
                     result = await self.run_worker_with_retry()
                 self.assertEqual(result, ("", 11))
                 self.assertEqual(len(self.calls), 1 if mode == "primary" else 2)
                 self.assertEqual(fallback.call_count, int(mode == "fallback"))
-                self.assertEqual(self.calls[-1]["model_id"],
-                                 "test-fallback" if mode == "fallback" else "gpt-4o")
+                self.assertEqual(
+                    self.calls[-1]["model_id"], "test-fallback" if mode == "fallback" else "gpt-4o"
+                )
                 self.assertEqual(self.responses, [])
 
     async def test_entry_accepts_tool_only_fallback_completion(self):
-        self.responses = ["plan", RuntimeError("primary failed"), [
-            AgentEvent(AgentEventType.TOOL_CALL, {"name": "test_tool"}),
-            AgentEvent(AgentEventType.TOOL_RESULT, {"result": "ok"}),
-            AgentEvent(AgentEventType.DONE, {"status": "completed", "tokens_used": 11}),
-        ], "approved"]
-        with patch.object(agent_runner, "MAX_RETRIES", 0), patch.object(
-            agent_runner, "_get_fallback_model", return_value=("openai", "test-fallback")
+        self.responses = [
+            "plan",
+            RuntimeError("primary failed"),
+            [
+                AgentEvent(AgentEventType.TOOL_CALL, {"name": "test_tool"}),
+                AgentEvent(AgentEventType.TOOL_RESULT, {"result": "ok"}),
+                AgentEvent(AgentEventType.DONE, {"status": "completed", "tokens_used": 11}),
+            ],
+            APPROVED,
+        ]
+        with (
+            patch.object(agent_runner, "MAX_RETRIES", 0),
+            patch.object(
+                agent_runner, "_get_fallback_model", return_value=("openai", "test-fallback")
+            ),
         ):
             await self.engine.run_task("task")
         self.assertEqual((await self.persisted_task()).status, "completed")
@@ -360,24 +441,34 @@ class CollaborationReview45Tests(unittest.IsolatedAsyncioTestCase):
         for events in ([], [AgentEvent(AgentEventType.TEXT, {"content": "partial output"})]):
             with self.subTest(events=events):
                 self.responses = [events]
-                with patch.object(agent_runner, "MAX_RETRIES", 0), patch.object(
-                    agent_runner, "_get_fallback_model", return_value=None
-                ), self.assertRaisesRegex(RuntimeError, "worker failed after retry") as raised:
+                with (
+                    patch.object(agent_runner, "MAX_RETRIES", 0),
+                    patch.object(agent_runner, "_get_fallback_model", return_value=None),
+                    self.assertRaisesRegex(RuntimeError, "worker failed after retry") as raised,
+                ):
                     await self.run_worker_with_retry()
                 self.assertIsInstance(raised.exception.__cause__, RuntimeError)
                 self.assertIn("DONE", str(raised.exception.__cause__))
 
     async def test_error_event_after_partial_text_is_failed(self):
-        self.responses = ["plan", [
-            AgentEvent(AgentEventType.TEXT, {"content": "partial output"}),
-            AgentEvent(AgentEventType.ERROR, {"error": "worker event failed"}),
-        ], RuntimeError("fallback failed"), "approved"]
-        with patch.object(agent_runner, "MAX_RETRIES", 0), patch.object(
-            agent_runner, "_get_fallback_model", return_value=("openai", "test-fallback")
+        self.responses = [
+            "plan",
+            [
+                AgentEvent(AgentEventType.TEXT, {"content": "partial output"}),
+                AgentEvent(AgentEventType.ERROR, {"error": "worker event failed"}),
+            ],
+            RuntimeError("fallback failed"),
+            APPROVED,
+        ]
+        with (
+            patch.object(agent_runner, "MAX_RETRIES", 0),
+            patch.object(
+                agent_runner, "_get_fallback_model", return_value=("openai", "test-fallback")
+            ),
         ):
             await self.engine.run_task("task")
         await self.assert_failed("worker failed after retry")
-        self.assertEqual(self.responses, ["approved"])
+        self.assertEqual(self.responses, [APPROVED])
 
 
 if __name__ == "__main__":

@@ -25,19 +25,25 @@ class ReasoningService:
 
             self.pipeline.register_strategy(ReasoningMode.TREE_OF_THOUGHT, TreeOfThoughtStrategy())
         except Exception as exc:  # pragma: no cover - defensive import
-            logger.warning("reasoning_strategy_registration_failed", strategy="tree_of_thought", error=str(exc))
+            logger.warning(
+                "reasoning_strategy_registration_failed", strategy="tree_of_thought", error=str(exc)
+            )
         try:
             from app.core.reasoning.strategies.deep_refine import DeepRefineStrategy
 
             self.pipeline.register_strategy(ReasoningMode.DEEP_REFINE, DeepRefineStrategy())
         except Exception as exc:  # pragma: no cover
-            logger.warning("reasoning_strategy_registration_failed", strategy="deep_refine", error=str(exc))
+            logger.warning(
+                "reasoning_strategy_registration_failed", strategy="deep_refine", error=str(exc)
+            )
         try:
             from app.core.reasoning.strategies.debate import DebateStrategy
 
             self.pipeline.register_strategy(ReasoningMode.DEBATE, DebateStrategy())
         except Exception as exc:  # pragma: no cover
-            logger.warning("reasoning_strategy_registration_failed", strategy="debate", error=str(exc))
+            logger.warning(
+                "reasoning_strategy_registration_failed", strategy="debate", error=str(exc)
+            )
 
     def is_available(self) -> bool:
         return self.pipeline is not None and bool(self.pipeline._strategies)

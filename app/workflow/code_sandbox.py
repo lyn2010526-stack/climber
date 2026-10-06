@@ -33,7 +33,9 @@ def _apply_child_limits() -> None:
     import resource
 
     resource.setrlimit(resource.RLIMIT_AS, (_MAX_MEMORY_BYTES, _MAX_MEMORY_BYTES))
-    resource.setrlimit(resource.RLIMIT_CPU, (_DEFAULT_TIMEOUT_SECONDS + 2, _DEFAULT_TIMEOUT_SECONDS + 4))
+    resource.setrlimit(
+        resource.RLIMIT_CPU, (_DEFAULT_TIMEOUT_SECONDS + 2, _DEFAULT_TIMEOUT_SECONDS + 4)
+    )
     resource.setrlimit(resource.RLIMIT_NOFILE, (32, 32))
     resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))
 
@@ -96,8 +98,8 @@ async def run_code_sandboxed(
             sys.executable,
             "-I",
             "-c",
-            "import sys; sys.path.insert(0, %r); "
-            "from app.workflow.code_sandbox import _child_main; _child_main()" % project_root,
+            f"import sys; sys.path.insert(0, {project_root!r}); "
+            "from app.workflow.code_sandbox import _child_main; _child_main()",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -114,7 +116,10 @@ async def run_code_sandboxed(
             with contextlib.suppress(ProcessLookupError):
                 proc.kill()
             await proc.wait()
-            return {"ok": False, "error": f"Code node exceeded {effective_timeout}s wall-clock limit"}
+            return {
+                "ok": False,
+                "error": f"Code node exceeded {effective_timeout}s wall-clock limit",
+            }
     except Exception as exc:
         return {"ok": False, "error": f"Code sandbox failed to start: {exc}"}
     finally:
@@ -125,7 +130,9 @@ async def run_code_sandboxed(
     raw = stdout[:_MAX_OUTPUT_BYTES]
     if not raw:
         err_text = stderr.decode("utf-8", errors="replace").strip()[:500]
-        reason = err_text or f"Code node terminated (exit={proc.returncode}, likely CPU/memory limit)"
+        reason = (
+            err_text or f"Code node terminated (exit={proc.returncode}, likely CPU/memory limit)"
+        )
         return {"ok": False, "error": reason}
     try:
         decoded = json.loads(raw.decode("utf-8", errors="replace"))

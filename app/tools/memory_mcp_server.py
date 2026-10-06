@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
-from typing import Any
+from typing import Any, cast
 
 from app.core.memory.lifecycle import MemoryLifecycleManager, MemoryRetrieveResult
 
@@ -54,12 +54,17 @@ def sync_write_memory(
     """Persist a memory through the lifecycle manager."""
     _ensure_tables()
     metadata = {"tags": tags or []} if tags else None
+    # Bound importance at the entry point so direct callers match the tool clamp.
+    try:
+        importance = max(0.0, min(1.0, float(importance)))
+    except (TypeError, ValueError):
+        importance = 0.5
     result = _run(
         _manager.write_memory(
             content=content,
             user_id=user_id,
             memory_type=memory_type,
-            importance=float(importance),
+            importance=importance,
             metadata=metadata,
         )
     )
@@ -130,7 +135,7 @@ def sync_memory_status(user_id: str = DEFAULT_USER_ID) -> dict[str, Any]:
             ).scalar() or 0
             return {"total": total, "archived": archived, "active": total - archived}
 
-    counts = _run(_counts())
+    counts: dict[str, Any] = _run(_counts())
     counts["user_id"] = user_id
     return counts
 
@@ -285,7 +290,11 @@ def handle_frame(frame: dict[str, Any]) -> dict[str, Any] | None:
     if method == "tools/call":
         name = params.get("name")
         if not isinstance(name, str) or not name:
-            return {"jsonrpc": "2.0", "id": frame_id, "error": {"code": -32602, "message": "missing tool name"}}
+            return {
+                "jsonrpc": "2.0",
+                "id": frame_id,
+                "error": {"code": -32602, "message": "missing tool name"},
+            }
         arguments = params.get("arguments") or {}
         if not isinstance(arguments, dict):
             return {
@@ -295,7 +304,7 @@ def handle_frame(frame: dict[str, Any]) -> dict[str, Any] | None:
             }
         return {"jsonrpc": "2.0", "id": frame_id, "result": _run_tool(name, arguments)}
 
-    if method.startswith("notifications/"):
+    if cast(str, method).startswith("notifications/"):
         return None
 
     return {
@@ -311,6 +320,7 @@ def main() -> None:
         line = line.strip()
         if not line:
             continue
+        response: dict[str, Any] | None
         try:
             frame = json.loads(line)
         except json.JSONDecodeError as exc:

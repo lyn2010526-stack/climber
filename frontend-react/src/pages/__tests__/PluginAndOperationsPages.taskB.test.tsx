@@ -17,6 +17,12 @@ vi.mock('../../api', () => ({
     importPlugin: vi.fn(),
     getPluginCategories: vi.fn(),
     getStats: vi.fn(),
+    listSessions: vi.fn(),
+    listAgents: vi.fn(),
+    listTasks: vi.fn(),
+    listCostRecords: vi.fn(),
+    getClusterStatus: vi.fn(),
+    getCostQuota: vi.fn(),
   },
 }));
 
@@ -39,6 +45,12 @@ beforeEach(async () => {
   vi.resetAllMocks();
   await i18n.changeLanguage('en');
   vi.mocked(api.checkHealth).mockResolvedValue(true);
+  vi.mocked(api.listSessions).mockResolvedValue([]);
+  vi.mocked(api.listAgents).mockResolvedValue([]);
+  vi.mocked(api.listTasks).mockResolvedValue([]);
+  vi.mocked(api.listCostRecords).mockResolvedValue([]);
+  vi.mocked(api.getClusterStatus).mockResolvedValue({});
+  vi.mocked(api.getCostQuota).mockResolvedValue(null as any);
   vi.mocked(api.listPlugins).mockResolvedValue([plugin] as any);
   vi.mocked(api.getPluginCategories).mockResolvedValue(['Tools'] as any);
   vi.mocked(api.getStats).mockResolvedValue({
@@ -61,9 +73,9 @@ describe('Task B operations pages', () => {
     render(<PluginsPage />);
     expect(await screen.findByText('Filesystem')).toBeDefined();
     fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), { target: { value: 'missing' } });
-    expect(screen.getByText('未找到插件')).toBeDefined();
+    expect(screen.getByText(i18n.t('plugins.empty_description'))).toBeDefined();
     fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), { target: { value: 'file' } });
-    fireEvent.click(screen.getByRole('button', { name: '禁用' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
     await waitFor(() => expect(api.disablePlugin).toHaveBeenCalledWith('plugin-1'));
   });
 
@@ -77,7 +89,7 @@ describe('Task B operations pages', () => {
       total_sessions: 13,
       total_api_keys: 1,
     });
-    fireEvent.click(screen.getByRole('button', { name: '重试' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('13')).toBeDefined();
   });
 });

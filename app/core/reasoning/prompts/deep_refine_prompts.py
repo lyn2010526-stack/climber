@@ -1,6 +1,4 @@
-"""DeepRefineStrategy prompts — Reflexion-style iterative refinement with backtracking.
-
-"""
+"""DeepRefineStrategy prompts — Reflexion-style iterative refinement with backtracking."""
 
 DEEP_REFINE_SYSTEM_PROMPT = """You are a deep reasoning engine with iterative refinement capability.
 

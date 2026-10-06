@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
@@ -22,12 +23,14 @@ from app.storage.repository_reasoning import (
     ReasoningTraceRepository,
 )
 
-DEFAULT_USER = "default-user"
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(tags=["reasoning"], redirect_slashes=False)
 
 
-async def _get_owned_trace(trace_repo: ReasoningTraceRepository, trace_id: str, user_id: str) -> Any:
+async def _get_owned_trace(
+    trace_repo: ReasoningTraceRepository, trace_id: str, user_id: str
+) -> Any:
     """Fetch a trace owned by the given user, or None."""
     trace = await trace_repo.get_by_trace_id(trace_id)
     if trace is None or (getattr(trace, "user_id", None) and trace.user_id != user_id):
@@ -41,13 +44,17 @@ async def reason_with_slash(
     req: ReasoningRequest,
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = RateLimit,
-    _auth: dict = Depends(_require_scopes("write")),
+    _auth: dict[str, Any] = Depends(_require_scopes("write")),
 ) -> ReasoningResult:
     from app.api.v1 import get_engine
 
     user_id = current_user_id(request)
     engine = get_engine()
-    if not hasattr(engine, 'reasoning') or not engine.reasoning or not engine.reasoning.is_available():
+    if (
+        not hasattr(engine, "reasoning")
+        or not engine.reasoning
+        or not engine.reasoning.is_available()
+    ):
         raise HTTPException(status_code=503, detail="Reasoning engine not initialized")
 
     try:
@@ -55,27 +62,33 @@ async def reason_with_slash(
 
         if result.trace:
             trace_repo = ReasoningTraceRepository(db)
-            await trace_repo.create({
-                "trace_id": result.trace.trace_id,
-                "user_id": user_id,
-                "task": result.trace.request_task,
-                "mode": result.mode_used.value,
-                "candidates_count": len(result.candidates),
-                "best_confidence": max((c.confidence for c in result.candidates), default=0.0),
-                "coverage_score": result.coverage.score if result.coverage else None,
-                "duration_ms": result.total_duration_ms,
-                "total_tokens": result.total_tokens,
-                "estimated_cost": result.estimated_cost,
-                "result_summary": result.answer[:500] if result.answer else None,
-                "path_traces": [p.dict() for p in result.trace.path_traces] if result.trace.path_traces else [],
-                "coverage_report": result.coverage.dict() if result.coverage else None,
-            })
+            await trace_repo.create(
+                {
+                    "trace_id": result.trace.trace_id,
+                    "user_id": user_id,
+                    "task": result.trace.request_task,
+                    "mode": result.mode_used.value,
+                    "candidates_count": len(result.candidates),
+                    "best_confidence": max((c.confidence for c in result.candidates), default=0.0),
+                    "coverage_score": result.coverage.score if result.coverage else None,
+                    "duration_ms": result.total_duration_ms,
+                    "total_tokens": result.total_tokens,
+                    "estimated_cost": result.estimated_cost,
+                    "result_summary": result.answer[:500] if result.answer else None,
+                    "path_traces": [p.dict() for p in result.trace.path_traces]
+                    if result.trace.path_traces
+                    else [],
+                    "coverage_report": result.coverage.dict() if result.coverage else None,
+                }
+            )
 
         return result
     except NotImplementedError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        logger.warning("reasoning_strategy_not_supported", error=str(e))
+        raise HTTPException(status_code=400, detail="Reasoning strategy is not supported") from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Reasoning failed: {e!s}") from e
+        logger.exception("reasoning_failed", error=str(e))
+        raise HTTPException(status_code=500, detail="Reasoning failed") from e
 
 
 @router.post("")
@@ -93,77 +106,125 @@ async def reason_stream(
     request: Request,
     req: ReasoningRequest,
     db: AsyncSession = Depends(get_db),
-    _auth: dict = Depends(_require_scopes("write")),
+    _auth: dict[str, Any] = Depends(_require_scopes("write")),
 ) -> EventSourceResponse:
     from app.api.v1 import get_engine
 
     user_id = current_user_id(request)
     engine = get_engine()
-    if not hasattr(engine, 'reasoning') or not engine.reasoning or not engine.reasoning.is_available():
+    if (
+        not hasattr(engine, "reasoning")
+        or not engine.reasoning
+        or not engine.reasoning.is_available()
+    ):
         raise HTTPException(status_code=503, detail="Reasoning engine not initialized")
 
     async def event_generator():
-        yield {"event": "reasoning_start", "data": json.dumps({"mode": req.mode.value, "task": req.task[:100]})}
+        yield {
+            "event": "reasoning_start",
+            "data": json.dumps({"mode": req.mode.value, "task": req.task[:100]}),
+        }
 
         try:
             result = await engine.reasoning.pipeline.reason(req)
 
             if result.trace:
                 trace_repo = ReasoningTraceRepository(db)
-                await trace_repo.create({
-                    "trace_id": result.trace.trace_id,
-                    "user_id": user_id,
-                    "task": result.trace.request_task,
-                    "mode": result.mode_used.value,
-                    "candidates_count": len(result.candidates),
-                    "best_confidence": max((c.confidence for c in result.candidates), default=0.0),
-                    "coverage_score": result.coverage.score if result.coverage else None,
-                    "duration_ms": result.total_duration_ms,
-                    "total_tokens": result.total_tokens,
-                    "estimated_cost": result.estimated_cost,
-                    "result_summary": result.answer[:500] if result.answer else None,
-                    "path_traces": [p.dict() for p in result.trace.path_traces] if result.trace.path_traces else [],
-                    "coverage_report": result.coverage.dict() if result.coverage else None,
-                })
+                await trace_repo.create(
+                    {
+                        "trace_id": result.trace.trace_id,
+                        "user_id": user_id,
+                        "task": result.trace.request_task,
+                        "mode": result.mode_used.value,
+                        "candidates_count": len(result.candidates),
+                        "best_confidence": max(
+                            (c.confidence for c in result.candidates), default=0.0
+                        ),
+                        "coverage_score": result.coverage.score if result.coverage else None,
+                        "duration_ms": result.total_duration_ms,
+                        "total_tokens": result.total_tokens,
+                        "estimated_cost": result.estimated_cost,
+                        "result_summary": result.answer[:500] if result.answer else None,
+                        "path_traces": [p.dict() for p in result.trace.path_traces]
+                        if result.trace.path_traces
+                        else [],
+                        "coverage_report": result.coverage.dict() if result.coverage else None,
+                    }
+                )
 
                 for path in result.trace.path_traces:
-                    yield {"event": "path_complete", "data": json.dumps({
-                        "candidate_id": path.candidate_id,
-                        "path_type": path.path_type,
-                        "confidence": path.final_confidence,
-                        "rounds": len(path.rounds),
-                    })}
+                    yield {
+                        "event": "path_complete",
+                        "data": json.dumps(
+                            {
+                                "candidate_id": path.candidate_id,
+                                "path_type": path.path_type,
+                                "confidence": path.final_confidence,
+                                "rounds": len(path.rounds),
+                            }
+                        ),
+                    }
 
             if result.coverage:
-                yield {"event": "coverage", "data": json.dumps({
-                    "score": result.coverage.score,
-                    "edge_cases": len(result.coverage.edge_cases),
-                    "risks": len(result.coverage.risks),
-                    "high_risks": len(result.coverage.high_risks),
-                })}
+                yield {
+                    "event": "coverage",
+                    "data": json.dumps(
+                        {
+                            "score": result.coverage.score,
+                            "edge_cases": len(result.coverage.edge_cases),
+                            "risks": len(result.coverage.risks),
+                            "high_risks": len(result.coverage.high_risks),
+                        }
+                    ),
+                }
 
-            yield {"event": "reasoning_complete", "data": json.dumps({
-                "answer": result.answer,
-                "mode_used": result.mode_used.value,
-                "candidates_count": len(result.candidates),
-                "duration_ms": result.total_duration_ms,
-                "trace_id": result.trace.trace_id if result.trace else None,
-            })}
+            yield {
+                "event": "reasoning_complete",
+                "data": json.dumps(
+                    {
+                        "answer": result.answer,
+                        "mode_used": result.mode_used.value,
+                        "candidates_count": len(result.candidates),
+                        "duration_ms": result.total_duration_ms,
+                        "trace_id": result.trace.trace_id if result.trace else None,
+                    }
+                ),
+            }
         except Exception as e:
-            yield {"event": "reasoning_error", "data": json.dumps({"error": str(e)})}
+            logger.warning("reasoning_stream_failed", error=str(e))
+            yield {"event": "reasoning_error", "data": json.dumps({"error": "Reasoning failed"})}
 
     return EventSourceResponse(event_generator())
 
 
 @router.get("/modes")
 async def list_reasoning_modes() -> list[dict[str, Any]]:
-    modes = [
-        {"id": "auto", "name": "Auto", "description": "Automatically select best strategy", "available": True},
-        {"id": "tree", "name": "Tree of Thought", "description": "Parallel multi-path + self-refine", "available": True},
-        {"id": "deep", "name": "Deep Refine", "description": "Iterative refinement with backtracking", "available": True},
-        {"id": "debate", "name": "Debate", "description": "Multi-agent debate convergence", "available": True},
+    return [
+        {
+            "id": "auto",
+            "name": "Auto",
+            "description": "Automatically select best strategy",
+            "available": True,
+        },
+        {
+            "id": "tree",
+            "name": "Tree of Thought",
+            "description": "Parallel multi-path + self-refine",
+            "available": True,
+        },
+        {
+            "id": "deep",
+            "name": "Deep Refine",
+            "description": "Iterative refinement with backtracking",
+            "available": True,
+        },
+        {
+            "id": "debate",
+            "name": "Debate",
+            "description": "Multi-agent debate convergence",
+            "available": True,
+        },
     ]
-    return modes
 
 
 @router.post("/{trace_id}/feedback")
@@ -173,6 +234,7 @@ async def submit_feedback(
     feedback: dict[str, Any],
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = RateLimit,
+    _scope_check: None = Depends(_require_scopes("write")),
 ) -> dict[str, str]:
     user_id = current_user_id(request)
     trace_repo = ReasoningTraceRepository(db)
@@ -181,14 +243,16 @@ async def submit_feedback(
         raise HTTPException(status_code=404, detail="Trace not found")
 
     feedback_repo = ReasoningFeedbackRepository(db)
-    await feedback_repo.create({
-        "trace_id": trace_id,
-        "user_id": user_id,
-        "rating": feedback.get("rating", 3),
-        "thumbs": feedback.get("thumbs"),
-        "comment": feedback.get("comment", ""),
-        "selected_candidate_id": feedback.get("selected_candidate_id"),
-    })
+    await feedback_repo.create(
+        {
+            "trace_id": trace_id,
+            "user_id": user_id,
+            "rating": feedback.get("rating", 3),
+            "thumbs": feedback.get("thumbs"),
+            "comment": feedback.get("comment", ""),
+            "selected_candidate_id": feedback.get("selected_candidate_id"),
+        }
+    )
 
     return {"status": "ok", "message": "Feedback recorded"}
 
@@ -226,10 +290,11 @@ async def list_reasoning_history(
     request: Request,
     db: AsyncSession = Depends(get_db),
     limit: int = 50,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     user_id = current_user_id(request)
     trace_repo = ReasoningTraceRepository(db)
-    items = await trace_repo.list_by_user(user_id, limit=limit)
+    items = await trace_repo.list_by_user(user_id, limit=limit, offset=offset)
     return [
         {
             "trace_id": t.trace_id,

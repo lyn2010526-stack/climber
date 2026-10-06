@@ -50,13 +50,13 @@ const opencode: Record<string, string> = {
   '--color-border-strong': '#4A4F66',
 };
 
-/** Light-theme surfaces follow OpenCode's light steps. */
+/** Light-theme surfaces: a single white canvas, Codex style. */
 const lightSurfaces: Record<string, string> = {
-  '--color-bg-page': '#F4F5F7',
+  '--color-bg-page': '#FFFFFF',
   '--color-bg-surface-1': '#FFFFFF',
-  '--color-bg-surface-2': '#ECEFF4',
-  '--color-bg-surface-3': '#E2E6EE',
-  '--color-bg-surface-4': '#D5DBE6',
+  '--color-bg-surface-2': '#F6F7F9',
+  '--color-bg-surface-3': '#EEF0F4',
+  '--color-bg-surface-4': '#E4E8EF',
   '--color-text-primary': '#2E3440',
   '--color-text-secondary': '#3B4252',
   '--color-text-muted': '#4C566A',

@@ -2,7 +2,11 @@
 venv/
 .venv/
 env/
+
+# Secrets
 .env
+.env.local
+.env.*.local
 
 # Python cache
 __pycache__/
@@ -19,12 +23,13 @@ dist/
 
 # Testing
 .pytest_cache/
-.coverage
-htmlcov/
-coverage.xml
-*.cover
+.ruff_cache/
 .tox/
 .nox/
+.coverage
+coverage.xml
+*.cover
+htmlcov/
 
 # Type checking
 .mypy_cache/
@@ -44,60 +49,35 @@ Thumbs.db
 # Logs
 logs/
 *.log
+*.log.*
 
 # Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Frontend (in subfolder, but include for safety)
-frontend-react/node_modules/
-frontend-react/dist/
-frontend-react/build/
-frontend-react/coverage/
-frontend-react/playwright-report/
-frontend-react/test-results/
-
-# Local development
-.env.local
-.env.*.local
-
-# Backup files
-*.bak
-*.backup
-
-# Database files
 data/
+sessions/
 *.db
 *.db-shm
 *.db-wal
-
-# Logs
-logs/
-*.log
-*.log.*
-
-# Test artifacts
-.pytest_cache/
-.ruff_cache/
-.superpowers/
-MagicMock/
-.coverage
-htmlcov/
+*.sqlite
+*.sqlite3
 
 # Frontend
 frontend-react/node_modules/
 frontend-react/build/
 frontend-react/dist/
 frontend-react/coverage/
+frontend-react/playwright-report/
+frontend-react/test-results/
 
-# OS
-.DS_Store
-Thumbs.db
+# Backup files
+*.bak
+*.backup
 
-# Runtime artifacts (added 2026-09-12)
-sessions/
-data/
-logs/
+# Local tool state
+.superpowers/
+MagicMock/
+
+# Runtime artifacts
 benchmark_results*.json
 comprehensive_performance_report.json
+.test_daemon.pid
+.test_daemon_alert_config.json

@@ -10,6 +10,7 @@ import contextvars
 import difflib
 import re
 from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -50,9 +51,7 @@ class FilePatchService:
 
     @staticmethod
     def create_patch(old_content: str, new_content: str, file_path: str = "") -> str:
-        """Create a unified diff string from old and new content.
-
-        """
+        """Create a unified diff string from old and new content."""
         old_lines = old_content.splitlines(keepends=True)
         new_lines = new_content.splitlines(keepends=True)
         diff = list(
@@ -174,11 +173,11 @@ class FilePatchService:
                 line_ending = "\n"
                 break
 
-        hunks = []
-        current_hunk = None
+        hunks: list[dict[str, Any]] = []
+        current_hunk: dict[str, Any] | None = None
 
         for line in patch_lines:
-            if line.startswith("--- ") or line.startswith("+++ "):
+            if line.startswith(("--- ", "+++ ")):
                 continue
             if line.startswith("@@"):
                 if current_hunk is not None:
@@ -211,7 +210,7 @@ class FilePatchService:
             new_hunk_lines = []
 
             for line in hunk["lines"]:
-                if line.startswith(" ") or line.startswith("+"):
+                if line.startswith((" ", "+")):
                     new_hunk_lines.append(line[1:] + line_ending)
 
             end = min(old_start + old_count, len(result_lines))

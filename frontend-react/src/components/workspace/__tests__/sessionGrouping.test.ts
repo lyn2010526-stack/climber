@@ -6,9 +6,10 @@ import {
   isSessionFilterActive,
   matchesSessionFilter,
   sessionGroupOf,
+  sessionLastActivityAt,
   type SessionFilter,
 } from '../sessionGrouping';
-import type { Session, SessionStatus } from '../../../store/workspace';
+import type { Message, Session, SessionStatus } from '../../../store/workspace';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -35,10 +36,9 @@ describe('sessionGroupOf', () => {
   it('buckets by the created_at the backend reported', () => {
     expect(sessionGroupOf(session('a', { createdAt: NOW }), NOW)).toBe('today');
     expect(sessionGroupOf(session('b', { createdAt: START_OF_TODAY }), NOW)).toBe('today');
-    expect(sessionGroupOf(session('c', { createdAt: START_OF_TODAY - DAY_MS }), NOW)).toBe('recent');
-    expect(sessionGroupOf(session('d', { createdAt: START_OF_TODAY - 6 * DAY_MS }), NOW)).toBe('recent');
-    expect(sessionGroupOf(session('e', { createdAt: START_OF_TODAY - 7 * DAY_MS }), NOW)).toBe('earlier');
-    expect(sessionGroupOf(session('f', { createdAt: 0 }), NOW)).toBe('earlier');
+    expect(sessionGroupOf(session('c', { createdAt: START_OF_TODAY - DAY_MS }), NOW)).toBe('yesterday');
+    expect(sessionGroupOf(session('d', { createdAt: START_OF_TODAY - 2 * DAY_MS }), NOW)).toBe('earlier');
+    expect(sessionGroupOf(session('e', { createdAt: 0 }), NOW)).toBe('earlier');
   });
 
   it('gives a timestamp the backend never sent its own bucket', () => {
@@ -63,12 +63,12 @@ describe('groupSessions', () => {
     const groups = groupSessions([
       session('old', { createdAt: 0 }),
       session('now'),
-      session('week', { createdAt: START_OF_TODAY - 2 * DAY_MS }),
+      session('day', { createdAt: START_OF_TODAY - DAY_MS }),
     ], NOW);
 
-    expect(groups.map((group) => group.id)).toEqual(['today', 'recent', 'earlier']);
+    expect(groups.map((group) => group.id)).toEqual(['today', 'yesterday', 'earlier']);
     expect(groups.map((group) => group.sessions.map((s) => s.id))).toEqual([
-      ['now'], ['week'], ['old'],
+      ['now'], ['day'], ['old'],
     ]);
   });
 
@@ -134,7 +134,7 @@ describe('session filtering', () => {
 
     expect(view.visible.map((s) => s.id)).toEqual(['now', 'week', 'old']);
     expect(view.groupOf.get('now')).toBe('today');
-    expect(view.groupOf.get('week')).toBe('recent');
+    expect(view.groupOf.get('week')).toBe('yesterday');
     expect(view.groupOf.get('old')).toBe('earlier');
   });
 
@@ -143,5 +143,28 @@ describe('session filtering', () => {
     const view = buildSessionView([unknown], { query: '', status: 'unknown' }, NOW);
 
     expect(view.visible.map((s) => s.id)).toEqual(['odd']);
+  });
+});
+
+describe('sessionLastActivityAt', () => {
+  const message = (timestamp: number): Message => ({ id: String(timestamp), type: 'user', content: '', timestamp });
+
+  it('uses the newest message timestamp the session carries', () => {
+    const row = session('row', { messages: [message(100), message(300), message(200)] });
+
+    expect(sessionLastActivityAt(row)).toBe(200);
+  });
+
+  it('falls back to created_at when the session has no messages yet', () => {
+    // A freshly created session has no transcript, so its only reported time is
+    // the creation time the backend sent.
+    expect(sessionLastActivityAt(session('fresh', { createdAt: 500, messages: [] }))).toBe(500);
+  });
+
+  it('returns null when neither a message time nor created_at is usable', () => {
+    expect(sessionLastActivityAt(session('bare', {
+      createdAt: Number.NaN,
+      messages: [message(Number.NaN)],
+    }))).toBeNull();
   });
 });

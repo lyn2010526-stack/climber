@@ -44,16 +44,28 @@ export interface ToolStatusDescriptor {
   className: string;
   label: string;
   spin: boolean;
+  /**
+   * The one state that is still moving. A running badge breathes while it
+   * waits; every settled state reports its outcome without animation.
+   */
+  pulse: boolean;
 }
 
-const STATUS_META: Record<ToolCallStatus, { tone: StatusTone; labelKey: string; spin: boolean }> = {
-  pending: { tone: 'queued', labelKey: 'tool_call.status_pending', spin: false },
-  running: { tone: 'loading', labelKey: 'tool_call.status_running', spin: true },
-  success: { tone: 'success', labelKey: 'tool_call.status_success', spin: false },
-  error: { tone: 'error', labelKey: 'tool_call.status_error', spin: false },
-  cancelled: { tone: 'info', labelKey: 'tool_call.status_cancelled', spin: false },
-  awaiting_approval: { tone: 'approval', labelKey: 'tool_call.status_awaiting_approval', spin: false },
-  unknown: { tone: 'unknown', labelKey: 'tool_call.status_unknown', spin: false },
+interface StatusMeta {
+  tone: StatusTone;
+  labelKey: string;
+  spin: boolean;
+  pulse: boolean;
+}
+
+const STATUS_META: Record<ToolCallStatus, StatusMeta> = {
+  pending: { tone: 'queued', labelKey: 'tool_call.status_pending', spin: false, pulse: false },
+  running: { tone: 'loading', labelKey: 'tool_call.status_running', spin: true, pulse: true },
+  success: { tone: 'success', labelKey: 'tool_call.status_success', spin: false, pulse: false },
+  error: { tone: 'error', labelKey: 'tool_call.status_error', spin: false, pulse: false },
+  cancelled: { tone: 'info', labelKey: 'tool_call.status_cancelled', spin: false, pulse: false },
+  awaiting_approval: { tone: 'approval', labelKey: 'tool_call.status_awaiting_approval', spin: false, pulse: false },
+  unknown: { tone: 'unknown', labelKey: 'tool_call.status_unknown', spin: false, pulse: false },
 };
 
 const STATUS_ALIASES: Record<string, ToolCallStatus> = {
@@ -108,7 +120,51 @@ export function resolveToolStatus(status: ToolCallStatus, t: TFunction): ToolSta
     className: TONE_TEXT[meta.tone],
     label: t(meta.labelKey),
     spin: meta.spin,
+    pulse: meta.pulse,
   };
+}
+
+/** The four states a call settles through, in the order a tally reads them. */
+export const PRIMARY_TOOL_STATES = ['running', 'pending', 'success', 'error'] as const satisfies readonly ToolCallStatus[];
+
+type StatusCarrier = { status: string | boolean | null | undefined };
+
+/**
+ * One tally per canonical state, read off the normalized status. A value this
+ * build does not recognise is counted under `unknown`, so an unrecognised
+ * wire value is never tallied as a healthy one.
+ */
+export function countToolStatuses(calls: readonly StatusCarrier[]): Record<ToolCallStatus, number> {
+  const counts = Object.fromEntries(
+    (Object.keys(STATUS_META) as ToolCallStatus[]).map(state => [state, 0]),
+  ) as Record<ToolCallStatus, number>;
+  for (const call of calls) {
+    counts[normalizeToolStatus(call.status)] += 1;
+  }
+  return counts;
+}
+
+/**
+ * The tally line as data: one entry per non-empty state, in the order a
+ * reader scans them. The glyph and its tone say which state, the number says
+ * how many, and the full phrase travels in `label` so it reaches a screen
+ * reader and a hover without repeating the wording on every card below.
+ */
+export function buildToolStatusSummary(
+  counts: Record<ToolCallStatus, number>,
+  t: TFunction,
+): { tone: StatusTone; count: number; label: string }[] {
+  const summary: { tone: StatusTone; count: number; label: string }[] = [];
+  for (const state of PRIMARY_TOOL_STATES) {
+    if (counts[state] === 0) continue;
+    const resolved = resolveToolStatus(state, t);
+    if (state === 'running') {
+      summary.push({ tone: resolved.tone, count: counts[state], label: t('tool_call.running_count', { count: counts[state] }) });
+      continue;
+    }
+    summary.push({ tone: resolved.tone, count: counts[state], label: resolved.label });
+  }
+  return summary;
 }
 
 /** Collapse a JSON payload for display without dropping any of it. */

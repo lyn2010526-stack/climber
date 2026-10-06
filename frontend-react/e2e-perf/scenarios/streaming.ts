@@ -24,16 +24,6 @@ import {
   gotoApp, markPhase, readSnapshot, resetProbe, settle, sampleMemoryAndDom,
 } from '../lib/probe.ts';
 
-/** Waits for a locator's element to stop being disabled, then returns it. */
-async function expectEnabled(locator: import('@playwright/test').Locator) {
-  const deadline = Date.now() + 15_000;
-  while (await locator.isDisabled()) {
-    if (Date.now() > deadline) throw new Error('send button stayed disabled after typing');
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  return locator;
-}
-
 /**
  * rAF cadence on an otherwise idle page, sampled after the stream.
  *
@@ -130,6 +120,13 @@ export async function runStreamingScenario(
 
   await page.setViewportSize(viewport);
 
+  // The AppLockGate first-run enrollment overlay (added 2026-10-05) covers the
+  // viewport until a PIN is set or skipped. Pre-seed the skip marker so the
+  // composer stays clickable; the storage read is synchronous at hook init.
+  await page.addInitScript(() => {
+    try { window.localStorage.setItem('climber.privacy.skipped', '1'); } catch { /* storage may be unavailable */ }
+  });
+
   // A pre-existing conversation makes the stream land on a realistic corpus:
   // the render cost of one chunk scales with how much is already on screen.
   const { buildMessagesPayload } = await import('../lib/fixtures.ts');
@@ -162,13 +159,15 @@ export async function runStreamingScenario(
   // React's onChange and the composer's own auto-grow run exactly as they do
   // for a person typing. The native setter assignment that would be faster
   // here bypasses the controlled-component contract and can leave state empty.
-  const composer = page.locator('form textarea').first();
+  // Anchored composer: a standalone textarea (no <form> wrapper) and an
+  // icon-only send button labelled by i18n `chat.send` ("Send"). The button is
+  // never disabled; an empty submit is a no-op inside the composer, so a click
+  // after fill is sufficient without an enabled-poll.
+  const composer = page.getByRole('textbox', { name: 'Ask Climber to do anything' });
   await composer.click();
   await composer.fill('measure the streaming render bound');
-  // The send button is disabled until the controlled state registers the text.
-  const sendButton = page.locator('form button[type="submit"]');
+  const sendButton = page.getByRole('button', { name: 'Send' });
   await sendButton.waitFor({ state: 'visible', timeout: 15_000 });
-  await expectEnabled(sendButton);
   await sendButton.click();
 
   // Fail loudly with the request log if the submit never reached the backend,
@@ -198,12 +197,15 @@ export async function runStreamingScenario(
   const streamDurationMs = Date.now() - streamStart;
 
   // Now wait for the app to settle the terminal frame into the DOM.
+  // Anchored flow: the streaming affordance is the pulsing status dot of the
+  // last ThinkingBubble (active turn); it stops pulsing once the turn ends.
   await page.waitForFunction(
     ([count]) => {
       const transcript = document.querySelector('[data-transcript]');
       const text = transcript?.textContent ?? '';
       const lastToken = 'tok' + (count - 1);
-      return text.includes(lastToken) && document.querySelectorAll('[data-streaming-cursor]').length === 0;
+      const pulsing = document.querySelectorAll('[data-testid="anchored-thinking-icon"].motion-safe\\:animate-pulse').length;
+      return text.includes(lastToken) && pulsing === 0;
     },
     [chunks] as [number],
     { timeout: 60_000 },
@@ -258,7 +260,7 @@ export async function runStreamingScenario(
     finalMessageRows: finalState.rows,
     streamTextRendered: finalState.hasStreamedText,
     raw: {
-      commitTimes,
+      commitTimes: snapshot.commitTimes,
       longTasks: snapshot.longTasks,
       frameIntervals: snapshot.frameIntervals,
       heapSamples: snapshot.heap,

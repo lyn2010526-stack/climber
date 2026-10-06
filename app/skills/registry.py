@@ -8,6 +8,7 @@ moved to dedicated modules.
 from __future__ import annotations
 
 import asyncio
+import inspect
 from collections.abc import Callable
 from enum import StrEnum
 from typing import Any
@@ -45,9 +46,9 @@ class SkillInfo(BaseModel):
 class SkillRegistry:
     def __init__(self) -> None:
         self._skills: dict[str, SkillInfo] = {}
-        self._handlers: dict[str, Callable] = {}
+        self._handlers: dict[str, Callable[..., Any]] = {}
 
-    def register(self, skill: SkillInfo, handler: Callable | None = None) -> None:
+    def register(self, skill: SkillInfo, handler: Callable[..., Any] | None = None) -> None:
         self._skills[skill.id] = skill
         if handler:
             self._handlers[skill.id] = handler
@@ -63,7 +64,7 @@ class SkillRegistry:
     def get(self, skill_id: str) -> SkillInfo | None:
         return self._skills.get(skill_id)
 
-    def get_handler(self, skill_id: str) -> Callable | None:
+    def get_handler(self, skill_id: str) -> Callable[..., Any] | None:
         return self._handlers.get(skill_id)
 
     def list_skills(self, category: str | None = None) -> list[dict[str, Any]]:
@@ -71,8 +72,10 @@ class SkillRegistry:
         skills = list(self._skills.values())
         if category is not None:
             skills = [
-                s for s in skills
-                if (s.category.value if hasattr(s.category, "value") else str(s.category)) == category
+                s
+                for s in skills
+                if (s.category.value if hasattr(s.category, "value") else str(s.category))
+                == category
             ]
         return [skill.model_dump() for skill in skills]
 
@@ -102,9 +105,30 @@ class SkillRegistry:
         handler = self._handlers.get(skill_id)
         if not handler:
             raise ValueError(f"No handler for skill: {skill_id}")
+        self._validate_params(skill_id, handler, params)
         if asyncio.iscoroutinefunction(handler):
             return await handler(**params)
         return handler(**params)
+
+    @staticmethod
+    def _validate_params(
+        skill_id: str, handler: Callable[..., Any], params: dict[str, Any]
+    ) -> None:
+        """Reject unknown keyword arguments before invoking a fixed handler.
+
+        Type checking is deliberately left to the handler; only the
+        parameter-name contract is validated so a typo raises a clear
+        ``ValueError`` instead of leaking ``TypeError`` to callers.
+        """
+        try:
+            signature = inspect.signature(handler)
+        except (TypeError, ValueError):
+            return
+        if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values()):
+            return
+        unknown = set(params) - set(signature.parameters)
+        if unknown:
+            raise ValueError(f"Skill '{skill_id}' does not accept parameter(s): {sorted(unknown)}")
 
     async def execute(self, skill_id: str, **kwargs: Any) -> Any:
         """Execute a skill by ID with given keyword arguments."""
@@ -114,7 +138,9 @@ class SkillRegistry:
         """Get skills grouped by category value."""
         result: dict[str, list[SkillInfo]] = {}
         for skill in self._skills.values():
-            cat_val = skill.category.value if hasattr(skill.category, "value") else str(skill.category)
+            cat_val = (
+                skill.category.value if hasattr(skill.category, "value") else str(skill.category)
+            )
             if cat_val not in result:
                 result[cat_val] = []
             result[cat_val].append(skill)

@@ -21,8 +21,8 @@ class ScheduledTask:
     id: str
     name: str
     description: str
-    cron_expression: str        # Simple: "*/5 * * * *" = every 5 min
-    task_type: str              # "inspect", "audit", "backup", "custom"
+    cron_expression: str  # Simple: "*/5 * * * *" = every 5 min
+    task_type: str  # "inspect", "audit", "backup", "custom"
     enabled: bool = True
     last_run: float | None = None
     next_run: float | None = None
@@ -34,25 +34,25 @@ class ScheduledTask:
 class TaskScheduler:
     """Manages scheduled tasks for periodic execution."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._tasks: dict[str, ScheduledTask] = {}
-        self._handlers: dict[str, Callable] = {}
+        self._handlers: dict[str, Callable[..., Any]] = {}
         self._running = False
 
-    def register_handler(self, task_type: str, handler: Callable):
+    def register_handler(self, task_type: str, handler: Callable[..., Any]) -> None:
         """Register a handler for a task type."""
         self._handlers[task_type] = handler
 
-    def add_task(self, task: ScheduledTask):
+    def add_task(self, task: ScheduledTask) -> None:
         """Add a scheduled task."""
         self._tasks[task.id] = task
         task.next_run = self._calc_next_run(task.cron_expression)
 
-    def remove_task(self, task_id: str):
+    def remove_task(self, task_id: str) -> None:
         """Remove a scheduled task."""
         self._tasks.pop(task_id, None)
 
-    def toggle_task(self, task_id: str):
+    def toggle_task(self, task_id: str) -> None:
         """Toggle task enabled/disabled."""
         task = self._tasks.get(task_id)
         if task:
@@ -65,12 +65,9 @@ class TaskScheduler:
     def get_due_tasks(self) -> list[ScheduledTask]:
         """Get tasks that are due for execution."""
         now = time.time()
-        return [
-            t for t in self._tasks.values()
-            if t.enabled and t.next_run and t.next_run <= now
-        ]
+        return [t for t in self._tasks.values() if t.enabled and t.next_run and t.next_run <= now]
 
-    async def run_pending(self):
+    async def run_pending(self) -> None:
         """Run all due tasks."""
         due = self.get_due_tasks()
         for task in due:
@@ -86,8 +83,14 @@ class TaskScheduler:
                         task.enabled = False
                 except Exception as e:
                     task.config["last_error"] = str(e)
-
-            task.next_run = self._calc_next_run(task.cron_expression)
+                task.next_run = self._calc_next_run(task.cron_expression)
+            else:
+                # No handler registered: surface the gap instead of silently
+                # pushing the run forward. The task stays due so the operator
+                # (health endpoint / UI) can see it is unserved.
+                task.config["last_error"] = (
+                    f"No handler registered for task_type '{task.task_type}'"
+                )
 
     def _calc_next_run(self, cron: str) -> float:
         """Calculate the next run time for a standard five-field cron expression."""

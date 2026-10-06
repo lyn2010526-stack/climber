@@ -1,6 +1,4 @@
-"""Error analysis module for the auto-debug loop.
-
-"""
+"""Error analysis module for the auto-debug loop."""
 
 from __future__ import annotations
 
@@ -75,9 +73,7 @@ class ErrorAnalyzer:
     _PERMISSION_ERROR_RE = re.compile(
         r"Permission denied|EACCES|permission denied|operation not permitted"
     )
-    _TIMEOUT_ERROR_RE = re.compile(
-        r"timed out|timeout|TimeLimitExceeded|deadline exceeded"
-    )
+    _TIMEOUT_ERROR_RE = re.compile(r"timed out|timeout|TimeLimitExceeded|deadline exceeded")
     _FILE_NOT_FOUND_RE = re.compile(
         r"FileNotFoundError|No such file or directory|does not exist|not found"
     )
@@ -153,7 +149,9 @@ class ErrorAnalyzer:
             )
         if self._HTTP_ERROR_RE.search(raw):
             return ErrorAnalysis(
-                error_type=ErrorType.AUTHENTICATION_ERROR if "401" in raw or "403" in raw else ErrorType.UNKNOWN,
+                error_type=ErrorType.AUTHENTICATION_ERROR
+                if "401" in raw or "403" in raw
+                else ErrorType.UNKNOWN,
                 message=raw,
                 cause=raw,
                 raw_error=raw,
@@ -195,10 +193,19 @@ class ErrorAnalyzer:
             return ErrorType.FILE_NOT_FOUND
         if "TimeoutError" in error_msg or "asyncio.TimeoutError" in error_msg:
             return ErrorType.TIMEOUT
-        if "ConnectionError" in error_msg or "HTTPError" in error_msg or "RequestException" in error_msg:
+        if (
+            "ConnectionError" in error_msg
+            or "HTTPError" in error_msg
+            or "RequestException" in error_msg
+        ):
             return ErrorType.NETWORK_ERROR
         if "AuthenticationError" in error_msg or "401" in error_msg or "403" in error_msg:
             return ErrorType.AUTHENTICATION_ERROR
-        if "ValueError" in error_msg or "TypeError" in error_msg or "KeyError" in error_msg or "IndexError" in error_msg:
+        if (
+            "ValueError" in error_msg
+            or "TypeError" in error_msg
+            or "KeyError" in error_msg
+            or "IndexError" in error_msg
+        ):
             return ErrorType.VALIDATION_ERROR
         return ErrorType.RUNTIME_ERROR

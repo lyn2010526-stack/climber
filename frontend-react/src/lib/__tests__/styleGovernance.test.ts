@@ -6,6 +6,19 @@ const root = resolve(process.cwd(), 'src');
 const css = readFileSync(resolve(root, 'index.css'), 'utf-8');
 
 const TOKEN_SOURCE = 'src/index.css';
+// workbench.css carries a second sanctioned token layer: the Codex-parity
+// `.workbench-theme` scope, the same block
+// components/workspace/__tests__/anchored-spec-conformance.test.tsx requires to
+// define its own colour tokens in. Only those declarations are tokens; the rest
+// of the file is styling and stays governed, so the block is lifted out of the
+// source instead of exempting the whole stylesheet.
+const WORKBENCH_TOKENS = 'src/styles/workbench.css';
+// Matches every `.workbench-theme` scope block: the plain scope, the light-theme
+// overrides, and the layout-qualified desktop and three-column palettes. The
+// qualifier class stops the match at `button:focus-visible` style rules, which
+// are styling rather than tokens.
+const WORKBENCH_TOKEN_BLOCK =
+  /^[ \t]*(?:\[data-theme="light"\][ \t]*)?\.workbench-theme[\w.="\-[\]]*\s*\{[^}]*\}[^\n]*\n?/gm;
 const TEST_FILE = /(?:^|[\\/])(?:__tests__[\\/])|\.(?:test|spec)\.[a-z0-9]+$/i;
 
 // Documented exceptions from the style-governance rules. Each one names its
@@ -42,12 +55,27 @@ const governedFiles = sourceFiles
   .filter(file => !TEST_FILE.test(file))
   .filter(file => !DOCUMENTED_EXCEPTIONS[file]);
 
-const readLines = (file: string) =>
-  readFileSync(resolve(process.cwd(), file), 'utf-8').split('\n');
+/** The styling of a governed file, with any token-definition block blanked out.
+ *  Newlines survive so a reported line number still points at the source. */
+function governedSource(file: string): string {
+  const source = readFileSync(resolve(process.cwd(), file), 'utf-8');
+  return file === WORKBENCH_TOKENS
+    ? source.replace(WORKBENCH_TOKEN_BLOCK, block => block.replace(/[^\n]/g, ''))
+    : source;
+}
+
+const readLines = (file: string) => governedSource(file).split('\n');
 
 const stripComment = (line: string) => line.replace(/\/\/.*$/, '');
 
-const declaredTokens = new Set([...css.matchAll(/(--[a-z0-9-]+)\s*:/g)].map(match => match[1]!));
+const tokenBlocks = [
+  css,
+  readFileSync(resolve(process.cwd(), WORKBENCH_TOKENS), 'utf-8').match(WORKBENCH_TOKEN_BLOCK)?.join('') ?? '',
+];
+
+const declaredTokens = new Set(
+  tokenBlocks.flatMap(block => [...block.matchAll(/(--[a-z0-9-]+)\s*:/g)].map(match => match[1]!)),
+);
 
 // A component may also declare a custom property in its own scope through a
 // Tailwind arbitrary property (`[--fade-width:20px]`). That is a local
@@ -107,8 +135,7 @@ describe('style governance', () => {
     const hits: string[] = [];
     for (const file of governedFiles) {
       if (!file.endsWith('.css')) continue;
-      const source = readFileSync(resolve(process.cwd(), file), 'utf-8');
-      for (const match of source.matchAll(SECOND_NAMESPACE)) hits.push(`${file} ${match[1]}`);
+      for (const match of governedSource(file).matchAll(SECOND_NAMESPACE)) hits.push(`${file} ${match[1]}`);
     }
     expect(hits).toEqual([]);
   });

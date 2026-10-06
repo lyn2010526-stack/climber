@@ -8,13 +8,19 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from sqlalchemy import JSON, Boolean, DateTime, Float, Integer, String, and_, select
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.metacognition.safety_gate import screen
 from app.storage import Base, async_session
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from app.core.metacognition.safety_gate import SafetyVerdict
 
 logger = structlog.get_logger()
 
@@ -56,6 +62,23 @@ class DecayReport:
 
 
 @dataclass
+class GatedDecayReport:
+    """Report of safety-gated memory decay.
+
+    Entries rejected by the gate skip decay entirely and are reported as
+    pending-forget candidates so the caller can audit and act on them.
+    """
+
+    total_memories: int
+    decayed_count: int
+    gated_count: int
+    avg_importance_before: float
+    avg_importance_after: float
+    pending_forget_ids: list[str]
+    pending_forget_reasons: dict[str, tuple[str, ...]]
+
+
+@dataclass
 class ArchiveReport:
     """Report of archive operation."""
 
@@ -81,7 +104,9 @@ class MemoryRecord(Base):
     access_count: Mapped[int] = mapped_column(Integer, default=0)
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC)
+    )
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     forgotten_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -179,7 +204,7 @@ class MemoryLifecycleManager:
             records = result.scalars().all()
 
             query_lower = query.lower()
-            query_words = set(w for w in query_lower.split() if len(w) > 2)
+            query_words = {w for w in query_lower.split() if len(w) > 2}
             scored: list[tuple[float, MemoryRecord]] = []
 
             for record in records:
@@ -189,7 +214,7 @@ class MemoryLifecycleManager:
                 if query_words:
                     matches = sum(1 for w in query_words if w in content_lower)
                     if matches > 0:
-                        score *= (1.0 + matches / len(query_words))
+                        score *= 1.0 + matches / len(query_words)
                     else:
                         score *= 0.1
 
@@ -203,15 +228,17 @@ class MemoryLifecycleManager:
                 record.access_count += 1
                 record.last_accessed_at = now
                 record.updated_at = now
-                results.append(MemoryRetrieveResult(
-                    memory_id=record.id,
-                    content=record.content,
-                    importance=record.importance,
-                    agent_id=record.agent_id or "",
-                    score=score,
-                    memory_type=record.memory_type,
-                    created_at=record.created_at.isoformat() if record.created_at else "",
-                ))
+                results.append(
+                    MemoryRetrieveResult(
+                        memory_id=record.id,
+                        content=record.content,
+                        importance=record.importance,
+                        agent_id=record.agent_id or "",
+                        score=score,
+                        memory_type=record.memory_type,
+                        created_at=record.created_at.isoformat() if record.created_at else "",
+                    )
+                )
 
             await db.commit()
             return results
@@ -249,14 +276,18 @@ class MemoryLifecycleManager:
 
             for record in records:
                 if record.last_accessed_at:
-                    delta = now - record.last_accessed_at.replace(tzinfo=UTC) if record.last_accessed_at.tzinfo is None else now - record.last_accessed_at
+                    delta = (
+                        now - record.last_accessed_at.replace(tzinfo=UTC)
+                        if record.last_accessed_at.tzinfo is None
+                        else now - record.last_accessed_at
+                    )
                     days = delta.days
                 else:
                     days = 0
 
                 record.days_since_access = days
                 old_importance = record.importance
-                new_importance = old_importance * (self.DECAY_BASE ** days)
+                new_importance = old_importance * (self.DECAY_BASE**days)
 
                 if new_importance < old_importance:
                     record.importance = round(new_importance, 6)
@@ -272,6 +303,94 @@ class MemoryLifecycleManager:
                 decayed_count=decayed,
                 avg_importance_before=round(total_before / count, 6) if count else 0.0,
                 avg_importance_after=round(total_after / count, 6) if count else 0.0,
+            )
+
+    async def decay_with_gate(
+        self,
+        user_id: str,
+        agent_id: str = "",
+        *,
+        safety_gate: Callable[[str], SafetyVerdict] = screen,
+    ) -> GatedDecayReport:
+        """Screen content before decay; gate-rejected entries skip decay.
+
+        Mirrors decay_memories with a safety gate in front: every candidate is
+        screened with ``safety_gate`` first. Entries whose verdict rejects them
+        keep their importance untouched and are returned in
+        ``pending_forget_ids`` (with the firing reasons) instead of decaying,
+        so the caller can audit them and decide whether to forget.
+        """
+        async with async_session() as db:
+            stmt = select(MemoryRecord).where(
+                and_(
+                    MemoryRecord.user_id == user_id,
+                    ~MemoryRecord.is_archived,
+                    ~MemoryRecord.is_forgotten,
+                )
+            )
+            if agent_id:
+                stmt = stmt.where(MemoryRecord.agent_id == agent_id)
+            result = await db.execute(stmt)
+            records = result.scalars().all()
+
+            if not records:
+                return GatedDecayReport(
+                    total_memories=0,
+                    decayed_count=0,
+                    gated_count=0,
+                    avg_importance_before=0.0,
+                    avg_importance_after=0.0,
+                    pending_forget_ids=[],
+                    pending_forget_reasons={},
+                )
+
+            now = datetime.now(UTC)
+            total_before = 0.0
+            total_after = 0.0
+            decayed = 0
+            pending_forget_ids: list[str] = []
+            pending_forget_reasons: dict[str, tuple[str, ...]] = {}
+
+            for record in records:
+                verdict = safety_gate(record.content)
+                if not verdict.allowed:
+                    pending_forget_ids.append(record.id)
+                    pending_forget_reasons[record.id] = verdict.reasons
+                    total_before += record.importance
+                    total_after += record.importance
+                    continue
+
+                if record.last_accessed_at:
+                    delta = (
+                        now - record.last_accessed_at.replace(tzinfo=UTC)
+                        if record.last_accessed_at.tzinfo is None
+                        else now - record.last_accessed_at
+                    )
+                    days = delta.days
+                else:
+                    days = 0
+
+                record.days_since_access = days
+                old_importance = record.importance
+                new_importance = old_importance * (self.DECAY_BASE**days)
+
+                if new_importance < old_importance:
+                    record.importance = round(new_importance, 6)
+                    decayed += 1
+
+                total_before += old_importance
+                total_after += record.importance
+
+            await db.commit()
+            count = len(records)
+            return GatedDecayReport(
+                total_memories=count,
+                decayed_count=decayed,
+                gated_count=len(pending_forget_ids),
+                avg_importance_before=round(total_before / count, 6) if count else 0.0,
+                avg_importance_after=round(total_after / count, 6) if count else 0.0,
+                pending_forget_ids=pending_forget_ids,
+                pending_forget_reasons=pending_forget_reasons,
             )
 
     async def forget_memory(self, memory_id: str) -> bool:

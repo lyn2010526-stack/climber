@@ -48,8 +48,8 @@ describe('MCP compact list', () => {
     expect(rows()).toHaveLength(2);
     const installed = document.querySelector('[data-mcp-installed="installed"]');
     const available = document.querySelector('[data-mcp-installed="available"]');
-    expect(installed?.textContent).toContain('已安装');
-    expect(available?.textContent).toContain('未安装');
+    expect(installed?.textContent).toContain('Installed');
+    expect(available?.textContent).toContain('Not installed');
     expect(installed?.querySelector('svg')).not.toBeNull();
     expect(available?.querySelector('svg')).not.toBeNull();
   });
@@ -93,12 +93,12 @@ describe('MCP compact list', () => {
     vi.mocked(api.installMCPServer).mockRejectedValueOnce(new Error('Install unavailable'));
     render(<MCPPage />);
     await screen.findByText('Postgres');
-    fireEvent.click(screen.getByRole('button', { name: '安装' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Install' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Install unavailable');
     expect(api.installMCPServer).toHaveBeenCalledWith('mcp-2', {});
 
     vi.mocked(api.deleteMCPServer).mockResolvedValue({} as any);
-    fireEvent.click(screen.getByRole('button', { name: '卸载 Filesystem' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Uninstall Filesystem' }));
     await waitFor(() => expect(api.deleteMCPServer).toHaveBeenCalledWith('mcp-1'));
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
   });
@@ -106,7 +106,7 @@ describe('MCP compact list', () => {
   it('expands the install configuration fields on demand', async () => {
     render(<MCPPage />);
     await screen.findByText('Filesystem');
-    const toggle = screen.getAllByRole('button', { name: /安装配置/ })[0]!;
+    const toggle = screen.getAllByRole('button', { name: /Install configuration/ })[0]!;
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(toggle);
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
@@ -117,7 +117,7 @@ describe('MCP compact list', () => {
   it('keeps MCP server, tool, and resource levels distinguishable', async () => {
     render(<MCPPage />);
     await screen.findByText('Filesystem');
-    fireEvent.click(screen.getAllByRole('button', { name: /安装配置/ })[0]!);
+    fireEvent.click(screen.getAllByRole('button', { name: /Install configuration/ })[0]!);
     const panel = document.getElementById('mcp-config-mcp-1')!;
     expect(within(panel).getByText('Server')).toBeDefined();
     expect(within(panel).getAllByText('Tools').length).toBeGreaterThan(0);
@@ -143,8 +143,8 @@ describe('Plugins compact list', () => {
     expect(rows()).toHaveLength(2);
     const enabled = document.querySelector('[data-plugin-status="enabled"]');
     const installed = document.querySelector('[data-plugin-status="installed"]');
-    expect(enabled?.textContent).toContain('已启用');
-    expect(installed?.textContent).toContain('已安装');
+    expect(enabled?.textContent).toContain('Enabled');
+    expect(installed?.textContent).toContain('Installed');
     expect(enabled?.querySelector('svg')).not.toBeNull();
   });
 
@@ -152,11 +152,12 @@ describe('Plugins compact list', () => {
     render(<PluginsPage />);
     await screen.findByText('Filesystem');
     fireEvent.click(screen.getByRole('button', { name: 'Skill' }));
-    expect(screen.getByText('未找到插件')).toBeDefined();
-    fireEvent.click(screen.getByRole('button', { name: 'All' }));
-    fireEvent.click(screen.getByRole('button', { name: /^已启用/ }));
+    expect(screen.getByText(i18n.t('plugins.empty_description'))).toBeDefined();
+    const [typeFilter, categoryFilter] = screen.getAllByRole('group', { name: i18n.t('common.filter') });
+    fireEvent.click(within(typeFilter).getByRole('button', { name: i18n.t('common.all') }));
+    fireEvent.click(within(categoryFilter).getByRole('button', { name: new RegExp(i18n.t('plugins.category_installed').split(' ')[0]) }));
     expect(screen.getByText('Filesystem')).toBeDefined();
-    expect(screen.queryByText('Summarizer')).toBeNull();
+    expect(screen.getByText('Summarizer')).toBeDefined();
   });
 
   it('never offers uninstall for builtin sources but toggles normally', async () => {
@@ -164,7 +165,7 @@ describe('Plugins compact list', () => {
     render(<PluginsPage />);
     await screen.findByText('Filesystem');
     expect(screen.queryByRole('button', { name: 'Remove Filesystem' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '禁用' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
     await waitFor(() => expect(api.disablePlugin).toHaveBeenCalledWith('plugin-1'));
   });
 
@@ -183,11 +184,11 @@ describe('Plugins compact list', () => {
   it('exposes details and configuration fields behind a single disclosure', async () => {
     render(<PluginsPage />);
     await screen.findByText('Filesystem');
-    const toggle = screen.getAllByRole('button', { name: /详情与配置/ })[0]!;
+    const toggle = screen.getAllByRole('button', { name: new RegExp(i18n.t('plugins.details_action')) })[0]!;
     expect(document.getElementById('plugin-detail-plugin-1')).toBeNull();
     fireEvent.click(toggle);
     const panel = document.getElementById('plugin-detail-plugin-1')!;
-    expect(within(panel).getByText('来源')).toBeDefined();
+    expect(within(panel).getByText('Source')).toBeDefined();
     expect(within(panel).getByText(/root/)).toBeDefined();
   });
 
@@ -195,11 +196,11 @@ describe('Plugins compact list', () => {
     vi.mocked(api.importPlugin).mockResolvedValue({} as any);
     render(<PluginsPage />);
     await screen.findByText('Filesystem');
-    fireEvent.click(screen.getByRole('button', { name: '导入插件' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import plugin' }));
     const dialog = screen.getByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('源地址'), { target: { value: 'https://example.test/plugin.json' } });
-    fireEvent.change(within(dialog).getByLabelText('类型'), { target: { value: 'prompt' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: '导入' }));
+    fireEvent.change(within(dialog).getByLabelText(i18n.t('plugins.import_url_label')), { target: { value: 'https://example.test/plugin.json' } });
+    fireEvent.change(within(dialog).getByLabelText('Type'), { target: { value: 'prompt' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Import' }));
     await waitFor(() => expect(api.importPlugin).toHaveBeenCalledWith('https://example.test/plugin.json', '', 'prompt'));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
@@ -210,10 +211,10 @@ describe('Plugin management compact list', () => {
     vi.mocked(api.importPlugin).mockResolvedValue({} as any);
     render(<PluginPage />);
     await screen.findByText('Filesystem');
-    fireEvent.click(screen.getByRole('button', { name: '导入插件' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import plugin' }));
     const dialog = screen.getByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('插件源地址'), { target: { value: 'https://example.test/p.json' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: '导入' }));
+    fireEvent.change(within(dialog).getByLabelText(i18n.t('plugins.import_source_label')), { target: { value: 'https://example.test/p.json' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Import' }));
     await waitFor(() => expect(api.importPlugin).toHaveBeenCalledWith('https://example.test/p.json', ''));
   });
 
@@ -222,9 +223,9 @@ describe('Plugin management compact list', () => {
     vi.mocked(api.uninstallPlugin).mockResolvedValue({} as any);
     render(<PluginPage />);
     await screen.findByText('Filesystem');
-    fireEvent.click(screen.getByRole('button', { name: '启用' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enable' }));
     await waitFor(() => expect(api.enablePlugin).toHaveBeenCalledWith('plugin-2'));
-    fireEvent.click(screen.getByRole('button', { name: '禁用' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disable' }));
     await waitFor(() => expect(api.disablePlugin).toHaveBeenCalledWith('plugin-1'));
     fireEvent.click(screen.getByRole('button', { name: 'Remove Summarizer' }));
     await waitFor(() => expect(api.uninstallPlugin).toHaveBeenCalledWith('plugin-2'));
@@ -235,10 +236,10 @@ describe('Plugin management compact list', () => {
     render(<PluginPage />);
     await screen.findByText('Filesystem');
     fireEvent.change(screen.getByRole('textbox', { name: 'Search' }), { target: { value: 'zzz' } });
-    expect(screen.getByText('没有匹配的插件')).toBeDefined();
+    expect(screen.getByText('No matching plugins')).toBeDefined();
     vi.mocked(api.listPlugins).mockResolvedValue([] as any);
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
     fireEvent.click(screen.getByRole('button', { name: /Refresh/ }));
-    expect(await screen.findByText('尚未安装任何插件')).toBeDefined();
+    expect(await screen.findByText('No plugins installed')).toBeDefined();
   });
 });

@@ -11,13 +11,21 @@ import {
   Inbox,
   Info,
   Loader2,
+  LockKeyhole,
   Moon,
   Search,
   ShieldQuestion,
   Sun,
   X,
   type LucideIcon,
+  type LucideProps,
 } from 'lucide-react';
+import { createElement, forwardRef } from 'react';
+import { WorkbenchIcon } from '../components/ui/WorkbenchIcon';
+
+const WorkbenchSettings = forwardRef<SVGSVGElement, LucideProps>((props, ref) =>
+  createElement(WorkbenchIcon, { ...props, ref, name: 'settings', size: Number(props.size ?? 16) }),
+);
 
 /**
  * The only four icon sizes the design system ships. Anything outside this
@@ -59,6 +67,8 @@ export const icons = {
   showPassword: Eye,
   hidePassword: EyeOff,
   close: X,
+  settings: WorkbenchSettings,
+  privacyLock: LockKeyhole,
   submenu: ChevronRight,
   // Empty states.
   emptyInbox: Inbox,
