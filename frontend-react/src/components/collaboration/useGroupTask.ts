@@ -40,9 +40,14 @@ export function useGroupTask(groupId: string) {
 
   const taskId = task?.task_id;
   const active = !!task && isActiveTaskStatus(task.status);
+  /** Whether the error on screen was raised by the poll itself. */
+  const pollFailed = useRef(false);
 
   useEffect(() => {
-    if (!taskId || !active) return;
+    if (!taskId || !active) {
+      pollFailed.current = false;
+      return;
+    }
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
     const refresh = async () => {
@@ -50,10 +55,19 @@ export function useGroupTask(groupId: string) {
         const result = await api.getTask(taskId);
         if (!disposed) {
           setTask(result);
-          setError('');
+          // Only retire the error this poll raised. A refused cancellation or a
+          // failed submission belongs to the user's action and must stay on
+          // screen until the user does something else.
+          if (pollFailed.current) {
+            pollFailed.current = false;
+            setError('');
+          }
         }
       } catch (reason) {
-        if (!disposed) setError(reason instanceof Error ? reason.message : '查询任务失败');
+        if (!disposed) {
+          pollFailed.current = true;
+          setError(reason instanceof Error ? reason.message : '查询任务失败');
+        }
       } finally {
         if (!disposed) timer = setTimeout(refresh, POLL_INTERVAL_MS);
       }
