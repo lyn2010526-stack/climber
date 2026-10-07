@@ -1,5 +1,6 @@
 import { ALL_NAV_ITEMS_BASE, NAV_GROUPS, type NavGroup, type Page } from '../navigation/navConfig';
 import { WorkbenchIcon, type WorkbenchIconName } from '../components/ui/WorkbenchIcon';
+import { navigationIconFor } from '../lib/icons';
 
 const NAV_ICON: Partial<Record<Page, WorkbenchIconName>> = {
   chat: 'conversation', tasks: 'task', skills: 'skill', settings: 'settings', mcp: 'tool', terminal: 'tool', agents: 'agent',
@@ -26,7 +27,7 @@ export function SidebarNavigation({ currentPage, onNavigate, collapsed = false, 
           )}
           <ul className="space-y-0.5">
             {ALL_NAV_ITEMS_BASE.filter(item => item.group === group.id).map(item => {
-              const Icon = item.icon;
+              const Icon = navigationIconFor(item.icon);
               const title = item.labelKey ? translate(item.labelKey) : item.label ?? item.id;
               const active = currentPage === item.id;
               return (

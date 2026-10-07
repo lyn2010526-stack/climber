@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useI18n } from '../../i18n';
 import { cn } from '../../lib/utils';
@@ -41,16 +41,12 @@ export function ThinkingBubble({ message, active }: { message: Message; active: 
   const typewriterMode = useTypewriterMode();
   const typewriterEnabled = isTypewriterActive(typewriterMode);
 
-  // Codex 风格：流式开始时自动展开公开推理摘要；手动收起在同一次流中保持收起。
-  useEffect(() => {
-    if (active) setReasoningOpen(true);
-  }, [active]);
-
   const content = useTypewriterReveal(message.content, {
     active,
     preset: typewriterPresetFor(typewriterMode),
     enabled: typewriterEnabled,
   });
+  const reasoningStatus = message.failed ? 'error' : message.interrupted ? 'paused' : active ? 'active' : 'complete';
 
   return (
     <div
@@ -64,23 +60,38 @@ export function ThinkingBubble({ message, active }: { message: Message; active: 
         </p>
       )}
       {content && (
-        <div className="workbench-agent-message max-w-[85%] text-[length:var(--text-sm)] leading-relaxed text-[var(--color-text-primary)]">
+        <div className="codex-agent-message max-w-[85%] text-[length:var(--text-sm)] leading-relaxed text-[var(--color-text-primary)]">
           <MarkdownRenderer content={content} />
         </div>
       )}
       <span className="flex min-w-0 items-center gap-[var(--space-1-5)] text-[length:var(--text-2xs)] text-[var(--color-text-muted)]">
         <WorkbenchIcon name="agent" size={12} className="shrink-0 text-[var(--color-text-muted)]" />
-        <span
+          <span
           aria-hidden="true"
           data-testid="anchored-thinking-icon"
           className={cn(
             'size-[6px] shrink-0 rounded-[var(--radius-pill)]',
             active
-              ? 'bg-[var(--color-accent-foreground)] motion-safe:animate-pulse'
-              : 'bg-[var(--color-text-muted)]',
+              ? 'bg-[var(--color-info)] motion-safe:animate-pulse'
+              : message.failed
+                ? 'bg-[var(--color-error)]'
+                : message.interrupted
+                  ? 'bg-[var(--color-warning)]'
+                  : 'bg-[var(--color-success)]',
           )}
         />
-        <span className="truncate">{t('anchored.status.thinking')}</span>
+        <span className={cn(
+          'truncate',
+          active && 'text-[var(--color-info)]',
+          message.failed && 'text-[var(--color-error)]',
+          message.interrupted && 'text-[var(--color-warning)]',
+          !active && !message.failed && !message.interrupted && 'text-[var(--color-success)]',
+        )}>
+          {t(
+            message.failed ? 'anchored.status.thinking_error' : message.interrupted ? 'anchored.status.thinking_paused' : active ? 'anchored.status.thinking' : 'anchored.status.thinking_complete',
+            { defaultValue: message.failed ? 'Thinking failed' : message.interrupted ? 'Thinking paused' : active ? 'Thinking' : 'Thinking complete' },
+          )}
+        </span>
       </span>
       {message.reasoning && (
         <div className="w-full min-w-0">
@@ -99,6 +110,7 @@ export function ThinkingBubble({ message, active }: { message: Message; active: 
               <ReasoningPanel
                 text={message.reasoning}
                 active={active}
+                status={reasoningStatus}
                 defaultOpen
                 className={REASONING_BODY_CLASS}
               />

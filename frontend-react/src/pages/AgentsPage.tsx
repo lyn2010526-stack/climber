@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Bot, X, ChevronRight, Check, RefreshCw, AlertCircle, Search, MoreVertical, Wrench, Boxes, CheckCircle2, AlertTriangle, CircleSlash, CircleHelp, SlidersHorizontal } from 'lucide-react';
+import { pageIcons as icons } from '../lib/icons';
+
+const { add: Plus, delete: Trash2, agent: Bot, close: X, submenu: ChevronRight, check: Check, refresh: RefreshCw, error: AlertCircle, search: Search, more: MoreVertical, tools: Wrench, skills: Boxes, successCircle: CheckCircle2, warning: AlertTriangle, disabled: CircleSlash, helpCircle: CircleHelp, chart: SlidersHorizontal } = icons;
 import { api } from '../api';
 import { useTranslation } from '../i18n';
 import { includesQuery } from '../lib/search';

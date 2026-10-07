@@ -6,7 +6,7 @@ const root = resolve(process.cwd(), 'src');
 const css = readFileSync(resolve(root, 'index.css'), 'utf-8');
 
 const TOKEN_SOURCE = 'src/index.css';
-// workbench.css carries a second sanctioned token layer: the Codex-parity
+// workbench.css carries a second sanctioned token layer for the workbench
 // `.workbench-theme` scope, the same block
 // components/workspace/__tests__/anchored-spec-conformance.test.tsx requires to
 // define its own colour tokens in. Only those declarations are tokens; the rest

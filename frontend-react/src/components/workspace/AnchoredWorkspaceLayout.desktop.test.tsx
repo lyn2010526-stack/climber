@@ -106,28 +106,40 @@ beforeEach(() => {
 });
 
 describe('Desktop anchored workspace (panel API mocked)', () => {
-  it.each([1280, 1440, 1600])('keeps desktop navigation and a closed inspect at %ipx', width => {
+  it.each([1280, 1440, 1600])('keeps desktop navigation and a collapsed inspect at %ipx', width => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
     render(<AnchoredWorkspaceLayout />);
     expect(screen.getByTestId('anchored-workspace')).toHaveAttribute('data-layout', 'three-column');
     expect(screen.getByTestId('anchored-left')).toHaveAttribute('data-default-size', '240px');
     expect(screen.getByTestId('anchored-center')).toHaveAttribute('data-min-size', '600px');
     expect(screen.getByTestId('anchored-right')).toHaveAttribute('data-default-size', '0px');
+    expect(screen.getByTestId('anchored-right')).toBeInTheDocument();
     expect(screen.queryByTestId('inspect-content')).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('opens inspect by button and preserves the chat and draft across toggles and window resize', () => {
+  it('toggles the default inspect panel and preserves the chat and draft across resize', () => {
     render(<AnchoredWorkspaceLayout />);
     const draft = screen.getByRole('textbox');
     fireEvent.change(draft, { target: { value: 'Keep current SSE session' } });
-    fireEvent.click(screen.getByText('Inspect'));
+    expect(screen.queryByTestId('inspect-content')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Inspect' }));
     expect(screen.getByTestId('inspect-content')).toHaveTextContent('real-session-contract');
-    act(() => { Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1200 }); window.dispatchEvent(new Event('resize')); });
+    act(() => { Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 }); window.dispatchEvent(new Event('resize')); });
     expect(screen.getByRole('textbox')).toBe(draft);
     fireEvent.click(screen.getByLabelText('anchored.layout.collapse_right'));
     expect(screen.queryByTestId('inspect-content')).toBeNull();
     expect(draft).toHaveValue('Keep current SSE session');
+  });
+
+  it('exposes forgiving resize targets for both rail boundaries', () => {
+    render(<AnchoredWorkspaceLayout />);
+    expect(screen.getByTestId('anchored-left-separator')).toHaveClass('workbench-desktop-separator');
+    expect(screen.getByTestId('anchored-right-separator')).toHaveClass('workbench-desktop-inspect-separator');
+    fireEvent.pointerDown(screen.getByTestId('anchored-right-separator'));
+    act(() => panels.get('anchored-right')!.resize('360px'));
+    fireEvent.pointerUp(window);
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toMatchObject({ rightWidth: 360 });
   });
 
   it('persists dragged widths and both collapse preferences across remounts', () => {
@@ -135,7 +147,7 @@ describe('Desktop anchored workspace (panel API mocked)', () => {
     fireEvent.pointerDown(screen.getAllByRole('separator')[0]);
     act(() => panels.get('anchored-left')!.resize('280px'));
     fireEvent.pointerUp(window);
-    fireEvent.click(screen.getByText('Inspect'));
+    expect(screen.queryByTestId('inspect-content')).toBeNull();
     fireEvent.keyDown(screen.getAllByRole('separator')[1], { key: 'ArrowLeft' });
     act(() => panels.get('anchored-right')!.resize('350px'));
     fireEvent.keyUp(window, { key: 'ArrowLeft' });
@@ -152,7 +164,6 @@ describe('Desktop anchored workspace (panel API mocked)', () => {
     localStorage.setItem(KEY, JSON.stringify({ leftWidth: 360, rightWidth: 480 }));
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1162 });
     render(<AnchoredWorkspaceLayout />);
-    fireEvent.click(screen.getByText('Inspect'));
     expect(JSON.parse(localStorage.getItem(KEY)!)).toMatchObject({ leftWidth: 360, rightWidth: 480 });
     expect(screen.getByTestId('anchored-right')).toHaveAttribute('data-max-size', '380px');
   });
@@ -173,8 +184,7 @@ describe('Desktop anchored workspace (panel API mocked)', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('Unavailable'); });
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Quota'); });
     render(<AnchoredWorkspaceLayout />);
-    fireEvent.click(screen.getByText('Inspect'));
-    expect(screen.getByTestId('inspect-content')).toBeInTheDocument();
+    expect(screen.queryByTestId('inspect-content')).toBeNull();
   });
 
   it('exits focus mode with Escape while leaving text-field Escape untouched', () => {
@@ -192,18 +202,17 @@ describe('Desktop anchored workspace (panel API mocked)', () => {
     useWorkspaceStore.setState({ focusMode: false });
     render(<AnchoredWorkspaceLayout />);
     const section = screen.getByTestId('anchored-workspace');
-    // Open inspect first so focus mode has a rail worth reclaiming.
-    fireEvent.click(screen.getByText('Inspect'));
-    expect(screen.getByTestId('inspect-content')).toBeInTheDocument();
+    // The inspect rail starts collapsed and opens only on explicit user action.
+    expect(screen.queryByTestId('inspect-content')).toBeNull();
     expect(screen.getByText('Collapse navigation')).toBeInTheDocument();
     expect(section).toHaveAttribute('data-focus', 'false');
-    expect(section).toHaveAttribute('data-inspect-open', 'true');
+    expect(section).toHaveAttribute('data-inspect-open', 'false');
 
     fireEvent.click(screen.getByLabelText('anchored.controlbar.enter_focus'));
 
     expect(section).toHaveAttribute('data-focus', 'true');
     // Both rails yield to the canvas: the navigation collapses to its rail
-    // button and the inspect panel closes.
+    // button and the inspect panel remains closed.
     expect(screen.queryByText('Collapse navigation')).toBeNull();
     expect(screen.getByLabelText('anchored.layout.expand_left')).toBeInTheDocument();
     expect(screen.queryByTestId('inspect-content')).toBeNull();
@@ -213,10 +222,10 @@ describe('Desktop anchored workspace (panel API mocked)', () => {
 
     expect(section).toHaveAttribute('data-focus', 'false');
     expect(screen.getByText('Collapse navigation')).toBeInTheDocument();
-    expect(screen.getByTestId('inspect-content')).toBeInTheDocument();
-    expect(section).toHaveAttribute('data-inspect-open', 'true');
+    expect(screen.queryByTestId('inspect-content')).toBeNull();
+    expect(section).toHaveAttribute('data-inspect-open', 'false');
     // The mode never rewrites the user's own collapse preferences.
-    expect(JSON.parse(localStorage.getItem(KEY)!)).toMatchObject({ leftCollapsed: false, rightCollapsed: false });
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toMatchObject({ leftCollapsed: false, rightCollapsed: true });
   });
 
   it('closes the side drawers in focus mode and restores them on exit', () => {

@@ -19,7 +19,8 @@
       "stop": "Séquences d’arrêt",
       "stop_placeholder": "Séparé par des virgules",
       "temperature": "Température",
-      "top_p": "Top P"
+      "top_p": "Top P",
+      "not_supported": "Not supported yet"
     },
     "settings": {
       "title": "Paramètres"
@@ -278,7 +279,19 @@
       "skills_error": "Échec du chargement des compétences",
       "toggle_skill": "Activer/désactiver la compétence",
       "unpin": "Désépingler",
-      "user_unknown": "Utilisateur non confirmé"
+      "user_unknown": "Utilisateur non confirmé",
+      "checkpoint_create": "Create checkpoint",
+      "checkpoint_created": "Checkpoint saved",
+      "checkpoint_failed": "Checkpoint action failed",
+      "checkpoint_history": "Checkpoint history",
+      "checkpoint_history_empty": "No checkpoints yet",
+      "checkpoint_history_title": "Checkpoints",
+      "checkpoint_iteration": "Iteration {{iteration}}",
+      "checkpoint_resume": "Resume from checkpoint",
+      "checkpoint_resumed": "Resumed from checkpoint (iteration {{iteration}})",
+      "fork_failed": "Failed to fork session",
+      "fork_session": "Fork session",
+      "forked": "Session forked"
     },
     "panel": {
       "label": "Panneau d’exécution"
@@ -361,6 +374,9 @@
       "label": "État de l’agent",
       "shortcuts_hint": "? pour les raccourcis",
       "thinking": "Réflexion",
+      "thinking_complete": "Réflexion terminée",
+      "thinking_error": "Échec de la réflexion",
+      "thinking_paused": "Réflexion en pause",
       "turn_tokens": "Tokens du tour",
       "unreported": "Non signalé"
     },
@@ -416,6 +432,11 @@
       "example_task": "Décomposer puis exécuter les sous-tâches en parallèle",
       "shift_hint": "Shift+Entrée pour un saut de ligne",
       "title": "Pour commencer"
+    },
+    "memory": {
+      "archives_title": "Session archives",
+      "archives_loading": "Loading session archives…",
+      "archives_unavailable": "Session archives unavailable"
     }
   },
   "annotation": {
@@ -615,6 +636,7 @@
     "thinking_level_low_hint": "Faible: réponses rapides pour les questions simples",
     "thinking_level_medium": "Moyen",
     "thinking_level_medium_hint": "Moyen: équilibre entre vitesse et profondeur (par défaut)",
+    "thinking_level_current": "Actuel : {{level}}",
     "thinking_mode": "Mode réflexion",
     "thinking_show_hint": "Afficher le processus de réflexion",
     "thinking_toggle": "Réflexion",
@@ -644,7 +666,8 @@
       "create_group": "Impossible de créer le groupe",
       "load_groups": "Impossible de charger les groupes",
       "load_members": "Impossible de charger les membres",
-      "update_member": "Impossible de mettre à jour le membre"
+      "update_member": "Impossible de mettre à jour le membre",
+      "delete_group": "Failed to delete group"
     },
     "group_status": {
       "active": "Active"
@@ -661,7 +684,9 @@
       "reload": "Recharger",
       "template_hint": "Utiliser le modèle de membres par défaut",
       "topic_label": "Sujet",
-      "topic_placeholder": "Sujet facultatif"
+      "topic_placeholder": "Sujet facultatif",
+      "delete_confirm": "Delete group \"{{name}}\"? This cannot be undone.",
+      "delete_named": "Delete group {{name}}"
     },
     "heading_task": "Tâche du groupe",
     "members": {
@@ -671,7 +696,8 @@
       "reload": "Recharger les membres",
       "remove_named": "Supprimer {{name}}",
       "retry": "Réessayer",
-      "role": "Rôle"
+      "role": "Rôle",
+      "change_role": "Change role"
     },
     "new_task": "Nouvelle tâche",
     "no_run_yet": "Aucune exécution",
@@ -699,9 +725,23 @@
       "failed": "Échec",
       "pending": "En attente d'exécution",
       "ready": "Prête",
-      "running": "En cours"
+      "running": "En cours",
+      "paused": "Paused"
     },
-    "topic_unset": "Sujet non signalé"
+    "topic_unset": "Sujet non signalé",
+    "cluster": {
+      "heading": "Cluster nodes",
+      "create": "New node",
+      "name_label": "Node name",
+      "endpoint_label": "Endpoint (optional)",
+      "role_label": "Role",
+      "empty": "No cluster nodes yet",
+      "load_failed": "Failed to load cluster nodes",
+      "create_failed": "Failed to create cluster node",
+      "delete_failed": "Failed to delete cluster node",
+      "delete_confirm": "Delete cluster node \"{{name}}\"?",
+      "delete_named": "Delete node {{name}}"
+    }
   },
   "common": {
     "account": "Compte",
@@ -918,7 +958,8 @@
       "load_agents": "Échec du chargement des agents",
       "load_datasets": "Échec du chargement des jeux de données",
       "run_failed": "L'exécution de l'évaluation a échoué",
-      "select_both": "Sélectionnez un agent et un jeu de données"
+      "select_both": "Sélectionnez un agent et un jeu de données",
+      "create_dataset": "Failed to create dataset"
     },
     "failed": "Échoués",
     "no_case_results": "Aucun résultat de cas pour l'instant",
@@ -939,7 +980,12 @@
     "run_no_cases": "Aucun cas de test à exécuter",
     "running": "En cours",
     "select_agent": "Sélectionner un agent",
-    "title": "Évaluation"
+    "title": "Évaluation",
+    "dataset_create": "New dataset",
+    "dataset_name": "Dataset name",
+    "dataset_description": "Description (optional)",
+    "dataset_cases": "Cases JSON array",
+    "dataset_cases_placeholder": "[{\"input\": \"...\", \"expected\": \"...\"}]"
   },
   "execution": {
     "empty": "Aucune étape d'exécution enregistrée.",
@@ -1254,7 +1300,10 @@
     "terminal": "Terminal",
     "traces": "Traces",
     "users": "Utilisateurs",
-    "workflows": "Flux de travail"
+    "workflows": "Flux de travail",
+    "documents": "Documents",
+    "prompt_templates": "Prompt Templates",
+    "security": "Security Policy"
   },
   "notifications_page": {
     "default_message": "Ceci est une notification de test",
@@ -1363,7 +1412,15 @@
       "error": "Erreur",
       "installed": "Installé",
       "unknown": "État non signalé"
-    }
+    },
+    "view_tabs_aria": "Plugin views",
+    "installed_tab": "Installed",
+    "marketplace_tab": "Marketplace",
+    "marketplace_search_placeholder": "Search marketplace",
+    "marketplace_empty_title": "No marketplace plugins",
+    "marketplace_empty_description": "The marketplace catalog is empty or nothing matches the current filters.",
+    "update": "Update",
+    "install": "Install"
   },
   "privacy": {
     "auto_lock_hint": "Le code et les données du visage restent sur cet appareil.",
@@ -1468,7 +1525,8 @@
     "errors": {
       "failed": "Le raisonnement a échoué",
       "feedback_failed": "Échec de l'envoi du retour",
-      "load_modes": "Échec du chargement des modes"
+      "load_modes": "Échec du chargement des modes",
+      "load_trace": "Failed to load reasoning detail"
     },
     "feedback_placeholder": "Partagez votre avis",
     "feedback_thanks": "Merci pour votre retour",
@@ -1493,7 +1551,12 @@
     "thinking": "Réflexion...",
     "thought_for": "Réflexion pendant {{count}} secondes",
     "thought_for_unknown": "Réflexion pendant quelques secondes",
-    "title": "Raisonnement"
+    "thinking_error": "Échec de la réflexion",
+    "thinking_paused": "Réflexion en pause",
+    "title": "Raisonnement",
+    "trace_detail": "Reasoning detail",
+    "feedback_up": "Upvote",
+    "feedback_down": "Downvote"
   },
   "right_panel": {
     "close": "Fermer l'inspecteur",
@@ -1744,7 +1807,13 @@
     "webhook_task_failed_desc": "Notifier en cas d’échec de tâche",
     "webhook_title": "Webhook",
     "webhook_url": "URL de webhook",
-    "webhook_url_desc": "Point de terminaison recevant les callbacks d’événements"
+    "webhook_url_desc": "Point de terminaison recevant les callbacks d’événements",
+    "test_notification_title": "Test notification",
+    "test_notification_desc": "Send a test notification to verify the current channel configuration.",
+    "test_notification_action": "Send test notification",
+    "test_notification_sent": "Test notification sent.",
+    "test_notification_failed": "Failed to send the test notification.",
+    "account_readonly_note": "Account details are managed by your identity provider and are read-only here."
   },
   "sidebar": {
     "all_entries": "Toutes les pages",
@@ -1814,7 +1883,13 @@
     "card_sessions": "Sessions",
     "card_users": "Utilisateurs",
     "load_failed": "Échec du chargement des statistiques",
-    "title": "Statistiques de la plateforme"
+    "title": "Statistiques de la plateforme",
+    "feedback_title": "Feedback stats",
+    "feedback_total": "Total feedback",
+    "feedback_approval": "Approval rate",
+    "feedback_up": "Upvotes",
+    "feedback_down": "Downvotes",
+    "feedback_load_failed": "Failed to load feedback stats"
   },
   "store_anchored": {
     "current_task": "Tâche en cours",
@@ -1846,14 +1921,21 @@
     "subtasks_aria": "File des sous-tâches",
     "subtasks_count": "{{claimed}} réclamées · {{done}} terminées · {{total}} total",
     "subtasks_empty": "Cette tâche n'a pas de sous-tâches.",
-    "subtasks_heading": "Sous-tâches"
+    "subtasks_error": "Échec du chargement des sous-tâches.",
+    "subtasks_heading": "Sous-tâches",
+    "controls_aria": "Task controls",
+    "pause_action": "Pause",
+    "resume_action": "Resume",
+    "retry_action": "Retry",
+    "rollback_action": "Rollback"
   },
   "terminal": {
     "clear": "Effacer",
     "executing": "Exécution en cours",
     "read_only": "Lecture seule",
     "title": "Terminal sandbox",
-    "waiting": "En attente de commande"
+    "waiting": "En attente de commande",
+    "subtitle": "Run commands through the sandbox API and view the output."
   },
   "thought_chain": {
     "label": "Chaîne de raisonnement"
@@ -1972,7 +2054,24 @@
       "unknown": "Statut non signalé"
     },
     "title": "Flux de travail",
-    "view_tabs_aria": "Vues du workflow"
+    "view_tabs_aria": "Vues du workflow",
+    "from_template": "From template",
+    "import": "Import",
+    "imported": "Workflow imported.",
+    "import_invalid": "The selected file is not valid JSON.",
+    "import_failed": "Failed to import the workflow.",
+    "export": "Export",
+    "export_failed": "Failed to export the workflow.",
+    "delete_confirm": "Delete this workflow? This cannot be undone.",
+    "delete_failed": "Failed to delete the workflow.",
+    "deleted": "Workflow deleted.",
+    "templates_title": "Workflow templates",
+    "templates_load_failed": "Failed to load workflow templates.",
+    "templates_empty_title": "No templates available",
+    "templates_empty_description": "Built-in workflow templates will appear here.",
+    "use_template": "Use template",
+    "template_created": "Workflow created from template.",
+    "template_create_failed": "Failed to create a workflow from this template."
   },
   "boot": {
     "loading": "Démarrage de Climber",
@@ -1988,5 +2087,200 @@
     "cta_agents": "Voir les agents",
     "cta_settings": "Paramètres"
   },
-  "scroll": {}
+  "scroll": {},
+  "documents": {
+    "title": "Documents",
+    "page_description": "Upload, index and search knowledge-base documents.",
+    "upload": "Upload",
+    "uploading": "Uploading...",
+    "uploaded": "Document uploaded and indexed",
+    "upload_failed": "Upload failed",
+    "load_failed": "Failed to load documents",
+    "drop_hint": "Drop files here or click to choose. Text content is indexed for retrieval.",
+    "delete": "Delete",
+    "deleted": "Document deleted",
+    "delete_failed": "Delete failed",
+    "delete_confirm": "Delete document \"{{name}}\"? This cannot be undone.",
+    "chunks": "{{count}} chunk(s)",
+    "search": "Search",
+    "searching": "Searching...",
+    "search_placeholder": "Enter a query to test retrieval...",
+    "search_failed": "Search failed",
+    "search_hits": "{{count}} hit(s)",
+    "no_hits": "No matching chunks.",
+    "empty_title": "No documents yet",
+    "empty_description": "Upload a text document to build the retrieval index."
+  },
+  "prompt_templates": {
+    "builtin": "Built-in",
+    "content": "Content",
+    "content_hint": "Use {{variable}} placeholders for substitution.",
+    "custom": "Custom",
+    "delete_confirm": "Delete template \"{{name}}\"? This cannot be undone.",
+    "duplicate": "Duplicate",
+    "edit": "Edit template",
+    "export_all": "Export all",
+    "import": "Import",
+    "model_id": "Model ID",
+    "new": "New template",
+    "no_variables": "This template has no variables.",
+    "render": "Render",
+    "render_title": "Render template",
+    "rendered_output": "Rendered output",
+    "tags": "Tags",
+    "tags_hint": "Comma separated",
+    "variables": "Variables",
+    "variables_hint": "One per line: name=default value"
+  },
+  "skills": {
+    "manage": "Manage",
+    "detail_subtitle": "Version history and test cases",
+    "tab_versions": "Versions",
+    "tab_test_cases": "Test cases",
+    "version_active": "Active",
+    "version_activate": "Activate",
+    "version_changelog": "Changelog",
+    "version_changelog_ph": "Changelog note (optional)",
+    "version_snapshot": "Save current as new version",
+    "version_snapshot_hint": "Snapshots the skill's current prompt and tools as a new active version.",
+    "versions_empty": "No versions yet",
+    "test_case_add": "Add test case",
+    "test_case_hint": "Static runs render the prompt template and assert the expected substring. No model is involved.",
+    "test_case_input_params": "Input params (JSON object)",
+    "test_case_expected_contains": "Expected output contains",
+    "test_case_expected_tools": "Expected tools (comma separated)",
+    "test_case_timeout": "Timeout (seconds)",
+    "test_case_run": "Run",
+    "test_case_passed": "Passed",
+    "test_case_failed": "Failed",
+    "test_cases_empty": "No test cases yet",
+    "invalid_json": "Input params must be a valid JSON object."
+  },
+  "crews": {
+    "page_title": "Crews",
+    "empty_title": "Crews orchestration",
+    "empty_description": "Multi-agent crew orchestration is on the way."
+  },
+  "integrations_page": {
+    "title": "Integrations",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "qqbot": {
+      "title": "QQBot",
+      "desc": "Webhook endpoint and binding QR token for the domestic QQBot adapter.",
+      "mode": "Mode",
+      "reason": "Reason",
+      "webhook_url": "Webhook URL",
+      "get_qr": "Get binding QR token",
+      "qr_disabled": "Provider disabled",
+      "token": "Token",
+      "expires_at": "Expires at"
+    },
+    "langgraph": {
+      "desc": "List registered graphs and invoke one with JSON inputs. Invocation requires admin.",
+      "graph": "Graph",
+      "graph_placeholder": "Graph name",
+      "inputs": "Inputs (JSON object)",
+      "config": "Config (JSON object)",
+      "invoke": "Invoke"
+    },
+    "mem0": {
+      "desc": "Search and write memories under your own namespace.",
+      "available": "Available",
+      "unavailable": "Unavailable",
+      "search_title": "Search memories",
+      "query_placeholder": "Query",
+      "limit": "Limit",
+      "no_results": "No results.",
+      "add_title": "Add a memory",
+      "content": "Content",
+      "metadata": "Metadata (JSON object)",
+      "add": "Add memory",
+      "added": "Memory added"
+    },
+    "agent_run": {
+      "title": "Agent Run",
+      "desc": "Run a Pydantic-AI agent with a prompt. Requires admin.",
+      "prompt": "Prompt",
+      "system_prompt": "System prompt (optional)",
+      "model": "Model",
+      "run": "Run agent",
+      "confidence": "Confidence",
+      "tool_calls": "Tool calls",
+      "metadata": "Metadata"
+    }
+  },
+  "security_policy": {
+    "title": "Security Policy",
+    "admin_only": "Security policy is available to administrators only.",
+    "save": "Save",
+    "saved": "Saved.",
+    "quotas": {
+      "title": "Resource quotas",
+      "desc": "Per-agent CPU, memory, disk and network limits.",
+      "edit_title": "Set quota",
+      "agent": "Agent",
+      "cpu": "CPU cores",
+      "memory": "Memory (MB)",
+      "disk": "Disk (MB)",
+      "network": "Network (kbps)"
+    },
+    "fs": {
+      "title": "File system isolation",
+      "desc": "Allowed, blocked and read-only paths; one entry per line.",
+      "allowed_paths": "Allowed paths",
+      "blocked_paths": "Blocked paths",
+      "read_only_paths": "Read-only paths",
+      "allowed_extensions": "Allowed extensions",
+      "max_file_size": "Max file size (MB)"
+    },
+    "allowlist": {
+      "title": "Network allowlist",
+      "desc": "Domains agents may reach; strict mode rejects everything else.",
+      "strict": "Strict",
+      "permissive": "Permissive",
+      "strict_mode": "Strict domain mode",
+      "strict_mode_desc": "When enabled, only allowlisted domains are reachable.",
+      "domain_placeholder": "Domain",
+      "add": "Add domain",
+      "remove": "Remove domain",
+      "empty": "No domains allowlisted yet."
+    }
+  },
+  "research": {
+    "heading": "Web research",
+    "query_label": "Research question",
+    "query_placeholder": "Enter a question to research…",
+    "sources_label": "Source count",
+    "sources_count": "{{count}} sources",
+    "run": "Research",
+    "error": "Research request failed",
+    "sources_used": "Sources: "
+  },
+  "audit": {
+    "chain_title": "Decision chain",
+    "chain_load_failed": "Failed to load decision chain",
+    "chain_empty": "No decision entries",
+    "alignment_title": "Goal alignment",
+    "alignment_load_failed": "Failed to load alignment status",
+    "alignment_drift": "Drift score",
+    "alignment_threshold": "threshold",
+    "alignment_drifting": "over threshold",
+    "alignment_no_goals": "No goals",
+    "estop_title": "Emergency stop",
+    "estop_load_failed": "Failed to load emergency-stop status",
+    "estop_active": "Status: ACTIVATED — the system is emergency-stopped",
+    "estop_inactive": "Status: not activated",
+    "estop_reason": "Reason (optional)",
+    "estop_activate": "Activate emergency stop",
+    "estop_deactivate": "Deactivate emergency stop",
+    "estop_failed": "Emergency-stop operation failed",
+    "estop_activate_confirm": "Activate emergency stop? All running tasks will be interrupted.",
+    "estop_deactivate_confirm": "Deactivate the emergency stop?",
+    "tab_events": "Event log",
+    "tab_chain": "Decision chain",
+    "tab_alignment": "Alignment",
+    "tab_estop": "Emergency stop",
+    "tabs_label": "Audit views"
+  }
 }

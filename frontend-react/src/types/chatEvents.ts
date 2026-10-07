@@ -16,6 +16,13 @@ export const CHAT_EVENT = {
   TOOL_RESULT: 'tool_result',
   DONE: 'done',
   ERROR: 'error',
+  CHECKPOINT: 'checkpoint',
+  CONTEXT_COMPRESSION: 'context_compression',
+  PROGRESS: 'progress',
+  MODEL_FALLBACK: 'model_fallback',
+  SUB_AGENT_START: 'sub_agent_start',
+  SUB_AGENT_END: 'sub_agent_end',
+  PIPELINE_COMPLETE: 'pipeline_complete',
 } as const;
 
 export type ChatEventName = (typeof CHAT_EVENT)[keyof typeof CHAT_EVENT];
@@ -54,6 +61,15 @@ export interface DonePayload {
   message_id?: string;
 }
 
+export interface ChatEventContext {
+  thinkingLevel?: string;
+  reasoningPhase?: string;
+}
+
+export interface LifecycleEventPayload extends ChatEventContext {
+  payload: Record<string, unknown>;
+}
+
 export type SessionInputKind = 'steering' | 'follow_up';
 export interface SessionInput {
   id: string;
@@ -88,12 +104,12 @@ export function parseRuntimeReport(value: unknown): RuntimeReport {
 }
 
 export type ChatStreamEvent =
-  | { type: 'text'; delta: string }
-  | { type: 'thinking'; delta: string }
-  | {
+  | ({ type: 'text'; delta: string } & ChatEventContext)
+  | ({ type: 'thinking'; delta: string; iteration?: number } & ChatEventContext)
+  | ({
       type: 'tool_call';
       toolCall: { id: string; name: string; arguments: Record<string, unknown>; requiresApproval?: boolean; description?: string; severity?: 'low' | 'medium' | 'high' };
-    }
+    } & ChatEventContext)
   | { type: 'tool_result'; toolCallId: string; result: string; error: string }
   | { type: 'done'; messageId?: string; content?: string; status?: string }
   | { type: 'turn_started'; inputId: string; message: string }
@@ -101,6 +117,13 @@ export type ChatStreamEvent =
   | { type: 'runtime_report'; report: RuntimeReport }
   | { type: 'loop_status'; outerRound: number; currentInput: string; completed: string[]; followupQueue: string[]; steeringQueue: string[]; noProgressCount: number }
   | { type: 'input_status'; item: SessionInput }
+  | ({ type: 'checkpoint' } & LifecycleEventPayload)
+  | ({ type: 'context_compression' } & LifecycleEventPayload)
+  | ({ type: 'progress' } & LifecycleEventPayload)
+  | ({ type: 'model_fallback' } & LifecycleEventPayload)
+  | ({ type: 'sub_agent_start' } & LifecycleEventPayload)
+  | ({ type: 'sub_agent_end' } & LifecycleEventPayload)
+  | ({ type: 'pipeline_complete' } & LifecycleEventPayload)
   | { type: 'error'; message: string }
   | { type: 'unknown'; raw: RawSSEEvent };
 
@@ -115,6 +138,15 @@ function readString(source: Record<string, unknown>, keys: string[]): string {
     if (typeof value === 'string' && value.length > 0) return value;
   }
   return '';
+}
+
+function readEventContext(source: Record<string, unknown>): ChatEventContext {
+  const context: ChatEventContext = {};
+  const thinkingLevel = readString(source, ['thinking_level', 'thinkingLevel', 'reasoning_level']);
+  const reasoningPhase = readString(source, ['reasoning_phase', 'reasoningPhase', 'phase']);
+  if (thinkingLevel) context.thinkingLevel = thinkingLevel;
+  if (reasoningPhase) context.reasoningPhase = reasoningPhase;
+  return context;
 }
 
 /**
@@ -155,11 +187,16 @@ export function normalizeChatEvent(raw: RawSSEEvent): ChatStreamEvent {
     }
     case CHAT_EVENT.TEXT: {
       const delta = readString(payload, ['content', 'delta', 'text']);
-      return { type: 'text', delta: typeof raw.data === 'string' ? raw.data : delta };
+      return { type: 'text', delta: typeof raw.data === 'string' ? raw.data : delta, ...readEventContext(payload) };
     }
     case CHAT_EVENT.THINKING: {
       const delta = readString(payload, ['content', 'delta', 'text', 'reasoning']);
-      return { type: 'thinking', delta: typeof raw.data === 'string' ? raw.data : delta };
+      return {
+        type: 'thinking',
+        delta: typeof raw.data === 'string' ? raw.data : delta,
+        ...(typeof payload.iteration === 'number' ? { iteration: payload.iteration } : {}),
+        ...readEventContext(payload),
+      };
     }
     case CHAT_EVENT.TOOL_CALL: {
       return {
@@ -174,12 +211,13 @@ export function normalizeChatEvent(raw: RawSSEEvent): ChatStreamEvent {
             severity: payload.severity === 'low' || payload.severity === 'high' ? payload.severity : 'medium' as const,
           } : {}),
         },
+        ...readEventContext(payload),
       };
     }
     case CHAT_EVENT.TOOL_RESULT: {
       return {
         type: 'tool_result',
-        toolCallId: readString(payload, ['id', 'tool_call_id', 'toolCallId']),
+        toolCallId: readString(payload, ['tool_call_id', 'toolCallId', 'id']) || readString(asRecord(payload.tool_call), ['id', 'tool_call_id', 'toolCallId']),
         result: readString(payload, ['result', 'output', 'content']),
         error: readString(payload, ['error', 'error_message']),
       };
@@ -198,6 +236,14 @@ export function normalizeChatEvent(raw: RawSSEEvent): ChatStreamEvent {
         'Unknown error';
       return { type: 'error', message };
     }
+    case CHAT_EVENT.CHECKPOINT:
+    case CHAT_EVENT.CONTEXT_COMPRESSION:
+    case CHAT_EVENT.PROGRESS:
+    case CHAT_EVENT.MODEL_FALLBACK:
+    case CHAT_EVENT.SUB_AGENT_START:
+    case CHAT_EVENT.SUB_AGENT_END:
+    case CHAT_EVENT.PIPELINE_COMPLETE:
+      return { type: name, payload, ...readEventContext(payload) } as ChatStreamEvent;
     default:
       return { type: 'unknown', raw };
   }

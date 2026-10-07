@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { pageIcons } from '../../lib/icons';
 import { cn } from '../../lib/utils';
 import { api } from '../../api';
 import { useI18n } from '../../i18n';
@@ -14,7 +14,7 @@ const DEFAULT_PATCH_TITLE = 'Would you like to make the following edits?';
 const DEFAULT_PERMISSIONS_TITLE = 'Would you like to grant these permissions?';
 const CONFIRM_FOOTER = 'Press enter to confirm or esc to cancel';
 
-export type CodexApprovalVariant = 'exec' | 'patch' | 'permissions';
+export type ApprovalVariant = 'exec' | 'patch' | 'permissions';
 
 /**
  * 后端模式下不存在"本会话持续放行"这个决策的三种：strict 与 plan 未显式放行即
@@ -23,7 +23,7 @@ export type CodexApprovalVariant = 'exec' | 'patch' | 'permissions';
  */
 const MODES_WITHOUT_SESSION_ALLOW: readonly PermissionMode[] = ['strict', 'plan', 'bypass'];
 
-interface CodexOption {
+interface ApprovalOption {
   id: 'allow' | 'allow_session' | 'allow_always' | 'deny' | 'dismiss';
   label: string;
   hint: string;
@@ -31,7 +31,7 @@ interface CodexOption {
 }
 
 interface PopupMeta {
-  variant: CodexApprovalVariant;
+  variant: ApprovalVariant;
   reason?: string;
   prefix?: string;
   command?: string;
@@ -47,7 +47,7 @@ function readString(payload: Record<string, unknown> | undefined, key: string): 
 }
 
 /** 弹窗显式声明的审批变体；未声明返回 null，交给推断或兜底形态。 */
-function readDeclaredVariant(popup: AnchoredPopup): CodexApprovalVariant | null {
+function readDeclaredVariant(popup: AnchoredPopup): ApprovalVariant | null {
   const explicit = popup.payload?.['variant'];
   if (explicit === 'exec' || explicit === 'patch' || explicit === 'permissions') return explicit;
   if (explicit === 'command') return 'exec';
@@ -56,7 +56,7 @@ function readDeclaredVariant(popup: AnchoredPopup): CodexApprovalVariant | null 
 }
 
 /** 没有显式声明时按弹窗自带的信息推断审批形态；无任何线索按 exec 处理。 */
-function inferVariant(popup: AnchoredPopup): CodexApprovalVariant {
+function inferVariant(popup: AnchoredPopup): ApprovalVariant {
   if (readString(popup.payload, 'permissionRule') || popup.fields?.some((f) => f.key === 'permissionRule')) {
     return 'permissions';
   }
@@ -68,7 +68,7 @@ function inferVariant(popup: AnchoredPopup): CodexApprovalVariant {
   return 'exec';
 }
 
-function detectVariant(popup: AnchoredPopup): CodexApprovalVariant {
+function detectVariant(popup: AnchoredPopup): ApprovalVariant {
   return readDeclaredVariant(popup) ?? inferVariant(popup);
 }
 
@@ -77,7 +77,7 @@ function detectVariant(popup: AnchoredPopup): CodexApprovalVariant {
  * 权限规则 / 参数表），要么自己声明了主确认按钮。只剩标题与描述的通用审批列不出
  * 有意义的编号选项，交给 HitlPanel 兜底。
  */
-function hasCodexOptions(popup: AnchoredPopup, meta: PopupMeta): boolean {
+function hasApprovalOptions(popup: AnchoredPopup, meta: PopupMeta): boolean {
   if (readDeclaredVariant(popup)) return true;
   if (meta.command || meta.path || meta.permissionRule) return true;
   if (popup.fields?.length) return true;
@@ -108,14 +108,14 @@ function resolveMeta(popup: AnchoredPopup): PopupMeta {
   };
 }
 
-function codexTitle(meta: PopupMeta, popup: AnchoredPopup): string {
+function approvalTitle(meta: PopupMeta, popup: AnchoredPopup): string {
   if (popup.title && popup.title.trim()) return popup.title;
   if (meta.variant === 'patch') return DEFAULT_PATCH_TITLE;
   if (meta.variant === 'permissions') return DEFAULT_PERMISSIONS_TITLE;
   return DEFAULT_EXEC_TITLE;
 }
 
-function optionsFor(meta: PopupMeta): CodexOption[] {
+function optionsFor(meta: PopupMeta): ApprovalOption[] {
   if (meta.variant === 'patch') {
     return [
       { id: 'allow', label: 'Yes, proceed', hint: 'y', decision: 'allow' },
@@ -144,7 +144,7 @@ function optionsFor(meta: PopupMeta): CodexOption[] {
   ];
 }
 
-function CodexPopupCard({ popup, selected }: { popup: AnchoredPopup; selected: boolean }) {
+function ApprovalPopupCard({ popup, selected }: { popup: AnchoredPopup; selected: boolean }) {
   const { t } = useI18n();
   const headingId = useId();
   const listId = useId();
@@ -154,7 +154,7 @@ function CodexPopupCard({ popup, selected }: { popup: AnchoredPopup; selected: b
   const activeRef = useRef<HTMLLIElement>(null);
 
   const meta = useMemo(() => resolveMeta(popup), [popup]);
-  const title = codexTitle(meta, popup);
+  const title = approvalTitle(meta, popup);
   const options = useMemo(() => optionsFor(meta), [meta]);
   const [activeIndex, setActiveIndex] = useState(0);
   const active = Math.min(activeIndex, options.length - 1);
@@ -163,9 +163,9 @@ function CodexPopupCard({ popup, selected }: { popup: AnchoredPopup; selected: b
     if (selected) activeRef.current?.focus?.();
   }, [selected, active]);
 
-  const decisionOf = (option: CodexOption): 'allow' | 'deny' => option.decision ?? 'deny';
+  const decisionOf = (option: ApprovalOption): 'allow' | 'deny' => option.decision ?? 'deny';
 
-  const run = async (option: CodexOption | undefined) => {
+  const run = async (option: ApprovalOption | undefined) => {
     if (submitting || !option) return;
     const decision = decisionOf(option);
     const toolCallId = popup.payload?.['toolCallId'];
@@ -242,7 +242,7 @@ function CodexPopupCard({ popup, selected }: { popup: AnchoredPopup; selected: b
           aria-label="Dismiss"
           className="mt-[1px] flex size-6 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-bg-surface-2)] hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"
         >
-          <X size={12} aria-hidden="true" />
+          <pageIcons.close size={12} aria-hidden="true" />
         </button>
       </header>
 
@@ -355,7 +355,7 @@ function HitlApprovalCard({ popup, meta }: { popup: AnchoredPopup; meta: PopupMe
 
   return (
     <HitlPanel
-      title={codexTitle(meta, popup)}
+      title={approvalTitle(meta, popup)}
       description={meta.reason}
       onApprove={() => decide('allow')}
       onReject={() => decide('deny')}
@@ -369,12 +369,12 @@ function HitlApprovalCard({ popup, meta }: { popup: AnchoredPopup; meta: PopupMe
   );
 }
 
-/** 有编号选项走 Codex 弹窗，没有则走兜底审批形态。 */
+/** 有编号选项走结构化审批弹窗，没有则走兜底审批形态。 */
 function AnchoredPopupCard({ popup, selected }: { popup: AnchoredPopup; selected: boolean }) {
   const meta = useMemo(() => resolveMeta(popup), [popup]);
-  const codex = useMemo(() => hasCodexOptions(popup, meta), [popup, meta]);
-  if (!codex) return <HitlApprovalCard popup={popup} meta={meta} />;
-  return <CodexPopupCard popup={popup} selected={selected} />;
+  const hasOptions = useMemo(() => hasApprovalOptions(popup, meta), [popup, meta]);
+  if (!hasOptions) return <HitlApprovalCard popup={popup} meta={meta} />;
+  return <ApprovalPopupCard popup={popup} selected={selected} />;
 }
 
 export function AnchoredPopupStack() {

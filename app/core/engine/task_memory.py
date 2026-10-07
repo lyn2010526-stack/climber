@@ -13,6 +13,7 @@ from typing import Any, cast
 
 from sqlalchemy import select, update
 
+from app.core.compressor import estimate_text_tokens
 from app.storage.database import Session, SessionInput, Turn
 from app.storage.models_instruction_traces import InstructionTrace
 
@@ -41,9 +42,12 @@ class TaskMemory:
     def _item(source: str, row: Any, text: str, status: str, **details: Any) -> dict[str, Any]:
         return {
             "source_id": f"{source}:{row.id}",
+            "source": source,
             "text": text,
             "status": status,
             "acceptance": "unverified",
+            "trust": "untrusted",
+            "untrusted": True,
             **details,
         }
 
@@ -156,7 +160,7 @@ class TaskMemory:
         for name in ("todo", "planning", "completed"):
             for item in layers[name]:
                 line = json.dumps({"layer": name, **item}, ensure_ascii=False, sort_keys=True)
-                cost = len((line + "\n").encode("utf-8"))
+                cost = estimate_text_tokens(line + "\n")
                 if used + cost <= token_budget:
                     lines.append(line + "\n")
                     used += cost
@@ -167,6 +171,7 @@ class TaskMemory:
             "layers": layers,
             "task_context": "".join(lines),
             "budget_used": used,
+            "budget_unit": "estimated_tokens",
             "omitted": omitted,
         }
 

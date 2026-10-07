@@ -3,11 +3,10 @@
  *
  * The tokens themselves live in `src/index.css` — this file carries no values,
  * only the provenance, so a future change to a hex can be traced back to the
- * benchmark that justified it. See
- * `.monkeycode/specs/2026-09-26-parity-codex-deepseek-opencode/benchmark.md`.
+ * benchmark that justified it.
  */
 
-export type ParitySource = 'codex' | 'opencode' | 'deepseek' | 'derived';
+export type ParitySource = 'dark-reference' | 'syntax-reference' | 'deepseek' | 'derived';
 
 export interface TokenProvenance {
   token: string;
@@ -16,8 +15,8 @@ export interface TokenProvenance {
   role: string;
 }
 
-/** Codex CLI, measured from its actual terminal interface. */
-const codex: Record<string, string> = {
+/** Dark workbench values measured from the reference interface. */
+const darkReference: Record<string, string> = {
   '--color-bg-page': '#20222E',
   '--color-bg-surface-1': '#262938',
   '--color-bg-surface-2': '#2A2D3E',
@@ -42,15 +41,15 @@ const codex: Record<string, string> = {
   '--color-diff-hunk': '#5BC8D8',
 };
 
-/** OpenCode's published theme schema, whose role names Climber reuses. */
-const opencode: Record<string, string> = {
+/** Syntax and border roles used by the workbench token schema. */
+const syntaxReference: Record<string, string> = {
   '--color-syntax-type': '#B48EAD',
   '--color-syntax-comment': '#6C7182',
   '--color-syntax-operator': '#C9CCD6',
   '--color-border-strong': '#4A4F66',
 };
 
-/** Light-theme surfaces: a single white canvas, Codex style. */
+/** Light-theme surfaces: a single white canvas. */
 const lightSurfaces: Record<string, string> = {
   '--color-bg-page': '#FFFFFF',
   '--color-bg-surface-1': '#FFFFFF',
@@ -98,12 +97,12 @@ const roleOf: Record<string, string> = {
 };
 
 export const darkTokenProvenance: TokenProvenance[] = Object.entries({
-  ...codex,
-  ...opencode,
+  ...darkReference,
+  ...syntaxReference,
 }).map(([token, value]) => ({
   token,
   value,
-  source: token in codex ? ('codex' as const) : ('opencode' as const),
+  source: token in darkReference ? ('dark-reference' as const) : ('syntax-reference' as const),
   role: roleOf[token] ?? 'unclassified',
 }));
 
@@ -111,7 +110,7 @@ export const lightTokenProvenance: TokenProvenance[] = Object.entries(lightSurfa
   ([token, value]) => ({
     token,
     value,
-    source: 'opencode' as const,
+    source: 'syntax-reference' as const,
     role: roleOf[token] ?? 'unclassified',
   }),
 );

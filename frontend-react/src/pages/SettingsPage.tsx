@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  User, Cpu, Key, Bell, Shield, Info, Check, Server,
+  User, Cpu, Key, Bell, Shield, Info, Server,
   Mail,
    ChevronRight, AlertCircle, RefreshCw,
 } from 'lucide-react';
@@ -19,6 +19,9 @@ import { ApiKeysPage } from './ApiKeysPage';
 import { AuthApiKeysPage } from './AuthApiKeysPage';
 import { LocalPinSettings } from '../components/privacy/LocalPinSettings';
 import { ProfileLearningSettings } from '../components/privacy/ProfileLearningSettings';
+import { pageIcons as icons } from '../lib/icons';
+
+const CheckIcon = icons.check;
 
 type SettingsSection = 'profile' | 'models' | 'apikeys' | 'accessTokens' | 'notifications' | 'security' | 'about';
 
@@ -400,7 +403,7 @@ function ModelsSection() {
                   <p className="truncate text-sm text-[var(--color-text-primary)]">{model.label || model.model_id}</p>
                   <p className="truncate font-mono text-[length:var(--text-2xs)] text-[var(--color-text-muted)]">{model.provider}:{model.model_id}</p>
                 </div>
-                <Check size={14} className="shrink-0 text-[var(--color-success)]" aria-label={t('settings_page.available')} />
+                <CheckIcon size={14} className="shrink-0 text-[var(--color-success)]" aria-label={t('settings_page.available')} />
               </div>
             ))}
           </div>
@@ -839,7 +842,7 @@ function SecuritySection() {
                     <span className="text-sm font-medium text-[var(--color-text-primary)]">
                       {t(`settings.${level.labelKey}`)}
                     </span>
-                    {selected && <Badge variant="success" className="ml-auto">✓</Badge>}
+                    {selected && <Badge variant="success" className="ml-auto"><CheckIcon size={12} aria-hidden="true" /></Badge>}
                   </div>
                   <p className="text-xs text-[var(--color-text-muted)] mt-1">
                     {t(`settings.${level.descKey}`)}

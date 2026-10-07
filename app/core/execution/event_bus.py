@@ -33,6 +33,11 @@ class TaskEvent:
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     data: dict[str, Any] = field(default_factory=dict)
     event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    sequence: int | None = None
+    schema_version: int = 1
+    correlation_id: str | None = None
+    causation_id: str | None = None
+    producer: str = "event_bus"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -41,6 +46,11 @@ class TaskEvent:
             "task_id": self.task_id,
             "timestamp": self.timestamp,
             "data": self.data,
+            "sequence": self.sequence,
+            "schema_version": self.schema_version,
+            "correlation_id": self.correlation_id,
+            "causation_id": self.causation_id,
+            "producer": self.producer,
         }
 
 
@@ -88,13 +98,38 @@ class EventBus:
                 event_type TEXT NOT NULL,
                 task_id TEXT NOT NULL,
                 timestamp TEXT NOT NULL,
-                data_json TEXT NOT NULL DEFAULT '{}'
+                data_json TEXT NOT NULL DEFAULT '{}',
+                sequence INTEGER,
+                schema_version INTEGER NOT NULL DEFAULT 1,
+                correlation_id TEXT,
+                causation_id TEXT,
+                producer TEXT NOT NULL DEFAULT 'event_bus'
+            );
+            CREATE TABLE IF NOT EXISTS task_event_sequence (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                value INTEGER NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_task_events_task_id
                 ON task_events(task_id);
             CREATE INDEX IF NOT EXISTS idx_task_events_type
                 ON task_events(event_type);
         """)
+        columns = {
+            row[1] for row in self._conn.execute("PRAGMA table_info(task_events)").fetchall()
+        }
+        for name, definition in {
+            "sequence": "INTEGER",
+            "schema_version": "INTEGER NOT NULL DEFAULT 1",
+            "correlation_id": "TEXT",
+            "causation_id": "TEXT",
+            "producer": "TEXT NOT NULL DEFAULT 'event_bus'",
+        }.items():
+            if name not in columns:
+                self._conn.execute(f"ALTER TABLE task_events ADD COLUMN {name} {definition}")
+        self._conn.execute(
+            "INSERT OR IGNORE INTO task_event_sequence (id, value) "
+            "SELECT 1, COALESCE(MAX(sequence), 0) FROM task_events"
+        )
         self._conn.commit()
 
     def subscribe(self, event_type: str, handler: TaskEventHandler) -> None:
@@ -119,10 +154,17 @@ class EventBus:
 
     def _persist_event(self, event: TaskEvent) -> None:
         with self._lock:
+            if event.sequence is None:
+                self._conn.execute("UPDATE task_event_sequence SET value = value + 1 WHERE id = 1")
+                event.sequence = self._conn.execute(
+                    "SELECT value FROM task_event_sequence WHERE id = 1"
+                ).fetchone()[0]
             self._conn.execute(
                 """
-                INSERT INTO task_events (event_id, event_type, task_id, timestamp, data_json)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO task_events (
+                    event_id, event_type, task_id, timestamp, data_json, sequence,
+                    schema_version, correlation_id, causation_id, producer
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     event.event_id,
@@ -130,6 +172,11 @@ class EventBus:
                     event.task_id,
                     event.timestamp,
                     json.dumps(event.data),
+                    event.sequence,
+                    event.schema_version,
+                    event.correlation_id,
+                    event.causation_id,
+                    event.producer,
                 ),
             )
             self._conn.commit()
@@ -148,7 +195,7 @@ class EventBus:
         if event_type:
             query += " AND event_type = ?"
             params.append(event_type)
-        query += " ORDER BY timestamp DESC LIMIT ?"
+        query += " ORDER BY sequence DESC, timestamp DESC LIMIT ?"
         params.append(limit)
         rows = self._conn.execute(query, params).fetchall()
         events = []
@@ -160,9 +207,61 @@ class EventBus:
                     task_id=row["task_id"],
                     timestamp=row["timestamp"],
                     data=json.loads(row["data_json"]),
+                    sequence=row["sequence"],
+                    schema_version=row["schema_version"] or 1,
+                    correlation_id=row["correlation_id"],
+                    causation_id=row["causation_id"],
+                    producer=row["producer"] or "event_bus",
                 )
             )
         return events
+
+    def replay(
+        self,
+        task_id: str | None = None,
+        *,
+        after_sequence: int | None = None,
+        event_type: str | None = None,
+        limit: int | None = None,
+    ) -> list[TaskEvent]:
+        """Replay persisted events in causal append order.
+
+        ``get_history`` remains newest-first for existing callers. Replay is
+        the event-sourced path: consumers fold this ordered stream into a
+        projection instead of reading mutable task state as authoritative.
+        """
+        query = "SELECT * FROM task_events WHERE 1=1"
+        params: list[Any] = []
+        if task_id:
+            query += " AND task_id = ?"
+            params.append(task_id)
+        if after_sequence is not None:
+            query += " AND sequence > ?"
+            params.append(after_sequence)
+        if event_type:
+            query += " AND event_type = ?"
+            params.append(event_type)
+        query += " ORDER BY sequence ASC, timestamp ASC, event_id ASC"
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+        rows = self._conn.execute(query, params).fetchall()
+        return [self._event_from_row(row) for row in rows]
+
+    @staticmethod
+    def _event_from_row(row: sqlite3.Row) -> TaskEvent:
+        return TaskEvent(
+            event_id=row["event_id"],
+            event_type=row["event_type"],
+            task_id=row["task_id"],
+            timestamp=row["timestamp"],
+            data=json.loads(row["data_json"]),
+            sequence=row["sequence"],
+            schema_version=row["schema_version"] or 1,
+            correlation_id=row["correlation_id"],
+            causation_id=row["causation_id"],
+            producer=row["producer"] or "event_bus",
+        )
 
     def clear_history(self) -> None:
         with self._lock:

@@ -14,9 +14,9 @@ afterEach(() => {
 });
 
 describe('ReasoningPanel', () => {
-  it('opens itself while streaming and follows the text', () => {
+  it('stays collapsed by default while streaming', () => {
     render(<ReasoningPanel text="step one" active />);
-    expect(screen.getByTestId('reasoning-content')).toHaveTextContent('step one');
+    expect(screen.queryByTestId('reasoning-content')).not.toBeInTheDocument();
     expect(screen.getByTestId('reasoning-label')).toHaveTextContent('Thinking...');
   });
 
@@ -25,7 +25,7 @@ describe('ReasoningPanel', () => {
     act(() => vi.advanceTimersByTime(3000));
 
     rerender(<ReasoningPanel text="step one step two" active={false} />);
-    expect(screen.getByTestId('reasoning-content')).toBeInTheDocument();
+    expect(screen.queryByTestId('reasoning-content')).not.toBeInTheDocument();
     expect(screen.getByTestId('reasoning-label')).toHaveTextContent('Thought for 3 seconds');
 
     act(() => vi.advanceTimersByTime(1000));

@@ -17,6 +17,12 @@ import { api } from '../../api';
 
 const FALLBACK_LEVELS = ['low', 'medium', 'high'] as const;
 
+const LEVEL_TONE: Record<string, string> = {
+  low: 'text-[var(--color-success)] data-[active=true]:bg-[var(--color-success)]/15',
+  medium: 'text-[var(--color-warning)] data-[active=true]:bg-[var(--color-warning)]/15',
+  high: 'text-[var(--color-info)] data-[active=true]:bg-[var(--color-info)]/15',
+};
+
 interface ThinkingLevelSelectProps {
   sessionId: string | null;
   className?: string;
@@ -90,6 +96,7 @@ export function ThinkingLevelSelect({ sessionId, className }: ThinkingLevelSelec
   );
 
   const groupLabel = t('chat.thinking_level', { defaultValue: '思考等级' });
+  const currentLevel = level ?? levels[0];
 
   return (
     <div className={cn('flex min-w-0 flex-col items-end gap-0.5', className)}>
@@ -106,14 +113,16 @@ export function ThinkingLevelSelect({ sessionId, className }: ThinkingLevelSelec
               key={id}
               type="button"
               aria-pressed={active}
+              data-active={active}
               disabled={!sessionId || pending}
               title={t(`chat.thinking_level_${id}_hint`, { defaultValue: id })}
               onClick={() => select(id)}
               className={cn(
                 'h-6 rounded-full px-2.5 text-[11px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)] motion-reduce:transition-none',
-                active
-                  ? 'bg-[var(--color-accent)] text-[var(--color-accent-text)]'
-                  : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-3)] hover:text-[var(--color-text-secondary)]',
+                 LEVEL_TONE[id] ?? 'text-[var(--color-text-muted)]',
+                 active
+                   ? 'font-semibold'
+                   : 'opacity-75 hover:bg-[var(--color-bg-surface-3)] hover:opacity-100',
               )}
             >
               {t(`chat.thinking_level_${id}`, { defaultValue: id })}
@@ -121,6 +130,9 @@ export function ThinkingLevelSelect({ sessionId, className }: ThinkingLevelSelec
           );
         })}
       </div>
+      <span data-testid="thinking-level-description" className="max-w-[18rem] truncate text-[length:var(--text-2xs)] text-[var(--color-text-muted)]">
+        {t(`chat.thinking_level_${currentLevel}_hint`, { defaultValue: currentLevel })}
+      </span>
       {error ? (
         <span role="alert" className="max-w-full truncate text-[length:var(--text-2xs)] text-[var(--color-error)]">
           {error}

@@ -7,9 +7,25 @@ override the entry points.
 
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import Any
 
-from app.core import MessageRole
+import structlog
+
+from app.core.compressor import ContextBlock
+
+logger = structlog.get_logger()
+
+
+def _diagnose(session: Any, hook: str, exc: Exception) -> None:
+    """Keep hook failures observable while preserving best-effort behavior."""
+    diagnostics = getattr(session, "memory_hook_diagnostics", None)
+    if not isinstance(diagnostics, list):
+        diagnostics = []
+        with suppress(Exception):
+            session.memory_hook_diagnostics = diagnostics
+    diagnostics.append({"hook": hook, "error": str(exc), "type": type(exc).__name__})
+    logger.warning("memory_hook_failed", hook=hook, error=str(exc), error_type=type(exc).__name__)
 
 
 def set_agent_mode(session: Any) -> None:
@@ -22,8 +38,8 @@ def set_agent_mode(session: Any) -> None:
         from app.core.file_patch import set_current_agent_mode
 
         set_current_agent_mode(session.mode)
-    except Exception:
-        pass
+    except Exception as exc:
+        _diagnose(session, "set_agent_mode", exc)
 
 
 async def inject_memory_context(engine: Any, session: Any, message: str) -> None:
@@ -44,15 +60,16 @@ async def inject_memory_context(engine: Any, session: Any, message: str) -> None
         if memory_context:
             for i, msg in enumerate(session.messages):
                 if msg.get("content", "").startswith(memory_marker):
-                    session.messages[i] = {
-                        "role": MessageRole.SYSTEM,
-                        "content": memory_marker + "\n" + memory_context,
-                    }
+                    session.messages[i] = ContextBlock(
+                        memory_marker + "\n" + memory_context, "memory", "untrusted", True
+                    ).as_message()
                     break
             else:
                 session.messages.insert(
                     -1,
-                    {"role": MessageRole.SYSTEM, "content": memory_marker + "\n" + memory_context},
+                    ContextBlock(
+                        memory_marker + "\n" + memory_context, "memory", "untrusted", True
+                    ).as_message(),
                 )
         else:
             session.messages[:] = [
@@ -60,8 +77,8 @@ async def inject_memory_context(engine: Any, session: Any, message: str) -> None
                 for msg in session.messages
                 if not msg.get("content", "").startswith(memory_marker)
             ]
-    except Exception:
-        pass
+    except Exception as exc:
+        _diagnose(session, "inject_memory_context", exc)
 
 
 async def inject_core_memory(session: Any) -> None:
@@ -79,15 +96,16 @@ async def inject_core_memory(session: Any) -> None:
             core_memory_xml = core_memory.format_for_prompt(blocks)
             for i, msg in enumerate(session.messages):
                 if msg.get("content", "").startswith(core_marker):
-                    session.messages[i] = {
-                        "role": MessageRole.SYSTEM,
-                        "content": core_marker + "\n" + core_memory_xml,
-                    }
+                    session.messages[i] = ContextBlock(
+                        core_marker + "\n" + core_memory_xml, "core_memory", "untrusted", True
+                    ).as_message()
                     break
             else:
                 session.messages.insert(
                     -1,
-                    {"role": MessageRole.SYSTEM, "content": core_marker + "\n" + core_memory_xml},
+                    ContextBlock(
+                        core_marker + "\n" + core_memory_xml, "core_memory", "untrusted", True
+                    ).as_message(),
                 )
         else:
             session.messages[:] = [
@@ -95,8 +113,8 @@ async def inject_core_memory(session: Any) -> None:
                 for msg in session.messages
                 if not msg.get("content", "").startswith(core_marker)
             ]
-    except Exception:
-        pass
+    except Exception as exc:
+        _diagnose(session, "inject_core_memory", exc)
 
 
 async def store_episodic_memory(engine: Any, session: Any, message: str) -> None:
@@ -117,8 +135,8 @@ async def store_episodic_memory(engine: Any, session: Any, message: str) -> None
                 source_session_id=session.session_id,
                 importance=0.7,
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        _diagnose(session, "store_episodic_memory", exc)
 
 
 def trigger_memory_reflection(engine: Any, session: Any) -> None:
@@ -132,8 +150,8 @@ def trigger_memory_reflection(engine: Any, session: Any) -> None:
         from app.core.memory_reflection import memory_reflection
 
         engine._spawn(memory_reflection.maybe_reflect(session.user_id))
-    except Exception:
-        pass
+    except Exception as exc:
+        _diagnose(session, "trigger_memory_reflection", exc)
 
 
 async def archive_instruction(session: Any, message: str) -> None:

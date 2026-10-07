@@ -22,6 +22,17 @@ function history(id: string): SessionMessage[] {
   }];
 }
 
+function historyWithAttachments(): SessionMessage[] {
+  return [{
+    id: 'attachment-message', role: 'user', content: 'inspect this', tool_calls: [],
+    tool_call_id: null, tool_name: null, created_at: '2026-01-01T00:00:00Z',
+    metadata: {
+      images: ['data:image/png;base64,abc'],
+      attachments: [{ kind: 'file', data: 'data:text/plain;base64,abc', name: 'notes.txt', mime_type: 'text/plain', size: 3 }],
+    },
+  }];
+}
+
 beforeEach(() => vi.resetAllMocks());
 
 describe('useChat history lifecycle', () => {
@@ -112,5 +123,15 @@ describe('useChat history lifecycle', () => {
     await act(async () => {});
     expect(api.getSessionMessages).not.toHaveBeenCalled();
     expect(result.current.messages).toEqual([]);
+  });
+
+  it('restores persisted images and file attachments from history', async () => {
+    vi.mocked(api.getSessionMessages).mockResolvedValueOnce(historyWithAttachments());
+    const { result } = renderHook(() => useChat('a'));
+    await act(async () => {});
+    expect(result.current.messages[0]).toMatchObject({
+      images: ['data:image/png;base64,abc'],
+      files: [{ name: 'notes.txt', kind: 'file' }],
+    });
   });
 });

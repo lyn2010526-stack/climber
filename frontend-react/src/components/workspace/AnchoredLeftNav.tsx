@@ -47,6 +47,7 @@ function writePinned(ids: Set<string>): void {
 
 export function AnchoredLeftNav({ onCollapse }: { onCollapse?: () => void }) {
   const SettingsIcon = icons.settings;
+  const CloseIcon = icons.close;
   const { t } = useI18n();
   const sessions = useWorkspaceStore((s) => s.sessions);
   const activeSessionId = useWorkspaceStore((s) => s.activeSessionId);
@@ -621,7 +622,7 @@ export function AnchoredLeftNav({ onCollapse }: { onCollapse?: () => void }) {
             onClick={() => setNotice(null)}
             className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
           >
-            ×
+            <CloseIcon size={iconSizes.xs} aria-hidden="true" />
           </button>
         </div>
       )}
@@ -648,7 +649,7 @@ export function AnchoredLeftNav({ onCollapse }: { onCollapse?: () => void }) {
                 onClick={() => setHistory(null)}
                 className="text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)]"
               >
-                ×
+                <CloseIcon size={iconSizes.xs} aria-hidden="true" />
               </button>
             </div>
             {history.checkpoints.length === 0 ? (

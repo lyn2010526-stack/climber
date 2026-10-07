@@ -22,6 +22,28 @@ describe('normalizeChatEvent', () => {
     expect(normalizeChatEvent({ event: 'thinking', data: { reasoning: 'b' } })).toEqual({ type: 'thinking', delta: 'b' });
   });
 
+  it('keeps backend iteration-only thinking events out of the text delta', () => {
+    expect(normalizeChatEvent({ event: 'thinking', data: { iteration: 3 } })).toEqual({
+      type: 'thinking', delta: '', iteration: 3,
+    });
+  });
+
+  it('normalizes lifecycle events and preserves reasoning metadata', () => {
+    expect(normalizeChatEvent({
+      event: 'progress',
+      data: { status: 'running', thinking_level: 'deep', reasoning_phase: 'planning' },
+    })).toEqual({
+      type: 'progress',
+      payload: { status: 'running', thinking_level: 'deep', reasoning_phase: 'planning' },
+      thinkingLevel: 'deep',
+      reasoningPhase: 'planning',
+    });
+    expect(normalizeChatEvent({
+      event: 'thinking',
+      data: { content: 'trace', reasoning_level: 'standard', phase: 'acting' },
+    })).toMatchObject({ type: 'thinking', delta: 'trace', thinkingLevel: 'standard', reasoningPhase: 'acting' });
+  });
+
   it('defaults a missing tool id and fills arguments with an empty object', () => {
     const result = normalizeChatEvent({ event: 'tool_call', data: { name: 'search' } });
     expect(result).toEqual({ type: 'tool_call', toolCall: { id: '', name: 'search', arguments: {} } });
@@ -38,6 +60,8 @@ describe('normalizeChatEvent', () => {
 
     const failed = normalizeChatEvent({ event: 'tool_result', data: { id: 'tc-1', error: 'boom' } });
     expect(failed).toEqual({ type: 'tool_result', toolCallId: 'tc-1', result: '', error: 'boom' });
+    expect(normalizeChatEvent({ event: 'tool_result', data: { tool_call: { id: 'tc-2' }, output: 'nested' } }))
+      .toEqual({ type: 'tool_result', toolCallId: 'tc-2', result: 'nested', error: '' });
   });
 
   it('reads the done message id and reports its absence as undefined', () => {

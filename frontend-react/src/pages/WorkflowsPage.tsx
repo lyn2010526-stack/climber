@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Play, FileCode, RefreshCw, AlertCircle, Plus, Edit, List, GitBranch, CheckCircle2, XCircle, Trash2, Download, Upload, LayoutTemplate } from 'lucide-react';
+import { pageIcons as icons } from '../lib/icons';
+
+const { play: Play, file: FileCode, refresh: RefreshCw, error: AlertCircle, add: Plus, edit: Edit, list: List, workflow: GitBranch, successCircle: CheckCircle2, errorCircle: XCircle, delete: Trash2, download: Download, upload: Upload, template: LayoutTemplate } = icons;
 import { api } from '../api';
 import { WorkflowEditor } from '../components/workflow/WorkflowEditor';
 import type { Node, Edge } from '@xyflow/react';

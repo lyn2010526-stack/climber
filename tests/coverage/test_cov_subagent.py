@@ -16,6 +16,7 @@ from app.core.engine.subagent import (
     SubagentState,
     SubagentUsage,
 )
+from app.core import AgentEventType
 
 
 async def _ok_runner(_spec: SubagentSpec) -> tuple[str, SubagentUsage]:
@@ -75,6 +76,23 @@ async def test_spawn_success_records_usage() -> None:
     assert record.completed_at is not None
     assert manager.active_count == 0
     assert manager.total_count == 1
+
+
+async def test_spawn_emits_lifecycle_events() -> None:
+    events = []
+
+    async def collect(event):
+        events.append(event)
+
+    manager = SubagentManager(concurrency_limit=1, event_handler=collect)
+    record = await manager.spawn(SubagentSpec(task_id="lifecycle"), _ok_runner)
+
+    assert record.state is SubagentState.COMPLETED
+    assert [event.type for event in events] == [
+        AgentEventType.SUB_AGENT_START,
+        AgentEventType.SUB_AGENT_END,
+    ]
+    assert events[-1].data["state"] == "completed"
 
 
 async def test_spawn_registers_child_of_known_parent() -> None:

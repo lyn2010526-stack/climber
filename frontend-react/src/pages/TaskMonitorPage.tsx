@@ -1,9 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Square, CheckCircle2, XCircle, Plus, RefreshCw, GitBranch, Hand, Check, Pause, Play, RotateCcw, Undo2 } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { pageIcons as icons } from '../lib/icons';
+
+const { stop: Square, successCircle: CheckCircle2, errorCircle: XCircle, add: Plus, refresh: RefreshCw, workflow: GitBranch, pause: Pause, play: Play, retry: RotateCcw, undo: Undo2, hand: Hand, check: Check } = icons;
 import { useI18n } from '../i18n';
 import { formatDateTime } from '../i18n/utils';
 import { taskStatusColor, taskStatusLabel } from '../components/collaboration/taskStatus';
 import { api, type TaskDetail, type TaskSummary, type SubtaskItem } from '../api';
+import { consumeTaskEvents, mergeTaskEvent, type LiveTask, type TaskEvent } from '../components/anchored/taskApi';
 import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
@@ -65,9 +68,13 @@ export default function TaskMonitorPage() {
   const [revision, setRevision] = useState(0);
   const [subtasks, setSubtasks] = useState<SubtaskItem[]>([]);
   const [subtasksLoading, setSubtasksLoading] = useState(false);
+  const [subtasksError, setSubtasksError] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [reportingId, setReportingId] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const suppressStreamRefreshRef = useRef(false);
+  const detailLoadedRef = useRef(false);
+  const taskEventControllerRef = useRef<AbortController | null>(null);
 
   const fetchTasks = useCallback(async () => {
     setListLoading(true);
@@ -93,10 +100,12 @@ export default function TaskMonitorPage() {
     // succeeds (R13-43).
     setError(false);
     setSelectedTask(null);
+    detailLoadedRef.current = false;
     setDetailLoading(true);
     api.getTask(selectedTaskId).then(task => {
       if (!active) return;
       setSelectedTask(task);
+      detailLoadedRef.current = true;
       // The detail payload can drop created_at; keep the list's timestamp so
       // the summary row does not lose it when the detail overwrites it (R9-04).
       setTasks(previous => previous.map(item => item.task_id === task.task_id ? { ...task, created_at: task.created_at ?? item.created_at } : item));
@@ -106,11 +115,13 @@ export default function TaskMonitorPage() {
 
   const fetchSubtasks = useCallback(async (taskId: string) => {
     setSubtasksLoading(true);
+    setSubtasksError(false);
     try {
       const data = await api.listSubtasks(taskId);
       setSubtasks(data.subtasks);
     } catch {
       setSubtasks([]);
+      setSubtasksError(true);
     } finally {
       setSubtasksLoading(false);
     }
@@ -164,25 +175,50 @@ export default function TaskMonitorPage() {
     if (stopping) return;
     setStopping(true);
     setError(false);
+    suppressStreamRefreshRef.current = true;
+    taskEventControllerRef.current?.abort();
     try {
-      await api.stopTask(taskId);
-      fetchTasks();
-      setRevision(value => value + 1);
-    } catch { setError(true); } finally { setStopping(false); }
+      const response = await api.stopTask(taskId);
+      if (response.cancelled) {
+        setSelectedTask(previous => previous ? { ...previous, status: 'cancelled' } : previous);
+        setTasks(previous => previous.map(item => item.task_id === taskId ? { ...item, status: 'cancelled' } : item));
+      }
+    } catch { setError(true); } finally {
+      suppressStreamRefreshRef.current = false;
+      setStopping(false);
+    }
   };
 
   type ControlAction = 'pause' | 'resume' | 'retry' | 'rollback';
 
-  // Poll the selected task while it is in a non-terminal state so status
-  // changes (e.g. after pause/resume) surface without a manual refresh.
-  // /tasks/ws stays unwired: it is admin-scope only and duplicates this poll.
   useEffect(() => {
     if (!selectedTaskId) return;
-    const status = selectedTask?.status;
-    if (!status || ['completed', 'failed', 'cancelled'].includes(status)) return;
-    const timer = window.setInterval(() => setRevision(value => value + 1), 5000);
-    return () => window.clearInterval(timer);
-  }, [selectedTaskId, selectedTask?.status]);
+    const controller = new AbortController();
+    taskEventControllerRef.current = controller;
+    const applyEvent = (event: TaskEvent) => {
+      setSelectedTask(previous => {
+        const current = previous ?? {
+          task_id: selectedTaskId,
+          objective: '',
+          status: 'pending',
+          progress: 0,
+          total_steps: 0,
+        };
+        const merged = mergeTaskEvent(current as LiveTask, event);
+        setTasks(items => items.map(item => item.task_id === selectedTaskId ? { ...item, ...merged } : item));
+        return merged as TaskDetail;
+      });
+    };
+    void consumeTaskEvents(selectedTaskId, controller.signal, applyEvent).catch(() => {
+      if (!controller.signal.aborted && detailLoadedRef.current && !suppressStreamRefreshRef.current) {
+        setRevision(value => value + 1);
+      }
+    });
+    return () => {
+      controller.abort();
+      if (taskEventControllerRef.current === controller) taskEventControllerRef.current = null;
+    };
+  }, [selectedTaskId]);
 
   const controlTask = async (action: ControlAction) => {
     if (!selectedTaskId || actionBusy) return;
@@ -342,7 +378,7 @@ export default function TaskMonitorPage() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {selectedTask.result && (
+              {selectedTask.result !== null && selectedTask.result !== undefined && (
                 <Card variant="default">
                   <CardContent className="p-3">
                     <div className="flex items-center gap-2 mb-2">
@@ -350,7 +386,9 @@ export default function TaskMonitorPage() {
                       <span className="text-xs font-semibold text-[var(--color-text-primary)]">{t('task_monitor.output_heading')}</span>
                     </div>
                     <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap">
-                      {String(selectedTask.result.output ?? JSON.stringify(selectedTask.result, null, 2))}
+                      {typeof selectedTask.result === 'object' && selectedTask.result !== null && 'output' in selectedTask.result
+                        ? String((selectedTask.result as { output?: unknown }).output ?? '')
+                        : JSON.stringify(selectedTask.result, null, 2)}
                     </p>
                   </CardContent>
                 </Card>
@@ -384,7 +422,7 @@ export default function TaskMonitorPage() {
                       variant="outline"
                       size="xs"
                       icon={<Hand size={12} />}
-                      disabled={claiming || subtasksLoading}
+                       disabled={claiming || subtasksLoading || subtasksError}
                       onClick={claimNext}
                     >
                       {claiming ? t('task_monitor.claiming') : t('task_monitor.claim_action')}
@@ -393,12 +431,19 @@ export default function TaskMonitorPage() {
 
                   {subtasksLoading ? (
                     <p role="status" className="py-3 text-xs text-[var(--color-text-muted)]">{t('common.loading')}</p>
+                  ) : subtasksError ? (
+                    <div role="alert" className="py-3 text-xs text-[var(--color-error)]">
+                      <p>{t('task_monitor.subtasks_error')}</p>
+                      <button type="button" className="mt-1 underline" onClick={() => selectedTaskId && fetchSubtasks(selectedTaskId)}>
+                        {t('common.retry')}
+                      </button>
+                    </div>
                   ) : subtasks.length === 0 ? (
                     <p className="py-3 text-xs text-[var(--color-text-muted)]">{t('task_monitor.subtasks_empty')}</p>
                   ) : (
                     <ul className="space-y-2" aria-label={t('task_monitor.subtasks_aria')}>
                       {subtasks.map(subtask => (
-                        <li key={subtask.id} className="rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-2.5">
+                         <li key={subtask.subtask_id} className="rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface-2)] p-2.5">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <p className="text-xs text-[var(--color-text-primary)] break-words">{subtask.description}</p>
@@ -418,10 +463,10 @@ export default function TaskMonitorPage() {
                                 variant="ghost"
                                 size="xs"
                                 icon={<Check size={12} />}
-                                disabled={reportingId === subtask.id}
-                                onClick={() => completeSubtask(subtask.id)}
-                              >
-                                {reportingId === subtask.id ? t('common.loading') : t('task_monitor.complete_action')}
+                                 disabled={reportingId === subtask.subtask_id}
+                                 onClick={() => completeSubtask(subtask.subtask_id)}
+                               >
+                                 {reportingId === subtask.subtask_id ? t('common.loading') : t('task_monitor.complete_action')}
                               </Button>
                             )}
                           </div>

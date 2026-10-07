@@ -10,7 +10,6 @@ import {
   type SessionInputKind,
 } from './types/chatEvents';
 import type {
-  ActionResponse,
   AgentMutationResponse,
   ApiKeyMutationResponse,
   AuthKeyMutationResponse,
@@ -22,7 +21,6 @@ import type {
   PermissionResolutionResponse,
   PluginMutationResponse,
   ReasoningTraceResponse,
-  SchedulerTaskResponse,
   SettingsResponse,
   StatsResponse,
   WorkflowMutationResponse,
@@ -112,22 +110,31 @@ export interface TaskSummary {
   progress: number;
   total_steps: number;
   created_at?: string | null;
+  retry_count?: number;
+  checkpoint?: Record<string, unknown> | null;
+  progress_evaluation?: Record<string, unknown> | null;
+  interruption_reason?: string | null;
 }
 
 export interface TaskDetail extends TaskSummary {
-  result?: Record<string, unknown> | null;
+  result?: unknown;
   error?: string | null;
   started_at?: string | null;
   finished_at?: string | null;
 }
 
 export interface TaskSubmitRequest {
-  task_type: 'agent_run' | 'data_processing' | 'workflow';
+  task_type: 'agent_run' | 'factory_run' | 'data_processing' | 'workflow';
   payload: Record<string, unknown>;
 }
 
+export interface TaskSubmitResponse {
+  task_id: string;
+  status: string;
+}
+
 export interface SubtaskItem {
-  id: string;
+  subtask_id: string;
   description: string;
   status: string;
   dependencies: string[];
@@ -137,6 +144,34 @@ export interface SubtaskItem {
   claimed_at?: string;
   completed_at?: string;
   lease_expires_at?: number;
+  claim_token?: string;
+  lease_version?: number;
+  attempt?: number;
+  worker_id?: string;
+  heartbeat_at?: string;
+  completion_id?: string;
+}
+
+export interface TaskEventSnapshot {
+  type: 'snapshot';
+  task_id: string;
+  protocol_version: number;
+  epoch: string;
+  sequence: number;
+  data: TaskDetail;
+  events: TaskEventEnvelope[];
+  history_scope: string;
+  timestamp: string;
+}
+
+export interface TaskEventEnvelope {
+  type: string;
+  task_id: string;
+  protocol_version: number;
+  epoch: string;
+  sequence: number;
+  timestamp?: string;
+  data: Record<string, unknown>;
 }
 
 export interface SubtaskListResponse {
@@ -1672,8 +1707,12 @@ class ApiClient {
     return this.request<TaskDetail>(`/tasks/${taskId}`);
   }
 
-  async createTask(data: TaskSubmitRequest): Promise<TaskDetail> {
-    return this.request<TaskDetail>('/tasks/submit', {
+  async getTaskSnapshot(taskId: string): Promise<TaskEventSnapshot> {
+    return this.request<TaskEventSnapshot>(`/tasks/${taskId}/snapshot`);
+  }
+
+  async createTask(data: TaskSubmitRequest): Promise<TaskSubmitResponse> {
+    return this.request<TaskSubmitResponse>('/tasks/submit', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -1708,17 +1747,24 @@ class ApiClient {
     return this.request<SubtaskListResponse>(`/tasks/${taskId}/subtasks${qs}`);
   }
 
-  async claimSubtasks(taskId: string, agentId: string, limit = 1, leaseSeconds = 900): Promise<ClaimSubtasksResponse> {
+  async claimSubtasks(taskId: string, agentId: string, limit = 1, leaseSeconds = 900, workerId?: string): Promise<ClaimSubtasksResponse> {
     return this.request<ClaimSubtasksResponse>(`/tasks/${taskId}/subtasks/claim`, {
       method: 'POST',
-      body: JSON.stringify({ agent_id: agentId, limit, lease_seconds: leaseSeconds }),
+      body: JSON.stringify({ agent_id: agentId, worker_id: workerId, limit, lease_seconds: leaseSeconds }),
     });
   }
 
-  async completeSubtask(taskId: string, subtaskId: string, agentId: string, result?: unknown, error?: string): Promise<SubtaskItem> {
+  async completeSubtask(taskId: string, subtaskId: string, agentId: string, result?: unknown, error?: string, claimToken?: string, leaseVersion?: number, completionId?: string): Promise<SubtaskItem> {
     return this.request<SubtaskItem>(`/tasks/${taskId}/subtasks/${subtaskId}/complete`, {
       method: 'POST',
-      body: JSON.stringify({ agent_id: agentId, result, error: error ?? null }),
+      body: JSON.stringify({ agent_id: agentId, claim_token: claimToken, lease_version: leaseVersion, completion_id: completionId, result, error: error ?? null }),
+    });
+  }
+
+  async heartbeatSubtask(taskId: string, subtaskId: string, agentId: string, claimToken: string, leaseVersion: number, extendSeconds = 300): Promise<SubtaskItem> {
+    return this.request<SubtaskItem>(`/tasks/${taskId}/subtasks/${subtaskId}/heartbeat`, {
+      method: 'POST',
+      body: JSON.stringify({ agent_id: agentId, claim_token: claimToken, lease_version: leaseVersion, extend_seconds: extendSeconds }),
     });
   }
 

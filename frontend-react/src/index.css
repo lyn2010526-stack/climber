@@ -23,7 +23,7 @@
 }
 
 @theme {
-  /* Surfaces — Codex CLI measured palette. `#20222E` page, `#262938` panel,
+  /* Surfaces — measured workbench palette. `#20222E` page, `#262938` panel,
      `#2A2D3E` message bubble, then two rungs above the bubble for hover and
      pressed. Each step is small on purpose: this is a dense agent workbench,
      not a landing page, so surface separation is carried by a few percent of
@@ -38,7 +38,7 @@
   --color-bg-surface-hover: var(--color-bg-surface-2);
   --color-bg-surface-elevated: var(--color-bg-surface-3);
 
-  /* Text Hierarchy — Codex `#E9EBF0` / `#C9CCD6` / `#8A8FA3`, with `disabled`
+  /* Text hierarchy — `#E9EBF0` / `#C9CCD6` / `#8A8FA3`, with `disabled`
      one rung below `muted`. Anchoring each step separately is what keeps the
      four greys visibly apart: a single 4.5:1 ceiling would collapse `muted`
      and `disabled` into one tone. */
@@ -50,7 +50,7 @@
      always ride the accent, never a surface. */
   --color-text-inverse: #11151B;
 
-  /* Accent System — Codex teal `#5BC8D8`, three states, no glow
+  /* Accent system — teal `#5BC8D8`, three states, no glow
      Three roles, and no single value can carry all three: a fill that is light
      enough to reach 3:1 against the lightest surface cannot also be dark enough
      for a 4.5:1 label on top of it.
@@ -68,7 +68,7 @@
   --color-accent-secondary: var(--color-accent-foreground);
   --color-accent-muted: var(--color-accent-subtle);
 
-  /* Semantic Colors — Codex measured values, each readable as text at 4.5:1 or
+  /* Semantic colors, each readable as text at 4.5:1 or
      better on every surface, which is also what lets each `*-subtle` wash stay
      dense enough to see. */
   --color-success: #7EC97E;
@@ -86,7 +86,7 @@
   --color-unknown: #8A8FA3;
   --color-unknown-subtle: rgba(138, 143, 163, 0.14);
 
-  /* Borders — Codex `#34374A` carries a control boundary; `subtle` drops to a
+  /* Borders — `#34374A` carries a control boundary; `subtle` drops to a
      low-alpha wash so it separates without reading as an input outline.
      `border-accent` is a solid accent so focus and selection stay visible. */
   --color-border-subtle: rgba(233, 235, 240, 0.08);
@@ -103,8 +103,7 @@
   --color-code-bg: #1B1E29;
   --color-code-border: #3A3F57;
 
-  /* Syntax and diff roles — OpenCode's theme schema names these roles and
-     Codex supplies the values. The code surface and the diff surface are the
+  /* Syntax and diff roles. The code surface and the diff surface are the
      two places a reviewer reads a lot of small coloured text, so they get
      their own tokens instead of borrowing the semantic ones. */
   --color-syntax-comment: #6C7182;
@@ -346,7 +345,7 @@
 /* Light Mode
    Same three-way accent split as the dark theme, mirrored: the fill is dark
    here, so `accent-text` is the light label that rides on top of it. Surfaces
-   follow OpenCode's light steps (nord6 / nord5), and the Codex teal is pressed
+   follow the light surface steps (nord6 / nord5), and the teal is pressed
    down to `#1F7A8C` so it still clears 4.5:1 as text on `#FFFFFF`. */
 [data-theme="light"] {
   color-scheme: light;
@@ -357,7 +356,7 @@
   --color-accent-foreground: #12545F;
   --color-accent-text: #FFFFFF;
   --color-accent-subtle: rgba(31, 122, 140, 0.08);
-  /* Codex parity: the light shell is a single white canvas. Depth comes from
+  /* Workbench light shell: the light shell is a single white canvas. Depth comes from
      hairline borders, not from a grey page behind white panels. */
   --color-bg-page: #FFFFFF;
   --color-bg-surface-1: #FFFFFF;
@@ -1693,8 +1692,8 @@ select:-webkit-autofill:focus {
   overflow: hidden;
 }
 
-/* Code syntax roles
-   Codex supplies the values, OpenCode supplies the role names. Every token
+ /* Code syntax roles
+    Every token
    class resolves to a `--color-syntax-*` token so a reviewer reading a diff or
    a stack trace sees the same seven hues everywhere, in both themes. */
 .code-block .token-comment,
@@ -1810,11 +1809,11 @@ select:-webkit-autofill:focus {
   to { translate: 100% 0; }
 }
 
-/* Shimmer text (codex `tui/src/shimmer.rs`): a highlight band sweeps across the
+/* Shimmer text: a highlight band sweeps across the
    glyphs once every 2s. The gradient is wide so the `shimmer` keyframe's
    background-position sweep moves the bright band through the clip; the base is
    the muted text token and the band lifts toward the primary token. */
-.codex-shimmer-text {
+.workbench-shimmer-text {
   background: linear-gradient(
     100deg,
     var(--color-text-muted) 40%,
@@ -1829,7 +1828,7 @@ select:-webkit-autofill:focus {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .codex-shimmer-text {
+  .workbench-shimmer-text {
     animation: none;
     background: none;
     color: var(--color-text-muted);

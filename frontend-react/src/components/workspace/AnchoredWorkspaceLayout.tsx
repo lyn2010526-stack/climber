@@ -389,7 +389,7 @@ export function AnchoredWorkspaceLayout() {
             }} />}
           </Panel>
         )}
-        {threeColumn && <Separator key="anchored-separator-left" {...separatorProps} aria-label={t('sidebar.workspace')} />}
+        {threeColumn && <Separator key="anchored-separator-left" {...separatorProps} aria-label={t('sidebar.workspace')} data-testid="anchored-left-separator" />}
         <Panel key="anchored-center" id="anchored-center" minSize={`${threeColumn ? CENTER_MIN : 0}px`} groupResizeBehavior="preserve-relative-size"
           className={`workbench-desktop-canvas h-full min-w-0 ${railEnterClass('center')}`.trim()}>
           {/* Session snapshot/rollback, expert/focus and permission controls live
@@ -400,7 +400,7 @@ export function AnchoredWorkspaceLayout() {
             <AnchoredChatColumn sessionId={sessionId} onToggleInfo={toggleInfo} />
           </div>
         </Panel>
-        {threeColumn && <Separator key="anchored-separator-right" {...separatorProps} className="workbench-desktop-separator workbench-desktop-inspect-separator"
+        {threeColumn && <Separator key="anchored-separator-right" {...separatorProps} data-testid="anchored-right-separator" className="workbench-desktop-separator workbench-desktop-inspect-separator"
           disabled={rightCollapsed} aria-label={t('anchored.panel.label')} />}
         {threeColumn && (
           <Panel key="anchored-right" id="anchored-right" panelRef={rightPanelRef}

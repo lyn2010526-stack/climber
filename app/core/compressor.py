@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+from dataclasses import dataclass
 from typing import Any
 
 import structlog
@@ -12,14 +13,40 @@ from app.core import CompressionStrategy, ContextConfig, MessageRole
 logger = structlog.get_logger()
 
 
+@dataclass(frozen=True)
+class ContextBlock:
+    """A prompt block with provenance and explicit trust semantics."""
+
+    content: str
+    source: str
+    trust: str = "untrusted"
+    untrusted: bool = True
+    role: str = MessageRole.SYSTEM
+
+    def as_message(self) -> dict[str, Any]:
+        return {
+            "role": self.role,
+            "content": self.content,
+            "source": self.source,
+            "trust": self.trust,
+            "untrusted": self.untrusted,
+        }
+
+
+def estimate_text_tokens(text: str) -> int:
+    """Estimate provider tokens; all context budgets use this unit."""
+    return len(text) // 4
+
+
 def estimate_tokens(messages: list[dict[str, Any]]) -> int:
-    """Rough token estimate: 1 token per 4 characters."""
+    """Estimate tokens using roughly four characters per token."""
     total = 0
     for msg in messages:
         content = msg.get("content", "")
-        total += len(content) // 4
+        if isinstance(content, str):
+            total += estimate_text_tokens(content)
         for tc in msg.get("tool_calls", []):
-            total += len(str(tc)) // 4
+            total += estimate_text_tokens(str(tc))
     return total
 
 
@@ -49,7 +76,11 @@ class ContextCompressor:
         if len(messages) <= keep + 1:
             return messages
         result = messages[:1]
-        result.append({"role": "system", "content": "[Earlier conversation truncated for brevity]"})
+        result.append(
+            ContextBlock(
+                "[Earlier conversation truncated for brevity]", "compression_truncation"
+            ).as_message()
+        )
         result.extend(messages[-(keep):])
         return result
 
@@ -58,7 +89,9 @@ class ContextCompressor:
         if len(messages) <= keep:
             return messages
         result = messages[:1]
-        result.append({"role": "system", "content": "[Earlier messages truncated]"})
+        result.append(
+            ContextBlock("[Earlier messages truncated]", "compression_truncation").as_message()
+        )
         result.extend(messages[-(keep):])
         return result
 
@@ -114,10 +147,11 @@ class ContextCompressor:
 
         out = list(head)
         out.append(
-            {
-                "role": MessageRole.SYSTEM,
-                "content": f"[Summary of earlier conversation]\n{summary_text}",
-            }
+            ContextBlock(
+                f"[Summary of earlier conversation]\n{summary_text}",
+                "compression_summary",
+                trust="derived",
+            ).as_message()
         )
         out.extend(tail)
         return out
@@ -158,8 +192,11 @@ class ContextCompressor:
         summarized_count = len(non_system) - len(kept)
         if summarized_count > 0:
             summary = {
-                "role": "system",
-                "content": f"<summary of {summarized_count} earlier messages>",
+                **ContextBlock(
+                    f"<summary of {summarized_count} earlier messages>",
+                    "compression_summary",
+                    trust="derived",
+                ).as_message()
             }
             return [*system_msgs, summary, *kept]
 

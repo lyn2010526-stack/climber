@@ -96,6 +96,9 @@ async def test_compress_summarize_dispatch() -> None:
     out = await comp.compress(_msgs(6), FakeModel(content="recap"))
     # no leading system message -> the summary is placed first
     assert out[0]["content"] == "[Summary of earlier conversation]\nrecap"
+    assert out[0]["source"] == "compression_summary"
+    assert out[0]["trust"] == "derived"
+    assert out[0]["untrusted"] is True
     assert out[-2:] == _msgs(2)
 
 

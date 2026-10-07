@@ -21,6 +21,7 @@ from typing import Any, cast
 import structlog
 
 from app.config import settings
+from app.core import AgentEvent, AgentEventType
 
 logger = structlog.get_logger()
 
@@ -126,6 +127,7 @@ class SubagentManager:
         concurrency_limit: int | None = None,
         orphan_timeout: float = 300.0,
         enable_cascade_cancel: bool = True,
+        event_handler: Callable[[AgentEvent], Awaitable[None] | None] | None = None,
     ):
         self._depth_limit = depth_limit
         self._concurrency_limit = (
@@ -138,6 +140,28 @@ class SubagentManager:
         self._semaphore = asyncio.Semaphore(self._concurrency_limit)
         self._running_count = 0
         self._cancel_events: dict[str, asyncio.Event] = {}
+        self._event_handler = event_handler
+
+    async def _emit_lifecycle(
+        self,
+        event_type: AgentEventType,
+        record: SubagentRecord,
+        *,
+        error: str | None = None,
+    ) -> None:
+        if self._event_handler is None:
+            return
+        data = {
+            "task_id": record.spec.task_id,
+            "parent_id": record.spec.parent_id,
+            "depth": record.spec.depth,
+            "state": record.state.value,
+        }
+        if error:
+            data["error"] = error
+        result = self._event_handler(AgentEvent(type=event_type, data=data))
+        if result is not None and hasattr(result, "__await__"):
+            await cast("Awaitable[None]", result)
 
     @property
     def active_count(self) -> int:
@@ -184,11 +208,14 @@ class SubagentManager:
                 error=f"Depth limit ({self._depth_limit}) exceeded",
             )
             self._records[spec.task_id] = record
+            await self._emit_lifecycle(AgentEventType.SUB_AGENT_START, record, error=record.error)
+            await self._emit_lifecycle(AgentEventType.SUB_AGENT_END, record, error=record.error)
             return record
 
         record = SubagentRecord(spec=spec, state=SubagentState.PENDING)
         self._records[spec.task_id] = record
         self._cancel_events[spec.task_id] = asyncio.Event()
+        await self._emit_lifecycle(AgentEventType.SUB_AGENT_START, record)
 
         # Register as child of parent
         if spec.parent_id and spec.parent_id in self._records:
@@ -202,6 +229,8 @@ class SubagentManager:
         except TimeoutError:
             record.state = SubagentState.FAILED
             record.error = "Concurrency acquisition timeout"
+            record.completed_at = time.monotonic()
+            await self._emit_lifecycle(AgentEventType.SUB_AGENT_END, record, error=record.error)
             return record
 
         self._running_count += 1
@@ -229,6 +258,7 @@ class SubagentManager:
             record.completed_at = time.monotonic()
             self._semaphore.release()
             self._running_count -= 1
+            await self._emit_lifecycle(AgentEventType.SUB_AGENT_END, record, error=record.error)
 
         return record
 

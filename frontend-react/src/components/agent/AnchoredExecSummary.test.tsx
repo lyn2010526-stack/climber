@@ -12,7 +12,7 @@ const base: ToolCall = {
   result: 'line one\nline two',
 };
 
-describe('CodexExecSummary upgrade', () => {
+describe('Codex execution summary', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('zh-CN');
   });

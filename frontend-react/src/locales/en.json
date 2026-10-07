@@ -374,6 +374,9 @@
       "label": "Agent status",
       "shortcuts_hint": "? for shortcuts",
       "thinking": "Thinking",
+      "thinking_complete": "Thinking complete",
+      "thinking_error": "Thinking failed",
+      "thinking_paused": "Thinking paused",
       "turn_tokens": "Turn tokens",
       "unreported": "Not reported"
     },
@@ -633,6 +636,7 @@
     "thinking_level_low_hint": "Low: fast responses, good for simple questions",
     "thinking_level_medium": "Medium",
     "thinking_level_medium_hint": "Medium: balanced speed and depth (default)",
+    "thinking_level_current": "Current: {{level}}",
     "thinking_mode": "Thinking Mode",
     "thinking_show_hint": "Show thinking process",
     "thinking_toggle": "Thinking",
@@ -1591,6 +1595,8 @@
     "thinking": "Thinking...",
     "thought_for": "Thought for {{count}} seconds",
     "thought_for_unknown": "Thought for a few seconds",
+    "thinking_error": "Thinking failed",
+    "thinking_paused": "Thinking paused",
     "title": "Reasoning",
     "trace_detail": "Reasoning detail",
     "feedback_up": "Upvote",
@@ -1988,6 +1994,7 @@
     "subtasks_aria": "Subtask queue",
     "subtasks_count": "{{claimed}} claimed · {{done}} done · {{total}} total",
     "subtasks_empty": "No subtasks on this task.",
+    "subtasks_error": "Failed to load subtasks.",
     "subtasks_heading": "Subtasks"
   },
   "terminal": {

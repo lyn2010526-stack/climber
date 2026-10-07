@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useId, useRef, type CSSProperties, type ReactNode } from 'react';
-import { MoreHorizontal, X, ChevronRight } from 'lucide-react';
+import { pageIcons } from '../../lib/icons';
 import { ClimberMark } from '../brand/ClimberMark';
 import { CORE_NAV_ITEMS_BASE, ALL_NAV_ITEMS_BASE, MOBILE_ADAPTED_PAGE_IDS, type Page } from '../../navigation/navConfig';
+import { navigationIconFor } from '../../lib/icons';
 import type { NavItem } from '../../navigation/navConfig';
 import { trapTab } from '../../lib/focusTrap';
 import { useI18n } from '../../i18n';
@@ -157,7 +158,7 @@ export function AdaptiveMobileLayout({ children, currentPage, onNavigate, header
     const toEntry = (item: NavItem) => ({
       id: item.id,
       label: t(item.labelKey ?? item.label ?? item.id),
-      icon: item.icon,
+       icon: navigationIconFor(item.icon),
     });
     const isUsable = (id: string) =>
       MOBILE_ADAPTED_PAGE_IDS.has(id as Page) && MOBILE_USABLE_PAGE_IDS.has(id);
@@ -256,7 +257,7 @@ export function AdaptiveMobileLayout({ children, currentPage, onNavigate, header
           className="mobile-icon-button rounded-full text-[var(--color-text-muted)] transition duration-200 ease-out motion-reduce:transition-none active:scale-95 data-[active=true]:text-[var(--color-accent-foreground)]"
           data-active={moreActive || undefined}
         >
-          <MoreHorizontal size={20} fill={moreActive ? 'currentColor' : 'none'} />
+          <pageIcons.moreHorizontal size={20} fill={moreActive ? 'currentColor' : 'none'} />
         </button>
       </nav>
 
@@ -282,14 +283,14 @@ export function AdaptiveMobileLayout({ children, currentPage, onNavigate, header
                 <h2 id={sheetTitleId} className="text-base font-semibold">{t('sidebar.all_entries')}</h2>
                 <p id={`${sheetTitleId}-description`} className="sr-only">{t('mobile.sheet_help')}</p>
               </div>
-              <button type="button" ref={sheetCloseRef} className="icon-button" onClick={() => setMoreOpen(false)} aria-label={t('common.close')}><X size={18} aria-hidden="true" focusable="false" /></button>
+              <button type="button" ref={sheetCloseRef} className="icon-button" onClick={() => setMoreOpen(false)} aria-label={t('common.close')}><pageIcons.close size={18} aria-hidden="true" focusable="false" /></button>
             </div>
             <div className="mobile-more-grid">
               {moreItems.map(({ id, label, icon: Icon }) => (
                 <button type="button" key={id} onClick={() => navigate(id)} aria-current={effectivePage === id ? 'page' : undefined}>
                   <Icon size={18} aria-hidden="true" focusable="false" />
                   <span>{label}</span>
-                  <ChevronRight size={14} aria-hidden="true" className="text-[var(--color-text-muted)]" />
+                  <pageIcons.submenu size={14} aria-hidden="true" className="text-[var(--color-text-muted)]" />
                 </button>
               ))}
             </div>

@@ -133,7 +133,7 @@ describe('parity palette provenance', () => {
     expect(dark.get('--color-bg-page')?.value).toBe('#20222E');
     expect(dark.get('--color-accent')?.value).toBe('#5BC8D8');
     expect(dark.get('--color-diff-added')?.value).toBe('#7EC97E');
-    // Light is a single white canvas (Codex parity), so page and surface-1
+    // Light is a single white canvas, so page and surface-1
     // share #FFFFFF and depth comes from borders.
     expect(light.get('--color-bg-page')?.value).toBe('#FFFFFF');
     expect(light.get('--color-text-primary')?.value).toBe('#2E3440');
@@ -143,7 +143,7 @@ describe('parity palette provenance', () => {
   it('never leaves a tracked token without a benchmark role', () => {
     for (const entry of tokenProvenance) {
       expect(entry.role, entry.token).not.toBe('unclassified');
-      expect(['codex', 'opencode', 'deepseek', 'derived']).toContain(entry.source);
+      expect(['dark-reference', 'syntax-reference', 'deepseek', 'derived']).toContain(entry.source);
     }
   });
 

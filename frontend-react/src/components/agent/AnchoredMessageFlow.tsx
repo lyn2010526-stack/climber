@@ -1,5 +1,5 @@
 import { memo, useId, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { pageIcons } from '../../lib/icons';
 import { WorkbenchIcon } from '../ui/WorkbenchIcon';
 import { useI18n } from '../../i18n';
 import { cn } from '../../lib/utils';
@@ -22,7 +22,7 @@ import type { Message } from '../../useChat';
  *      ThinkingBubble.tsx：ReasoningPanel 承载推理正文，MessageActions 承载
  *      hover / focus 才显形的操作条。
  *   3. 工具调用卡片 —— 工具名 + 状态标签，参数与日志通过详情展开。卡在审批上的
- *      调用改用 AgentToolCard（唯一带审批行的工具面），其余留在 Codex 卡片上。
+ *      调用改用 AgentToolCard（唯一带审批行的工具面），其余留在 Codex 工具卡片上。
  *   4. 工具结果块 —— 默认折叠（仅状态标签 + 展开按钮），展开后最大高 240px。
  *   5. 代码差异块 —— 左右分栏，左删除红底，右新增绿底，行号对齐。
  * 一个 tool turn 里的多步调用额外用 ThoughtChainPanel 串成一条链路概览。
@@ -364,7 +364,7 @@ export function ToolCallCard({
       <div
         data-testid="anchored-tool-result"
         data-tool-status={status ?? 'unreported'}
-        className="workbench-tool overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)]"
+        className="codex-tool overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border-default)] bg-[var(--color-bg-surface-1)]"
       >
         <header className="flex min-h-[var(--control-height-sm)] items-center gap-[var(--space-2)] border-b border-[var(--color-border-subtle)] px-[var(--space-2-5)] py-[var(--space-1-5)]">
           <WorkbenchIcon name="tool" className="shrink-0 text-[var(--color-text-secondary)]" />
@@ -381,12 +381,12 @@ export function ToolCallCard({
             onClick={() => { setDismissedFailure(failed); setExpanded(!isOpen); }}
             className="flex items-center gap-[var(--space-1)] text-[length:var(--text-2xs)] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"
           >
-            {isOpen ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronRight size={12} aria-hidden="true" />}
+            {isOpen ? <pageIcons.chevronDown size={12} aria-hidden="true" /> : <pageIcons.submenu size={12} aria-hidden="true" />}
             <span className={cn(failed && 'text-[var(--color-error)]')}>
               {failed ? t('anchored.messages.tool_result_failed') : t(isOpen ? 'tool_call.collapse' : 'tool_call.expand')}
             </span>
           </button>
-          <div id={panelId} hidden={!isOpen} className="workbench-tool-result max-h-[var(--anchored-result-height)] overflow-auto">
+          <div id={panelId} hidden={!isOpen} className="codex-tool-result max-h-[var(--anchored-result-height)] overflow-auto">
             {call.error && (
               <ToolCodeBlock tone="error" label={t('tool_call.error_detail')}>
                 {call.error}
@@ -410,7 +410,7 @@ export function ToolCallCard({
       data-testid="anchored-tool-card"
       data-tool-status={status ?? 'unreported'}
       className={cn(
-        'workbench-tool overflow-hidden rounded-[var(--radius-lg)] border bg-[var(--color-bg-surface-1)]',
+        'codex-tool overflow-hidden rounded-[var(--radius-lg)] border bg-[var(--color-bg-surface-1)]',
         failed ? 'border-[var(--color-error)]/40' : 'border-[var(--color-border-default)]',
       )}
     >
@@ -434,12 +434,12 @@ export function ToolCallCard({
               onClick={() => { setDismissedFailure(failed); setExpanded(!isOpen); }}
               className="mt-[var(--space-1-5)] flex items-center gap-[var(--space-1)] text-[length:var(--text-2xs)] text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text-primary)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]"
             >
-              {isOpen ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronRight size={12} aria-hidden="true" />}
+              {isOpen ? <pageIcons.chevronDown size={12} aria-hidden="true" /> : <pageIcons.submenu size={12} aria-hidden="true" />}
               <span className={cn(failed && 'text-[var(--color-error)]')}>
                 {failed ? t('anchored.messages.tool_result_failed') : t(isOpen ? 'tool_call.collapse' : 'tool_call.expand')}
               </span>
             </button>
-            <div id={panelId} hidden={!isOpen} className="workbench-tool-result max-h-[var(--anchored-result-height)] overflow-auto">
+            <div id={panelId} hidden={!isOpen} className="codex-tool-result max-h-[var(--anchored-result-height)] overflow-auto">
               {isOpen && hasArgs && (
                 <ToolCodeBlock label={t('tool_call.arguments')}>
                   {JSON.stringify(call.arguments, null, 2)}
@@ -498,7 +498,7 @@ function UserBubble({ message }: { message: Message }) {
         {CODEX_USER_GLYPH}
       </span>
       <div className="flex min-w-0 flex-1 flex-col items-start">
-        <div className="workbench-user-message max-w-[85%] rounded-[var(--radius-lg)] bg-[var(--color-bg-surface-2)] px-[var(--space-3)] py-[var(--space-2)] text-[length:var(--text-sm)] leading-relaxed text-[var(--color-text-primary)]">
+        <div className="codex-user-message max-w-[85%] rounded-[var(--radius-lg)] bg-[var(--color-bg-surface-2)] px-[var(--space-3)] py-[var(--space-2)] text-[length:var(--text-sm)] leading-relaxed text-[var(--color-text-primary)]">
           <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{message.content}</p>
           {message.images && message.images.length > 0 && (
             <div className="mt-[var(--space-2)] flex flex-wrap gap-[var(--space-2)]">

@@ -91,7 +91,7 @@ it('keeps five ordered compact sections and task and usage inspection collapsibl
   render(<AnchoredInfoPanel />);
   await screen.findByDisplayValue('soul server');
   const sections = INFO_CARD_ORDER.map(card => screen.getByTestId(`anchored-card-${card}`));
-  expect(Array.from(screen.getByTestId('anchored-info-panel').querySelectorAll('section'))).toEqual(sections);
+  expect(Array.from(screen.getByTestId('anchored-info-panel').querySelectorAll('[data-testid^="anchored-card-"]'))).toEqual(sections);
   for (const section of sections) {
     expect(within(section).getByRole('heading', { level: 3 })).toBeInTheDocument();
     expect(section).not.toHaveClass('workbench-info-card');
@@ -105,6 +105,17 @@ it('keeps five ordered compact sections and task and usage inspection collapsibl
     fireEvent.click(button);
     expect(button).toHaveAttribute('aria-expanded', 'true');
   }
+});
+
+it('keeps the continuous inspector card order per session', async () => {
+  const { rerender } = render(<AnchoredInfoPanel sessionId="session-a" />);
+  await screen.findByDisplayValue('soul server');
+  const cards = () => Array.from(screen.getByTestId('anchored-info-panel').querySelectorAll('[data-testid^="anchored-card-"]')).map((card) => card.getAttribute('data-testid'));
+  expect(cards()).toEqual(INFO_CARD_ORDER.map((card) => `anchored-card-${card}`));
+  rerender(<AnchoredInfoPanel sessionId="session-b" />);
+  expect(cards()).toEqual(INFO_CARD_ORDER.map((card) => `anchored-card-${card}`));
+  rerender(<AnchoredInfoPanel sessionId="session-a" />);
+  expect(cards()).toEqual(INFO_CARD_ORDER.map((card) => `anchored-card-${card}`));
 });
 
 it('renders the plan headers, default states and per-card actions with tokens', async () => {

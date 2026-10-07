@@ -19,12 +19,25 @@ import structlog
 from sqlalchemy import CursorResult
 
 from app.config import settings
+from app.core.execution.event_bus import EventBus, TaskEvent
 from app.storage import async_session
 from app.storage.models_platform import AutoLoopTask
 
 logger = structlog.get_logger()
 
 _SENSITIVE_PAYLOAD_KEYS = {"api_key", "api_key_encrypted"}
+_SUBTASK_STATUSES = {
+    "pending",
+    "ready",
+    "claimed",
+    "running",
+    "retrying",
+    "completed",
+    "failed",
+    "blocked",
+    "skipped",
+    "dead_letter",
+}
 
 
 async def resolve_owner_agent_payload(
@@ -113,6 +126,13 @@ class TaskStatus(StrEnum):
     RETRYING = "retrying"
 
 
+def _lease_expired(value: Any, now_timestamp: float) -> bool:
+    try:
+        return float(value or 0) <= now_timestamp
+    except (TypeError, ValueError):
+        return True
+
+
 @dataclass
 class TaskInfo:
     task_id: str
@@ -132,7 +152,12 @@ class TaskInfo:
 class TaskManager:
     """Manages task lifecycle: submit, execute, track, cancel."""
 
-    def __init__(self, max_workers: int | None = None, max_task_retries: int = 2):
+    def __init__(
+        self,
+        max_workers: int | None = None,
+        max_task_retries: int = 2,
+        event_bus: EventBus | None = None,
+    ):
         self._handlers: dict[str, Callable[..., Coroutine[Any, Any, Any]]] = {}
         self._max_workers = settings.max_concurrent_subtasks if max_workers is None else max_workers
         self._max_task_retries = max(0, max_task_retries)
@@ -146,6 +171,8 @@ class TaskManager:
         self._event_subscribers: dict[str, set[asyncio.Queue[dict[str, Any]]]] = defaultdict(set)
         self._event_epoch = str(uuid.uuid4())
         self._event_sequence = 0
+        self._event_ids: dict[str, str] = {}
+        self._event_bus = event_bus
 
     @property
     def max_workers(self) -> int:
@@ -187,17 +214,81 @@ class TaskManager:
             while len(self._event_history) > 100:
                 self._event_history.popitem(last=False)
 
+    @staticmethod
+    def _validate_subtask_graph(subtasks: list[dict[str, Any]]) -> None:
+        ids = [str(item.get("id", "")) for item in subtasks]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Subtask IDs must be unique")
+        known = set(ids)
+        graph = {item_id: set() for item_id in ids}
+        for item in subtasks:
+            item_id = str(item.get("id", ""))
+            dependencies = item.get("dependencies", [])
+            if not isinstance(dependencies, list) or any(
+                not isinstance(dependency, str) for dependency in dependencies
+            ):
+                raise ValueError("Subtask dependencies must be a list of IDs")
+            if item_id in dependencies:
+                raise ValueError("A subtask cannot depend on itself")
+            missing = set(dependencies) - known
+            if missing:
+                raise ValueError("Subtask dependencies must reference a subtask in the same task")
+            graph[item_id].update(dependencies)
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(node: str) -> None:
+            if node in visiting:
+                raise ValueError("Subtask dependencies cannot contain cycles")
+            if node in visited:
+                return
+            visiting.add(node)
+            for dependency in graph[node]:
+                visit(dependency)
+            visiting.remove(node)
+            visited.add(node)
+
+        for node in graph:
+            visit(node)
+
     async def emit_event(self, task_id: str, event_type: str, data: dict[str, Any]) -> None:
-        self._event_sequence += 1
+        event_id = str(uuid.uuid4())
+        causation_id = self._event_ids.get(task_id)
+        timestamp = datetime.now(UTC).isoformat()
+        bus = self._event_bus
+        if bus is None:
+            from app.core.execution.event_bus import get_task_event_bus
+
+            bus = get_task_event_bus()
+            self._event_bus = bus
+        persisted = TaskEvent(
+            event_id=event_id,
+            event_type=event_type,
+            task_id=task_id,
+            timestamp=timestamp,
+            data=data,
+            schema_version=1,
+            correlation_id=task_id,
+            causation_id=causation_id,
+            producer="task_manager",
+        )
+        await bus.publish(persisted)
+        self._event_sequence = max(self._event_sequence, persisted.sequence or 0)
         event = {
+            "event_id": event_id,
             "type": event_type,
             "data": data,
             "task_id": task_id,
-            "sequence": self._event_sequence,
+            "sequence": persisted.sequence,
             "epoch": self._event_epoch,
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": timestamp,
             "protocol_version": 1,
+            "schema_version": 1,
+            "correlation_id": task_id,
+            "causation_id": causation_id,
+            "producer": "task_manager",
         }
+        self._event_ids[task_id] = event_id
         history = self._event_history.setdefault(task_id, deque(maxlen=100))
         history.append(event)
         self._event_history.move_to_end(task_id)
@@ -257,11 +348,15 @@ class TaskManager:
                         "dependencies": list(item.get("dependencies") or []),
                         "result": None,
                         "error": "",
+                        "claim_token": None,
+                        "lease_version": 0,
+                        "attempt": 0,
+                        "worker_id": None,
+                        "heartbeat_at": None,
+                        "completion_id": None,
                     }
                 )
-            ids = {item["id"] for item in normalized_subtasks}
-            if any(dep not in ids for item in normalized_subtasks for dep in item["dependencies"]):
-                raise ValueError("Subtask dependencies must reference a subtask in the same task")
+            self._validate_subtask_graph(normalized_subtasks)
             payload["subtasks"] = normalized_subtasks
 
         task_id = str(uuid.uuid4())[:12]
@@ -604,6 +699,7 @@ class TaskManager:
         limit: int = 1,
         include_all: bool = False,
         lease_seconds: int = 900,
+        worker_id: str | None = None,
     ) -> list[dict[str, Any]] | None:
         """Atomically claim ready subtasks for a worker agent.
 
@@ -627,6 +723,24 @@ class TaskManager:
             subtasks = envelope.get("subtasks", [])
             if not isinstance(subtasks, list):
                 return []
+            # A crashed agent must not strand work in the claimed state.
+            now_timestamp = now.timestamp()
+            lease_reclaimed = False
+            for item in subtasks:
+                if item.get("status") == "claimed" and _lease_expired(
+                    item.get("lease_expires_at"), now_timestamp
+                ):
+                    lease_reclaimed = True
+                    item.update(
+                        {
+                            "status": "pending",
+                            "claimed_by": None,
+                            "claimed_at": None,
+                            "lease_expires_at": None,
+                            "claim_token": None,
+                            "worker_id": None,
+                        }
+                    )
             completed = {item.get("id") for item in subtasks if item.get("status") == "completed"}
             claimed: list[dict[str, Any]] = []
             for item in subtasks:
@@ -642,11 +756,16 @@ class TaskManager:
                         "status": "claimed",
                         "claimed_by": agent_id,
                         "claimed_at": now.isoformat(),
-                        "lease_expires_at": (now.timestamp() + max(1, lease_seconds)),
+                        "lease_expires_at": (now_timestamp + max(1, lease_seconds)),
+                        "claim_token": str(uuid.uuid4()),
+                        "lease_version": int(item.get("lease_version") or 0) + 1,
+                        "attempt": int(item.get("attempt") or 0) + 1,
+                        "worker_id": worker_id or agent_id,
+                        "heartbeat_at": now.isoformat(),
                     }
                 )
                 claimed.append(dict(item))
-            if not claimed:
+            if not claimed and not lease_reclaimed:
                 return []
             envelope["subtasks"] = subtasks
             updated = await session.execute(
@@ -662,7 +781,14 @@ class TaskManager:
                 return []
             await session.commit()
         await self._emit_progress(
-            task_id, {"status": "subtasks_claimed", "count": len(claimed), "agent_id": agent_id}
+            task_id,
+            {
+                "status": "subtasks_claimed",
+                "count": len(claimed),
+                "agent_id": agent_id,
+                "subtask_ids": [item.get("id") for item in claimed],
+                "lease_reclaimed": lease_reclaimed,
+            },
         )
         return claimed
 
@@ -676,6 +802,9 @@ class TaskManager:
         result: Any = None,
         error: str | None = None,
         include_all: bool = False,
+        claim_token: str | None = None,
+        lease_version: int | None = None,
+        completion_id: str | None = None,
     ) -> dict[str, Any] | None:
         """Complete a claimed subtask and make dependent work claimable."""
         from sqlalchemy import update
@@ -693,10 +822,21 @@ class TaskManager:
                 return None
             subtasks = envelope.get("subtasks", [])
             target = next((item for item in subtasks if item.get("id") == subtask_id), None)
+            if target is None or target.get("claimed_by") != agent_id:
+                return None
+            if completion_id and target.get("completion_id") == completion_id:
+                if (
+                    (claim_token is None or target.get("claim_token") == claim_token)
+                    and (lease_version is None or target.get("lease_version") == lease_version)
+                    and target.get("status") in {"running", "completed", "failed"}
+                ):
+                    return dict(target)
+                return None
             if (
-                target is None
-                or target.get("status") != "claimed"
-                or target.get("claimed_by") != agent_id
+                target.get("status") not in {"claimed", "running"}
+                or (claim_token is not None and target.get("claim_token") != claim_token)
+                or (lease_version is not None and target.get("lease_version") != lease_version)
+                or _lease_expired(target.get("lease_expires_at"), datetime.now(UTC).timestamp())
             ):
                 return None
             target.update(
@@ -705,8 +845,31 @@ class TaskManager:
                     "result": result,
                     "error": error or "",
                     "completed_at": datetime.now(UTC).isoformat(),
+                    "lease_expires_at": None,
+                    "completion_id": completion_id,
                 }
             )
+            completed_count = sum(item.get("status") == "completed" for item in subtasks)
+            failed = any(item.get("status") == "failed" for item in subtasks)
+            has_unfinished = any(item.get("status") in {"pending", "claimed"} for item in subtasks)
+            if failed:
+                record.status = TaskStatus.FAILED.value
+                record.error = "A subtask failed"
+                record.finished_at = datetime.now(UTC)
+            elif not has_unfinished and subtasks:
+                record.status = TaskStatus.COMPLETED.value
+                record.finished_at = datetime.now(UTC)
+            elif record.status == TaskStatus.PENDING.value:
+                record.status = TaskStatus.RUNNING.value
+                record.started_at = record.started_at or datetime.now(UTC)
+            record.current_step = completed_count
+            record.max_steps = len(subtasks)
+            record.progress_evaluation = {
+                "percent": round(completed_count / len(subtasks) * 100, 2),
+                "message": "Subtasks complete" if not has_unfinished else "Subtasks in progress",
+                "step": completed_count,
+                "total": len(subtasks),
+            }
             envelope["subtasks"] = subtasks
             updated = await session.execute(
                 update(AutoLoopTask)
@@ -723,7 +886,84 @@ class TaskManager:
                 return None
             await session.commit()
         await self._emit_progress(
-            task_id, {"status": "subtask_completed", "subtask_id": subtask_id}
+            task_id,
+            {
+                "status": "subtask_completed",
+                "subtask_id": subtask_id,
+                "parent_status": record.status,
+                "progress": record.current_step,
+                "total": record.max_steps,
+                "completed_count": completed_count,
+                "remaining_count": sum(
+                    item.get("status") in {"pending", "claimed"} for item in subtasks
+                ),
+            },
+        )
+        return dict(target)
+
+    async def heartbeat_subtask(
+        self,
+        task_id: str,
+        subtask_id: str,
+        *,
+        owner_id: str,
+        agent_id: str,
+        claim_token: str,
+        lease_version: int,
+        extend_seconds: int = 300,
+        include_all: bool = False,
+    ) -> dict[str, Any] | None:
+        """Extend a live subtask lease using its fencing token."""
+        from sqlalchemy import update
+
+        now = datetime.now(UTC)
+        now_timestamp = now.timestamp()
+        async with async_session() as session:
+            record = await session.get(AutoLoopTask, task_id)
+            if record is None or (not include_all and record.owner_id != owner_id):
+                return None
+            original = record.objective
+            try:
+                envelope = json.loads(original)
+            except (TypeError, json.JSONDecodeError):
+                return None
+            subtasks = envelope.get("subtasks", []) if isinstance(envelope, dict) else []
+            target = next((item for item in subtasks if item.get("id") == subtask_id), None)
+            if (
+                target is None
+                or target.get("status") not in {"claimed", "running"}
+                or target.get("claimed_by") != agent_id
+                or target.get("claim_token") != claim_token
+                or target.get("lease_version") != lease_version
+                or _lease_expired(target.get("lease_expires_at"), now_timestamp)
+            ):
+                return None
+            target["status"] = "running"
+            target["heartbeat_at"] = now.isoformat()
+            current_expiry = float(target.get("lease_expires_at") or now_timestamp)
+            target["lease_expires_at"] = max(current_expiry, now_timestamp) + max(1, extend_seconds)
+            envelope["subtasks"] = subtasks
+            updated = await session.execute(
+                update(AutoLoopTask)
+                .where(
+                    AutoLoopTask.id == task_id,
+                    AutoLoopTask.owner_id == record.owner_id,
+                    AutoLoopTask.objective == original,
+                )
+                .values(objective=json.dumps(envelope, ensure_ascii=False), updated_at=now)
+            )
+            if cast(CursorResult[Any], updated).rowcount != 1:
+                return None
+            await session.commit()
+        await self._emit_progress(
+            task_id,
+            {
+                "status": "subtask_heartbeat",
+                "subtask_id": subtask_id,
+                "agent_id": agent_id,
+                "lease_version": lease_version,
+                "lease_expires_at": target["lease_expires_at"],
+            },
         )
         return dict(target)
 
@@ -874,18 +1114,31 @@ class TaskManager:
 
                 async with async_session() as session:
                     record = await session.get(AutoLoopTask, task_id)
+                    subtasks = self._subtasks_from_record(record) if record else []
+                    subtasks_pending = any(
+                        item.get("status") in {"pending", "claimed"} for item in subtasks
+                    )
+                    subtask_failed = any(item.get("status") == "failed" for item in subtasks)
                     if (
                         self._owns_worker(task_id, worker)
                         and record
                         and record.status == TaskStatus.RUNNING.value
                     ):
+                        if subtask_failed:
+                            result_status = TaskStatus.FAILED.value
+                            record.error = "A subtask failed"
+                        elif subtasks_pending:
+                            result_status = TaskStatus.RUNNING.value
+                            record.error = None
                         record.status = result_status
                         record.result = (
                             result if isinstance(result, dict) else {"output": str(result)}
                         )
                         if result_status == TaskStatus.FAILED.value and isinstance(result, dict):
                             record.error = str(result.get("error", ""))[:500]
-                        record.finished_at = datetime.now(UTC)
+                        record.finished_at = (
+                            None if result_status == TaskStatus.RUNNING.value else datetime.now(UTC)
+                        )
                         await session.commit()
                     else:
                         return

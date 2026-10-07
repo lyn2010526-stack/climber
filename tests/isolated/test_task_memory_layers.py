@@ -10,6 +10,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.core.compressor import estimate_text_tokens
 from app.core.engine.task_memory import TaskMemory
 from app.storage import Base
 from app.storage.database import Agent, Session, SessionInput, Turn
@@ -120,6 +121,15 @@ class TaskMemoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(
             all(x["acceptance"] == "unverified" for rows in layers.values() for x in rows)
         )
+        self.assertTrue(
+            all(
+                x["source"] in {"instruction", "turn", "input"}
+                and x["trust"] == "untrusted"
+                and x["untrusted"] is True
+                for rows in layers.values()
+                for x in rows
+            )
+        )
         self.assertNotIn("PRIVATE", view["task_context"])
         self.assertNotIn("SIBLING", view["task_context"])
 
@@ -142,9 +152,11 @@ class TaskMemoryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(empty["task_context"], "")
         for budget in (1, 200, 600):
             view = await self.memory.restore("s", "u", token_budget=budget)
-            self.assertLessEqual(len(view["task_context"].encode()), budget)
-            self.assertEqual(view["budget_used"], len(view["task_context"].encode()))
+            self.assertLessEqual(estimate_text_tokens(view["task_context"]), budget)
             lines = view["task_context"].splitlines()
+            self.assertEqual(
+                view["budget_used"], sum(estimate_text_tokens(line + "\n") for line in lines)
+            )
             self.assertEqual(
                 sum(map(len, view["layers"].values())), len(lines) + sum(view["omitted"].values())
             )
@@ -237,7 +249,7 @@ class TaskMemoryTests(unittest.IsolatedAsyncioTestCase):
         summary = await self.memory.summarize_turn("s", "u", "t")
         self.assertEqual(summary["layers"]["planning"][0]["text"], text)
         view = await self.memory.restore("s", "u", token_budget=400)
-        self.assertLessEqual(len(view["task_context"].encode("utf-8")), 400)
+        self.assertLessEqual(view["budget_used"], 400)
         self.assertEqual(view["layers"]["planning"][0]["text"], text)
 
 

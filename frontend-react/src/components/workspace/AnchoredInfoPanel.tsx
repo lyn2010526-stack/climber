@@ -484,7 +484,6 @@ export function AnchoredInfoPanel({ sessionId }: { sessionId?: string | null }) 
   const closeFilePreview = useAnchoredStore((s) => s.closeFilePreview);
   const ruleEditor = useRuleEditorState(cardsOpen.ruleEditor);
   const [treeForceOpen, setTreeForceOpen] = useState<boolean | null>(null);
-
   // 计量仪表盘：挂载与每回合结束后拉取计费数据；失败时保持 null（"未上报"）。
   useEffect(() => {
     let active = true;

@@ -27,10 +27,10 @@ afterEach(() => {
 });
 
 describe('ThinkingBubble reveal behavior', () => {
-  it('auto-expands the public reasoning summary while streaming', () => {
+  it('keeps the public reasoning summary collapsed while streaming', () => {
     render(<ThinkingBubble message={message} active />);
-    expect(screen.getByRole('button', { name: '公开推理摘要' })).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByText('Reported public summary')).toBeVisible();
+    expect(screen.getByRole('button', { name: '公开推理摘要' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('Reported public summary')).toBeNull();
   });
 
   it('keeps reasoning collapsed when idle', () => {

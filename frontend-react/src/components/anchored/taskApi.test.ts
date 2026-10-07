@@ -14,6 +14,7 @@ describe('task event contract', () => {
     }
     expect(mergeTaskEvent(task, { ...event, type: 'snapshot', epoch: 'b', data: { status: 'failed' } }, { epoch: 'a', sequence: 3 })).toMatchObject({ status: 'failed' });
     expect(mergeTaskEvent(task, { ...event, data: { type: 'task_retry' } })).toMatchObject({ status: 'retrying' });
+    expect(mergeTaskEvent(task, { ...event, data: { status: 'subtasks_claimed', count: 1 } })).toMatchObject({ status: 'running' });
   });
 
   it('consumes authenticated chunked CRLF SSE, heartbeat, UTF-8 and trailing frames', async () => {

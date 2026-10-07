@@ -142,6 +142,16 @@ describe('useChat stop and failure', () => {
     expect(result.current.messages[1].toolCalls?.[0]).toMatchObject({ status: 'error', error: 'broken', requiresApproval: false });
     expect(result.current.messages[1].toolCalls?.[1].status).toBe('running');
   });
+
+  it('matches tool results using tool_call_id in either raw or turn-scoped form', async () => {
+    const { result } = await startTurn();
+    act(() => {
+      emit!({ type: 'tool_call', toolCall: { id: 'one', name: 'read', arguments: {} } });
+      emit!({ type: 'tool_result', toolCallId: 'assistant-id:one', result: 'ok', error: '' });
+      emit!({ type: 'done' });
+    });
+    expect(result.current.messages[1].toolCalls?.[0]).toMatchObject({ result: 'ok', status: 'success' });
+  });
   it('aborts, flushes the buffer and marks the turn interrupted on stop', async () => {
     const { result } = await startTurn();
     act(() => { emit!({ type: 'text', delta: '写到一半' }); });

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
 import { isActiveTaskStatus } from './taskStatus';
+import { consumeTaskEvents, mergeTaskEvent, type LiveTask, type TaskEvent } from '../anchored/taskApi';
 
 type Task = Awaited<ReturnType<typeof api.getTask>>;
 
@@ -42,6 +43,24 @@ export function useGroupTask(groupId: string) {
   const active = !!task && isActiveTaskStatus(task.status);
   /** Whether the error on screen was raised by the poll itself. */
   const pollFailed = useRef(false);
+
+  useEffect(() => {
+    if (!taskId || !active) return;
+    const controller = new AbortController();
+    let cursor: { epoch: string; sequence: number } | undefined;
+    void consumeTaskEvents(taskId, controller.signal, (event: TaskEvent) => {
+      setTask(previous => {
+        if (!previous || previous.task_id !== taskId) return previous;
+        const updated = mergeTaskEvent(previous as LiveTask, event, cursor);
+        if (updated === previous) return previous;
+        cursor = { epoch: event.epoch, sequence: event.sequence };
+        return updated as Task;
+      });
+    }).catch(() => {
+      // The detail poll below remains authoritative when the stream disconnects.
+    });
+    return () => controller.abort();
+  }, [taskId, active]);
 
   useEffect(() => {
     if (!taskId || !active) {
@@ -94,7 +113,10 @@ export function useGroupTask(groupId: string) {
         // A submit that resolves after the user switched groups must not write
         // its task into the new group's slot (R10-01).
         if (!mounted.current || groupIdRef.current !== requestGroupId) return;
-        setTask(result);
+        setTask({
+          ...result,
+          objective,
+        } as Task);
       } catch (reason) {
         if (mounted.current && groupIdRef.current === requestGroupId) {
           setError(reason instanceof Error ? reason.message : '提交任务失败');

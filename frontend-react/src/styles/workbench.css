@@ -33,13 +33,13 @@
 .workbench-skill { color: var(--color-text-muted); }
 .workbench-skill[data-enabled="true"],
 .workbench-skill[data-enabled="true"] > span { color: var(--color-accent-foreground); }
-.workbench-user-message {
+.codex-user-message {
   max-width: var(--workbench-user-width);
   border: 1px solid var(--color-border-accent);
   border-radius: var(--workbench-message-radius) var(--workbench-message-radius) var(--radius-sm) var(--workbench-message-radius);
   padding: var(--space-3) var(--space-4);
 }
-.workbench-agent-message {
+.codex-agent-message {
   max-width: var(--workbench-agent-width);
   background: var(--color-bg-surface-1);
   border-inline-start: var(--workbench-rule-width) solid var(--color-border-default);
@@ -47,11 +47,11 @@
   padding: var(--space-3) var(--space-4);
   line-height: var(--workbench-line-height);
 }
-.workbench-tool { border-radius: var(--radius-md); }
-.workbench-tool > header { background: var(--color-bg-surface-2); }
-.workbench-tool[data-tool-status="running"] { border-inline-start: var(--workbench-rule-width) solid var(--color-info); }
-.workbench-tool[data-tool-status="error"] { border-color: var(--color-error); }
-.workbench-tool-result {
+.codex-tool { border-radius: var(--radius-md); }
+.codex-tool > header { background: var(--color-bg-surface-2); }
+.codex-tool[data-tool-status="running"] { border-inline-start: var(--workbench-rule-width) solid var(--color-info); }
+.codex-tool[data-tool-status="error"] { border-color: var(--color-error); }
+.codex-tool-result {
   margin-top: var(--space-2);
   border-top: 1px solid var(--color-border-subtle);
   background: var(--color-code-bg);
@@ -106,13 +106,13 @@
 }
 .workbench-theme button:active { background-color: var(--color-accent-subtle); }
 .workbench-theme button:disabled { color: var(--color-text-muted); cursor: not-allowed; }
-[data-testid="anchored-composer"] > .flex:has(textarea) {
+.codex-composer-surface {
   padding: var(--space-2);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-lg);
   background: var(--color-bg-page);
 }
-[data-testid="anchored-composer"] > .flex:has(textarea):focus-within { border-color: var(--color-border-accent); }
+.codex-composer-surface:focus-within { border-color: var(--color-border-accent); }
 
 @media (min-width: 1024px) {
   /* The three-column desktop layout refines geometry only; colour comes from
@@ -134,21 +134,21 @@
     box-shadow: none;
     font-weight: var(--weight-medium);
   }
-  [data-layout="three-column"] .workbench-agent-message {
+  [data-layout="three-column"] .codex-agent-message {
     border: 1px solid var(--color-border-subtle);
     border-radius: var(--workbench-message-radius);
   }
-  [data-layout="three-column"] .workbench-tool {
+  [data-layout="three-column"] .codex-tool {
     border-color: var(--color-border-subtle);
     border-radius: var(--radius-lg);
   }
-  [data-layout="three-column"] .workbench-tool > header {
+  [data-layout="three-column"] .codex-tool > header {
     background: var(--color-bg-surface-1);
   }
-  [data-layout="three-column"] .workbench-tool[data-tool-status="error"] {
+  [data-layout="three-column"] .codex-tool[data-tool-status="error"] {
     border-color: var(--color-error);
   }
-  [data-layout="three-column"] .workbench-tool-result {
+  [data-layout="three-column"] .codex-tool-result {
     border-radius: var(--radius-sm);
   }
   [data-layout="three-column"] .workbench-info-card {
@@ -233,24 +233,24 @@
   border-top: 0;
   background: var(--color-bg-page);
 }
-.workbench-desktop .workbench-user-message {
+.workbench-desktop .codex-user-message {
   border-color: var(--color-border-subtle);
   background: var(--color-bg-surface-1);
   border-radius: var(--radius-lg);
 }
-.workbench-desktop .workbench-agent-message {
+.workbench-desktop .codex-agent-message {
   background: var(--color-bg-page);
   border: 0;
   border-radius: var(--radius-lg);
   line-height: var(--workbench-line-height);
 }
-.workbench-desktop .workbench-tool,
+.workbench-desktop .codex-tool,
 .workbench-desktop .workbench-info-card {
   border-color: var(--color-border-subtle);
   border-radius: var(--radius-md);
 }
-.workbench-desktop .workbench-tool[data-tool-status="error"] { border-color: var(--color-error); }
-.workbench-desktop .workbench-tool > header,
+.workbench-desktop .codex-tool[data-tool-status="error"] { border-color: var(--color-error); }
+.workbench-desktop .codex-tool > header,
 .workbench-desktop .workbench-info-card[data-open="true"] > button {
   background: var(--color-bg-surface-1);
 }

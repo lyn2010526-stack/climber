@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo, useId } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { Search, ArrowUpDown, CornerDownLeft } from 'lucide-react';
+import { pageIcons } from '../../lib/icons';
 import { ALL_NAV_ITEMS_BASE } from '../../navigation/navConfig';
+import { navigationIconFor } from '../../lib/icons';
 import { rankCommands } from '../../lib/commandScore';
 import { useI18n } from '../../i18n';
 import './codex-suite.css';
@@ -27,7 +28,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
     .map(item => ({
       id: item.id,
       label: t(item.labelKey ?? item.label ?? item.id),
-      icon: item.icon,
+       icon: navigationIconFor(item.icon),
       keywords: item.keywords ?? '',
       group: t(`nav_groups.${item.group ?? 'config'}`),
     })), [t]);
@@ -88,7 +89,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
       >
         {/* The input is the palette; a heading and a tally above it restated it. */}
         <div className="flex items-center gap-3 px-4 py-3">
-          <Search size={18} aria-hidden="true" className="shrink-0 text-[var(--color-text-muted)]" />
+          <pageIcons.search size={18} aria-hidden="true" className="shrink-0 text-[var(--color-text-muted)]" />
           <input
             ref={inputRef}
             type="text"
@@ -159,7 +160,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
                           <IconComponent size={14} aria-hidden="true" />
                         </span>
                         <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                        {selected && <CornerDownLeft size={14} aria-hidden="true" className="shrink-0 text-[var(--color-text-muted)]" />}
+                        {selected && <pageIcons.open size={14} aria-hidden="true" className="shrink-0 text-[var(--color-text-muted)]" />}
                       </button>
                     );
                   })}
@@ -173,10 +174,10 @@ export default function CommandPalette({ isOpen, onClose, onNavigate }: CommandP
             rows, and Escape closes the dialog without a second label for it. */}
         <div className="flex items-center gap-4 border-t border-[var(--color-border-subtle)] px-4 py-2 text-[11px] text-[var(--color-text-muted)]">
           <span className="flex items-center gap-1">
-            <ArrowUpDown size={12} aria-hidden="true" /> {t('common.navigate')}
+            <pageIcons.navigate size={12} aria-hidden="true" /> {t('common.navigate')}
           </span>
           <span className="flex items-center gap-1">
-            <CornerDownLeft size={12} aria-hidden="true" /> {t('common.open')}
+            <pageIcons.open size={12} aria-hidden="true" /> {t('common.open')}
           </span>
         </div>
       </Dialog.Content>

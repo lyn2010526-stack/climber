@@ -6,11 +6,14 @@ Handlers are scripted; no model, tools, or business database are exercised.
 
 import asyncio
 import json
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from app.api.v1.routes import tasks as task_routes
 from app.core import task_worker
 from app.storage.models_platform import AutoLoopTask
 
@@ -55,6 +58,210 @@ async def test_retry_persists_progress_and_checkpoint(manager):
     assert state["progress_evaluation"]["percent"] == 100
     assert state["progress_evaluation"]["message"] == "attempt 2"
     assert any(event["data"].get("step") == 2 for event in manager._event_history[task_id])
+
+
+@pytest.mark.asyncio
+async def test_subtask_completion_aggregates_parent_progress_and_status(manager):
+    async def handler(payload, on_progress):
+        return {"output": "awaiting subtasks"}
+
+    manager.register("scripted", handler)
+    task_id = await manager.submit(
+        "scripted",
+        {
+            "subtasks": [
+                {"id": "first", "description": "First"},
+                {"id": "second", "description": "Second", "dependencies": ["first"]},
+            ]
+        },
+    )
+    claimed = await manager.claim_subtasks(task_id, owner_id="default-user", agent_id="agent")
+    assert [item["id"] for item in claimed] == ["first"]
+    completed = await manager.complete_subtask(
+        task_id, "first", owner_id="default-user", agent_id="agent", result={"ok": True}
+    )
+    assert completed["status"] == "completed"
+    state = await manager.get_status(task_id)
+    assert state["status"] == "running"
+    assert state["progress"] == 1
+    assert state["total_steps"] == 2
+    claimed = await manager.claim_subtasks(task_id, owner_id="default-user", agent_id="agent")
+    assert [item["id"] for item in claimed] == ["second"]
+    await manager.complete_subtask(
+        task_id, "second", owner_id="default-user", agent_id="agent", result={"ok": True}
+    )
+    state = await manager.get_status(task_id)
+    assert state["status"] == "completed"
+    assert state["progress"] == 2
+
+
+@pytest.mark.asyncio
+async def test_expired_subtask_lease_is_reclaimable(manager):
+    async def handler(payload, on_progress):
+        return {"output": "awaiting subtasks"}
+
+    manager.register("scripted", handler)
+    task_id = await manager.submit("scripted", {"subtasks": [{"description": "Work"}]})
+    claimed = await manager.claim_subtasks(
+        task_id, owner_id="default-user", agent_id="old", lease_seconds=1
+    )
+    assert claimed
+    async with task_worker.async_session() as session:
+        record = await session.get(AutoLoopTask, task_id)
+        envelope = json.loads(record.objective)
+        envelope["subtasks"][0]["lease_expires_at"] = (
+            datetime.now(UTC) - timedelta(seconds=1)
+        ).timestamp()
+        record.objective = json.dumps(envelope)
+        await session.commit()
+    reclaimed = await manager.claim_subtasks(task_id, owner_id="default-user", agent_id="new")
+    assert reclaimed[0]["claimed_by"] == "new"
+
+
+@pytest.mark.asyncio
+async def test_failed_subtask_fails_parent(manager):
+    async def handler(payload, on_progress):
+        return {"output": "awaiting subtasks"}
+
+    manager.register("scripted", handler)
+    task_id = await manager.submit("scripted", {"subtasks": [{"description": "Work"}]})
+    await manager.claim_subtasks(task_id, owner_id="default-user", agent_id="agent")
+    await manager.complete_subtask(
+        task_id,
+        "st-1",
+        owner_id="default-user",
+        agent_id="agent",
+        error="failed work",
+    )
+    state = await manager.get_status(task_id)
+    assert state["status"] == "failed"
+    assert state["error"] == "A subtask failed"
+
+
+@pytest.mark.asyncio
+async def test_claim_issues_fencing_token_and_heartbeat(manager):
+    manager.register("scripted", lambda payload, on_progress: asyncio.sleep(0))
+    task_id = await manager.submit("scripted", {"subtasks": [{"description": "Work"}]})
+    claimed = await manager.claim_subtasks(
+        task_id, owner_id="default-user", agent_id="agent", worker_id="worker-1"
+    )
+    item = claimed[0]
+    assert item["claim_token"]
+    assert item["lease_version"] == 1
+    assert item["worker_id"] == "worker-1"
+    renewed = await manager.heartbeat_subtask(
+        task_id,
+        item["id"],
+        owner_id="default-user",
+        agent_id="agent",
+        claim_token=item["claim_token"],
+        lease_version=item["lease_version"],
+    )
+    assert renewed["status"] == "running"
+    assert renewed["lease_expires_at"] > item["lease_expires_at"]
+
+
+@pytest.mark.asyncio
+async def test_stale_claim_cannot_complete_after_reclaim(manager):
+    manager.register("scripted", lambda payload, on_progress: asyncio.sleep(0))
+    task_id = await manager.submit("scripted", {"subtasks": [{"description": "Work"}]})
+    old = (
+        await manager.claim_subtasks(
+            task_id, owner_id="default-user", agent_id="old", lease_seconds=1
+        )
+    )[0]
+    async with task_worker.async_session() as session:
+        record = await session.get(AutoLoopTask, task_id)
+        envelope = json.loads(record.objective)
+        envelope["subtasks"][0]["lease_expires_at"] = datetime.now(UTC).timestamp() - 1
+        record.objective = json.dumps(envelope)
+        await session.commit()
+    new = (
+        await manager.claim_subtasks(task_id, owner_id="default-user", agent_id="new")
+    )[0]
+    assert new["lease_version"] == old["lease_version"] + 1
+    stale = await manager.complete_subtask(
+        task_id,
+        old["id"],
+        owner_id="default-user",
+        agent_id="old",
+        claim_token=old["claim_token"],
+        lease_version=old["lease_version"],
+        result={"stale": True},
+    )
+    assert stale is None
+
+
+@pytest.mark.asyncio
+async def test_submit_rejects_cyclic_subtasks(manager):
+    manager.register("scripted", lambda payload, on_progress: asyncio.sleep(0))
+    with pytest.raises(ValueError, match="cycles"):
+        await manager.submit(
+            "scripted",
+            {
+                "subtasks": [
+                    {"id": "a", "description": "A", "dependencies": ["b"]},
+                    {"id": "b", "description": "B", "dependencies": ["a"]},
+                ]
+            },
+        )
+
+
+@pytest.mark.asyncio
+async def test_running_subtask_completes_and_duplicate_completion_is_idempotent(manager):
+    manager.register("scripted", lambda payload, on_progress: asyncio.sleep(0))
+    task_id = await manager.submit("scripted", {"subtasks": [{"description": "Work"}]})
+    item = (
+        await manager.claim_subtasks(task_id, owner_id="default-user", agent_id="agent")
+    )[0]
+    await manager.heartbeat_subtask(
+        task_id,
+        item["id"],
+        owner_id="default-user",
+        agent_id="agent",
+        claim_token=item["claim_token"],
+        lease_version=item["lease_version"],
+    )
+    completed = await manager.complete_subtask(
+        task_id,
+        item["id"],
+        owner_id="default-user",
+        agent_id="agent",
+        claim_token=item["claim_token"],
+        lease_version=item["lease_version"],
+        completion_id="completion-1",
+        result={"ok": True},
+    )
+    duplicate = await manager.complete_subtask(
+        task_id,
+        item["id"],
+        owner_id="default-user",
+        agent_id="agent",
+        claim_token=item["claim_token"],
+        lease_version=item["lease_version"],
+        completion_id="completion-1",
+        result={"ok": True},
+    )
+    assert completed["status"] == "completed"
+    assert duplicate == completed
+
+
+@pytest.mark.asyncio
+async def test_task_control_maps_value_error_to_conflict(monkeypatch):
+    async def get_status(*args, **kwargs):
+        return {"task_id": "task-1", "status": "running"}
+
+    async def rollback(*args, **kwargs):
+        raise ValueError("Rollback requires a stopped worker")
+
+    monkeypatch.setattr(task_routes.task_manager, "get_status", get_status)
+    monkeypatch.setattr(task_routes.task_manager, "rollback", rollback)
+
+    with pytest.raises(HTTPException) as raised:
+        await task_routes._control("task-1", "rollback", {"id": "owner"})
+
+    assert raised.value.status_code == 409
+    assert raised.value.detail == "Rollback requires a stopped worker"
 
 
 @pytest.mark.asyncio

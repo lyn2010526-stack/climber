@@ -195,6 +195,14 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - 长任务里某个子代理报错/上游中断不是停止信号：记录原始错误、立即重跑或换更小批次，直到整批完成；未全部完成前不得只汇报"报错了"就结束。
   - 长任务的最终汇报必须逐项给"完成/失败原因/重跑结果"，并继续下一步，不能停在半途。
 
+[用户指令摘要]
+- Date: 2026-10-07
+- Context: 用户要求持续推进架构实现时明确决策交互方式
+- Instructions:
+  - 需要用户决策时直接使用可选择项提问，方便用户快速回答。
+  - 获得选择后立即继续实现，不停留在方案讨论。
+  - 没有决策依赖的工作直接拆分并行子任务，持续执行、验证和拉起下一轮，直到目标闭环。
+
 [项目知识摘要]
 - Date: 2026-10-01
 - Context: Agent 在执行 iOS 风格 UI 打磨任务时发现（frontend-react 呈现契约测试）
@@ -265,3 +273,11 @@ Agent 在任务执行过程中发现的条目应遵循以下格式：
   - `app/api/v1/__init__.py::_include_extension_routes` 按 `path.startswith(prefixes)` 摘取挂载，前缀会连带挂载子路径（如前缀 `/mcp/servers` 同时挂载 `/mcp/servers/{id}/install`），审计报告中"未挂载"结论必须以实际展开的路由清单复核，不能手推。
   - `app/core/scheduler.py`（TaskScheduler）有活调用链：`app/api/v1/scheduler.py` 被挂载的 `/scheduler/tasks` POST/PATCH/DELETE 经 `_register_scheduled_task`/`remove_task`/`register_handler` 引用它；死代码扫描报告曾误判其"零调用方"。
   - 2026-10-05 全量 pytest 既有失败基线 9 个：tests/test_profile_persistence.py 7 个（"profile learning is disabled"）+ tests/test_chat_images.py 2 个（sqlite no such table），与代码改动无关；tests/test_factory_path_regressions.py::test_task_control_loop_persists_pause_resume_and_progress 为 flaky（单跑通过）。
+
+[用户指令摘要]
+- Date: 2026-10-07
+- Context: 用户要求长任务持续推进
+- Instructions:
+  - 只要任务尚未完成，就持续执行下一批工作、验证结果并修复失败项。
+  - 遇到单个子任务失败时记录原始错误并继续重跑或拆分处理，直到整批完成。
+  - 只有遇到真实阻塞或需要产品决策时才暂停向用户询问。

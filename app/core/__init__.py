@@ -10,6 +10,7 @@ from enum import Enum, StrEnum
 from typing import Any
 
 from app.core.checkpoint import CheckpointData
+from app.core.execution.event_bus import TaskEvent
 from app.core.security_sandbox import AgentMode
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "ModelRoute",
     "SessionStatus",
     "SubAgentTask",
+    "TaskEvent",
     "datetime",
 ]
 

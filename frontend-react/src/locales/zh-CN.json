@@ -374,6 +374,9 @@
       "label": "Agent 状态",
       "shortcuts_hint": "? 查看快捷键",
       "thinking": "思考中",
+      "thinking_complete": "思考完成",
+      "thinking_error": "思考失败",
+      "thinking_paused": "思考已暂停",
       "turn_tokens": "本轮 Token",
       "unreported": "未上报"
     },
@@ -633,6 +636,7 @@
     "thinking_level_low_hint": "低档：快速响应，适合简单问题",
     "thinking_level_medium": "中",
     "thinking_level_medium_hint": "中档：速度与深度平衡（默认）",
+    "thinking_level_current": "当前：{{level}}",
     "thinking_mode": "思考模式",
     "thinking_show_hint": "显示思考过程",
     "thinking_toggle": "思考",
@@ -1591,6 +1595,8 @@
     "thinking": "思考中",
     "thought_for": "思考耗时 {{count}} 秒",
     "thought_for_unknown": "思考了很短时间",
+    "thinking_error": "思考失败",
+    "thinking_paused": "思考已暂停",
     "title": "推理",
     "trace_detail": "推理详情",
     "feedback_up": "赞",
@@ -1988,6 +1994,7 @@
     "subtasks_aria": "子任务队列",
     "subtasks_count": "{{claimed}} 认领中 · {{done}} 完成 · {{total}} 总计",
     "subtasks_empty": "该任务暂无子任务。",
+    "subtasks_error": "子任务加载失败。",
     "subtasks_heading": "子任务"
   },
   "terminal": {

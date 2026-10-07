@@ -376,10 +376,10 @@ export function AnchoredComposer({
   return (
     <div
       data-testid="anchored-composer"
-      className="mx-auto flex w-full max-w-[832px] shrink-0 flex-col gap-[var(--space-2)] bg-[var(--color-bg-page)] px-[var(--space-4)] pb-[var(--space-3)] pt-[var(--space-2)]"
+      className="codex-composer mx-auto flex w-full max-w-[832px] shrink-0 flex-col gap-[var(--space-2)] bg-[var(--color-bg-page)] px-[var(--space-4)] pb-[var(--space-3)] pt-[var(--space-2)]"
     >
       <AnchoredPopupStack />
-      <div data-testid="anchored-composer-surface" className="flex flex-col gap-[var(--space-2)] rounded-[var(--radius-xl)] bg-[var(--color-bg-surface-2)] p-[var(--space-3)] transition-shadow focus-within:shadow-[var(--focus-ring)]" style={{ minHeight: STACK_MIN_HEIGHT }}>
+      <div data-testid="anchored-composer-surface" className="codex-composer-surface flex flex-col gap-[var(--space-2)] rounded-[var(--radius-xl)] bg-[var(--color-bg-surface-2)] p-[var(--space-3)] transition-shadow focus-within:shadow-[var(--focus-ring)]" style={{ minHeight: STACK_MIN_HEIGHT }}>
       {inputError && <p role="alert" className="text-[length:var(--text-xs)] text-[var(--color-error)]">{inputError}</p>}
       {storageError && <p role="alert" className="text-[length:var(--text-xs)] text-[var(--color-error)]">{storageError}</p>}
       {attachmentBlocked && <p role="alert" className="text-[length:var(--text-xs)] text-[var(--color-text-muted)]">{attachments.some(item => item.status === 'reading') ? t('anchored.composer.attachment_reading') : t('anchored.composer.attachment_failed')}</p>}

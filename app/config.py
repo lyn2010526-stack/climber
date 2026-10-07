@@ -45,7 +45,7 @@ MIN_SECRET_LENGTH = 16
 
 # Agent subtask concurrency. The default is the tuned single-node value; the
 # ceiling is the hard bound one node may ever run, whatever an operator sets.
-DEFAULT_MAX_CONCURRENT_SUBTASKS = 3
+DEFAULT_MAX_CONCURRENT_SUBTASKS = 8
 MAX_CONCURRENT_SUBTASKS_CEILING = 18
 
 SECRET_GENERATION_HINT = (

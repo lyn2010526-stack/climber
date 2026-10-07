@@ -1,4 +1,4 @@
-import type { GroupSnapshot, GroupTaskNode, TaskSummary } from '../../api';
+import type { GroupTaskNode, TaskSummary } from '../../api';
 import { api } from '../../api';
 
 export type { GroupSnapshot, GroupTaskNode } from '../../api';
@@ -19,6 +19,7 @@ export interface TaskEvent {
 }
 
 export const isTerminalTask = (status: string) => ['completed', 'failed', 'cancelled'].includes(status);
+const TASK_STATUSES = new Set(['pending', 'running', 'paused', 'retrying', 'completed', 'failed', 'cancelled']);
 
 export class TaskStreamError extends Error {
   constructor(message: string, public readonly retryable = true, public readonly retryAfterMs = 0) {
@@ -30,10 +31,13 @@ export function mergeTaskEvent(task: LiveTask, event: TaskEvent, cursor?: { epoc
   if (event.task_id !== task.task_id || event.protocol_version !== 1) return task;
   if (cursor?.epoch === event.epoch && event.sequence <= cursor.sequence) return task;
   if (cursor && cursor.epoch !== event.epoch && event.type !== 'snapshot') return task;
+  const eventStatus = typeof event.data.status === 'string' && TASK_STATUSES.has(event.data.status)
+    ? event.data.status
+    : event.data.type === 'task_retry' ? 'retrying' : task.status;
   return { ...task, ...(event.type === 'snapshot' ? { error: null, interruption_reason: null, retry_count: 0 } : {}), ...event.data, task_id: task.task_id,
     progress: event.data.progress ?? event.data.step ?? task.progress,
     total_steps: event.data.total_steps ?? event.data.total ?? task.total_steps,
-    status: event.data.status ?? (event.data.type === 'task_retry' ? 'retrying' : task.status) };
+    status: eventStatus };
 }
 
 export async function consumeTaskEvents(taskId: string, signal: AbortSignal, onEvent: (event: TaskEvent) => void): Promise<void> {

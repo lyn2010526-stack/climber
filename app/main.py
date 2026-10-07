@@ -198,6 +198,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
             register_builtins()
 
+            from app.core.task_worker import task_manager
+
+            recovered_tasks = await task_manager.recover_pending_tasks()
+            if recovered_tasks:
+                logger.info("Recovered pending task workers", count=recovered_tasks)
+
             auto_loop_engine: Any = di_resolve("AutoLoopEngine")
             _wire_auto_loop_runner(auto_loop_engine)
             recovered = await auto_loop_engine.recover_interrupted_sessions()

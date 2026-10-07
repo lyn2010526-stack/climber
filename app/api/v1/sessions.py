@@ -348,6 +348,7 @@ async def get_session_messages(
                 tool_calls=r.tool_calls or [],
                 tool_name=r.tool_name,
                 created_at=r.created_at.isoformat() if r.created_at else "",
+                metadata=r.metadata_ or {},
             )
             for r in rows
         ]

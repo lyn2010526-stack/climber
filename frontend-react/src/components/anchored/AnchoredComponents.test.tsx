@@ -86,8 +86,8 @@ describe('anchored tool and activity panels', () => {
       { id: 'u', role: 'user', content: 'request' },
       { id: 'a', role: 'assistant', content: 'response', reasoning: 'reasoning' },
     ]} />);
-    expect(screen.getByText('request').parentElement).toHaveClass('workbench-user-message');
-    expect(screen.getByTestId('anchored-thinking-bubble').querySelector('.workbench-agent-message')).toBeInTheDocument();
+    expect(screen.getByText('request').parentElement).toHaveClass('codex-user-message');
+    expect(screen.getByTestId('anchored-thinking-bubble').querySelector('.codex-agent-message')).toBeInTheDocument();
     expect(screen.getByTestId('anchored-thinking-bubble').querySelector('svg')).toHaveAttribute('data-workbench-icon', 'agent');
   });
 

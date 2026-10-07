@@ -7,6 +7,7 @@ layer while prompt resolution remains deterministic and testable.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
@@ -55,6 +56,7 @@ class PromptSpec:
             "tool_contract_version": self.tool_contract_version,
             "schema_version": PROMPT_SCHEMA_VERSION,
             "task_type": self.task_type,
+            "prompt_hash": hashlib.sha256(self.body.encode("utf-8")).hexdigest(),
         }
 
 
@@ -531,6 +533,9 @@ def build_injected_prompt(
             "core": core.metadata(),
             "task": task.metadata(),
             "model_id": model_id,
+            "prompt_version": core.version,
+            "prompt_hash": hashlib.sha256(rendered.encode("utf-8")).hexdigest(),
+            "prompt_source": core.source,
             "tool_contract_version": TOOL_CONTRACT_VERSION,
             "visible_event_fields": (
                 "phase",

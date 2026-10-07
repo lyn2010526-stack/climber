@@ -42,7 +42,7 @@ interface SessionStatusBadgeProps {
 /**
  * The label comes from `right_panel.status.*`, the same keys the run summary and
  * the session sidebar read, so a status reads identically wherever it appears.
- * The badge itself is a codex pill: full-round, 11px medium, surface wash.
+ * The badge uses the shared pill treatment for a compact status surface.
  */
 export function SessionStatusBadge({ status }: SessionStatusBadgeProps) {
   const { t } = useI18n();

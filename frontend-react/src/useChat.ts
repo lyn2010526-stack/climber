@@ -32,7 +32,7 @@ export interface Message {
   interrupted?: boolean;
   /** 随本轮用户消息发送的图片（data URL 或 http(s) URL）。 */
   images?: string[];
-  files?: ChatAttachmentPayload[];
+  files?: ChatAttachment[];
 }
 
 export interface ChatAttachmentPayload {
@@ -42,6 +42,8 @@ export interface ChatAttachmentPayload {
   mime_type: string;
   size: number;
 }
+
+export type ChatAttachment = Omit<ChatAttachmentPayload, 'data'> & { data?: string };
 
 /**
  * 流式平滑参数。每帧从缓冲里释放一部分文本，而不是每个 token 触发一次
@@ -63,6 +65,17 @@ let messageIdSeq = 0;
 function nextId(prefix: string): string {
   messageIdSeq += 1;
   return `${prefix}-${Date.now()}-${messageIdSeq}`;
+}
+
+function parseToolArguments(value: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(value || '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
 }
 
 export interface UseChatOptions {
@@ -132,12 +145,13 @@ export function useChat(sessionId: string | null, options: UseChatOptions = {}) 
           id: toolCall.id,
           name: toolCall.function?.name || toolCall.name || 'unknown',
           arguments: typeof toolCall.function?.arguments === 'string'
-            ? JSON.parse(toolCall.function.arguments || '{}')
-            : toolCall.function?.arguments || toolCall.arguments || {},
+             ? parseToolArguments(toolCall.function.arguments)
+             : toolCall.function?.arguments || toolCall.arguments || {},
         })),
         tool_name: m.tool_name || undefined,
         timestamp: new Date(m.created_at),
         images: m.metadata?.images,
+        files: m.metadata?.attachments,
       }));
       setMessages(msgs);
     }).catch(() => {
@@ -367,6 +381,12 @@ export function useChat(sessionId: string | null, options: UseChatOptions = {}) 
     const toolCallsMap = new Map<string, ToolCall>();
     const startedInputs = new Set<string>();
     const toolOwners = new Map<string, string>();
+    const findToolId = (toolCallId: string) => {
+      if (toolCallsMap.has(toolCallId)) return toolCallId;
+      const match = [...toolCallsMap.keys()].find(id =>
+        id.endsWith(`:${toolCallId}`) || toolCallId.endsWith(`:${id}`));
+      return match ?? toolCallId;
+    };
     const finishTurn = (messageId?: string, fallback?: string, status?: string) => {
       if (!assistantId) return;
       // Final done can follow turn_done; restore the last turn's buffer target before flushing.
@@ -430,6 +450,9 @@ export function useChat(sessionId: string | null, options: UseChatOptions = {}) 
         }
         case 'thinking': {
           if (!assistantId) break;
+          // The backend emits iteration-only thinking frames for loop progress.
+          // Only text-bearing frames belong in the public reasoning transcript.
+          if (!event.delta) break;
           assistantIdRef.current = assistantId;
           bufferRef.current.reasoning += event.delta;
           scheduleFlush();
@@ -464,9 +487,10 @@ export function useChat(sessionId: string | null, options: UseChatOptions = {}) 
           break;
         }
         case 'tool_result': {
-          const owner = toolOwners.get(event.toolCallId);
-          const previous = toolCallsMap.get(event.toolCallId);
-          if (previous) toolCallsMap.set(event.toolCallId, {
+          const resolvedId = findToolId(event.toolCallId);
+          const owner = toolOwners.get(resolvedId);
+          const previous = toolCallsMap.get(resolvedId);
+          if (previous) toolCallsMap.set(resolvedId, {
             ...previous, result: event.result, error: event.error,
             requiresApproval: false, status: event.error ? 'error' : 'success',
           });
@@ -475,7 +499,7 @@ export function useChat(sessionId: string | null, options: UseChatOptions = {}) 
               if (msg.id !== owner) return msg;
               const updatedToolCalls = msg.toolCalls
                 ? msg.toolCalls.map(tc =>
-                    tc.id === previous?.id
+                    (tc.id === previous?.id || tc.id.endsWith(`:${resolvedId}`))
                       ? { ...tc, result: event.result, error: event.error, requiresApproval: false, status: event.error ? 'error' : 'success' }
                       : tc
                   )
@@ -485,6 +509,15 @@ export function useChat(sessionId: string | null, options: UseChatOptions = {}) 
           );
           break;
         }
+        case 'checkpoint':
+        case 'context_compression':
+        case 'progress':
+        case 'model_fallback':
+        case 'sub_agent_start':
+        case 'sub_agent_end':
+        case 'pipeline_complete':
+          // Lifecycle telemetry is exposed through onEvent for dedicated panels.
+          break;
         case 'done': {
           finishTurn(event.messageId, event.content, event.status);
           streamingRef.current = false;
@@ -545,7 +578,10 @@ export function useChat(sessionId: string | null, options: UseChatOptions = {}) 
     if (streamKindRef.current === 'queue') { startInputs(); return; }
     const lastUser = [...messages].reverse().find(m => m.role === 'user' && (m.content.trim() || m.images?.length || m.files?.length));
     if (!lastUser) return;
-    void sendMessage(lastUser.content, lastUser.images, lastUser.files);
+    const retryFiles = lastUser.files?.filter(
+      (file): file is ChatAttachmentPayload => typeof file.data === 'string',
+    );
+    void sendMessage(lastUser.content, lastUser.images, retryFiles);
   }, [sessionId, isStreaming, messages, sendMessage, startInputs]);
 
   const clear = useCallback(() => {

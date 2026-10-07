@@ -114,7 +114,7 @@ export function TaskTracePanel({ sessionId, kind }: { sessionId?: string | null;
     if (kind === 'traces' && !sessionId) { setLoading(false); return; }
     void load();
     return () => { active = false; clearTimeout(timer); for (const stream of streams.values()) stream.abort(); };
-  }, [kind, sessionId, refresh]);
+  }, [kind, sessionId, refresh, t]);
 
   const tasks = rows as LiveTask[];
   const traces = rows as TraceSummary[];
@@ -188,7 +188,7 @@ function TaskRow({ task }: { task: LiveTask }) {
       if (active) setError(cause instanceof Error ? cause.message : t('anchored.trace.detail_load_failed'));
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [open, task.task_id, task.status, task.progress, refresh]);
+  }, [open, task.task_id, task.status, task.progress, refresh, t]);
   return <details open={open} onToggle={event => setOpen(event.currentTarget.open)} className="border-b border-[var(--color-border-subtle)] py-[var(--space-1)]">
     <summary className="cursor-pointer rounded-[var(--radius-md)] hover:bg-[var(--color-bg-surface-2)] focus-visible:outline-none focus-visible:shadow-[var(--focus-ring)]">
       <span className="block truncate text-[13px] text-[var(--color-text-primary)]" title={task.objective}>{task.objective || task.task_id}</span>
@@ -241,7 +241,7 @@ function GroupTaskTree() {
     }
     void load();
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [groupId, refresh]);
+  }, [groupId, refresh, t]);
   const forest = buildGroupTaskForest(snapshot?.task_tree?.nodes ?? []);
   return <section aria-label={t('anchored.trace.group_tree_label')} className="space-y-[var(--space-2)]">
     <label className="block">{t('anchored.trace.group_tree_label')}
